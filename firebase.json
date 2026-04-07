@@ -1,0 +1,30 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ctp-job-cards",
+          "appId": "1:296041546243:android:eeec36e0f2b509bdb60436",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ctp-job-cards",
+          "configurations": {
+            "android": "1:296041546243:android:eeec36e0f2b509bdb60436",
+            "ios": "1:296041546243:ios:6d0547bca33b2ec9b60436",
+            "macos": "1:296041546243:ios:6d0547bca33b2ec9b60436",
+            "web": "1:296041546243:web:273e88faf1a7a1abb60436",
+            "windows": "1:296041546243:web:6f70a1cbb07a909cb60436"
+          }
+        }
+      }
+    }
+  },
+  
+  "functions": {
+    "predeploy": []
+  }
+
+}

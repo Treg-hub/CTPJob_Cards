@@ -1,0 +1,275 @@
+import 'package:flutter/material.dart';
+import '../models/job_card.dart';
+import '../services/firestore_service.dart';
+import '../main.dart' show currentEmployee;
+
+class MyAssignedJobsScreen extends StatefulWidget {
+  const MyAssignedJobsScreen({super.key});
+
+  @override
+  State<MyAssignedJobsScreen> createState() => _MyAssignedJobsScreenState();
+}
+
+class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
+  String? selectedDepartment;
+  String? selectedArea;
+  String? selectedMachine;
+  List<String> departments = [];
+  List<String> areas = [];
+  List<String> machines = [];
+
+  final FirestoreService _firestoreService = FirestoreService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDepartments();
+  }
+
+  Future<void> _loadDepartments() async {
+    if (currentEmployee?.clockNo == null) return;
+
+    try {
+      final depts = await _firestoreService.getDepartmentsForJobCards('open');
+      setState(() => departments = depts);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading departments: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _updateAreas(String dept) {
+    setState(() {
+      selectedDepartment = dept;
+      selectedArea = null;
+      selectedMachine = null;
+      areas = [];
+      machines = [];
+    });
+    _loadAreas(dept);
+  }
+
+  Future<void> _loadAreas(String dept) async {
+    try {
+      final areaList = await _firestoreService.getAreasForJobCards('open', dept);
+      setState(() => areas = areaList);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading areas: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _updateMachines(String area) {
+    setState(() {
+      selectedArea = area;
+      selectedMachine = null;
+      machines = [];
+    });
+    _loadMachines(selectedDepartment!, area);
+  }
+
+  Future<void> _loadMachines(String dept, String area) async {
+    try {
+      final machineList = await _firestoreService.getMachinesForJobCards('open', dept, area);
+      setState(() => machines = machineList);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading machines: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _clearFilters() {
+    setState(() {
+      selectedDepartment = null;
+      selectedArea = null;
+      selectedMachine = null;
+      areas = [];
+      machines = [];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (currentEmployee?.clockNo == null) {
+      return const Scaffold(
+        body: Center(child: Text('No employee logged in')),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Assigned Jobs'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Clear Filters',
+            onPressed: _clearFilters,
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: departments.map((dept) => FilterChip(
+                    label: Text(dept, style: const TextStyle(fontSize: 12)),
+                    selected: selectedDepartment == dept,
+                    onSelected: (_) => _updateAreas(dept),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  )).toList(),
+                ),
+                if (selectedDepartment != null) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: areas.map((area) => FilterChip(
+                      label: Text(area, style: const TextStyle(fontSize: 12)),
+                      selected: selectedArea == area,
+                      onSelected: (_) => _updateMachines(area),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    )).toList(),
+                  ),
+                ],
+                if (selectedArea != null) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: machines.map((machine) => FilterChip(
+                      label: Text(machine, style: const TextStyle(fontSize: 12)),
+                      selected: selectedMachine == machine,
+                      onSelected: (_) => setState(() => selectedMachine = machine),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    )).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<JobCard>>(
+              stream: _firestoreService.getAssignedJobCards(currentEmployee!.clockNo),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                var jobs = snapshot.data!;
+                if (selectedDepartment != null) {
+                  jobs = jobs.where((j) => j.department == selectedDepartment).toList();
+                }
+                if (selectedArea != null) {
+                  jobs = jobs.where((j) => j.area == selectedArea).toList();
+                }
+                if (selectedMachine != null) {
+                  jobs = jobs.where((j) => j.machine == selectedMachine).toList();
+                }
+
+                if (jobs.isEmpty) {
+                  return const Center(child: Text('No jobs assigned to you yet', style: TextStyle(fontSize: 20)));
+                }
+
+                return ListView.builder(
+                  itemCount: jobs.length,
+                  itemBuilder: (context, index) {
+                    final job = jobs[index];
+                    return Card(
+                      margin: const EdgeInsets.all(8),
+                      child: ListTile(
+                        title: Text(job.description),
+                        subtitle: Text('${job.department} • ${job.machine}'),
+                        trailing: ElevatedButton(
+                          onPressed: () => _showCompleteDialog(context, job),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                          child: const Text('Complete'),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCompleteDialog(BuildContext context, JobCard job) {
+    final notesController = TextEditingController();
+    bool isCompleting = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Complete Job'),
+          content: TextField(
+            controller: notesController,
+            decoration: const InputDecoration(labelText: 'Notes / Work Done'),
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: isCompleting ? null : () async {
+                setDialogState(() => isCompleting = true);
+
+                try {
+                  final completedJob = job.copyWith(
+                    status: JobStatus.completed,
+                    completedBy: currentEmployee?.name,
+                    completedAt: DateTime.now(),
+                    notes: notesController.text.trim(),
+                  );
+
+                  await _firestoreService.updateJobCard(job.id!, completedJob);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ Job Completed!')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error completing job: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                } finally {
+                  if (context.mounted) setDialogState(() => isCompleting = false);
+                }
+              },
+              child: isCompleting
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Complete'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

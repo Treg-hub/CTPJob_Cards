@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296041546243",
+    "project_id": "ctp-job-cards",
+    "storage_bucket": "ctp-job-cards.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296041546243:android:eeec36e0f2b509bdb60436",
+        "android_client_info": {
+          "package_name": "com.example.ctp_job_cards"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1jSxzKCGDAF605TB-kjxW_2x2ynXrK6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
