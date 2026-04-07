@@ -66,12 +66,18 @@ class _AdminScreenState extends State<AdminScreen> {
                 final data = snapshot.data!;
                 return Column(
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: selectedDeptForArea,
-                      hint: const Text('Select Department'),
-                      items: data.keys.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                      onChanged: (v) => setState(() => selectedDeptForArea = v),
+                    const Text('Select Department', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: data.keys.map((dept) => ChoiceChip(
+                        label: Text(dept),
+                        selected: selectedDeptForArea == dept,
+                        onSelected: (_) => setState(() => selectedDeptForArea = dept),
+                      )).toList(),
                     ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: areaController,
                       decoration: const InputDecoration(labelText: 'Area name'),
@@ -112,26 +118,38 @@ class _AdminScreenState extends State<AdminScreen> {
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const CircularProgressIndicator();
                 final data = snapshot.data!;
+                final areas = selectedDeptForMachine != null ? (data[selectedDeptForMachine] as Map<String, dynamic>? ?? {}).keys.toList() : <String>[];
                 return Column(
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: selectedDeptForMachine,
-                      hint: const Text('Select Department'),
-                      items: data.keys.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                      onChanged: (v) => setState(() {
-                        selectedDeptForMachine = v;
-                        selectedAreaForMachine = null;
-                      }),
+                    const Text('Select Department', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: data.keys.map((dept) => ChoiceChip(
+                        label: Text(dept),
+                        selected: selectedDeptForMachine == dept,
+                        onSelected: (_) => setState(() {
+                          selectedDeptForMachine = dept;
+                          selectedAreaForMachine = null;
+                        }),
+                      )).toList(),
                     ),
-                    if (selectedDeptForMachine != null)
-                      DropdownButtonFormField<String>(
-                        value: selectedAreaForMachine,
-                        hint: const Text('Select Area'),
-                        items: (data[selectedDeptForMachine] as Map<String, dynamic>).keys
-                            .map((a) => DropdownMenuItem(value: a, child: Text(a)))
-                            .toList(),
-                        onChanged: (v) => setState(() => selectedAreaForMachine = v),
+                    if (selectedDeptForMachine != null) ...[
+                      const SizedBox(height: 16),
+                      const Text('Select Area', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: areas.map((area) => ChoiceChip(
+                          label: Text(area),
+                          selected: selectedAreaForMachine == area,
+                          onSelected: (_) => setState(() => selectedAreaForMachine = area),
+                        )).toList(),
                       ),
+                    ],
+                    const SizedBox(height: 16),
                     TextField(
                       controller: machineController,
                       decoration: const InputDecoration(labelText: 'Machine / Part name'),

@@ -40,6 +40,10 @@ class JobCard {
   final String notes;
   final JobStatus status;
   final DateTime? createdAt;
+  final DateTime? assignedAt;
+  final DateTime? startedAt;
+  final DateTime? lastUpdatedAt;
+  final DateTime? notificationReceivedAt;
   final String? completedBy;
   final DateTime? completedAt;
 
@@ -59,6 +63,10 @@ class JobCard {
     this.notes = '',
     this.status = JobStatus.open,
     this.createdAt,
+    this.assignedAt,
+    this.startedAt,
+    this.lastUpdatedAt,
+    this.notificationReceivedAt,
     this.completedBy,
     this.completedAt,
   });
@@ -83,6 +91,18 @@ class JobCard {
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
+      assignedAt: data['assignedAt'] != null
+          ? (data['assignedAt'] as Timestamp).toDate()
+          : null,
+      startedAt: data['startedAt'] != null
+          ? (data['startedAt'] as Timestamp).toDate()
+          : null,
+      lastUpdatedAt: data['lastUpdatedAt'] != null
+          ? (data['lastUpdatedAt'] as Timestamp).toDate()
+          : null,
+      notificationReceivedAt: data['notificationReceivedAt'] != null
+          ? (data['notificationReceivedAt'] as Timestamp).toDate()
+          : null,
       completedBy: data['completedBy'] as String?,
       completedAt: data['completedAt'] != null
           ? (data['completedAt'] as Timestamp).toDate()
@@ -106,6 +126,10 @@ class JobCard {
       'notes': notes,
       'status': status.name,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'assignedAt': assignedAt != null ? Timestamp.fromDate(assignedAt!) : null,
+      'startedAt': startedAt != null ? Timestamp.fromDate(startedAt!) : null,
+      'lastUpdatedAt': FieldValue.serverTimestamp(), // Always update on save
+      'notificationReceivedAt': notificationReceivedAt != null ? Timestamp.fromDate(notificationReceivedAt!) : null,
       'completedBy': completedBy,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
@@ -127,6 +151,10 @@ class JobCard {
     String? notes,
     JobStatus? status,
     DateTime? createdAt,
+    DateTime? assignedAt,
+    DateTime? startedAt,
+    DateTime? lastUpdatedAt,
+    DateTime? notificationReceivedAt,
     String? completedBy,
     DateTime? completedAt,
   }) {
@@ -146,6 +174,10 @@ class JobCard {
       notes: notes ?? this.notes,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      assignedAt: assignedAt ?? this.assignedAt,
+      startedAt: startedAt ?? this.startedAt,
+      lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
+      notificationReceivedAt: notificationReceivedAt ?? this.notificationReceivedAt,
       completedBy: completedBy ?? this.completedBy,
       completedAt: completedAt ?? this.completedAt,
     );

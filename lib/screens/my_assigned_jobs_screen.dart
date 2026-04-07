@@ -197,10 +197,28 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       child: ListTile(
                         title: Text(job.description),
                         subtitle: Text('${job.department} • ${job.machine}'),
-                        trailing: ElevatedButton(
-                          onPressed: () => _showCompleteDialog(context, job),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                          child: const Text('Complete'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (job.startedAt == null)
+                              ElevatedButton(
+                                onPressed: () => _startWork(job),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                child: const Text('Start', style: TextStyle(fontSize: 12)),
+                              ),
+                            const SizedBox(width: 4),
+                            ElevatedButton(
+                              onPressed: () => _showCompleteDialog(context, job),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                              child: const Text('Complete', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -212,6 +230,28 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _startWork(JobCard job) async {
+    try {
+      final startedJob = job.copyWith(
+        startedAt: DateTime.now(),
+      );
+
+      await _firestoreService.updateJobCard(job.id!, startedJob);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Work started!'), backgroundColor: Colors.blue),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting work: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _showCompleteDialog(BuildContext context, JobCard job) {

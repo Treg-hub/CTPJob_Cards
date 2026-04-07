@@ -341,6 +341,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                   final updatedJob = job.copyWith(
                     assignedTo: selectedClockNo,
                     assignedToName: assignedEmp.name,
+                    assignedAt: DateTime.now(),
                     notes: notesController.text.trim(),
                   );
 
@@ -351,6 +352,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                     try {
                       await _notificationService.sendJobAssignmentNotification(
                         recipientToken: assignedEmp.fcmToken!,
+                        jobCardId: job.id!,
                         operator: currentEmployee?.name ?? 'Unknown',
                         department: assignedEmp.department,
                         area: job.area,

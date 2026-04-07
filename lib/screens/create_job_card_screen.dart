@@ -16,7 +16,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   String? selectedArea;
   String? selectedMachine;
   String part = '';
-  JobType jobType = JobType.mechanical;
+  JobType? jobType;
   int priority = 3;
   String description = '';
   bool _isLoading = false;
@@ -32,7 +32,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
   Future<void> _saveJobCard() async {
     if (!_formKey.currentState!.validate()) return;
-    if (selectedDepartment == null || selectedArea == null || selectedMachine == null || part.isEmpty) {
+    if (selectedDepartment == null || selectedArea == null || selectedMachine == null || part.isEmpty || jobType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
       );
@@ -46,7 +46,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         area: selectedArea!,
         machine: selectedMachine!,
         part: part,
-        type: jobType,
+        type: jobType!,
         priority: priority,
         operator: operatorName,
         operatorClockNo: currentEmployee?.clockNo,
@@ -74,6 +74,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('Building CreateJobCardScreen - jobType: $jobType');
     return Scaffold(
       appBar: AppBar(title: const Text('Create Job Card')),
       body: Padding(
@@ -100,81 +101,101 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                 children: [
                   Text('Operator: $operatorName', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 24),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Department', border: OutlineInputBorder()),
-                    value: selectedDepartment,
-                    items: data.keys.map((dept) => DropdownMenuItem(value: dept, child: Text(dept))).toList(),
-                    onChanged: (val) => setState(() {
-                      selectedDepartment = val;
-                      selectedArea = null;
-                      selectedMachine = null;
-                      part = '';
-                    }),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Area / Section', border: OutlineInputBorder()),
-                    value: selectedArea,
-                    items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
-                    onChanged: (val) => setState(() {
-                      selectedArea = val;
-                      selectedMachine = null;
-                      part = '';
-                    }),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Machine / Location', border: OutlineInputBorder()),
-                    value: selectedMachine,
-                    items: machines.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                    onChanged: (val) => setState(() {
-                      selectedMachine = val;
-                      part = '';
-                    }),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  FutureBuilder<List<String>>(
-                    future: _loadPreviousParts(),
-                    builder: (context, snapshot) {
-                      final previousParts = snapshot.data ?? [];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (previousParts.isNotEmpty)
-                            Wrap(
-                              spacing: 8,
-                              children: previousParts.map((p) => ActionChip(
-                                label: Text(p),
-                                onPressed: () => setState(() => part = p),
-                              )).toList(),
+                   const Text('Department', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                   const SizedBox(height: 8),
+                   Wrap(
+                     spacing: 8,
+                     runSpacing: 4,
+                     children: data.keys.map((dept) => ChoiceChip(
+                       label: Text(dept),
+                       selected: selectedDepartment == dept,
+                       onSelected: (_) => setState(() {
+                         selectedDepartment = dept;
+                         selectedArea = null;
+                         selectedMachine = null;
+                         part = '';
+                       }),
+                     )).toList(),
+                   ),
+                  if (selectedDepartment != null) ...[
+                    const SizedBox(height: 16),
+                    const Text('Area / Section', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: areas.map((area) => ChoiceChip(
+                        label: Text(area),
+                        selected: selectedArea == area,
+                        onSelected: (_) => setState(() {
+                          selectedArea = area;
+                          selectedMachine = null;
+                          part = '';
+                        }),
+                      )).toList(),
+                    ),
+                  ],
+                  if (selectedArea != null) ...[
+                    const SizedBox(height: 16),
+                    const Text('Machine / Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: machines.map((machine) => ChoiceChip(
+                        label: Text(machine),
+                        selected: selectedMachine == machine,
+                        onSelected: (_) => setState(() {
+                          selectedMachine = machine;
+                          part = '';
+                        }),
+                      )).toList(),
+                    ),
+                  ],
+                  if (selectedMachine != null) ...[
+                    const SizedBox(height: 24),
+                    const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    FutureBuilder<List<String>>(
+                      future: _loadPreviousParts(),
+                      builder: (context, snapshot) {
+                        final previousParts = snapshot.data ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (previousParts.isNotEmpty)
+                              Wrap(
+                                spacing: 8,
+                                children: previousParts.map((p) => ActionChip(
+                                  label: Text(p),
+                                  onPressed: () => setState(() => part = p),
+                                )).toList(),
+                              ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              decoration: const InputDecoration(
+                                labelText: 'Type part or tap suggestion above',
+                                border: OutlineInputBorder(),
+                              ),
+                              initialValue: part,
+                              onChanged: (v) => part = v,
+                              validator: (v) => v!.isEmpty ? 'Required' : null,
                             ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            decoration: const InputDecoration(
-                              labelText: 'Type part or tap suggestion above',
-                              border: OutlineInputBorder(),
-                            ),
-                            initialValue: part,
-                            onChanged: (v) => part = v,
-                            validator: (v) => v!.isEmpty ? 'Required' : null,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 24),
-                  DropdownButtonFormField<JobType>(
-                    decoration: const InputDecoration(labelText: 'Job Type', border: OutlineInputBorder()),
-                    value: jobType,
-                    items: JobType.values.map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(type.displayName),
+                  const Text('Job Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: JobType.values.map((type) => ChoiceChip(
+                      label: Text(type.displayName),
+                      selected: jobType == type,
+                      onSelected: (_) => setState(() => jobType = jobType == type ? null : type),
                     )).toList(),
-                    onChanged: (val) => setState(() => jobType = val!),
                   ),
                   const SizedBox(height: 16),
                   const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),

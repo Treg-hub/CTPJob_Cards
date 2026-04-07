@@ -64,7 +64,7 @@ class CtpJobCardsApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF000000),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFFF8C42),
-          foregroundColor: Color.fromARGB(255, 148, 132, 132),
+          foregroundColor: Color.fromARGB(255, 0, 0, 0),
           elevation: 0,
           titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.black),
         ),
@@ -93,7 +93,7 @@ class CtpJobCardsApp extends StatelessWidget {
           ),
         ),
       ),
-      home: isLoggedIn ? const HomeScreen() : const LoginScreen(),
+      home: const LoginScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

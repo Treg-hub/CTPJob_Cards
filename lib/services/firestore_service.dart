@@ -66,6 +66,16 @@ class FirestoreService {
     }
   }
 
+  Future<JobCard?> getJobCard(String jobCardId) async {
+    try {
+      final doc = await _firestore.collection('job_cards').doc(jobCardId).get();
+      if (!doc.exists) return null;
+      return JobCard.fromFirestore(doc);
+    } catch (e) {
+      throw Exception('Failed to get job card: $e');
+    }
+  }
+
   Stream<List<JobCard>> getOpenJobCards() {
     return _firestore
         .collection('job_cards')
@@ -88,6 +98,14 @@ class FirestoreService {
         .collection('job_cards')
         .where('status', isEqualTo: 'completed')
         .orderBy('completedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+  }
+
+  Stream<List<JobCard>> getAllJobCards() {
+    return _firestore
+        .collection('job_cards')
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }
@@ -235,5 +253,129 @@ class FirestoreService {
   Future<void> clearLoggedInEmployee() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('loggedInClockNo');
+  }
+
+  // Dashboard aggregation methods
+  Future<int> getOpenJobCardsCount() async {
+    try {
+      final snapshot = await _firestore
+          .collection('job_cards')
+          .where('status', isEqualTo: 'open')
+          .count()
+          .get();
+      return snapshot.count ?? 0;
+    } catch (e) {
+      throw Exception('Failed to get open job cards count: $e');
+    }
+  }
+
+  Future<int> getCompletedJobCardsCountInPeriod(DateTime startDate) async {
+    try {
+      // Get all completed job cards and filter in memory to avoid composite index requirement
+      final snapshot = await _firestore
+          .collection('job_cards')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      final startTimestamp = Timestamp.fromDate(startDate);
+      final count = snapshot.docs.where((doc) {
+        final data = doc.data();
+        final completedAt = data['completedAt'] as Timestamp?;
+        return completedAt != null && completedAt.compareTo(startTimestamp) >= 0;
+      }).length;
+
+      return count;
+    } catch (e) {
+      throw Exception('Failed to get completed job cards count: $e');
+    }
+  }
+
+  Future<Map<String, int>> getEmployeePerformance() async {
+    try {
+      final snapshot = await _firestore
+          .collection('job_cards')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      final performance = <String, int>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final completedBy = data['completedBy'] as String?;
+        if (completedBy != null && completedBy.isNotEmpty) {
+          performance[completedBy] = (performance[completedBy] ?? 0) + 1;
+        }
+      }
+      return performance;
+    } catch (e) {
+      throw Exception('Failed to get employee performance: $e');
+    }
+  }
+
+  Future<Duration?> getAverageCompletionTime() async {
+    try {
+      // Get all completed job cards and filter in memory to avoid composite index requirement
+      final snapshot = await _firestore
+          .collection('job_cards')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      if (snapshot.docs.isEmpty) return null;
+
+      var totalDuration = Duration.zero;
+      var count = 0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        final completedAt = (data['completedAt'] as Timestamp?)?.toDate();
+
+        if (createdAt != null && completedAt != null) {
+          totalDuration += completedAt.difference(createdAt);
+          count++;
+        }
+      }
+
+      return count > 0 ? totalDuration ~/ count : null;
+    } catch (e) {
+      throw Exception('Failed to get average completion time: $e');
+    }
+  }
+
+  Future<Map<String, int>> getJobCardsByPriority() async {
+    try {
+      final snapshot = await _firestore.collection('job_cards').get();
+
+      final priorityCounts = <String, int>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final priority = data['priority'] as int? ?? 3;
+        final status = data['status'] as String? ?? 'open';
+
+        final key = status == 'open' ? 'Open P$priority' : 'Completed P$priority';
+        priorityCounts[key] = (priorityCounts[key] ?? 0) + 1;
+      }
+      return priorityCounts;
+    } catch (e) {
+      throw Exception('Failed to get job cards by priority: $e');
+    }
+  }
+
+  Future<Map<String, int>> getJobCardsByType() async {
+    try {
+      final snapshot = await _firestore.collection('job_cards').get();
+
+      final typeCounts = <String, int>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final type = data['type'] as String? ?? 'Mechanical';
+        final status = data['status'] as String? ?? 'open';
+
+        final key = status == 'open' ? 'Open $type' : 'Completed $type';
+        typeCounts[key] = (typeCounts[key] ?? 0) + 1;
+      }
+      return typeCounts;
+    } catch (e) {
+      throw Exception('Failed to get job cards by type: $e');
+    }
   }
 }

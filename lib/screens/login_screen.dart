@@ -5,9 +5,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../services/firestore_service.dart';
+import '../main.dart' show currentEmployee;
 import 'home_screen.dart';
-
-Employee? currentEmployee;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +19,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _clockNoController = TextEditingController();
   bool _isLoading = false;
   final FirestoreService _firestoreService = FirestoreService();
+
+  @override
+  void initState() {
+    super.initState();
+    if (currentEmployee != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+      });
+    }
+  }
 
   Future<void> _login() async {
     final clockNo = _clockNoController.text.trim();
@@ -101,7 +110,34 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.business, size: 80, color: Color(0xFFFF8C42)),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final screenWidth = MediaQuery.of(context).size.width;
+                    final isMobile = screenWidth < 600;
+                    
+                    double logoWidth;
+                    if (isMobile) {
+                      logoWidth = screenWidth - 48; // Account for padding
+                    } else {
+                      // Measure the width of "CTP Job Cards" text
+                      final textPainter = TextPainter(
+                        text: const TextSpan(
+                          text: 'CTP Job Cards',
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                        ),
+                        textDirection: TextDirection.ltr,
+                      );
+                      textPainter.layout();
+                      logoWidth = textPainter.width;
+                    }
+                    
+                    return SizedBox(
+                      height: logoWidth * 0.5, // Maintain aspect ratio
+                      width: logoWidth,
+                      child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+                    );
+                  },
+                ),
                 const SizedBox(height: 24),
                 const Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
                 const SizedBox(height: 8),

@@ -118,6 +118,7 @@ class NotificationService {
 
   Future<void> sendJobAssignmentNotification({
     required String recipientToken,
+    required String jobCardId,
     required String operator,
     required String department,
     required String area,
@@ -136,6 +137,7 @@ class NotificationService {
 
       await callable.call({
         'recipientToken': recipientToken,
+        'jobCardId': jobCardId,
         'operator': operator,
         'department': department,
         'area': area,

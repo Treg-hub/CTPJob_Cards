@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/employee.dart';
+import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
@@ -10,6 +11,8 @@ import 'view_job_cards_screen.dart';
 import 'my_assigned_jobs_screen.dart';
 import 'completed_jobs_screen.dart';
 import 'admin_screen.dart';
+import 'manager_dashboard_screen.dart';
+import 'job_card_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,10 +22,47 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool isOnSite = true;
+  int _selectedIndex = 0;
 
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
+
+  bool isOnSite = true;
+
+  // Responsive design helpers
+  bool get _isMobile => MediaQuery.of(context).size.width < 600;
+  bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
+  bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
+
+  int get _gridCrossAxisCount {
+    if (_isDesktop) return 4;
+    if (_isTablet) return 3;
+    return 2; // Mobile
+  }
+
+  double get _iconSize {
+    if (_isDesktop) return 24;
+    if (_isTablet) return 28;
+    return 32; // Mobile
+  }
+
+  double get _cardPadding {
+    if (_isDesktop) return 12;
+    if (_isTablet) return 14;
+    return 16; // Mobile
+  }
+
+  double get _screenPadding {
+    if (_isDesktop) return 32;
+    if (_isTablet) return 24;
+    return 16; // Mobile
+  }
+
+  double get _gridSpacing {
+    if (_isDesktop) return 16;
+    if (_isTablet) return 14;
+    return 12; // Mobile
+  }
 
   @override
   void initState() {
@@ -48,8 +88,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         if (message.data['click_action'] == 'FLUTTER_NOTIFICATION_CLICK') {
+          // Mark notification as received/read
+          _markNotificationReceived(message.data);
           if (mounted) {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
+            setState(() => _selectedIndex = 1); // Switch to Jobs tab
           }
         }
       });
@@ -86,32 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       // Revert the UI change
       setState(() => isOnSite = !value);
-    }
-  }
-
-  Future<void> _refreshFcmToken() async {
-    if (kIsWeb) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Push notifications are for mobile only'), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    }
-
-    try {
-      await _notificationService.refreshToken();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
-        );
-      }
     }
   }
 
@@ -231,20 +247,771 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMenuButton(BuildContext context, String title, Color color, IconData icon, VoidCallback onTap) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 28),
-        label: Text(title),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.black,
-          padding: const EdgeInsets.symmetric(vertical: 18),
+  Widget _buildHomeTab() {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(_screenPadding),
+      child: Column(
+        children: [
+          // Compact On-Site Toggle
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(_cardPadding),
+              child: Row(
+                children: [
+                  Icon(
+                    isOnSite ? Icons.check_circle : Icons.cancel,
+                    color: isOnSite ? Colors.green : Colors.red,
+                    size: _isDesktop ? 20 : 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
+                      style: TextStyle(
+                        fontSize: _isDesktop ? 14 : 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Transform.scale(
+                    scale: _isDesktop ? 0.7 : 0.8,
+                    child: Switch(
+                      value: isOnSite,
+                      onChanged: _toggleOnSite,
+                      activeColor: Colors.green,
+                      inactiveTrackColor: Colors.redAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // Quick Actions Grid
+          Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: _isDesktop ? 18 : 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: _isDesktop ? 20 : 16),
+          GridView.count(
+            crossAxisCount: _gridCrossAxisCount,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: _gridSpacing,
+            mainAxisSpacing: _gridSpacing,
+            children: [
+              _buildQuickActionCard(
+                'Create Job Card',
+                Icons.add_circle,
+                const Color(0xFFFF8C42),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
+              ),
+              _buildQuickActionCard(
+                'View Open Jobs',
+                Icons.list_alt,
+                const Color(0xFF64748B),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+              ),
+              _buildQuickActionCard(
+                'My Assigned Jobs',
+                Icons.assignment_turned_in,
+                const Color(0xFF10B981),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen())),
+              ),
+              _buildQuickActionCard(
+                'Completed Jobs',
+                Icons.history,
+                const Color(0xFF8B5CF6),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen())),
+              ),
+            ],
+          ),
+
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // Management & Administration Section
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Management & Administration',
+                style: TextStyle(
+                  fontSize: _isDesktop ? 18 : 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: _isDesktop ? 20 : 16),
+              if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildQuickActionCard(
+                        'Manager Dashboard',
+                        Icons.dashboard,
+                        const Color(0xFFEF4444),
+                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManagerDashboardScreen())),
+                      ),
+                    ),
+                    SizedBox(width: _gridSpacing),
+                    Expanded(
+                      child: _buildQuickActionCard(
+                        'Admin Settings',
+                        Icons.settings,
+                        const Color(0xFF14B8A6),
+                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                _buildQuickActionCard(
+                  'Admin Settings',
+                  Icons.settings,
+                  const Color(0xFF14B8A6),
+                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+                  fullWidth: true,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap, {bool fullWidth = false}) {
+    return Card(
+      elevation: 4,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.all(_cardPadding),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: _iconSize, color: color),
+              SizedBox(height: _isDesktop ? 6 : 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: _isDesktop ? 12 : 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildJobsTab() {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: 'Open Jobs'),
+              Tab(text: 'All Jobs'),
+            ],
+            labelColor: Color(0xFFFF8C42),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Color(0xFFFF8C42),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildOpenJobsList(),
+                _buildAllJobsList(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOpenJobsList() {
+    return StreamBuilder(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final jobCards = snapshot.data!.where((job) => job.status != JobStatus.completed).toList();
+
+        if (jobCards.isEmpty) {
+          return const Center(
+            child: Text('No open jobs available', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: jobCards.length,
+          itemBuilder: (context, index) {
+            final job = jobCards[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor('P${job.priority}'),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'P${job.priority}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                onTap: () {
+                  // Navigate to job details - for now just show a snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Tapped on: ${job.description}')),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAllJobsList() {
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final jobCards = snapshot.data!;
+
+        if (jobCards.isEmpty) {
+          return const Center(
+            child: Text('No jobs available', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: jobCards.length,
+          itemBuilder: (context, index) {
+            final job = jobCards[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Status: ${job.status.displayName}',
+                      style: TextStyle(
+                        color: _getStatusColor(job.status.name),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor('P${job.priority}'),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'P${job.priority}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                onTap: () {
+                  // Navigate to job details - for now just show a snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Tapped on: ${job.description}')),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toUpperCase()) {
+      case 'P1':
+        return Colors.red;
+      case 'P2':
+        return Colors.orange;
+      case 'P3':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return Colors.blue;
+      case 'in progress':
+        return Colors.orange;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildMyWorkTab() {
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: 'Assigned'),
+              Tab(text: 'Created'),
+              Tab(text: 'History'),
+            ],
+            labelColor: Color(0xFFFF8C42),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Color(0xFFFF8C42),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildAssignedJobs(),
+                _buildCreatedJobs(),
+                _buildWorkHistory(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignedJobs() {
+    if (currentEmployee == null) {
+      return const Center(
+        child: Text('Please log in to view assigned jobs', style: TextStyle(color: Colors.white70)),
+      );
+    }
+
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAssignedJobCards(currentEmployee!.clockNo),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final assignedJobs = snapshot.data!;
+
+        if (assignedJobs.isEmpty) {
+          return const Center(
+            child: Text('No jobs assigned to you', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: assignedJobs.length,
+          itemBuilder: (context, index) {
+            final job = assignedJobs[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Status: ${job.status.displayName} • From: ${job.operator}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor('P${job.priority}'),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'P${job.priority}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobCardDetailScreen(jobCard: job),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCreatedJobs() {
+    if (currentEmployee == null) {
+      return const Center(
+        child: Text('Please log in to view created jobs', style: TextStyle(color: Colors.white70)),
+      );
+    }
+
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final createdJobs = snapshot.data!
+            .where((job) => job.operatorClockNo == currentEmployee!.clockNo)
+            .toList();
+
+        if (createdJobs.isEmpty) {
+          return const Center(
+            child: Text('No jobs created by you', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: createdJobs.length,
+          itemBuilder: (context, index) {
+            final job = createdJobs[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Status: ${job.status.displayName}',
+                      style: TextStyle(
+                        color: _getStatusColor(job.status.name),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor('P${job.priority}'),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'P${job.priority}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobCardDetailScreen(jobCard: job),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkHistory() {
+    if (currentEmployee == null) {
+      return const Center(
+        child: Text('Please log in to view work history', style: TextStyle(color: Colors.white70)),
+      );
+    }
+
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getCompletedJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final completedJobs = snapshot.data!
+            .where((job) => job.completedBy == currentEmployee!.clockNo)
+            .toList();
+
+        if (completedJobs.isEmpty) {
+          return const Center(
+            child: Text('No completed work history', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: completedJobs.length,
+          itemBuilder: (context, index) {
+            final job = completedJobs[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Completed: ${job.completedAt != null ? _formatDate(job.completedAt!) : 'Unknown'}',
+                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                trailing: const Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 24,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobCardDetailScreen(jobCard: job),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  Widget _buildSettingsTab() {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(_screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Settings',
+            style: TextStyle(
+              fontSize: _isDesktop ? 22 : 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // User Info
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(_cardPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current User: ${currentEmployee?.name ?? 'Unknown'}',
+                    style: TextStyle(
+                      fontSize: _isDesktop ? 14 : 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Clock No: ${currentEmployee?.clockNo ?? 'Unknown'}',
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Department: ${currentEmployee?.department ?? 'Unknown'}',
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // Developer Options (only show if not web)
+          if (!kIsWeb) ...[
+            Text(
+              'Developer Options',
+              style: TextStyle(
+                fontSize: _isDesktop ? 18 : 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(height: _isDesktop ? 20 : 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  await _notificationService.refreshToken();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh FCM Token'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markNotificationReceived(Map<String, dynamic> data) async {
+    try {
+      // Extract job card ID from notification data
+      final jobCardId = data['jobCardId'];
+      if (jobCardId == null) return;
+
+      // Get the current job card
+      final jobCard = await _firestoreService.getJobCard(jobCardId);
+      if (jobCard == null) return;
+
+      // Only update if notification hasn't been received yet and user is the assigned person
+      if (jobCard.notificationReceivedAt == null && jobCard.assignedTo == currentEmployee?.clockNo) {
+        final updatedJob = jobCard.copyWith(
+          notificationReceivedAt: DateTime.now(),
+        );
+        await _firestoreService.updateJobCard(jobCardId, updatedJob);
+      }
+    } catch (e) {
+      debugPrint('Error marking notification as received: $e');
+    }
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -276,119 +1043,48 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: () => _toggleOnSite(!isOnSite),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isOnSite ? Colors.green : Colors.red,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Icon(
-                              isOnSite ? Icons.check_circle : Icons.cancel,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                                softWrap: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Transform.scale(
-                        scale: 1.2,
-                        child: Switch(
-                          value: isOnSite,
-                          onChanged: _toggleOnSite,
-                          activeThumbColor: Colors.white,
-                          activeTrackColor: const Color.fromARGB(255, 20, 128, 78),
-                          inactiveThumbColor: Colors.white,
-                          inactiveTrackColor: Colors.redAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _refreshFcmToken,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Refresh FCM Token'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueGrey,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Image.asset('assets/images/logo.png', width: 200, height: 200, fit: BoxFit.cover),
-              const SizedBox(height: 24),
-              const SizedBox(height: 48),
-              _buildMenuButton(
-                context,
-                'Create New Job Card',
-                const Color(0xFFFF8C42),
-                Icons.add_circle,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
-              ),
-              const SizedBox(height: 12),
-              _buildMenuButton(
-                context,
-                'View Open Job Cards',
-                const Color(0xFF64748B),
-                Icons.list_alt,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
-              ),
-              const SizedBox(height: 12),
-              _buildMenuButton(
-                context,
-                'My Assigned Jobs',
-                const Color(0xFF10B981),
-                Icons.assignment_turned_in,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen())),
-              ),
-              const SizedBox(height: 12),
-              _buildMenuButton(
-                context,
-                'Completed Jobs History',
-                const Color(0xFF8B5CF6),
-                Icons.history,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen())),
-              ),
-              const SizedBox(height: 12),
-              _buildMenuButton(
-                context,
-                'Admin Settings',
-                const Color(0xFF14B8A6),
-                Icons.settings,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-              ),
-            ],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          _buildHomeTab(),
+          _buildJobsTab(),
+          _buildMyWorkTab(),
+          _buildSettingsTab(),
+        ],
+      ),
+      floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
+        backgroundColor: const Color(0xFFFF8C42),
+        child: const Icon(Icons.add, color: Colors.black),
+      ) : null,
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
           ),
-        ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.work),
+            label: 'Jobs',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assignment),
+            label: 'My Work',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        selectedItemColor: const Color(0xFFFF8C42),
+        unselectedItemColor: Colors.grey,
+        backgroundColor: const Color(0xFF1A1A1A),
+        onTap: _onItemTapped,
       ),
     );
   }
 }
+
+
+
