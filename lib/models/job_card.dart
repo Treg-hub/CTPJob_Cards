@@ -38,6 +38,8 @@ class JobCard {
   final String? assignedToName;
   final String description;
   final String notes;
+  final String comments;
+  final int reoccurrenceCount;
   final JobStatus status;
   final DateTime? createdAt;
   final DateTime? assignedAt;
@@ -61,6 +63,8 @@ class JobCard {
     this.assignedToName,
     required this.description,
     this.notes = '',
+    this.comments = '',
+    this.reoccurrenceCount = 1,
     this.status = JobStatus.open,
     this.createdAt,
     this.assignedAt,
@@ -87,6 +91,8 @@ class JobCard {
       assignedToName: data['assignedToName'] as String?,
       description: data['description'] as String? ?? '',
       notes: data['notes'] as String? ?? '',
+      comments: data['comments'] as String? ?? '',
+      reoccurrenceCount: data['reoccurrenceCount'] as int? ?? 1,
       status: JobStatusExtension.fromString(data['status'] as String? ?? 'Open'),
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
@@ -124,6 +130,8 @@ class JobCard {
       'assignedToName': assignedToName,
       'description': description,
       'notes': notes,
+      'comments': comments,
+      'reoccurrenceCount': reoccurrenceCount,
       'status': status.name,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'assignedAt': assignedAt != null ? Timestamp.fromDate(assignedAt!) : null,
@@ -149,6 +157,8 @@ class JobCard {
     String? assignedToName,
     String? description,
     String? notes,
+    String? comments,
+    int? reoccurrenceCount,
     JobStatus? status,
     DateTime? createdAt,
     DateTime? assignedAt,
@@ -172,6 +182,8 @@ class JobCard {
       assignedToName: assignedToName ?? this.assignedToName,
       description: description ?? this.description,
       notes: notes ?? this.notes,
+      comments: comments ?? this.comments,
+      reoccurrenceCount: reoccurrenceCount ?? this.reoccurrenceCount,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       assignedAt: assignedAt ?? this.assignedAt,

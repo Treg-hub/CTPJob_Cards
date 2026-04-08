@@ -35,19 +35,21 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
 
   int get _gridCrossAxisCount {
-    if (_isDesktop) return 4;
+    if (_isDesktop) return 6;
     if (_isTablet) return 3;
     return 2; // Mobile
   }
 
   double get _iconSize {
-    if (_isDesktop) return 52;
-    if (_isTablet) return 40;
-    return 44; // Mobile - smaller to fit compact design
+    return 44; // Consistent icon size across all devices
   }
 
   double get _cardPadding {
-    return 8; // Even smaller padding for all cards
+    return _isDesktop ? 0 : 2; // No padding on desktop for minimal size
+  }
+
+  EdgeInsets get _cardPaddingInsets {
+    return _isDesktop ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4) : const EdgeInsets.all(2);
   }
 
   double get _screenPadding {
@@ -57,9 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   double get _gridSpacing {
-    if (_isDesktop) return 16;
-    if (_isTablet) return 14;
-    return 12; // Mobile
+    if (_isDesktop) return 3;
+    if (_isTablet) return 10;
+    return 8; // Mobile
   }
 
   @override
@@ -277,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Switch(
                       value: isOnSite,
                       onChanged: _toggleOnSite,
-                      activeColor: Colors.green,
+                      activeThumbColor: Colors.green,
                       inactiveTrackColor: Colors.redAccent,
                     ),
                   ),
@@ -297,39 +299,106 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: _gridCrossAxisCount,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: _gridSpacing,
-            mainAxisSpacing: _gridSpacing,
-            children: [
-              _buildQuickActionCard(
-                'Create Job Card',
-                Icons.add_circle,
-                const Color(0xFFFF8C42),
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
-              ),
-              _buildQuickActionCard(
-                'View Open Jobs',
-                Icons.list_alt,
-                const Color(0xFF64748B),
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
-              ),
-              _buildQuickActionCard(
-                'My Assigned Jobs',
-                Icons.assignment_turned_in,
-                const Color(0xFF10B981),
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen())),
-              ),
-              _buildQuickActionCard(
-                'Completed Jobs',
-                Icons.history,
-                const Color(0xFF8B5CF6),
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen())),
-              ),
-            ],
-          ),
+           _isDesktop
+               ? Center(
+                   child: SizedBox(
+                     width: MediaQuery.of(context).size.width * 0.8, // Limit width to 80% for centering
+                     child: LayoutBuilder(
+                       builder: (context, constraints) {
+                         final containerWidth = constraints.maxWidth;
+                         final spacing = _gridSpacing;
+                         final cellWidth = (containerWidth - 5 * spacing) / 6;
+                         final cellHeight = cellWidth; // 1:1 aspect ratio
+                         return Center(
+                           child: Row(
+                             mainAxisAlignment: MainAxisAlignment.center,
+                             mainAxisSize: MainAxisSize.min,
+                             children: [
+                               SizedBox(width: cellWidth + spacing), // Left spacer (1 empty column)
+                               SizedBox(
+                                 width: cellWidth,
+                                 height: cellHeight,
+                                 child: _buildQuickActionCard(
+                                   'Create Job Card',
+                                   Icons.add_circle,
+                                   const Color(0xFFFF8C42),
+                                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
+                                 ),
+                               ),
+                               SizedBox(width: spacing),
+                               SizedBox(
+                                 width: cellWidth,
+                                 height: cellHeight,
+                                 child: _buildQuickActionCard(
+                                   'View Open Jobs',
+                                   Icons.list_alt,
+                                   const Color(0xFF64748B),
+                                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+                                 ),
+                               ),
+                               SizedBox(width: spacing),
+                               SizedBox(
+                                 width: cellWidth,
+                                 height: cellHeight,
+                                 child: _buildQuickActionCard(
+                                   'My Assigned Jobs',
+                                   Icons.assignment_turned_in,
+                                   const Color(0xFF10B981),
+                                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen())),
+                                 ),
+                               ),
+                               SizedBox(width: spacing),
+                               SizedBox(
+                                 width: cellWidth,
+                                 height: cellHeight,
+                                 child: _buildQuickActionCard(
+                                   'Completed Jobs',
+                                   Icons.history,
+                                   const Color(0xFF8B5CF6),
+                                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen())),
+                                 ),
+                               ),
+                               SizedBox(width: cellWidth + spacing), // Right spacer (1 empty column)
+                             ],
+                           ),
+                         );
+                       },
+                     ),
+                   ),
+                 )
+              : GridView.count(
+                  crossAxisCount: _gridCrossAxisCount,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: _gridSpacing,
+                  mainAxisSpacing: _gridSpacing,
+                  children: [
+                    _buildQuickActionCard(
+                      'Create Job Card',
+                      Icons.add_circle,
+                      const Color(0xFFFF8C42),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
+                    ),
+                    _buildQuickActionCard(
+                      'View Open Jobs',
+                      Icons.list_alt,
+                      const Color(0xFF64748B),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+                    ),
+                    _buildQuickActionCard(
+                      'My Assigned Jobs',
+                      Icons.assignment_turned_in,
+                      const Color(0xFF10B981),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen())),
+                    ),
+                    _buildQuickActionCard(
+                      'Completed Jobs',
+                      Icons.history,
+                      const Color(0xFF8B5CF6),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen())),
+                    ),
+                  ],
+                ),
 
           const SizedBox(height: 16),
 
@@ -356,16 +425,16 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: EdgeInsets.all(_cardPadding),
+          padding: _cardPaddingInsets,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: _iconSize, color: color),
-              SizedBox(height: _isDesktop ? 6 : 8),
+              SizedBox(height: _isDesktop ? 2 : 6),
               Text(
                 title,
-                style: TextStyle(
-                  fontSize: _isDesktop ? 11 : 13,
+                style: const TextStyle(
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
                 ),
@@ -637,12 +706,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                 ),
-                onTap: () {
-                  // Navigate to job details - for now just show a snackbar
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Tapped on: ${job.description}')),
-                  );
-                },
+                 onTap: () {
+                   Navigator.push(
+                     context,
+                     MaterialPageRoute(
+                       builder: (_) => JobCardDetailScreen(jobCard: job),
+                     ),
+                   );
+                 },
               ),
             );
           },

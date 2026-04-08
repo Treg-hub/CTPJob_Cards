@@ -71,11 +71,12 @@ class _AdminScreenState extends State<AdminScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
-                      children: data.keys.map((dept) => ChoiceChip(
-                        label: Text(dept),
-                        selected: selectedDeptForArea == dept,
-                        onSelected: (_) => setState(() => selectedDeptForArea = dept),
-                      )).toList(),
+                    children: data.keys.map((dept) => ChoiceChip(
+                      label: Text(dept),
+                      selected: selectedDeptForArea == dept,
+                      onSelected: (_) => setState(() => selectedDeptForArea = dept),
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                    )).toList(),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -133,6 +134,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           selectedDeptForMachine = dept;
                           selectedAreaForMachine = null;
                         }),
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                       )).toList(),
                     ),
                     if (selectedDeptForMachine != null) ...[
@@ -142,11 +144,12 @@ class _AdminScreenState extends State<AdminScreen> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
-                        children: areas.map((area) => ChoiceChip(
-                          label: Text(area),
-                          selected: selectedAreaForMachine == area,
-                          onSelected: (_) => setState(() => selectedAreaForMachine = area),
-                        )).toList(),
+                      children: areas.map((area) => ChoiceChip(
+                        label: Text(area),
+                        selected: selectedAreaForMachine == area,
+                        onSelected: (_) => setState(() => selectedAreaForMachine = area),
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                      )).toList(),
                       ),
                     ],
                     const SizedBox(height: 16),

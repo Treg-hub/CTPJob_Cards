@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
 import 'services/firestore_service.dart';
 
 // ==================== BACKGROUND HANDLER (mobile only) ====================
