@@ -21,6 +21,24 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   String description = '';
   bool _isLoading = false;
 
+  final List<Color> priorityColors = [
+    Colors.transparent,
+    Colors.green[500]!,
+    Colors.lightGreen[500]!,
+    Colors.amber[500]!,
+    Colors.deepOrange[500]!,
+    Colors.red[700]!,
+  ];
+
+  final List<String> priorityDescriptions = [
+    '',
+    "External issue: No runnability impact",
+    "Minimal interference: Can run",
+    "Reduced speed: No waste impact",
+    "Reduced speed: Causes additional waste",
+    "Cannot run: Requires urgent attention",
+  ];
+
   final FirestoreService _firestoreService = FirestoreService();
 
   String get operatorName => currentEmployee?.name ?? 'Unknown';
@@ -207,12 +225,30 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         label: Text('$num'),
                         selected: priority == num,
                         onSelected: (_) => setState(() => priority = num),
-                        backgroundColor: num >= 4 ? Colors.red : num == 3 ? Colors.orange : Colors.green,
-                        selectedColor: Colors.white,
-                        labelStyle: TextStyle(color: priority == num ? Colors.black : Colors.white),
+                        backgroundColor: priorityColors[num],
+                        selectedColor: priorityColors[num]?.withOpacity(0.2),
+                        labelStyle: TextStyle(color: num == priority ? Colors.black87 : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       );
                     }),
                   ),
+                  const SizedBox(height: 8),
+                  if (priority > 0)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: priorityColors[priority]?.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        priorityDescriptions[priority],
+                        style: TextStyle(
+                          color: priorityColors[priority],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   const SizedBox(height: 24),
                   TextFormField(
                     decoration: const InputDecoration(
@@ -229,7 +265,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _saveJobCard,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
+                        backgroundColor: Color(0xFFFF8C42),
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         textStyle: const TextStyle(fontSize: 24),
                       ),

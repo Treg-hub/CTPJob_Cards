@@ -41,15 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   double get _iconSize {
-    if (_isDesktop) return 24;
-    if (_isTablet) return 28;
-    return 32; // Mobile
+    if (_isDesktop) return 52;
+    if (_isTablet) return 40;
+    return 44; // Mobile - smaller to fit compact design
   }
 
   double get _cardPadding {
-    if (_isDesktop) return 12;
-    if (_isTablet) return 14;
-    return 16; // Mobile
+    return 8; // Even smaller padding for all cards
   }
 
   double get _screenPadding {
@@ -287,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          SizedBox(height: _isDesktop ? 32 : 24),
+          const SizedBox(height: 16),
 
           // Quick Actions Grid
           Text(
@@ -298,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white,
             ),
           ),
-          SizedBox(height: _isDesktop ? 20 : 16),
+          const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: _gridCrossAxisCount,
             shrinkWrap: true,
@@ -333,59 +331,25 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
 
-          SizedBox(height: _isDesktop ? 32 : 24),
+          const SizedBox(height: 16),
 
-          // Management & Administration Section
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Management & Administration',
-                style: TextStyle(
-                  fontSize: _isDesktop ? 18 : 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(height: _isDesktop ? 20 : 16),
-              if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        'Manager Dashboard',
-                        Icons.dashboard,
-                        const Color(0xFFEF4444),
-                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManagerDashboardScreen())),
-                      ),
-                    ),
-                    SizedBox(width: _gridSpacing),
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        'Admin Settings',
-                        Icons.settings,
-                        const Color(0xFF14B8A6),
-                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                _buildQuickActionCard(
-                  'Admin Settings',
-                  Icons.settings,
-                  const Color(0xFF14B8A6),
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-                  fullWidth: true,
-                ),
-            ],
+          // Recent Job Cards Section
+          Text(
+            'Recent Job Cards',
+            style: TextStyle(
+              fontSize: _isDesktop ? 18 : 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
+          const SizedBox(height: 12),
+          _buildRecentJobCards(),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap, {bool fullWidth = false}) {
+  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
     return Card(
       elevation: 4,
       child: InkWell(
@@ -401,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: _isDesktop ? 12 : 14,
+                  fontSize: _isDesktop ? 11 : 13,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
                 ),
@@ -414,6 +378,177 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildRecentJobCards() {
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: Text('Error loading recent jobs: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final allJobs = snapshot.data!;
+        if (allJobs.isEmpty) {
+          return const Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: Text('No recent jobs available', style: TextStyle(color: Colors.white70)),
+              ),
+            ),
+          );
+        }
+
+        // Sort by lastUpdatedAt descending and take top 20
+        final recentJobs = allJobs
+            .where((job) => job.lastUpdatedAt != null)
+            .toList()
+          ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+        final top20Jobs = recentJobs.take(20).toList();
+
+        // All screens: Vertical ListView with horizontal Row layout
+        return Column(
+          children: [
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: top20Jobs.length,
+              itemBuilder: (context, index) {
+                final job = top20Jobs[index];
+                return Card(
+                  elevation: 4,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // First line: department, machine, area, created by
+                          Row(
+                            children: [
+                              Text(
+                                '${job.department} • ${job.machine} • ${job.area}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Created by: ${job.operator}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // Second line: Priority, description
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _getPriorityColor('P${job.priority}'),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'P${job.priority}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  job.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // Third line: Status, Type, Assigned to, Last updated
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(job.status.name).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  job.status.displayName,
+                                  style: TextStyle(color: _getStatusColor(job.status.name), fontSize: 11, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueGrey.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  job.type.displayName,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                job.assignedToName ?? job.assignedTo ?? 'Unassigned',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatDateTime(job.lastUpdatedAt!),
+                                style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+                icon: const Icon(Icons.visibility, size: 16),
+                label: const Text('View All Job Cards'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF8C42),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildJobsTab() {
     return DefaultTabController(
       length: 2,
@@ -422,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const TabBar(
             tabs: [
               Tab(text: 'Open Jobs'),
-              Tab(text: 'All Jobs'),
+              Tab(text: 'Closed Jobs'),
             ],
             labelColor: Color(0xFFFF8C42),
             unselectedLabelColor: Colors.grey,
@@ -432,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: TabBarView(
               children: [
                 _buildOpenJobsList(),
-                _buildAllJobsList(),
+                _buildClosedJobsList(),
               ],
             ),
           ),
@@ -478,9 +613,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                 ),
-                subtitle: Text(
-                  'Priority: P${job.priority} • Type: ${job.type.displayName}',
-                  style: const TextStyle(color: Colors.white70),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Assigned to: ${job.assignedToName ?? job.assignedTo ?? "Not Assigned"}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
                 ),
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -585,14 +729,90 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildClosedJobsList() {
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final jobCards = snapshot.data!.where((job) => job.status == JobStatus.completed).toList();
+
+        if (jobCards.isEmpty) {
+          return const Center(
+            child: Text('No closed jobs available', style: TextStyle(color: Colors.white70)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: jobCards.length,
+          itemBuilder: (context, index) {
+            final job = jobCards[index];
+            return Card(
+              elevation: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                title: Text(
+                  job.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    Text(
+                      'Completed: ${job.completedAt != null ? _formatDate(job.completedAt!) : 'Unknown'}',
+                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                trailing: const Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 24,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobCardDetailScreen(jobCard: job),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Color _getPriorityColor(String priority) {
-    switch (priority.toUpperCase()) {
-      case 'P1':
-        return Colors.red;
-      case 'P2':
-        return Colors.orange;
-      case 'P3':
-        return Colors.green;
+    final num = int.tryParse(priority.substring(1)) ?? 0;
+    switch (num) {
+      case 1:
+        return Colors.green[500]!;
+      case 2:
+        return Colors.lightGreen[500]!;
+      case 3:
+        return Colors.amber[500]!;
+      case 4:
+        return Colors.deepOrange[500]!;
+      case 5:
+        return Colors.red[700]!;
       default:
         return Colors.grey;
     }
@@ -615,13 +835,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildMyWorkTab() {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Column(
         children: [
           const TabBar(
             tabs: [
               Tab(text: 'Assigned'),
-              Tab(text: 'Created'),
               Tab(text: 'History'),
             ],
             labelColor: Color(0xFFFF8C42),
@@ -632,7 +851,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: TabBarView(
               children: [
                 _buildAssignedJobs(),
-                _buildCreatedJobs(),
                 _buildWorkHistory(),
               ],
             ),
@@ -695,94 +913,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'Status: ${job.status.displayName} • From: ${job.operator}',
                       style: const TextStyle(color: Colors.white70),
-                    ),
-                  ],
-                ),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getPriorityColor('P${job.priority}'),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'P${job.priority}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => JobCardDetailScreen(jobCard: job),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildCreatedJobs() {
-    if (currentEmployee == null) {
-      return const Center(
-        child: Text('Please log in to view created jobs', style: TextStyle(color: Colors.white70)),
-      );
-    }
-
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
-          );
-        }
-
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final createdJobs = snapshot.data!
-            .where((job) => job.operatorClockNo == currentEmployee!.clockNo)
-            .toList();
-
-        if (createdJobs.isEmpty) {
-          return const Center(
-            child: Text('No jobs created by you', style: TextStyle(color: Colors.white70)),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: createdJobs.length,
-          itemBuilder: (context, index) {
-            final job = createdJobs[index];
-            return Card(
-              elevation: 4,
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                title: Text(
-                  job.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Priority: P${job.priority} • Type: ${job.type.displayName}',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    Text(
-                      'Status: ${job.status.displayName}',
-                      style: TextStyle(
-                        color: _getStatusColor(job.status.name),
-                        fontWeight: FontWeight.w500,
-                      ),
                     ),
                   ],
                 ),
@@ -896,6 +1026,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildDashboardTab() {
+    if (currentEmployee == null || !currentEmployee!.position.toLowerCase().contains('manager')) {
+      return const Center(
+        child: Text('Access denied. Manager role required.', style: TextStyle(color: Colors.white70)),
+      );
+    }
+    return const ManagerDashboardScreen();
+  }
+
   Widget _buildSettingsTab() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(_screenPadding),
@@ -940,6 +1083,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // Admin Settings
+          Text(
+            'Admin Settings',
+            style: TextStyle(
+              fontSize: _isDesktop ? 18 : 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: _isDesktop ? 20 : 16),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+            icon: const Icon(Icons.settings),
+            label: const Text('Manage Factory Structure'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF14B8A6),
+              foregroundColor: Colors.white,
             ),
           ),
 
@@ -1025,7 +1190,7 @@ class _HomeScreenState extends State<HomeScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFF8C42), Color.fromARGB(255, 124, 124, 124)],
+              colors: [Color.fromRGBO(255, 140, 66, 1), Color.fromARGB(255, 124, 124, 124)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -1049,29 +1214,34 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHomeTab(),
           _buildJobsTab(),
           _buildMyWorkTab(),
+          if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+            _buildDashboardTab(),
           _buildSettingsTab(),
         ],
       ),
-      floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen())),
-        backgroundColor: const Color(0xFFFF8C42),
-        child: const Icon(Icons.add, color: Colors.black),
-      ) : null,
       bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
+        type: BottomNavigationBarType.fixed,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        items: <BottomNavigationBarItem>[
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.work),
             label: 'Jobs',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.assignment),
             label: 'My Work',
           ),
-          BottomNavigationBarItem(
+          if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard),
+              label: 'Dashboard',
+            ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
           ),
@@ -1085,6 +1255,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
-
-

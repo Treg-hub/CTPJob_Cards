@@ -16,6 +16,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _nameController = TextEditingController();
   final _clockNoController = TextEditingController();
   bool _isLoading = false;
   final FirestoreService _firestoreService = FirestoreService();
@@ -31,23 +32,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final name = _nameController.text.trim();
     final clockNo = _clockNoController.text.trim();
-    if (clockNo.isEmpty) {
+    if (name.isEmpty || clockNo.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your clock card number'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please enter your name and clock card number'), backgroundColor: Colors.red),
       );
       return;
     }
     setState(() => _isLoading = true);
     try {
-      final empDoc = await FirebaseFirestore.instance.collection('employees').doc(clockNo).get();
-      final empData = empDoc.data();
-      if (empData == null) {
+      final query = FirebaseFirestore.instance.collection('employees').where('name', isEqualTo: name).where('clockNo', isEqualTo: clockNo).limit(1);
+      final snapshot = await query.get();
+      if (snapshot.docs.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load employee data'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Invalid name or clock card number'), backgroundColor: Colors.red),
         );
         return;
       }
+      final empData = snapshot.docs.first.data();
       final employee = Employee(
         clockNo: empData['clockNo'] as String? ?? '',
         name: empData['name'] as String? ?? '',
@@ -55,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         department: empData['department'] as String? ?? '',
       );
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('loggedInName', name);
       await prefs.setString('loggedInClockNo', clockNo);
       currentEmployee = employee;
       if (!kIsWeb) {
@@ -96,12 +100,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _clockNoController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    double titleWidth;
+    if (isMobile) {
+      titleWidth = screenWidth - 48;
+    } else {
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'CTP Job Cards',
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      titleWidth = textPainter.width;
+    }
+
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -110,70 +132,69 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final screenWidth = MediaQuery.of(context).size.width;
-                    final isMobile = screenWidth < 600;
-                    
-                    double logoWidth;
-                    if (isMobile) {
-                      logoWidth = screenWidth - 48; // Account for padding
-                    } else {
-                      // Measure the width of "CTP Job Cards" text
-                      final textPainter = TextPainter(
-                        text: const TextSpan(
-                          text: 'CTP Job Cards',
-                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                        ),
-                        textDirection: TextDirection.ltr,
-                      );
-                      textPainter.layout();
-                      logoWidth = textPainter.width;
-                    }
-                    
-                    return SizedBox(
-                      height: logoWidth * 0.5, // Maintain aspect ratio
-                      width: logoWidth,
-                      child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-                    );
-                  },
+                SizedBox(
+                  height: titleWidth * 0.5, // Maintain aspect ratio
+                  width: titleWidth,
+                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
                 ),
                 const SizedBox(height: 24),
                 const Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
                 const SizedBox(height: 8),
                 const Text('Welcome', style: TextStyle(fontSize: 18, color: Colors.white70)),
                 const SizedBox(height: 48),
-                TextField(
-                  controller: _clockNoController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Clock Card Number',
-                    hintText: 'Enter your clock card number',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    filled: true,
-                    fillColor: const Color(0xFF1A1A1A),
-                    labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
-                  ),
-                  style: const TextStyle(color: Colors.white),
-                  enabled: !_isLoading,
-                ),
-                const SizedBox(height: 24),
                 SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: const Color(0xFFFF8C42),
-                      disabledBackgroundColor: Colors.grey,
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.black)))
-                        : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                  width: titleWidth,
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        keyboardType: TextInputType.text,
+                        decoration: InputDecoration(
+                          labelText: 'Name',
+                          hintText: 'Enter your name',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A1A),
+                          labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
+                        ),
+                        style: const TextStyle(color: Colors.white),
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _clockNoController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Clock Card Number',
+                          hintText: 'Enter your clock card number',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A1A),
+                          labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
+                        ),
+                        style: const TextStyle(color: Colors.white),
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _login,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: const Color(0xFFFF8C42),
+                            disabledBackgroundColor: Colors.grey,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.black)))
+                              : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('This device will be limited to your account', style: TextStyle(fontSize: 14, color: Colors.white70), textAlign: TextAlign.center),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text('This device will be limited to your account', style: TextStyle(fontSize: 14, color: Colors.white70), textAlign: TextAlign.center),
               ],
             ),
           ),
