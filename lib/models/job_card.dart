@@ -46,6 +46,8 @@ class JobCard {
   final DateTime? startedAt;
   final DateTime? lastUpdatedAt;
   final DateTime? notificationReceivedAt;
+  final DateTime? notifiedAt2min;
+  final DateTime? notifiedAt7min;
   final String? completedBy;
   final DateTime? completedAt;
 
@@ -71,6 +73,8 @@ class JobCard {
     this.startedAt,
     this.lastUpdatedAt,
     this.notificationReceivedAt,
+    this.notifiedAt2min,
+    this.notifiedAt7min,
     this.completedBy,
     this.completedAt,
   });
@@ -109,6 +113,12 @@ class JobCard {
       notificationReceivedAt: data['notificationReceivedAt'] != null
           ? (data['notificationReceivedAt'] as Timestamp).toDate()
           : null,
+      notifiedAt2min: data['notifiedAt2min'] != null
+          ? (data['notifiedAt2min'] as Timestamp).toDate()
+          : null,
+      notifiedAt7min: data['notifiedAt7min'] != null
+          ? (data['notifiedAt7min'] as Timestamp).toDate()
+          : null,
       completedBy: data['completedBy'] as String?,
       completedAt: data['completedAt'] != null
           ? (data['completedAt'] as Timestamp).toDate()
@@ -138,6 +148,8 @@ class JobCard {
       'startedAt': startedAt != null ? Timestamp.fromDate(startedAt!) : null,
       'lastUpdatedAt': FieldValue.serverTimestamp(), // Always update on save
       'notificationReceivedAt': notificationReceivedAt != null ? Timestamp.fromDate(notificationReceivedAt!) : null,
+      'notifiedAt2min': notifiedAt2min != null ? Timestamp.fromDate(notifiedAt2min!) : null,
+      'notifiedAt7min': notifiedAt7min != null ? Timestamp.fromDate(notifiedAt7min!) : null,
       'completedBy': completedBy,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
@@ -165,6 +177,8 @@ class JobCard {
     DateTime? startedAt,
     DateTime? lastUpdatedAt,
     DateTime? notificationReceivedAt,
+    DateTime? notifiedAt2min,
+    DateTime? notifiedAt7min,
     String? completedBy,
     DateTime? completedAt,
   }) {
@@ -190,6 +204,8 @@ class JobCard {
       startedAt: startedAt ?? this.startedAt,
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
       notificationReceivedAt: notificationReceivedAt ?? this.notificationReceivedAt,
+      notifiedAt2min: notifiedAt2min ?? this.notifiedAt2min,
+      notifiedAt7min: notifiedAt7min ?? this.notifiedAt7min,
       completedBy: completedBy ?? this.completedBy,
       completedAt: completedAt ?? this.completedAt,
     );

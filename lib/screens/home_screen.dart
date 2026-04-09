@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final NotificationService _notificationService = NotificationService();
 
   bool isOnSite = true;
+  String? _pendingJobId;
 
   // Responsive design helpers
   bool get _isMobile => MediaQuery.of(context).size.width < 600;
@@ -84,10 +85,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
+        // Handle deep link for foreground messages
+        if (message.data['jobId'] != null) {
+          setState(() => _pendingJobId = message.data['jobId']);
+        }
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        if (message.data['click_action'] == 'FLUTTER_NOTIFICATION_CLICK') {
+        if (message.data['jobId'] != null) {
+          _handleJobDeepLink(message.data['jobId']);
+        } else if (message.data['click_action'] == 'FLUTTER_NOTIFICATION_CLICK') {
           // Mark notification as received/read
           _markNotificationReceived(message.data);
           if (mounted) {
@@ -1244,6 +1251,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _handleJobDeepLink(String jobId) async {
+    try {
+      final job = await _firestoreService.getJobCard(jobId);
+      if (job != null && mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)));
+      }
+    } catch (e) {
+      debugPrint('Error handling job deep link: $e');
+    }
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -1252,6 +1270,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_pendingJobId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleJobDeepLink(_pendingJobId!);
+        _pendingJobId = null;
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
