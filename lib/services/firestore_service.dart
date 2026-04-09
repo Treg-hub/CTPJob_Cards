@@ -88,7 +88,7 @@ class FirestoreService {
     return _firestore
         .collection('job_cards')
         .where('status', isEqualTo: 'open')
-        .where('assignedTo', isEqualTo: employeeClockNo)
+        .where('assignedClockNos', arrayContains: employeeClockNo)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }

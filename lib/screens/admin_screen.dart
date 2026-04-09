@@ -71,12 +71,13 @@ class _AdminScreenState extends State<AdminScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
-                    children: data.keys.map((dept) => ChoiceChip(
-                      label: Text(dept),
-                      selected: selectedDeptForArea == dept,
-                      onSelected: (_) => setState(() => selectedDeptForArea = dept),
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                    )).toList(),
+                     children: data.keys.map((dept) => ChoiceChip(
+                       label: Text(dept),
+                       selected: selectedDeptForArea == dept,
+                       onSelected: (_) => setState(() => selectedDeptForArea = dept),
+                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                       labelStyle: selectedDeptForArea == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                     )).toList(),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -135,6 +136,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           selectedAreaForMachine = null;
                         }),
                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                        labelStyle: selectedDeptForMachine == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                       )).toList(),
                     ),
                     if (selectedDeptForMachine != null) ...[
@@ -149,6 +151,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         selected: selectedAreaForMachine == area,
                         onSelected: (_) => setState(() => selectedAreaForMachine = area),
                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                        labelStyle: selectedAreaForMachine == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                       )).toList(),
                       ),
                     ],

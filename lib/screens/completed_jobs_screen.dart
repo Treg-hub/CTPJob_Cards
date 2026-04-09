@@ -96,6 +96,52 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
     });
   }
 
+  void _showAddCommentDialog(JobCard job) {
+    final commentController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Comment'),
+        content: TextField(
+          controller: commentController,
+          decoration: const InputDecoration(labelText: 'Comment'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (commentController.text.trim().isEmpty) return;
+              final now = DateTime.now();
+              final user = 'User'; // Since no currentEmployee in this screen
+              final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2,'0')}] $user: ${commentController.text.trim()}';
+              final updatedComments = job.comments + newComment;
+              try {
+                await _firestoreService.updateJobCard(job.id!, job.copyWith(comments: updatedComments));
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Comment added!')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error adding comment: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,16 +172,17 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                 const SizedBox(height: 16),
                 const Text('Filter by Department:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: departments.map((dept) => FilterChip(
-                    label: Text(dept, style: const TextStyle(fontSize: 12)),
-                    selected: selectedDepartment == dept,
-                    onSelected: (_) => _updateAreas(dept),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  )).toList(),
-                ),
+                 Wrap(
+                   spacing: 6,
+                   runSpacing: 4,
+                   children: departments.map((dept) => FilterChip(
+                     label: Text(dept, style: const TextStyle(fontSize: 12)),
+                     selected: selectedDepartment == dept,
+                     onSelected: (_) => _updateAreas(dept),
+                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                     labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                   )).toList(),
+                 ),
                 if (selectedDepartment != null) ...[
                   const SizedBox(height: 6),
                   Wrap(
@@ -146,6 +193,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                       selected: selectedArea == area,
                       onSelected: (_) => _updateMachines(area),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                     )).toList(),
                   ),
                 ],
@@ -159,6 +207,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                       selected: selectedMachine == machine,
                       onSelected: (_) => setState(() => selectedMachine = machine),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                     )).toList(),
                   ),
                 ],
@@ -209,13 +258,29 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              job.description,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    job.description,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () => _showAddCommentDialog(job),
+                                  icon: const Icon(Icons.comment, size: 16),
+                                  label: const Text('Add Comment'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    textStyle: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${job.department} • ${job.area} • ${job.machine}\n${job.type.displayName} | P${job.priority} | Completed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}',
+                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Completed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}',
                               style: const TextStyle(fontSize: 14, color: Colors.grey),
                             ),
                             const SizedBox(height: 8),

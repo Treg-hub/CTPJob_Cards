@@ -183,11 +183,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
-                    _buildDetailRow('Created By', widget.jobCard.operator),
-                    if (widget.jobCard.assignedToName != null)
-                      _buildDetailRow('Assigned To', widget.jobCard.assignedToName!),
-                    if (widget.jobCard.completedBy != null)
-                      _buildDetailRow('Completed By', widget.jobCard.completedBy!),
+                     _buildDetailRow('Created By', widget.jobCard.operator),
+                     if (widget.jobCard.assignedNames != null)
+                       for (var name in widget.jobCard.assignedNames!)
+                         _buildDetailRow('Assigned To', name),
+                     if (widget.jobCard.completedBy != null)
+                       _buildDetailRow('Completed By', widget.jobCard.completedBy!),
                   ],
                 ),
               ),

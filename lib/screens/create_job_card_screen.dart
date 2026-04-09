@@ -215,10 +215,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  '${job.department} • ${job.machine} • ${job.area}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                ),
+                            Text(
+                              '${job.department} > ${job.machine} > ${job.area}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Created by: ${job.operator}',
@@ -279,7 +279,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  job.assignedToName ?? job.assignedTo ?? 'Unassigned',
+                                   job.assignedNames?.join(', ') ?? 'Unassigned',
                                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                                 ),
                                 const SizedBox(width: 8),
@@ -342,8 +342,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
             return ListView(
               children: [
-                Text('Operator: $operatorName', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
                 if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -374,17 +372,18 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                    Wrap(
                      spacing: 8,
                      runSpacing: 4,
-                      children: data.keys.map((dept) => ChoiceChip(
-                        label: Text(dept),
-                        selected: selectedDepartment == dept,
-                        onSelected: (_) => setState(() {
-                          selectedDepartment = dept;
-                          selectedArea = null;
-                          selectedMachine = null;
-                          part = '';
-                        }),
-                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                      )).toList(),
+                       children: data.keys.map((dept) => ChoiceChip(
+                         label: Text(dept),
+                         selected: selectedDepartment == dept,
+                         onSelected: (_) => setState(() {
+                           selectedDepartment = dept;
+                           selectedArea = null;
+                           selectedMachine = null;
+                           part = '';
+                         }),
+                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                         labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                       )).toList(),
                    ),
                  ],
                 if (selectedDepartment != null && selectedArea == null) ...[
@@ -403,6 +402,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          part = '';
                        }),
                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                       labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                      )).toList(),
                    ),
                  ],
@@ -421,11 +421,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          part = '';
                        }),
                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                       labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                      )).toList(),
                    ),
                  ],
                 if (selectedMachine != null) ...[
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   FutureBuilder<List<String>>(
                     future: _loadPreviousParts(),
@@ -468,6 +469,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     selected: jobType == type,
                     onSelected: (_) => setState(() => jobType = jobType == type ? null : type),
                     padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                    labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                   )).toList(),
                 ),
                 const SizedBox(height: 16),
@@ -483,7 +485,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       onSelected: (_) => setState(() => priority = num),
                       backgroundColor: priorityColors[num],
                       selectedColor: priorityColors[num].withOpacity(0.2),
-                      labelStyle: TextStyle(color: num == priority ? Colors.black87 : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                      labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                     );
                   }),
@@ -516,7 +518,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -567,8 +569,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   key: _formKey,
                   child: ListView(
                     children: [
-                      Text('Operator: $operatorName', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 24),
                       if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -708,7 +708,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             onSelected: (_) => setState(() => priority = num),
                             backgroundColor: priorityColors[num],
                             selectedColor: priorityColors[num].withOpacity(0.2),
-                            labelStyle: TextStyle(color: num == priority ? Colors.black87 : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                            labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                           );
                         }),
@@ -777,7 +777,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   Widget build(BuildContext context) {
     debugPrint('Building CreateJobCardScreen - jobType: $jobType');
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Job Card')),
+      appBar: AppBar(
+        title: const Text('Create Job Card'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Text('Operator: $operatorName', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
       body: _isWide ? _buildWideLayout() : _buildNarrowLayout(),
     );
   }

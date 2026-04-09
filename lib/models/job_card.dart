@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 enum JobType {
   mechanical('Mechanical'),
   electrical('Electrical'),
-  mechanicalElectrical('Mech/Elec (Unknown)');
+  mechanicalElectrical('Mech/Elec (Unknown)'),
+  maintenance('Maintenance');
 
   const JobType(this.displayName);
   final String displayName;
@@ -34,8 +35,8 @@ class JobCard {
   final int priority;
   final String operator;
   final String? operatorClockNo;
-  final String? assignedTo;
-  final String? assignedToName;
+  final List<String>? assignedClockNos;
+  final List<String>? assignedNames;
   final String description;
   final String notes;
   final String comments;
@@ -61,8 +62,8 @@ class JobCard {
     required this.priority,
     required this.operator,
     this.operatorClockNo,
-    this.assignedTo,
-    this.assignedToName,
+    this.assignedClockNos,
+    this.assignedNames,
     required this.description,
     this.notes = '',
     this.comments = '',
@@ -91,8 +92,8 @@ class JobCard {
       priority: data['priority'] as int? ?? 3,
       operator: data['operator'] as String? ?? '',
       operatorClockNo: data['operatorClockNo'] as String?,
-      assignedTo: data['assignedTo'] as String?,
-      assignedToName: data['assignedToName'] as String?,
+      assignedClockNos: (data['assignedClockNos'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      assignedNames: (data['assignedNames'] as List<dynamic>?)?.map((e) => e as String).toList(),
       description: data['description'] as String? ?? '',
       notes: data['notes'] as String? ?? '',
       comments: data['comments'] as String? ?? '',
@@ -136,8 +137,8 @@ class JobCard {
       'priority': priority,
       'operator': operator,
       'operatorClockNo': operatorClockNo,
-      'assignedTo': assignedTo,
-      'assignedToName': assignedToName,
+      'assignedClockNos': assignedClockNos,
+      'assignedNames': assignedNames,
       'description': description,
       'notes': notes,
       'comments': comments,
@@ -165,8 +166,8 @@ class JobCard {
     int? priority,
     String? operator,
     String? operatorClockNo,
-    String? assignedTo,
-    String? assignedToName,
+    List<String>? assignedClockNos,
+    List<String>? assignedNames,
     String? description,
     String? notes,
     String? comments,
@@ -192,8 +193,8 @@ class JobCard {
       priority: priority ?? this.priority,
       operator: operator ?? this.operator,
       operatorClockNo: operatorClockNo ?? this.operatorClockNo,
-      assignedTo: assignedTo ?? this.assignedTo,
-      assignedToName: assignedToName ?? this.assignedToName,
+      assignedClockNos: assignedClockNos ?? this.assignedClockNos,
+      assignedNames: assignedNames ?? this.assignedNames,
       description: description ?? this.description,
       notes: notes ?? this.notes,
       comments: comments ?? this.comments,
@@ -211,7 +212,7 @@ class JobCard {
     );
   }
 
-  bool get isAssigned => assignedTo != null && assignedTo!.isNotEmpty;
+  bool get isAssigned => assignedClockNos?.isNotEmpty ?? false;
   bool get isCompleted => status == JobStatus.completed;
 }
 

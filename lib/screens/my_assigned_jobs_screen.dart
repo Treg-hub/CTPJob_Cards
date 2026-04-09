@@ -131,6 +131,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                     selected: selectedDepartment == dept,
                     onSelected: (_) => _updateAreas(dept),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                   )).toList(),
                 ),
                 if (selectedDepartment != null) ...[
@@ -143,6 +144,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       selected: selectedArea == area,
                       onSelected: (_) => _updateMachines(area),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                     )).toList(),
                   ),
                 ],
@@ -156,6 +158,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       selected: selectedMachine == machine,
                       onSelected: (_) => setState(() => selectedMachine = machine),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                     )).toList(),
                   ),
                 ],
@@ -196,7 +199,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       margin: const EdgeInsets.all(8),
                       child: ListTile(
                         title: Text(job.description),
-                        subtitle: Text('${job.department} • ${job.machine}'),
+                        subtitle: Text('${job.department} > ${job.machine} > ${job.area}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

@@ -770,8 +770,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               _buildDetailRow('Operator', jobCard.operator),
               if (jobCard.operatorClockNo != null)
                 _buildDetailRow('Operator ID', jobCard.operatorClockNo!),
-              if (jobCard.assignedTo != null)
-                _buildDetailRow('Assigned To', jobCard.assignedToName ?? jobCard.assignedTo!),
+              if (jobCard.assignedClockNos?.isNotEmpty ?? false)
+                _buildDetailRow('Assigned To', jobCard.assignedNames?.join(', ') ?? 'Unassigned'),
               if (jobCard.notes.isNotEmpty)
               _buildDetailRow('Notes', jobCard.notes),
               if (jobCard.createdAt != null)

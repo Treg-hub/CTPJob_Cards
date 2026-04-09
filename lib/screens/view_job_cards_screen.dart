@@ -217,19 +217,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // First line: department, machine, area, created by
-              Row(
-                children: [
-                  Text(
-                    '${job.department} • ${job.machine} • ${job.area}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Created by: ${job.operator}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
+              // First line: Department > Area > Machine > Part | Created By
+              Text(
+                '${job.department} > ${job.area} > ${job.machine} > ${job.part}   |   ${job.operator}',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 4),
               // Second line: Priority, description
@@ -287,7 +278,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      job.assignedToName ?? job.assignedTo ?? 'Unassigned',
+                      job.assignedNames?.join(', ') ?? 'Unassigned',
                       style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ),
@@ -332,6 +323,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SegmentedButton<bool>(
+                  style: ButtonStyle(
+                    textStyle: MaterialStateProperty.resolveWith<TextStyle>((Set<MaterialState> states) {
+                      if (states.contains(MaterialState.selected)) {
+                        return const TextStyle(color: Color(0xFFFF8C42));
+                      }
+                      return const TextStyle(color: Colors.white);
+                    }),
+                  ),
                   segments: [
                     ButtonSegment(value: true, label: Text('Open ($openCount)')),
                     ButtonSegment(value: false, label: Text('Closed ($closedCount)')),
@@ -363,12 +362,13 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                     child: Wrap(
                       spacing: 4,
                       runSpacing: 2,
-                      children: departments.map((dept) => ChoiceChip(
-                        label: Text(dept),
-                        selected: selectedDepartment == dept,
-                        onSelected: (_) => _updateAreas(dept),
-                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                      )).toList(),
+                       children: departments.map((dept) => ChoiceChip(
+                         label: Text(dept),
+                         selected: selectedDepartment == dept,
+                         onSelected: (_) => _updateAreas(dept),
+                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                         labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                       )).toList(),
                     ),
                   ),
                 ),
@@ -384,6 +384,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                           selected: selectedArea == area,
                           onSelected: (_) => _updateMachines(area),
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                          labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                         )).toList(),
                       ),
                     ),
@@ -403,6 +404,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                             _loadParts(selectedDepartment!, selectedArea!, machine);
                           },
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                          labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                         )).toList(),
                       ),
                     ),
@@ -419,6 +421,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                           selected: selectedPart == part,
                           onSelected: (_) => setState(() => selectedPart = part),
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                          labelStyle: selectedPart == part ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                         )).toList(),
                       ),
                     ),
@@ -489,14 +492,15 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
     final notesController = TextEditingController();
     String searchQuery = '';
-    String? selectedClockNo;
+    List<String> selectedClockNos = [];
+    List<String> selectedNames = [];
     bool isSaving = false;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Assign or Complete'),
+          title: const Text('Assign to Employees'),
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
@@ -516,13 +520,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                     if (!snapshot.hasData) return const CircularProgressIndicator();
                     var employees = snapshot.data!;
 
-                    // Filter by job type
-                    if (job.type == JobType.mechanical) {
-                      employees = employees.where((e) => e.position.toLowerCase().contains('mech')).toList();
-                    } else if (job.type == JobType.electrical) {
-                      employees = employees.where((e) => e.position.toLowerCase().contains('elec')).toList();
-                    }
-
                     if (searchQuery.isNotEmpty) {
                       employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
                     }
@@ -533,11 +530,23 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                         itemCount: employees.length,
                         itemBuilder: (context, index) {
                           final emp = employees[index];
-                          return RadioListTile<String>(
+                          final isSelected = selectedClockNos.contains(emp.clockNo);
+                          return CheckboxListTile(
                             title: Text(emp.displayName),
-                            value: emp.clockNo,
-                            groupValue: selectedClockNo,
-                            onChanged: (val) => setDialogState(() => selectedClockNo = val),
+                            value: isSelected,
+                            onChanged: (val) {
+                              if (val == true) {
+                                setDialogState(() {
+                                  selectedClockNos.add(emp.clockNo);
+                                  selectedNames.add(emp.name);
+                                });
+                              } else {
+                                setDialogState(() {
+                                  selectedClockNos.remove(emp.clockNo);
+                                  selectedNames.remove(emp.name);
+                                });
+                              }
+                            },
                           );
                         },
                       ),
@@ -559,68 +568,62 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: isSaving ? null : () async {
-                if (selectedClockNo == null) return;
+              onPressed: isSaving || selectedClockNos.isEmpty ? null : () async {
                 setDialogState(() => isSaving = true);
 
                 try {
-                  final assignedEmp = await _firestoreService.getEmployee(selectedClockNo!);
-                  if (assignedEmp == null) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Employee not found'), backgroundColor: Colors.red),
+                  // Check off-site for all selected
+                  for (var clockNo in selectedClockNos) {
+                    final emp = await _firestoreService.getEmployee(clockNo);
+                    if (emp != null && !emp.isOnSite && context.mounted) {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Employee is OFF SITE'),
+                          content: Text('${emp.name} is currently OFF SITE.\n\nDo you still want to assign the job?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Assign Anyway')),
+                          ],
+                        ),
                       );
-                    }
-                    return;
-                  }
 
-                  final isOnSite = assignedEmp.isOnSite;
-
-                  // Off site confirmation
-                  if (!isOnSite && context.mounted) {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Employee is OFF SITE'),
-                        content: const Text('This employee is currently OFF SITE.\n\nDo you still want to assign the job?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Assign Anyway')),
-                        ],
-                      ),
-                    );
-
-                    if (confirm != true) {
-                      setDialogState(() => isSaving = false);
-                      return;
+                      if (confirm != true) {
+                        setDialogState(() => isSaving = false);
+                        return;
+                      }
                     }
                   }
 
                   // Update job card
                   final updatedJob = job.copyWith(
-                    assignedTo: selectedClockNo,
-                    assignedToName: assignedEmp.name,
+                    assignedClockNos: selectedClockNos,
+                    assignedNames: selectedNames,
                     assignedAt: DateTime.now(),
                     notes: notesController.text.trim(),
                   );
 
                   await _firestoreService.updateJobCard(job.id!, updatedJob);
 
-                  // Send notification
-                  if (assignedEmp.fcmToken != null) {
-                    try {
-                      await _notificationService.sendJobAssignmentNotification(
-                        recipientToken: assignedEmp.fcmToken!,
-                        jobCardId: job.id!,
-                        operator: currentEmployee?.name ?? 'Unknown',
-                        department: assignedEmp.department,
-                        area: job.area,
-                        machine: job.machine,
-                        part: job.part,
-                        description: notesController.text.trim(),
-                      );
-                    } catch (e) {
-                      debugPrint('Notification failed: $e');
+                  // Send notifications to all
+                  for (var i = 0; i < selectedClockNos.length; i++) {
+                    final clockNo = selectedClockNos[i];
+                    final emp = await _firestoreService.getEmployee(clockNo);
+                    if (emp?.fcmToken != null) {
+                      try {
+                        await _notificationService.sendJobAssignmentNotification(
+                          recipientToken: emp!.fcmToken!,
+                          jobCardId: job.id!,
+                          operator: currentEmployee?.name ?? 'Unknown',
+                          department: emp.department,
+                          area: job.area,
+                          machine: job.machine,
+                          part: job.part,
+                          description: notesController.text.trim(),
+                        );
+                      } catch (e) {
+                        debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
+                      }
                     }
                   }
 

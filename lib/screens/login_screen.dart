@@ -131,19 +131,21 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  height: titleWidth * 0.5, // Maintain aspect ratio
-                  width: titleWidth,
-                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-                ),
-                const SizedBox(height: 24),
+               children: [
+                  Container(
+                    width: kIsWeb ? titleWidth * 1.8 : screenWidth * 0.95,
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: kIsWeb ? BoxFit.contain : BoxFit.fitWidth,
+                    ),
+                  ),
+                 const SizedBox(height: 24),
                 const Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
                 const SizedBox(height: 8),
                 const Text('Welcome', style: TextStyle(fontSize: 18, color: Colors.white70)),
                 const SizedBox(height: 48),
                 SizedBox(
-                  width: titleWidth,
+                  width: kIsWeb ? titleWidth * 1.4 : titleWidth,
                   child: Column(
                     children: [
                       TextField(
