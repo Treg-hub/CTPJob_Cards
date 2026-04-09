@@ -110,6 +110,15 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }
 
+  Future<List<JobCard>> getAllJobCardsFuture() async {
+    try {
+      final snapshot = await _firestore.collection('job_cards').get();
+      return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+    } catch (e) {
+      throw Exception('Failed to get all job cards: $e');
+    }
+  }
+
   Future<List<String>> getDepartmentsForJobCards(String status) async {
     try {
       final snapshot = await _firestore

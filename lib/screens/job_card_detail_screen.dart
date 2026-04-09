@@ -23,6 +23,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     _reoccurrenceCount = widget.jobCard.reoccurrenceCount;
   }
 
+  bool get isManager => currentEmployee?.position.toLowerCase().contains('manager') ?? false;
+
   void _incrementCount() {
     setState(() => _reoccurrenceCount++);
     _updateJobCard();
@@ -195,6 +197,21 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             ),
             const SizedBox(height: 16),
 
+            if (widget.jobCard.isCompleted && !isManager) ...[
+              Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'CLOSED - View & Comment Only (Managers can edit)',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Reoccurrence Count
             Card(
               elevation: 4,
@@ -213,7 +230,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.remove),
-                          onPressed: _decrementCount,
+                          color: widget.jobCard.isCompleted && !isManager ? Colors.grey : null,
+                          onPressed: () {
+                            if (widget.jobCard.isCompleted && !isManager) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Cannot edit closed job cards. Managers only.'), backgroundColor: Colors.orange),
+                              );
+                              return;
+                            }
+                            _decrementCount();
+                          },
                         ),
                         Text(
                           '$_reoccurrenceCount',
@@ -221,7 +247,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.add),
-                          onPressed: _incrementCount,
+                          color: widget.jobCard.isCompleted && !isManager ? Colors.grey : null,
+                          onPressed: () {
+                            if (widget.jobCard.isCompleted && !isManager) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Cannot edit closed job cards. Managers only.'), backgroundColor: Colors.orange),
+                              );
+                              return;
+                            }
+                            _incrementCount();
+                          },
                         ),
                       ],
                     ),

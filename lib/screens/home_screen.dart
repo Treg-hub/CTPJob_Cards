@@ -429,36 +429,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 16),
 
-          // Manager Dept Toggle
-          if (isManager) Padding(
-            padding: EdgeInsets.symmetric(horizontal: _screenPadding),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('Show Dept Only', style: TextStyle(color: Colors.white)),
-                Switch(
-                  value: _showDeptOnly,
-                  onChanged: (v) {
-                    setState(() => _showDeptOnly = v);
-                    _saveShowDeptOnly(v);
-                  },
-                  activeColor: const Color(0xFFFF8C42),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Recent Job Cards Section
-          Text(
-            'Recent Job Cards',
-            style: TextStyle(
-              fontSize: _isDesktop ? 18 : 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
+           // Recent Job Cards Section
+           Row(
+             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+             children: [
+               Text(
+                 'Recent Job Cards',
+                 style: TextStyle(
+                   fontSize: _isDesktop ? 18 : 20,
+                   fontWeight: FontWeight.bold,
+                   color: Colors.white,
+                 ),
+               ),
+               if (isManager) Row(
+                 children: [
+                   const Text('Show Dept Only', style: TextStyle(color: Colors.white, fontSize: 14)),
+                   Switch(
+                     value: _showDeptOnly,
+                     onChanged: (v) {
+                       setState(() => _showDeptOnly = v);
+                       _saveShowDeptOnly(v);
+                     },
+                     activeColor: const Color(0xFFFF8C42),
+                   ),
+                 ],
+               ),
+             ],
+           ),
           const SizedBox(height: 12),
           _buildRecentJobCards(),
         ],
