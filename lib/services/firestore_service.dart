@@ -28,6 +28,22 @@ class FirestoreService {
     }
   }
 
+  Future<void> createEmployee(Employee employee) async {
+    try {
+      await _firestore.collection('employees').doc(employee.clockNo).set(employee.toFirestore());
+    } catch (e) {
+      throw Exception('Failed to create employee: $e');
+    }
+  }
+
+  Future<void> deleteEmployee(String clockNo) async {
+    try {
+      await _firestore.collection('employees').doc(clockNo).delete();
+    } catch (e) {
+      throw Exception('Failed to delete employee: $e');
+    }
+  }
+
   Future<List<Employee>> getAllEmployees() async {
     try {
       final snapshot = await _firestore.collection('employees').get();

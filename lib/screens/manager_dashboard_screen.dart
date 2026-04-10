@@ -1,6 +1,9 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
 import '../models/job_card.dart';
+import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'view_job_cards_screen.dart';
@@ -274,6 +277,30 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Offline indicator
+                    Consumer<ConnectivityService>(
+                      builder: (context, connectivity, child) {
+                        return StreamBuilder<List<ConnectivityResult>>(
+                          stream: connectivity.connectivityStream,
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                            final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
+                            if (isOnline) return const SizedBox.shrink();
+                            return Container(
+                              width: double.infinity,
+                              color: Colors.red,
+                              padding: const EdgeInsets.all(8),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              child: const Text(
+                                'Offline Mode - Data may be outdated',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                     // Filters - more prominent with clear button always visible
                     Card(
                       child: Padding(

@@ -1,11 +1,15 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'screens/login_screen.dart';
+import 'services/connectivity_service.dart';
 import 'services/firestore_service.dart';
 
 // ==================== BACKGROUND HANDLER (mobile only) ====================
@@ -20,7 +24,9 @@ Employee? currentEmployee;
 // ==================== APP ====================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
@@ -40,7 +46,12 @@ void main() async {
     }
   }
 
-  runApp(CtpJobCardsApp(isLoggedIn: hasLogin));
+  runApp(MultiProvider(
+    providers: [
+      Provider<ConnectivityService>(create: (_) => ConnectivityService()),
+    ],
+    child: CtpJobCardsApp(isLoggedIn: hasLogin),
+  ));
 }
 
 class CtpJobCardsApp extends StatelessWidget {
