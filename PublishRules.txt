@@ -1,0 +1,5 @@
+flutter clean
+flutter pub get
+flutter build web --release
+firebase deploy --only hosting
+flutter build apk --target-platform android-arm64 --release

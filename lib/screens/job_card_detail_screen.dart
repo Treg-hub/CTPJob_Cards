@@ -70,7 +70,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     try {
       await _firestoreService.updateJobCard(jobCard.id!, updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to job!')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to you')));
       }
     } catch (e) {
       if (mounted) {
@@ -91,7 +91,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     try {
       await _firestoreService.updateJobCard(jobCard.id!, updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unassigned from job!')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Removed from job')));
       }
     } catch (e) {
       if (mounted) {
@@ -102,22 +102,20 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-  // ==================== ASSIGN DIALOG WITH MECH/ELEC TOGGLE ====================
+  // ==================== IMPROVED & COMPACT ASSIGN DIALOG ====================
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
-    final notesController = TextEditingController();
     String searchQuery = '';
     String? selectedDepartmentFilter;
-    String? mechElecFilter; // null = Both, "Mechanical", "Electrical"
+    String? mechElecFilter;
     List<String> selectedClockNos = [];
     List<String> selectedNames = [];
     bool isSaving = false;
     bool showOnsiteOnly = true;
+    bool showAdvancedFilters = false;
 
-    // Pre-select currently assigned employees
     selectedClockNos.addAll(job.assignedClockNos ?? []);
     selectedNames.addAll(job.assignedNames ?? []);
 
-    // Auto-select Mech/Elec based on job type
     if (job.type.displayName.toLowerCase().contains('mechanical')) {
       mechElecFilter = 'Mechanical';
     } else if (job.type.displayName.toLowerCase().contains('electrical')) {
@@ -134,77 +132,122 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Search employee...',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => setDialogState(() => searchQuery = value.toLowerCase()),
-                ),
-                const SizedBox(height: 12),
-
-                Column(
+                // Search + Clear All
+                Row(
                   children: [
-                    SegmentedButton<bool>(
-                      selected: {showOnsiteOnly},
-                      onSelectionChanged: (Set<bool> selection) {
-                        setDialogState(() => showOnsiteOnly = selection.first);
-                      },
-                      segments: const [
-                        ButtonSegment(value: true, label: Text('Onsite Only')),
-                        ButtonSegment(value: false, label: Text('All')),
-                      ],
+                    Expanded(
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Search employee...',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setDialogState(() => searchQuery = value.toLowerCase()),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-
-                    SegmentedButton<String?>(
-                      selected: {mechElecFilter},
-                      onSelectionChanged: (Set<String?> selection) {
-                        setDialogState(() => mechElecFilter = selection.first);
-                      },
-                      segments: const [
-                        ButtonSegment(value: 'Mechanical', label: Text('Mech')),
-                        ButtonSegment(value: 'Electrical', label: Text('Elec')),
-                        ButtonSegment(value: null, label: Text('Both')),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    StreamBuilder<List<Employee>>(
-                      stream: _firestoreService.getEmployeesStream(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) return const CircularProgressIndicator();
-                        final depts = snapshot.data!
-                            .map((e) => e.department)
-                            .where((d) => d != null && d.isNotEmpty)
-                            .cast<String>()
-                            .toSet()
-                            .toList()
-                          ..sort();
-
-                        return DropdownButtonFormField<String>(
-                          isDense: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Department',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                          value: selectedDepartmentFilter,
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('All Departments')),
-                            ...depts.map((d) => DropdownMenuItem(value: d, child: Text(d))),
-                          ],
-                          onChanged: (val) => setDialogState(() => selectedDepartmentFilter = val),
-                        );
-                      },
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => setDialogState(() {
+                        selectedClockNos.clear();
+                        selectedNames.clear();
+                      }),
+                      icon: const Icon(Icons.clear_all),
+                      label: const Text('Clear All'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
+                // Selected count + Advanced filters toggle (side by side)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (selectedClockNos.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Selected: ${selectedClockNos.length} people',
+                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 15.5),
+                        ),
+                      ),
+                    TextButton.icon(
+                      onPressed: () => setDialogState(() => showAdvancedFilters = !showAdvancedFilters),
+                      icon: Icon(showAdvancedFilters ? Icons.expand_less : Icons.expand_more),
+                      label: Text(
+                        showAdvancedFilters ? 'Hide Filters' : 'Show Advanced Filters',
+                        style: const TextStyle(fontSize: 15.5),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                if (showAdvancedFilters) ...[
+                  Column(
+                    children: [
+                      SegmentedButton<bool>(
+                        selected: {showOnsiteOnly},
+                        onSelectionChanged: (Set<bool> selection) {
+                          setDialogState(() => showOnsiteOnly = selection.first);
+                        },
+                        segments: const [
+                          ButtonSegment(value: true, label: Text('Onsite Only')),
+                          ButtonSegment(value: false, label: Text('All')),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<String?>(
+                        selected: {mechElecFilter},
+                        onSelectionChanged: (Set<String?> selection) {
+                          setDialogState(() => mechElecFilter = selection.first);
+                        },
+                        segments: const [
+                          ButtonSegment(value: 'Mechanical', label: Text('Mech')),
+                          ButtonSegment(value: 'Electrical', label: Text('Elec')),
+                          ButtonSegment(value: null, label: Text('Both')),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      StreamBuilder<List<Employee>>(
+                        stream: _firestoreService.getEmployeesStream(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return const CircularProgressIndicator();
+                          final depts = snapshot.data!
+                              .map((e) => e.department)
+                              .where((d) => d != null && d.isNotEmpty)
+                              .cast<String>()
+                              .toSet()
+                              .toList()
+                            ..sort();
+
+                          return DropdownButtonFormField<String>(
+                            isDense: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Department',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            value: selectedDepartmentFilter,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('All Departments')),
+                              ...depts.map((d) => DropdownMenuItem(value: d, child: Text(d))),
+                            ],
+                            onChanged: (val) => setDialogState(() => selectedDepartmentFilter = val),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Employee list (tight & consistent with main screen)
                 SizedBox(
-                  height: 280,
+                  height: 260,
                   child: StreamBuilder<List<Employee>>(
                     stream: _firestoreService.getEmployeesStream(),
                     builder: (context, snapshot) {
@@ -218,7 +261,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                         employees = employees.where((e) => e.isOnSite).toList();
                       }
 
-                      // DEPARTMENT OVERRIDES MECH/ELEC
                       if (selectedDepartmentFilter != null) {
                         employees = employees.where((e) => e.department == selectedDepartmentFilter).toList();
                       } else if (mechElecFilter != null) {
@@ -231,7 +273,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
 
                       if (employees.isEmpty) {
-                        return const Center(child: Text('No employees match filters', style: TextStyle(color: Colors.white70)));
+                        return const Center(child: Text('No employees match filters', style: TextStyle(color: Colors.white70, fontSize: 15.5)));
                       }
 
                       return ListView.separated(
@@ -244,8 +286,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           return CheckboxListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                             title: Text(
-                              '${emp.displayName} - ${emp.department ?? ''}',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                              '${emp.displayName} (${emp.clockNo}) - ${emp.department ?? ''} ${emp.position ?? ''}',
+                              style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w500),
                             ),
                             secondary: Icon(
                               emp.isOnSite ? Icons.location_on : Icons.location_off,
@@ -270,13 +312,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       );
                     },
                   ),
-                ),
-
-                const SizedBox(height: 12),
-                TextField(
-                  controller: notesController,
-                  decoration: const InputDecoration(labelText: 'Notes / Work Done', border: OutlineInputBorder()),
-                  maxLines: 3,
                 ),
               ],
             ),
@@ -314,7 +349,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           assignedClockNos: selectedClockNos,
                           assignedNames: selectedNames,
                           assignedAt: DateTime.now(),
-                          notes: notesController.text.trim(),
+                          notes: job.notes, // keep existing notes (no new notes field)
                         );
 
                         await _firestoreService.updateJobCard(job.id!, updatedJob);
@@ -332,7 +367,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                                 area: job.area,
                                 machine: job.machine,
                                 part: job.part,
-                                description: notesController.text.trim(),
+                                description: '',
                               );
                             } catch (e) {
                               debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
@@ -364,175 +399,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Job Card Details'),
-        backgroundColor: const Color(0xFFFF8C42),
-      ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'addComment',
-            onPressed: _showAddCommentDialog,
-            icon: const Icon(Icons.comment, size: 20),
-            label: const Text('Comment', style: TextStyle(fontSize: 13)),
-            backgroundColor: const Color(0xFFFF8C42),
-          ),
-          if (isManager) const SizedBox(height: 8),
-          if (isManager) FloatingActionButton.extended(
-            heroTag: 'assignJob',
-            onPressed: () => _showAssignCompleteDialog(context, _currentJobCard),
-            icon: const Icon(Icons.assignment, size: 20),
-            label: const Text('Assign', style: TextStyle(fontSize: 13)),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        ],
-      ),
-      body: StreamBuilder<JobCard>(
-        stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
-        builder: (context, snapshot) {
-          final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
-          _currentJobCard = jobCard;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Card(
-                  elevation: 6,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Job #${jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: jobCard.status == JobStatus.completed ? Colors.green : Colors.blue,
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              child: Text(
-                                jobCard.status.displayName.toUpperCase(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: _getPriorityColor('P${jobCard.priority}'), width: 2.5),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'P${jobCard.priority}',
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _getPriorityColor('P${jobCard.priority}')),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                jobCard.description,
-                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.3),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(title: 'Location', child: Column(children: [
-                  _buildDetailRow('Department', jobCard.department ?? 'N/A'),
-                  _buildDetailRow('Area', jobCard.area ?? 'N/A'),
-                  _buildDetailRow('Machine', jobCard.machine ?? 'N/A'),
-                  _buildDetailRow('Part', jobCard.part ?? 'N/A'),
-                ])),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(title: 'Personnel', child: Column(children: [
-                  _buildDetailRow('Created By', jobCard.operator ?? 'Unknown'),
-                  if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty)
-                    _buildDetailRow('Assigned To', jobCard.assignedNames!.join(', ')),
-                  if (jobCard.completedBy != null)
-                    _buildDetailRow('Completed By', jobCard.completedBy!),
-                  if ((currentEmployee?.position ?? '').toLowerCase().contains('mechanical') || (currentEmployee?.position ?? '').toLowerCase().contains('electrical')) Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: ElevatedButton(
-                      onPressed: jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
-                      style: jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? ElevatedButton.styleFrom(backgroundColor: Colors.red) : null,
-                      child: Text(jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? 'Unassign Self' : 'Assign Self'),
-                    ),
-                  ),
-                ])),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(
-                  title: 'Notes',
-                  child: jobCard.notes.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(jobCard.notes, style: const TextStyle(fontSize: 15)),
-                      )
-                    : const Text('No notes', style: TextStyle(color: Colors.white70)),
-                ),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(
-                  title: 'Reoccurrence Count',
-                  child: Center(child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
-                ),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(
-                  title: 'Comments',
-                  child: Column(
-                    children: [
-                      if (jobCard.comments.isNotEmpty)
-                        ..._parseComments(jobCard.comments).map((comment) => Card(
-                              margin: const EdgeInsets.only(bottom: 6),
-                              child: Padding(padding: const EdgeInsets.all(8), child: Text(comment, style: const TextStyle(fontSize: 15))),
-                            )),
-                      if (jobCard.comments.isEmpty) const Text('No comments yet', style: TextStyle(color: Colors.white70)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                _buildSectionCard(
-                  title: 'Timeline',
-                  child: Column(
-                    children: [
-                      if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
-                      if (jobCard.assignedAt != null) _buildTimelineRow('Assigned', jobCard.assignedAt!),
-                      if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
-                      if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
-                      if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
-                      if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void _showAddCommentDialog() {
     showModalBottomSheet(
       context: context,
@@ -551,23 +417,23 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: const Color(0xFFFF8C42), onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white))),
                       IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
                     ],
                   ),
                   const SizedBox(height: 20),
-                  TextField(controller: _commentController, decoration: const InputDecoration(labelText: 'Comment / Work Done', border: OutlineInputBorder()), maxLines: 4),
+                  TextField(controller: _commentController, decoration: const InputDecoration(labelText: 'Comment / Work Done', border: OutlineInputBorder(), labelStyle: TextStyle(color: Colors.white70)), maxLines: 4, style: const TextStyle(color: Colors.white)),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
                       const SizedBox(width: 12),
                       ElevatedButton(onPressed: () { Navigator.pop(context); _appendComment(); }, child: const Text('Save Comment')),
                     ],
@@ -581,28 +447,279 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     );
   }
 
-  Widget _buildSectionCard({required String title, required Widget child}) {
+  @override
+  Widget build(BuildContext context) {
+    const double sectionSpacing = 5.0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Job Card Details'),
+        backgroundColor: const Color(0xFFFF8C42),
+      ),
+      body: StreamBuilder<JobCard>(
+        stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
+        builder: (context, snapshot) {
+          final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
+          _currentJobCard = jobCard;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeroHeader(jobCard),
+                SizedBox(height: sectionSpacing),
+                _buildSelfAssignButton(jobCard),
+                SizedBox(height: sectionSpacing),
+                _buildCombinedCard(jobCard),
+                SizedBox(height: sectionSpacing),
+                _buildDetailsCard(jobCard),
+                SizedBox(height: sectionSpacing),
+                _buildActivityLogCard(jobCard),
+              ],
+            ),
+          );
+        },
+      ),
+      bottomNavigationBar: isManager
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1F1F1F),
+                border: Border(top: BorderSide(color: Colors.white24)),
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () => _showAssignCompleteDialog(context, _currentJobCard),
+                icon: const Icon(Icons.assignment),
+                label: const Text('Manage Assignments'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildSelfAssignButton(JobCard jobCard) {
+    final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ElevatedButton.icon(
+        onPressed: isAssigned ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
+        icon: Icon(isAssigned ? Icons.remove_circle : Icons.person_add, size: 24),
+        label: Text(
+          isAssigned ? 'Unassign Self' : 'Assign to Me',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isAssigned ? Colors.orange : const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 56),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroHeader(JobCard jobCard) {
+    return Card(
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Job #${jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: jobCard.status == JobStatus.completed ? Colors.green : Colors.blue,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    jobCard.status.displayName.toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: _getPriorityColor('P${jobCard.priority}'), width: 2.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'P${jobCard.priority}',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _getPriorityColor('P${jobCard.priority}')),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Count - $_reoccurrenceCount',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${jobCard.department ?? 'N/A'} > ${jobCard.area ?? 'N/A'} > ${jobCard.machine ?? 'N/A'} > ${jobCard.part ?? 'N/A'}',
+              style: const TextStyle(fontSize: 15.5, color: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCombinedCard(JobCard jobCard) {
+    final parsedComments = _parseComments(jobCard.comments);
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), const SizedBox(height: 6), child]),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Description', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 6),
+            Text(jobCard.description, style: const TextStyle(fontSize: 15.5, color: Colors.white)),
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                TextButton.icon(
+                  onPressed: _showAddCommentDialog,
+                  icon: const Icon(Icons.add_comment, size: 20),
+                  label: const Text('Add Comment'),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (parsedComments.isEmpty)
+              const Text('No comments yet', style: TextStyle(color: Colors.white70)),
+            if (parsedComments.isNotEmpty)
+              ...parsedComments.map((comment) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(comment, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                  )),
+
+            const SizedBox(height: 16),
+
+            const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 6),
+            jobCard.notes.isNotEmpty
+                ? Text(jobCard.notes, style: const TextStyle(fontSize: 15.5, color: Colors.white))
+                : const Text('No notes', style: TextStyle(color: Colors.white70)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard(JobCard jobCard) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 8),
+            _buildDetailRow('Created By', jobCard.operator ?? 'Unknown'),
+            if (jobCard.completedBy != null) _buildDetailRow('Completed By', jobCard.completedBy!),
+            if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 120, child: Text('Assigned To:', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: jobCard.assignedNames!.map((name) {
+                        return Chip(
+                          avatar: const Icon(Icons.person, size: 16, color: Colors.green),
+                          label: Text(name, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          backgroundColor: Colors.white12,
+                          side: const BorderSide(color: Colors.white24),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActivityLogCard(JobCard jobCard) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 8),
+            if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
+            if (jobCard.assignedAt != null) _buildTimelineRow('Assigned', jobCard.assignedAt!),
+            if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
+            if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
+            if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
+            if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 120, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.grey))), Expanded(child: Text(value, style: const TextStyle(fontSize: 15.5)))]),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 120, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 15.5, color: Colors.white))),
+        ],
+      ),
     );
   }
 
   Widget _buildTimelineRow(String label, DateTime dateTime) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(children: [SizedBox(width: 130, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.grey))), Expanded(child: Text(_formatDateTime(dateTime), style: const TextStyle(fontSize: 15.5)))]),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 130, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+          Expanded(child: Text(_formatDateTime(dateTime), style: const TextStyle(fontSize: 15.5, color: Colors.white))),
+        ],
+      ),
     );
   }
 
