@@ -115,13 +115,10 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        if (message.data['jobId'] != null) {
+        if (message.data['notificationType'] == 'assigned') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
+        } else if (message.data['jobId'] != null) {
           _handleJobDeepLink(message.data['jobId']);
-        } else if (message.data['click_action'] == 'FLUTTER_NOTIFICATION_CLICK') {
-          _markNotificationReceived(message.data);
-          if (mounted) {
-            setState(() => _selectedIndex = 1); // now points to My Work
-          }
         }
       });
     } catch (e) {

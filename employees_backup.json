@@ -1,0 +1,779 @@
+[
+  {
+    "id": "1",
+    "data": {
+      "clockNo": "1",
+      "position": "Manager",
+      "department": "General",
+      "isOnSite": true,
+      "name": "Management"
+    }
+  },
+  {
+    "id": "1050",
+    "data": {
+      "name": "C Binneman ",
+      "position": "Foreman",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "1050"
+    }
+  },
+  {
+    "id": "1116",
+    "data": {
+      "name": "KJ Botha",
+      "position": "DTG Operator",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "1116"
+    }
+  },
+  {
+    "id": "19003",
+    "data": {
+      "name": "B Morton",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19003"
+    }
+  },
+  {
+    "id": "19014",
+    "data": {
+      "name": "Thevar M",
+      "position": "Operator",
+      "department": "Lurgi",
+      "isOnSite": true,
+      "clockNo": "19014"
+    }
+  },
+  {
+    "id": "19017",
+    "data": {
+      "name": "A Naicker",
+      "position": "Mechanical Assistant",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19017"
+    }
+  },
+  {
+    "id": "19018",
+    "data": {
+      "name": "MRM Bhengu",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19018"
+    }
+  },
+  {
+    "id": "19028",
+    "data": {
+      "name": "Chetty C",
+      "position": "Operator",
+      "department": "Lurgi",
+      "isOnSite": true,
+      "clockNo": "19028"
+    }
+  },
+  {
+    "id": "19029",
+    "data": {
+      "name": "N Malan",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19029"
+    }
+  },
+  {
+    "id": "19033",
+    "data": {
+      "name": "Ngcobo ZE",
+      "position": "Hyster Driver",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19033"
+    }
+  },
+  {
+    "id": "19035",
+    "data": {
+      "name": "Perumaul WM",
+      "position": "Crew",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19035"
+    }
+  },
+  {
+    "id": "19036",
+    "data": {
+      "clockNo": "19036",
+      "name": "ZB Ngcobo",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "19038",
+    "data": {
+      "name": "A Kalicharan ",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19038"
+    }
+  },
+  {
+    "id": "19039",
+    "data": {
+      "name": "Nontshe MV",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19039"
+    }
+  },
+  {
+    "id": "19041",
+    "data": {
+      "name": "IS Zulu ",
+      "position": "Shrinkwrap Operator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19041"
+    }
+  },
+  {
+    "id": "19042",
+    "data": {
+      "name": "Gallant GT",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19042"
+    }
+  },
+  {
+    "id": "19043",
+    "data": {
+      "name": "W Singh",
+      "position": "Electrician",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19043"
+    }
+  },
+  {
+    "id": "19045",
+    "data": {
+      "name": "Govender D",
+      "position": "Co Ordinator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19045"
+    }
+  },
+  {
+    "id": "19046",
+    "data": {
+      "name": "PN Khumalo",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19046"
+    }
+  },
+  {
+    "id": "19048",
+    "data": {
+      "name": "MI Khathi",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19048"
+    }
+  },
+  {
+    "id": "19049",
+    "data": {
+      "name": "LS Mthembu",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19049"
+    }
+  },
+  {
+    "id": "19050",
+    "data": {
+      "name": "R Mpanza",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "19050"
+    }
+  },
+  {
+    "id": "19052",
+    "data": {
+      "name": "SL Madondo",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19052"
+    }
+  },
+  {
+    "id": "19053",
+    "data": {
+      "name": "V Moneypersadh",
+      "position": "Hyster Driver",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19053"
+    }
+  },
+  {
+    "id": "19054",
+    "data": {
+      "clockNo": "19054",
+      "name": "L Khumalo",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "19056",
+    "data": {
+      "name": "K Mfeka",
+      "position": "Electrician",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19056"
+    }
+  },
+  {
+    "id": "19057",
+    "data": {
+      "name": "P Moodley",
+      "position": "Electrician",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "19057"
+    }
+  },
+  {
+    "id": "19060",
+    "data": {
+      "name": "S Naicker",
+      "position": "Co Ordinator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "19060"
+    }
+  },
+  {
+    "id": "20",
+    "data": {
+      "clockNo": "20",
+      "name": "R Davidson",
+      "position": "Manager",
+      "department": "Pre Press",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "22",
+    "data": {
+      "clockNo": "22",
+      "name": "G Peens",
+      "position": "Manager",
+      "department": "Pressroom",
+      "fcmTokenUpdatedAt": null,
+      "fcmToken": null,
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "23162",
+    "data": {
+      "clockNo": "23162",
+      "name": "R Chrisenduth",
+      "position": "Electrical Manager",
+      "department": "Workshop",
+      "isOnSite": true,
+      "fcmToken": "fmrn7LsnQ8WduRTvjXW5cp:APA91bGWw8IFy4skB_SssMzy2Z_uSjYqa6Tz7RHPlpvv1x9yJ4HFNE0yf9OyaBfJHbUemO_0NoEs0jPZO0I7CYLBN3XILxK3CK5tLXkUurNTwalqzu1piZA",
+      "fcmTokenUpdatedAt": {
+        "_seconds": 1775725443,
+        "_nanoseconds": 32361000
+      }
+    }
+  },
+  {
+    "id": "23165",
+    "data": {
+      "clockNo": "23165",
+      "name": "T Simpkins",
+      "position": "Manager",
+      "department": "Pressroom",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "23194",
+    "data": {
+      "clockNo": "23194",
+      "name": "M Pederson",
+      "position": "Mechanical Manager",
+      "department": "Workshop",
+      "isOnSite": true,
+      "fcmTokenUpdatedAt": {
+        "_seconds": 1775724357,
+        "_nanoseconds": 447188000
+      },
+      "fcmToken": "fmrn7LsnQ8WduRTvjXW5cp:APA91bGWw8IFy4skB_SssMzy2Z_uSjYqa6Tz7RHPlpvv1x9yJ4HFNE0yf9OyaBfJHbUemO_0NoEs0jPZO0I7CYLBN3XILxK3CK5tLXkUurNTwalqzu1piZA"
+    }
+  },
+  {
+    "id": "2989",
+    "data": {
+      "name": "DB Walton",
+      "position": "DTG Operator ",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "2989"
+    }
+  },
+  {
+    "id": "2992",
+    "data": {
+      "name": "DW Zietsman ",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "2992"
+    }
+  },
+  {
+    "id": "3026",
+    "data": {
+      "name": "R Ganasen ",
+      "position": "Shrinkwrap Operator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "3026"
+    }
+  },
+  {
+    "id": "3164",
+    "data": {
+      "name": "S Bhugwandeen",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "3164"
+    }
+  },
+  {
+    "id": "3262",
+    "data": {
+      "name": "MB Campbell ",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "3262"
+    }
+  },
+  {
+    "id": "3593",
+    "data": {
+      "name": "M Gounden ",
+      "position": "Shrinkwrap Operator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "3593"
+    }
+  },
+  {
+    "id": "3669",
+    "data": {
+      "name": "EG Hood ",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "3669"
+    }
+  },
+  {
+    "id": "3852",
+    "data": {
+      "name": "January MA",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "3852"
+    }
+  },
+  {
+    "id": "3920",
+    "data": {
+      "name": "Pillay M",
+      "position": "Shrinkwrap Operator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "3920"
+    }
+  },
+  {
+    "id": "4126",
+    "data": {
+      "name": "Mohammed S",
+      "position": "Foreman",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "4126"
+    }
+  },
+  {
+    "id": "4129",
+    "data": {
+      "name": "K Maharaj",
+      "position": "Foreman",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "4129"
+    }
+  },
+  {
+    "id": "415",
+    "data": {
+      "name": "V Govender",
+      "position": "Manager",
+      "department": "Workshop",
+      "fcmTokenUpdatedAt": {
+        "_seconds": 1775727291,
+        "_nanoseconds": 542674000
+      },
+      "fcmToken": "eDpOMnihQ2SNksLvn2cO1S:APA91bH8iuNGJUbj0HZuKQSaDl9yveQHaBhRmwgMEcunypDc_toG6SlrggVQ5mk-pAvN6RSPGzBN3oUdN8NwBcKyhwzfTYL52TQuUrpAdVtkabIu8FSoHn8",
+      "isOnSite": true,
+      "clockNo": "415"
+    }
+  },
+  {
+    "id": "4517",
+    "data": {
+      "name": "Pillay J",
+      "position": "Operator",
+      "department": "Lurgi",
+      "isOnSite": true,
+      "clockNo": "4517"
+    }
+  },
+  {
+    "id": "4630",
+    "data": {
+      "name": "L Ruthnum",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "4630"
+    }
+  },
+  {
+    "id": "4639",
+    "data": {
+      "name": "S Reddy",
+      "position": "Electrician",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "4639"
+    }
+  },
+  {
+    "id": "4749",
+    "data": {
+      "name": "Subramoney CM",
+      "position": "Co Ordinator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "4749"
+    }
+  },
+  {
+    "id": "5013",
+    "data": {
+      "name": "A Ally",
+      "position": "Mechanical",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "5013"
+    }
+  },
+  {
+    "id": "5194",
+    "data": {
+      "name": "M Mthuli",
+      "position": "No2",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "5194"
+    }
+  },
+  {
+    "id": "5421",
+    "data": {
+      "clockNo": "5421",
+      "name": "M Govender",
+      "position": "Manager",
+      "department": "Pre Press",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "5422",
+    "data": {
+      "name": "D Gounden ",
+      "position": "Shift Leader",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "5422"
+    }
+  },
+  {
+    "id": "5900",
+    "data": {
+      "name": "S Ramjan ",
+      "position": "No2",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "5900"
+    }
+  },
+  {
+    "id": "5902",
+    "data": {
+      "name": "Cressey ST",
+      "position": "No1",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "5902"
+    }
+  },
+  {
+    "id": "5906",
+    "data": {
+      "name": "C Dindikazi",
+      "position": "Operator",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "5906"
+    }
+  },
+  {
+    "id": "5908",
+    "data": {
+      "name": "FP Ngidi",
+      "position": "Operator",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "5908"
+    }
+  },
+  {
+    "id": "5909",
+    "data": {
+      "name": "M Ramsuth",
+      "position": "Operator",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "5909"
+    }
+  },
+  {
+    "id": "5911",
+    "data": {
+      "name": "S Mazubane",
+      "position": "DTG Operator",
+      "department": "Pre Press",
+      "isOnSite": true,
+      "clockNo": "5911"
+    }
+  },
+  {
+    "id": "5913",
+    "data": {
+      "name": "T Magwanyana",
+      "position": "No2",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "5913"
+    }
+  },
+  {
+    "id": "6585",
+    "data": {
+      "name": "N Ramdas ",
+      "position": "No2",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "6585"
+    }
+  },
+  {
+    "id": "6739",
+    "data": {
+      "name": "Sheik Gudoo ME",
+      "position": "Despatch Shift Leader",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "6739"
+    }
+  },
+  {
+    "id": "6769",
+    "data": {
+      "name": "R Dunpath ",
+      "position": "Reelstand Operator",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "6769"
+    }
+  },
+  {
+    "id": "707",
+    "data": {
+      "name": "J Biyela",
+      "position": "Mechanical Assistant",
+      "department": "Workshop",
+      "isOnSite": true,
+      "clockNo": "707"
+    }
+  },
+  {
+    "id": "7293",
+    "data": {
+      "clockNo": "7293",
+      "name": "SS Dlamini",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "7715",
+    "data": {
+      "name": "Khenisa MS",
+      "position": "Operator",
+      "department": "Lurgi",
+      "isOnSite": true,
+      "clockNo": "7715"
+    }
+  },
+  {
+    "id": "7776",
+    "data": {
+      "clockNo": "7776",
+      "name": "TE Khoza",
+      "position": "Electrician Assistant",
+      "department": "Workshop",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "7785",
+    "data": {
+      "name": "Khomo HM",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "7785"
+    }
+  },
+  {
+    "id": "7787",
+    "data": {
+      "clockNo": "7787",
+      "name": "NL Khanyile",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "8019",
+    "data": {
+      "name": "Manqele ZW",
+      "position": "Shrinkwrap Operator",
+      "department": "Post Press",
+      "isOnSite": true,
+      "clockNo": "8019"
+    }
+  },
+  {
+    "id": "8033",
+    "data": {
+      "name": "Maduma DK",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "8033"
+    }
+  },
+  {
+    "id": "8903",
+    "data": {
+      "name": "Zuma N",
+      "position": "Crew",
+      "department": "Pressroom",
+      "isOnSite": true,
+      "clockNo": "8903"
+    }
+  },
+  {
+    "id": "9689",
+    "data": {
+      "clockNo": "9689",
+      "name": "B Tunzi",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "9800",
+    "data": {
+      "clockNo": "9800",
+      "name": "LJ Xaba",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "9899",
+    "data": {
+      "clockNo": "9899",
+      "name": "MA Zuma",
+      "position": "Storeperson",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  },
+  {
+    "id": "9999",
+    "data": {
+      "clockNo": "9999",
+      "name": "Z Govender",
+      "position": "Manager",
+      "department": "Stores",
+      "isOnSite": true
+    }
+  }
+]

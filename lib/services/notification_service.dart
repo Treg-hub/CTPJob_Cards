@@ -135,7 +135,7 @@ class NotificationService {
       final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('sendJobAssignmentNotification');
 
-      await callable.call({
+      final params = {
         'recipientToken': recipientToken,
         'jobCardId': jobCardId,
         'operator': operator,
@@ -144,7 +144,13 @@ class NotificationService {
         'machine': machine,
         'part': part,
         'description': description,
-      });
+      };
+
+      debugPrint('🚀 Calling sendJobAssignmentNotification with:');
+      debugPrint('  recipientToken len: ${recipientToken.length} preview: ${recipientToken.substring(0, 50)}...');
+      debugPrint('  Full map keys: ${params.keys}');
+
+      await callable.call(params);
 
       debugPrint('✅ Notification sent successfully');
     } catch (e) {

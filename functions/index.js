@@ -7,11 +7,23 @@ const messaging = admin.messaging();
 functions.setGlobalOptions({ region: "africa-south1" });
 
 exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
-  const { recipientToken, operator, department, area, machine, part, description } = data;
+   console.log('📥 data keys:', Object.keys(data));
+   console.log('📥 data.data keys:', data.data ? Object.keys(data.data) : 'no data.data');
+   const innerData = data.data || data;
+   const recipientToken = innerData.recipientToken;
+   const operator = innerData.operator;
+   const department = innerData.department;
+   const area = innerData.area;
+   const machine = innerData.machine;
+   const part = innerData.part;
+   const description = innerData.description;
 
-  if (!recipientToken) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
-  }
+   console.log('🔍 Extracted recipientToken:', recipientToken, 'type:', typeof recipientToken, 'len:', recipientToken ? recipientToken.length : 'n/a');
+
+   if (!recipientToken || !recipientToken.trim()) {
+     console.log('❌ recipientToken missing or empty - throwing');
+     throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
+   }
 
   // Build rich notification body
   const body = `Operator: ${operator}\n` +
@@ -25,7 +37,7 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
         title: "New Job Assigned",
         body: body
       },
-      data: { click_action: "FLUTTER_NOTIFICATION_CLICK" },
+      data: { click_action: "FLUTTER_NOTIFICATION_CLICK", jobId: jobCardId, notificationType: "assigned" },
       android: { priority: "high" }
     });
 
@@ -117,7 +129,7 @@ async function sendNotification(token, title, body, jobId) {
     await messaging.send({
       token,
       notification: { title, body },
-      data: { click_action: 'FLUTTER_NOTIFICATION_CLICK', jobId },
+      data: { click_action: 'FLUTTER_NOTIFICATION_CLICK', jobId, notificationType: 'broadcast' },
       android: { priority: 'high' }
     });
   } catch (e) {
@@ -232,4 +244,29 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     console.error('❌ escalateNotifications error:', error);
     throw error; // Re-throw so Cloud Scheduler sees the 500 (for retry logic)
   }
+});
+
+// Migration function to fix employee doc IDs to match clockNo
+exports.migrateEmployeeIds = functions.https.onCall(async (data, context) => {
+  const employeesRef = admin.firestore().collection('employees');
+  const snapshot = await employeesRef.get();
+  const migrated = [];
+  const batch = admin.firestore().batch();
+
+  for (const doc of snapshot.docs) {
+    const docData = doc.data();
+    const clockNo = docData.clockNo;
+    if (doc.id !== clockNo) {
+      // Create new doc with clockNo as ID
+      const newRef = employeesRef.doc(clockNo);
+      batch.set(newRef, docData);
+      // Delete old
+      batch.delete(doc.ref);
+      migrated.push({oldId: doc.id, newId: clockNo, name: docData.name});
+    }
+  }
+
+  await batch.commit();
+  console.log(`Migrated ${migrated.length} employee docs`);
+  return {migrated, count: migrated.length};
 });

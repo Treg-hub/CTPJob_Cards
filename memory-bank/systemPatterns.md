@@ -1,0 +1,123 @@
+# System Patterns
+
+## System Architecture
+
+### Frontend Architecture (Flutter)
+```
+lib/
+├── main.dart                 # App entry point, theme, routing
+├── models/                   # Data models (Employee, JobCard)
+├── screens/                  # UI screens (detail, list, create, etc.)
+├── services/                 # Business logic (Firestore, Notifications)
+├── utils/                    # Helper utilities
+├── widgets/                  # Reusable UI components
+└── firebase_options.dart     # Firebase configuration
+```
+
+### Backend Architecture (Firebase)
+```
+Firebase Project
+├── Firestore Database        # Document-based storage
+│   ├── employees/           # Employee collection
+│   └── jobCards/            # Job card collection
+├── Cloud Functions          # Server-side logic
+│   └── functions/
+│       ├── index.js         # Main functions
+│       └── lib/             # Helper functions
+├── Cloud Messaging          # Push notifications
+└── Authentication           # User management (implied)
+```
+
+## Key Technical Decisions
+
+### State Management
+- **Decision**: Provider pattern with service classes
+- **Rationale**: Simple, effective for Firebase integration
+- **Implementation**: Service classes handle data operations, screens consume via StreamBuilder
+
+### Data Models
+- **Employee Model**: Core entity with displayName getter for consistent formatting
+- **JobCard Model**: Comprehensive job tracking with status enum and timestamps
+- **CopyWith Pattern**: Immutable updates with copyWith methods
+
+### UI Patterns
+- **Card-based Layout**: Consistent use of Cards for sectioned information
+- **Dialog-heavy UX**: Complex operations (assign, comment) use modal dialogs
+- **Color-coded Priorities**: P1-P5 with distinct colors for visual hierarchy
+- **Icon + Text Buttons**: Floating action buttons with clear visual cues
+
+## Design Patterns
+
+### Repository Pattern
+- **FirestoreService**: Centralized data access layer
+- **Methods**: CRUD operations, streams, and complex queries
+- **Benefits**: Clean separation, testable, maintainable
+
+### Factory Pattern
+- **Model.fromFirestore()**: Creates model instances from Firestore documents
+- **Benefits**: Centralized deserialization, consistent data mapping
+
+### Builder Pattern
+- **JobCard Creation**: Step-by-step job card building in create screen
+- **Benefits**: Complex object construction, validation at each step
+
+### Observer Pattern
+- **StreamBuilder**: Reactive UI updates from Firestore streams
+- **Benefits**: Real-time data synchronization, automatic UI refresh
+
+## Component Relationships
+
+### Core Flow: Job Creation → Assignment → Completion
+```
+Create Job Card
+    ↓
+Assign to Employees (with filtering)
+    ↓
+Employee Notification
+    ↓
+Status Updates & Comments
+    ↓
+Job Completion
+```
+
+### Data Flow
+```
+Firestore ←→ FirestoreService ←→ Screens ←→ User Interactions
+    ↑              ↑                    ↑
+Notifications  Push Updates       UI State Updates
+```
+
+## Critical Implementation Paths
+
+### Job Assignment Flow
+1. **Dialog Opening**: `_showAssignCompleteDialog()` initializes filters and state
+2. **Employee Streaming**: `getEmployeesStream()` provides real-time employee list
+3. **Filtering Logic**: Sequential filters (search → onsite → department/mech-elec)
+4. **Selection Management**: Local state tracks selected employees
+5. **Assignment Execution**: Batch update job card + send notifications
+6. **Confirmation**: UI feedback and dialog closure
+
+### Notification Flow
+1. **Assignment Trigger**: After successful job update
+2. **Employee Lookup**: Fetch employee FCM tokens
+3. **Notification Construction**: Build message with job details
+4. **Send Operation**: Async notification sending with error handling
+5. **Logging**: Debug print for failed notifications
+
+### Comment System
+1. **Dialog Display**: Bottom sheet with reoccurrence counter
+2. **Comment Formatting**: Timestamp + user prefix
+3. **Update Operation**: Append to existing comments + update reoccurrence
+4. **UI Refresh**: Automatic via StreamBuilder
+
+## Performance Considerations
+- **Stream Efficiency**: Firestore streams update entire lists - monitor for large datasets
+- **Image Loading**: No images currently, but prepared for asset integration
+- **Memory Management**: Stateful widgets disposed properly, no memory leaks
+- **Build Optimization**: Debug builds tested, release builds pending
+
+## Error Handling Patterns
+- **Network Errors**: ScaffoldMessenger snackbars for user feedback
+- **Validation**: Client-side checks before Firestore operations
+- **Graceful Degradation**: Null-safe operations with fallback values
+- **Logging**: Debug prints for development, structured logging for production
