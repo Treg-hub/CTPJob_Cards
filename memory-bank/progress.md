@@ -24,6 +24,7 @@
 - **Intuitive Navigation**: Clear screen flow and floating action buttons
 - **Error Handling**: User-friendly error messages and loading states
 - **Dark Theme Support**: Implied by color usage patterns
+- **Manager Dashboard**: Analytics and reporting screens with KPIs, charts, filters, export
 
 ### Technical Infrastructure
 - **Firebase Integration**: Full Firestore CRUD operations
@@ -34,7 +35,6 @@
 ## What's Left to Build 🚧
 
 ### High Priority
-- **Manager Dashboard**: Analytics and reporting screens
 - **Job Status Updates**: Allow technicians to update job status
 - **Admin Panel**: Employee management interface
 - **Job Filtering**: Advanced filtering on job list screens

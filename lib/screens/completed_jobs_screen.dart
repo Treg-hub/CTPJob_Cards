@@ -96,6 +96,14 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
     });
   }
 
+  String _getLastCommentPreview(String comments) {
+    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    final lastComment = parts.last;
+    final lines = lastComment.split('\n');
+    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
+  }
+
   void _showAddCommentDialog(JobCard job) {
     final commentController = TextEditingController();
     showDialog(
@@ -280,7 +288,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Completed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}',
+                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Completed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}${job.comments.isNotEmpty ? '\nComments: ${_getLastCommentPreview(job.comments)}' : ''}',
                               style: const TextStyle(fontSize: 14, color: Colors.grey),
                             ),
                             const SizedBox(height: 8),

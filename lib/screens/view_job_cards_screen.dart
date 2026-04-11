@@ -74,6 +74,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
+  String _getLastCommentPreview(String comments) {
+    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    final lastComment = parts.last;
+    final lines = lastComment.split('\n');
+    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
+  }
+
   // ==================== IMPROVED JOB CARD (same as HomeScreen) ====================
   Widget _buildJobCardWidget(JobCard job) {
     return Card(
@@ -148,6 +156,24 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    if (job.notes.isNotEmpty) Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        job.notes.split('\n').first.trim(),
+                        style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (job.comments.isNotEmpty) Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        _getLastCommentPreview(job.comments),
+                        style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Row(

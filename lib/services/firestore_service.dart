@@ -92,6 +92,10 @@ class FirestoreService {
     }
   }
 
+  Stream<JobCard> getJobCardStream(String jobCardId) {
+    return _firestore.collection('job_cards').doc(jobCardId).snapshots().map((doc) => JobCard.fromFirestore(doc));
+  }
+
   Stream<List<JobCard>> getOpenJobCards() {
     return _firestore
         .collection('job_cards')

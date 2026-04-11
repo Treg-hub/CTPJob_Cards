@@ -19,6 +19,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
   List<String> machines = [];
 
   final FirestoreService _firestoreService = FirestoreService();
+  final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
@@ -200,6 +201,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       child: ListTile(
                         title: Text(job.description),
                         subtitle: Text('${job.department} > ${job.machine} > ${job.area}'),
+                        onTap: () => _showCommentDialog(context, job),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -255,6 +257,61 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
         );
       }
     }
+  }
+
+  void _showCommentDialog(BuildContext context, JobCard job) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Comment'),
+        content: TextField(
+          controller: _commentController,
+          decoration: const InputDecoration(labelText: 'Comment'),
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_commentController.text.trim().isEmpty) {
+                Navigator.pop(context);
+                return;
+              }
+
+              final now = DateTime.now();
+              final user = currentEmployee?.name ?? 'User';
+              final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: ${_commentController.text.trim()}';
+              final updatedComments = job.comments + newComment;
+
+              try {
+                await _firestoreService.updateJobCard(
+                  job.id!,
+                  job.copyWith(comments: updatedComments),
+                );
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  setState(() => _commentController.clear());
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ Comment added!')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error adding comment: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCompleteDialog(BuildContext context, JobCard job) {

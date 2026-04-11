@@ -47,6 +47,11 @@ dependencies:
   hive_flutter: ^1.1.0
   provider: ^6.1.2
 
+  # New dependencies required by the Manager Dashboard (CSV/PDF export + file sharing)
+  share_plus: ^10.0.0
+  path_provider: ^2.1.4
+  pdf: ^3.11.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -11,6 +11,12 @@
   - **After**: `'${emp.displayName} - ${emp.department ?? ''}'`
   - **Reason**: `Employee.displayName` already includes name, clockNo, and position
 - **Fixed Null Safety Error**: Added null assertion operator for `mechElecFilter!.toLowerCase()` in employee filtering logic
+- **Fixed Manager Dashboard Lint Errors**: Resolved compile and lint issues in manager_dashboard_screen.dart.
+  - **Const with Runtime Values**: Removed `const` from `SizedBox(height: _sectionSpacing)` where `_sectionSpacing` is runtime getter.
+  - **Deprecated APIs**: Updated `Colors.grey.withOpacity(0.3)` to `Colors.grey.withValues(alpha: 0.3)`, `pw.Table.fromTextArray` to `pw.TableHelper.fromTextArray`.
+  - **Unnecessary Null Checks**: Simplified `j.machine?.trim().isNotEmpty == true ? j.machine! : 'Unknown Machine'` to `j.machine != null && j.machine.trim().isNotEmpty ? j.machine : 'Unknown Machine'`.
+  - **Unnecessary this**: Removed `this.` qualifiers in `_showMonthPicker`.
+  - **Result**: Dashboard now compiles cleanly with only minor false positive dead code warnings.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

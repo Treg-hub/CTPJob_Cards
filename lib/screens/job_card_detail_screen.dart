@@ -16,6 +16,7 @@ class JobCardDetailScreen extends StatefulWidget {
 
 class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   late int _reoccurrenceCount;
+  late JobCard _currentJobCard;
   final TextEditingController _commentController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
@@ -24,36 +25,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   void initState() {
     super.initState();
     _reoccurrenceCount = widget.jobCard.reoccurrenceCount;
+    _currentJobCard = widget.jobCard;
   }
 
-  bool get isManager => currentEmployee?.position.toLowerCase().contains('manager') ?? false;
-
-  Future<void> _updateJobCard() async {
-    try {
-      await _firestoreService.updateJobCard(
-        widget.jobCard.id!,
-        widget.jobCard.copyWith(reoccurrenceCount: _reoccurrenceCount),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
+  bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
 
   Future<void> _appendComment() async {
     if (_commentController.text.trim().isEmpty) return;
     final now = DateTime.now();
     final user = currentEmployee?.name ?? 'User';
     final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: ${_commentController.text.trim()}';
-    final updatedComments = widget.jobCard.comments + newComment;
+    final updatedComments = _currentJobCard.comments + newComment;
 
     try {
       await _firestoreService.updateJobCard(
-        widget.jobCard.id!,
-        widget.jobCard.copyWith(
+        _currentJobCard.id!,
+        _currentJobCard.copyWith(
           comments: updatedComments,
           reoccurrenceCount: _reoccurrenceCount,
         ),
@@ -71,6 +58,50 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
+  Future<void> _selfAssign(JobCard jobCard) async {
+    final current = currentEmployee;
+    if (current == null) return;
+    final updated = jobCard.copyWith(
+      assignedClockNos: [...?jobCard.assignedClockNos, current.clockNo],
+      assignedNames: [...?jobCard.assignedNames, current.name],
+      assignedAt: DateTime.now(),
+      notes: jobCard.notes,
+    );
+    try {
+      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to job!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error assigning: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _selfUnassign(JobCard jobCard) async {
+    final current = currentEmployee;
+    if (current == null) return;
+    final updated = jobCard.copyWith(
+      assignedClockNos: jobCard.assignedClockNos?.where((c) => c != current.clockNo).toList(),
+      assignedNames: jobCard.assignedNames?.where((n) => n != current.name).toList(),
+    );
+    try {
+      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unassigned from job!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error unassigning: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   // ==================== ASSIGN DIALOG WITH MECH/ELEC TOGGLE ====================
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
     final notesController = TextEditingController();
@@ -81,6 +112,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     List<String> selectedNames = [];
     bool isSaving = false;
     bool showOnsiteOnly = true;
+
+    // Pre-select currently assigned employees
+    selectedClockNos.addAll(job.assignedClockNos ?? []);
+    selectedNames.addAll(job.assignedNames ?? []);
 
     // Auto-select Mech/Elec based on job type
     if (job.type.displayName.toLowerCase().contains('mechanical')) {
@@ -183,16 +218,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                         employees = employees.where((e) => e.isOnSite).toList();
                       }
 
-                       // DEPARTMENT OVERRIDES MECH/ELEC
-                       if (selectedDepartmentFilter != null) {
-                         employees = employees.where((e) => e.department == selectedDepartmentFilter).toList();
-                       } else if (mechElecFilter != null) {
-                         final filterLower = mechElecFilter!.toLowerCase();
-                         employees = employees.where((e) {
-                           final pos = (e.position ?? '').toLowerCase();
-                           return pos.contains(filterLower);
-                         }).toList();
-                       }
+                      // DEPARTMENT OVERRIDES MECH/ELEC
+                      if (selectedDepartmentFilter != null) {
+                        employees = employees.where((e) => e.department == selectedDepartmentFilter).toList();
+                      } else if (mechElecFilter != null) {
+                        employees = employees.where((e) {
+                          final pos = (e.position ?? '').toLowerCase();
+                          return pos.contains(mechElecFilter!.toLowerCase());
+                        }).toList();
+                      }
 
                       employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
 
@@ -285,44 +319,30 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
 
                         await _firestoreService.updateJobCard(job.id!, updatedJob);
 
-                        int successCount = 0;
-                        List<String> failedNames = [];
-                         for (var i = 0; i < selectedClockNos.length; i++) {
-                           final clockNo = selectedClockNos[i];
-                           final emp = await _firestoreService.getEmployee(clockNo);
-                           if (emp?.fcmToken?.trim().isNotEmpty == true) {
-                             try {
-                               await _notificationService.sendJobAssignmentNotification(
-                                 recipientToken: emp!.fcmToken!.trim(),
-                                 jobCardId: job.id!,
-                                 operator: currentEmployee?.name ?? 'Unknown',
-                                 department: emp.department,
-                                 area: job.area,
-                                 machine: job.machine,
-                                 part: job.part,
-                                 description: notesController.text.trim(),
-                               );
-                               successCount++;
-                             } catch (e) {
-                               debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
-                               failedNames.add(emp?.name ?? 'Unknown');
-                             }
-                           } else {
-                             failedNames.add('${emp?.name ?? 'Unknown'} (no token)');
-                           }
-                         }
+                        for (var i = 0; i < selectedClockNos.length; i++) {
+                          final clockNo = selectedClockNos[i];
+                          final emp = await _firestoreService.getEmployee(clockNo);
+                          if (emp?.fcmToken != null) {
+                            try {
+                              await _notificationService.sendJobAssignmentNotification(
+                                recipientToken: emp!.fcmToken!,
+                                jobCardId: job.id!,
+                                operator: currentEmployee?.name ?? 'Unknown',
+                                department: emp.department,
+                                area: job.area,
+                                machine: job.machine,
+                                part: job.part,
+                                description: notesController.text.trim(),
+                              );
+                            } catch (e) {
+                              debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
+                            }
+                          }
+                        }
 
                         if (context.mounted) {
                           Navigator.pop(context);
-                          String message = '✅ Job assigned to ${selectedClockNos.length} employee(s)!';
-                          if (successCount > 0) message += ' $successCount notified.';
-                          if (failedNames.isNotEmpty) message += ' Failed: ${failedNames.join(', ')}';
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(message),
-                              backgroundColor: failedNames.isEmpty ? null : Colors.orange,
-                            ),
-                          );
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Job assigned!')));
                         }
                       } catch (e) {
                         if (context.mounted) {
@@ -361,128 +381,154 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             label: const Text('Comment', style: TextStyle(fontSize: 13)),
             backgroundColor: const Color(0xFFFF8C42),
           ),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
+          if (isManager) const SizedBox(height: 8),
+          if (isManager) FloatingActionButton.extended(
             heroTag: 'assignJob',
-            onPressed: () => _showAssignCompleteDialog(context, widget.jobCard),
+            onPressed: () => _showAssignCompleteDialog(context, _currentJobCard),
             icon: const Icon(Icons.assignment, size: 20),
             label: const Text('Assign', style: TextStyle(fontSize: 13)),
             backgroundColor: const Color(0xFF10B981),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              elevation: 6,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: StreamBuilder<JobCard>(
+        stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
+        builder: (context, snapshot) {
+          final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
+          _currentJobCard = jobCard;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  elevation: 6,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Job #${widget.jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: widget.jobCard.status == JobStatus.completed ? Colors.green : Colors.blue,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Text(
-                            widget.jobCard.status.displayName.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Job #${jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: jobCard.status == JobStatus.completed ? Colors.green : Colors.blue,
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              child: Text(
+                                jobCard.status.displayName.toUpperCase(),
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: _getPriorityColor('P${jobCard.priority}'), width: 2.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'P${jobCard.priority}',
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _getPriorityColor('P${jobCard.priority}')),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                jobCard.description,
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.3),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: _getPriorityColor('P${widget.jobCard.priority}'), width: 2.5),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'P${widget.jobCard.priority}',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _getPriorityColor('P${widget.jobCard.priority}')),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            widget.jobCard.description,
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.3),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(title: 'Location', child: Column(children: [
+                  _buildDetailRow('Department', jobCard.department ?? 'N/A'),
+                  _buildDetailRow('Area', jobCard.area ?? 'N/A'),
+                  _buildDetailRow('Machine', jobCard.machine ?? 'N/A'),
+                  _buildDetailRow('Part', jobCard.part ?? 'N/A'),
+                ])),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(title: 'Personnel', child: Column(children: [
+                  _buildDetailRow('Created By', jobCard.operator ?? 'Unknown'),
+                  if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty)
+                    _buildDetailRow('Assigned To', jobCard.assignedNames!.join(', ')),
+                  if (jobCard.completedBy != null)
+                    _buildDetailRow('Completed By', jobCard.completedBy!),
+                  if ((currentEmployee?.position ?? '').toLowerCase().contains('mechanical') || (currentEmployee?.position ?? '').toLowerCase().contains('electrical')) Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: ElevatedButton(
+                      onPressed: jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
+                      style: jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? ElevatedButton.styleFrom(backgroundColor: Colors.red) : null,
+                      child: Text(jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false ? 'Unassign Self' : 'Assign Self'),
+                    ),
+                  ),
+                ])),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(
+                  title: 'Notes',
+                  child: jobCard.notes.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(jobCard.notes, style: const TextStyle(fontSize: 15)),
+                      )
+                    : const Text('No notes', style: TextStyle(color: Colors.white70)),
+                ),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(
+                  title: 'Reoccurrence Count',
+                  child: Center(child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
+                ),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(
+                  title: 'Comments',
+                  child: Column(
+                    children: [
+                      if (jobCard.comments.isNotEmpty)
+                        ..._parseComments(jobCard.comments).map((comment) => Card(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              child: Padding(padding: const EdgeInsets.all(8), child: Text(comment, style: const TextStyle(fontSize: 15))),
+                            )),
+                      if (jobCard.comments.isEmpty) const Text('No comments yet', style: TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                _buildSectionCard(
+                  title: 'Timeline',
+                  child: Column(
+                    children: [
+                      if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
+                      if (jobCard.assignedAt != null) _buildTimelineRow('Assigned', jobCard.assignedAt!),
+                      if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
+                      if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
+                      if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
+                      if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-
-            _buildSectionCard(title: 'Location', child: Column(children: [
-              _buildDetailRow('Department', widget.jobCard.department ?? 'N/A'),
-              _buildDetailRow('Area', widget.jobCard.area ?? 'N/A'),
-              _buildDetailRow('Machine', widget.jobCard.machine ?? 'N/A'),
-              _buildDetailRow('Part', widget.jobCard.part ?? 'N/A'),
-            ])),
-            const SizedBox(height: 6),
-
-            _buildSectionCard(title: 'Personnel', child: Column(children: [
-              _buildDetailRow('Created By', widget.jobCard.operator ?? 'Unknown'),
-              if (widget.jobCard.assignedNames != null && widget.jobCard.assignedNames!.isNotEmpty)
-                _buildDetailRow('Assigned To', widget.jobCard.assignedNames!.join(', ')),
-              if (widget.jobCard.completedBy != null)
-                _buildDetailRow('Completed By', widget.jobCard.completedBy!),
-            ])),
-            const SizedBox(height: 6),
-
-            _buildSectionCard(
-              title: 'Reoccurrence Count',
-              child: Center(child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
-            ),
-            const SizedBox(height: 6),
-
-            _buildSectionCard(
-              title: 'Comments',
-              child: Column(
-                children: [
-                  if (widget.jobCard.comments.isNotEmpty)
-                    ..._parseComments(widget.jobCard.comments).map((comment) => Card(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: Padding(padding: const EdgeInsets.all(8), child: Text(comment, style: const TextStyle(fontSize: 15))),
-                        )),
-                  if (widget.jobCard.comments.isEmpty) const Text('No comments yet', style: TextStyle(color: Colors.white70)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            _buildSectionCard(
-              title: 'Timeline',
-              child: Column(
-                children: [
-                  if (widget.jobCard.createdAt != null) _buildTimelineRow('Created', widget.jobCard.createdAt!),
-                  if (widget.jobCard.assignedAt != null) _buildTimelineRow('Assigned', widget.jobCard.assignedAt!),
-                  if (widget.jobCard.startedAt != null) _buildTimelineRow('Started', widget.jobCard.startedAt!),
-                  if (widget.jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', widget.jobCard.notificationReceivedAt!),
-                  if (widget.jobCard.completedAt != null) _buildTimelineRow('Completed', widget.jobCard.completedAt!),
-                  if (widget.jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', widget.jobCard.lastUpdatedAt!),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
