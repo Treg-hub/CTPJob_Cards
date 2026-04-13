@@ -938,7 +938,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   if (deleteAll) {
                     await _firestoreService.deleteAllEmployees();
                   }
+                  int imported = 0;
+                  int skipped = 0;
                   for (final row in rows) {
+                    if (row['clockNo'].toString().isEmpty) {
+                      skipped++;
+                      continue;
+                    }
                     final emp = Employee(
                       clockNo: row['clockNo'] as String,
                       name: row['name'] as String,
@@ -948,12 +954,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       fcmToken: row['fcmToken'] as String?,
                     );
                     try {
-                      await _firestoreService.createEmployee(emp);
+                      await _firestoreService.updateEmployee(emp);
+                      imported++;
                     } catch (e) {
-                      // ignore duplicates
+                      skipped++;
+                      print('Error importing ${row['clockNo']}: $e');
                     }
                   }
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import completed')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imported $imported employees, skipped $skipped')));
                 },
                 child: const Text('Import'),
               ),
