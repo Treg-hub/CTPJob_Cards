@@ -53,6 +53,18 @@
   - **Unnecessary Null Checks**: Simplified `j.machine?.trim().isNotEmpty == true ? j.machine! : 'Unknown Machine'` to `j.machine != null && j.machine.trim().isNotEmpty ? j.machine : 'Unknown Machine'`.
   - **Unnecessary this**: Removed `this.` qualifiers in `_showMonthPicker`.
   - **Result**: Dashboard now compiles cleanly with only minor false positive dead code warnings.
+- **Fixed Admin Settings Navigation Error**: Resolved TypeError "String is not subtype of List<dynamic>" when navigating to admin settings.
+  - **Root Cause**: Firestore `structures/factory/data` had inconsistent data types (String instead of List for machine arrays).
+  - **Fix**: Added `_normalizeStructure()` method in admin_screen.dart to convert legacy String values to List<String>, ensuring all machine fields are Lists.
+  - **Implementation**: Applied normalization in `_loadStructure()` to sanitize data before UI rendering.
+  - **Result**: AdminScreen Structures tab now loads safely with mixed data types, preventing crashes on navigation.
+- **Enhanced Admin Employees Tab to Spreadsheet View**: Transformed Employees tab into a spreadsheet-like interface with bulk operations.
+  - **New UI**: Replaced ListView with `PaginatedDataTable` for editable rows, search, and pagination.
+  - **Inline Editing**: Click edit icon to toggle row to TextField inputs, save with icon.
+  - **Bulk Operations**: Checkbox select rows for bulk delete; CSV import/export for add/edit.
+  - **CSV Features**: Export template with headers; import with preview dialog; web-optimized download/upload.
+  - **Dependencies**: Added `file_picker: ^8.1.2` and `csv: ^6.0.0` for CSV handling.
+  - **Result**: Efficient bulk employee management, especially for web users.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

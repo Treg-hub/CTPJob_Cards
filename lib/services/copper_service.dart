@@ -41,4 +41,40 @@ class CopperService {
     }
     return total;
   }
+
+  Future<CopperTransaction?> getLastSortingTransaction() async {
+    final snapshot = await _firestore
+        .collection('copperTransactions')
+        .where('type', isEqualTo: CopperType.toSort.name)
+        .where('description', isEqualTo: 'In Sorting')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    return CopperTransaction.fromFirestore(snapshot.docs.first);
+  }
+
+  Future<double> getSortingTotal() async {
+    final snapshot = await _firestore
+        .collection('copperTransactions')
+        .where('description', isEqualTo: 'In Sorting')
+        .get();
+    double total = 0.0;
+    for (final doc in snapshot.docs) {
+      total += (doc.data()['kg'] as num?)?.toDouble() ?? 0.0;
+    }
+    return total;
+  }
+
+  Future<double> getSoldTotal() async {
+    final snapshot = await _firestore
+        .collection('copperTransactions')
+        .where('type', whereIn: ['soldNuggets', 'soldRods'])
+        .get();
+    double total = 0.0;
+    for (final doc in snapshot.docs) {
+      total += (doc.data()['kg'] as num?)?.toDouble() ?? 0.0;
+    }
+    return total;
+  }
 }

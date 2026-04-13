@@ -288,6 +288,15 @@ class FirestoreService {
     }
   }
 
+  Future<String?> getCopperPassword() async {
+    try {
+      final doc = await _firestore.collection('settings').doc('app').get();
+      return doc.data()?['copperPassword'] as String?;
+    } catch (e) {
+      throw Exception('Failed to get copper password: $e');
+    }
+  }
+
   // Authentication persistence
   Future<void> saveLoggedInEmployee(String clockNo) async {
     final prefs = await SharedPreferences.getInstance();

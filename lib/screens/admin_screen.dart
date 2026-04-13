@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import 'dart:html' as html;
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'copper_storage_screen.dart';
@@ -35,6 +41,15 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   String _currentPassword = '';
   String? _currentClockNo;
 
+  // Spreadsheet state
+  Set<int> _selectedRows = {};
+  int? _editingIndex;
+  final TextEditingController _clockNoController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _positionController = TextEditingController();
+  final TextEditingController _departmentController = TextEditingController();
+  final TextEditingController _fcmController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +73,34 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     machineController.dispose();
     structureSearchController.dispose();
     _passwordController.dispose();
+    _clockNoController.dispose();
+    _nameController.dispose();
+    _positionController.dispose();
+    _departmentController.dispose();
+    _fcmController.dispose();
     super.dispose();
+  }
+
+  Map<String, dynamic> _normalizeStructure(Map<String, dynamic> structure) {
+    final normalized = <String, dynamic>{};
+    structure.forEach((dept, areas) {
+      if (areas is Map) {
+        final normalizedAreas = <String, dynamic>{};
+        (areas as Map<String, dynamic>).forEach((area, machines) {
+          if (machines is List) {
+            normalizedAreas[area] = machines;
+          } else if (machines is String) {
+            normalizedAreas[area] = [machines];
+          } else {
+            normalizedAreas[area] = [];
+          }
+        });
+        normalized[dept] = normalizedAreas;
+      } else {
+        normalized[dept] = {};
+      }
+    });
+    return normalized;
   }
 
   Future<void> _loadEmployees() async {
@@ -86,7 +128,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Future<void> _loadStructure() async {
     try {
-      _structure = await _firestoreService.getFactoryStructure();
+      _structure = _normalizeStructure(await _firestoreService.getFactoryStructure());
       setState(() {});
     } catch (e) {
       if (mounted) {
@@ -148,62 +190,136 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Widget _buildEmployeesTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          TextField(
-            controller: _employeeSearchController,
-            decoration: const InputDecoration(
-              labelText: 'Search Employees',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onChanged: (_) => setState(() => _filterEmployees()),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _employeeSearchController,
+                  decoration: const InputDecoration(
+                    labelText: 'Search Employees',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (_) => setState(() => _filterEmployees()),
+                ),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton.icon(
+                onPressed: _exportTemplate,
+                icon: const Icon(Icons.download),
+                label: const Text('Export Template'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _importCsv,
+                icon: const Icon(Icons.upload),
+                label: const Text('Import CSV'),
+              ),
+              if (_selectedRows.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _bulkDelete,
+                  icon: const Icon(Icons.delete, color: Colors.white),
+                  label: const Text('Delete Selected'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: StreamBuilder<List<Employee>>(
-              stream: _firestoreService.getEmployeesStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && _allEmployees.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                final employees = snapshot.data ?? _allEmployees;
-                _allEmployees = employees;
-                _filterEmployees();
-                return ListView.builder(
-                  itemCount: _filteredEmployees.length,
-                  itemBuilder: (context, index) {
-                    final emp = _filteredEmployees[index];
-                    return Card(
-                      child: ListTile(
-                        title: Text(emp.displayName),
-                        subtitle: Text('${emp.department} - ${emp.isOnSite ? 'On Site' : 'Off Site'}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () => _showEmployeeDialog(emp),
+        ),
+        Expanded(
+          child: StreamBuilder<List<Employee>>(
+            stream: _firestoreService.getEmployeesStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && _allEmployees.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final employees = snapshot.data ?? _allEmployees;
+              _allEmployees = employees;
+              _filterEmployees();
+              return SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Select')),
+                      DataColumn(label: Text('Clock No')),
+                      DataColumn(label: Text('Name')),
+                      DataColumn(label: Text('Position')),
+                      DataColumn(label: Text('Department')),
+                      DataColumn(label: Text('On Site')),
+                      DataColumn(label: Text('FCM Token')),
+                      DataColumn(label: Text('Actions')),
+                    ],
+                    rows: _filteredEmployees.map((emp) {
+                      final index = _allEmployees.indexOf(emp);
+                      final isEditing = _editingIndex == index;
+                      return DataRow(
+                        selected: _selectedRows.contains(index),
+                        onSelectChanged: (selected) {
+                          if (selected!) {
+                            _selectedRows.add(index);
+                          } else {
+                            _selectedRows.remove(index);
+                          }
+                          setState(() {});
+                        },
+                        cells: [
+                          DataCell(
+                            Checkbox(
+                              value: _selectedRows.contains(index),
+                              onChanged: (v) {
+                                if (v!) {
+                                  _selectedRows.add(index);
+                                } else {
+                                  _selectedRows.remove(index);
+                                }
+                                setState(() {});
+                              },
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteEmployee(emp.clockNo),
+                          ),
+                          DataCell(isEditing ? TextField(controller: _clockNoController) : Text(emp.clockNo)),
+                          DataCell(isEditing ? TextField(controller: _nameController) : Text(emp.name)),
+                          DataCell(isEditing ? TextField(controller: _positionController) : Text(emp.position)),
+                          DataCell(isEditing ? TextField(controller: _departmentController) : Text(emp.department)),
+                          DataCell(
+                            Checkbox(
+                              value: emp.isOnSite,
+                              onChanged: (v) => _firestoreService.updateEmployee(emp.copyWith(isOnSite: v ?? true)),
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                          ),
+                          DataCell(isEditing ? SizedBox(width: 150, child: TextField(controller: _fcmController)) : SizedBox(width: 150, child: Text(emp.fcmToken != null ? (emp.fcmToken!.length > 100 ? '${emp.fcmToken!.substring(0, 100)}...' : emp.fcmToken!) : '', overflow: TextOverflow.ellipsis))),
+                          DataCell(
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(isEditing ? Icons.save : Icons.edit),
+                                  onPressed: () => _toggleEdit(index),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _deleteEmployee(emp.clockNo),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -735,4 +851,130 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       }
     }
   }
+
+  void _exportTemplate() {
+    final csv = const ListToCsvConverter().convert([
+      ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken'],
+      ['', '', '', '', 'true', '']
+    ]);
+    if (kIsWeb) {
+      final blob = html.Blob([csv], 'text/csv');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)..download = 'employees_template.csv'..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      Share.share(csv, subject: 'Employees Template');
+    }
+  }
+
+  void _importCsv() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+    if (result != null) {
+      final file = result.files.first;
+      String csvString;
+      if (file.bytes != null) {
+        csvString = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null) {
+        csvString = await File(file.path!).readAsString();
+      } else {
+        return;
+      }
+      final csvTable = const CsvToListConverter().convert(csvString);
+      if (csvTable.isEmpty || csvTable[0].length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid CSV format')));
+        return;
+      }
+      final headers = csvTable[0].map((e) => e.toString()).toList();
+      if (headers != ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken']) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid headers')));
+        return;
+      }
+      final rows = csvTable.skip(1).map((row) => {
+        'clockNo': row[0].toString(),
+        'name': row[1].toString(),
+        'position': row[2].toString(),
+        'department': row[3].toString(),
+        'isOnSite': row[4].toString().toLowerCase() == 'true',
+        'fcmToken': row[5].toString().isEmpty ? null : row[5].toString(),
+      }).toList();
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Preview Import'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: ListView(
+              children: rows.map((row) => ListTile(
+                title: Text('${row['clockNo']} - ${row['name']}'),
+                subtitle: Text('${row['position']} - ${row['department']}'),
+              )).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                for (final row in rows) {
+                  final emp = Employee(
+                    clockNo: row['clockNo'] as String,
+                    name: row['name'] as String,
+                    position: row['position'] as String,
+                    department: row['department'] as String,
+                    isOnSite: row['isOnSite'] as bool,
+                    fcmToken: row['fcmToken'] as String?,
+                  );
+                  try {
+                    await _firestoreService.createEmployee(emp);
+                  } catch (e) {
+                    // ignore duplicates
+                  }
+                }
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import completed')));
+              },
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _toggleEdit(int index) {
+    if (_editingIndex == index) {
+      // save
+      final emp = _allEmployees[index];
+      final updatedEmp = emp.copyWith(
+        clockNo: _clockNoController.text,
+        name: _nameController.text,
+        position: _positionController.text,
+        department: _departmentController.text,
+        fcmToken: _fcmController.text.isEmpty ? null : _fcmController.text,
+      );
+      _firestoreService.updateEmployee(updatedEmp);
+      _editingIndex = null;
+    } else {
+      _editingIndex = index;
+      final emp = _allEmployees[index];
+      _clockNoController.text = emp.clockNo;
+      _nameController.text = emp.name;
+      _positionController.text = emp.position;
+      _departmentController.text = emp.department;
+      _fcmController.text = emp.fcmToken ?? '';
+    }
+    setState(() {});
+  }
+
+  void _bulkDelete() async {
+    final toDelete = _selectedRows.map((i) => _allEmployees[i].clockNo).toList();
+    for (final clockNo in toDelete) {
+      await _firestoreService.deleteEmployee(clockNo);
+    }
+    _selectedRows.clear();
+    setState(() {});
+  }
 }
+
+
+

@@ -48,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
                            (currentEmployee?.position.toLowerCase().contains('electrical') ?? false);
   bool get isOperator => !(isManager || isTechnician);
 
+  bool get _isCopperAuthorized => ['22', '5421', '20'].contains(currentEmployee?.clockNo ?? '');
+
   List<Map<String, dynamic>> get _quickActions {
     final actions = [
       {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))},
@@ -982,12 +984,12 @@ class _HomeScreenState extends State<HomeScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              if (clockController.text.trim() == '22') {
+              if (['22', '5421', '20'].contains(clockController.text.trim())) {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperStorageScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Access denied. Only clock card 22 allowed.'), backgroundColor: Colors.red),
+                  const SnackBar(content: Text('Access denied. Only authorized clock cards allowed.'), backgroundColor: Colors.red),
                 );
               }
             },
@@ -1029,6 +1031,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onItemTapped(int index) {
+    if (index >= [
+      _buildHomeTab(),
+      _buildMyWorkTab(),
+      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+        _buildDashboardTab(),
+      _buildSettingsTab(),
+      if (_isCopperAuthorized)
+        _buildCopperTab(),
+    ].length) {
+      return;
+    }
     setState(() {
       _selectedIndex = index;
     });
@@ -1041,6 +1054,45 @@ class _HomeScreenState extends State<HomeScreen> {
         _handleJobDeepLink(_pendingJobId!);
         _pendingJobId = null;
       });
+    }
+
+    final List<BottomNavigationBarItem> items = [
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.home),
+        label: 'Home',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.assignment),
+        label: 'My Work',
+      ),
+      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.settings),
+        label: 'Settings',
+      ),
+      if (_isCopperAuthorized)
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.inventory),
+          label: 'Copper',
+        ),
+    ];
+
+    final List<Widget> children = [
+      _buildHomeTab(),
+      _buildMyWorkTab(),
+      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
+        _buildDashboardTab(),
+      _buildSettingsTab(),
+      if (_isCopperAuthorized)
+        _buildCopperTab(),
+    ];
+
+    if (_selectedIndex >= children.length) {
+      _selectedIndex = 0;
     }
 
     return Scaffold(
@@ -1072,42 +1124,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: IndexedStack(
         index: _selectedIndex,
-        children: [
-          _buildHomeTab(),
-          _buildMyWorkTab(), // now index 1 (Jobs tab removed)
-          if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-            _buildDashboardTab(),
-          _buildSettingsTab(),
-          _buildCopperTab(),
-        ],
+        children: children,
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        items: <BottomNavigationBarItem>[
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.assignment),
-            label: 'My Work',
-          ),
-          if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              label: 'Dashboard',
-            ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.inventory),
-            label: 'Copper',
-          ),
-        ],
+        items: items,
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xFFFF8C42),
         unselectedItemColor: Colors.grey,
