@@ -852,6 +852,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
+  bool _parseBool(String value) {
+    final lower = value.toLowerCase();
+    return lower == 'true' || lower == '1' || lower == 'yes' || lower == 'on';
+  }
+
   void _exportTemplate() {
     final csv = const ListToCsvConverter().convert([
       ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken'],
@@ -881,61 +886,79 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       }
       final csvTable = const CsvToListConverter().convert(csvString);
       if (csvTable.isEmpty || csvTable[0].length < 6) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid CSV format')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid CSV format: found ${csvTable.isEmpty ? 0 : csvTable[0].length} columns, expected at least 6')));
         return;
       }
-      final headers = csvTable[0].map((e) => e.toString()).toList();
-      if (headers != ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken']) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid headers')));
+      final headers = csvTable[0].map((e) => e.toString().trim().toLowerCase()).toList();
+      final expectedHeaders = ['clockno', 'name', 'position', 'department', 'isonsite', 'fcmtoken'];
+      if (!expectedHeaders.every((h) => headers.contains(h))) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid headers: expected clockNo, name, position, department, isOnSite, fcmToken')));
         return;
       }
       final rows = csvTable.skip(1).map((row) => {
-        'clockNo': row[0].toString(),
-        'name': row[1].toString(),
-        'position': row[2].toString(),
-        'department': row[3].toString(),
-        'isOnSite': row[4].toString().toLowerCase() == 'true',
-        'fcmToken': row[5].toString().isEmpty ? null : row[5].toString(),
+        'clockNo': row[headers.indexOf('clockno')].toString().trim(),
+        'name': row[headers.indexOf('name')].toString().trim(),
+        'position': row[headers.indexOf('position')].toString().trim(),
+        'department': row[headers.indexOf('department')].toString().trim(),
+        'isOnSite': _parseBool(row[headers.indexOf('isonsite')].toString().trim()),
+        'fcmToken': row[headers.indexOf('fcmtoken')].toString().trim().isEmpty ? null : row[headers.indexOf('fcmtoken')].toString().trim(),
       }).toList();
+      bool deleteAll = false;
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Preview Import'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: ListView(
-              children: rows.map((row) => ListTile(
-                title: Text('${row['clockNo']} - ${row['name']}'),
-                subtitle: Text('${row['position']} - ${row['department']}'),
-              )).toList(),
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Preview Import'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    title: const Text('Delete all existing employees first'),
+                    value: deleteAll,
+                    onChanged: (v) => setState(() => deleteAll = v ?? false),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: rows.map((row) => ListTile(
+                        title: Text('${row['clockNo']} - ${row['name']}'),
+                        subtitle: Text('${row['position']} - ${row['department']}'),
+                      )).toList(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                for (final row in rows) {
-                  final emp = Employee(
-                    clockNo: row['clockNo'] as String,
-                    name: row['name'] as String,
-                    position: row['position'] as String,
-                    department: row['department'] as String,
-                    isOnSite: row['isOnSite'] as bool,
-                    fcmToken: row['fcmToken'] as String?,
-                  );
-                  try {
-                    await _firestoreService.createEmployee(emp);
-                  } catch (e) {
-                    // ignore duplicates
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  if (deleteAll) {
+                    await _firestoreService.deleteAllEmployees();
                   }
-                }
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import completed')));
-              },
-              child: const Text('Import'),
-            ),
-          ],
+                  for (final row in rows) {
+                    final emp = Employee(
+                      clockNo: row['clockNo'] as String,
+                      name: row['name'] as String,
+                      position: row['position'] as String,
+                      department: row['department'] as String,
+                      isOnSite: row['isOnSite'] as bool,
+                      fcmToken: row['fcmToken'] as String?,
+                    );
+                    try {
+                      await _firestoreService.createEmployee(emp);
+                    } catch (e) {
+                      // ignore duplicates
+                    }
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import completed')));
+                },
+                child: const Text('Import'),
+              ),
+            ],
+          ),
         ),
       );
     }

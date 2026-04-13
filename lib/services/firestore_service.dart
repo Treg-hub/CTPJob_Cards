@@ -44,6 +44,19 @@ class FirestoreService {
     }
   }
 
+  Future<void> deleteAllEmployees() async {
+    try {
+      final batch = _firestore.batch();
+      final snapshot = await _firestore.collection('employees').get();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Failed to delete all employees: $e');
+    }
+  }
+
   Future<List<Employee>> getAllEmployees() async {
     try {
       final snapshot = await _firestore.collection('employees').get();
