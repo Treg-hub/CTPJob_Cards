@@ -29,6 +29,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
+  bool get isTech => (currentEmployee?.position ?? '').toLowerCase().contains('technician') || (currentEmployee?.position ?? '').toLowerCase().contains('tech');
+  bool get _canAddNotes => isManager || (currentEmployee?.position ?? '').toLowerCase().contains('electrical') || (currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
 
   Future<void> _appendComment() async {
     if (_commentController.text.trim().isEmpty) return;
@@ -358,17 +360,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           final clockNo = selectedClockNos[i];
                           final emp = await _firestoreService.getEmployee(clockNo);
                           if (emp?.fcmToken != null) {
-                            try {
-                              await _notificationService.sendJobAssignmentNotification(
-                                recipientToken: emp!.fcmToken!,
-                                jobCardId: job.id!,
-                                operator: currentEmployee?.name ?? 'Unknown',
-                                department: emp.department,
-                                area: job.area,
-                                machine: job.machine,
-                                part: job.part,
-                                description: '',
-                              );
+                             try {
+                               await _notificationService.sendJobAssignmentNotification(
+                                 recipientToken: emp!.fcmToken!,
+                                 jobCardId: job.id!,
+                                 jobCardNumber: job.jobCardNumber,
+                                 operator: currentEmployee?.name ?? 'Unknown',
+                                 department: emp.department,
+                                 area: job.area,
+                                 machine: job.machine,
+                                 part: job.part,
+                                 description: job.description,
+                               );
                             } catch (e) {
                               debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
                             }
@@ -447,6 +450,77 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     );
   }
 
+  void _showAddNoteDialog() {
+    final noteController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1F1F1F),
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Add Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Note / Work Progress',
+                    border: OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Colors.white70)
+                  ),
+                  maxLines: 4,
+                  style: const TextStyle(color: Colors.white)
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+                    const SizedBox(width: 12),
+                    ElevatedButton(onPressed: () { Navigator.pop(context); _appendNote(noteController.text.trim()); }, child: const Text('Save Note')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _appendNote(String noteText) async {
+    if (noteText.isEmpty) return;
+    final now = DateTime.now();
+    final user = currentEmployee?.name ?? 'User';
+    final newNote = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: $noteText';
+    final updatedNotes = _currentJobCard.notes + newNote;
+
+    try {
+      await _firestoreService.updateJobCard(
+        _currentJobCard.id!,
+        _currentJobCard.copyWith(notes: updatedNotes),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note added!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding note: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const double sectionSpacing = 5.0;
@@ -480,25 +554,325 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           );
         },
       ),
-      bottomNavigationBar: isManager
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1F1F1F),
-                border: Border(top: BorderSide(color: Colors.white24)),
+      bottomNavigationBar: _buildBottomBanner(_currentJobCard),
+    );
+  }
+
+  Widget _buildBottomBanner(JobCard jobCard) {
+    // Hide all buttons if job is completed
+    if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();
+
+    final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
+    if (!isAssigned && !isManager) return const SizedBox.shrink();
+
+    final buttons = <Widget>[];
+
+    if (jobCard.status == JobStatus.open) {
+      if (jobCard.startedAt == null) {
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _startJob(jobCard),
+              icon: const Icon(Icons.play_arrow, size: 20),
+              label: const Text('Start', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: ElevatedButton.icon(
-                onPressed: () => _showAssignCompleteDialog(context, _currentJobCard),
-                icon: const Icon(Icons.assignment),
-                label: const Text('Manage Assignments'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 52),
-                ),
+            ),
+          ),
+        );
+      }
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showCompleteDialog(jobCard),
+            icon: const Icon(Icons.check_circle, size: 20),
+            label: const Text('Complete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-            )
-          : null,
+          ),
+        ),
+      );
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showMonitorDialog(jobCard),
+            icon: const Icon(Icons.visibility, size: 20),
+            label: const Text('Monitor', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      );
+    } else if (jobCard.status == JobStatus.monitoring) {
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showAdjustmentDialog(jobCard),
+            icon: const Icon(Icons.refresh, size: 20),
+            label: const Text('Adjustment Made', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (buttons.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1F1F1F),
+        border: Border(top: BorderSide(color: Colors.white24)),
+      ),
+      child: Row(
+        children: buttons.map((btn) => [btn, const SizedBox(width: 8)]).expand((x) => x).toList()..removeLast(),
+      ),
+    );
+  }
+
+
+
+  Future<void> _startJob(JobCard jobCard) async {
+    final now = DateTime.now();
+    final user = currentEmployee?.name ?? 'User';
+    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Started by $user';
+    final updated = jobCard.copyWith(
+      startedAt: now,
+      notes: jobCard.notes + note,
+    );
+    try {
+      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Job started!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting job: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showCompleteDialog(JobCard jobCard) {
+    final noteController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Job'),
+        content: TextField(
+          controller: noteController,
+          decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final note = noteController.text.trim();
+              if (note.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
+                return;
+              }
+              Navigator.pop(context);
+              await _completeJob(jobCard, false, note);
+            },
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMonitorDialog(JobCard jobCard) {
+    final noteController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Start Monitoring'),
+        content: TextField(
+          controller: noteController,
+          decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final note = noteController.text.trim();
+              if (note.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
+                return;
+              }
+              Navigator.pop(context);
+              await _completeJob(jobCard, true, note);
+            },
+            child: const Text('Start Monitoring'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdjustmentDialog(JobCard jobCard) {
+    final noteController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Adjustment Made'),
+        content: TextField(
+          controller: noteController,
+          decoration: const InputDecoration(labelText: 'Description of Adjustment'),
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final note = noteController.text.trim();
+              if (note.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
+                return;
+              }
+              Navigator.pop(context);
+              await _adjustmentMade(jobCard, note);
+            },
+            child: const Text('Save Adjustment'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _completeJob(JobCard jobCard, bool withMonitoring, String description) async {
+    final now = DateTime.now();
+    final user = currentEmployee?.name ?? 'User';
+    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $description';
+    final updated = jobCard.copyWith(
+      status: withMonitoring ? JobStatus.monitoring : JobStatus.completed,
+      completedBy: user,
+      completedAt: now,
+      monitoringStartedAt: withMonitoring ? now : null,
+      notes: jobCard.notes + note,
+    );
+    try {
+      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(withMonitoring ? 'Job completed and monitoring started!' : 'Job completed!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error completing job: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _adjustmentMade(JobCard jobCard, String description) async {
+    final now = DateTime.now();
+    final user = currentEmployee?.name ?? 'User';
+    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Adjustment made by $user: $description – restarted monitoring';
+    final updated = jobCard.copyWith(
+      monitoringStartedAt: now,
+      notes: jobCard.notes + note,
+    );
+    try {
+      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error resetting monitoring: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showStatusChangeDialog(JobCard jobCard) {
+    JobStatus selectedStatus = jobCard.status;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Job Status'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SegmentedButton<JobStatus>(
+                segments: const [
+                  ButtonSegment(value: JobStatus.open, label: Text('Open')),
+                  ButtonSegment(value: JobStatus.monitoring, label: Text('Monitoring')),
+                  ButtonSegment(value: JobStatus.completed, label: Text('Completed')),
+                  ButtonSegment(value: JobStatus.closed, label: Text('Closed')),
+                ],
+                selected: {selectedStatus},
+                onSelectionChanged: (Set<JobStatus> selection) {
+                  setDialogState(() => selectedStatus = selection.first);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                if (selectedStatus == jobCard.status) {
+                  Navigator.pop(context);
+                  return;
+                }
+                final now = DateTime.now();
+                final user = currentEmployee?.name ?? 'User';
+                final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Status changed to ${selectedStatus.displayName} by $user';
+                final updated = jobCard.copyWith(
+                  status: selectedStatus,
+                  monitoringStartedAt: selectedStatus == JobStatus.monitoring ? now : null,
+                  notes: jobCard.notes + note,
+                );
+                try {
+                  await _firestoreService.updateJobCard(jobCard.id!, updated);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error changing status: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const Text('Change Status'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -536,45 +910,53 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Job #${jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: jobCard.status == JobStatus.completed ? Colors.green : Colors.blue,
-                    borderRadius: BorderRadius.circular(30),
+                Text('Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white)),
+                GestureDetector(
+                  onTap: isManager ? () => _showStatusChangeDialog(jobCard) : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: jobCard.status == JobStatus.completed ? Colors.green : jobCard.status == JobStatus.monitoring ? Colors.orange : jobCard.status == JobStatus.closed ? Colors.grey : Colors.blue,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          jobCard.status.displayName.toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        if (isManager) const SizedBox(width: 4),
+                        if (isManager) const Icon(Icons.edit, color: Colors.white, size: 14),
+                      ],
+                    ),
                   ),
-                  child: Text(
-                    jobCard.status.displayName.toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: _getPriorityColor('P${jobCard.priority}'), width: 2.5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'P${jobCard.priority}',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _getPriorityColor('P${jobCard.priority}')),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Count - $_reoccurrenceCount',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              '${jobCard.department ?? 'N/A'} > ${jobCard.area ?? 'N/A'} > ${jobCard.machine ?? 'N/A'} > ${jobCard.part ?? 'N/A'}',
-              style: const TextStyle(fontSize: 15.5, color: Colors.white),
+              'Count - $_reoccurrenceCount',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'P${jobCard.priority}',
+                    style: TextStyle(
+                      color: _getPriorityColor('P${jobCard.priority}'),
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' | ${jobCard.department ?? 'N/A'} > ${jobCard.area ?? 'N/A'} > ${jobCard.machine ?? 'N/A'} > ${jobCard.part ?? 'N/A'}',
+                    style: const TextStyle(fontSize: 15.5, color: Colors.white),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -620,11 +1002,26 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
 
             const SizedBox(height: 16),
 
-            const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                if (_canAddNotes)
+                  TextButton.icon(
+                    onPressed: _showAddNoteDialog,
+                    icon: const Icon(Icons.note_add, size: 20),
+                    label: const Text('Add Note'),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  ),
+              ],
+            ),
             const SizedBox(height: 6),
-            jobCard.notes.isNotEmpty
-                ? Text(jobCard.notes, style: const TextStyle(fontSize: 15.5, color: Colors.white))
-                : const Text('No notes', style: TextStyle(color: Colors.white70)),
+            if (jobCard.notes.isNotEmpty) ..._parseNotes(jobCard.notes).map((note) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(note, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                )),
+            if (jobCard.notes.isEmpty)
+              const Text('No notes', style: TextStyle(color: Colors.white70)),
           ],
         ),
       ),
@@ -691,6 +1088,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
             if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
             if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
+            if (jobCard.monitoringStartedAt != null) _buildTimelineRow('Monitoring Started', jobCard.monitoringStartedAt!),
             if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
           ],
         ),
@@ -724,6 +1122,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   List<String> _parseComments(String comments) => comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+
+  List<String> _parseNotes(String notes) => notes.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;

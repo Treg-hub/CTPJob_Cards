@@ -68,7 +68,27 @@ class FirestoreService {
   // Job Card operations
   Future<void> createJobCard(JobCard jobCard) async {
     try {
-      await _firestore.collection('job_cards').add(jobCard.toFirestore());
+      await _firestore.runTransaction((transaction) async {
+        // Get the counter document
+        final counterRef = _firestore.collection('counters').doc('jobCards');
+        final counterSnapshot = await transaction.get(counterRef);
+
+        int nextNumber;
+        if (counterSnapshot.exists) {
+          nextNumber = counterSnapshot.data()?['nextJobCardNumber'] as int? ?? 1;
+        } else {
+          // Initialize counter if it doesn't exist
+          nextNumber = 1;
+        }
+
+        // Update counter
+        transaction.set(counterRef, {'nextJobCardNumber': nextNumber + 1}, SetOptions(merge: true));
+
+        // Create job card with the number
+        final jobCardWithNumber = jobCard.copyWith(jobCardNumber: nextNumber);
+        final jobCardRef = _firestore.collection('job_cards').doc(); // Auto-ID
+        transaction.set(jobCardRef, jobCardWithNumber.toFirestore());
+      });
     } catch (e) {
       throw Exception('Failed to create job card: $e');
     }
@@ -406,5 +426,37 @@ class FirestoreService {
     } catch (e) {
       throw Exception('Failed to get job cards by type: $e');
     }
+  }
+
+  Stream<List<JobCard>> getMonitoringJobCards() {
+    return _firestore
+        .collection('job_cards')
+        .where('status', isEqualTo: 'monitoring')
+        .orderBy('monitoringStartedAt', descending: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+  }
+
+  Future<List<JobCard>> getRecentlyAutoClosed(DateTime startDate) async {
+    try {
+      final snapshot = await _firestore
+          .collection('job_cards')
+          .where('status', isEqualTo: 'closed')
+          .where('closedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .orderBy('closedAt', descending: true)
+          .get();
+      return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+    } catch (e) {
+      throw Exception('Failed to get recently auto-closed jobs: $e');
+    }
+  }
+
+  Stream<List<JobCard>> getClosedJobCards() {
+    return _firestore
+        .collection('job_cards')
+        .where('status', isEqualTo: 'closed')
+        .orderBy('closedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }
 }

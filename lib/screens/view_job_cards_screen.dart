@@ -5,6 +5,7 @@ import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
+import 'monitoring_dashboard_screen.dart';
 
 class ViewJobCardsScreen extends StatefulWidget {
   const ViewJobCardsScreen({
@@ -30,9 +31,13 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
   String? selectedMachine;
   String? selectedPart;
 
-  bool viewOpenJobs = true;
+  String selectedStatus = 'open';
   int openCount = 0;
   int closedCount = 0;
+
+  String selectedStaffFilter = 'All';
+
+  bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
 
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
@@ -40,13 +45,25 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
   @override
   void initState() {
     super.initState();
-    selectedDepartment = widget.filterDepartment ?? currentEmployee?.department;
+    selectedStaffFilter = _employeeStaffDefault ?? 'All';
+    if (_employeeStaffDefault == null) {
+      selectedDepartment = currentEmployee?.department;
+    } else {
+      selectedDepartment = null;
+    }
     selectedArea = widget.filterArea;
     selectedMachine = widget.filterMachine;
     selectedPart = widget.filterPart;
   }
 
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
+
+  String? get _employeeStaffDefault {
+    final empPosition = currentEmployee?.position?.toLowerCase();
+    if (empPosition?.contains('electrical') ?? false) return 'Electrical';
+    if (empPosition?.contains('mechanical') ?? false) return 'Mechanical';
+    return null;
+  }
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
@@ -63,8 +80,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'open': return Colors.blue;
-      case 'in progress': return Colors.orange;
+      case 'monitoring': return Colors.orange;
       case 'completed': return Colors.green;
+      case 'closed': return Colors.grey;
       case 'cancelled': return Colors.red;
       default: return Colors.grey;
     }
@@ -94,134 +112,135 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
           MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
         ),
         borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              decoration: BoxDecoration(
-                color: _getPriorityColor('P${job.priority}'),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
                   children: [
-                    Text(
-                      '${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'}   |   ${job.operator ?? 'Unknown'}',
+                    TextSpan(
+                      text: 'P${job.priority}',
+                      style: TextStyle(
+                        color: _getPriorityColor('P${job.priority}'),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11.5,
                         height: 1.2,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: _getPriorityColor('P${job.priority}'), width: 2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'P${job.priority}',
-                            style: TextStyle(
-                              color: _getPriorityColor('P${job.priority}'),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            job.description,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (job.notes.isNotEmpty) Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        job.notes.split('\n').first.trim(),
-                        style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (job.comments.isNotEmpty) Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        _getLastCommentPreview(job.comments),
-                        style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(job.status.name).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            job.status.displayName,
-                            style: TextStyle(
-                              color: _getStatusColor(job.status.name),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            job.type.displayName,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          job.assignedNames?.join(', ') ?? 'Unassigned',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
-                          style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                        ),
-                      ],
                     ),
                   ],
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (job.jobCardNumber != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'JC #${job.jobCardNumber}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      job.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (job.comments.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _getLastCommentPreview(job.comments),
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (job.notes.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  job.notes.split('\n').first.trim(),
+                  style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(job.status.name).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.status.displayName,
+                      style: TextStyle(
+                        color: _getStatusColor(job.status.name),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.type.displayName,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    job.assignedNames?.join(', ') ?? 'Unassigned',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
+                    style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -233,13 +252,18 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
       appBar: AppBar(
         title: const Text('All Job Cards'),
         actions: [
-          if (selectedDepartment != null || selectedArea != null || selectedMachine != null || selectedPart != null)
+          if (selectedDepartment != null || selectedArea != null || selectedMachine != null || selectedPart != null || selectedStaffFilter != (_employeeStaffDefault ?? 'All'))
             TextButton.icon(
               icon: const Icon(Icons.clear),
               label: const Text('Clear Filters'),
               onPressed: () {
                 setState(() {
-                  selectedDepartment = null;
+                  selectedStaffFilter = _employeeStaffDefault ?? 'All';
+                  if (_employeeStaffDefault == null) {
+                    selectedDepartment = currentEmployee?.department;
+                  } else {
+                    selectedDepartment = null;
+                  }
                   selectedArea = null;
                   selectedMachine = null;
                   selectedPart = null;
@@ -337,21 +361,42 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
             ),
           ),
 
-          // Open / Closed selector
+          // Open / Closed and Elec / Mech selectors
           if (!_isDesktop)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, label: Text('Open')),
-                  ButtonSegment(value: false, label: Text('Closed')),
+              child: Column(
+                children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'open', label: Text('Open')),
+                      ButtonSegment(value: 'monitoring', label: Text('Monitoring')),
+                      ButtonSegment(value: 'completed', label: Text('Completed')),
+                    ],
+                    selected: {selectedStatus},
+                    onSelectionChanged: (Set<String> selected) {
+                      if (selected.isNotEmpty) {
+                        setState(() => selectedStatus = selected.first);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'Electrical', label: Text('Elec')),
+                      ButtonSegment(value: 'Mechanical', label: Text('Mech')),
+                      ButtonSegment(value: 'All', label: Text('All')),
+                    ],
+                    selected: {selectedStaffFilter},
+                    onSelectionChanged: (Set<String> selected) {
+                      if (selected.isNotEmpty) {
+                        setState(() {
+                          selectedStaffFilter = selected.first;
+                        });
+                      }
+                    },
+                  ),
                 ],
-                selected: {viewOpenJobs},
-                onSelectionChanged: (Set<bool> selected) {
-                  if (selected.isNotEmpty) {
-                    setState(() => viewOpenJobs = selected.first);
-                  }
-                },
               ),
             ),
 
@@ -368,6 +413,11 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                 }
 
                 var jobs = snapshot.data!;
+
+                // Apply staff filter
+                if (selectedStaffFilter != 'All') {
+                  jobs = jobs.where((j) => j.type.name == selectedStaffFilter.toLowerCase()).toList();
+                }
 
                 // Apply filters
                 if (selectedDepartment != null) jobs = jobs.where((j) => j.department == selectedDepartment).toList();
@@ -390,15 +440,56 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                   });
                 }
 
+                final filteredJobs = jobs.where((j) => j.status.name == selectedStatus).toList();
+
                 if (_isDesktop) {
-                  return Row(
+                  return Column(
                     children: [
-                      Expanded(child: _buildJobList(openJobs, 'Open Jobs')),
-                      Expanded(child: _buildJobList(closedJobs, 'Closed Jobs')),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(value: 'open', label: Text('Open')),
+                                  ButtonSegment(value: 'monitoring', label: Text('Monitoring')),
+                                  ButtonSegment(value: 'completed', label: Text('Completed')),
+                                ],
+                                selected: {selectedStatus},
+                                onSelectionChanged: (Set<String> selected) {
+                                  if (selected.isNotEmpty) {
+                                    setState(() => selectedStatus = selected.first);
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 16),
+                              SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(value: 'Electrical', label: Text('Elec')),
+                                  ButtonSegment(value: 'Mechanical', label: Text('Mech')),
+                                  ButtonSegment(value: 'All', label: Text('All')),
+                                ],
+                                selected: {selectedStaffFilter},
+                                onSelectionChanged: (Set<String> selected) {
+                                  if (selected.isNotEmpty) {
+                                    setState(() {
+                                      selectedStaffFilter = selected.first;
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(child: _buildJobList(filteredJobs, '')),
                     ],
                   );
                 } else {
-                  return _buildJobList(viewOpenJobs ? openJobs : closedJobs, '');
+                  return _buildJobList(filteredJobs, '');
                 }
               },
             ),

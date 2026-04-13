@@ -10,13 +10,15 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
    console.log('📥 data keys:', Object.keys(data));
    console.log('📥 data.data keys:', data.data ? Object.keys(data.data) : 'no data.data');
    const innerData = data.data || data;
-   const recipientToken = innerData.recipientToken;
-   const operator = innerData.operator;
-   const department = innerData.department;
-   const area = innerData.area;
-   const machine = innerData.machine;
-   const part = innerData.part;
-   const description = innerData.description;
+    const recipientToken = innerData.recipientToken;
+    const jobCardId = innerData.jobCardId;
+    const jobCardNumber = innerData.jobCardNumber;
+    const operator = innerData.operator;
+    const department = innerData.department;
+    const area = innerData.area;
+    const machine = innerData.machine;
+    const part = innerData.part;
+    const description = innerData.description;
 
    console.log('🔍 Extracted recipientToken:', recipientToken, 'type:', typeof recipientToken, 'len:', recipientToken ? recipientToken.length : 'n/a');
 
@@ -26,7 +28,8 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
    }
 
   // Build rich notification body
-  const body = `Operator: ${operator}\n` +
+  const body = `Job #${jobCardNumber || 'N/A'}\n` +
+               `Operator: ${operator}\n` +
                `${department} - ${area} - ${machine} - ${part}\n` +
                `Description: ${description}`;
 
@@ -269,4 +272,101 @@ exports.migrateEmployeeIds = functions.https.onCall(async (data, context) => {
   await batch.commit();
   console.log(`Migrated ${migrated.length} employee docs`);
   return {migrated, count: migrated.length};
+});
+
+// Auto-close monitoring jobs after 7 days with no adjustments
+exports.autoCloseMonitoringJobs = functions.scheduler.onSchedule({
+  schedule: '0 8 * * *', // Daily at 8am Johannesburg
+  region: 'europe-west1',
+  timeZone: 'Africa/Johannesburg'
+}, async (event) => {
+  console.log('🚀 autoCloseMonitoringJobs started at', new Date().toISOString());
+
+  try {
+    const now = admin.firestore.Timestamp.now();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    console.log('⏰ sevenDaysAgo:', sevenDaysAgo.toISOString());
+
+    // Query monitoring jobs started 7+ days ago
+    const monitoringJobs = await admin.firestore().collection('job_cards')
+      .where('status', '==', 'monitoring')
+      .where('monitoringStartedAt', '<=', admin.firestore.Timestamp.fromDate(sevenDaysAgo))
+      .get();
+
+    console.log(`📊 Found ${monitoringJobs.size} monitoring jobs`);
+
+    const batch = admin.firestore().batch();
+    let closedCount = 0;
+
+    for (const doc of monitoringJobs.docs) {
+      const job = doc.data();
+      const monitoringStartedAt = job.monitoringStartedAt?.toDate();
+      const lastUpdatedAt = job.lastUpdatedAt?.toDate();
+
+      if (monitoringStartedAt && lastUpdatedAt) {
+        const sevenDaysAfterStart = new Date(monitoringStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+        // Close if no updates during the 7-day period
+        if (lastUpdatedAt <= sevenDaysAfterStart) {
+          const autoNote = `\n\n[${now.toDate().toLocaleString()}] Auto-closed: 7-day monitoring complete, no adjustments.`;
+          const currentNotes = job.notes || '';
+          batch.update(doc.ref, {
+            status: 'closed',
+            closedAt: now,
+            monitoringStartedAt: null,
+            notes: currentNotes + autoNote,
+          });
+          closedCount++;
+          console.log(`✅ Auto-closed job ${doc.id}`);
+        }
+      }
+    }
+
+    if (closedCount > 0) {
+      await batch.commit();
+      console.log(`🎉 Auto-closed ${closedCount} jobs`);
+    } else {
+      console.log('ℹ️ No jobs to auto-close');
+    }
+
+    console.log('🎉 autoCloseMonitoringJobs completed successfully');
+  } catch (error) {
+    console.error('❌ autoCloseMonitoringJobs error:', error);
+    throw error;
+  }
+});
+
+// Copper Storage Notification Trigger
+exports.onCopperTransactionWrite = functions.firestore.onDocumentWritten({ document: 'copperTransactions/{docId}' }, async (event) => {
+  try {
+    const after = event.data.after.data();
+    if (!after) return;
+
+    // Compute total sell kg (nuggets + rods)
+    const sellTypes = ['sellNuggets', 'sellRods'];
+    const snapshot = await admin.firestore().collection('copperTransactions')
+      .where('type', 'in', sellTypes)
+      .get();
+
+    const sellTotal = snapshot.docs.reduce((sum, doc) => sum + (doc.data().kg || 0), 0);
+
+    if (sellTotal > 400) {
+      // Send notification to employee 22
+      const emp22 = await admin.firestore().doc('employees/22').get();
+      if (emp22.exists && emp22.data().fcmToken) {
+        await messaging.send({
+          token: emp22.data().fcmToken,
+          notification: {
+            title: 'Copper Sell Ready',
+            body: `Total sell copper: ${sellTotal}kg`,
+          },
+          data: { click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+          android: { priority: 'high' }
+        });
+        console.log('✅ Copper sell notification sent to employee 22');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Copper notification error:', error);
+  }
 });

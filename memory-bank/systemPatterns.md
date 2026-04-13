@@ -37,7 +37,7 @@ Firebase Project
 
 ### Data Models
 - **Employee Model**: Core entity with displayName getter for consistent formatting
-- **JobCard Model**: Comprehensive job tracking with status enum and timestamps
+- **JobCard Model**: Comprehensive job tracking with status enum, timestamps, and sequential jobCardNumber for easy reference
 - **CopyWith Pattern**: Immutable updates with copyWith methods
 
 ### UI Patterns
@@ -67,7 +67,7 @@ Firebase Project
 
 ## Component Relationships
 
-### Core Flow: Job Creation → Assignment → Completion
+### Core Flow: Job Creation → Assignment → Completion → Optional Monitoring
 ```
 Create Job Card
     ↓
@@ -77,7 +77,11 @@ Employee Notification
     ↓
 Status Updates & Comments
     ↓
-Job Completion
+Job Completion (optional monitoring)
+    ↓
+Monitoring (7 days, auto-close if no adjustments)
+    ↓
+Closed (final status)
 ```
 
 ### Data Flow
@@ -109,6 +113,12 @@ Notifications  Push Updates       UI State Updates
 2. **Comment Formatting**: Timestamp + user prefix
 3. **Update Operation**: Append to existing comments + update reoccurrence
 4. **UI Refresh**: Automatic via StreamBuilder
+
+### Job Creation Flow
+1. **Form Submission**: User fills job card details
+2. **Counter Transaction**: Atomically read/increment counters/jobCards nextJobCardNumber
+3. **Document Creation**: Create job_cards/ doc with jobCardNumber set to incremented value
+4. **UI Confirmation**: Show success with new job number
 
 ## Performance Considerations
 - **Stream Efficiency**: Firestore streams update entire lists - monitor for large datasets

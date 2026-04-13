@@ -19,7 +19,6 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
   List<String> machines = [];
 
   final FirestoreService _firestoreService = FirestoreService();
-  final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
@@ -198,32 +197,106 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                     final job = jobs[index];
                     return Card(
                       margin: const EdgeInsets.all(8),
-                      child: ListTile(
-                        title: Text(job.description),
-                        subtitle: Text('${job.department} > ${job.machine} > ${job.area}'),
-                        onTap: () => _showCommentDialog(context, job),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (job.startedAt == null)
-                              ElevatedButton(
-                                onPressed: () => _startWork(job),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: InkWell(
+                        onTap: () => _showNotesDialog(context, job),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header: Job #, Priority, Type (inline like home screen)
+                              RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Job #${job.jobCardNumber ?? job.id ?? 'N/A'}',
+                                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                                    ),
+                                    const TextSpan(text: ' | '),
+                                    TextSpan(
+                                      text: 'P${job.priority}',
+                                      style: TextStyle(
+                                        color: _getPriorityColor('P${job.priority}'),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' | ${job.type.displayName}',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: const Text('Start', style: TextStyle(fontSize: 12)),
                               ),
-                            const SizedBox(width: 4),
-                            ElevatedButton(
-                              onPressed: () => _showCompleteDialog(context, job),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              const SizedBox(height: 6),
+                              // Location
+                              Text(
+                                '${job.department} > ${job.machine} > ${job.area}',
+                                style: const TextStyle(fontSize: 13, color: Colors.grey),
                               ),
-                              child: const Text('Complete', style: TextStyle(fontSize: 12)),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              // Description
+                              Text(
+                                job.description,
+                                style: const TextStyle(fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              // Comments preview
+                              if (job.comments.isNotEmpty) ...[
+                                _buildCommentsPreview(job.comments),
+                                const SizedBox(height: 4),
+                              ],
+                              // Notes preview
+                              if (job.notes.isNotEmpty) ...[
+                                _buildNotesPreview(job.notes),
+                                const SizedBox(height: 8),
+                              ],
+                              // Action buttons at bottom
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  if (job.startedAt == null)
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () => _startWork(job),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                        child: const Text('Start'),
+                                      ),
+                                    ),
+                                  if (job.startedAt == null) const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () => _showCompleteDialog(context, job),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                      ),
+                                      child: const Text('Complete'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () => _showMonitorDialog(context, job),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                      ),
+                                      child: const Text('Monitor'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -259,14 +332,17 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
     }
   }
 
-  void _showCommentDialog(BuildContext context, JobCard job) {
+
+
+  void _showNotesDialog(BuildContext context, JobCard job) {
+    final notesController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Comment'),
+        title: const Text('Add Note'),
         content: TextField(
-          controller: _commentController,
-          decoration: const InputDecoration(labelText: 'Comment'),
+          controller: notesController,
+          decoration: const InputDecoration(labelText: 'Note'),
           maxLines: 4,
         ),
         actions: [
@@ -276,33 +352,32 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              if (_commentController.text.trim().isEmpty) {
+              if (notesController.text.trim().isEmpty) {
                 Navigator.pop(context);
                 return;
               }
 
               final now = DateTime.now();
               final user = currentEmployee?.name ?? 'User';
-              final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: ${_commentController.text.trim()}';
-              final updatedComments = job.comments + newComment;
+              final newNote = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: ${notesController.text.trim()}';
+              final updatedNotes = job.notes + newNote;
 
               try {
                 await _firestoreService.updateJobCard(
                   job.id!,
-                  job.copyWith(comments: updatedComments),
+                  job.copyWith(notes: updatedNotes),
                 );
 
                 if (context.mounted) {
                   Navigator.pop(context);
-                  setState(() => _commentController.clear());
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ Comment added!')),
+                    const SnackBar(content: Text('✅ Note added!')),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding comment: $e'), backgroundColor: Colors.red),
+                    SnackBar(content: Text('Error adding note: $e'), backgroundColor: Colors.red),
                   );
                 }
               }
@@ -325,7 +400,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
           title: const Text('Complete Job'),
           content: TextField(
             controller: notesController,
-            decoration: const InputDecoration(labelText: 'Notes / Work Done'),
+            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
             maxLines: 4,
           ),
           actions: [
@@ -335,14 +410,23 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
             ),
             TextButton(
               onPressed: isCompleting ? null : () async {
+                final note = notesController.text.trim();
+                if (note.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
+                  return;
+                }
                 setDialogState(() => isCompleting = true);
 
                 try {
+                  final now = DateTime.now();
+                  final user = currentEmployee?.name ?? 'User';
                   final completedJob = job.copyWith(
                     status: JobStatus.completed,
-                    completedBy: currentEmployee?.name,
-                    completedAt: DateTime.now(),
-                    notes: notesController.text.trim(),
+                    completedBy: user,
+                    completedAt: now,
+                    notes: job.notes.isNotEmpty
+                        ? '${job.notes}\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $note'
+                        : '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $note',
                   );
 
                   await _firestoreService.updateJobCard(job.id!, completedJob);
@@ -370,6 +454,145 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showMonitorDialog(BuildContext context, JobCard job) {
+    final notesController = TextEditingController();
+    bool isMonitoring = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Start Monitoring'),
+          content: TextField(
+            controller: notesController,
+            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: isMonitoring ? null : () async {
+                final note = notesController.text.trim();
+                if (note.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
+                  return;
+                }
+                setDialogState(() => isMonitoring = true);
+
+                try {
+                  final now = DateTime.now();
+                  final user = currentEmployee?.name ?? 'User';
+                  final monitoredJob = job.copyWith(
+                    status: JobStatus.monitoring,
+                    completedBy: user,
+                    completedAt: now,
+                    monitoringStartedAt: now,
+                    notes: job.notes.isNotEmpty
+                        ? '${job.notes}\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed and monitoring started by $user: $note'
+                        : '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed and monitoring started by $user: $note',
+                  );
+
+                  await _firestoreService.updateJobCard(job.id!, monitoredJob);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ Job completed and monitoring started!')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error starting monitoring: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                } finally {
+                  if (context.mounted) setDialogState(() => isMonitoring = false);
+                }
+              },
+              child: isMonitoring
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Start Monitoring'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getPriorityColor(String priority) {
+    final num = int.tryParse(priority.substring(1)) ?? 0;
+    switch (num) {
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      case 3:
+        return Colors.yellow;
+      case 4:
+        return Colors.blue;
+      case 5:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildCommentsPreview(String comments) {
+    final entries = comments.split('\n\n').where((e) => e.trim().isNotEmpty).toList();
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '📝 Comments:',
+          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 2),
+        ...entries.map((entry) {
+          final truncated = entry.length > 60 ? '${entry.substring(0, 60)}...' : entry;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              truncated,
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildNotesPreview(String notes) {
+    final entries = notes.split('\n\n').where((e) => e.trim().isNotEmpty).toList();
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '📋 Notes:',
+          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 2),
+        ...entries.map((entry) {
+          final truncated = entry.length > 60 ? '${entry.substring(0, 60)}...' : entry;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              truncated,
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+          );
+        }),
+      ],
     );
   }
 }

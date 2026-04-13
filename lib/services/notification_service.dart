@@ -119,6 +119,7 @@ class NotificationService {
   Future<void> sendJobAssignmentNotification({
     required String recipientToken,
     required String jobCardId,
+    required int? jobCardNumber,
     required String operator,
     required String department,
     required String area,
@@ -138,6 +139,7 @@ class NotificationService {
       final params = {
         'recipientToken': recipientToken,
         'jobCardId': jobCardId,
+        'jobCardNumber': jobCardNumber,
         'operator': operator,
         'department': department,
         'area': area,

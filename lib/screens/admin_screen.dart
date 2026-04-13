@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
+import 'copper_storage_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -32,10 +33,12 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   // Settings tab
   final TextEditingController _passwordController = TextEditingController();
   String _currentPassword = '';
+  String? _currentClockNo;
 
   @override
   void initState() {
     super.initState();
+    print('AdminScreen initState'); // Debug
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {});
@@ -43,6 +46,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _loadEmployees();
     _loadStructure();
     _loadSettings();
+    _loadCurrentClockNo();
   }
 
   @override
@@ -104,6 +108,12 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         );
       }
     }
+  }
+
+  Future<void> _loadCurrentClockNo() async {
+    _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
+    print('Debug: Loaded ClockNo: $_currentClockNo'); // Debug
+    setState(() {});
   }
 
   @override
@@ -440,7 +450,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Widget _buildSettingsTab() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -455,6 +465,20 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           ElevatedButton(
             onPressed: _updateSettings,
             child: const Text('Save Settings'),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.inventory),
+            title: const Text('Copper Storage'),
+            onTap: () {
+              if (_currentClockNo == '22') {
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopperStorageScreen()));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Access denied. Only clock card 22 allowed.')),
+                );
+              }
+            },
           ),
         ],
       ),

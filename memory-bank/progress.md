@@ -14,8 +14,9 @@
   - Multi-select employees
 - **Comment System**: Add comments with reoccurrence counter updates
 - **Real-time Updates**: Live data synchronization via Firestore streams
-- **Push Notifications**: FCM notifications sent to assigned employees
+- **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Status Tracking**: Complete job lifecycle tracking with timestamps
+- **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs
 
 ### UI/UX Features
 - **Responsive Design**: Works on mobile devices
@@ -35,7 +36,7 @@
 ## What's Left to Build 🚧
 
 ### High Priority
-- **Job Status Updates**: Allow technicians to update job status
+- ✅ **Job Status Updates**: Allow technicians to update job status (completed with optional monitoring)
 - **Admin Panel**: Employee management interface
 - **Job Filtering**: Advanced filtering on job list screens
 

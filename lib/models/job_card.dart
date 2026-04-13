@@ -19,7 +19,9 @@ enum JobType {
 
 enum JobStatus {
   open('Open'),
-  completed('Completed');
+  completed('Completed'),
+  monitoring('Monitoring'),
+  closed('Closed');
 
   const JobStatus(this.displayName);
   final String displayName;
@@ -27,6 +29,7 @@ enum JobStatus {
 
 class JobCard {
   final String? id;
+  final int? jobCardNumber;
   final String department;
   final String area;
   final String machine;
@@ -51,9 +54,12 @@ class JobCard {
   final DateTime? notifiedAt7min;
   final String? completedBy;
   final DateTime? completedAt;
+  final DateTime? monitoringStartedAt;
+  final DateTime? closedAt;
 
   const JobCard({
     this.id,
+    this.jobCardNumber,
     required this.department,
     required this.area,
     required this.machine,
@@ -78,12 +84,15 @@ class JobCard {
     this.notifiedAt7min,
     this.completedBy,
     this.completedAt,
+    this.monitoringStartedAt,
+    this.closedAt,
   });
 
   factory JobCard.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return JobCard(
       id: doc.id,
+      jobCardNumber: data['jobCardNumber'] as int?,
       department: data['department'] as String? ?? '',
       area: data['area'] as String? ?? '',
       machine: data['machine'] as String? ?? '',
@@ -124,11 +133,18 @@ class JobCard {
       completedAt: data['completedAt'] != null
           ? (data['completedAt'] as Timestamp).toDate()
           : null,
+      monitoringStartedAt: data['monitoringStartedAt'] != null
+          ? (data['monitoringStartedAt'] as Timestamp).toDate()
+          : null,
+      closedAt: data['closedAt'] != null
+          ? (data['closedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
+      'jobCardNumber': jobCardNumber,
       'department': department,
       'area': area,
       'machine': machine,
@@ -153,11 +169,14 @@ class JobCard {
       'notifiedAt7min': notifiedAt7min != null ? Timestamp.fromDate(notifiedAt7min!) : null,
       'completedBy': completedBy,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
+      'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
     };
   }
 
   JobCard copyWith({
     String? id,
+    int? jobCardNumber,
     String? department,
     String? area,
     String? machine,
@@ -182,9 +201,12 @@ class JobCard {
     DateTime? notifiedAt7min,
     String? completedBy,
     DateTime? completedAt,
+    DateTime? monitoringStartedAt,
+    DateTime? closedAt,
   }) {
     return JobCard(
       id: id ?? this.id,
+      jobCardNumber: jobCardNumber ?? this.jobCardNumber,
       department: department ?? this.department,
       area: area ?? this.area,
       machine: machine ?? this.machine,
@@ -209,6 +231,8 @@ class JobCard {
       notifiedAt7min: notifiedAt7min ?? this.notifiedAt7min,
       completedBy: completedBy ?? this.completedBy,
       completedAt: completedAt ?? this.completedAt,
+      monitoringStartedAt: monitoringStartedAt ?? this.monitoringStartedAt,
+      closedAt: closedAt ?? this.closedAt,
     );
   }
 

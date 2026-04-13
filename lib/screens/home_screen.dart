@@ -15,6 +15,8 @@ import 'completed_jobs_screen.dart';
 import 'admin_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
+import 'monitoring_dashboard_screen.dart';
+import 'copper_storage_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,15 +56,17 @@ class _HomeScreenState extends State<HomeScreen> {
       {'title': 'Completed Jobs', 'icon': Icons.history, 'color': const Color(0xFF8B5CF6), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen()))},
     ];
 
+    final monitoringAction = {'title': 'Monitoring Dashboard', 'icon': Icons.dashboard, 'color': const Color(0xFFFFA500), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MonitoringDashboardScreen()))};
+
     if (isOperator) {
-      return [actions[0], actions[1], actions[2], actions[3]];
+      return [actions[0], actions[1], actions[2], monitoringAction, actions[3]];
     } else if (isTechnician) {
-      return [actions[2], actions[1], actions[0], actions[3]];
+      return [actions[2], actions[1], monitoringAction, actions[0], actions[3]];
     } else if (isManager) {
       final allAction = {'title': 'View All Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-      return [actions[0], allAction];
+      return [actions[0], allAction, monitoringAction];
     } else {
-      return actions;
+      return [...actions, monitoringAction];
     }
   }
 
@@ -475,141 +479,142 @@ class _HomeScreenState extends State<HomeScreen> {
           MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
         ),
         borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              decoration: BoxDecoration(
-                color: _getPriorityColor('P${job.priority}'),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
                   children: [
-                    Text(
-                      '${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'}   |   ${job.operator ?? 'Unknown'}',
+                    TextSpan(
+                      text: 'P${job.priority}',
+                      style: TextStyle(
+                        color: _getPriorityColor('P${job.priority}'),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11.5,
                         height: 1.2,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: _getPriorityColor('P${job.priority}'), width: 2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'P${job.priority}',
-                            style: TextStyle(
-                              color: _getPriorityColor('P${job.priority}'),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            job.description,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (job.notes.isNotEmpty) Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        job.notes.split('\n').first.trim(),
-                        style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (job.comments.isNotEmpty) Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        _getLastCommentPreview(job.comments),
-                        style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(job.status.name).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            job.status.displayName,
-                            style: TextStyle(
-                              color: _getStatusColor(job.status.name),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            job.type.displayName,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          job.assignedNames?.join(', ') ?? 'Unassigned',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
-                          style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                        ),
-                        const SizedBox(width: 12),
-                        Row(
-                          children: [
-                            if (job.comments.isNotEmpty) Icon(Icons.comment_outlined, size: 16, color: Colors.blue[400]),
-                            if (job.notes.isNotEmpty) Icon(Icons.build_outlined, size: 16, color: Colors.orange[400]),
-                          ],
-                        ),
-                      ],
                     ),
                   ],
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (job.jobCardNumber != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'JC #${job.jobCardNumber}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      job.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (job.comments.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _getLastCommentPreview(job.comments),
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (job.notes.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  job.notes.split('\n').first.trim(),
+                  style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(job.status.name).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.status.displayName,
+                      style: TextStyle(
+                        color: _getStatusColor(job.status.name),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.type.displayName,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    job.assignedNames?.join(', ') ?? 'Unassigned',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
+                    style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      if (job.comments.isNotEmpty) Icon(Icons.comment_outlined, size: 16, color: Colors.blue[400]),
+                      if (job.notes.isNotEmpty) Icon(Icons.build_outlined, size: 16, color: Colors.orange[400]),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -953,6 +958,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCopperTab() {
+    return Center(
+      child: ElevatedButton(
+        onPressed: _showCopperAuthDialog,
+        child: const Text('Access Copper Storage'),
+      ),
+    );
+  }
+
+  void _showCopperAuthDialog() {
+    final clockController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Clock Number'),
+        content: TextField(
+          controller: clockController,
+          decoration: const InputDecoration(labelText: 'Clock Card Number'),
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              if (clockController.text.trim() == '22') {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperStorageScreen()));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Access denied. Only clock card 22 allowed.'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Access'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _markNotificationReceived(Map<String, dynamic> data) async {
     try {
       final jobCardId = data['jobCardId'];
@@ -1033,6 +1078,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
             _buildDashboardTab(),
           _buildSettingsTab(),
+          _buildCopperTab(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -1056,6 +1102,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.inventory),
+            label: 'Copper',
           ),
         ],
         currentIndex: _selectedIndex,
