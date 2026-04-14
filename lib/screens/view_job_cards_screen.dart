@@ -38,6 +38,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
   String selectedStaffFilter = 'All';
 
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
+  bool get isSuperManager => currentEmployee?.department?.toLowerCase() == 'general';
 
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
@@ -49,6 +50,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
     if (_employeeStaffDefault == null) {
       selectedDepartment = currentEmployee?.department;
     } else {
+      selectedDepartment = null;
+    }
+    if (isSuperManager) {
       selectedDepartment = null;
     }
     selectedArea = widget.filterArea;
@@ -256,19 +260,22 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
             TextButton.icon(
               icon: const Icon(Icons.clear),
               label: const Text('Clear Filters'),
-              onPressed: () {
-                setState(() {
-                  selectedStaffFilter = _employeeStaffDefault ?? 'All';
-                  if (_employeeStaffDefault == null) {
-                    selectedDepartment = currentEmployee?.department;
-                  } else {
-                    selectedDepartment = null;
-                  }
-                  selectedArea = null;
-                  selectedMachine = null;
-                  selectedPart = null;
-                });
-              },
+            onPressed: () {
+              setState(() {
+                selectedStaffFilter = _employeeStaffDefault ?? 'All';
+                if (_employeeStaffDefault == null) {
+                  selectedDepartment = currentEmployee?.department;
+                } else {
+                  selectedDepartment = null;
+                }
+                if (isSuperManager) {
+                  selectedDepartment = null;
+                }
+                selectedArea = null;
+                selectedMachine = null;
+                selectedPart = null;
+              });
+            },
             ),
         ],
       ),
@@ -301,19 +308,34 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> {
                         return Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: depts.map((dept) => ChoiceChip(
-                            label: Text(dept),
-                            selected: selectedDepartment == dept,
-                            onSelected: (_) {
-                              setState(() {
-                                selectedDepartment = dept;
-                                selectedArea = null;
-                                selectedMachine = null;
-                                selectedPart = null;
-                              });
-                            },
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          )).toList(),
+                          children: [
+                            ChoiceChip(
+                              label: const Text('All Departments'),
+                              selected: selectedDepartment == null,
+                              onSelected: (_) {
+                                setState(() {
+                                  selectedDepartment = null;
+                                  selectedArea = null;
+                                  selectedMachine = null;
+                                  selectedPart = null;
+                                });
+                              },
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            ),
+                            ...depts.map((dept) => ChoiceChip(
+                              label: Text(dept),
+                              selected: selectedDepartment == dept,
+                              onSelected: (_) {
+                                setState(() {
+                                  selectedDepartment = dept;
+                                  selectedArea = null;
+                                  selectedMachine = null;
+                                  selectedPart = null;
+                                });
+                              },
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            )).toList(),
+                          ],
                         );
                       },
                     ),

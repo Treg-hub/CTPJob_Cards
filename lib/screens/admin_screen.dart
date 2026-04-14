@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
-import 'dart:html' as html;
+import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'copper_storage_screen.dart';

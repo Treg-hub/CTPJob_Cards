@@ -38,7 +38,7 @@
 ### High Priority
 - ✅ **Job Status Updates**: Allow technicians to update job status (completed with optional monitoring)
 - ✅ **Admin Panel**: Employee and structure management (spreadsheet view with bulk CSV operations)
-- **Job Filtering**: Advanced filtering on job list screens
+- ✅ **Job Filtering**: Advanced filtering on job list screens (completed with super-manager pattern for 'general' dept users)
 
 ### Medium Priority
 - **Offline Support**: Local caching for offline functionality
@@ -125,6 +125,9 @@
 - ✅ **Technical Quality**: Clean, maintainable code
 - ✅ **Performance**: Acceptable for production use
 - ✅ **Reliability**: Stable builds and error handling
+- ✅ **Super-manager Feature**: 'general' dept users have full oversight and filter access
+- ✅ **Web Deployment**: Latest build deployed to https://ctp-job-cards.web.app
+- 🔄 **Android Build**: ARM64 APK build in progress
 
 ## Next Milestones
 1. **User Testing**: Deploy to beta users for feedback

@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get isTechnician => (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false) ||
                            (currentEmployee?.position.toLowerCase().contains('electrical') ?? false);
   bool get isOperator => !(isManager || isTechnician);
+  bool get isSuperManager => currentEmployee?.department?.toLowerCase() == 'general';
 
   bool get _isCopperAuthorized => ['22', '5421', '20'].contains(currentEmployee?.clockNo ?? '');
 
@@ -64,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return [actions[0], actions[1], actions[2], monitoringAction, actions[3]];
     } else if (isTechnician) {
       return [actions[2], actions[1], monitoringAction, actions[0], actions[3]];
-    } else if (isManager) {
+    } else if (isManager || isSuperManager) {
       final allAction = {'title': 'View All Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
       return [actions[0], allAction, monitoringAction];
     } else {
@@ -90,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadOnSiteStatus();
     _loadShowDeptOnly();
     _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-      final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department)).length;
+      final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
       if (mounted) setState(() => _openJobCount = count);
     });
     if (!kIsWeb) _setupFirebaseMessaging();
@@ -147,6 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadShowDeptOnly() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() => _showDeptOnly = prefs.getBool('showDeptOnly') ?? true);
+    if (isSuperManager) {
+      setState(() => _showDeptOnly = false);
+    }
   }
 
   Future<void> _saveShowDeptOnly(bool value) async {
@@ -389,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.white,
                   ),
                 ),
-                if (isManager) ...[
+                if (isManager || isSuperManager) ...[
                   const SizedBox(width: 12),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -668,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         var topJobs = recentJobs.take(20).toList();
 
-        if (isManager && _showDeptOnly) {
+        if ((isManager || isSuperManager) && _showDeptOnly) {
           topJobs = topJobs.where((j) => j.department == currentEmployee!.department).toList();
         }
 
