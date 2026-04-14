@@ -179,10 +179,10 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     console.log('⏰ twoMinAgo:', twoMinAgo.toISOString(), 'sevenMinAgo:', sevenMinAgo.toISOString());
 
     // ==================== 2-MINUTE ESCALATION ====================
-    console.log('🔍 Running 2min query: status=open, assignedTo=null, createdAt<=2minAgo, notifiedAt2min=null');
+    console.log('🔍 Running 2min query: status=open, assignedClockNos=null, createdAt<=2minAgo, notifiedAt2min=null');
     const jobs2min = await admin.firestore().collection('job_cards')
       .where('status', '==', 'open')
-      .where('assignedTo', '==', null)
+      .where('assignedClockNos', '==', null)
       .where('createdAt', '<=', twoMinAgo)
       .where('notifiedAt2min', '==', null)
       .get();
@@ -210,10 +210,10 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     }
 
     // ==================== 7-MINUTE ESCALATION ====================
-    console.log('🔍 Running 7min query: status=open, assignedTo=null, createdAt<=7minAgo, notifiedAt7min=null');
+    console.log('🔍 Running 7min query: status=open, assignedClockNos=null, createdAt<=7minAgo, notifiedAt7min=null');
     const jobs7min = await admin.firestore().collection('job_cards')
       .where('status', '==', 'open')
-      .where('assignedTo', '==', null)
+      .where('assignedClockNos', '==', null)
       .where('createdAt', '<=', sevenMinAgo)
       .where('notifiedAt7min', '==', null)
       .get();

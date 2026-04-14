@@ -84,7 +84,51 @@
           "arrayConfig": "CONTAINS"
         }
       ]
+    },
+    {
+      "collectionGroup": "job_cards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "assignedClockNos",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "notifiedAt2min",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "job_cards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "assignedClockNos",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "notifiedAt7min",
+          "order": "ASCENDING"
+        }
+      ]
     }
-  ],
-  "fieldOverrides": []
+   ],
+   "fieldOverrides": []
 }
