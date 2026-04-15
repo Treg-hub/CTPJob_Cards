@@ -30,7 +30,6 @@ class _CopperStorageScreenState extends State<CopperStorageScreen> {
   final TextEditingController _sortedSellKgController = TextEditingController();
 
   String? _currentClockNo;
-  String? _selectedSortSubtype;
   String? _selectedSellSubtype;
   String _searchQuery = '';
   CopperType? _filterType;
@@ -107,45 +106,6 @@ class _CopperStorageScreenState extends State<CopperStorageScreen> {
       _addRodsDescController.clear();
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added rods to Sell Rods')));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-    }
-  }
-
-  Future<void> _sortCopper() async {
-    final kg = double.tryParse(_sortKgController.text);
-    if (kg == null || kg <= 0 || _selectedSortSubtype == null || _currentClockNo == null) return;
-
-    final toSortTotal = await _copperService.getTotalForType(CopperType.toSort);
-    if (toSortTotal < kg) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not enough in To Sort'), backgroundColor: Colors.red));
-      return;
-    }
-
-    CopperType targetType;
-    if (_selectedSortSubtype == 'Reuse') {
-      targetType = CopperType.reuse;
-    } else if (_selectedSortSubtype == 'Nuggets') {
-      targetType = CopperType.sellNuggets;
-    } else {
-      targetType = CopperType.sellRods;
-    }
-
-    try {
-      final tx = CopperTransaction(
-        id: '',
-        type: targetType,
-        kg: kg,
-        clockNo: _currentClockNo!,
-        timestamp: DateTime.now(),
-          description: 'Sorted from In Sorting',
-      );
-      await _copperService.addTransaction(tx);
-      _sortKgController.clear();
-      _selectedSortSubtype = null;
-      Navigator.of(context).pop();
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sorted to $targetType')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
@@ -246,41 +206,6 @@ class _CopperStorageScreenState extends State<CopperStorageScreen> {
               ElevatedButton(
                 onPressed: _addRodsToSell,
                 child: const Text('Add'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSortModal() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Sort from To Sort', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _sortKgController,
-                decoration: const InputDecoration(labelText: 'Kg from To Sort'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedSortSubtype,
-                decoration: const InputDecoration(labelText: 'To'),
-                items: ['Reuse', 'Nuggets', 'Rods'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (value) => setState(() => _selectedSortSubtype = value),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _sortCopper,
-                child: const Text('Sort'),
               ),
             ],
           ),

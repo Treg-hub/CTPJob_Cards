@@ -865,7 +865,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     if (kIsWeb) {
       final blob = html.Blob([csv], 'text/csv');
       final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)..download = 'employees_template.csv'..click();
+      html.AnchorElement(href: url)..download = 'employees_template.csv'..click();
       html.Url.revokeObjectUrl(url);
     } else {
       Share.share(csv, subject: 'Employees Template');

@@ -7,50 +7,49 @@ const messaging = admin.messaging();
 functions.setGlobalOptions({ region: "africa-south1" });
 
 exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
-   console.log('📥 data keys:', Object.keys(data));
-   console.log('📥 data.data keys:', data.data ? Object.keys(data.data) : 'no data.data');
-   const innerData = data.data || data;
-    const recipientToken = innerData.recipientToken;
-    const jobCardId = innerData.jobCardId;
-    const jobCardNumber = innerData.jobCardNumber;
-    const operator = innerData.operator;
-    const department = innerData.department;
-    const area = innerData.area;
-    const machine = innerData.machine;
-    const part = innerData.part;
-    const description = innerData.description;
+    console.log('📥 data keys:', Object.keys(data));
+    console.log('📥 data.data keys:', data.data ? Object.keys(data.data) : 'no data.data');
+    const innerData = data.data || data;
+     const recipientToken = innerData.recipientToken;
+     const jobCardId = innerData.jobCardId;
+     const jobCardNumber = innerData.jobCardNumber;
+     const operator = innerData.operator;
+     const creator = innerData.creator;
+     const department = innerData.department;
+     const area = innerData.area;
+     const machine = innerData.machine;
+     const part = innerData.part;
+     const description = innerData.description;
 
-   console.log('🔍 Extracted recipientToken:', recipientToken, 'type:', typeof recipientToken, 'len:', recipientToken ? recipientToken.length : 'n/a');
+    console.log('🔍 Extracted recipientToken:', recipientToken, 'type:', typeof recipientToken, 'len:', recipientToken ? recipientToken.length : 'n/a');
 
-   if (!recipientToken || !recipientToken.trim()) {
-     console.log('❌ recipientToken missing or empty - throwing');
-     throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
+    if (!recipientToken || !recipientToken.trim()) {
+      console.log('❌ recipientToken missing or empty - throwing');
+      throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
+    }
+
+   // Build notification title and body
+   const title = `Job Assigned by ${operator} Job#${jobCardNumber || 'N/A'}`;
+   const body = `Created by ${creator}\nLocation: ${area}\nDescription: ${description}`;
+
+   try {
+     const response = await messaging.send({
+       token: recipientToken,
+       notification: {
+         title: title,
+         body: body
+       },
+       data: { click_action: "FLUTTER_NOTIFICATION_CLICK", jobId: jobCardId, notificationType: "assigned" },
+       android: { priority: "high" }
+     });
+
+     console.log("✅ Notification sent successfully");
+     return { success: true, messageId: response };
+   } catch (error) {
+     console.error("FCM Error:", error);
+     throw new functions.https.HttpsError("internal", error.message);
    }
-
-  // Build rich notification body
-  const body = `Job #${jobCardNumber || 'N/A'}\n` +
-               `Operator: ${operator}\n` +
-               `${department} - ${area} - ${machine} - ${part}\n` +
-               `Description: ${description}`;
-
-  try {
-    const response = await messaging.send({
-      token: recipientToken,
-      notification: {
-        title: "New Job Assigned",
-        body: body
-      },
-      data: { click_action: "FLUTTER_NOTIFICATION_CLICK", jobId: jobCardId, notificationType: "assigned" },
-      android: { priority: "high" }
-    });
-
-    console.log("✅ Notification sent successfully");
-    return { success: true, messageId: response };
-  } catch (error) {
-    console.error("FCM Error:", error);
-    throw new functions.https.HttpsError("internal", error.message);
-  }
-});
+ });
 
 // Helper functions
 async function getOnsiteMechanics() {

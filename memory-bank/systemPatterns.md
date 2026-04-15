@@ -45,6 +45,7 @@ Firebase Project
 - **Dialog-heavy UX**: Complex operations (assign, comment) use modal dialogs
 - **Color-coded Priorities**: P1-P5 with distinct colors for visual hierarchy
 - **Icon + Text Buttons**: Floating action buttons with clear visual cues
+- **Notes-style Logs**: Activity and assignment logs display as timestamped lists with left alignment, replicating comment/note format
 
 ## Design Patterns
 

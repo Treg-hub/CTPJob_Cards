@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
@@ -18,10 +20,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   String? selectedArea;
   String? selectedMachine;
   String part = '';
+  late final TextEditingController _partController = TextEditingController();
   JobType? jobType;
   int priority = 3;
   String description = '';
   bool _isLoading = false;
+  List<Map<String, dynamic>> photos = [];
 
   final List<Color> priorityColors = [
     Colors.transparent,
@@ -81,6 +85,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     setState(() {
       selectedDepartment = selectedArea = selectedMachine = null;
       part = '';
+      _partController.clear();
     });
   }
 
@@ -123,6 +128,51 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addPhoto() async {
+    final picker = ImagePicker();
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Photo Source'),
+        content: const Text('Choose where to get the photo from.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
+    final pickedFile = await picker.pickImage(source: source);
+    if (pickedFile == null) return;
+
+    // Compress the image
+    final compressedFile = await FlutterImageCompress.compressAndGetFile(
+      pickedFile.path,
+      '${pickedFile.path}_compressed.jpg',
+      minWidth: 800,
+      minHeight: 800,
+      quality: 85,
+    );
+
+    if (compressedFile == null) return;
+
+    setState(() {
+      photos.add({'file': compressedFile.path});
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
     }
   }
 
@@ -257,7 +307,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: _getStatusColor(job.status.name).withOpacity(0.2),
+                      color: _getStatusColor(job.status.name).withValues(alpha: 51),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -269,7 +319,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueGrey.withOpacity(0.3),
+                      color: Colors.blueGrey.withValues(alpha: 77),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -364,7 +414,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                 ],
                  if (selectedDepartment == null) ...[
                    const Text('Department', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -387,7 +437,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                    ),
                  ],
                 if (selectedDepartment != null && selectedArea == null) ...[
-                   const SizedBox(height: 16),
+                   const SizedBox(height: 8),
                    const Text('Area / Section', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                    const SizedBox(height: 8),
                    Wrap(
@@ -407,7 +457,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                    ),
                  ],
                 if (selectedArea != null && selectedMachine == null) ...[
-                   const SizedBox(height: 16),
+                   const SizedBox(height: 8),
                    const Text('Machine / Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                    const SizedBox(height: 8),
                    Wrap(
@@ -426,7 +476,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                    ),
                  ],
                 if (selectedMachine != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   FutureBuilder<List<String>>(
                     future: _loadPreviousParts(),
@@ -440,16 +490,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                               spacing: 8,
                               children: previousParts.map((p) => ActionChip(
                                 label: Text(p),
-                                onPressed: () => setState(() => part = p),
+                                onPressed: () => setState(() { part = p; _partController.text = p; }),
                               )).toList(),
                             ),
                           const SizedBox(height: 8),
                           TextFormField(
+                            controller: _partController,
                             decoration: const InputDecoration(
                               labelText: 'Type part or tap suggestion above',
                               border: OutlineInputBorder(),
                             ),
-                            initialValue: part,
                             onChanged: (v) => part = v,
                             validator: (v) => v!.isEmpty ? 'Required' : null,
                           ),
@@ -458,7 +508,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     },
                   ),
                 ],
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 const Text('Job Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 Wrap(
@@ -472,7 +522,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
                   )).toList(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Row(
@@ -484,7 +534,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       selected: priority == num,
                       onSelected: (_) => setState(() => priority = num),
                       backgroundColor: priorityColors[num],
-                      selectedColor: priorityColors[num].withOpacity(0.2),
+                      selectedColor: priorityColors[num].withValues(alpha: 51),
                       labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                     );
@@ -495,7 +545,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: priorityColors[priority].withOpacity(0.1),
+                      color: priorityColors[priority].withValues(alpha: 26),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -508,7 +558,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 TextFormField(
                   decoration: const InputDecoration(
                     labelText: 'Job Description',
@@ -518,7 +568,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -533,7 +583,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         : const Text('Save Job Card'),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: _addPhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Add Photo'),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                ),
+                const SizedBox(height: 12),
                 _buildSimilarJobCards(),
               ],
             );
@@ -591,7 +648,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                       ],
                        if (selectedDepartment == null) ...[
                          const Text('Department', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -613,7 +670,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          ),
                        ],
                       if (selectedDepartment != null && selectedArea == null) ...[
-                         const SizedBox(height: 16),
+                         const SizedBox(height: 8),
                          const Text('Area / Section', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                          const SizedBox(height: 8),
                          Wrap(
@@ -632,7 +689,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          ),
                        ],
                       if (selectedArea != null && selectedMachine == null) ...[
-                         const SizedBox(height: 16),
+                         const SizedBox(height: 8),
                          const Text('Machine / Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                          const SizedBox(height: 8),
                          Wrap(
@@ -650,7 +707,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          ),
                        ],
                       if (selectedMachine != null) ...[
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 12),
                         const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                         FutureBuilder<List<String>>(
                           future: _loadPreviousParts(),
@@ -664,16 +721,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                     spacing: 8,
                                     children: previousParts.map((p) => ActionChip(
                                       label: Text(p),
-                                      onPressed: () => setState(() => part = p),
+                                      onPressed: () => setState(() { part = p; _partController.text = p; }),
                                     )).toList(),
                                   ),
                                 const SizedBox(height: 8),
                                 TextFormField(
+                                  controller: _partController,
                                   decoration: const InputDecoration(
                                     labelText: 'Type part or tap suggestion above',
                                     border: OutlineInputBorder(),
                                   ),
-                                  initialValue: part,
                                   onChanged: (v) => part = v,
                                   validator: (v) => v!.isEmpty ? 'Required' : null,
                                 ),
@@ -682,7 +739,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           },
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       const Text('Job Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 8),
                       Wrap(
@@ -695,7 +752,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                         )).toList(),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Row(
@@ -707,7 +764,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             selected: priority == num,
                             onSelected: (_) => setState(() => priority = num),
                             backgroundColor: priorityColors[num],
-                            selectedColor: priorityColors[num].withOpacity(0.2),
+                           selectedColor: priorityColors[num].withValues(alpha: 51),
                             labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                           );
@@ -718,7 +775,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: priorityColors[priority].withOpacity(0.1),
+                           color: priorityColors[priority].withValues(alpha: 26),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -731,7 +788,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       TextFormField(
                         decoration: const InputDecoration(
                           labelText: 'Job Description',
@@ -741,7 +798,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                         onChanged: (v) => description = v,
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -755,6 +812,13 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                               ? const CircularProgressIndicator(color: Colors.black)
                               : const Text('Save Job Card'),
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: _addPhoto,
+                        icon: const Icon(Icons.camera_alt),
+                        label: const Text('Add Photo'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
                       ),
                     ],
                   ),
@@ -782,7 +846,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: Text('Operator: $operatorName', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(operatorName),
           ),
         ],
       ),

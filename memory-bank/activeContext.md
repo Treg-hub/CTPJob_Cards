@@ -66,6 +66,40 @@
   - **CSV Features**: Export template with headers; import with preview dialog; web-optimized download/upload.
   - **Dependencies**: Added `file_picker: ^8.1.2` and `csv: ^6.0.0` for CSV handling.
   - **Result**: Efficient bulk employee management, especially for web users.
+- **Redesigned View Job Cards Screen Filters**: Completely restructured filter system to reduce space usage and improve usability.
+  - **New Layout**: Tab-based status selection (Open/Monitoring/Completed) at top, collapsible advanced filters below.
+  - **Active Filter Chips**: Removable chips showing only applied filters (Staff Type, Department, Area, Machine, Part).
+  - **Collapsible Advanced Filters**: Expandable section containing staff type segmented button and cascading location chips.
+  - **Smart Defaults**: Electrical staff default to 'Electrical' filter, Mechanical to 'Mechanical', Super-managers to 'All'.
+  - **Space Savings**: Reduced filter height from ~40-50% screen space to ~15% when collapsed, ~25% when expanded.
+  - **Mobile/Desktop Responsive**: Collapsed by default on mobile, expanded on desktop (width >= 1200px).
+  - **UX Improvements**: Clear visual hierarchy, easy filter removal, logical cascading filter flow.
+  - **Result**: Dramatically improved screen space utilization while maintaining full filtering power.
+- **Enhanced Job Card Details Screen**: Improved manager assignment button and employee selection with advanced search, department grouping, onsite filtering, and bulk operations.
+  - **Search & Filtering**: Real-time search by employee name, onsite status filtering, department-based grouping with expansion tiles.
+  - **Bulk Selection**: Multi-select employees with chips display, clear all functionality, offsite employee warnings.
+  - **UI Improvements**: Streamlined dialog with grouped employee lists, visual onsite indicators, and efficient selection management.
+  - **Result**: Faster, more intuitive job assignments with comprehensive employee visibility.
+- **Updated Notification Format**: Enhanced push notifications with creator information and improved message structure.
+  - **Title Format**: "Job Assigned by [assigner] Job#[number]" – immediately shows who assigned it.
+  - **Body Format**: "Created by [creator]\nLocation: [area]\nDescription: [description]" – key details at a glance.
+  - **Implementation**: Updated notification_service.dart and cloud functions to pass creator parameter and format messages.
+  - **Result**: More informative notifications with clear assignment context and job details.
+- **Hidden Assignment Buttons on Completed Jobs**: Self-assign/unassign buttons now hidden when job status is completed.
+  - **Implementation**: Added status check `if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();` in assignment buttons.
+  - **Result**: Clean UI that prevents unnecessary actions on completed jobs.
+- **Activity and Assignment Logs Redesign**: Logs now display in notes-style format with timestamps and left alignment.
+  - **Activity Log**: Status timeline (Created, Started, Completed, etc.) with timestamps.
+  - **Assignment Log**: Detailed events (assignments, adjustments, completions) formatted as "[timestamp] details".
+  - **UI**: Left-aligned text with consistent styling, crossAxisAlignment for proper layout.
+  - **Result**: Chronological, readable history separated by activity type vs detailed actions.
+- **Photo Upload Feature**: Added ability to take/upload photos to job cards with compression.
+  - **Dependencies**: Added `image_picker: ^1.1.2`, `flutter_image_compress: ^2.3.0`, `firebase_storage: ^13.2.0`.
+  - **JobCard Model**: Added `List<String> photos` field with Firestore serialization.
+  - **UI**: "📷 Add Photo" button in Notes section, camera/gallery selection dialog.
+  - **Upload Flow**: Compress to 800px max, 85% quality, upload to `job_cards/{jobId}/photos/{timestamp}.jpg`.
+  - **Display**: GridView of photos in "Photos" section, tap to enlarge.
+  - **Result**: Job-specific photo documentation with optimized storage and easy viewing.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

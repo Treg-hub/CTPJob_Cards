@@ -9,10 +9,12 @@
 - **Job Assignment**: Advanced assignment dialog with multiple filtering options
   - Search by name
   - Filter by onsite status
-  - Department dropdown
+  - Department dropdown with grouped expansion tiles
   - Mechanical/Electrical toggle
-  - Multi-select employees
+  - Multi-select employees with chips display
+  - Bulk operations and offsite warnings
 - **Comment System**: Add comments with reoccurrence counter updates
+- **Photo Upload**: Take/upload photos to job cards with compression and Firebase Storage
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Status Tracking**: Complete job lifecycle tracking with timestamps

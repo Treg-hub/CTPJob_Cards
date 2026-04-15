@@ -75,7 +75,7 @@ class ActiveMonitoringTab extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isOverdue ? Colors.red.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+                        color: isOverdue ? Colors.red.withValues(alpha: 51) : Colors.orange.withValues(alpha: 51),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(

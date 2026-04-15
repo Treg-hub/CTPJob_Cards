@@ -38,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<List<JobCard>>? _countSubscription;
 
   // Responsive design helpers
-  bool get _isMobile => MediaQuery.of(context).size.width < 600;
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
 
@@ -71,12 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       return [...actions, monitoringAction];
     }
-  }
-
-  int get _gridCrossAxisCount {
-    if (_isDesktop) return 4;
-    if (_isTablet) return 3;
-    return 2; // Mobile
   }
 
   double get _iconSize => _isDesktop ? 96 : 80;
@@ -268,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: emp.isOnSite ? Colors.green : Colors.red[400]!,
                               size: 20,
                             ),
-                            tileColor: emp.isOnSite ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                           tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
                             onTap: () async {
                               try {
                                 await _firestoreService.saveLoggedInEmployee(emp.clockNo);
@@ -405,7 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           setState(() => _showDeptOnly = v);
                           _saveShowDeptOnly(v);
                         },
-                        activeColor: const Color(0xFFFF8C42),
+                        activeThumbColor: const Color(0xFFFF8C42),
                       ),
                     ],
                   ),
@@ -523,7 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.8),
+                               color: Colors.blue.withValues(alpha: 204),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -576,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name).withOpacity(0.2),
+                             color: _getStatusColor(job.status.name).withValues(alpha: 51),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -592,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.blueGrey.withOpacity(0.25),
+                             color: Colors.blueGrey.withValues(alpha: 64),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -829,10 +822,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
@@ -1002,25 +991,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _markNotificationReceived(Map<String, dynamic> data) async {
-    try {
-      final jobCardId = data['jobCardId'];
-      if (jobCardId == null) return;
-
-      final jobCard = await _firestoreService.getJobCard(jobCardId);
-      if (jobCard == null) return;
-
-      if (jobCard.notificationReceivedAt == null && (jobCard.assignedClockNos?.contains(currentEmployee?.clockNo) ?? false)) {
-        final updatedJob = jobCard.copyWith(
-          notificationReceivedAt: DateTime.now(),
-        );
-        await _firestoreService.updateJobCard(jobCardId, updatedJob);
-      }
-    } catch (e) {
-      debugPrint('Error marking notification as received: $e');
-    }
   }
 
   Future<void> _handleJobDeepLink(String jobId) async {

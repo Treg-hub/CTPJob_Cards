@@ -4,7 +4,7 @@ import 'assignment_event.dart';
 enum JobType {
   mechanical('Mechanical'),
   electrical('Electrical'),
-  mechanicalElectrical('Mech/Elec (Unknown)'),
+  mechanicalElectrical('Mech/Elec ?'),
   maintenance('Maintenance');
 
   const JobType(this.displayName);
@@ -58,6 +58,7 @@ class JobCard {
   final DateTime? monitoringStartedAt;
   final DateTime? closedAt;
   final List<AssignmentEvent> assignmentHistory;
+  final List<Map<String, dynamic>> photos;
 
   const JobCard({
     this.id,
@@ -89,6 +90,7 @@ class JobCard {
     this.monitoringStartedAt,
     this.closedAt,
     this.assignmentHistory = const [],
+    this.photos = const [],
   });
 
   factory JobCard.fromFirestore(DocumentSnapshot doc) {
@@ -143,6 +145,7 @@ class JobCard {
           ? (data['closedAt'] as Timestamp).toDate()
           : null,
       assignmentHistory: (data['assignmentHistory'] as List?)?.map((m) => AssignmentEvent.fromFirestore(m)).toList() ?? [],
+      photos: _parsePhotos(data['photos']),
     );
   }
 
@@ -176,6 +179,7 @@ class JobCard {
       'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
       'assignmentHistory': assignmentHistory.map((e) => e.toFirestore()).toList(),
+      'photos': photos,
     };
   }
 
@@ -209,6 +213,7 @@ class JobCard {
     DateTime? monitoringStartedAt,
     DateTime? closedAt,
     List<AssignmentEvent>? assignmentHistory,
+    List<Map<String, dynamic>>? photos,
   }) {
     return JobCard(
       id: id ?? this.id,
@@ -240,11 +245,30 @@ class JobCard {
       monitoringStartedAt: monitoringStartedAt ?? this.monitoringStartedAt,
       closedAt: closedAt ?? this.closedAt,
       assignmentHistory: assignmentHistory ?? this.assignmentHistory,
+      photos: photos ?? this.photos,
     );
   }
 
   bool get isAssigned => assignedClockNos?.isNotEmpty ?? false;
   bool get isCompleted => status == JobStatus.completed;
+
+  static List<Map<String, dynamic>> _parsePhotos(dynamic photosData) {
+    if (photosData == null) return const [];
+    final list = photosData as List;
+    return list.map((e) {
+      if (e is String) {
+        return {
+          'section': 'legacy',
+          'url': e,
+          'addedBy': 'Unknown',
+          'timestamp': '',
+        };
+      } else if (e is Map<String, dynamic>) {
+        return e;
+      }
+      return <String, dynamic>{};
+    }).toList();
+  }
 }
 
 extension JobStatusExtension on JobStatus {

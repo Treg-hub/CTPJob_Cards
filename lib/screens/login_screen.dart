@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
-import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'home_screen.dart';
 
@@ -19,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
   final _clockNoController = TextEditingController();
   bool _isLoading = false;
-  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {

@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import '../models/assignment_event.dart';
@@ -133,33 +138,30 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   // ==================== IMPROVED & COMPACT ASSIGN DIALOG ====================
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
     String searchQuery = '';
-    String? selectedDepartmentFilter;
-    String? mechElecFilter;
     List<String> selectedClockNos = [];
     List<String> selectedNames = [];
     bool isSaving = false;
-    bool showOnsiteOnly = true;
-    bool showAdvancedFilters = false;
+  Timer? debounceTimer;
 
     selectedClockNos.addAll(job.assignedClockNos ?? []);
     selectedNames.addAll(job.assignedNames ?? []);
 
-    if (job.type.displayName.toLowerCase().contains('mechanical')) {
-      mechElecFilter = 'Mechanical';
-    } else if (job.type.displayName.toLowerCase().contains('electrical')) {
-      mechElecFilter = 'Electrical';
-    }
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Assign to Employees'),
-          content: SizedBox(
-            width: double.maxFinite,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.95,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
+                const Text('Assign to Employees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 // Search + Clear All
                 Row(
                   children: [
@@ -169,8 +171,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           labelText: 'Search employee...',
                           prefixIcon: Icon(Icons.search),
                           border: OutlineInputBorder(),
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         ),
-                        onChanged: (value) => setDialogState(() => searchQuery = value.toLowerCase()),
+                        onChanged: (value) {
+                          debounceTimer?.cancel();
+                          debounceTimer = Timer(const Duration(milliseconds: 300), () => setDialogState(() => searchQuery = value.toLowerCase()));
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -186,96 +193,31 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // Selected count + Advanced filters toggle (side by side)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (selectedClockNos.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Selected: ${selectedClockNos.length} people',
-                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 15.5),
-                        ),
-                      ),
-                    TextButton.icon(
-                      onPressed: () => setDialogState(() => showAdvancedFilters = !showAdvancedFilters),
-                      icon: Icon(showAdvancedFilters ? Icons.expand_less : Icons.expand_more),
-                      label: Text(
-                        showAdvancedFilters ? 'Hide Filters' : 'Show Advanced Filters',
-                        style: const TextStyle(fontSize: 15.5),
-                      ),
+                // Selected chips
+                if (selectedClockNos.isNotEmpty)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: selectedClockNos.map((clockNo) {
+                        final name = selectedNames[selectedClockNos.indexOf(clockNo)];
+                        return Chip(
+                          label: Text(name, style: const TextStyle(fontSize: 12)),
+                          onDeleted: () => setDialogState(() {
+                            selectedClockNos.remove(clockNo);
+                            selectedNames.remove(name);
+                          }),
+                          deleteIcon: const Icon(Icons.close, size: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        );
+                      }).toList(),
                     ),
-                  ],
-                ),
+                  ),
                 const SizedBox(height: 8),
 
-                if (showAdvancedFilters) ...[
-                  Column(
-                    children: [
-                      SegmentedButton<bool>(
-                        selected: {showOnsiteOnly},
-                        onSelectionChanged: (Set<bool> selection) {
-                          setDialogState(() => showOnsiteOnly = selection.first);
-                        },
-                        segments: const [
-                          ButtonSegment(value: true, label: Text('Onsite Only')),
-                          ButtonSegment(value: false, label: Text('All')),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      SegmentedButton<String?>(
-                        selected: {mechElecFilter},
-                        onSelectionChanged: (Set<String?> selection) {
-                          setDialogState(() => mechElecFilter = selection.first);
-                        },
-                        segments: const [
-                          ButtonSegment(value: 'Mechanical', label: Text('Mech')),
-                          ButtonSegment(value: 'Electrical', label: Text('Elec')),
-                          ButtonSegment(value: null, label: Text('Both')),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      StreamBuilder<List<Employee>>(
-                        stream: _firestoreService.getEmployeesStream(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) return const CircularProgressIndicator();
-                          final depts = snapshot.data!
-                              .map((e) => e.department)
-                              .where((d) => d != null && d.isNotEmpty)
-                              .cast<String>()
-                              .toSet()
-                              .toList()
-                            ..sort();
 
-                          return DropdownButtonFormField<String>(
-                            isDense: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Department',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            value: selectedDepartmentFilter,
-                            items: [
-                              const DropdownMenuItem(value: null, child: Text('All Departments')),
-                              ...depts.map((d) => DropdownMenuItem(value: d, child: Text(d))),
-                            ],
-                            onChanged: (val) => setDialogState(() => selectedDepartmentFilter = val),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
 
-                // Employee list (tight & consistent with main screen)
-                SizedBox(
-                  height: 260,
+                // Employee list grouped by department
+                Expanded(
                   child: StreamBuilder<List<Employee>>(
                     stream: _firestoreService.getEmployeesStream(),
                     builder: (context, snapshot) {
@@ -285,158 +227,166 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       if (searchQuery.isNotEmpty) {
                         employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
                       }
-                      if (showOnsiteOnly) {
-                        employees = employees.where((e) => e.isOnSite).toList();
-                      }
 
-                      if (selectedDepartmentFilter != null) {
-                        employees = employees.where((e) => e.department == selectedDepartmentFilter).toList();
-                      } else if (mechElecFilter != null) {
-                        employees = employees.where((e) {
-                          final pos = (e.position ?? '').toLowerCase();
-                          return pos.contains(mechElecFilter!.toLowerCase());
-                        }).toList();
-                      }
-
+                      // Sort by onsite first
                       employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
 
-                      if (employees.isEmpty) {
-                        return const Center(child: Text('No employees match filters', style: TextStyle(color: Colors.white70, fontSize: 15.5)));
+                      // Group by department
+                      final Map<String, List<Employee>> grouped = {};
+                      for (final emp in employees) {
+                        final dept = emp.department ?? 'No Department';
+                        grouped.putIfAbsent(dept, () => []).add(emp);
                       }
 
-                      return ListView.separated(
-                        itemCount: employees.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
-                        itemBuilder: (context, index) {
-                          final emp = employees[index];
-                          final isSelected = selectedClockNos.contains(emp.clockNo);
+                      if (employees.isEmpty) {
+                        return const Center(child: Text('No employees match filters', style: TextStyle(color: Colors.white70, fontSize: 14)));
+                      }
 
-                          return CheckboxListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                            title: Text(
-                              '${emp.displayName} (${emp.clockNo}) - ${emp.department ?? ''} ${emp.position ?? ''}',
-                              style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w500),
-                            ),
-                            secondary: Icon(
-                              emp.isOnSite ? Icons.location_on : Icons.location_off,
-                              color: emp.isOnSite ? Colors.green : Colors.red[400]!,
-                              size: 20,
-                            ),
-                            tileColor: emp.isOnSite ? Colors.green.withOpacity(0.08) : Colors.red.withOpacity(0.08),
-                            value: isSelected,
-                            onChanged: (val) {
-                              setDialogState(() {
-                                if (val == true) {
-                                  selectedClockNos.add(emp.clockNo);
-                                  selectedNames.add(emp.name);
-                                } else {
-                                  selectedClockNos.remove(emp.clockNo);
-                                  selectedNames.remove(emp.name);
-                                }
-                              });
-                            },
+                      return ListView(
+                        children: grouped.entries.map((entry) {
+                          return ExpansionTile(
+                            title: Text('${entry.key} (${entry.value.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            children: entry.value.expand((emp) {
+                              final isSelected = selectedClockNos.contains(emp.clockNo);
+                              return [
+                                CheckboxListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+                                  visualDensity: VisualDensity.compact,
+                                  title: Text(
+                                    '${emp.name} - ${emp.position ?? ''} (${emp.department ?? ''})',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                  ),
+                                  secondary: Icon(
+                                    emp.isOnSite ? Icons.location_on : Icons.location_off,
+                                    color: emp.isOnSite ? Colors.green : Colors.red[400]!,
+                                    size: 16,
+                                  ),
+                                  tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 20) : Colors.red.withValues(alpha: 20),
+                                  value: isSelected,
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedClockNos.add(emp.clockNo);
+                                        selectedNames.add(emp.name);
+                                      } else {
+                                        selectedClockNos.remove(emp.clockNo);
+                                        selectedNames.remove(emp.name);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ];
+                            }).toList()..removeLast(),
                           );
-                        },
+                        }).toList(),
                       );
                     },
                   ),
                 ),
+                // Action buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: isSaving || selectedClockNos.isEmpty
+                          ? null
+                          : () async {
+                              setDialogState(() => isSaving = true);
+                              try {
+                                for (var clockNo in selectedClockNos) {
+                                  final emp = await _firestoreService.getEmployee(clockNo);
+                                  if (emp != null && !emp.isOnSite && context.mounted) {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Employee is OFF SITE'),
+                                        content: Text('${emp.name} is currently OFF SITE.\n\nDo you still want to assign the job?'),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Assign Anyway')),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm != true) {
+                                      setDialogState(() => isSaving = false);
+                                      return;
+                                    }
+                                  }
+                                }
+
+                                final updatedJob = job.copyWith(
+                                  assignedClockNos: selectedClockNos,
+                                  assignedNames: selectedNames,
+                                  assignedAt: DateTime.now(),
+                                  notes: job.notes,
+                                );
+
+                                final event = AssignmentEvent(
+                                  assignedByName: currentEmployee?.name ?? 'Unknown',
+                                  assignedByClockNo: currentEmployee?.clockNo ?? '',
+                                  assigneeClockNos: selectedClockNos,
+                                  assigneeNames: selectedNames,
+                                  timestamp: DateTime.now(),
+                                );
+                                final newHistory = List<AssignmentEvent>.from(job.assignmentHistory ?? []);
+                                newHistory.add(event);
+                                final finalUpdatedJob = updatedJob.copyWith(
+                                  assignmentHistory: newHistory,
+                                  assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
+                                );
+
+                                await _firestoreService.updateJobCard(job.id!, finalUpdatedJob);
+
+                                // Send notifications only for newly added employees
+                                final newEmployees = selectedClockNos.where((clockNo) => !(job.assignedClockNos?.contains(clockNo) ?? false)).toList();
+                                for (var i = 0; i < newEmployees.length; i++) {
+                                  final clockNo = newEmployees[i];
+                                  final emp = await _firestoreService.getEmployee(clockNo);
+                                  if (emp?.fcmToken != null) {
+                                     try {
+                                       await _notificationService.sendJobAssignmentNotification(
+                                         recipientToken: emp!.fcmToken!,
+                                         jobCardId: job.id!,
+                                         jobCardNumber: job.jobCardNumber,
+                                         operator: currentEmployee?.name ?? 'Unknown',
+                                         creator: job.operator ?? 'Unknown',
+                                         department: emp.department,
+                                         area: job.area,
+                                         machine: job.machine,
+                                         part: job.part,
+                                         description: job.description,
+                                       );
+                                    } catch (e) {
+                                      debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
+                                    }
+                                  }
+                                }
+
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Job assigned!')));
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                                  );
+                                }
+                              } finally {
+                                if (context.mounted) setDialogState(() => isSaving = false);
+                              }
+                            },
+                      child: isSaving
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Assign'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            TextButton(
-              onPressed: isSaving || selectedClockNos.isEmpty
-                  ? null
-                  : () async {
-                      setDialogState(() => isSaving = true);
-                      try {
-                        for (var clockNo in selectedClockNos) {
-                          final emp = await _firestoreService.getEmployee(clockNo);
-                          if (emp != null && !emp.isOnSite && context.mounted) {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Employee is OFF SITE'),
-                                content: Text('${emp.name} is currently OFF SITE.\n\nDo you still want to assign the job?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Assign Anyway')),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) {
-                              setDialogState(() => isSaving = false);
-                              return;
-                            }
-                          }
-                        }
-
-                        final updatedJob = job.copyWith(
-                          assignedClockNos: selectedClockNos,
-                          assignedNames: selectedNames,
-                          assignedAt: DateTime.now(),
-                          notes: job.notes, // keep existing notes (no new notes field)
-                        );
-
-                        final event = AssignmentEvent(
-                          assignedByName: currentEmployee?.name ?? 'Unknown',
-                          assignedByClockNo: currentEmployee?.clockNo ?? '',
-                          assigneeClockNos: selectedClockNos,
-                          assigneeNames: selectedNames,
-                          timestamp: DateTime.now(),
-                        );
-                        final newHistory = List<AssignmentEvent>.from(job.assignmentHistory ?? []);
-                        newHistory.add(event);
-                        final finalUpdatedJob = updatedJob.copyWith(
-                          assignmentHistory: newHistory,
-                          assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
-                        );
-
-                        await _firestoreService.updateJobCard(job.id!, finalUpdatedJob);
-
-                        for (var i = 0; i < selectedClockNos.length; i++) {
-                          final clockNo = selectedClockNos[i];
-                          final emp = await _firestoreService.getEmployee(clockNo);
-                          if (emp?.fcmToken != null) {
-                             try {
-                               await _notificationService.sendJobAssignmentNotification(
-                                 recipientToken: emp!.fcmToken!,
-                                 jobCardId: job.id!,
-                                 jobCardNumber: job.jobCardNumber,
-                                 operator: currentEmployee?.name ?? 'Unknown',
-                                 department: emp.department,
-                                 area: job.area,
-                                 machine: job.machine,
-                                 part: job.part,
-                                 description: job.description,
-                               );
-                            } catch (e) {
-                              debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
-                            }
-                          }
-                        }
-
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Job assigned!')));
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                          );
-                        }
-                      } finally {
-                        if (context.mounted) setDialogState(() => isSaving = false);
-                      }
-                    },
-              child: isSaving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Assign'),
-            ),
-          ],
         ),
       ),
     );
@@ -561,42 +511,236 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
+  Future<void> _addPhoto(JobCard jobCard, String section) async {
+    final picker = ImagePicker();
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Photo Source'),
+        content: const Text('Choose where to get the photo from.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
+    final pickedFile = await picker.pickImage(source: source);
+    if (pickedFile == null) return;
+
+    // Compress the image
+    final compressedFile = await FlutterImageCompress.compressAndGetFile(
+      pickedFile.path,
+      '${pickedFile.path}_compressed.jpg',
+      minWidth: 800,
+      minHeight: 800,
+      quality: 85,
+    );
+
+    if (compressedFile == null) return;
+
+    // Upload to Firebase Storage
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('job_cards/${jobCard.id}/photos/$timestamp.jpg');
+
+    try {
+      final uploadTask = storageRef.putFile(File(compressedFile.path));
+      final snapshot = await uploadTask.whenComplete(() {});
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // Update job card with new photo
+      final photoMap = {
+        'section': section,
+        'url': downloadUrl,
+        'addedBy': currentEmployee?.name ?? 'Unknown',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      final updatedPhotos = [...jobCard.photos, photoMap];
+      await _firestoreService.updateJobCard(
+        jobCard.id!,
+        jobCard.copyWith(photos: updatedPhotos),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading photo: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.network(photoUrl),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                'Added by $addedBy on ${DateTime.parse(timestamp).toLocal().toString().substring(0,16)}',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const double sectionSpacing = 5.0;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Job Card Details'),
-        backgroundColor: const Color(0xFFFF8C42),
-      ),
-      body: StreamBuilder<JobCard>(
-        stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
-        builder: (context, snapshot) {
-          final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
-          _currentJobCard = jobCard;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Job Card Details'),
+          backgroundColor: const Color(0xFFFF8C42),
+          bottom: const TabBar(
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black54,
+            tabs: [
+              Tab(text: 'Details'),
+              Tab(text: 'Photos'),
+            ],
+          ),
+        ),
+        body: StreamBuilder<JobCard>(
+          stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
+          builder: (context, snapshot) {
+            final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
+            _currentJobCard = jobCard;
+            return TabBarView(
               children: [
-                _buildHeroHeader(jobCard),
-                SizedBox(height: sectionSpacing),
-                _buildAssignmentButtons(jobCard),
-                SizedBox(height: sectionSpacing),
-                _buildCombinedCard(jobCard),
-                SizedBox(height: sectionSpacing),
-                _buildDetailsCard(jobCard),
-                SizedBox(height: sectionSpacing),
-                _buildActivityLogCard(jobCard),
-                SizedBox(height: sectionSpacing),
-                _buildAssignmentLogCard(jobCard),
+                // Details Tab
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeroHeader(jobCard),
+                      SizedBox(height: sectionSpacing),
+                      _buildAssignmentButtons(jobCard),
+                      SizedBox(height: sectionSpacing),
+                      _buildCombinedCard(jobCard),
+                      SizedBox(height: sectionSpacing),
+                      _buildDetailsCard(jobCard),
+                      SizedBox(height: sectionSpacing),
+                      _buildActivityLogCard(jobCard),
+                      SizedBox(height: sectionSpacing),
+                      _buildAssignmentLogCard(jobCard),
+                    ],
+                  ),
+                ),
+                // Photos Tab
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Photos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                          TextButton.icon(
+                            onPressed: () => _addPhoto(jobCard, 'photos'),
+                            icon: const Icon(Icons.camera_alt, size: 20),
+                            label: const Text('Add Photo'),
+                            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ...['description', 'comments', 'notes', 'photos'].map((section) {
+                        final sectionPhotos = jobCard.photos.where((p) => p['section'] == section).toList();
+                        if (sectionPhotos.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(section.toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                            const SizedBox(height: 6),
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                              itemCount: sectionPhotos.length,
+                              itemBuilder: (context, index) {
+                                final photoMap = sectionPhotos[index];
+                                final photoUrl = photoMap['url'];
+                                final addedBy = photoMap['addedBy'];
+                                final timestamp = photoMap['timestamp'];
+                                return GestureDetector(
+                                  onTap: () => _showPhotoDialog(photoUrl, addedBy, timestamp),
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(8),
+                                          image: DecorationImage(
+                                            image: NetworkImage(photoUrl),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        child: Container(
+                                          color: Colors.black54,
+                                          padding: const EdgeInsets.all(4),
+                                          child: Text(
+                                            'By $addedBy\n${DateTime.parse(timestamp).toLocal().toString().substring(0,16)}',
+                                            style: const TextStyle(color: Colors.white, fontSize: 10),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      }),
+                      if (jobCard.photos.isEmpty)
+                        const Text('No photos', style: TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                ),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
+        bottomNavigationBar: _buildBottomBanner(_currentJobCard),
       ),
-      bottomNavigationBar: _buildBottomBanner(_currentJobCard),
     );
   }
 
@@ -703,8 +847,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       startedAt: now,
       notes: jobCard.notes + note,
     );
+    final event = AssignmentEvent(
+      assignedByName: 'Started by $user',
+      assignedByClockNo: currentEmployee?.clockNo ?? '',
+      assigneeClockNos: [],
+      assigneeNames: [],
+      timestamp: now,
+    );
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    newHistory.add(event);
+    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      await _firestoreService.updateJobCard(jobCard.id!, finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Job started!')));
       }
@@ -818,8 +972,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       monitoringStartedAt: withMonitoring ? now : null,
       notes: jobCard.notes + note,
     );
+    final event = AssignmentEvent(
+      assignedByName: withMonitoring ? 'Monitoring by $user' : 'Completed by $user',
+      assignedByClockNo: currentEmployee?.clockNo ?? '',
+      assigneeClockNos: [],
+      assigneeNames: [],
+      timestamp: now,
+    );
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    newHistory.add(event);
+    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      await _firestoreService.updateJobCard(jobCard.id!, finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(withMonitoring ? 'Job completed and monitoring started!' : 'Job completed!')),
@@ -842,8 +1006,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       monitoringStartedAt: now,
       notes: jobCard.notes + note,
     );
+    final event = AssignmentEvent(
+      assignedByName: 'Adjustment by $user',
+      assignedByClockNo: currentEmployee?.clockNo ?? '',
+      assigneeClockNos: [],
+      assigneeNames: [],
+      timestamp: now,
+    );
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    newHistory.add(event);
+    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      await _firestoreService.updateJobCard(jobCard.id!, finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
       }
@@ -919,6 +1093,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   Widget _buildAssignmentButtons(JobCard jobCard) {
+    // Hide all assignment buttons if job is completed
+    if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();
+
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
 
     return Padding(
@@ -1050,11 +1227,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               children: [
                 const Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                 if (_canAddComments)
-                  TextButton.icon(
-                    onPressed: _showAddCommentDialog,
-                    icon: const Icon(Icons.add_comment, size: 20),
-                    label: const Text('Add Comment'),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _showAddCommentDialog,
+                        icon: const Icon(Icons.add_comment, size: 20),
+                        label: const Text('Add Comment'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () => _addPhoto(jobCard, 'comments'),
+                        icon: const Icon(Icons.camera_alt, size: 20),
+                        label: const Text('Add Photo'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -1073,13 +1261,24 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                if (_canAddNotes)
-                  TextButton.icon(
-                    onPressed: _showAddNoteDialog,
-                    icon: const Icon(Icons.note_add, size: 20),
-                    label: const Text('Add Note'),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
-                  ),
+                Row(
+                  children: [
+                    if (_canAddNotes)
+                      TextButton.icon(
+                        onPressed: _showAddNoteDialog,
+                        icon: const Icon(Icons.note_add, size: 20),
+                        label: const Text('Add Note'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      ),
+                    if (_canAddNotes) const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => _addPhoto(jobCard, 'notes'),
+                      icon: const Icon(Icons.camera_alt, size: 20),
+                      label: const Text('Add Photo'),
+                      style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1089,6 +1288,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                 )),
             if (jobCard.notes.isEmpty)
               const Text('No notes', style: TextStyle(color: Colors.white70)),
+
+
           ],
         ),
       ),
@@ -1149,6 +1350,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
                 if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
@@ -1165,6 +1367,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   Widget _buildAssignmentLogCard(JobCard jobCard) {
+    final parsedHistory = _parseAssignmentHistory(jobCard.assignmentHistory ?? []);
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1174,10 +1377,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
-              children: jobCard.assignmentHistory?.reversed.map((event) => _buildTimelineRow(
-                '${event.isUnassign ? 'Unassigned' : 'Assigned to'} ${event.assigneeNames.join(', ')} by ${event.assignedByName}',
-                event.timestamp,
-              )).toList() ?? [],
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: parsedHistory.isEmpty
+                  ? [const Text('No assignment history', style: TextStyle(color: Colors.white70))]
+                  : parsedHistory.map((entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(entry, style: const TextStyle(fontSize: 15, color: Colors.white), textAlign: TextAlign.left),
+                        ),
+                      )).toList(),
             ),
           ),
         ],
@@ -1213,6 +1422,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   List<String> _parseComments(String comments) => comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
 
   List<String> _parseNotes(String notes) => notes.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+
+  List<String> _parseAssignmentHistory(List<AssignmentEvent> history) {
+    return history.reversed.map((event) {
+      final formatted = event.assigneeNames.isEmpty
+          ? event.assignedByName
+          : '${event.isUnassign ? 'Unassigned' : 'Assigned to'} ${event.assigneeNames.join(', ')} by ${event.assignedByName}';
+      return '[${_formatDateTime(event.timestamp)}] $formatted';
+    }).toList();
+  }
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
