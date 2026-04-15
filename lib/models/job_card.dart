@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'assignment_event.dart';
 
 enum JobType {
   mechanical('Mechanical'),
@@ -56,6 +57,7 @@ class JobCard {
   final DateTime? completedAt;
   final DateTime? monitoringStartedAt;
   final DateTime? closedAt;
+  final List<AssignmentEvent> assignmentHistory;
 
   const JobCard({
     this.id,
@@ -86,6 +88,7 @@ class JobCard {
     this.completedAt,
     this.monitoringStartedAt,
     this.closedAt,
+    this.assignmentHistory = const [],
   });
 
   factory JobCard.fromFirestore(DocumentSnapshot doc) {
@@ -139,6 +142,7 @@ class JobCard {
       closedAt: data['closedAt'] != null
           ? (data['closedAt'] as Timestamp).toDate()
           : null,
+      assignmentHistory: (data['assignmentHistory'] as List?)?.map((m) => AssignmentEvent.fromFirestore(m)).toList() ?? [],
     );
   }
 
@@ -171,6 +175,7 @@ class JobCard {
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
+      'assignmentHistory': assignmentHistory.map((e) => e.toFirestore()).toList(),
     };
   }
 
@@ -203,6 +208,7 @@ class JobCard {
     DateTime? completedAt,
     DateTime? monitoringStartedAt,
     DateTime? closedAt,
+    List<AssignmentEvent>? assignmentHistory,
   }) {
     return JobCard(
       id: id ?? this.id,
@@ -233,6 +239,7 @@ class JobCard {
       completedAt: completedAt ?? this.completedAt,
       monitoringStartedAt: monitoringStartedAt ?? this.monitoringStartedAt,
       closedAt: closedAt ?? this.closedAt,
+      assignmentHistory: assignmentHistory ?? this.assignmentHistory,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
@@ -31,6 +32,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
   bool get isTech => (currentEmployee?.position ?? '').toLowerCase().contains('technician') || (currentEmployee?.position ?? '').toLowerCase().contains('tech');
   bool get _canAddNotes => isManager || (currentEmployee?.position ?? '').toLowerCase().contains('electrical') || (currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
+  bool get _canAddComments => !(currentEmployee?.position ?? '').toLowerCase().contains('electrical') && !(currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
 
   Future<void> _appendComment() async {
     if (_commentController.text.trim().isEmpty) return;
@@ -69,8 +71,21 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       assignedAt: DateTime.now(),
       notes: jobCard.notes,
     );
+    final event = AssignmentEvent(
+      assignedByName: current.name,
+      assignedByClockNo: current.clockNo,
+      assigneeClockNos: updated.assignedClockNos ?? [],
+      assigneeNames: updated.assignedNames ?? [],
+      timestamp: DateTime.now(),
+    );
+    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory ?? []);
+    newHistory.add(event);
+    final finalUpdated = updated.copyWith(
+      assignmentHistory: newHistory,
+      assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
+    );
     try {
-      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      await _firestoreService.updateJobCard(jobCard.id!, finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to you')));
       }
@@ -90,8 +105,19 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       assignedClockNos: jobCard.assignedClockNos?.where((c) => c != current.clockNo).toList(),
       assignedNames: jobCard.assignedNames?.where((n) => n != current.name).toList(),
     );
+    final event = AssignmentEvent(
+      assignedByName: current.name,
+      assignedByClockNo: current.clockNo,
+      assigneeClockNos: [current.clockNo],
+      assigneeNames: [current.name],
+      timestamp: DateTime.now(),
+      isUnassign: true,
+    );
+    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory ?? []);
+    newHistory.add(event);
+    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.updateJobCard(jobCard.id!, updated);
+      await _firestoreService.updateJobCard(jobCard.id!, finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Removed from job')));
       }
@@ -354,7 +380,21 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           notes: job.notes, // keep existing notes (no new notes field)
                         );
 
-                        await _firestoreService.updateJobCard(job.id!, updatedJob);
+                        final event = AssignmentEvent(
+                          assignedByName: currentEmployee?.name ?? 'Unknown',
+                          assignedByClockNo: currentEmployee?.clockNo ?? '',
+                          assigneeClockNos: selectedClockNos,
+                          assigneeNames: selectedNames,
+                          timestamp: DateTime.now(),
+                        );
+                        final newHistory = List<AssignmentEvent>.from(job.assignmentHistory ?? []);
+                        newHistory.add(event);
+                        final finalUpdatedJob = updatedJob.copyWith(
+                          assignmentHistory: newHistory,
+                          assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
+                        );
+
+                        await _firestoreService.updateJobCard(job.id!, finalUpdatedJob);
 
                         for (var i = 0; i < selectedClockNos.length; i++) {
                           final clockNo = selectedClockNos[i];
@@ -542,13 +582,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               children: [
                 _buildHeroHeader(jobCard),
                 SizedBox(height: sectionSpacing),
-                _buildSelfAssignButton(jobCard),
+                _buildAssignmentButtons(jobCard),
                 SizedBox(height: sectionSpacing),
                 _buildCombinedCard(jobCard),
                 SizedBox(height: sectionSpacing),
                 _buildDetailsCard(jobCard),
                 SizedBox(height: sectionSpacing),
                 _buildActivityLogCard(jobCard),
+                SizedBox(height: sectionSpacing),
+                _buildAssignmentLogCard(jobCard),
               ],
             ),
           );
@@ -876,24 +918,48 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     );
   }
 
-  Widget _buildSelfAssignButton(JobCard jobCard) {
+  Widget _buildAssignmentButtons(JobCard jobCard) {
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: ElevatedButton.icon(
-        onPressed: isAssigned ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
-        icon: Icon(isAssigned ? Icons.remove_circle : Icons.person_add, size: 24),
-        label: Text(
-          isAssigned ? 'Unassign Self' : 'Assign to Me',
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isAssigned ? Colors.orange : const Color(0xFF10B981),
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: isAssigned ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
+              icon: Icon(isAssigned ? Icons.remove_circle : Icons.person_add, size: 24),
+              label: Text(
+                isAssigned ? 'Unassign' : 'Assign',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isAssigned ? Colors.orange : const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (isManager)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _showAssignCompleteDialog(context, jobCard),
+                icon: const Icon(Icons.group_add, size: 24),
+                label: const Text(
+                  'Manage',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8C42),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -983,12 +1049,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                TextButton.icon(
-                  onPressed: _showAddCommentDialog,
-                  icon: const Icon(Icons.add_comment, size: 20),
-                  label: const Text('Add Comment'),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
-                ),
+                if (_canAddComments)
+                  TextButton.icon(
+                    onPressed: _showAddCommentDialog,
+                    icon: const Icon(Icons.add_comment, size: 20),
+                    label: const Text('Add Comment'),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -1076,22 +1143,44 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 8),
-            if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
-            if (jobCard.assignedAt != null) _buildTimelineRow('Assigned', jobCard.assignedAt!),
-            if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
-            if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
-            if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
-            if (jobCard.monitoringStartedAt != null) _buildTimelineRow('Monitoring Started', jobCard.monitoringStartedAt!),
-            if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
-          ],
-        ),
+      child: ExpansionTile(
+        title: const Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
+                if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
+                if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
+                if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
+                if (jobCard.monitoringStartedAt != null) _buildTimelineRow('Monitoring Started', jobCard.monitoringStartedAt!),
+                if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignmentLogCard(JobCard jobCard) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ExpansionTile(
+        title: const Text('Assignment Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: jobCard.assignmentHistory?.reversed.map((event) => _buildTimelineRow(
+                '${event.isUnassign ? 'Unassigned' : 'Assigned to'} ${event.assigneeNames.join(', ')} by ${event.assignedByName}',
+                event.timestamp,
+              )).toList() ?? [],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1102,7 +1191,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 120, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+          SizedBox(width: 200, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 15.5, color: Colors.white))),
         ],
       ),
@@ -1114,8 +1203,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          SizedBox(width: 130, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
-          Expanded(child: Text(_formatDateTime(dateTime), style: const TextStyle(fontSize: 15.5, color: Colors.white))),
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+          SizedBox(width: 220, child: Text(_formatDateTime(dateTime), textAlign: TextAlign.right, style: const TextStyle(fontSize: 15.5, color: Colors.white))),
         ],
       ),
     );
@@ -1138,6 +1227,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

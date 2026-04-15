@@ -39,6 +39,7 @@
 - ✅ **Job Status Updates**: Allow technicians to update job status (completed with optional monitoring)
 - ✅ **Admin Panel**: Employee and structure management (spreadsheet view with bulk CSV operations)
 - ✅ **Job Filtering**: Advanced filtering on job list screens (completed with super-manager pattern for 'general' dept users)
+- ✅ **Assignment History Tracking**: Added detailed assignment history in activity log with timestamps and who assigned whom
 
 ### Medium Priority
 - **Offline Support**: Local caching for offline functionality

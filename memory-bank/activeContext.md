@@ -6,6 +6,7 @@
 - **Memory Bank Setup**: Establishing documentation structure for future development
 - **Code Quality**: Maintaining clean, efficient Flutter code with proper null safety
 - **Monitoring Status Feature**: Added optional 7-day monitoring for completed jobs, auto-close if no adjustments, in-app dashboard for visibility
+- **Assignment History Tracking**: Implemented detailed assignment history in activity log, showing who assigned whom with timestamps for all assignments and unassignments
 
 ## Recent Changes
 - **Enhanced My Assigned Jobs Card Layout**: Completely redesigned job card layout in my_assigned_jobs_screen.dart for better information hierarchy and usability.
@@ -78,6 +79,7 @@
 - **Color Scheme**: Orange (#FFFF8C42) for primary actions, green (#FF10B981) for success states
 - **Priority Colors**: P1 (green) to P5 (red) with distinct shades for visual hierarchy
 - **Null Safety**: Comprehensive null checking with `??` operators and conditional rendering
+- **Role-Based UI Visibility**: Comment button hidden for electrical/mechanical staff; Notes button visible for managers + electrical/mechanical; Activity/Assignment logs expandable for all; Manage Assignments button visible only to managers (next to self-assign)
 
 ## Learnings and Project Insights
 - **UI String Construction**: Always verify display strings don't duplicate model data
