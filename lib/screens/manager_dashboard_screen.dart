@@ -16,14 +16,14 @@ import '../main.dart' show currentEmployee;
 import 'view_job_cards_screen.dart';
 import 'copper_dashboard_screen.dart';
 
-class ManagerDashboardScreen extends StatefulWidget {
+class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
 
   @override
-  State<ManagerDashboardScreen> createState() => _ManagerDashboardScreenState();
+  ConsumerState<ManagerDashboardScreen> createState() => _ManagerDashboardScreenState();
 }
 
-class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
+class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
   // Dashboard data - expanded KPIs for better Job Card / Breakdown tracking
@@ -370,31 +370,29 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Offline indicator
-                    Consumer<ConnectivityService>(
-                      builder: (context, connectivity, child) {
-                        return StreamBuilder<List<ConnectivityResult>>(
-                          stream: connectivity.connectivityStream,
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-                            final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
-                            if (isOnline) return const SizedBox.shrink();
-                            return Container(
-                              width: double.infinity,
-                              color: Colors.red,
-                              padding: const EdgeInsets.all(8),
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: const Text(
-                                'Offline Mode - Data may be outdated',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
-                              ),
-                            );
-                          },
+                    // Offline indicator - Riverpod version (no Consumer wrapper)
+                    StreamBuilder<List<ConnectivityResult>>(
+                      stream: _connectivityService.connectivityStream,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
+                        if (isOnline) return const SizedBox.shrink();
+
+                        return Container(
+                          width: double.infinity,
+                          color: Colors.red,
+                          padding: const EdgeInsets.all(8),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: const Text(
+                            'Offline Mode - Data may be outdated',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
                         );
                       },
                     ),
-                    // Filters
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
