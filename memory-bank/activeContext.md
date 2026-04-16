@@ -7,6 +7,7 @@
 - **Code Quality**: Maintaining clean, efficient Flutter code with proper null safety
 - **Monitoring Status Feature**: Added optional 7-day monitoring for completed jobs, auto-close if no adjustments, in-app dashboard for visibility
 - **Assignment History Tracking**: Implemented detailed assignment history in activity log, showing who assigned whom with timestamps for all assignments and unassignments
+- **Copper Inventory Module**: Complete copper tracking system for managers with dashboard, sorting, transactions, password auth, atomic updates
 
 ## Recent Changes
 - **Enhanced My Assigned Jobs Card Layout**: Completely redesigned job card layout in my_assigned_jobs_screen.dart for better information hierarchy and usability.
@@ -100,6 +101,15 @@
   - **Upload Flow**: Compress to 800px max, 85% quality, upload to `job_cards/{jobId}/photos/{timestamp}.jpg`.
   - **Display**: GridView of photos in "Photos" section, tap to enlarge.
   - **Result**: Job-specific photo documentation with optimized storage and easy viewing.
+- **Copper Inventory Tracking Module**: Implemented complete copper inventory system for managers only.
+  - **Features**: Real-time dashboard with charts/cards, password authentication, atomic transactions, sorting screen, transaction history with edit/search/filter.
+  - **Models**: CopperInventory (single doc), CopperTransaction (collection) with proper Firestore serialization.
+  - **Services**: CopperService with runTransaction for consistency, streams for real-time updates.
+  - **Screens**: CopperStorageScreen (main dashboard), SortCopperScreen (validation), CopperTransactionsScreen (list/edit).
+  - **UI**: Copper-themed colors (amber/orange), Material 3 design, responsive layout.
+  - **Integration**: Added to manager dashboard app bar and home screen (authorized users), separate from job card functionality.
+  - **Consolidation**: Removed duplicate copper_dashboard_screen.dart, updated all nav to use CopperStorageScreen as entry point.
+  - **Result**: Production-ready copper tracking with data integrity and professional UX.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

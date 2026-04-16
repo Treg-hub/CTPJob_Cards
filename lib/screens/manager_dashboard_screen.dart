@@ -14,6 +14,7 @@ import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'view_job_cards_screen.dart';
+import 'copper_dashboard_screen.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -352,6 +353,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.file_download),
             onPressed: _showExportOptions,
+          ),
+          IconButton(
+            icon: const Icon(Icons.inventory),
+            tooltip: 'Copper Inventory',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CopperDashboardScreen())),
           ),
         ],
       ),
@@ -1164,14 +1170,14 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               children: [
                                 Text(job.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text('${job.type.displayName} • ${job.machine ?? "—"} • ${job.operator}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                               Text('${job.type.displayName} • ${job.machine ?? "—"} • ${job.operator}', style: TextStyle(color: Colors.white, fontSize: 13)),
                               ],
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: job.status == JobStatus.open ? Colors.blue.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                              color: job.status == JobStatus.open ? Colors.blue.withValues(alpha: 128) : Colors.orange.withValues(alpha: 128),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(job.status.displayName, style: TextStyle(color: job.status == JobStatus.open ? Colors.blue : Colors.orange, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -1288,7 +1294,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         ),
                         subtitle: Text(
                           '${job.type.displayName} • ${job.machine ?? "—"}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style: const TextStyle(fontSize: 12, color: Colors.white),
                         ),
                         trailing: const Icon(Icons.chevron_right, size: 20),
                         onTap: () {
@@ -1530,7 +1536,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               width: 110,
               child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 15)),
             ),
-            Expanded(child: Text(value, style: const TextStyle(fontSize: 15))),
+            Expanded(child: Text(value, style: const TextStyle(fontSize: 15, color: Colors.white))),
           ],
         ),
       ),

@@ -2,11 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
@@ -16,7 +19,7 @@ import 'admin_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'monitoring_dashboard_screen.dart';
-import 'copper_storage_screen.dart';
+import 'copper_dashboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -355,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontSize: _isDesktop ? 18 : 20,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 12),
@@ -383,7 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(
                     fontSize: _isDesktop ? 18 : 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 if (isManager || isSuperManager) ...[
@@ -391,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Show Dept Only', style: TextStyle(color: Colors.white, fontSize: 14)),
+                      Text('Show Dept Only', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
                       Switch(
                         value: _showDeptOnly,
                         onChanged: (v) {
@@ -429,10 +432,10 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: _isDesktop ? 8 : 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -497,8 +500,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     TextSpan(
                       text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 11.5,
                         height: 1.2,
                       ),
@@ -535,9 +538,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       job.description,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.normal,
                         fontSize: 15,
                         height: 1.3,
                       ),
@@ -557,8 +560,8 @@ class _HomeScreenState extends State<HomeScreen> {
               if (job.notes.isNotEmpty) Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  job.notes.split('\n').first.trim(),
-                  style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
+                  job.notes.split('\n').last.trim(),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -569,7 +572,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                             color: _getStatusColor(job.status.name).withValues(alpha: 51),
+                             color: _getStatusColor(job.status.name).withValues(alpha: 128),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -590,13 +593,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: Text(
                       job.type.displayName,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    job.assignedNames?.join(', ') ?? 'Unassigned',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                  Flexible(
+                    child: Text(
+                      job.assignedNames?.join(', ') ?? 'Unassigned',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -647,12 +654,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final allJobs = snapshot.data!;
         if (allJobs.isEmpty) {
-          return const Card(
+          return Card(
             elevation: 4,
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Center(
-                child: Text('No recent jobs available', style: TextStyle(color: Colors.white70)),
+              child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             ),
           );
@@ -697,14 +704,14 @@ class _HomeScreenState extends State<HomeScreen> {
       length: 2,
       child: Column(
         children: [
-          const TabBar(
-            tabs: [
+          TabBar(
+            tabs: const [
               Tab(text: 'Assigned'),
               Tab(text: 'History'),
             ],
-            labelColor: Color(0xFFFF8C42),
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Color(0xFFFF8C42),
+            labelColor: const Color(0xFFFF8C42),
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            indicatorColor: const Color(0xFFFF8C42),
           ),
           Expanded(
             child: TabBarView(
@@ -798,11 +805,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
     switch (num) {
-      case 1: return Colors.green[600]!;
-      case 2: return Colors.lightGreen[500]!;
-      case 3: return Colors.amber[600]!;
-      case 4: return Colors.deepOrange[600]!;
-      case 5: return const Color(0xFFFF3D00);
+      case 1: return Theme.of(context).appColors.priority1;
+      case 2: return Theme.of(context).appColors.priority2;
+      case 3: return Theme.of(context).appColors.priority3;
+      case 4: return Theme.of(context).appColors.priority4;
+      case 5: return Theme.of(context).appColors.priority5;
       default: return Colors.grey;
     }
   }
@@ -810,13 +817,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'open':
-        return Colors.blue;
+        return Theme.of(context).appColors.statusOpen;
       case 'in progress':
-        return Colors.orange;
+        return Theme.of(context).appColors.statusInProgress;
       case 'completed':
-        return Colors.green;
+        return Theme.of(context).appColors.statusCompleted;
       case 'cancelled':
-        return Colors.red;
+        return Theme.of(context).appColors.statusCancelled;
       default:
         return Colors.grey;
     }
@@ -885,6 +892,47 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(fontSize: 14, color: Colors.white70),
                   ),
                 ],
+              ),
+            ),
+          ),
+
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          // Theme Switch
+          Consumer<ThemeNotifier>(
+            builder: (context, themeNotifier, child) => Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(_cardPadding),
+                child: Row(
+                  children: [
+                    const Icon(Icons.brightness_6, color: Color(0xFFFF8C42)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Theme',
+                        style: TextStyle(
+                          fontSize: _isDesktop ? 14 : 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      themeNotifier.themeMode == ThemeMode.dark ? 'Dark' : 'Light',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(width: 12),
+                    Transform.scale(
+                      scale: _isDesktop ? 0.7 : 0.8,
+                      child: Switch(
+                        value: themeNotifier.themeMode == ThemeMode.light,
+                        onChanged: (value) => themeNotifier.toggleTheme(),
+                        activeThumbColor: const Color(0xFFFF8C42),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -979,7 +1027,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               if (['22', '5421', '20'].contains(clockController.text.trim())) {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperStorageScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Access denied. Only authorized clock cards allowed.'), backgroundColor: Colors.red),

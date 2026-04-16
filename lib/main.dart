@@ -8,9 +8,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'models/employee.dart';
+import 'providers/theme_provider.dart';
+import 'providers/copper_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/connectivity_service.dart';
 import 'services/firestore_service.dart';
+import 'theme/app_theme.dart';
 
 // ==================== BACKGROUND HANDLER (mobile only) ====================
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -49,6 +52,8 @@ void main() async {
   runApp(MultiProvider(
     providers: [
       Provider<ConnectivityService>(create: (_) => ConnectivityService()),
+      ChangeNotifierProvider<ThemeNotifier>(create: (_) => ThemeNotifier()),
+      ChangeNotifierProvider<CopperProvider>(create: (_) => CopperProvider()),
     ],
     child: CtpJobCardsApp(isLoggedIn: hasLogin),
   ));
@@ -60,9 +65,65 @@ class CtpJobCardsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = context.watch<ThemeNotifier>();
     return MaterialApp(
       title: 'CTP Job Cards',
+      themeMode: themeNotifier.themeMode,
       theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFFFF8C42),
+          onPrimary: Colors.white,
+          secondary: Color(0xFFE0E0E0),
+          surface: Colors.white,
+          outline: Color(0xFFBDBDBD),
+        ),
+        scaffoldBackgroundColor: Colors.grey[50],
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFF8C42),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.black87),
+          titleMedium: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Color(0xFFFF8C42)),
+          bodyLarge: TextStyle(fontSize: 18, color: Colors.black87),
+          bodyMedium: TextStyle(fontSize: 17, color: Colors.black54),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+            textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: const Color(0xFFFF8C42),
+            foregroundColor: Colors.white,
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey[100],
+          labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Colors.grey),
+          ),
+        ),
+        extensions: const [
+          AppColors(
+            priority1: Color(0xFF4CAF50),
+            priority2: Color(0xFF8BC34A),
+            priority3: Color(0xFFFFC107),
+            priority4: Color(0xFFFF9800),
+            priority5: Color(0xFFFF3D00),
+            statusOpen: Colors.blue,
+            statusInProgress: Colors.orange,
+            statusCompleted: Colors.green,
+            statusCancelled: Colors.red,
+          ),
+        ],
+      ),
+      darkTheme: ThemeData(
         useMaterial3: true,
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFFF8C42),
@@ -102,6 +163,19 @@ class CtpJobCardsApp extends StatelessWidget {
             borderSide: const BorderSide(color: Color(0xFF333333)),
           ),
         ),
+        extensions: const [
+          AppColors(
+            priority1: Color(0xFF4CAF50),
+            priority2: Color(0xFF8BC34A),
+            priority3: Color(0xFFFFC107),
+            priority4: Color(0xFFFF9800),
+            priority5: Color(0xFFFF3D00),
+            statusOpen: Colors.blue,
+            statusInProgress: Colors.orange,
+            statusCompleted: Colors.green,
+            statusCancelled: Colors.red,
+          ),
+        ],
       ),
       home: const LoginScreen(),
       debugShowCheckedModeBanner: false,

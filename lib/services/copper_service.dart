@@ -1,80 +1,149 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
+import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 
 class CopperService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Uuid _uuid = const Uuid();
 
-  Stream<List<CopperTransaction>> getTransactionsStream() {
-    return _firestore
-        .collection('copperTransactions')
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => CopperTransaction.fromFirestore(doc)).toList());
+  static const String inventoryPath = 'copper_inventory/main';
+  static const String transCollection = 'copper_transactions';
+
+  Stream<CopperInventory> getInventoryStream() {
+    return _firestore.doc(inventoryPath).snapshots().map((doc) => CopperInventory.fromFirestore(doc));
   }
 
-  Future<void> addTransaction(CopperTransaction transaction) async {
+  Stream<List<CopperTransaction>> getTransactionsStream({DateTimeRange? range}) {
+    Query query = _firestore.collection(transCollection).orderBy('timestamp', descending: true);
+    if (range != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
+                  .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(range.end));
+    }
+    return query.snapshots().map((snapshot) => snapshot.docs.map((doc) => CopperTransaction.fromFirestore(doc)).toList());
+  }
+
+  Future<void> updateTransactionComments(String id, String comments) async {
     try {
-      await _firestore.collection('copperTransactions').add(transaction.toFirestore());
+      await _firestore.collection(transCollection).doc(id).update({'comments': comments});
     } catch (e) {
-      throw Exception('Failed to add copper transaction: $e');
+      throw Exception('Failed to update transaction comments: $e');
     }
   }
 
-  Stream<Map<CopperType, double>> getTotalsStream() {
-    return getTransactionsStream().map((transactions) {
-      final totals = <CopperType, double>{};
-      for (final tx in transactions) {
-        totals[tx.type] = (totals[tx.type] ?? 0.0) + tx.kg;
-      }
-      return totals;
+  Future<void> performAddToSort(double amountKg, String comments, String userId) async {
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      final newInv = inv.copyWith(sortKg: inv.sortKg + amountKg, lastUpdated: now);
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.addToSort,
+        amountKg: amountKg,
+        fromBucket: 'baths',
+        toBucket: 'sort',
+        timestamp: now,
+        comments: comments,
+        userId: userId,
+      ).toFirestore());
     });
   }
 
-  Future<double> getTotalForType(CopperType type) async {
-    final snapshot = await _firestore
-        .collection('copperTransactions')
-        .where('type', isEqualTo: type.name)
-        .get();
-    double total = 0.0;
-    for (final doc in snapshot.docs) {
-      total += (doc.data()['kg'] as num?)?.toDouble() ?? 0.0;
-    }
-    return total;
+  Future<void> performPlateBars(double amountKg, String comments, String userId) async {
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      final newInv = inv.copyWith(sellKg: inv.sellKg + amountKg, lastUpdated: now);
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.plateBars,
+        amountKg: amountKg,
+        fromBucket: 'bars',
+        toBucket: 'sell',
+        timestamp: now,
+        comments: comments,
+        userId: userId,
+      ).toFirestore());
+    });
   }
 
-  Future<CopperTransaction?> getLastSortingTransaction() async {
-    final snapshot = await _firestore
-        .collection('copperTransactions')
-        .where('type', isEqualTo: CopperType.toSort.name)
-        .where('description', isEqualTo: 'In Sorting')
-        .orderBy('timestamp', descending: true)
-        .limit(1)
-        .get();
-    if (snapshot.docs.isEmpty) return null;
-    return CopperTransaction.fromFirestore(snapshot.docs.first);
+  Future<void> performSort(double reuseKg, double sellKg, String comments, String userId) async {
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    final totalKg = reuseKg + sellKg;
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      if (inv.sortKg < totalKg) throw Exception('Insufficient sort kg');
+      final newInv = inv.copyWith(
+        sortKg: inv.sortKg - totalKg,
+        reuseKg: inv.reuseKg + reuseKg,
+        sellKg: inv.sellKg + sellKg,
+        lastUpdated: now,
+      );
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.sort,
+        amountKg: totalKg,
+        fromBucket: 'sort',
+        toBucket: 'reuse+sell',
+        timestamp: now,
+        comments: comments,
+        userId: userId,
+      ).toFirestore());
+    });
   }
 
-  Future<double> getSortingTotal() async {
-    final snapshot = await _firestore
-        .collection('copperTransactions')
-        .where('description', isEqualTo: 'In Sorting')
-        .get();
-    double total = 0.0;
-    for (final doc in snapshot.docs) {
-      total += (doc.data()['kg'] as num?)?.toDouble() ?? 0.0;
-    }
-    return total;
+  Future<void> performUseReuse(double amountKg, String comments, String userId) async {
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      if (inv.reuseKg < amountKg) throw Exception('Insufficient reuse kg');
+      final newInv = inv.copyWith(reuseKg: inv.reuseKg - amountKg, lastUpdated: now);
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.useReuse,
+        amountKg: amountKg,
+        fromBucket: 'reuse',
+        timestamp: now,
+        comments: comments,
+        userId: userId,
+      ).toFirestore());
+    });
   }
 
-  Future<double> getSoldTotal() async {
-    final snapshot = await _firestore
-        .collection('copperTransactions')
-        .where('type', whereIn: ['soldNuggets', 'soldRods'])
-        .get();
-    double total = 0.0;
-    for (final doc in snapshot.docs) {
-      total += (doc.data()['kg'] as num?)?.toDouble() ?? 0.0;
-    }
-    return total;
+  Future<void> performRecordSale(double amountKg, double rPerKg, String comments, String userId) async {
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    final totalValueR = amountKg * rPerKg;
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      if (inv.sellKg < amountKg) throw Exception('Insufficient sell kg');
+      final newInv = inv.copyWith(sellKg: inv.sellKg - amountKg, currentRPerKg: rPerKg, lastUpdated: now);
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.recordSale,
+        amountKg: amountKg,
+        fromBucket: 'sell',
+        timestamp: now,
+        comments: comments,
+        rPerKg: rPerKg,
+        totalValueR: totalValueR,
+        userId: userId,
+      ).toFirestore());
+    });
   }
 }

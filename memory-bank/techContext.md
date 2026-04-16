@@ -24,7 +24,8 @@ dependencies:
   firebase_core: ^2.x
   cloud_firestore: ^4.x
   firebase_messaging: ^14.x
-  provider: ^6.x (inferred from patterns)
+  provider: ^6.x (state management)
+  shared_preferences: ^2.x (theme persistence)
   intl: ^0.19.x (for date formatting)
 ```
 

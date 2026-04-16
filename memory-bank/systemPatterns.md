@@ -19,7 +19,9 @@ lib/
 Firebase Project
 ├── Firestore Database        # Document-based storage
 │   ├── employees/           # Employee collection
-│   └── jobCards/            # Job card collection
+│   ├── jobCards/            # Job card collection
+│   ├── copper_inventory/    # Copper inventory single document
+│   └── copper_transactions/ # Copper transaction history
 ├── Cloud Functions          # Server-side logic
 │   └── functions/
 │       ├── index.js         # Main functions
@@ -35,17 +37,27 @@ Firebase Project
 - **Rationale**: Simple, effective for Firebase integration
 - **Implementation**: Service classes handle data operations, screens consume via StreamBuilder
 
+### Firestore Transactions
+- **Decision**: Atomic transactions for inventory updates
+- **Rationale**: Ensures data consistency for copper inventory operations
+- **Implementation**: runTransaction for multi-document updates (inventory + transaction)
+
 ### Data Models
 - **Employee Model**: Core entity with displayName getter for consistent formatting
 - **JobCard Model**: Comprehensive job tracking with status enum, timestamps, and sequential jobCardNumber for easy reference
+- **CopperInventory Model**: Single document tracking sort/reuse/sell kg, current R/kg, last updated
+- **CopperTransaction Model**: Transaction history with type, amount, buckets, comments, user ID
 - **CopyWith Pattern**: Immutable updates with copyWith methods
 
 ### UI Patterns
 - **Card-based Layout**: Consistent use of Cards for sectioned information
 - **Dialog-heavy UX**: Complex operations (assign, comment) use modal dialogs
-- **Color-coded Priorities**: P1-P5 with distinct colors for visual hierarchy
+- **Color-coded Priorities**: P1-P5 with distinct visual indicators
 - **Icon + Text Buttons**: Floating action buttons with clear visual cues
 - **Notes-style Logs**: Activity and assignment logs display as timestamped lists with left alignment, replicating comment/note format
+- **Theme Switching**: Dynamic light/dark mode toggle in settings, persisted via SharedPreferences, with orange primary maintained across themes
+- **Copper-themed UI**: Amber/orange colors for copper inventory module
+- **Password Authentication**: Modal password dialog for sensitive copper operations
 
 ## Design Patterns
 

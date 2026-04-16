@@ -7,7 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
-import 'copper_storage_screen.dart';
+import 'copper_dashboard_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -588,7 +588,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             title: const Text('Copper Storage'),
             onTap: () {
               if (_currentClockNo == '22') {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopperStorageScreen()));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Access denied. Only clock card 22 allowed.')),

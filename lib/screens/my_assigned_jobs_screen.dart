@@ -221,13 +221,13 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    TextSpan(
-                                      text: ' | ${job.type.displayName}',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                    ),
+                                     TextSpan(
+                                       text: ' | ${job.type.displayName}',
+                                       style: const TextStyle(
+                                         color: Colors.white,
+                                         fontSize: 12,
+                                       ),
+                                     ),
                                   ],
                                 ),
                               ),

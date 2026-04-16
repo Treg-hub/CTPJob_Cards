@@ -46,11 +46,11 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       setState(() {
-        selectedStatus = ['open', 'monitoring', 'completed'][_tabController.index];
+        selectedStatus = ['open', 'completed'][_tabController.index];
       });
     });
 
@@ -506,7 +506,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name).withValues(alpha: 51),
+                      color: _getStatusColor(job.status.name).withValues(alpha: 128),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -527,7 +527,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     ),
                     child: Text(
                       job.type.displayName,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                   const Spacer(),
@@ -585,7 +585,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             controller: _tabController,
             tabs: const [
               Tab(text: 'Open'),
-              Tab(text: 'Monitoring'),
               Tab(text: 'Completed'),
             ],
             labelColor: Colors.white,
@@ -626,7 +625,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               controller: _tabController,
               children: [
                 _buildJobListForStatus('open'),
-                _buildJobListForStatus('monitoring'),
                 _buildJobListForStatus('completed'),
               ],
             ),
@@ -661,7 +659,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         if (selectedPart != null) jobs = jobs.where((j) => j.part == selectedPart).toList();
 
         // Filter by status
-        final filteredJobs = jobs.where((j) => j.status.name == status).toList();
+        final filteredJobs = status == 'open'
+            ? jobs.where((j) => j.status.name == 'open' || j.status.name == 'monitoring').toList()
+            : jobs.where((j) => j.status.name == status).toList();
 
         return _buildJobList(filteredJobs, '');
       },
