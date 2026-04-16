@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/copper_inventory.dart';
-import '../providers/copper_provider.dart';
 import '../services/firestore_service.dart';
 import 'sort_copper_screen.dart';
 import 'copper_transactions_screen.dart';
 
-class CopperDashboardScreen extends StatefulWidget {
+class CopperDashboardScreen extends ConsumerStatefulWidget {
   const CopperDashboardScreen({super.key});
 
   @override
   State<CopperDashboardScreen> createState() => _CopperDashboardScreenState();
 }
 
-class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
+class CopperDashboardScreen extends ConsumerStatefulWidget {
+class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
   final TextEditingController _addToSortKgController = TextEditingController();
@@ -103,7 +103,8 @@ class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
     if (kg == null || kg <= 0 || _currentClockNo == null) return;
 
     try {
-      await context.read<CopperProvider>().performAddToSort(kg, _addToSortCommentsController.text, _currentClockNo!);
+      await 
+      ref.read(copperNotifierProvider.notifier).performAddToSort(kg, _addToSortCommentsController.text, _currentClockNo!);
       _addToSortKgController.clear();
       _addToSortCommentsController.clear();
       Navigator.of(context).pop();
@@ -118,7 +119,7 @@ class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
     if (kg == null || kg <= 0 || _currentClockNo == null) return;
 
     try {
-      await context.read<CopperProvider>().performPlateBars(kg, _plateBarsCommentsController.text, _currentClockNo!);
+      await ref.read(copperNotifierProvider.notifier).performPlateBars(kg, _plateBarsCommentsController.text, _currentClockNo!);
       _plateBarsKgController.clear();
       _plateBarsCommentsController.clear();
       Navigator.of(context).pop();
@@ -133,7 +134,7 @@ class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
     if (kg == null || kg <= 0 || _currentClockNo == null) return;
 
     try {
-      await context.read<CopperProvider>().performUseReuse(kg, _useReuseCommentsController.text, _currentClockNo!);
+      await ref.read(copperNotifierProvider.notifier).performUseReuse(kg, _useReuseCommentsController.text, _currentClockNo!);
       _useReuseKgController.clear();
       _useReuseCommentsController.clear();
       Navigator.of(context).pop();
@@ -149,7 +150,7 @@ class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
     if (kg == null || kg <= 0 || rPerKg == null || rPerKg <= 0 || _currentClockNo == null) return;
 
     try {
-      await context.read<CopperProvider>().performRecordSale(kg, rPerKg, _recordSaleCommentsController.text, _currentClockNo!);
+      await ref.read(copperNotifierProvider.notifier).performRecordSale(kg, rPerKg, _recordSaleCommentsController.text, _currentClockNo!);
       _recordSaleKgController.clear();
       _recordSaleRPerKgController.clear();
       _recordSaleCommentsController.clear();
@@ -317,7 +318,7 @@ class _CopperDashboardScreenState extends State<CopperDashboardScreen> {
         ],
       ),
       body: StreamBuilder<CopperInventory>(
-        stream: context.watch<CopperProvider>().inventoryStream,
+        stream: ref.watch(copperNotifierProvider.notifier).inventoryStream,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
