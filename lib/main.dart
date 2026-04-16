@@ -3,43 +3,39 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'providers/theme_provider.dart';
-import 'providers/copper_provider.dart';
+import 'providers/copper_provider.dart';   // ← now Riverpod
 import 'screens/login_screen.dart';
 import 'services/connectivity_service.dart';
 import 'services/firestore_service.dart';
 import 'theme/app_theme.dart';
 
-// ==================== BACKGROUND HANDLER (mobile only) ====================
+Employee? currentEmployee;
+
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('Background message received: ${message.messageId}');
-  // Message will be displayed automatically by FCM
 }
 
-Employee? currentEmployee;
-
-// ==================== APP ====================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 
   final firestoreService = FirestoreService();
-
-  // Initialize settings if not exist
   await firestoreService.initializeSettings();
 
-  // If logged in, restore employee from storage
   final prefs = await SharedPreferences.getInstance();
   final hasLogin = prefs.containsKey('loggedInClockNo');
   if (hasLogin) {
@@ -49,26 +45,23 @@ void main() async {
     }
   }
 
-  runApp(MultiProvider(
-    providers: [
-      Provider<ConnectivityService>(create: (_) => ConnectivityService()),
-      ChangeNotifierProvider<ThemeNotifier>(create: (_) => ThemeNotifier()),
-      ChangeNotifierProvider<CopperProvider>(create: (_) => CopperProvider()),
-    ],
-    child: CtpJobCardsApp(isLoggedIn: hasLogin),
-  ));
+  runApp(
+    const ProviderScope(
+      child: CtpJobCardsApp(),
+    ),
+  );
 }
 
-class CtpJobCardsApp extends StatelessWidget {
-  final bool isLoggedIn;
-  const CtpJobCardsApp({super.key, required this.isLoggedIn});
+class CtpJobCardsApp extends ConsumerWidget {
+  const CtpJobCardsApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final themeNotifier = context.watch<ThemeNotifier>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeNotifierProvider);
+
     return MaterialApp(
       title: 'CTP Job Cards',
-      themeMode: themeNotifier.themeMode,
+      themeMode: themeMode,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: const ColorScheme.light(
