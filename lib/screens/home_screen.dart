@@ -1070,6 +1070,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeNotifierProvider);
     if (_pendingJobId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleJobDeepLink(_pendingJobId!);
