@@ -15,6 +15,7 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'view_job_cards_screen.dart';
 import 'copper_dashboard_screen.dart';
+import '../widgets/skeleton_loader.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -312,7 +313,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
     return '${_lastUpdated!.day}/${_lastUpdated!.month} ${_lastUpdated!.hour}:${_lastUpdated!.minute.toString().padLeft(2, '0')}';
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     if (currentEmployee == null || !currentEmployee!.position.toLowerCase().contains('manager')) {
       return const Scaffold(
@@ -362,38 +363,56 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           ),
         ],
       ),
-      body: _isLoading
-          ? _buildLoadingSkeleton()
-          : RefreshIndicator(
-              onRefresh: () => _loadDashboardData(selectedDept, selectedMonth),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(_screenPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Offline indicator - Riverpod version
-                    StreamBuilder<List<ConnectivityResult>>(
-                      stream: _connectivityService.connectivityStream,
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
-                        if (isOnline) return const SizedBox.shrink();
+      body: RefreshIndicator(
+        onRefresh: () => _loadDashboardData(selectedDept, selectedMonth),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(_screenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Offline indicator
+              StreamBuilder<List<ConnectivityResult>>(
+                stream: _connectivityService.connectivityStream,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
+                  if (isOnline) return const SizedBox.shrink();
 
-                        return Container(
-                          width: double.infinity,
-                          color: Colors.red,
-                          padding: const EdgeInsets.all(8),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: const Text(
-                            'Offline Mode - Data may be outdated',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      },
+                  return Container(
+                    width: double.infinity,
+                    color: Colors.red,
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: const Text(
+                      'Offline Mode - Data may be outdated',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
                     ),
+                  );
+                },
+              ),
+
+              // Loading skeletons
+              if (_isLoading)
+                const Column(
+                  children: [
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 16),
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 16),
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 16),
+                    SkeletonLoader(height: 300),
+                  ],
+                )
+
+              // Real content when loaded
+              else
+                Column(
+                  children: [
+                    // Filters card
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -481,7 +500,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                     ),
                     SizedBox(height: _sectionSpacing),
 
-                    // KPIs - horizontal scroll on mobile
+                    // KPIs
                     _buildMetricsSection(),
 
                     SizedBox(height: _sectionSpacing),
@@ -518,8 +537,10 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                     _buildLiveJobCardsList(),
                   ],
                 ),
-              ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
