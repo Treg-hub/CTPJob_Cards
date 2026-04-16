@@ -849,7 +849,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return const ManagerDashboardScreen();
   }
 
-  Widget _buildSettingsTab(ThemeMode themeMode, WidgetRef ref) {   // ← CHANGED: now accepts themeMode + ref
+  Widget _buildSettingsTab(ThemeMode themeMode, WidgetRef ref) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
@@ -1024,7 +1024,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               if (['22', '5421', '20'].contains(clockController.text.trim())) {
                 Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Access denied. Only authorized clock cards allowed.'), backgroundColor: Colors.red),
@@ -1050,17 +1050,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _onItemTapped(int index) {
-    if (index >= [
+    final List<Widget> children = [
       _buildHomeTab(),
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(),
+      _buildSettingsTab(ref.watch(themeNotifierProvider), ref),   // ← fixed
       if (_isCopperAuthorized)
         _buildCopperTab(),
-    ].length) {
-      return;
-    }
+    ];
+
+    if (index >= children.length) return;
+
     setState(() {
       _selectedIndex = index;
     });
@@ -1068,7 +1069,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeNotifierProvider);   // ← this stays
+    final themeMode = ref.watch(themeNotifierProvider);
 
     if (_pendingJobId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1078,28 +1079,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     final List<BottomNavigationBarItem> items = [
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.home),
-        label: 'Home',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.assignment),
-        label: 'My Work',
-      ),
+      const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+      const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Work'),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard),
-          label: 'Dashboard',
-        ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.settings),
-        label: 'Settings',
-      ),
+        const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+      const BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
       if (_isCopperAuthorized)
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.inventory),
-          label: 'Copper',
-        ),
+        const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
     ];
 
     final List<Widget> children = [
@@ -1107,7 +1093,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(),
+      _buildSettingsTab(themeMode, ref),   // ← fixed
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
