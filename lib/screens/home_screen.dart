@@ -2,11 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';           // ← NEW
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/employee.dart';
 import '../models/job_card.dart';
-import '../providers/theme_provider.dart';
+import '../providers/theme_provider.dart';                       // ← still needed for now
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
@@ -21,14 +22,14 @@ import 'job_card_detail_screen.dart';
 import 'monitoring_dashboard_screen.dart';
 import 'copper_dashboard_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
   final FirestoreService _firestoreService = FirestoreService();
