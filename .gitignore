@@ -47,3 +47,9 @@ app.*.map.json
 # Firebase - keep local only
 android/app/google-services.json
 ios/GoogleService-Info.plist
+
+# Service account keys - NEVER commit these (security!)
+serviceAccountKey.json
+serviceAccountKey*.json
+firebase-adminsdk*.json
+*.pem

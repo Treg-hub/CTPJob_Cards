@@ -899,41 +899,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           SizedBox(height: _isDesktop ? 32 : 24),
 
-          // Theme Switch
-          Consumer<ThemeNotifier>(
-            builder: (context, themeNotifier, child) => Card(
-              elevation: 4,
-              child: Padding(
-                padding: EdgeInsets.all(_cardPadding),
-                child: Row(
-                  children: [
-                    const Icon(Icons.brightness_6, color: Color(0xFFFF8C42)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Theme',
-                        style: TextStyle(
-                          fontSize: _isDesktop ? 14 : 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
+          // Theme Switch - Riverpod version
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(_cardPadding),
+              child: Row(
+                children: [
+                  const Icon(Icons.brightness_6, color: Color(0xFFFF8C42)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Theme',
+                      style: TextStyle(
+                        fontSize: _isDesktop ? 14 : 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
                       ),
                     ),
-                    Text(
-                      themeNotifier.themeMode == ThemeMode.dark ? 'Dark' : 'Light',
-                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  Text(
+                    themeMode == ThemeMode.dark ? 'Dark' : 'Light',
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(width: 12),
+                  Transform.scale(
+                    scale: _isDesktop ? 0.7 : 0.8,
+                    child: Switch(
+                      value: themeMode == ThemeMode.light,
+                      onChanged: (value) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
+                      activeThumbColor: const Color(0xFFFF8C42),
                     ),
-                    const SizedBox(width: 12),
-                    Transform.scale(
-                      scale: _isDesktop ? 0.7 : 0.8,
-                      child: Switch(
-                        value: themeNotifier.themeMode == ThemeMode.light,
-                        onChanged: (value) => themeNotifier.toggleTheme(),
-                        activeThumbColor: const Color(0xFFFF8C42),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
