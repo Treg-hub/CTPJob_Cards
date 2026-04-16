@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';           // ← added for DateTimeRange
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 import '../services/copper_service.dart';

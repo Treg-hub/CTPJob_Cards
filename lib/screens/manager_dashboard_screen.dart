@@ -25,6 +25,7 @@ class ManagerDashboardScreen extends ConsumerStatefulWidget {
 
 class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  final ConnectivityService _connectivityService = ConnectivityService();
 
   // Dashboard data - expanded KPIs for better Job Card / Breakdown tracking
   int _totalJobs = 0;
@@ -370,7 +371,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Offline indicator - Riverpod version (no Consumer wrapper)
+                    // Offline indicator - Riverpod version
                     StreamBuilder<List<ConnectivityResult>>(
                       stream: _connectivityService.connectivityStream,
                       builder: (context, snapshot) {
