@@ -39,7 +39,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   late TabController _tabController;
 
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
-  bool get isSuperManager => currentEmployee?.department?.toLowerCase() == 'general';
+  bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
 
   final FirestoreService _firestoreService = FirestoreService();
 
@@ -75,7 +75,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   }
 
   String? get _employeeStaffDefault {
-    final empPosition = currentEmployee?.position?.toLowerCase();
+    final empPosition = currentEmployee?.position.toLowerCase();
     if (empPosition?.contains('electrical') ?? false) return 'Electrical';
     if (empPosition?.contains('mechanical') ?? false) return 'Mechanical';
     return null;
@@ -250,8 +250,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
 
                   final depts = jobs
                       .map((j) => j.department)
-                      .where((d) => d != null && d.isNotEmpty)
-                      .cast<String>()
+                      .where((d) => d.isNotEmpty)
                       .toSet()
                       .toList()
                     ..sort();
@@ -285,7 +284,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                           });
                         },
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      )).toList(),
+                      )),
                     ],
                   );
                 },
@@ -302,8 +301,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                       final jobs = snapshot.data!.where((j) => j.department == selectedDepartment).toList();
                       final areaList = jobs
                           .map((j) => j.area)
-                          .where((a) => a != null && a.isNotEmpty)
-                          .cast<String>()
+                          .where((a) => a.isNotEmpty)
                           .toSet()
                           .toList()
                         ..sort();
@@ -341,8 +339,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                           .toList();
                       final machineList = jobs
                           .map((j) => j.machine)
-                          .where((m) => m != null && m.isNotEmpty)
-                          .cast<String>()
+                          .where((m) => m.isNotEmpty)
                           .toSet()
                           .toList()
                         ..sort();
@@ -381,8 +378,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                           .toList();
                       final partList = jobs
                           .map((j) => j.part)
-                          .where((p) => p != null && p.isNotEmpty)
-                          .cast<String>()
+                          .where((p) => p.isNotEmpty)
                           .toSet()
                           .toList()
                         ..sort();

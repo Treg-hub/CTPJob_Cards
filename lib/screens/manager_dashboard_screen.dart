@@ -249,7 +249,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       // Machine breakdown
       _machineBreakdown = {};
       for (final j in filteredJobs) {
-        final key = j.machine != null && j.machine.trim().isNotEmpty ? j.machine : 'Unknown Machine';
+        final key = j.machine.trim().isNotEmpty ? j.machine : 'Unknown Machine';
         _machineBreakdown[key] = (_machineBreakdown[key] ?? 0) + 1;
       }
 

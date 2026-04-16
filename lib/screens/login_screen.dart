@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
                children: [
-                  Container(
+                  SizedBox(
                     width: kIsWeb ? titleWidth * 1.8 : screenWidth * 0.95,
                     child: Image.asset(
                       'assets/images/logo.png',

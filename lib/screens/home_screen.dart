@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get isTechnician => (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false) ||
                            (currentEmployee?.position.toLowerCase().contains('electrical') ?? false);
   bool get isOperator => !(isManager || isTechnician);
-  bool get isSuperManager => currentEmployee?.department?.toLowerCase() == 'general';
+  bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
 
   bool get _isCopperAuthorized => ['22', '5421', '20'].contains(currentEmployee?.clockNo ?? '');
 

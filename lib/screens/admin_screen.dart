@@ -42,7 +42,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   String? _currentClockNo;
 
   // Spreadsheet state
-  Set<int> _selectedRows = {};
+  final Set<int> _selectedRows = {};
   int? _editingIndex;
   final TextEditingController _clockNoController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -53,7 +53,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    print('AdminScreen initState'); // Debug
+    debugPrint('AdminScreen initState'); // Debug
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {});
@@ -154,7 +154,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Future<void> _loadCurrentClockNo() async {
     _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
-    print('Debug: Loaded ClockNo: $_currentClockNo'); // Debug
+    debugPrint('Debug: Loaded ClockNo: $_currentClockNo'); // Debug
     setState(() {});
   }
 
@@ -958,7 +958,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       imported++;
                     } catch (e) {
                       skipped++;
-                      print('Error importing ${row['clockNo']}: $e');
+                      debugPrint('Error importing ${row['clockNo']}: $e');
                     }
                   }
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imported $imported employees, skipped $skipped')));
