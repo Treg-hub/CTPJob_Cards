@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';           // ← NEW
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
-import '../providers/theme_provider.dart';                       // ← still needed for now
+import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
@@ -41,11 +41,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
 
-  // Responsive design helpers
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
 
-  // Role helpers
   bool get isManager => currentEmployee?.position.toLowerCase().contains('manager') ?? false;
   bool get isTechnician => (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false) ||
                            (currentEmployee?.position.toLowerCase().contains('electrical') ?? false);
@@ -851,7 +849,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return const ManagerDashboardScreen();
   }
 
-  Widget _buildSettingsTab() {
+  Widget _buildSettingsTab(ThemeMode themeMode, WidgetRef ref) {   // ← CHANGED: now accepts themeMode + ref
     return SingleChildScrollView(
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
@@ -1070,7 +1068,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeNotifierProvider);
+    final themeMode = ref.watch(themeNotifierProvider);   // ← this stays
+
     if (_pendingJobId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleJobDeepLink(_pendingJobId!);
