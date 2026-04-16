@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../providers/copper_provider.dart';        // ← ADD THIS LINE
 import '../models/copper_inventory.dart';
 import '../services/firestore_service.dart';
 import 'sort_copper_screen.dart';
@@ -10,13 +12,12 @@ class CopperDashboardScreen extends ConsumerStatefulWidget {
   const CopperDashboardScreen({super.key});
 
   @override
-  State<CopperDashboardScreen> createState() => _CopperDashboardScreenState();
+  ConsumerState<CopperDashboardScreen> createState() => _CopperDashboardScreenState();
 }
 
-class CopperDashboardScreen extends ConsumerStatefulWidget {
 class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
-
+  
   final TextEditingController _addToSortKgController = TextEditingController();
   final TextEditingController _addToSortCommentsController = TextEditingController();
   final TextEditingController _plateBarsKgController = TextEditingController();
