@@ -13,6 +13,7 @@ import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
+import '../widgets/skeleton_loader.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'my_assigned_jobs_screen.dart';
@@ -626,7 +627,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-    Widget _buildRecentJobCards() {
+      Widget _buildRecentJobCards() {
     return StreamBuilder<List<JobCard>>(
       stream: _firestoreService.getAllJobCards(),
       builder: (context, snapshot) {
@@ -641,6 +642,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
 
         if (!snapshot.hasData) {
+          // Loading skeletons
           return const Card(
             elevation: 4,
             child: Padding(

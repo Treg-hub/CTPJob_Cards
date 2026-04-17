@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/skeleton_loader.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import '../models/assignment_event.dart';
@@ -583,14 +585,19 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-  void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
+    void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.network(photoUrl),
+            CachedNetworkImage(
+              imageUrl: photoUrl,                    // ← fixed: use the parameter, not job.photoUrl
+              fit: BoxFit.cover,
+              placeholder: (context, url) => const SkeletonLoader(height: 200),
+              errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.red),
+            ),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Text(
