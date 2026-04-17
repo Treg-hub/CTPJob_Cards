@@ -24,6 +24,7 @@ import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'monitoring_dashboard_screen.dart';
 import 'copper_dashboard_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -983,41 +984,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SizedBox(height: _isDesktop ? 32 : 24),
           ],
 
-          if (!kIsWeb) ...[
-            Text(
-              'Developer Options',
-              style: TextStyle(
-                fontSize: _isDesktop ? 18 : 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: _isDesktop ? 20 : 16),
-            ElevatedButton.icon(
-              onPressed: () async {
-                try {
-                  await _notificationService.refreshToken();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh FCM Token'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueGrey,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+           // Logout Button
+           Card(
+             elevation: 4,
+             child: Padding(
+               padding: EdgeInsets.all(_cardPadding),
+               child: ElevatedButton.icon(
+                 onPressed: _logout,
+                 icon: const Icon(Icons.logout),
+                 label: const Text('Log Out'),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: Colors.red,
+                   foregroundColor: Colors.white,
+                   minimumSize: const Size(double.infinity, 48),
+                 ),
+               ),
+             ),
+           ),
+
+           if (!kIsWeb) ...[
+             SizedBox(height: _isDesktop ? 32 : 24),
+             Text(
+               'Developer Options',
+               style: TextStyle(
+                 fontSize: _isDesktop ? 18 : 20,
+                 fontWeight: FontWeight.bold,
+                 color: Colors.white,
+               ),
+             ),
+             SizedBox(height: _isDesktop ? 20 : 16),
+             ElevatedButton.icon(
+               onPressed: () async {
+                 try {
+                   await _notificationService.refreshToken();
+                   if (context.mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
+                     );
+                   }
+                 } catch (e) {
+                   if (context.mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
+                     );
+                   }
+                 }
+               },
+               icon: const Icon(Icons.refresh),
+               label: const Text('Refresh FCM Token'),
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.blueGrey,
+                 foregroundColor: Colors.white,
+               ),
+             ),
+           ],
         ],
       ),
     );
@@ -1061,6 +1081,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log Out')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _firestoreService.clearLoggedInEmployee();
+        currentEmployee = null;
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error logging out: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _handleJobDeepLink(String jobId) async {
