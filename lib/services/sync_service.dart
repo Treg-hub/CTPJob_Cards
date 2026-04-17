@@ -56,12 +56,18 @@ class SyncService {
 
     for (var item in items) {
       try {
-        final docRef = firestore.collection(item.collection).doc(item.id);
-
-        if (item.operation == 'create' || item.operation == 'update') {
+        if (item.collection == 'copper_inventory') {
+          // Special handling for document updates
+          final docRef = firestore.doc('copper_inventory/main');
           await docRef.set(item.data, SetOptions(merge: true));
-        } else if (item.operation == 'delete') {
-          await docRef.delete();
+        } else {
+          final docRef = firestore.collection(item.collection).doc(item.id);
+
+          if (item.operation == 'create' || item.operation == 'update') {
+            await docRef.set(item.data, SetOptions(merge: true));
+          } else if (item.operation == 'delete') {
+            await docRef.delete();
+          }
         }
 
         await item.delete();

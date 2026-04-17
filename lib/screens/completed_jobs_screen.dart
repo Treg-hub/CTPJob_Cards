@@ -128,7 +128,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
               final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2,'0')}] $user: ${commentController.text.trim()}';
               final updatedComments = job.comments + newComment;
               try {
-                await _firestoreService.updateJobCard(job.id!, job.copyWith(comments: updatedComments));
+                await _firestoreService.saveJobCardOfflineAware(job.copyWith(comments: updatedComments));
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(

@@ -56,20 +56,34 @@
         }
       ]
     },
-    {
-      "collectionGroup": "job_cards",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "completedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
+     {
+       "collectionGroup": "job_cards",
+       "queryScope": "COLLECTION",
+       "fields": [
+         {
+           "fieldPath": "status",
+           "order": "ASCENDING"
+         },
+         {
+           "fieldPath": "completedAt",
+           "order": "DESCENDING"
+         }
+       ]
+     },
+     {
+       "collectionGroup": "job_cards",
+       "queryScope": "COLLECTION",
+       "fields": [
+         {
+           "fieldPath": "status",
+           "order": "ASCENDING"
+         },
+         {
+           "fieldPath": "completedAt",
+           "order": "ASCENDING"
+         }
+       ]
+     },
 
     {
       "collectionGroup": "job_cards",

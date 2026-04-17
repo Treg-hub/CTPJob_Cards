@@ -112,7 +112,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         description: description,
       );
 
-      await _firestoreService.createJobCard(jobCard);
+      await _firestoreService.saveJobCardOfflineAware(jobCard);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

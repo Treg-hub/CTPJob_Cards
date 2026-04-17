@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
+import '../services/connectivity_service.dart';
 
 class CopperService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -35,6 +36,7 @@ class CopperService {
   Future<void> performAddToSort(double amountKg, String comments, String userId) async {
     final id = _uuid.v4();
     final now = Timestamp.now();
+    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
@@ -56,6 +58,7 @@ class CopperService {
   Future<void> performPlateBars(double amountKg, String comments, String userId) async {
     final id = _uuid.v4();
     final now = Timestamp.now();
+    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
@@ -78,6 +81,7 @@ class CopperService {
     final id = _uuid.v4();
     final now = Timestamp.now();
     final totalKg = reuseKg + sellKg;
+    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
@@ -105,6 +109,7 @@ class CopperService {
   Future<void> performUseReuse(double amountKg, String comments, String userId) async {
     final id = _uuid.v4();
     final now = Timestamp.now();
+    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
@@ -127,6 +132,7 @@ class CopperService {
     final id = _uuid.v4();
     final now = Timestamp.now();
     final totalValueR = amountKg * rPerKg;
+    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);

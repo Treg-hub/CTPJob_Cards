@@ -316,7 +316,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
         startedAt: DateTime.now(),
       );
 
-      await _firestoreService.updateJobCard(job.id!, startedJob);
+      await _firestoreService.saveJobCardOfflineAware(startedJob);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -363,10 +363,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
               final updatedNotes = job.notes + newNote;
 
               try {
-                await _firestoreService.updateJobCard(
-                  job.id!,
-                  job.copyWith(notes: updatedNotes),
-                );
+                await _firestoreService.saveJobCardOfflineAware(job.copyWith(notes: updatedNotes));
 
                 if (context.mounted) {
                   Navigator.pop(context);
@@ -429,7 +426,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                         : '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $note',
                   );
 
-                  await _firestoreService.updateJobCard(job.id!, completedJob);
+                  await _firestoreService.saveJobCardOfflineAware(completedJob);
 
                   if (context.mounted) {
                     Navigator.pop(context);
@@ -498,7 +495,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                         : '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed and monitoring started by $user: $note',
                   );
 
-                  await _firestoreService.updateJobCard(job.id!, monitoredJob);
+                  await _firestoreService.saveJobCardOfflineAware(monitoredJob);
 
                   if (context.mounted) {
                     Navigator.pop(context);

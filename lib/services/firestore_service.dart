@@ -1,7 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/copper_transaction.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import 'connectivity_service.dart';
+import 'sync_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -46,12 +51,18 @@ class FirestoreService {
 
   Future<void> deleteAllEmployees() async {
     try {
-      final batch = _firestore.batch();
       final snapshot = await _firestore.collection('employees').get();
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
+      const int chunkSize = 500;
+      final docs = snapshot.docs;
+
+      for (var i = 0; i < docs.length; i += chunkSize) {
+        final batch = _firestore.batch();
+        final end = (i + chunkSize < docs.length) ? i + chunkSize : docs.length;
+        for (var j = i; j < end; j++) {
+          batch.delete(docs[j].reference);
+        }
+        await batch.commit();
       }
-      await batch.commit();
     } catch (e) {
       throw Exception('Failed to delete all employees: $e');
     }
@@ -109,7 +120,7 @@ class FirestoreService {
 
   Future<void> updateJobCard(String jobCardId, JobCard jobCard) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).update(jobCard.toFirestore());
+      await _firestore.collection('job_cards').doc(jobCardId).set(jobCard.toFirestore(), SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to update job card: $e');
     }
@@ -165,7 +176,7 @@ class FirestoreService {
 
   Future<List<JobCard>> getAllJobCardsFuture() async {
     try {
-      final snapshot = await _firestore.collection('job_cards').get();
+      final snapshot = await _firestore.collection('job_cards').limit(1000).get();
       return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
     } catch (e) {
       throw Exception('Failed to get all job cards: $e');
@@ -342,20 +353,14 @@ class FirestoreService {
 
   Future<int> getCompletedJobCardsCountInPeriod(DateTime startDate) async {
     try {
-      // Get all completed job cards and filter in memory to avoid composite index requirement
+      final startTimestamp = Timestamp.fromDate(startDate);
       final snapshot = await _firestore
           .collection('job_cards')
           .where('status', isEqualTo: 'completed')
+          .where('completedAt', isGreaterThanOrEqualTo: startTimestamp)
+          .count()
           .get();
-
-      final startTimestamp = Timestamp.fromDate(startDate);
-      final count = snapshot.docs.where((doc) {
-        final data = doc.data();
-        final completedAt = data['completedAt'] as Timestamp?;
-        return completedAt != null && completedAt.compareTo(startTimestamp) >= 0;
-      }).length;
-
-      return count;
+      return snapshot.count ?? 0;
     } catch (e) {
       throw Exception('Failed to get completed job cards count: $e');
     }
@@ -480,5 +485,59 @@ class FirestoreService {
         .orderBy('closedAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+  }
+
+  // Copper transaction operations
+  Future<void> createCopperTransaction(CopperTransaction transaction) async {
+    try {
+      await _firestore.collection('copper_transactions').doc(transaction.id).set(transaction.toFirestore());
+    } catch (e) {
+      throw Exception('Failed to create copper transaction: $e');
+    }
+  }
+
+  // Offline-aware save for Job Cards
+  Future<void> saveJobCardOfflineAware(JobCard jobCard) async {
+    final isOnline = await ConnectivityService().isOnline();
+
+    if (isOnline) {
+      if (jobCard.id == null) {
+        await createJobCard(jobCard);
+      } else {
+        await updateJobCard(jobCard.id!, jobCard);
+      }
+      debugPrint('✅ JobCard saved directly to Firestore');
+    } else {
+      if (jobCard.id != null) {
+        await SyncService().addToQueue(
+          collection: 'job_cards',
+          operation: 'update',
+          data: jobCard.toFirestore(),
+          documentId: jobCard.id,
+        );
+        debugPrint('📤 JobCard queued for later sync (offline)');
+      } else {
+        debugPrint('❌ Cannot save new JobCard offline - requires online connection');
+        throw Exception('Cannot create new job card offline');
+      }
+    }
+  }
+
+  // Offline-aware save for Copper Transactions
+  Future<void> saveCopperTransactionOfflineAware(CopperTransaction transaction) async {
+    final isOnline = await ConnectivityService().isOnline();
+
+    if (isOnline) {
+      await createCopperTransaction(transaction);
+      debugPrint('✅ CopperTransaction saved directly to Firestore');
+    } else {
+      await SyncService().addToQueue(
+        collection: 'copper_transactions',
+        operation: 'create',
+        data: transaction.toFirestore(),
+        documentId: transaction.id,
+      );
+      debugPrint('📤 CopperTransaction queued for later sync (offline)');
+    }
   }
 }
