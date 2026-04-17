@@ -59,11 +59,12 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInName', name);
       await prefs.setString('loggedInClockNo', clockNo);
       currentEmployee = employee;
-      if (!kIsWeb) {
-        await _saveFcmToken(clockNo);
-      }
       if (mounted) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+      }
+      // Save FCM token asynchronously after navigation to prevent UI freeze
+      if (!kIsWeb) {
+        _saveFcmToken(clockNo);
       }
     } catch (e) {
       if (mounted) {

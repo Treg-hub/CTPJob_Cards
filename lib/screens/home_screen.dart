@@ -89,10 +89,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _loadOnSiteStatus();
     _loadShowDeptOnly();
-    _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-      final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
-      if (mounted) setState(() => _openJobCount = count);
-    });
+    try {
+      _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
+        final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
+        if (mounted) setState(() => _openJobCount = count);
+      });
+    } catch (e) {
+      debugPrint('Error setting up job count subscription: $e');
+    }
     if (!kIsWeb) _setupFirebaseMessaging();
   }
 
