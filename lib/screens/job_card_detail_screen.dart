@@ -563,7 +563,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       };
       final updatedPhotos = [...jobCard.photos, photoMap];
       await _firestoreService.saveJobCardOfflineAware(
-        jobCard.id!,
         jobCard.copyWith(photos: updatedPhotos),
       );
 
@@ -984,7 +983,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.saveJobCardOfflineAware(jobCard.id!, finalUpdated);
+      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(withMonitoring ? 'Job completed and monitoring started!' : 'Job completed!')),
@@ -1018,7 +1017,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.saveJobCardOfflineAware(jobCard.id!, finalUpdated);
+      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
       }
@@ -1072,7 +1071,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                   notes: jobCard.notes + note,
                 );
                 try {
-                  await _firestoreService.saveJobCardOfflineAware(jobCard.id!, updated);
+                  await _firestoreService.saveJobCardOfflineAware(updated);
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')));

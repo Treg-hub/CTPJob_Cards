@@ -12,12 +12,12 @@ import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
-import 'providers/copper_provider.dart';
+
 import 'screens/login_screen.dart';
-import 'services/connectivity_service.dart';
+
 import 'services/firestore_service.dart';
 import 'services/sync_service.dart';
-import 'theme/app_theme.dart';
+
 
 Employee? currentEmployee;
 

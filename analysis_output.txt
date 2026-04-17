@@ -1,96 +1,82 @@
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:411:54)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:417:54)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:486:54)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:492:54)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:688:31)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:691:40)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:697:40)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:889:30)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:895:30)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:908:9)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\admin_screen.dart:964:40)
-[info] 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:229:17)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:84:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:85:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:87:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:107:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:108:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:110:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:143:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:145:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:147:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:295:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:297:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:335:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:350:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:352:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:354:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:438:20)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:440:28)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\copper_storage_screen.dart:442:28)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:258:62)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:50)
-[warning] The receiver can't be 'null' because of short-circuiting, so the null-aware operator '?.' can't be used (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:49:57)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:258:65)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:258:89)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:53)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:76)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:102)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:125)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:499:152)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:104:32)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:119:26)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:931:42)
-[info] Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check (c:\Users\user-pc\ctp_job_cards\lib\screens\home_screen.dart:937:42)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:86:85)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:121:85)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:237:53)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:256:67)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:333:101)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:857:77)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:982:77)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1016:77)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1198:52)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1310:60)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1370:77)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:86:88)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:121:88)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:237:56)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:256:70)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:256:95)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:333:104)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:354:67)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:857:80)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:982:80)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1016:80)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1198:55)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1198:82)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1198:112)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1198:139)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1310:63)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\job_card_detail_screen.dart:1370:80)
-[info] Don't use 'BuildContext's across async gaps (c:\Users\user-pc\ctp_job_cards\lib\screens\login_screen.dart:46:30)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1167:79)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1290:68)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1352:111)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1441:35)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1490:58)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1167:82)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1290:71)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1352:114)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1441:38)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1490:61)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:1491:55)
-[warning] The operand can't be 'null', so the condition is always 'true' (c:\Users\user-pc\ctp_job_cards\lib\screens\manager_dashboard_screen.dart:252:31)
-[warning] Dead code (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:50)
-[warning] The receiver can't be 'null' because of short-circuiting, so the null-aware operator '?.' can't be used (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:42:57)
-[warning] The receiver can't be 'null' because of short-circuiting, so the null-aware operator '?.' can't be used (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:78:50)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:53)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:76)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:102)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:125)
-[warning] The left operand can't be null, so the right operand is never executed (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:440:152)
-[warning] The operand can't be 'null', so the condition is always 'true' (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:253:39)
-[warning] The operand can't be 'null', so the condition is always 'true' (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:305:43)
-[warning] The operand can't be 'null', so the condition is always 'true' (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:344:43)
-[warning] The operand can't be 'null', so the condition is always 'true' (c:\Users\user-pc\ctp_job_cards\lib\screens\view_job_cards_screen.dart:384:43)
+Analyzing CTPJob_Cards...                                       
+
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:411:54 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:417:54 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:486:54 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:492:54 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\admin_screen.dart:688:31 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:691:40 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\admin_screen.dart:697:40 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\admin_screen.dart:889:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\admin_screen.dart:895:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\admin_screen.dart:908:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\admin_screen.dart:964:40 - use_build_context_synchronously
+warning - The declaration '_showPasswordDialog' isn't referenced - lib\screens\copper_dashboard_screen.dart:65:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:96:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:98:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:111:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:112:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:114:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:126:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:127:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:129:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:141:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:142:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:144:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:158:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:159:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_dashboard_screen.dart:161:28 - use_build_context_synchronously
+   info - The imported package 'intl' isn't a dependency of the importing package - lib\screens\copper_transactions_screen.dart:2:8 - depend_on_referenced_packages
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_transactions_screen.dart:82:38 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_transactions_screen.dart:83:46 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\copper_transactions_screen.dart:85:46 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\home_screen.dart:108:32 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\home_screen.dart:123:26 - use_build_context_synchronously
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:262:65 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:262:89 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:503:53 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:503:76 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:503:102 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:503:125 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\home_screen.dart:503:152 - dead_null_aware_expression
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\home_screen.dart:1000:42 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\home_screen.dart:1006:42 - use_build_context_synchronously
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:85:88 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:120:88 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:236:56 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:255:70 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:255:95 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:332:104 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:353:67 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:857:80 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:982:80 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1016:80 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1198:55 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1198:82 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1198:112 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1198:139 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1310:63 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\job_card_detail_screen.dart:1370:80 - dead_null_aware_expression
+   info - Don't use 'BuildContext's across async gaps - lib\screens\login_screen.dart:46:30 - use_build_context_synchronously
+warning - Unused import: 'package:share_plus/share_plus.dart' - lib\screens\manager_dashboard_screen.dart:6:8 - unused_import
+warning - Unused import: 'dart:convert' - lib\screens\manager_dashboard_screen.dart:7:8 - unused_import
+warning - Unused import: 'dart:io' - lib\screens\manager_dashboard_screen.dart:8:8 - unused_import
+warning - Unused import: 'package:path_provider/path_provider.dart' - lib\screens\manager_dashboard_screen.dart:9:8 - unused_import
+warning - Unused import: 'package:pdf/pdf.dart' - lib\screens\manager_dashboard_screen.dart:10:8 - unused_import
+warning - Unused import: 'package:pdf/widgets.dart' - lib\screens\manager_dashboard_screen.dart:11:8 - unused_import
+warning - Unused import: 'view_job_cards_screen.dart' - lib\screens\manager_dashboard_screen.dart:19:8 - unused_import
+warning - The value of the field '_firestoreService' isn't used - lib\screens\manager_dashboard_screen.dart:30:26 - unused_field
+warning - The value of the field '_completed30Days' isn't used - lib\screens\manager_dashboard_screen.dart:36:7 - unused_field
+warning - The value of the field '_averageCompletionTime' isn't used - lib\screens\manager_dashboard_screen.dart:38:13 - unused_field
+warning - The value of the field '_avgResponseTime' isn't used - lib\screens\manager_dashboard_screen.dart:39:13 - unused_field
+warning - The value of the field '_agedOpen30d' isn't used - lib\screens\manager_dashboard_screen.dart:42:7 - unused_field
+   info - Empty catch block - lib\screens\manager_dashboard_screen.dart:80:17 - empty_catches
+   info - Don't use 'BuildContext's across async gaps - lib\screens\sort_copper_screen.dart:56:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\sort_copper_screen.dart:67:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\sort_copper_screen.dart:69:28 - use_build_context_synchronously
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\view_job_cards_screen.dart:436:53 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\view_job_cards_screen.dart:436:76 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\view_job_cards_screen.dart:436:102 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\view_job_cards_screen.dart:436:125 - dead_null_aware_expression
+warning - The left operand can't be null, so the right operand is never executed - lib\screens\view_job_cards_screen.dart:436:152 - dead_null_aware_expression
+
