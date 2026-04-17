@@ -626,7 +626,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildRecentJobCards() {
-    return StreamBuilder<List<JobCard>>(
+  return RefreshIndicator(
+    onRefresh: () async {
+      // Force refresh by cancelling and re-subscribing (simple & effective)
+      _countSubscription?.cancel();
+      _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
+        final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
+        if (mounted) setState(() => _openJobCount = count);
+      });
+    },
+    child: StreamBuilder<List<JobCard>>(
       stream: _firestoreService.getAllJobCards(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -634,9 +643,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             elevation: 4,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Center(
-                child: Text('Error loading recent jobs: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
-              ),
+              child: Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red))),
             ),
           );
         }
@@ -646,7 +653,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             elevation: 4,
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: Column(
+                  children: [
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 12),
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 12),
+                    SkeletonLoader(height: 80),
+                  ],
+                ),
+              ),
             ),
           );
         }
