@@ -10,11 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'models/employee.dart';
+import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
 import 'providers/copper_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/connectivity_service.dart';
 import 'services/firestore_service.dart';
+import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
@@ -27,6 +29,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+
+  // Register Hive adapters
+  Hive.registerAdapter(SyncQueueItemAdapter());
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Enable Crashlytics
@@ -44,6 +50,10 @@ void main() async {
 
   final firestoreService = FirestoreService();
   await firestoreService.initializeSettings();
+
+  // Initialize Sync Queue + SyncService
+  await Hive.openBox<SyncQueueItem>('syncQueue');
+  await SyncService().init();
 
   final prefs = await SharedPreferences.getInstance();
   final hasLogin = prefs.containsKey('loggedInClockNo');
