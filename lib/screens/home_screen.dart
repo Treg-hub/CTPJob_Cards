@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/employee.dart';
@@ -625,17 +626,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildRecentJobCards() {
-  return RefreshIndicator(
-    onRefresh: () async {
-      // Force refresh by cancelling and re-subscribing (simple & effective)
-      _countSubscription?.cancel();
-      _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
-        if (mounted) setState(() => _openJobCount = count);
-      });
-    },
-    child: StreamBuilder<List<JobCard>>(
+    Widget _buildRecentJobCards() {
+    return StreamBuilder<List<JobCard>>(
       stream: _firestoreService.getAllJobCards(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -675,7 +667,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Center(
-              child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             ),
           );
@@ -692,24 +684,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           topJobs = topJobs.where((j) => j.department == currentEmployee!.department).toList();
         }
 
-        return Column(
-          children: [
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: topJobs.length,
-              itemBuilder: (context, index) => _buildJobCardWidget(topJobs[index]),
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: TextButton.icon(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
-                icon: const Icon(Icons.visibility, size: 18),
-                label: const Text('View All Job Cards', style: TextStyle(fontSize: 15)),
-                style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+        return AnimationLimiter(
+          child: Column(
+            children: [
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: topJobs.length,
+                itemBuilder: (context, index) {
+                  return AnimationConfiguration.staggeredList(
+                    position: index,
+                    duration: const Duration(milliseconds: 375),
+                    child: SlideAnimation(
+                      verticalOffset: 50.0,
+                      child: FadeInAnimation(
+                        child: _buildJobCardWidget(topJobs[index]),
+                      ),
+                    ),
+                  );
+                },
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+                  icon: const Icon(Icons.visibility, size: 18),
+                  label: const Text('View All Job Cards', style: TextStyle(fontSize: 15)),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
