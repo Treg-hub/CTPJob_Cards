@@ -16,6 +16,7 @@ import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
+import '../widgets/sync_indicator.dart';
 import 'view_job_cards_screen.dart';
 import 'copper_dashboard_screen.dart';
 
@@ -333,28 +334,32 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => _loadDashboardData(selectedDept, selectedMonth),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(_screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StreamBuilder<List<ConnectivityResult>>(
-                stream: _connectivityService.connectivityStream,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-                  final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
-                  if (isOnline) return const SizedBox.shrink();
-                  return Container(
-                    width: double.infinity,
-                    color: Colors.red,
-                    padding: const EdgeInsets.all(8),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: const Text('Offline Mode - Data may be outdated', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  );
-                },
-              ),
+      body: Column(
+        children: [
+          const SyncIndicator(),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => _loadDashboardData(selectedDept, selectedMonth),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(_screenPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StreamBuilder<List<ConnectivityResult>>(
+                      stream: _connectivityService.connectivityStream,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                        final isOnline = snapshot.data!.any((r) => r != ConnectivityResult.none);
+                        if (isOnline) return const SizedBox.shrink();
+                        return Container(
+                          width: double.infinity,
+                          color: Colors.red,
+                          padding: const EdgeInsets.all(8),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: const Text('Offline Mode - Data may be outdated', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                        );
+                      },
+                    ),
               if (_isLoading)
                 const Column(
                   children: [
@@ -469,10 +474,13 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                     _buildLiveJobCardsList(),
                   ],
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    );
+    ],
+  ),
+);
   }
 }

@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
+import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'my_assigned_jobs_screen.dart';
@@ -1153,9 +1154,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: children,
+      body: Column(
+        children: [
+          const SyncIndicator(),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: children,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
