@@ -109,7 +109,31 @@
   - **UI**: Copper-themed colors (amber/orange), Material 3 design, responsive layout.
   - **Integration**: Added to manager dashboard app bar and home screen (authorized users), separate from job card functionality.
   - **Consolidation**: Removed duplicate copper_dashboard_screen.dart, updated all nav to use CopperStorageScreen as entry point.
-  - **Result**: Production-ready copper tracking with data integrity and professional UX.
+- **Result**: Production-ready copper tracking with data integrity and professional UX.
+- **Riverpod State Management Refactor**: Migrated from Provider to Riverpod for better scalability, testability, and modern state management patterns.
+  - **Before**: Provider pattern with ChangeNotifier
+  - **After**: Riverpod providers with Notifier classes
+  - **Benefits**: Improved dependency injection, easier testing, better performance
+- **Enhanced Firebase Integration**: Added comprehensive Firebase services (Auth, Storage, Crashlytics, Cloud Functions).
+  - **Auth**: User authentication framework
+  - **Storage**: Photo upload and file management
+  - **Crashlytics**: Crash reporting and analytics
+  - **Functions**: Server-side notification sending and business logic
+- **Offline Support Implementation**: Added Hive local storage with connectivity monitoring for offline functionality.
+  - **Dependencies**: hive ^2.2.3, hive_flutter ^1.1.0, connectivity_plus ^6.0.5
+  - **Features**: Local data caching, sync on reconnect
+- **Dashboard Analytics Enhancement**: Integrated interactive charts and PDF export for manager dashboards.
+  - **Charts**: fl_chart ^0.70.0, charts_flutter ^0.12.0 for data visualization
+  - **Export**: pdf ^3.11.1, share_plus ^10.0.2 for report generation and sharing
+- **Local Notifications**: Added foreground message handling with flutter_local_notifications ^17.2.3.
+  - **Platform Support**: Android channels, iOS permissions
+  - **Integration**: Works alongside FCM for complete notification experience
+- **Advanced Admin Operations**: Enhanced bulk CSV import/export with file_picker ^8.1.2 and csv ^6.0.0.
+  - **Features**: Drag-and-drop file selection, preview dialogs, error handling
+- **Image Management System**: Improved photo upload with compression and Firebase Storage.
+  - **Compression**: flutter_image_compress ^2.3.0 for optimized storage
+  - **Storage**: firebase_storage ^12.3.3 for cloud file management
+  - **UI**: Enhanced gallery/camera selection with preview
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

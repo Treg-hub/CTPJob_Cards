@@ -33,9 +33,9 @@ Firebase Project
 ## Key Technical Decisions
 
 ### State Management
-- **Decision**: Provider pattern with service classes
-- **Rationale**: Simple, effective for Firebase integration
-- **Implementation**: Service classes handle data operations, screens consume via StreamBuilder
+- **Decision**: Riverpod pattern with service classes
+- **Rationale**: Modern, scalable state management for Firebase integration
+- **Implementation**: Service classes handle data operations, screens consume via Riverpod providers and StreamBuilder
 
 ### Firestore Transactions
 - **Decision**: Atomic transactions for inventory updates

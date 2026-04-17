@@ -17,8 +17,15 @@
 - **Photo Upload**: Take/upload photos to job cards with compression and Firebase Storage
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
+- **Local Notifications**: Foreground message handling with flutter_local_notifications
 - **Status Tracking**: Complete job lifecycle tracking with timestamps
 - **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs
+- **Charts and Analytics**: Interactive charts (fl_chart, charts_flutter) for dashboard visualization
+- **PDF Export**: Report generation and sharing with pdf and share_plus
+- **Offline Support**: Hive local storage with connectivity monitoring
+- **Crash Reporting**: Firebase Crashlytics integration
+- **Enhanced Firebase Services**: Auth, Storage, Cloud Functions for comprehensive backend support
+- **Bulk Admin Operations**: Advanced CSV import/export with file_picker
 
 ### UI/UX Features
 - **Responsive Design**: Works on mobile devices

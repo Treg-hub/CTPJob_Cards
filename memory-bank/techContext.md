@@ -21,12 +21,32 @@
 ```yaml
 dependencies:
   flutter: SDK
-  firebase_core: ^2.x
-  cloud_firestore: ^4.x
-  firebase_messaging: ^14.x
-  provider: ^6.x (state management)
-  shared_preferences: ^2.x (theme persistence)
-  intl: ^0.19.x (for date formatting)
+  flutter_riverpod: ^2.5.3 (state management)
+  firebase_core: ^3.15.2
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  firebase_storage: ^12.3.3
+  firebase_messaging: ^15.1.3
+  firebase_crashlytics: ^4.1.0
+  cloud_functions: ^5.3.0
+  connectivity_plus: ^6.0.5
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.0
+  fl_chart: ^0.70.0
+  charts_flutter: ^0.12.0
+  pdf: ^3.11.1
+  share_plus: ^10.0.2
+  path_provider: ^2.1.4
+  cached_network_image: ^3.4.1
+  pull_to_refresh_flutter3: ^2.0.2
+  flutter_staggered_animations: ^1.1.1
+  flutter_local_notifications: ^17.2.3
+  file_picker: ^8.1.2
+  csv: ^6.0.0
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+  uuid: ^4.5.3
 ```
 
 ## Development Setup

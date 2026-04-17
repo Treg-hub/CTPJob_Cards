@@ -256,7 +256,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
         _machineBreakdown[key] = (_machineBreakdown[key] ?? 0) + 1;
       }
 
-      // Trend data (30 days)
+      // Trend data (30 days) - cumulative
       final thirtyDaysAgo = now.subtract(const Duration(days: 30));
       final createdPerDay = <DateTime, int>{};
       final completedPerDay = <DateTime, int>{};
@@ -272,11 +272,14 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
       }
       createdSpots.clear();
       completedSpots.clear();
+      double cumulativeCreated = 0;
+      double cumulativeCompleted = 0;
       for (int i = 0; i < 30; i++) {
         final day = thirtyDaysAgo.add(Duration(days: i));
-        final x = i.toDouble();
-        createdSpots.add(FlSpot(x, (createdPerDay[day] ?? 0).toDouble()));
-        completedSpots.add(FlSpot(x, (completedPerDay[day] ?? 0).toDouble()));
+        cumulativeCreated += (createdPerDay[day] ?? 0).toDouble();
+        cumulativeCompleted += (completedPerDay[day] ?? 0).toDouble();
+        createdSpots.add(FlSpot(i.toDouble(), cumulativeCreated));
+        completedSpots.add(FlSpot(i.toDouble(), cumulativeCompleted));
       }
 
       // Record last updated time (low-cost solution)
