@@ -10,6 +10,11 @@
 - **Copper Inventory Module**: Complete copper tracking system for managers with dashboard, sorting, transactions, password auth, atomic updates
 
 ## Recent Changes
+- **Hidden Recent Job Cards on Home Screen for Non-Managers**: Recent job cards list now only visible to managers and super-managers (department == 'general'), hiding it completely for operators and technicians.
+  - **Before**: Recent job cards visible to all users on home screen
+  - **After**: Only managers/super-managers see the list with "Show Dept Only" toggle
+  - **Implementation**: Wrapped entire section in `if (isManager || isSuperManager) ...[]` in `_buildHomeTab`
+  - **Rationale**: Aligns with role-based access; managers need oversight, others focus on their tasks
 - **Enhanced My Assigned Jobs Card Layout**: Completely redesigned job card layout in my_assigned_jobs_screen.dart for better information hierarchy and usability.
   - **New Structure**: Header (Job # | P2 | Type inline) → Location → Description → Comments preview → Notes preview → Action buttons at bottom
   - **Comments/Notes Previews**: Show ALL entries (not just latest) with parsing logic, truncated to 60 chars, with 📝/📋 icons

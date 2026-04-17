@@ -375,43 +375,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             )).toList(),
           ),
 
-          const SizedBox(height: 24),
+           const SizedBox(height: 24),
 
-          // Recent Job Cards header with toggle directly next to title, whole block centered
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Recent Job Cards',
-                  style: TextStyle(
-                    fontSize: _isDesktop ? 18 : 20,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                if (isManager || isSuperManager) ...[
-                  const SizedBox(width: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Show Dept Only', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
-                      Switch(
-                        value: _showDeptOnly,
-                        onChanged: (v) {
-                          setState(() => _showDeptOnly = v);
-                          _saveShowDeptOnly(v);
-                        },
-                        activeThumbColor: const Color(0xFFFF8C42),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildRecentJobCards(),
+           if (isManager || isSuperManager) ...[
+             // Recent Job Cards header with toggle directly next to title, whole block centered
+             Center(
+               child: Row(
+                 mainAxisSize: MainAxisSize.min,
+                 children: [
+                   Text(
+                     'Recent Job Cards',
+                     style: TextStyle(
+                       fontSize: _isDesktop ? 18 : 20,
+                       fontWeight: FontWeight.bold,
+                       color: Theme.of(context).colorScheme.onSurface,
+                     ),
+                   ),
+                   const SizedBox(width: 12),
+                   Row(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [
+                       Text('Show Dept Only', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
+                       Switch(
+                         value: _showDeptOnly,
+                         onChanged: (v) {
+                           setState(() => _showDeptOnly = v);
+                           _saveShowDeptOnly(v);
+                         },
+                         activeThumbColor: const Color(0xFFFF8C42),
+                       ),
+                     ],
+                   ),
+                 ],
+               ),
+             ),
+             const SizedBox(height: 12),
+             _buildRecentJobCards(),
+           ],
         ],
       ),
     );
