@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 
-class CompletedJobsScreen extends StatefulWidget {
-  const CompletedJobsScreen({super.key});
+class ClosedJobsScreen extends StatefulWidget {
+  const ClosedJobsScreen({super.key});
 
   @override
-  State<CompletedJobsScreen> createState() => _CompletedJobsScreenState();
+  State<ClosedJobsScreen> createState() => _ClosedJobsScreenState();
 }
 
-class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
+class _ClosedJobsScreenState extends State<ClosedJobsScreen> {
   String searchQuery = '';
   String? selectedDepartment;
   String? selectedArea;
@@ -28,7 +28,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
 
   Future<void> _loadDepartments() async {
     try {
-      final depts = await _firestoreService.getDepartmentsForJobCards('completed');
+      final depts = await _firestoreService.getDepartmentsForJobCards('closed');
       setState(() => departments = depts);
     } catch (e) {
       if (mounted) {
@@ -52,7 +52,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
 
   Future<void> _loadAreas(String dept) async {
     try {
-      final areaList = await _firestoreService.getAreasForJobCards('completed', dept);
+      final areaList = await _firestoreService.getAreasForJobCards('closed', dept);
       setState(() => areas = areaList);
     } catch (e) {
       if (mounted) {
@@ -74,7 +74,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
 
   Future<void> _loadMachines(String dept, String area) async {
     try {
-      final machineList = await _firestoreService.getMachinesForJobCards('completed', dept, area);
+      final machineList = await _firestoreService.getMachinesForJobCards('closed', dept, area);
       setState(() => machines = machineList);
     } catch (e) {
       if (mounted) {
@@ -154,7 +154,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Completed Jobs History'),
+        title: const Text('Closed Jobs History'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -224,7 +224,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<JobCard>>(
-              stream: _firestoreService.getCompletedJobCards(),
+              stream: _firestoreService.getClosedJobCards(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
@@ -251,7 +251,7 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                 }
 
                 if (jobs.isEmpty) {
-                  return const Center(child: Text('No completed jobs matching filters', style: TextStyle(fontSize: 20)));
+                  return const Center(child: Text('No closed jobs matching filters', style: TextStyle(fontSize: 20)));
                 }
 
                 return ListView.builder(
@@ -288,13 +288,13 @@ class _CompletedJobsScreenState extends State<CompletedJobsScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Completed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}${job.comments.isNotEmpty ? '\nComments: ${_getLastCommentPreview(job.comments)}' : ''}',
+                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Closed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}${job.comments.isNotEmpty ? '\nComments: ${_getLastCommentPreview(job.comments)}' : ''}',
                               style: const TextStyle(fontSize: 14, color: Colors.grey),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               completedAt != null
-                                  ? 'Completed: ${completedAt.day}/${completedAt.month}/${completedAt.year}'
+                                  ? 'Closed: ${completedAt.day}/${completedAt.month}/${completedAt.year}'
                                   : '',
                               style: const TextStyle(fontSize: 12, color: Colors.white70),
                             ),

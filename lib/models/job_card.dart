@@ -20,8 +20,7 @@ enum JobType {
 
 enum JobStatus {
   open('Open'),
-  completed('Completed'),
-  monitoring('Monitoring'),
+  monitor('Monitor'),
   closed('Closed');
 
   const JobStatus(this.displayName);
@@ -250,7 +249,7 @@ class JobCard {
   }
 
   bool get isAssigned => assignedClockNos?.isNotEmpty ?? false;
-  bool get isCompleted => status == JobStatus.completed;
+  bool get isClosed => status == JobStatus.closed;
 
   static List<Map<String, dynamic>> _parsePhotos(dynamic photosData) {
     if (photosData == null) return const [];

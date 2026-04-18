@@ -1,39 +1,65 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json');
+const https = require('https');
+const { execSync } = require('child_process');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: 'ctp-job-cards'
-});
-
-async function callMigrate() {
+async function callMigrateFunction() {
   try {
-    const result = await admin.firestore().runTransaction(async (transaction) => {
-      // Can't call callable directly, but since it's server, run the logic here
-      const employeesRef = admin.firestore().collection('employees');
-      const snapshot = await employeesRef.get();
-      const migrated = [];
-      const batch = admin.firestore().batch();
+    console.log('Getting Firebase access token...');
 
-      for (const doc of snapshot.docs) {
-        const docData = doc.data();
-        const clockNo = docData.clockNo;
-        if (doc.id !== clockNo) {
-          const newRef = employeesRef.doc(clockNo);
-          batch.set(newRef, docData);
-          batch.delete(doc.ref);
-          migrated.push({oldId: doc.id, newId: clockNo, name: docData.name});
-        }
+    // Get Firebase access token
+    const token = execSync('firebase auth:export --output-format=json', { encoding: 'utf8' });
+    const tokenData = JSON.parse(token);
+    const accessToken = tokenData.tokens.access_token;
+
+    console.log('Calling migrateJobStatuses function...');
+
+    const postData = JSON.stringify({});
+
+    const options = {
+      hostname: 'africa-south1-ctp-job-cards.cloudfunctions.net',
+      port: 443,
+      path: '/migrateJobStatuses',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'Authorization': `Bearer ${accessToken}`
       }
+    };
 
-      await batch.commit();
-      return {migrated, count: migrated.length};
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            console.log('Migration completed successfully!');
+            console.log('Result:', JSON.stringify(result, null, 2));
+            resolve(result);
+          } catch (e) {
+            console.log('Raw response:', data);
+            resolve(data);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('Request failed:', error);
+        reject(error);
+      });
+
+      req.write(postData);
+      req.end();
     });
 
-    console.log('Migration result:', result);
-  } catch (e) {
-    console.error('Error:', e);
+  } catch (error) {
+    console.error('Migration failed:', error);
   }
 }
 
-callMigrate();
+// Run the function call
+callMigrateFunction();

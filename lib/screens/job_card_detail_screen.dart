@@ -745,8 +745,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   Widget _buildBottomBanner(JobCard jobCard) {
-    // Hide all buttons if job is completed
-    if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();
+    // Hide all buttons if job is closed
+    if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
     if (!isAssigned && !isManager) return const SizedBox.shrink();
@@ -804,7 +804,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           ),
         ),
       );
-    } else if (jobCard.status == JobStatus.monitoring) {
+    } else if (jobCard.status == JobStatus.monitor) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
@@ -966,7 +966,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final user = currentEmployee?.name ?? 'User';
     final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $description';
     final updated = jobCard.copyWith(
-      status: withMonitoring ? JobStatus.monitoring : JobStatus.completed,
+      status: withMonitoring ? JobStatus.monitor : JobStatus.closed,
       completedBy: user,
       completedAt: now,
       monitoringStartedAt: withMonitoring ? now : null,
@@ -1043,9 +1043,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               SegmentedButton<JobStatus>(
                 segments: const [
                   ButtonSegment(value: JobStatus.open, label: Text('Open')),
-                  ButtonSegment(value: JobStatus.monitoring, label: Text('Monitoring')),
-                  ButtonSegment(value: JobStatus.completed, label: Text('Completed')),
+                  ButtonSegment(value: JobStatus.monitor, label: Text('Monitor')),
                   ButtonSegment(value: JobStatus.closed, label: Text('Closed')),
+
                 ],
                 selected: {selectedStatus},
                 onSelectionChanged: (Set<JobStatus> selection) {
@@ -1067,7 +1067,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                 final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Status changed to ${selectedStatus.displayName} by $user';
                 final updated = jobCard.copyWith(
                   status: selectedStatus,
-                  monitoringStartedAt: selectedStatus == JobStatus.monitoring ? now : null,
+                  monitoringStartedAt: selectedStatus == JobStatus.monitor ? now : null,
                   notes: jobCard.notes + note,
                 );
                 try {
@@ -1093,8 +1093,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   Widget _buildAssignmentButtons(JobCard jobCard) {
-    // Hide all assignment buttons if job is completed
-    if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();
+    // Hide all assignment buttons if job is closed
+    if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
 
@@ -1159,7 +1159,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: jobCard.status == JobStatus.completed ? Colors.green : jobCard.status == JobStatus.monitoring ? Colors.orange : jobCard.status == JobStatus.closed ? Colors.grey : Colors.blue,
+                      color: jobCard.status == JobStatus.closed ? Colors.green : jobCard.status == JobStatus.monitor ? Colors.orange : Colors.blue,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(

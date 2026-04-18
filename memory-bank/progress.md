@@ -18,7 +18,8 @@
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Local Notifications**: Foreground message handling with flutter_local_notifications
-- **Status Tracking**: Complete job lifecycle tracking with timestamps
+- **Status Tracking**: Complete job lifecycle tracking with timestamps (Open → Monitor → Closed)
+- **Job Status System**: Four statuses (Open, Monitor, Closed, Cancelled) with proper color coding and UI
 - **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs
 - **Charts and Analytics**: Interactive charts (fl_chart, charts_flutter) for dashboard visualization
 - **PDF Export**: Report generation and sharing with pdf and share_plus

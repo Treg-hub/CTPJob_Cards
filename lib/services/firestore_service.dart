@@ -160,7 +160,7 @@ class FirestoreService {
   Stream<List<JobCard>> getCompletedJobCards() {
     return _firestore
         .collection('job_cards')
-        .where('status', isEqualTo: 'completed')
+        .where('status', isEqualTo: 'closed')
         .orderBy('completedAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
@@ -356,7 +356,7 @@ class FirestoreService {
       final startTimestamp = Timestamp.fromDate(startDate);
       final snapshot = await _firestore
           .collection('job_cards')
-          .where('status', isEqualTo: 'completed')
+          .where('status', isEqualTo: 'closed')
           .where('completedAt', isGreaterThanOrEqualTo: startTimestamp)
           .count()
           .get();
@@ -370,7 +370,7 @@ class FirestoreService {
     try {
       final snapshot = await _firestore
           .collection('job_cards')
-          .where('status', isEqualTo: 'completed')
+          .where('status', isEqualTo: 'closed')
           .get();
 
       final performance = <String, int>{};
@@ -392,7 +392,7 @@ class FirestoreService {
       // Get all completed job cards and filter in memory to avoid composite index requirement
       final snapshot = await _firestore
           .collection('job_cards')
-          .where('status', isEqualTo: 'completed')
+          .where('status', isEqualTo: 'closed')
           .get();
 
       if (snapshot.docs.isEmpty) return null;
@@ -458,7 +458,7 @@ class FirestoreService {
   Stream<List<JobCard>> getMonitoringJobCards() {
     return _firestore
         .collection('job_cards')
-        .where('status', isEqualTo: 'monitoring')
+        .where('status', isEqualTo: 'monitor')
         .orderBy('monitoringStartedAt', descending: false)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());

@@ -18,11 +18,9 @@ import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'my_assigned_jobs_screen.dart';
-import 'completed_jobs_screen.dart';
 import 'admin_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
-import 'monitoring_dashboard_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'login_screen.dart';
 
@@ -59,22 +57,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<Map<String, dynamic>> get _quickActions {
     final actions = [
       {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))},
-      {'title': 'View Open Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))},
+      {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))},
       {'title': 'My Assigned Jobs', 'icon': Icons.assignment_turned_in, 'color': const Color(0xFF10B981), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()))},
-      {'title': 'Completed Jobs', 'icon': Icons.history, 'color': const Color(0xFF8B5CF6), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedJobsScreen()))},
     ];
 
-    final monitoringAction = {'title': 'Monitoring Dashboard', 'icon': Icons.dashboard, 'color': const Color(0xFFFFA500), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MonitoringDashboardScreen()))};
-
-    if (isOperator) {
-      return [actions[0], actions[1], actions[2], monitoringAction, actions[3]];
+    if (isOperator || !isManager && !isTechnician) {
+      return [actions[0], actions[1], actions[2]];
     } else if (isTechnician) {
-      return [actions[2], actions[1], monitoringAction, actions[0], actions[3]];
+      return [actions[2], actions[1], actions[0]];
     } else if (isManager || isSuperManager) {
-      final allAction = {'title': 'View All Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-      return [actions[0], allAction, monitoringAction];
+      final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+      return [actions[0], viewJobsAction];
     } else {
-      return [...actions, monitoringAction];
+      return actions;
     }
   }
 
@@ -91,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadShowDeptOnly();
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final count = jobs.where((j) => !j.isCompleted && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
+        final count = jobs.where((j) => !j.isClosed && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
         if (mounted) setState(() => _openJobCount = count);
       });
     } catch (e) {
@@ -452,7 +447,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
 
-    if (title == 'View All Jobs') {
+    if (title == 'View Jobs') {
       card = Stack(
         children: [
           card,
@@ -800,7 +795,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getCompletedJobCards(),
+      stream: _firestoreService.getClosedJobCards(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(

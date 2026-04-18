@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Card Status Migration</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #result { margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 4px; white-space: pre-wrap; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Job Card Status Migration</h1>
+        <p>This tool will update all job cards with status "completed" to "closed" and "monitoring" to "monitor".</p>
+
+        <button id="migrateBtn" onclick="runMigration()">Run Migration</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function runMigration() {
+            const btn = document.getElementById('migrateBtn');
+            const result = document.getElementById('result');
+
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            result.textContent = 'Starting migration...';
+
+            try {
+                // Call the Firebase function
+                const response = await fetch('https://africa-south1-ctp-job-cards.cloudfunctions.net/migrateJobStatuses', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    result.className = 'success';
+                    result.textContent = `✅ Migration completed successfully!\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    throw new Error(data.error?.message || 'Migration failed');
+                }
+
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = `❌ Migration failed: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run Migration';
+            }
+        }
+    </script>
+</body>
+</html>

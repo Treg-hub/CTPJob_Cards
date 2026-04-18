@@ -99,13 +99,13 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
       _openJobsCount = jobs.where((j) => j.status == JobStatus.open).length;
 
       final now = DateTime.now();
-      _completed7Days = jobs.where((j) => j.status == JobStatus.completed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 7)))).length;
-      _completed30Days = jobs.where((j) => j.status == JobStatus.completed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 30)))).length;
+      _completed7Days = jobs.where((j) => j.status == JobStatus.closed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 7)))).length;
+      _completed30Days = jobs.where((j) => j.status == JobStatus.closed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 30)))).length;
 
-      final completedInPeriod = jobs.where((j) => j.status == JobStatus.completed).length;
+      final completedInPeriod = jobs.where((j) => j.status == JobStatus.closed).length;
       _completionRate = _totalJobs > 0 ? (completedInPeriod / _totalJobs * 100) : 0.0;
 
-      final completedJobs = jobs.where((j) => j.status == JobStatus.completed && j.createdAt != null && j.completedAt != null).toList();
+      final completedJobs = jobs.where((j) => j.status == JobStatus.closed && j.createdAt != null && j.completedAt != null).toList();
       if (completedJobs.isNotEmpty) {
         var totalDuration = Duration.zero;
         for (var j in completedJobs) {

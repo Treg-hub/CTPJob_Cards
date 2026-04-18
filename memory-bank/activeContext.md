@@ -5,6 +5,7 @@
 - **UI Bug Fixes**: Resolving display issues in job assignment dialogs
 - **Memory Bank Setup**: Establishing documentation structure for future development
 - **Code Quality**: Maintaining clean, efficient Flutter code with proper null safety
+- **Job Status Standardization**: Updated job status system to Open, Monitor, Closed with consistent naming, colors, and UI
 - **Monitoring Status Feature**: Added optional 7-day monitoring for completed jobs, auto-close if no adjustments, in-app dashboard for visibility
 - **Assignment History Tracking**: Implemented detailed assignment history in activity log, showing who assigned whom with timestamps for all assignments and unassignments
 - **Copper Inventory Module**: Complete copper tracking system for managers with dashboard, sorting, transactions, password auth, atomic updates
@@ -139,6 +140,22 @@
   - **Compression**: flutter_image_compress ^2.3.0 for optimized storage
   - **Storage**: firebase_storage ^12.3.3 for cloud file management
   - **UI**: Enhanced gallery/camera selection with preview
+- **Job Status Standardization**: Updated job status system from (Open, Monitoring, Completed, Closed) to (Open, Monitor, Closed).
+  - **Enum Changes**: Renamed JobStatus.monitoring to JobStatus.monitor, JobStatus.completed to JobStatus.closed, removed JobStatus.cancelled
+  - **UI Updates**: Updated all screens, filters, colors, and buttons to use new status names
+  - **Data Migration**: Created migrate_status.js script to update existing Firestore data (completed→closed, monitoring→monitor)
+  - **Screen Renames**: Renamed completed_jobs_screen.dart to closed_jobs_screen.dart
+  - **Filter Updates**: Updated all status filters and queries to match new status values
+  - **Color Coding**: Open(blue), Monitor(orange), Closed(green)
+  - **Result**: Consistent, clear status system with proper lifecycle (Open → Monitor → Closed)
+- **Home Screen Quick Actions Simplified**: Streamlined quick actions to focus on core functionality.
+  - **Removed**: 'Closed Jobs' and 'Monitoring Dashboard' actions from all roles
+  - **Renamed**: 'View Open Jobs' → 'View Jobs' for all roles, 'View All Jobs' → 'View Jobs' for managers
+  - **Role Actions**:
+    - **Operator/Other**: Create → View Jobs → My Assigned
+    - **Technician**: My Assigned → View Jobs → Create
+    - **Manager**: Create → View Jobs
+  - **Result**: Cleaner, more focused home screen with essential actions only
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI
@@ -168,11 +185,13 @@
 - ✅ Individual assignment notifications fixed (logging crash resolved, robust validation, jobCardId extraction added)
 - ✅ Notification click navigation implemented (assigned → MyAssignedJobsScreen, broadcast → JobCardDetail)
 - ✅ Web version published to Firebase Hosting (https://ctp-job-cards.web.app, service worker disabled)
+- ✅ Job Status Standardization: Updated to Open, Monitor, Closed with consistent UI and data migration - deployed to production
 - ✅ ARM64 APK built (build\app\outputs\flutter-apk\app-release.apk, 20.1MB)
 - ✅ Copper Inventory Module: Complete production-ready system with dashboard, transactions, sorting, password auth, atomic updates
 - ✅ Riverpod State Management: Migrated from Provider to Riverpod with Notifier classes for better scalability
 - ✅ Offline Support: Implemented Hive local storage with sync queue and connectivity monitoring
 - ✅ Photo Upload: Added image picker, compression, Firebase Storage integration
+- ✅ Job Status Standardization: Updated to Open, Monitor, Closed with consistent UI and data migration
 - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps

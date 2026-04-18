@@ -417,8 +417,8 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                 try {
                   final now = DateTime.now();
                   final user = currentEmployee?.name ?? 'User';
-                  final completedJob = job.copyWith(
-                    status: JobStatus.completed,
+                   final completedJob = job.copyWith(
+                     status: JobStatus.closed,
                     completedBy: user,
                     completedAt: now,
                     notes: job.notes.isNotEmpty
@@ -485,8 +485,8 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                 try {
                   final now = DateTime.now();
                   final user = currentEmployee?.name ?? 'User';
-                  final monitoredJob = job.copyWith(
-                    status: JobStatus.monitoring,
+                   final monitoredJob = job.copyWith(
+                     status: JobStatus.monitor,
                     completedBy: user,
                     completedAt: now,
                     monitoringStartedAt: now,
