@@ -169,6 +169,10 @@
 - ✅ Notification click navigation implemented (assigned → MyAssignedJobsScreen, broadcast → JobCardDetail)
 - ✅ Web version published to Firebase Hosting (https://ctp-job-cards.web.app, service worker disabled)
 - ✅ ARM64 APK built (build\app\outputs\flutter-apk\app-release.apk, 20.1MB)
+- ✅ Copper Inventory Module: Complete production-ready system with dashboard, transactions, sorting, password auth, atomic updates
+- ✅ Riverpod State Management: Migrated from Provider to Riverpod with Notifier classes for better scalability
+- ✅ Offline Support: Implemented Hive local storage with sync queue and connectivity monitoring
+- ✅ Photo Upload: Added image picker, compression, Firebase Storage integration
 - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps

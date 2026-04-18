@@ -3,12 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:convert';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 
 import '../models/job_card.dart';
@@ -17,7 +11,6 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
-import 'view_job_cards_screen.dart';
 import 'copper_dashboard_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {

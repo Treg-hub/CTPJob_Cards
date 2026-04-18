@@ -12,12 +12,10 @@ import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
-
 import 'screens/login_screen.dart';
-
 import 'services/firestore_service.dart';
 import 'services/sync_service.dart';
-
+import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
 
@@ -30,12 +28,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
 
-  // Register Hive adapters
   Hive.registerAdapter(SyncQueueItemAdapter());
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Enable Crashlytics
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
@@ -51,7 +47,6 @@ void main() async {
   final firestoreService = FirestoreService();
   await firestoreService.initializeSettings();
 
-  // Initialize Sync Queue + SyncService
   await Hive.openBox<SyncQueueItem>('syncQueue');
   await SyncService().init();
 
@@ -96,6 +91,19 @@ class CtpJobCardsApp extends ConsumerWidget {
           foregroundColor: Colors.white,
           elevation: 0,
         ),
+        extensions: const [
+          AppColors(
+            priority1: Color(0xFF4CAF50),
+            priority2: Color(0xFF8BC34A),
+            priority3: Color(0xFFFFC107),
+            priority4: Color(0xFFFF9800),
+            priority5: Color(0xFFFF3D00),
+            statusOpen: Colors.blue,
+            statusInProgress: Colors.orange,
+            statusCompleted: Colors.green,
+            statusCancelled: Colors.red,
+          ),
+        ],
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -112,6 +120,19 @@ class CtpJobCardsApp extends ConsumerWidget {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
+        extensions: const [
+          AppColors(
+            priority1: Color(0xFF4CAF50),
+            priority2: Color(0xFF8BC34A),
+            priority3: Color(0xFFFFC107),
+            priority4: Color(0xFFFF9800),
+            priority5: Color(0xFFFF3D00),
+            statusOpen: Colors.blue,
+            statusInProgress: Colors.orange,
+            statusCompleted: Colors.green,
+            statusCancelled: Colors.red,
+          ),
+        ],
       ),
       home: const LoginScreen(),
       debugShowCheckedModeBanner: false,

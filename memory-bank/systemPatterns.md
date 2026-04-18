@@ -33,9 +33,9 @@ Firebase Project
 ## Key Technical Decisions
 
 ### State Management
-- **Decision**: Riverpod pattern with service classes
-- **Rationale**: Modern, scalable state management for Firebase integration
-- **Implementation**: Service classes handle data operations, screens consume via Riverpod providers and StreamBuilder
+- **Decision**: Riverpod pattern with Notifier classes and service classes
+- **Rationale**: Modern, scalable state management for Firebase integration and better testability
+- **Implementation**: Notifier classes for complex state (theme, copper inventory), service classes for data operations, screens consume via Riverpod providers and StreamBuilder
 
 ### Firestore Transactions
 - **Decision**: Atomic transactions for inventory updates
@@ -47,6 +47,7 @@ Firebase Project
 - **JobCard Model**: Comprehensive job tracking with status enum, timestamps, and sequential jobCardNumber for easy reference
 - **CopperInventory Model**: Single document tracking sort/reuse/sell kg, current R/kg, last updated
 - **CopperTransaction Model**: Transaction history with type, amount, buckets, comments, user ID
+- **SyncQueueItem Model**: Offline queue item with Hive serialization for offline operations
 - **CopyWith Pattern**: Immutable updates with copyWith methods
 
 ### UI Patterns

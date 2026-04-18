@@ -22,10 +22,11 @@
 - **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs
 - **Charts and Analytics**: Interactive charts (fl_chart, charts_flutter) for dashboard visualization
 - **PDF Export**: Report generation and sharing with pdf and share_plus
-- **Offline Support**: Hive local storage with connectivity monitoring
+- **Offline Support**: Hive local storage with connectivity monitoring and sync queue
 - **Crash Reporting**: Firebase Crashlytics integration
 - **Enhanced Firebase Services**: Auth, Storage, Cloud Functions for comprehensive backend support
 - **Bulk Admin Operations**: Advanced CSV import/export with file_picker
+- **Copper Inventory Management**: Complete copper tracking system with real-time dashboard, transactions, sorting, password authentication, and atomic updates
 
 ### UI/UX Features
 - **Responsive Design**: Works on mobile devices

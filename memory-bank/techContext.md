@@ -42,11 +42,22 @@ dependencies:
   pull_to_refresh_flutter3: ^2.0.2
   flutter_staggered_animations: ^1.1.1
   flutter_local_notifications: ^17.2.3
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
+
+  # Admin bulk operations
   file_picker: ^8.1.2
   csv: ^6.0.0
+
+  # Photo upload
   image_picker: ^1.1.2
   flutter_image_compress: ^2.3.0
   uuid: ^4.5.3
+
+dev_dependencies:
+  flutter_test: SDK
+  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^6.0.0
 ```
 
 ## Development Setup

@@ -10,6 +10,7 @@ CTP Job Cards is a Flutter mobile application designed for maintenance departmen
 - **Real-time Tracking**: Track job status (pending, assigned, started, completed) with timestamps and comments.
 - **Notifications**: Push notifications to assigned employees via FCM.
 - **Reporting**: Dashboard views for managers with job statistics and trends.
+- **Copper Inventory Management**: Complete copper tracking system for managers with real-time dashboard, transactions, sorting, and password authentication.
 
 ## Technical Stack
 - **Frontend**: Flutter (Dart)

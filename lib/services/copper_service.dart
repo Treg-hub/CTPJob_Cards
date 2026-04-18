@@ -16,6 +16,20 @@ class CopperService {
     return _firestore.doc(inventoryPath).snapshots().map((doc) => CopperInventory.fromFirestore(doc));
   }
 
+  Future<void> initializeInventory() async {
+    final docRef = _firestore.doc(inventoryPath);
+    final doc = await docRef.get();
+    if (!doc.exists) {
+      await docRef.set(CopperInventory(
+        sortKg: 0.0,
+        reuseKg: 0.0,
+        sellKg: 0.0,
+        currentRPerKg: 0.0,
+        lastUpdated: Timestamp.now(),
+      ).toFirestore());
+    }
+  }
+
   Stream<List<CopperTransaction>> getTransactionsStream({DateTimeRange? range}) {
     Query query = _firestore.collection(transCollection).orderBy('timestamp', descending: true);
     if (range != null) {

@@ -1,44 +1,86 @@
-import 'package:flutter/material.dart';           // ← added for DateTimeRange
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 import '../services/copper_service.dart';
 
-final copperNotifierProvider = NotifierProvider<CopperNotifier, void>(CopperNotifier.new);
+final copperNotifierProvider = StateNotifierProvider<CopperNotifier, AsyncValue<CopperInventory>>((ref) {
+  return CopperNotifier();
+});
 
-class CopperNotifier extends Notifier<void> {
-  final CopperService _copperService = CopperService();
-
-  @override
-  void build() {}
-
-  Stream<CopperInventory> get inventoryStream => _copperService.getInventoryStream();
-
-  Stream<List<CopperTransaction>> getTransactionsStream({DateTimeRange? range}) =>
-      _copperService.getTransactionsStream(range: range);
-
-  Future<void> updateTransactionComments(String id, String comments) async {
-    await _copperService.updateTransactionComments(id, comments);
+class CopperNotifier extends StateNotifier<AsyncValue<CopperInventory>> {
+  CopperNotifier() : super(const AsyncValue.loading()) {
+    _loadInventory();
   }
 
-  Future<void> performAddToSort(double amountKg, String comments, String userId) async {
-    await _copperService.performAddToSort(amountKg, comments, userId);
+  final CopperService _service = CopperService();
+  Stream<CopperInventory>? _inventoryStream;
+
+  Stream<CopperInventory> get inventoryStream {
+    _inventoryStream ??= _service.getInventoryStream();
+    return _inventoryStream!;
   }
 
-  Future<void> performPlateBars(double amountKg, String comments, String userId) async {
-    await _copperService.performPlateBars(amountKg, comments, userId);
+  void _loadInventory() async {
+    try {
+      await _service.initializeInventory();
+      inventoryStream.listen((inventory) {
+        state = AsyncValue.data(inventory);
+      }, onError: (error) {
+        state = AsyncValue.error(error, StackTrace.current);
+      });
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+    }
   }
 
-  Future<void> performSort(double reuseKg, double sellKg, String comments, String userId) async {
-    await _copperService.performSort(reuseKg, sellKg, comments, userId);
+  Future<void> performAddToSort(double kg, String comments, String clockNo) async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.performAddToSort(kg, comments, clockNo);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
   }
 
-  Future<void> performUseReuse(double amountKg, String comments, String userId) async {
-    await _copperService.performUseReuse(amountKg, comments, userId);
+  Future<void> performPlateBars(double kg, String comments, String clockNo) async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.performPlateBars(kg, comments, clockNo);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
   }
 
-  Future<void> performRecordSale(double amountKg, double rPerKg, String comments, String userId) async {
-    await _copperService.performRecordSale(amountKg, rPerKg, comments, userId);
+  Future<void> performUseReuse(double kg, String comments, String clockNo) async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.performUseReuse(kg, comments, clockNo);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
+  }
+
+  Future<void> performRecordSale(double kg, double rPerKg, String comments, String clockNo) async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.performRecordSale(kg, rPerKg, comments, clockNo);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
+  }
+
+  Future<void> performSort(double kgToReuse, double kgToSell, String comments, String clockNo) async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.performSort(kgToReuse, kgToSell, comments, clockNo);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
   }
 }
