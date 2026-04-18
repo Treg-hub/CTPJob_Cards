@@ -14,7 +14,7 @@
   - Multi-select employees with chips display
   - Bulk operations and offsite warnings
 - **Comment System**: Add comments with reoccurrence counter updates
-- **Photo Upload**: Take/upload photos to job cards with compression and Firebase Storage
+- **Photo Upload**: Take/upload photos to job cards with maximum compression (1024px/70% quality), Firebase Storage, unique UUID paths for web safety, and horizontal scrolling display with CachedNetworkImage
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Local Notifications**: Foreground message handling with flutter_local_notifications
@@ -58,7 +58,6 @@
 
 ### Medium Priority
 - **Offline Support**: Local caching for offline functionality
-- **Image Attachments**: Photo support for job cards
 - **Bulk Operations**: Multi-job assignment and updates
 - **Export Features**: PDF/CSV export of job reports
 

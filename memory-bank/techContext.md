@@ -95,6 +95,7 @@ dev_dependencies:
 
 ### Performance Constraints
 - **Stream Efficiency**: Large employee lists may cause UI lag
+- **Image Loading**: Photo loading with CachedNetworkImage and compression optimization
 - **Network Dependency**: Requires internet for core functionality
 - **Battery Impact**: Push notifications and real-time updates
 
@@ -109,6 +110,11 @@ dev_dependencies:
 - **firebase_core**: App initialization and Firebase setup
 - **cloud_firestore**: All data operations (CRUD, streams, queries)
 - **firebase_messaging**: Push notification handling
+- **firebase_storage**: Photo upload and file management
+- **image_picker**: Camera/gallery photo selection
+- **flutter_image_compress**: Photo compression for storage optimization
+- **cached_network_image**: Efficient photo loading and caching
+- **uuid**: Unique identifier generation for photo paths
 - **intl**: Date/time formatting and localization
 
 ### Code Patterns

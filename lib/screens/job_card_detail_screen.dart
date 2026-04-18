@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:uuid/uuid.dart';
 import '../widgets/skeleton_loader.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -621,7 +622,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-  Future<void> _addPhoto(JobCard jobCard, String section) async {
+  Future<void> _addPhoto() async {
     final picker = ImagePicker();
     final source = await showDialog<ImageSource>(
       context: context,
@@ -640,98 +641,61 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         ],
       ),
     );
-
     if (source == null) return;
-
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
 
-    // Compress image (max compression: 800px max dim, 85% quality) - skip on web
-    File? uploadFile;
-    Uint8List? bytes;
-    if (kIsWeb) {
-      bytes = await pickedFile.readAsBytes();
-    } else {
-      final compressedFile = await FlutterImageCompress.compressAndGetFile(
-        pickedFile.path,
-        '${pickedFile.path}_compressed.jpg',
-        minWidth: 800,
-        minHeight: 800,
-        quality: 85,
-      );
-      uploadFile = compressedFile != null ? File(compressedFile.path) : File(pickedFile.path);
-    }
-
-    // Ensure user is authenticated before upload
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      debugPrint('No auth user, signing in anonymously...');
-      await FirebaseAuth.instance.signInAnonymously();
-      user = FirebaseAuth.instance.currentUser;
-      debugPrint('Auth user after sign-in: ${user?.uid}');
-    } else {
-      debugPrint('Auth user exists: ${user.uid}');
-    }
-
-    // Upload to Firebase Storage
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final storageRef = FirebaseStorage.instance
-        .ref()
-        .child('job_cards/${jobCard.id}/photos/$timestamp.jpg');
-
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Uploading photo...'),
-          ],
-        ),
-      ),
+    // MAXIMUM practical compression for job cards (70-85% smaller files)
+    final compressedFile = await FlutterImageCompress.compressAndGetFile(
+      pickedFile.path,
+      '${pickedFile.path}_compressed.jpg',
+      minWidth: 1024,
+      minHeight: 1024,
+      quality: 70,
+      rotate: 0,
+      keepExif: false,
+      format: CompressFormat.jpeg,
     );
+    if (compressedFile == null) return;
 
+    // Upload the compressed photo immediately
+    final storage = FirebaseStorage.instance;
+    final uuid = const Uuid();
     try {
-      debugPrint('Starting upload to: ${storageRef.fullPath}');
-      final uploadTask = kIsWeb
-        ? storageRef.putData(bytes!)
-        : storageRef.putFile(uploadFile!);
-      final snapshot = await uploadTask.whenComplete(() {});
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint('Upload success, URL: $downloadUrl');
+      final file = File(compressedFile.path);
+      final jobUuid = uuid.v4();
+      final storageRef = storage
+          .ref()
+          .child('job_cards/$jobUuid/photos/photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      // Update job card with new photo
-      final photoMap = {
-        'section': section,
+      await storageRef.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      final newPhoto = {
         'url': downloadUrl,
+        'section': 'job_card',
         'addedBy': currentEmployee?.name ?? 'Unknown',
         'timestamp': DateTime.now().toIso8601String(),
       };
-      final updatedPhotos = [...jobCard.photos, photoMap];
-      debugPrint('Saving to Firestore, photos count: ${updatedPhotos.length}');
-      await _firestoreService.saveJobCardOfflineAware(
-        jobCard.copyWith(photos: updatedPhotos),
-      );
-      debugPrint('Firestore save complete');
-      await _refreshJobCard();
-      debugPrint('Refresh complete');
 
-      // Close loading dialog
+      final updatedPhotos = List<Map<String, dynamic>>.from(_currentJobCard.photos ?? []);
+      updatedPhotos.add(newPhoto);
+
+      await _firestoreService.saveJobCardOfflineAware(
+        _currentJobCard.copyWith(photos: updatedPhotos),
+      );
+
+      await _refreshJobCard();
+
       if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo added & heavily compressed!')),
+        );
       }
     } catch (e) {
-      debugPrint('Error uploading photo: $e');
-      // Close loading dialog
       if (mounted) {
-        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading photo: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to add photo: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -834,7 +798,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                         children: [
                           const Text('Photos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                           TextButton.icon(
-                            onPressed: () => _addPhoto(jobCard, 'photos'),
+                            onPressed: () => _addPhoto(),
                             icon: const Icon(Icons.camera_alt, size: 20),
                             label: const Text('Add Photo'),
                             style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
@@ -1389,7 +1353,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       ),
                       const SizedBox(width: 8),
                       TextButton.icon(
-                        onPressed: () => _addPhoto(jobCard, 'comments'),
+                        onPressed: () => _addPhoto(),
                         icon: const Icon(Icons.camera_alt, size: 20),
                         label: const Text('Add Photo'),
                         style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
@@ -1424,7 +1388,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       ),
                     if (_canAddNotes) const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () => _addPhoto(jobCard, 'notes'),
+                      onPressed: () => _addPhoto(),
                       icon: const Icon(Icons.camera_alt, size: 20),
                       label: const Text('Add Photo'),
                       style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),

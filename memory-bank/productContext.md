@@ -15,6 +15,7 @@ The CTP Job Cards app addresses critical inefficiencies in manual maintenance ma
 4. **Inefficient Filtering**: Smart filtering by department, position, and onsite status ensures jobs go to the right people.
 5. **Recurring Issues**: Reoccurrence tracking helps identify and address systemic problems.
 6. **Status Visibility**: Real-time status updates provide managers with accurate oversight.
+7. **Visual Documentation**: Photo attachments with maximum compression provide visual evidence of issues and work completed while optimizing storage.
 
 ## User Experience Goals
 ### For Operators (Job Creators)

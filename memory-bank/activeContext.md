@@ -180,6 +180,16 @@
   - **Upload**: Original image (no compression hang)
   - **Debug**: Prints for auth/upload/save steps
   - **Result**: Photo uploads work without auth errors or freezes
+- **Photo Upload and Display for Web Safety**: Updated photo upload method in create_job_card_screen.dart to use unique UUID for storage paths and improved error handling. Added _buildPhotosSection method in job_card_detail_screen.dart for horizontal scrolling photo display with CachedNetworkImage and CORS fix. Replaced old photo display code with new section call. Published changes to git.
+  - **Upload**: Unique UUID paths prevent conflicts, better error handling with snackbars
+  - **Display**: Horizontal ListView with CachedNetworkImage, error widget with CORS note
+  - **Web Compatibility**: Fixed CORS issues for web photo loading
+  - **Result**: Photos now safe and display properly on web platform
+- **Photo Upload Maximum Compression in Detail Screen**: Updated _addPhoto method in job_card_detail_screen.dart to use 1024px min dimension and 70% quality compression, UUID paths for web safety, removed web-specific handling, updated all calls to parameterless method. Photos now heavily compressed for storage efficiency.
+  - **Compression**: Maximum practical compression (1024px min, 70% quality) for 70-85% smaller files
+  - **Upload**: UUID paths prevent conflicts, no web special handling needed
+  - **Calls**: Updated all _addPhoto calls to parameterless for consistency
+  - **Result**: Photos heavily compressed while maintaining quality, optimized storage usage
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

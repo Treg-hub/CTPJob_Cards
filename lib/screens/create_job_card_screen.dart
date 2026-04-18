@@ -141,50 +141,50 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     }
   }
 
-  Future<void> _addPhoto() async {
-    final picker = ImagePicker();
-    final source = await showDialog<ImageSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Photo Source'),
-        content: const Text('Choose where to get the photo from.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text('Camera'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.gallery),
-            child: const Text('Gallery'),
-          ),
-        ],
-      ),
-    );
+    Future<void> _addPhoto() async {
+      final picker = ImagePicker();
+      final source = await showDialog<ImageSource>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Photo Source'),
+          content: const Text('Choose where to get the photo from.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, ImageSource.camera),
+              child: const Text('Camera'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, ImageSource.gallery),
+              child: const Text('Gallery'),
+            ),
+          ],
+        ),
+      );
+      if (source == null) return;
+      final pickedFile = await picker.pickImage(source: source);
+      if (pickedFile == null) return;
 
-    if (source == null) return;
+      // MAXIMUM practical compression for job cards (70-85% smaller files)
+      final compressedFile = await FlutterImageCompress.compressAndGetFile(
+        pickedFile.path,
+        '${pickedFile.path}_compressed.jpg',
+        minWidth: 1024,
+        minHeight: 1024,
+        quality: 70,
+        rotate: 0,
+        keepExif: false,
+        format: CompressFormat.jpeg,
+      );
+      if (compressedFile == null) return;
 
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile == null) return;
+      setState(() {
+        photos.add({'file': compressedFile.path});
+      });
 
-    // Compress the image
-    final compressedFile = await FlutterImageCompress.compressAndGetFile(
-      pickedFile.path,
-      '${pickedFile.path}_compressed.jpg',
-      minWidth: 800,
-      minHeight: 800,
-      quality: 85,
-    );
-
-    if (compressedFile == null) return;
-
-    setState(() {
-      photos.add({'file': compressedFile.path});
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added & heavily compressed!')));
+      }
     }
-  }
 
   Future<List<Map<String, dynamic>>> _uploadPhotos() async {
     if (photos.isEmpty) return [];

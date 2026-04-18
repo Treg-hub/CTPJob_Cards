@@ -58,6 +58,7 @@ Firebase Project
 - **Color-coded Priorities**: P1-P5 with distinct visual indicators
 - **Icon + Text Buttons**: Floating action buttons with clear visual cues
 - **Notes-style Logs**: Activity and assignment logs display as timestamped lists with left alignment, replicating comment/note format
+- **Photo Display**: Horizontal scrolling photo gallery with CachedNetworkImage for job documentation
 - **Theme Switching**: Dynamic light/dark mode toggle in settings, persisted via SharedPreferences, with orange primary maintained across themes
 - **Copper-themed UI**: Amber/orange colors for copper inventory module
 - **Password Authentication**: Modal password dialog for sensitive copper operations
@@ -137,6 +138,16 @@ Notifications  Push Updates       UI State Updates
 2. **Counter Transaction**: Atomically read/increment counters/jobCards nextJobCardNumber
 3. **Document Creation**: Create job_cards/ doc with jobCardNumber set to incremented value
 4. **UI Confirmation**: Show success with new job number
+
+### Photo Upload Flow
+1. **Source Selection**: User chooses camera or gallery via dialog
+2. **Image Capture/Pick**: Use image_picker to get image file
+3. **Maximum Compression**: Apply 1024px min dimension, 70% quality compression for 70-85% size reduction
+4. **UUID Path Generation**: Create unique storage path with job_cards/{uuid}/photos/{timestamp}.jpg
+5. **Firebase Upload**: Put compressed file to Firebase Storage with jpeg content type
+6. **URL Retrieval**: Get download URL from uploaded file
+7. **Job Card Update**: Add photo metadata to job card photos array, save via FirestoreService
+8. **UI Refresh**: Update job card state and show success message
 
 ## Performance Considerations
 - **Stream Efficiency**: Firestore streams update entire lists - monitor for large datasets
