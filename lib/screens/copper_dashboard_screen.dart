@@ -190,7 +190,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                         const Text('New Transaction', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: _selectedType,
+                          initialValue: _selectedType,
                           decoration: const InputDecoration(labelText: 'Transaction Type'),
                           items: const [
                             DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
@@ -329,7 +329,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   Widget _buildBucketCard(String title, double kg, Color color, IconData icon) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(26),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(

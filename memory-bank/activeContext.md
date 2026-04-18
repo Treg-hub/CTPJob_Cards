@@ -175,6 +175,11 @@
   - **App Bar**: Changed background from black to amber (yellow), title text from white to black for contrast
   - **Tab Bar**: Moved out of AppBar and placed in separate black Container below app bar for visual separation
   - **Result**: Consistent yellow theme for app bar matching tab selection color, with distinct black tab bar background
+- **Fixed Firebase Storage auth & upload issues**: Deployed storage.rules (auth writes to job_cards/**), added anonymous auth check, removed compression to fix freeze, added debug logs in job_card_detail_screen.dart _addPhoto().
+  - **Auth**: Anonymous sign-in before upload if no user
+  - **Upload**: Original image (no compression hang)
+  - **Debug**: Prints for auth/upload/save steps
+  - **Result**: Photo uploads work without auth errors or freezes
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI
@@ -218,3 +223,22 @@
 - Monitor for additional UI inconsistencies
 - Consider performance optimizations for large datasets
 - Plan dashboard enhancements based on user feedback
+
+## Code Review Summary (2026-04-18 by Cline)
+**Strengths**:
+- Feature-complete core workflow + extras (copper, photos, analytics).
+- Robust backend (priority FCM escalation, schedulers, atomic txns).
+- Solid architecture (Riverpod Notifiers, FirestoreService repo, streams).
+- Good configs (indexes for queries, persistence, crashlytics).
+- Production beta-ready (web/APK deploys).
+
+**Identified Improvements** (prioritized, security skipped):
+1. **Perf**: Paginate job/employee lists, optimize StreamBuilder rebuilds (filtered queries/limit).
+2. **Quality**: Fix deprecated APIs (withOpacity etc.), lint warnings, update deps (charts_flutter old).
+3. **Testing**: Add unit/widget/integration tests (low coverage).
+4. **UX**: Consistent skeletons, accessibility, form validation.
+5. **Backend**: Abstract CF hardcoded emp IDs (23194/62/22), more env vars.
+6. **Security** (later): Granular Firestore rules (operators read all/add comments).
+7. **Polish**: i18n, PDF filters, GA4 events.
+
+**Next**: Implement med-pri (quality/perf) in ACT.

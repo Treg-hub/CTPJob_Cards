@@ -110,6 +110,14 @@
 - **Error Handling**: Could be more comprehensive
 - **Testing**: Limited automated test coverage
 
+**Code Review Technical Debt (2026-04-18)**:
+- **Performance**: StreamBuilder full rebuilds on employee/job lists → paginate + query limits/filters.
+- **Deprecated APIs**: withOpacity(0.3) → withValues(alpha:0.3), pw.Table.fromTextArray → TableHelper.fromTextArray, etc.
+- **Lint Warnings**: Run `flutter analyze` to fix (const runtime, unnecessary null checks).
+- **Dependencies**: charts_flutter ^0.12.0 outdated → migrate fully to fl_chart?
+- **Backend**: Hardcoded CF emp IDs (23194/23162/22, emp22) → config/env.
+- **Testing**: Expand unit/widget/integration.
+
 ## Evolution of Project Decisions
 
 ### Initial Architecture Decisions

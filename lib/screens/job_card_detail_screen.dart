@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -12,6 +13,8 @@ import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -34,6 +37,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     super.initState();
     _reoccurrenceCount = widget.jobCard.reoccurrenceCount;
     _currentJobCard = widget.jobCard;
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
@@ -572,16 +581,32 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
 
-    // Compress the image
-    final compressedFile = await FlutterImageCompress.compressAndGetFile(
-      pickedFile.path,
-      '${pickedFile.path}_compressed.jpg',
-      minWidth: 800,
-      minHeight: 800,
-      quality: 85,
-    );
+    // Compress image (max compression: 800px max dim, 85% quality) - skip on web
+    File? uploadFile;
+    Uint8List? bytes;
+    if (kIsWeb) {
+      bytes = await pickedFile.readAsBytes();
+    } else {
+      final compressedFile = await FlutterImageCompress.compressAndGetFile(
+        pickedFile.path,
+        '${pickedFile.path}_compressed.jpg',
+        minWidth: 800,
+        minHeight: 800,
+        quality: 85,
+      );
+      uploadFile = compressedFile != null ? File(compressedFile.path) : File(pickedFile.path);
+    }
 
-    if (compressedFile == null) return;
+    // Ensure user is authenticated before upload
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint('No auth user, signing in anonymously...');
+      await FirebaseAuth.instance.signInAnonymously();
+      user = FirebaseAuth.instance.currentUser;
+      debugPrint('Auth user after sign-in: ${user?.uid}');
+    } else {
+      debugPrint('Auth user exists: ${user.uid}');
+    }
 
     // Upload to Firebase Storage
     final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -589,10 +614,30 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         .ref()
         .child('job_cards/${jobCard.id}/photos/$timestamp.jpg');
 
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Uploading photo...'),
+          ],
+        ),
+      ),
+    );
+
     try {
-      final uploadTask = storageRef.putFile(File(compressedFile.path));
+      debugPrint('Starting upload to: ${storageRef.fullPath}');
+      final uploadTask = kIsWeb
+        ? storageRef.putData(bytes!)
+        : storageRef.putFile(uploadFile!);
       final snapshot = await uploadTask.whenComplete(() {});
       final downloadUrl = await snapshot.ref.getDownloadURL();
+      debugPrint('Upload success, URL: $downloadUrl');
 
       // Update job card with new photo
       final photoMap = {
@@ -602,16 +647,24 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         'timestamp': DateTime.now().toIso8601String(),
       };
       final updatedPhotos = [...jobCard.photos, photoMap];
+      debugPrint('Saving to Firestore, photos count: ${updatedPhotos.length}');
       await _firestoreService.saveJobCardOfflineAware(
         jobCard.copyWith(photos: updatedPhotos),
       );
+      debugPrint('Firestore save complete');
       await _refreshJobCard();
+      debugPrint('Refresh complete');
 
+      // Close loading dialog
       if (mounted) {
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
       }
     } catch (e) {
+      debugPrint('Error uploading photo: $e');
+      // Close loading dialog
       if (mounted) {
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error uploading photo: $e'), backgroundColor: Colors.red),
         );

@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/copper_inventory.dart';
-import '../models/copper_transaction.dart';
 import '../services/copper_service.dart';
 
 final copperNotifierProvider = StateNotifierProvider<CopperNotifier, AsyncValue<CopperInventory>>((ref) {
