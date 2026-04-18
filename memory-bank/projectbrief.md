@@ -17,7 +17,7 @@ CTP Job Cards is a Flutter mobile application designed for maintenance departmen
 - **Backend**: Firebase Firestore (data storage), Firebase Cloud Functions (server-side logic)
 - **Authentication**: Firebase Auth (implied)
 - **Notifications**: Firebase Cloud Messaging (FCM)
-- **State Management**: Provider pattern (inferred from code structure)
+- **State Management**: Riverpod pattern with Notifier classes
 
 ## Key Features
 - Priority-based job management (P1-P5)

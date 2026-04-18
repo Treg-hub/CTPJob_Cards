@@ -48,6 +48,13 @@
 - **Corrected Comments/Notes Order in Home Screen**: Fixed display order in recent job cards to show comments first, then notes.
   - **Before**: Notes displayed before comments in job card previews
   - **After**: Comments now appear first, followed by notes
+- **Implemented Priority-Based Smart Notifications**: Added intelligent notification escalation system based on job priority (1-5).
+  - **Levels**: Normal (pri1-3), Medium-High (pri4, loud sound+vib), Full-Loud (pri5, max vol+custom sound+repeat vib+fullScreenIntent)
+  - **Creation**: Pri1-3 normal, pri4 medium-high, pri5 full-loud to techs+creator
+  - **Escalations**: 60s pri5 medium-high, 2min pri1-3 normal pri4-5 medium-high, 7min pri1-3 normal pri4-5 full-loud
+  - **Implementation**: CF reads priority, passes level in FCM data; Dart creates 3 channels, switches on level for sound/vib/fullscreen
+  - **Android**: Custom sound file, fullScreenIntent permission, MainActivity requests permission
+  - **Bonus**: Pri5 first escalation at 60s instead of 2min
   - **Reason**: More logical flow - comments are typically more important than work notes
   - **Applied to**: `_buildJobCardWidget` method in home screen recent jobs section
 - **Added Timestamps to Notes**: Implemented timestamp functionality for job card notes similar to comments. Notes now append with timestamps when jobs are completed, and display is updated to parse and show individual notes with timestamps.
@@ -156,6 +163,18 @@
     - **Technician**: My Assigned → View Jobs → Create
     - **Manager**: Create → View Jobs
   - **Result**: Cleaner, more focused home screen with essential actions only
+- **Enhanced Manager Dashboard Analytics**: Added comprehensive job card analytics with created vs closed trends and department breakdowns.
+  - **Trend Chart**: Line chart showing daily created (blue) vs closed (green) job cards over last 30 days with weekly date labels.
+  - **Department Chart**: Line graph displaying outstanding job cards by department (Pre Press green, Pressroom blue, Post Press brown) over last 30 days.
+  - **Data Computation**: Added daily outstanding counts by dept, computed from jobs created before each day and not completed by that day.
+  - **Metrics**: Added "Created (Month)" and "Closed (Month)" cards for monthly totals.
+  - **Layout**: Charts stacked vertically (trend on top, dept below) for all screen sizes, responsive design.
+  - **Filters**: Dept/month filters apply to all data, real-time updates from Firestore.
+  - **Result**: Professional analytics dashboard providing insights into job creation, completion, and department workload trends.
+- **Copper Dashboard App Bar Color Update**: Made the copper dashboard app bar yellow (amber) to match the selected tab text color, with separate black tab bar background.
+  - **App Bar**: Changed background from black to amber (yellow), title text from white to black for contrast
+  - **Tab Bar**: Moved out of AppBar and placed in separate black Container below app bar for visual separation
+  - **Result**: Consistent yellow theme for app bar matching tab selection color, with distinct black tab bar background
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI
@@ -192,6 +211,7 @@
 - ✅ Offline Support: Implemented Hive local storage with sync queue and connectivity monitoring
 - ✅ Photo Upload: Added image picker, compression, Firebase Storage integration
 - ✅ Job Status Standardization: Updated to Open, Monitor, Closed with consistent UI and data migration
+- ✅ Enhanced Manager Dashboard Analytics: Added comprehensive job card analytics with created vs closed trends and department breakdowns
 - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps

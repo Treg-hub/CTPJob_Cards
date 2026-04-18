@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:typed_data' show Int64List;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
@@ -13,20 +14,42 @@ class NotificationService {
 
     await _requestPermissions();
 
-    // Initialize local notifications
+    // Initialize local notifications with multiple channels
     if (Platform.isAndroid) {
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'job_cards_channel',
-        'Job Card Notifications',
-        description: 'Notifications for job card assignments',
+      const AndroidNotificationChannel normalChannel = AndroidNotificationChannel(
+        'normal_channel',
+        'Normal Job Notifications',
+        description: 'Standard notifications for job card assignments',
         importance: Importance.high,
         enableVibration: true,
         playSound: true,
       );
 
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+      const AndroidNotificationChannel mediumChannel = AndroidNotificationChannel(
+        'medium_channel',
+        'Medium-High Job Notifications',
+        description: 'Loud notifications for priority 4 jobs',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('escalation_alert'),
+      );
+
+      const AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
+        'full_channel',
+        'Full-Loud Job Notifications',
+        description: 'Maximum priority notifications for priority 5 jobs',
+        importance: Importance.max,
+        enableVibration: true,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('escalation_alert'),
+      );
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(normalChannel);
+      await androidPlugin?.createNotificationChannel(mediumChannel);
+      await androidPlugin?.createNotificationChannel(fullChannel);
     }
 
     // Message handlers
@@ -69,9 +92,11 @@ class NotificationService {
     debugPrint('📨 Foreground message received: ${message.messageId}');
 
     if (message.notification != null) {
+      final level = message.data['notificationLevel'] ?? 'normal';
       _showLocalNotification(
         title: message.notification!.title ?? 'New Notification',
         body: message.notification!.body ?? 'You have a new notification',
+        level: level,
       );
     }
   }
@@ -83,20 +108,53 @@ class NotificationService {
   Future<void> _showLocalNotification({
     required String title,
     required String body,
+    required String level,
   }) async {
     if (kIsWeb) return;
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'job_cards_channel',
-      'Job Card Notifications',
-      channelDescription: 'Notifications for job card assignments',
-      importance: Importance.high,
-      priority: Priority.high,
-      enableVibration: true,
-      playSound: true,
-    );
+    late AndroidNotificationDetails androidDetails;
+    switch (level) {
+      case 'medium-high':
+        androidDetails = AndroidNotificationDetails(
+          'medium_channel',
+          'Medium-High Job Notifications',
+          channelDescription: 'Loud notifications for priority 4 jobs',
+          importance: Importance.high,
+          priority: Priority.high,
+          enableVibration: true,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('escalation_alert'),
+          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
+        );
+        break;
+      case 'full-loud':
+        androidDetails = AndroidNotificationDetails(
+          'full_channel',
+          'Full-Loud Job Notifications',
+          channelDescription: 'Maximum priority notifications for priority 5 jobs',
+          importance: Importance.max,
+          priority: Priority.max,
+          enableVibration: true,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('escalation_alert'),
+          vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
+          category: AndroidNotificationCategory.call,
+          fullScreenIntent: true,
+        );
+        break;
+      default:
+        androidDetails = AndroidNotificationDetails(
+          'normal_channel',
+          'Normal Job Notifications',
+          channelDescription: 'Standard notifications for job card assignments',
+          importance: Importance.high,
+          priority: Priority.high,
+          enableVibration: true,
+          playSound: true,
+        );
+    }
 
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
+    final NotificationDetails details = NotificationDetails(android: androidDetails);
 
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,   // id
@@ -117,6 +175,7 @@ class NotificationService {
     required String machine,
     required String part,
     required String description,
+    int? priority,
   }) async {
     if (recipientToken.isEmpty) {
       debugPrint('⚠️ No FCM token - skipping notification');
@@ -138,6 +197,7 @@ class NotificationService {
         'machine': machine,
         'part': part,
         'description': description,
+        'priority': priority ?? 1,
       };
 
       await callable.call(params);
@@ -145,6 +205,54 @@ class NotificationService {
     } catch (e) {
       debugPrint('❌ Error sending notification: $e');
       throw Exception('Failed to send notification: $e');
+    }
+  }
+
+  Future<void> sendCreatorNotification({
+    required String recipientToken,
+    required String jobCardId,
+    required int? jobCardNumber,
+    required String operator,
+    required String creator,
+    required String department,
+    required String area,
+    required String machine,
+    required String part,
+    required String description,
+    required String notificationType, // 'self_assign' or 'closed'
+    required String assigneeName,
+    int? priority,
+  }) async {
+    if (recipientToken.isEmpty) {
+      debugPrint('⚠️ No FCM token - skipping creator notification');
+      return;
+    }
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('sendCreatorNotification');
+
+      final params = {
+        'recipientToken': recipientToken,
+        'jobCardId': jobCardId,
+        'jobCardNumber': jobCardNumber,
+        'operator': operator,
+        'creator': creator,
+        'department': department,
+        'area': area,
+        'machine': machine,
+        'part': part,
+        'description': description,
+        'notificationType': notificationType,
+        'assigneeName': assigneeName,
+        'priority': priority ?? 1,
+      };
+
+      await callable.call(params);
+      debugPrint('✅ Creator notification sent successfully');
+    } catch (e) {
+      debugPrint('❌ Error sending creator notification: $e');
+      throw Exception('Failed to send creator notification: $e');
     }
   }
 

@@ -5,13 +5,15 @@
 ### Frontend Architecture (Flutter)
 ```
 lib/
-├── main.dart                 # App entry point, theme, routing
-├── models/                   # Data models (Employee, JobCard)
-├── screens/                  # UI screens (detail, list, create, etc.)
-├── services/                 # Business logic (Firestore, Notifications)
-├── utils/                    # Helper utilities
-├── widgets/                  # Reusable UI components
-└── firebase_options.dart     # Firebase configuration
+├── main.dart                 # App entry point, Firebase init, theme, routing
+├── models/                   # Data models (Employee, JobCard, CopperInventory, etc.)
+├── providers/                # Riverpod state management (theme, copper inventory)
+├── screens/                  # UI screens (home, detail, create, admin, etc.)
+├── services/                 # Business logic (Firestore, Notifications, Sync)
+├── theme/                    # App theming (colors, extensions)
+├── widgets/                  # Reusable UI components (skeleton, sync indicator)
+├── firebase_options.dart     # Firebase configuration
+└── stub.dart                 # Development stub file
 ```
 
 ### Backend Architecture (Firebase)
@@ -116,11 +118,13 @@ Notifications  Push Updates       UI State Updates
 6. **Confirmation**: UI feedback and dialog closure
 
 ### Notification Flow
-1. **Assignment Trigger**: After successful job update
-2. **Employee Lookup**: Fetch employee FCM tokens
-3. **Notification Construction**: Build message with job details
-4. **Send Operation**: Async notification sending with error handling
-5. **Logging**: Debug print for failed notifications
+1. **Trigger**: Job creation, assignment, or timed escalation
+2. **Priority Check**: Read job.priority (1-5) to determine level (normal/medium-high/full-loud)
+3. **Recipient Selection**: Techs for creation, assignee for assignment, escalating groups for escalations
+4. **Level Application**: CF passes notificationLevel in FCM data
+5. **Client Handling**: Dart switches on level for channel/sound/vib/fullscreen
+6. **Send Operation**: Async FCM with error handling
+7. **Logging**: Debug prints for tracking
 
 ### Comment System
 1. **Dialog Display**: Bottom sheet with reoccurrence counter

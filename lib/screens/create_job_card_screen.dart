@@ -310,10 +310,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       color: _getStatusColor(job.status.name).withValues(alpha: 51),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text(
-                                    job.status.displayName,
-                                    style: TextStyle(color: _getStatusColor(job.status.name), fontSize: 11, fontWeight: FontWeight.w500),
-                                  ),
+                    child: Text(
+                      job.status.displayName,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
@@ -550,8 +550,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     ),
                     child: Text(
                       priorityDescriptions[priority],
-                      style: TextStyle(
-                        color: priorityColors[priority],
+                      style: const TextStyle(
+                        color: Colors.black,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -580,7 +580,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.black)
-                        : const Text('Save Job Card'),
+                        : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -780,8 +780,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                           child: Text(
                             priorityDescriptions[priority],
-                            style: TextStyle(
-                              color: priorityColors[priority],
+                            style: const TextStyle(
+                              color: Colors.black,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -810,7 +810,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                           child: _isLoading
                               ? const CircularProgressIndicator(color: Colors.black)
-                              : const Text('Save Job Card'),
+                              : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
                         ),
                       ),
                       const SizedBox(height: 12),

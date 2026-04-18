@@ -26,8 +26,10 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   // Transaction form controllers
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _rPerKgController = TextEditingController();
+  final TextEditingController _sellAmountController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   String _selectedType = 'addToSort';
+  double _reuseAmount = 0;
 
   @override
   void initState() {
@@ -38,7 +40,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
 
   Future<void> _loadClockNo() async {
     _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -46,16 +48,24 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
     _tabController.dispose();
     _amountController.dispose();
     _rPerKgController.dispose();
+    _sellAmountController.dispose();
     _commentsController.dispose();
     super.dispose();
   }
 
   Future<void> _executeTransaction() async {
     if (_currentClockNo == null) return;
+
     final amount = double.tryParse(_amountController.text) ?? 0;
     final rPerKg = double.tryParse(_rPerKgController.text) ?? 0;
+    final sellAmount = double.tryParse(_sellAmountController.text) ?? 0;
+
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Amount must be greater than 0')));
+      return;
+    }
+    if (_selectedType == 'removeFromSort' && sellAmount > amount) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sell amount cannot exceed total amount')));
       return;
     }
 
@@ -70,6 +80,10 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
         case 'plateBars':
           await notifier.performPlateBars(amount, _commentsController.text, _currentClockNo!);
           break;
+        case 'removeFromSort':
+          final reuseAmount = amount - sellAmount;
+          await notifier.performSort(reuseAmount, sellAmount, _commentsController.text, _currentClockNo!);
+          break;
         case 'useReuse':
           await notifier.performUseReuse(amount, _commentsController.text, _currentClockNo!);
           break;
@@ -78,14 +92,19 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
           await notifier.performRecordSale(amount, rPerKg, _commentsController.text, _currentClockNo!);
           break;
       }
+
+      // Clear form
       _amountController.clear();
       _rPerKgController.clear();
+      _sellAmountController.clear();
       _commentsController.clear();
+      _reuseAmount = 0;
+
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction successful ✅')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -106,7 +125,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
         tx.amountKg,
         tx.fromBucket ?? '',
         tx.toBucket ?? '',
-        tx.rPerKg ?? '',
+        tx.rPerKg?.toString() ?? '',
         tx.comments,
       ]);
     }
@@ -122,143 +141,185 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Copper Management'),
+        title: const Text('Copper Management', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.amber,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.swap_horiz), text: 'Make Transaction'),
-            Tab(icon: Icon(Icons.history), text: 'History'),
-          ],
-        ),
+        elevation: 0,
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          // ==================== TAB 1: MAKE TRANSACTION ====================
-          ref.watch(copperNotifierProvider).when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('Error: $error')),
-            data: (inv) {
-
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Current Copper Buckets', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        _buildBucketCard('Sort', inv.sortKg, Colors.blue, Icons.sort),
-                        const SizedBox(width: 8),
-                        _buildBucketCard('Reuse', inv.reuseKg, Colors.green, Icons.refresh),
-                        const SizedBox(width: 8),
-                        _buildBucketCard('Sell', inv.sellKg, Colors.amber, Icons.sell),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    const Text('New Transaction', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _selectedType,
-                      decoration: const InputDecoration(labelText: 'Transaction Type'),
-                      items: const [
-                        DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
-                        DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
-                        DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
-                        DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
-                      ],
-                      onChanged: (v) => setState(() => _selectedType = v!),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _amountController,
-                      decoration: const InputDecoration(labelText: 'Amount (kg)'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    if (_selectedType == 'recordSale') ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _rPerKgController,
-                        decoration: const InputDecoration(labelText: 'R per kg'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _commentsController,
-                      decoration: const InputDecoration(labelText: 'Comments'),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _executeTransaction,
-                        child: _isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text('Execute Transaction', style: TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+          Container(
+            color: Colors.black,
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.amber,
+              labelColor: Colors.amber,
+              unselectedLabelColor: Colors.white70,
+              tabs: const [
+                Tab(icon: Icon(Icons.swap_horiz), text: 'Make Transaction'),
+                Tab(icon: Icon(Icons.history), text: 'History'),
+              ],
+            ),
           ),
-
-          // ==================== TAB 2: HISTORY ====================
-          StreamBuilder<List<CopperTransaction>>(
-            stream: _copperService.getTransactionsStream(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final txs = snapshot.data!;
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.download),
-                      label: const Text('Export CSV'),
-                      onPressed: () => _exportCSV(txs),
-                    ),
-                  ),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () async => setState(() {}),
-                      child: ListView.separated(
-                        itemCount: txs.length,
-                        separatorBuilder: (_, __) => const Divider(),
-                        itemBuilder: (context, index) {
-                          final tx = txs[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            child: ListTile(
-                              leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
-                              title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (tx.fromBucket != null || tx.toBucket != null)
-                                    Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
-                                  if (tx.rPerKg != null) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
-                                  Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                ],
-                              ),
-                              trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // ==================== TAB 1: MAKE TRANSACTION ====================
+                ref.watch(copperNotifierProvider).when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, stack) => Center(child: Text('Error: $error')),
+                  data: (CopperInventory inv) => SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Current Copper Buckets', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _buildBucketCard('Sort', inv.sortKg, Colors.blue, Icons.sort),
+                            const SizedBox(width: 8),
+                            _buildBucketCard('Reuse', inv.reuseKg, Colors.green, Icons.refresh),
+                            const SizedBox(width: 8),
+                            _buildBucketCard('Sell', inv.sellKg, Colors.amber, Icons.sell),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const Text('New Transaction', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _selectedType,
+                          decoration: const InputDecoration(labelText: 'Transaction Type'),
+                          items: const [
+                            DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
+                            DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
+                            DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
+                            DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
+                            DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
+                          ],
+                          onChanged: (v) => setState(() => _selectedType = v!),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _amountController,
+                          decoration: const InputDecoration(labelText: 'Amount (kg)'),
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) {
+                            setState(() {
+                              _reuseAmount = (double.tryParse(value) ?? 0) - (double.tryParse(_sellAmountController.text) ?? 0);
+                            });
+                          },
+                        ),
+                        if (_selectedType == 'removeFromSort') ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _sellAmountController,
+                            decoration: const InputDecoration(labelText: 'Sell Amount (kg)'),
+                            keyboardType: TextInputType.number,
+                            onChanged: (value) {
+                              setState(() {
+                                _reuseAmount = (double.tryParse(_amountController.text) ?? 0) - (double.tryParse(value) ?? 0);
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Reuse: ${_reuseAmount.toStringAsFixed(1)} kg',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: _reuseAmount >= 0 ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ],
+                        if (_selectedType == 'recordSale') ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _rPerKgController,
+                            decoration: const InputDecoration(labelText: 'R per kg'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _commentsController,
+                          decoration: const InputDecoration(labelText: 'Comments'),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _executeTransaction,
+                            child: _isLoading
+                                ? const CircularProgressIndicator(color: Colors.white)
+                                : const Text('Execute Transaction', style: TextStyle(fontSize: 18)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              );
-            },
+                ),
+
+                // ==================== TAB 2: HISTORY ====================
+                StreamBuilder<List<CopperTransaction>>(
+                  stream: _copperService.getTransactionsStream(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final txs = snapshot.data!;
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.download),
+                            label: const Text('Export CSV'),
+                            onPressed: () => _exportCSV(txs),
+                          ),
+                        ),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              setState(() {});
+                              await Future.delayed(const Duration(milliseconds: 500));
+                            },
+                            child: ListView.separated(
+                              itemCount: txs.length,
+                              separatorBuilder: (_, __) => const Divider(),
+                              itemBuilder: (context, index) {
+                                final tx = txs[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  child: ListTile(
+                                    leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
+                                    title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (tx.fromBucket != null || tx.toBucket != null)
+                                          Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
+                                        if (tx.rPerKg != null) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
+                                        Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                      ],
+                                    ),
+                                    trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -292,23 +353,35 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
 
   IconData _getIcon(String type) {
     switch (type) {
-      case CopperTransaction.addToSort: return Icons.add_circle;
-      case CopperTransaction.plateBars: return Icons.build_circle;
-      case CopperTransaction.sort: return Icons.sort;
-      case CopperTransaction.useReuse: return Icons.remove_circle;
-      case CopperTransaction.recordSale: return Icons.attach_money;
-      default: return Icons.help;
+      case CopperTransaction.addToSort:
+        return Icons.add_circle;
+      case CopperTransaction.plateBars:
+        return Icons.build_circle;
+      case CopperTransaction.sort:
+        return Icons.sort;
+      case CopperTransaction.useReuse:
+        return Icons.remove_circle;
+      case CopperTransaction.recordSale:
+        return Icons.attach_money;
+      default:
+        return Icons.help;
     }
   }
 
   Color _getColor(String type) {
     switch (type) {
-      case CopperTransaction.addToSort: return Colors.blue;
-      case CopperTransaction.plateBars: return Colors.purple;
-      case CopperTransaction.sort: return Colors.green;
-      case CopperTransaction.useReuse: return Colors.red;
-      case CopperTransaction.recordSale: return Colors.amber;
-      default: return Colors.grey;
+      case CopperTransaction.addToSort:
+        return Colors.blue;
+      case CopperTransaction.plateBars:
+        return Colors.purple;
+      case CopperTransaction.sort:
+        return Colors.green;
+      case CopperTransaction.useReuse:
+        return Colors.red;
+      case CopperTransaction.recordSale:
+        return Colors.amber;
+      default:
+        return Colors.grey;
     }
   }
 }

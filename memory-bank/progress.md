@@ -18,6 +18,7 @@
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Local Notifications**: Foreground message handling with flutter_local_notifications
+- **Priority-Based Smart Notifications**: Intelligent escalation system with 3 levels (normal, medium-high, full-loud) based on job priority, custom sounds, vibrations, and full-screen alerts for critical jobs
 - **Status Tracking**: Complete job lifecycle tracking with timestamps (Open → Monitor → Closed)
 - **Job Status System**: Four statuses (Open, Monitor, Closed, Cancelled) with proper color coding and UI
 - **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs
@@ -28,6 +29,8 @@
 - **Enhanced Firebase Services**: Auth, Storage, Cloud Functions for comprehensive backend support
 - **Bulk Admin Operations**: Advanced CSV import/export with file_picker
 - **Copper Inventory Management**: Complete copper tracking system with real-time dashboard, transactions, sorting, password authentication, and atomic updates
+- **Enhanced Manager Dashboard Analytics**: Comprehensive job card analytics with created vs closed trends and department breakdowns, including line charts for trends and outstanding jobs by department
+- **Copper Dashboard UI Enhancement**: Updated app bar to yellow (amber) theme matching tab selection color, with separate black tab bar background for visual distinction
 
 ### UI/UX Features
 - **Responsive Design**: Works on mobile devices

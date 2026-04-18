@@ -6,7 +6,7 @@ async function callMigrateFunction() {
     console.log('Getting Firebase access token...');
 
     // Get Firebase access token
-    const token = execSync('firebase auth:export --output-format=json', { encoding: 'utf8' });
+    const token = execSync('# firebase auth:export auth_export.json --format=json  # skipped - new project', { encoding: 'utf8' });
     const tokenData = JSON.parse(token);
     const accessToken = tokenData.tokens.access_token;
 

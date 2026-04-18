@@ -34,12 +34,11 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
 
   String selectedStaffFilter = 'All';
 
-  bool _filtersExpanded = false;
-
   late TabController _tabController;
 
   bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
   bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
+  bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
   final FirestoreService _firestoreService = FirestoreService();
 
@@ -115,290 +114,171 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     return lines.length > 1 ? lines[1].trim() : lastComment.trim();
   }
 
-  // ==================== ACTIVE FILTER CHIPS ====================
-  Widget _buildActiveFilterChips() {
-    final activeFilters = <Widget>[];
 
-    if (selectedStaffFilter != (_employeeStaffDefault ?? 'All')) {
-      activeFilters.add(
-        Chip(
-          label: Text(selectedStaffFilter),
-          deleteIcon: const Icon(Icons.close, size: 16),
-          onDeleted: () => setState(() => selectedStaffFilter = _employeeStaffDefault ?? 'All'),
-          backgroundColor: Colors.orange.withValues(alpha: 51),
-          labelStyle: const TextStyle(color: Colors.orange),
-        ),
-      );
-    }
 
-    if (selectedDepartment != null) {
-      activeFilters.add(
-        Chip(
-          label: Text(selectedDepartment!),
-          deleteIcon: const Icon(Icons.close, size: 16),
-          onDeleted: () => setState(() {
-            selectedDepartment = null;
-            selectedArea = null;
-            selectedMachine = null;
-            selectedPart = null;
-          }),
-          backgroundColor: Colors.blue.withValues(alpha: 51),
-          labelStyle: const TextStyle(color: Colors.blue),
-        ),
-      );
-    }
+  // ==================== CASCADING FILTERS ====================
+  Widget _buildCascadingFilters() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _firestoreService.getFactoryStructure(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Error loading filters: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: const EdgeInsets.all(16),
+            child: CircularProgressIndicator(),
+          );
+        }
 
-    if (selectedArea != null) {
-      activeFilters.add(
-        Chip(
-          label: Text(selectedArea!),
-          deleteIcon: const Icon(Icons.close, size: 16),
-          onDeleted: () => setState(() {
-            selectedArea = null;
-            selectedMachine = null;
-            selectedPart = null;
-          }),
-          backgroundColor: Colors.green.withValues(alpha: 51),
-          labelStyle: const TextStyle(color: Colors.green),
-        ),
-      );
-    }
+        final data = snapshot.data!;
+        final areas = selectedDepartment != null ? (data[selectedDepartment] as Map<String, dynamic>? ?? {}).keys.toList() : <String>[];
+        final machines = selectedArea != null && selectedDepartment != null
+            ? (data[selectedDepartment]?[selectedArea] as List<dynamic>? ?? []).cast<String>()
+            : <String>[];
 
-    if (selectedMachine != null) {
-      activeFilters.add(
-        Chip(
-          label: Text(selectedMachine!),
-          deleteIcon: const Icon(Icons.close, size: 16),
-          onDeleted: () => setState(() {
-            selectedMachine = null;
-            selectedPart = null;
-          }),
-          backgroundColor: Colors.purple.withValues(alpha: 51),
-          labelStyle: const TextStyle(color: Colors.purple),
-        ),
-      );
-    }
+        Widget currentStep;
 
-    if (selectedPart != null) {
-      activeFilters.add(
-        Chip(
-          label: Text(selectedPart!),
-          deleteIcon: const Icon(Icons.close, size: 16),
-          onDeleted: () => setState(() => selectedPart = null),
-          backgroundColor: Colors.teal.withValues(alpha: 51),
-          labelStyle: const TextStyle(color: Colors.teal),
-        ),
-      );
-    }
+        if (selectedPart != null) {
+          // All selected, show nothing
+          currentStep = const SizedBox.shrink();
+        } else if (selectedMachine != null) {
+          // Show part input
+          currentStep = FutureBuilder<List<String>>(
+            future: _firestoreService.getPreviousParts(selectedDepartment!, selectedArea!, selectedMachine!),
+            builder: (context, snapshot) {
+              final previousParts = snapshot.data ?? [];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (previousParts.isNotEmpty)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: previousParts.map((part) => ActionChip(
+                        label: Text(part),
+                        onPressed: () => setState(() => selectedPart = part),
+                        backgroundColor: selectedPart == part ? const Color(0xFFFF8C42).withValues(alpha: 51) : null,
+                        labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Colors.white),
+                      )).toList(),
+                    ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Type part or tap suggestion above',
+                      border: OutlineInputBorder(),
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
+                    onChanged: (value) => setState(() => selectedPart = value.trim()),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              );
+            },
+          );
+        } else if (selectedArea != null) {
+          // Show machine chips
+          currentStep = Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: machines.map((machine) => ChoiceChip(
+              label: Text(machine),
+              selected: selectedMachine == machine,
+              onSelected: (_) => setState(() {
+                selectedMachine = machine;
+                selectedPart = null;
+              }),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+            )).toList(),
+          );
+        } else if (selectedDepartment != null) {
+          // Show area chips
+          currentStep = Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: areas.map((area) => ChoiceChip(
+              label: Text(area),
+              selected: selectedArea == area,
+              onSelected: (_) => setState(() {
+                selectedArea = area;
+                selectedMachine = null;
+                selectedPart = null;
+              }),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+            )).toList(),
+          );
+        } else {
+          // Show dept chips
+          currentStep = Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('All Departments'),
+                selected: selectedDepartment == null,
+                onSelected: (_) => setState(() {
+                  selectedDepartment = null;
+                  selectedArea = null;
+                  selectedMachine = null;
+                  selectedPart = null;
+                }),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+              ),
+              ...data.keys.map((dept) => ChoiceChip(
+                label: Text(dept),
+                selected: selectedDepartment == dept,
+                onSelected: (_) => setState(() {
+                  selectedDepartment = dept;
+                  selectedArea = null;
+                  selectedMachine = null;
+                  selectedPart = null;
+                }),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+              )),
+            ],
+          );
+        }
 
-    if (activeFilters.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            const Text('Active Filters:', style: TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(width: 8),
-            ...activeFilters.map((chip) => Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: chip,
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==================== ADVANCED FILTERS ====================
-  Widget _buildAdvancedFilters() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      height: _filtersExpanded ? null : 0,
-      child: SingleChildScrollView(
-        child: Padding(
+        return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Staff Type Filter
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'Electrical', label: Text('Electrical')),
-                    ButtonSegment(value: 'Mechanical', label: Text('Mechanical')),
-                    ButtonSegment(value: 'All', label: Text('All')),
-                  ],
-                  selected: {selectedStaffFilter},
-                  onSelectionChanged: (Set<String> selected) {
-                    if (selected.isNotEmpty) {
-                      setState(() => selectedStaffFilter = selected.first);
-                    }
-                  },
-                ),
-              ),
-
-              // Department Chips
-              StreamBuilder<List<JobCard>>(
-                stream: _firestoreService.getAllJobCards(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox();
-                  final jobs = snapshot.data!;
-
-                  final depts = jobs
-                      .map((j) => j.department)
-                      .where((d) => d.isNotEmpty)
-                      .toSet()
-                      .toList()
-                    ..sort();
-
-                  return Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All Departments'),
-                        selected: selectedDepartment == null,
-                        onSelected: (_) {
-                          setState(() {
-                            selectedDepartment = null;
-                            selectedArea = null;
-                            selectedMachine = null;
-                            selectedPart = null;
-                          });
-                        },
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                      ...depts.map((dept) => ChoiceChip(
-                        label: Text(dept),
-                        selected: selectedDepartment == dept,
-                        onSelected: (_) {
-                          setState(() {
-                            selectedDepartment = dept;
-                            selectedArea = null;
-                            selectedMachine = null;
-                            selectedPart = null;
-                          });
-                        },
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      )),
-                    ],
-                  );
-                },
-              ),
-
-              // Area Chips (conditional)
-              if (selectedDepartment != null)
+              // Clear All Button
+              if (selectedDepartment != null || selectedArea != null || selectedMachine != null || selectedPart != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: StreamBuilder<List<JobCard>>(
-                    stream: _firestoreService.getAllJobCards(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-                      final jobs = snapshot.data!.where((j) => j.department == selectedDepartment).toList();
-                      final areaList = jobs
-                          .map((j) => j.area)
-                          .where((a) => a.isNotEmpty)
-                          .toSet()
-                          .toList()
-                        ..sort();
-
-                      return Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: areaList.map((area) => ChoiceChip(
-                          label: Text(area),
-                          selected: selectedArea == area,
-                          onSelected: (_) {
-                            setState(() {
-                              selectedArea = area;
-                              selectedMachine = null;
-                              selectedPart = null;
-                            });
-                          },
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        )).toList(),
-                      );
-                    },
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          selectedStaffFilter = 'All';
+                          selectedDepartment = null;
+                          selectedArea = null;
+                          selectedMachine = null;
+                          selectedPart = null;
+                        });
+                      },
+                      icon: const Icon(Icons.clear),
+                      label: const Text('Clear All Filters'),
+                      style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                    ),
                   ),
                 ),
 
-              // Machine Chips (conditional)
-              if (selectedArea != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: StreamBuilder<List<JobCard>>(
-                    stream: _firestoreService.getAllJobCards(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-                      final jobs = snapshot.data!
-                          .where((j) => j.department == selectedDepartment && j.area == selectedArea)
-                          .toList();
-                      final machineList = jobs
-                          .map((j) => j.machine)
-                          .where((m) => m.isNotEmpty)
-                          .toSet()
-                          .toList()
-                        ..sort();
-
-                      return Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: machineList.map((machine) => ChoiceChip(
-                          label: Text(machine),
-                          selected: selectedMachine == machine,
-                          onSelected: (_) {
-                            setState(() {
-                              selectedMachine = machine;
-                              selectedPart = null;
-                            });
-                          },
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        )).toList(),
-                      );
-                    },
-                  ),
-                ),
-
-              // Part Chips (conditional)
-              if (selectedMachine != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: StreamBuilder<List<JobCard>>(
-                    stream: _firestoreService.getAllJobCards(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-                      final jobs = snapshot.data!
-                          .where((j) => j.department == selectedDepartment &&
-                                       j.area == selectedArea &&
-                                       j.machine == selectedMachine)
-                          .toList();
-                      final partList = jobs
-                          .map((j) => j.part)
-                          .where((p) => p.isNotEmpty)
-                          .toSet()
-                          .toList()
-                        ..sort();
-
-                      return Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: partList.map((part) => ChoiceChip(
-                          label: Text(part),
-                          selected: selectedPart == part,
-                          onSelected: (_) => setState(() => selectedPart = part),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        )).toList(),
-                      );
-                    },
-                  ),
-                ),
+              // Current Step
+              currentStep,
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -445,27 +325,25 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (job.jobCardNumber != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                               color: Colors.blue.withValues(alpha: 204),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'JC #${job.jobCardNumber}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
+               Row(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                     decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 204),
+                       borderRadius: BorderRadius.circular(6),
+                     ),
+                   child: Text(
+                     'JC #${job.jobCardNumber ?? 'N/A'}',
+                     style: const TextStyle(
+                       color: Colors.white,
+                       fontSize: 12,
+                       fontWeight: FontWeight.w600,
+                     ),
+                   ),
+                   ),
+                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       job.description,
@@ -510,8 +388,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     ),
                     child: Text(
                       job.status.displayName,
-                      style: TextStyle(
-                        color: _getStatusColor(job.status.name),
+                      style: const TextStyle(
+                        color: Colors.black,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -553,85 +431,127 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     return Scaffold(
       appBar: AppBar(
         title: const Text('All Job Cards'),
+        backgroundColor: const Color(0xFFFF8C42),
         actions: [
-          if (selectedDepartment != null || selectedArea != null || selectedMachine != null || selectedPart != null || selectedStaffFilter != (_employeeStaffDefault ?? 'All'))
-            TextButton.icon(
-              icon: const Icon(Icons.clear),
-              label: const Text('Clear Filters'),
-              onPressed: () {
-                setState(() {
-                  selectedStaffFilter = _employeeStaffDefault ?? 'All';
-                  if (_employeeStaffDefault == null) {
-                    selectedDepartment = currentEmployee?.department;
-                  } else {
-                    selectedDepartment = null;
-                  }
-                  if (isSuperManager) {
-                    selectedDepartment = null;
-                  }
-                  selectedArea = null;
-                  selectedMachine = null;
-                  selectedPart = null;
-                });
-              },
-            ),
+          // Staff Filter Icons
+          ToggleButtons(
+            isSelected: [
+              selectedStaffFilter == 'Mechanical',
+              selectedStaffFilter == 'Electrical',
+              selectedStaffFilter == 'All',
+            ],
+            onPressed: (index) {
+              setState(() {
+                selectedStaffFilter = ['Mechanical', 'Electrical', 'All'][index];
+              });
+            },
+            borderRadius: BorderRadius.circular(8),
+            selectedColor: const Color(0xFFFF8C42),
+            fillColor: const Color(0xFFFF8C42).withValues(alpha: 51),
+            children: const [
+              Icon(Icons.build, size: 24, color: Colors.black), // Mechanical
+              Icon(Icons.bolt, size: 24, color: Colors.black), // Electrical
+              Icon(Icons.circle_outlined, size: 24, color: Colors.black), // All
+            ],
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          // Status Tabs
-          TabBar(
+      body: _isWide ? _buildWideLayout() : _buildNarrowLayout(),
+    );
+  }
+
+  Widget _buildNarrowLayout() {
+    return Column(
+      children: [
+        // Status Tabs
+        Container(
+          color: Colors.black,
+          child: TabBar(
             controller: _tabController,
             tabs: const [
               Tab(text: 'Open'),
               Tab(text: 'Monitor'),
               Tab(text: 'Closed'),
             ],
-            labelColor: Colors.white,
+            labelColor: const Color(0xFFFF8C42),
             unselectedLabelColor: Colors.white70,
             indicatorColor: const Color(0xFFFF8C42),
           ),
+        ),
 
-          // Active Filter Chips
-          _buildActiveFilterChips(),
+        // Cascading Filters
+        _buildCascadingFilters(),
 
-          // Advanced Filters Toggle
-          InkWell(
-            onTap: () => setState(() => _filtersExpanded = !_filtersExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Advanced Filters',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    _filtersExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.white70,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Advanced Filters (Collapsible)
-          _buildAdvancedFilters(),
-
-          // Main Content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
+        // Main Content
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
             children: [
               _buildJobListForStatus('open'),
               _buildJobListForStatus('monitor'),
               _buildJobListForStatus('closed'),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWideLayout() {
+    return Row(
+      children: [
+        // Filters Sidebar
+        Container(
+          width: 300,
+          color: Colors.black12,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 16),
+                _buildCascadingFilters(),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+
+        // Main Content
+        Expanded(
+          child: Column(
+            children: [
+              // Status Tabs
+              Container(
+                color: Colors.black,
+                child: TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(text: 'Open'),
+                    Tab(text: 'Monitor'),
+                    Tab(text: 'Closed'),
+                  ],
+                  labelColor: const Color(0xFFFF8C42),
+                  unselectedLabelColor: Colors.white70,
+                  indicatorColor: const Color(0xFFFF8C42),
+                ),
+              ),
+
+              // Job List
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildJobListForStatus('open'),
+                    _buildJobListForStatus('monitor'),
+                    _buildJobListForStatus('closed'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

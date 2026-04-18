@@ -107,16 +107,16 @@ class CopperService {
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.sort,
-        amountKg: totalKg,
-        fromBucket: 'sort',
-        toBucket: 'reuse+sell',
-        timestamp: now,
-        comments: comments,
-        userId: userId,
-      ).toFirestore());
+       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+         id: id,
+         type: CopperTransaction.sort,
+         amountKg: totalKg,
+         fromBucket: 'sort',
+         toBucket: 'reuse: ${reuseKg.toStringAsFixed(1)}kg, sell: ${sellKg.toStringAsFixed(1)}kg',
+         timestamp: now,
+         comments: comments,
+         userId: userId,
+       ).toFirestore());
     });
   }
 

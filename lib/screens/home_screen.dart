@@ -577,14 +577,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                              color: _getStatusColor(job.status.name).withValues(alpha: 128),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
-                      job.status.displayName,
-                      style: TextStyle(
-                        color: _getStatusColor(job.status.name),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                     child: Text(
+                       job.status.displayName,
+                       style: const TextStyle(
+                         color: Colors.white,
+                         fontSize: 12,
+                         fontWeight: FontWeight.w600,
+                       ),
+                     ),
                   ),
                   const SizedBox(width: 6),
                   Container(
@@ -929,29 +929,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               padding: EdgeInsets.all(_cardPadding),
               child: Row(
                 children: [
-                  const Icon(Icons.brightness_6, color: Color(0xFFFF8C42)),
+                  Icon(
+                    isOnSite ? Icons.check_circle : Icons.cancel,
+                    color: isOnSite ? Colors.green : Colors.red,
+                    size: _isDesktop ? 20 : 24,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Theme',
+                      isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
                       style: TextStyle(
                         fontSize: _isDesktop ? 14 : 16,
                         fontWeight: FontWeight.w500,
-                        color: Colors.white,
                       ),
                     ),
                   ),
-                  Text(
-                    themeMode == ThemeMode.dark ? 'Dark' : 'Light',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(width: 12),
                   Transform.scale(
                     scale: _isDesktop ? 0.7 : 0.8,
                     child: Switch(
-                      value: themeMode == ThemeMode.light,
-                      onChanged: (value) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
-                      activeThumbColor: const Color(0xFFFF8C42),
+                      value: isOnSite,
+                      onChanged: _toggleOnSite,
+                      activeThumbColor: Colors.green,
+                      inactiveTrackColor: Colors.redAccent,
                     ),
                   ),
                 ],

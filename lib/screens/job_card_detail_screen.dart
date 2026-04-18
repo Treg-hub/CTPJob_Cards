@@ -41,6 +41,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   bool get _canAddNotes => isManager || (currentEmployee?.position ?? '').toLowerCase().contains('electrical') || (currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
   bool get _canAddComments => !(currentEmployee?.position ?? '').toLowerCase().contains('electrical') && !(currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
 
+  Future<void> _refreshJobCard() async {
+    if (_currentJobCard.id != null) {
+      final updated = await _firestoreService.getJobCard(_currentJobCard.id!);
+      if (updated != null && mounted) {
+        setState(() => _currentJobCard = updated);
+      }
+    }
+  }
+
   Future<void> _appendComment() async {
     if (_commentController.text.trim().isEmpty) return;
     final now = DateTime.now();
@@ -53,6 +62,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         comments: updatedComments,
         reoccurrenceCount: _reoccurrenceCount,
       ));
+      await _refreshJobCard();
       setState(() => _commentController.clear());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment added!')));
@@ -90,6 +100,33 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     );
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _refreshJobCard();
+
+      // Notify creator
+      if (jobCard.operatorClockNo != null) {
+        try {
+          final creatorEmp = await _firestoreService.getEmployee(jobCard.operatorClockNo!);
+          if (creatorEmp?.fcmToken != null) {
+            await _notificationService.sendCreatorNotification(
+              recipientToken: creatorEmp!.fcmToken!,
+              jobCardId: jobCard.id!,
+              jobCardNumber: jobCard.jobCardNumber,
+              operator: currentEmployee?.name ?? 'Unknown',
+              creator: jobCard.operator,
+              department: jobCard.department,
+              area: jobCard.area,
+              machine: jobCard.machine,
+              part: jobCard.part,
+              description: jobCard.description,
+              notificationType: 'self_assign',
+              assigneeName: currentEmployee?.name ?? 'Unknown',
+            );
+          }
+        } catch (e) {
+          debugPrint('Error sending creator notification: $e');
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to you')));
       }
@@ -122,6 +159,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Removed from job')));
       }
@@ -337,6 +375,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                                 );
 
       await _firestoreService.saveJobCardOfflineAware(finalUpdatedJob);
+      await _refreshJobCard();
 
                                 // Send notifications only for newly added employees
                                 final newEmployees = selectedClockNos.where((clockNo) => !(job.assignedClockNos?.contains(clockNo) ?? false)).toList();
@@ -495,6 +534,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
 
     try {
       await _firestoreService.saveJobCardOfflineAware(_currentJobCard.copyWith(notes: updatedNotes));
+      await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note added!')));
       }
@@ -565,6 +605,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       await _firestoreService.saveJobCardOfflineAware(
         jobCard.copyWith(photos: updatedPhotos),
       );
+      await _refreshJobCard();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
@@ -618,13 +659,20 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         appBar: AppBar(
           title: const Text('Job Card Details'),
           backgroundColor: const Color(0xFFFF8C42),
-          bottom: const TabBar(
-            labelColor: Colors.black,
-            unselectedLabelColor: Colors.black54,
-            tabs: [
-              Tab(text: 'Details'),
-              Tab(text: 'Photos'),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: Container(
+              color: Colors.black,
+              child: TabBar(
+                labelColor: const Color(0xFFFF8C42),
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: const Color(0xFFFF8C42),
+                tabs: const [
+                  Tab(text: 'Details'),
+                  Tab(text: 'Photos'),
+                ],
+              ),
+            ),
           ),
         ),
         body: StreamBuilder<JobCard>(
@@ -635,23 +683,26 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             return TabBarView(
               children: [
                 // Details Tab
-                SingleChildScrollView(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeroHeader(jobCard),
-                      SizedBox(height: sectionSpacing),
-                      _buildAssignmentButtons(jobCard),
-                      SizedBox(height: sectionSpacing),
-                      _buildCombinedCard(jobCard),
-                      SizedBox(height: sectionSpacing),
-                      _buildDetailsCard(jobCard),
-                      SizedBox(height: sectionSpacing),
-                      _buildActivityLogCard(jobCard),
-                      SizedBox(height: sectionSpacing),
-                      _buildAssignmentLogCard(jobCard),
-                    ],
+                RefreshIndicator(
+                  onRefresh: _refreshJobCard,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeroHeader(jobCard),
+                        SizedBox(height: sectionSpacing),
+                        _buildAssignmentButtons(jobCard),
+                        SizedBox(height: sectionSpacing),
+                        _buildCombinedCard(jobCard),
+                        SizedBox(height: sectionSpacing),
+                        _buildDetailsCard(jobCard),
+                        SizedBox(height: sectionSpacing),
+                        _buildActivityLogCard(jobCard),
+                        SizedBox(height: sectionSpacing),
+                        _buildAssignmentLogCard(jobCard),
+                      ],
+                    ),
                   ),
                 ),
                 // Photos Tab
@@ -859,6 +910,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Job started!')));
       }
@@ -984,6 +1036,33 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _refreshJobCard();
+
+      // Notify creator
+      if (jobCard.operatorClockNo != null) {
+        try {
+          final creatorEmp = await _firestoreService.getEmployee(jobCard.operatorClockNo!);
+          if (creatorEmp?.fcmToken != null) {
+            await _notificationService.sendCreatorNotification(
+              recipientToken: creatorEmp!.fcmToken!,
+              jobCardId: jobCard.id!,
+              jobCardNumber: jobCard.jobCardNumber,
+              operator: currentEmployee?.name ?? 'Unknown',
+              creator: jobCard.operator,
+              department: jobCard.department,
+              area: jobCard.area,
+              machine: jobCard.machine,
+              part: jobCard.part,
+              description: jobCard.description,
+              notificationType: 'closed',
+              assigneeName: currentEmployee?.name ?? 'Unknown',
+            );
+          }
+        } catch (e) {
+          debugPrint('Error sending creator notification: $e');
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(withMonitoring ? 'Job completed and monitoring started!' : 'Job completed!')),
@@ -1018,6 +1097,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
       }
@@ -1072,6 +1152,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                 );
                 try {
                   await _firestoreService.saveJobCardOfflineAware(updated);
+                  await _refreshJobCard();
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')));
@@ -1177,6 +1258,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                 ),
               ],
             ),
+            if (jobCard.createdAt != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Spacer(),
+                  Text(
+                    _formatDateTime(jobCard.createdAt!),
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               'Count - $_reoccurrenceCount',

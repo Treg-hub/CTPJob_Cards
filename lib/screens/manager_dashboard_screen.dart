@@ -11,7 +11,9 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
+import '../theme/app_theme.dart';
 import 'copper_dashboard_screen.dart';
+import 'job_card_detail_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -34,6 +36,14 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
   int _pendingAssignments = 0;
   int _agedOpen7d = 0;
   int _agedOpen30d = 0;
+  int _createdThisMonth = 0;
+  int _closedThisMonth = 0;
+
+  Map<DateTime, int> _createdDaily = {};
+  Map<DateTime, int> _closedDaily = {};
+  Map<String, int> _createdByDept = {};
+  Map<String, int> _closedByDept = {};
+  Map<DateTime, Map<String, int>> _outstandingByDeptDaily = {};
 
   bool _isLoading = true;
 
@@ -95,10 +105,48 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
 
       _filteredJobsCache = jobs;
 
+      // Compute analytics data
+      _createdDaily.clear();
+      _closedDaily.clear();
+      _createdByDept.clear();
+      _closedByDept.clear();
+      _createdThisMonth = 0;
+      _closedThisMonth = 0;
+
+      final now = DateTime.now();
+      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+      final startOfMonth = DateTime(now.year, now.month, 1);
+
+      for (var job in jobs) {
+        if (job.createdAt != null) {
+          final date = job.createdAt!.toLocal();
+          if (date.isAfter(thirtyDaysAgo)) {
+            final day = DateTime(date.year, date.month, date.day);
+            _createdDaily[day] = (_createdDaily[day] ?? 0) + 1;
+          }
+          if (date.isAfter(startOfMonth)) {
+            _createdThisMonth++;
+          }
+          final dept = job.department ?? 'Other';
+          _createdByDept[dept] = (_createdByDept[dept] ?? 0) + 1;
+        }
+        if (job.completedAt != null && job.status == JobStatus.closed) {
+          final date = job.completedAt!.toLocal();
+          if (date.isAfter(thirtyDaysAgo)) {
+            final day = DateTime(date.year, date.month, date.day);
+            _closedDaily[day] = (_closedDaily[day] ?? 0) + 1;
+          }
+          if (date.isAfter(startOfMonth)) {
+            _closedThisMonth++;
+          }
+          final dept = job.department ?? 'Other';
+          _closedByDept[dept] = (_closedByDept[dept] ?? 0) + 1;
+        }
+      }
+
       _totalJobs = jobs.length;
       _openJobsCount = jobs.where((j) => j.status == JobStatus.open).length;
 
-      final now = DateTime.now();
       _completed7Days = jobs.where((j) => j.status == JobStatus.closed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 7)))).length;
       _completed30Days = jobs.where((j) => j.status == JobStatus.closed && j.completedAt != null && j.completedAt!.isAfter(now.subtract(const Duration(days: 30)))).length;
 
@@ -133,6 +181,22 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
       _agedOpen7d = openJobs.where((j) => j.createdAt!.isBefore(now.subtract(const Duration(days: 7)))).length;
       _agedOpen30d = openJobs.where((j) => j.createdAt!.isBefore(now.subtract(const Duration(days: 30)))).length;
 
+      // Compute outstanding by dept daily
+      _outstandingByDeptDaily.clear();
+      for (int i = 29; i >= 0; i--) {
+        final date = now.subtract(Duration(days: i));
+        final day = DateTime(date.year, date.month, date.day);
+        final outstanding = <String, int>{};
+        for (var job in jobs) {
+          if (job.createdAt != null && job.createdAt!.toLocal().isBefore(day.add(const Duration(days: 1))) &&
+              (job.completedAt == null || job.completedAt!.toLocal().isAfter(day))) {
+            final dept = job.department ?? 'Other';
+            outstanding[dept] = (outstanding[dept] ?? 0) + 1;
+          }
+        }
+        _outstandingByDeptDaily[day] = outstanding;
+      }
+
       _lastUpdated = DateTime.now();
     } catch (e) {
       debugPrint('Error loading dashboard: $e');
@@ -147,6 +211,201 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
+  }
+
+  Color _getPriorityColor(String priority) {
+    final num = int.tryParse(priority.substring(1)) ?? 0;
+    switch (num) {
+      case 1: return Theme.of(context).appColors.priority1;
+      case 2: return Theme.of(context).appColors.priority2;
+      case 3: return Theme.of(context).appColors.priority3;
+      case 4: return Theme.of(context).appColors.priority4;
+      case 5: return Theme.of(context).appColors.priority5;
+      default: return Colors.grey;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return Theme.of(context).appColors.statusOpen;
+      case 'in progress':
+        return Theme.of(context).appColors.statusInProgress;
+      case 'completed':
+        return Theme.of(context).appColors.statusCompleted;
+      case 'cancelled':
+        return Theme.of(context).appColors.statusCancelled;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _getLastCommentPreview(String comments) {
+    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    final lastComment = parts.last;
+    final lines = lastComment.split('\n');
+    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
+  }
+
+  Widget _buildJobCardWidget(JobCard job) {
+    return Card(
+      elevation: 6,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
+        ),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'P${job.priority}',
+                      style: TextStyle(
+                        color: _getPriorityColor('P${job.priority}'),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 11.5,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (job.jobCardNumber != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 204),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'JC #${job.jobCardNumber}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      job.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.normal,
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (job.comments.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _getLastCommentPreview(job.comments),
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (job.notes.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  job.notes.split('\n').last.trim(),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                              color: _getStatusColor(job.status.name).withValues(alpha: 128),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.status.displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                              color: Colors.blueGrey.withValues(alpha: 64),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      job.type.displayName,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                  const Spacer(),
+                  Flexible(
+                    child: Text(
+                      job.assignedNames?.join(', ') ?? 'Unassigned',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
+                    style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      if (job.comments.isNotEmpty) Icon(Icons.comment_outlined, size: 16, color: Colors.blue[400]),
+                      if (job.notes.isNotEmpty) Icon(Icons.build_outlined, size: 16, color: Colors.orange[400]),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showMonthPicker() {
@@ -179,7 +438,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
         mainAxisSpacing: 12,
         childAspectRatio: 1.8,
       ),
-      itemCount: 6,
+      itemCount: 8,
       itemBuilder: (context, index) {
         final data = [
           {'title': 'Total Jobs', 'value': _totalJobs.toString(), 'color': Colors.blue},
@@ -188,6 +447,8 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           {'title': 'Completion %', 'value': '${_completionRate.toStringAsFixed(0)}%', 'color': Colors.purple},
           {'title': 'Pending Assign', 'value': _pendingAssignments.toString(), 'color': Colors.red},
           {'title': 'Aged >7d', 'value': _agedOpen7d.toString(), 'color': Colors.redAccent},
+          {'title': 'Created (Month)', 'value': _createdThisMonth.toString(), 'color': Colors.blueAccent},
+          {'title': 'Closed (Month)', 'value': _closedThisMonth.toString(), 'color': Colors.greenAccent},
         ][index];
 
         return Card(
@@ -209,43 +470,131 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
   }
 
   Widget _buildChartsSection() {
+    final now = DateTime.now();
+    final createdSpots = <FlSpot>[];
+    final closedSpots = <FlSpot>[];
+    for (int i = 29; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final day = DateTime(date.year, date.month, date.day);
+      createdSpots.add(FlSpot((29 - i).toDouble(), (_createdDaily[day] ?? 0).toDouble()));
+      closedSpots.add(FlSpot((29 - i).toDouble(), (_closedDaily[day] ?? 0).toDouble()));
+    }
+
     return Card(
       elevation: 4,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text('Trend (Last 30 days)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Created vs Closed Trend (Last 30 days)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             SizedBox(
               height: 220,
               child: LineChart(
                 LineChartData(
                   gridData: const FlGridData(show: true),
-                  titlesData: const FlTitlesData(show: true),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          if (value % 7 == 0) {
+                            final date = now.subtract(Duration(days: 29 - value.toInt()));
+                            return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 10));
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true)),
+                  ),
                   borderData: FlBorderData(show: true),
                   lineBarsData: [
                     LineChartBarData(
-                      spots: List.generate(30, (i) => FlSpot(i.toDouble(), (i % 5).toDouble())),
+                      spots: createdSpots,
                       isCurved: true,
-                      color: Colors.orange,
+                      color: Colors.blue,
                       barWidth: 3,
+                      belowBarData: BarAreaData(show: false),
+                      dotData: const FlDotData(show: false),
+                    ),
+                    LineChartBarData(
+                      spots: closedSpots,
+                      isCurved: true,
+                      color: Colors.green,
+                      barWidth: 3,
+                      belowBarData: BarAreaData(show: false),
+                      dotData: const FlDotData(show: false),
                     ),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            _buildDeptChart(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTabbedAnalytics() {
-    return const Text('Mobile Tabbed Analytics (expand if needed)');
+  Widget _buildDeptChart() {
+    final now = DateTime.now();
+    final depts = ['Pre Press', 'Pressroom', 'Post Press'];
+    final colors = [Colors.green, Colors.blue, Colors.brown];
+
+    final lineBarsData = <LineChartBarData>[];
+    for (int i = 0; i < depts.length; i++) {
+      final dept = depts[i];
+      final spots = <FlSpot>[];
+      for (int j = 29; j >= 0; j--) {
+        final date = now.subtract(Duration(days: j));
+        final day = DateTime(date.year, date.month, date.day);
+        spots.add(FlSpot((29 - j).toDouble(), (_outstandingByDeptDaily[day]?[dept] ?? 0).toDouble()));
+      }
+      lineBarsData.add(LineChartBarData(
+        spots: spots,
+        isCurved: true,
+        color: colors[i],
+        barWidth: 3,
+        belowBarData: BarAreaData(show: false),
+        dotData: const FlDotData(show: false),
+      ));
+    }
+
+    return Column(
+      children: [
+        const Text('Outstanding Job Cards by Department (Last 30 days)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        SizedBox(
+          height: 220,
+          child: LineChart(
+            LineChartData(
+              gridData: const FlGridData(show: true),
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      if (value % 7 == 0) {
+                        final date = now.subtract(Duration(days: 29 - value.toInt()));
+                        return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 10));
+                      }
+                      return const Text('');
+                    },
+                  ),
+                ),
+                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true)),
+              ),
+              borderData: FlBorderData(show: true),
+              lineBarsData: lineBarsData,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _buildTrendChart() {
-    return const SizedBox(height: 200, child: Center(child: Text('Trend Chart')));
+  Widget _buildTabbedAnalytics() {
+    return const Text('Mobile Tabbed Analytics (expand if needed)');
   }
 
     Widget _buildLiveJobCardsList() {
@@ -259,30 +608,27 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
     }
 
     return AnimationLimiter(
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _filteredJobsCache.length > 10 ? 10 : _filteredJobsCache.length,
-        itemBuilder: (context, index) {
-          final job = _filteredJobsCache[index];
-          return AnimationConfiguration.staggeredList(
-            position: index,
-            duration: const Duration(milliseconds: 375),
-            child: SlideAnimation(
-              verticalOffset: 50.0,
-              child: FadeInAnimation(
-                child: Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    title: Text(job.description),
-                    subtitle: Text('${job.department} • ${job.status.displayName}'),
-                    trailing: Text('P${job.priority}'),
+      child: Column(
+        children: [
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _filteredJobsCache.length > 10 ? 10 : _filteredJobsCache.length,
+            itemBuilder: (context, index) {
+              final job = _filteredJobsCache[index];
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: _buildJobCardWidget(job),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -297,7 +643,10 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manager Dashboard - Job Card Program'),
+        title: Text(
+          'Manager Dashboard - Job Card Program',
+          style: TextStyle(fontSize: _isMobile ? 16 : 20),
+        ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -308,17 +657,25 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           ),
         ),
         actions: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Last updated: ${_getLastUpdatedText()}', style: const TextStyle(fontSize: 13, color: Colors.white70)),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                onPressed: () => _loadDashboardData(selectedDept, selectedMonth),
-              ),
-            ],
-          ),
+          if (!_isMobile) ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Last updated: ${_getLastUpdatedText()}', style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  onPressed: () => _loadDashboardData(selectedDept, selectedMonth),
+                ),
+              ],
+            ),
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              tooltip: 'Refresh (${_getLastUpdatedText()})',
+              onPressed: () => _loadDashboardData(selectedDept, selectedMonth),
+            ),
+          ],
           IconButton(icon: const Icon(Icons.file_download), onPressed: _showExportOptions),
           IconButton(
             icon: const Icon(Icons.inventory),
@@ -332,7 +689,10 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           const SyncIndicator(),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => _loadDashboardData(selectedDept, selectedMonth),
+              onRefresh: () async {
+                await _loadDashboardData(selectedDept, selectedMonth);
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(_screenPadding),
                 child: Column(
@@ -458,9 +818,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                     SizedBox(height: _sectionSpacing),
                     Text('Analytics & Breakdowns', style: TextStyle(fontSize: _isDesktop ? 26 : 24, fontWeight: FontWeight.bold)),
                     SizedBox(height: _isDesktop ? 24 : 16),
-                    if (_isMobile) _buildTabbedAnalytics() else _buildChartsSection(),
-                    const SizedBox(height: 24),
-                    _buildTrendChart(),
+                    _buildChartsSection(),
                     SizedBox(height: _sectionSpacing),
                     Text('Live Active Job Cards', style: TextStyle(fontSize: _isDesktop ? 26 : 24, fontWeight: FontWeight.bold)),
                     SizedBox(height: _isDesktop ? 24 : 16),

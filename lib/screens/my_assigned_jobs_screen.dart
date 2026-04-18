@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 
 class MyAssignedJobsScreen extends StatefulWidget {
@@ -191,116 +192,119 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                   return const Center(child: Text('No jobs assigned to you yet', style: TextStyle(fontSize: 20)));
                 }
 
-                return ListView.builder(
-                  itemCount: jobs.length,
-                  itemBuilder: (context, index) {
-                    final job = jobs[index];
-                    return Card(
-                      margin: const EdgeInsets.all(8),
-                      child: InkWell(
-                        onTap: () => _showNotesDialog(context, job),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Header: Job #, Priority, Type (inline like home screen)
-                              RichText(
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: 'Job #${job.jobCardNumber ?? job.id ?? 'N/A'}',
-                                      style: const TextStyle(fontSize: 14, color: Colors.white),
-                                    ),
-                                    const TextSpan(text: ' | '),
-                                    TextSpan(
-                                      text: 'P${job.priority}',
-                                      style: TextStyle(
-                                        color: _getPriorityColor('P${job.priority}'),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: ListView.builder(
+                    itemCount: jobs.length,
+                    itemBuilder: (context, index) {
+                      final job = jobs[index];
+                      return Card(
+                        margin: const EdgeInsets.all(8),
+                        child: InkWell(
+                          onTap: () => _showNotesDialog(context, job),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header: Job #, Priority, Type (inline like home screen)
+                                RichText(
+                                  text: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: 'Job #${job.jobCardNumber ?? job.id ?? 'N/A'}',
+                                        style: const TextStyle(fontSize: 14, color: Colors.white),
                                       ),
-                                    ),
-                                     TextSpan(
-                                       text: ' | ${job.type.displayName}',
-                                       style: const TextStyle(
-                                         color: Colors.white,
-                                         fontSize: 12,
+                                      const TextSpan(text: ' | '),
+                                      TextSpan(
+                                        text: 'P${job.priority}',
+                                        style: TextStyle(
+                                          color: _getPriorityColor('P${job.priority}'),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                       TextSpan(
+                                         text: ' | ${job.type.displayName}',
+                                         style: const TextStyle(
+                                           color: Colors.white,
+                                           fontSize: 12,
+                                         ),
                                        ),
-                                     ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              // Location
-                              Text(
-                                '${job.department} > ${job.machine} > ${job.area}',
-                                style: const TextStyle(fontSize: 13, color: Colors.grey),
-                              ),
-                              const SizedBox(height: 2),
-                              // Description
-                              Text(
-                                job.description,
-                                style: const TextStyle(fontSize: 14),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              // Comments preview
-                              if (job.comments.isNotEmpty) ...[
-                                _buildCommentsPreview(job.comments),
-                                const SizedBox(height: 4),
-                              ],
-                              // Notes preview
-                              if (job.notes.isNotEmpty) ...[
-                                _buildNotesPreview(job.notes),
+                                const SizedBox(height: 6),
+                                // Location
+                                Text(
+                                  '${job.department} > ${job.machine} > ${job.area}',
+                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                ),
+                                const SizedBox(height: 2),
+                                // Description
+                                Text(
+                                  job.description,
+                                  style: const TextStyle(fontSize: 14),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 const SizedBox(height: 8),
-                              ],
-                              // Action buttons at bottom
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  if (job.startedAt == null)
+                                // Comments preview
+                                if (job.comments.isNotEmpty) ...[
+                                  _buildCommentsPreview(job.comments),
+                                  const SizedBox(height: 4),
+                                ],
+                                // Notes preview
+                                if (job.notes.isNotEmpty) ...[
+                                  _buildNotesPreview(job.notes),
+                                  const SizedBox(height: 8),
+                                ],
+                                // Action buttons at bottom
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    if (job.startedAt == null)
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () => _startWork(job),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue,
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                          ),
+                                          child: const Text('Start'),
+                                        ),
+                                      ),
+                                    if (job.startedAt == null) const SizedBox(width: 8),
                                     Expanded(
                                       child: ElevatedButton(
-                                        onPressed: () => _startWork(job),
+                                        onPressed: () => _showCompleteDialog(context, job),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue,
+                                          backgroundColor: Colors.green,
                                           padding: const EdgeInsets.symmetric(vertical: 8),
                                         ),
-                                        child: const Text('Start'),
+                                        child: const Text('Complete'),
+                                        ),
+                                      ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () => _showMonitorDialog(context, job),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange,
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                        child: const Text('Monitor'),
                                       ),
                                     ),
-                                  if (job.startedAt == null) const SizedBox(width: 8),
-                                  Expanded(
-                                    child: ElevatedButton(
-                                      onPressed: () => _showCompleteDialog(context, job),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                      ),
-                                      child: const Text('Complete'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: ElevatedButton(
-                                      onPressed: () => _showMonitorDialog(context, job),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.orange,
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                      ),
-                                      child: const Text('Monitor'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -427,6 +431,31 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                   );
 
                   await _firestoreService.saveJobCardOfflineAware(completedJob);
+
+                  // Notify creator
+                  if (job.operatorClockNo != null) {
+                    try {
+                      final creatorEmp = await _firestoreService.getEmployee(job.operatorClockNo!);
+                      if (creatorEmp?.fcmToken != null) {
+                        await NotificationService().sendCreatorNotification(
+                          recipientToken: creatorEmp!.fcmToken!,
+                          jobCardId: job.id!,
+                          jobCardNumber: job.jobCardNumber,
+                          operator: currentEmployee?.name ?? 'Unknown',
+                          creator: job.operator,
+                          department: job.department,
+                          area: job.area,
+                          machine: job.machine,
+                          part: job.part,
+                          description: job.description,
+                          notificationType: 'closed',
+                          assigneeName: currentEmployee?.name ?? 'Unknown',
+                        );
+                      }
+                    } catch (e) {
+                      debugPrint('Error sending creator notification: $e');
+                    }
+                  }
 
                   if (context.mounted) {
                     Navigator.pop(context);

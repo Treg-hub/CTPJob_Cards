@@ -2,4 +2,14 @@ flutter clean
 flutter pub get
 flutter build web --release
 firebase deploy --only hosting
+
+Run these three below before uploading the app to firebase
+flutter clean
+flutter pub get
+flutter build apk --target-platform android-arm64 --release
+
+flutter clean
+flutter pub get
+flutter build web --release
+firebase deploy --only hosting
 flutter build apk --target-platform android-arm64 --release
