@@ -181,7 +181,72 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-  // ==================== IMPROVED & COMPACT ASSIGN DIALOG ====================
+  Widget _buildPhotosSection() {
+    if (_currentJobCard.photos == null || _currentJobCard.photos!.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('No photos attached to this job card', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _currentJobCard.photos!.length,
+            itemBuilder: (context, index) {
+              final photo = _currentJobCard.photos![index];
+              final url = photo['url'] as String?;
+              if (url == null) return const SizedBox.shrink();
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    width: 180,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 180,
+                      height: 180,
+                      color: Colors.grey[300],
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 180,
+                      height: 180,
+                      color: Colors.grey[200],
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.broken_image, size: 48, color: Colors.red),
+                          SizedBox(height: 8),
+                          Text('Failed to load', style: TextStyle(fontSize: 12)),
+                          Text('(CORS fixed)', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+// ==================== IMPROVED & COMPACT ASSIGN DIALOG ====================
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
     String searchQuery = '';
     List<String> selectedClockNos = [];
@@ -776,66 +841,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      ...['description', 'comments', 'notes', 'photos'].map((section) {
-                        final sectionPhotos = jobCard.photos.where((p) => p['section'] == section).toList();
-                        if (sectionPhotos.isEmpty) return const SizedBox.shrink();
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(section.toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
-                            const SizedBox(height: 6),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 8,
-                                mainAxisSpacing: 8,
-                              ),
-                              itemCount: sectionPhotos.length,
-                              itemBuilder: (context, index) {
-                                final photoMap = sectionPhotos[index];
-                                final photoUrl = photoMap['url'];
-                                final addedBy = photoMap['addedBy'];
-                                final timestamp = photoMap['timestamp'];
-                                return GestureDetector(
-                                  onTap: () => _showPhotoDialog(photoUrl, addedBy, timestamp),
-                                  child: Stack(
-                                    children: [
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
-                                          image: DecorationImage(
-                                            image: NetworkImage(photoUrl),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        child: Container(
-                                          color: Colors.black54,
-                                          padding: const EdgeInsets.all(4),
-                                          child: Text(
-                                            'By $addedBy\n${DateTime.parse(timestamp).toLocal().toString().substring(0,16)}',
-                                            style: const TextStyle(color: Colors.white, fontSize: 10),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        );
-                      }),
-                      if (jobCard.photos.isEmpty)
-                        const Text('No photos', style: TextStyle(color: Colors.white70)),
+                      _buildPhotosSection(),
                     ],
                   ),
                 ),

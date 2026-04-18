@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uuid/uuid.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
@@ -99,7 +102,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     }
 
     setState(() => _isLoading = true);
+
     try {
+      // Step 1: Upload all photos to Firebase Storage FIRST
+      final uploadedPhotos = await _uploadPhotos();
+
+      // Step 2: Create JobCard with the uploaded photo maps (now containing URLs)
       final jobCard = JobCard(
         department: selectedDepartment!,
         area: selectedArea!,
@@ -110,13 +118,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         operator: operatorName,
         operatorClockNo: currentEmployee?.clockNo,
         description: description,
+        photos: uploadedPhotos,   // ← THIS WAS THE MISSING PART
       );
 
+      // Step 3: Save
       await _firestoreService.saveJobCardOfflineAware(jobCard);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Job Card saved!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Job Card saved with photos!'), backgroundColor: Colors.green),
         );
         Navigator.pop(context);
       }
@@ -174,6 +184,104 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added!')));
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadPhotos() async {
+    if (photos.isEmpty) return [];
+    final List<Map<String, dynamic>> uploaded = [];
+    final storage = FirebaseStorage.instance;
+    final uuid = const Uuid();
+
+    for (int i = 0; i < photos.length; i++) {
+      final photoData = photos[i];
+      final filePath = photoData['file'] as String?;
+      if (filePath == null) continue;
+
+      try {
+        final file = File(filePath);
+        if (!file.existsSync()) continue;
+
+        final jobUuid = uuid.v4();
+        final storageRef = storage
+            .ref()
+            .child('job_cards/$jobUuid/photos/photo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        await storageRef.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+        final downloadUrl = await storageRef.getDownloadURL();
+
+        uploaded.add({
+          'url': downloadUrl,
+          'section': 'job_card',
+          'addedBy': operatorName,
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Photo ${i + 1} uploaded')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed photo ${i + 1}: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+    return uploaded;
+  }
+
+  Widget _buildPhotosPreview() {
+    if (photos.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text('No photos added yet', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: photos.length,
+        itemBuilder: (context, index) {
+          final filePath = photos[index]['file'] as String?;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(filePath!),
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        photos.removeAt(index);
+                      });
+                    },
+                    child: const CircleAvatar(
+                      radius: 12,
+                      backgroundColor: Colors.red,
+                      child: Icon(Icons.close, size: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildSimilarJobCards() {
@@ -568,7 +676,17 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
+                const SizedBox(height: 24),
+                const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: _addPhoto,
+                  icon: const Icon(Icons.add_a_photo),
+                  label: const Text('Add Photo (Camera/Gallery)'),
+                ),
+                const SizedBox(height: 12),
+                _buildPhotosPreview(),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -798,7 +916,17 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                         onChanged: (v) => description = v,
                       ),
+                      const SizedBox(height: 24),
+                      const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: _addPhoto,
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text('Add Photo (Camera/Gallery)'),
+                      ),
                       const SizedBox(height: 12),
+                      _buildPhotosPreview(),
+                      const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
