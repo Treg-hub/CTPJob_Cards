@@ -209,12 +209,22 @@ async function sendNotification(token, title, body, jobId, level, priority) {
   try {
     await messaging.send({
       token,
-      notification: {title, body},
-      data: {click_action: "FLUTTER_NOTIFICATION_CLICK", jobId, notificationType: "broadcast", notificationLevel: level, priority: priority.toString()},
-      android: {priority: "high"},
+      notification: {
+        title: title,
+        body: body,
+      },
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        jobId: jobId,
+        notificationLevel: level,
+        priority: priority.toString(),
+      },
+      android: {
+        priority: "high",
+      },
     });
   } catch (e) {
-    console.error("FCM send error:", e);
+    console.error("FCM send error for token:", token, e);
   }
 }
 

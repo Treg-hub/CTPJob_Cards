@@ -38,11 +38,11 @@ class NotificationService {
       const AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
         'full_channel',
         'Full-Loud Job Notifications',
-        description: 'Maximum priority notifications for priority 5 jobs',
+        description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
         importance: Importance.max,
-        enableVibration: true,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('escalation_alert'),
+        enableVibration: true,
       );
 
       final androidPlugin = _localNotifications
@@ -103,13 +103,19 @@ class NotificationService {
 
   void _handleForegroundMessage(RemoteMessage message) {
     debugPrint('📨 Foreground message received: ${message.messageId}');
+    debugPrint('📨 RAW FCM DATA RECEIVED: ${message.data}');
 
-    if (message.notification != null) {
+    // Handle both notification messages (with notification field) and data messages
+    if (message.notification != null || message.data.isNotEmpty) {
       final level = message.data['notificationLevel'] ?? 'normal';
       debugPrint('Received notificationLevel: $level');
+
+      final title = message.data['title'] ?? message.notification?.title ?? 'New Notification';
+      final body = message.data['body'] ?? message.notification?.body ?? 'You have a new notification';
+
       _showLocalNotification(
-        title: message.notification!.title ?? 'New Notification',
-        body: message.notification!.body ?? 'You have a new notification',
+        title: title,
+        body: body,
         level: level,
       );
     }
@@ -124,6 +130,7 @@ class NotificationService {
     required String body,
     required String level,
   }) async {
+    debugPrint('=== RECEIVED LEVEL: $level | Using channel: ${level == "full-loud" ? "full_channel" : "normal/medium"} ===');
     if (kIsWeb) return;
 
     late AndroidNotificationDetails androidDetails;
