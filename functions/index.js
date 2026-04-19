@@ -204,13 +204,13 @@ async function getWorkshopManager() {
   }).map((doc) => doc.data())[0];
 }
 
-async function sendNotification(token, title, body, jobId, level) {
+async function sendNotification(token, title, body, jobId, level, priority) {
   if (!token) return;
   try {
     await messaging.send({
       token,
       notification: {title, body},
-      data: {click_action: "FLUTTER_NOTIFICATION_CLICK", jobId, notificationType: "broadcast", notificationLevel: level},
+      data: {click_action: "FLUTTER_NOTIFICATION_CLICK", jobId, notificationType: "broadcast", notificationLevel: level, priority: priority.toString()},
       android: {priority: "high"},
     });
   } catch (e) {
@@ -227,8 +227,17 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({document: "job
     const creator = await admin.firestore().doc(`employees/${job.operatorClockNo}`).get();
     if (creator.exists) recipients.push(creator.data());
   }
+  console.log(`Job ${event.data.id} priority: ${priority}, level: ${level}, recipients: ${recipients.length}`);
+  let title, body;
+  if (priority === 5) {
+    title = "URGENT - Priority 5";
+    body = "Machine standing - immediate action required";
+  } else {
+    title = "New Job Available";
+    body = `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`;
+  }
   for (const emp of recipients) {
-    await sendNotification(emp.token, "New Job Available", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, event.data.id, level);
+    await sendNotification(emp.token, title, body, event.data.id, level, priority);
   }
 });
 
@@ -240,7 +249,7 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({document: "jo
     const level = getNotificationLevel(priority);
     const assignee = await admin.firestore().doc(`employees/${after.assignedTo}`).get();
     if (assignee.exists) {
-      await sendNotification(assignee.data().fcmToken, "New Job Assigned", `${after.department} - ${after.machine}\n${after.area} - ${after.part}\n${after.description}`, event.data.after.id, level);
+      await sendNotification(assignee.data().fcmToken, "New Job Assigned", `${after.department} - ${after.machine}\n${after.area} - ${after.part}\n${after.description}`, event.data.after.id, level, priority);
     }
   }
 });
@@ -276,7 +285,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const creatorData = creator.exists ? creator.data() : null;
       const recipients = [creatorData, ...mgrs, ...foremen].filter(Boolean);
       for (const emp of recipients) {
-        await sendNotification(emp.fcmToken, "Escalation: Unassigned Job (2min)", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, doc.id, level);
+        await sendNotification(emp.fcmToken, "Escalation: Unassigned Job (2min)", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, doc.id, level, priority);
       }
       await doc.ref.update({notifiedAt2min: now});
     }
@@ -300,7 +309,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const creatorData = creator.exists ? creator.data() : null;
       const recipients = [creatorData, ...mgrs, ...foremen, ...deptMgrs, workshopMgr].filter(Boolean);
       for (const emp of recipients) {
-        await sendNotification(emp.fcmToken, "Urgent Escalation: Unassigned Job (7min)", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, doc.id, level);
+        await sendNotification(emp.fcmToken, "Urgent Escalation: Unassigned Job (7min)", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, doc.id, level, priority);
       }
       await doc.ref.update({notifiedAt7min: now});
     }

@@ -50,6 +50,19 @@ class NotificationService {
       await androidPlugin?.createNotificationChannel(normalChannel);
       await androidPlugin?.createNotificationChannel(mediumChannel);
       await androidPlugin?.createNotificationChannel(fullChannel);
+
+      // Request Do Not Disturb access (required for bypassDnd to work)
+      final androidImplementation = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImplementation != null) {
+        final bool? granted = await androidImplementation.requestNotificationsPermission();
+
+        if (granted == true) {
+          // DND permission must be granted manually by the user
+          // We will add a button or auto-open the settings screen in the next step
+          debugPrint('Notification permission granted. User still needs to grant DND access manually.');
+        }
+      }
     }
 
     // Message handlers
@@ -93,6 +106,7 @@ class NotificationService {
 
     if (message.notification != null) {
       final level = message.data['notificationLevel'] ?? 'normal';
+      debugPrint('Received notificationLevel: $level');
       _showLocalNotification(
         title: message.notification!.title ?? 'New Notification',
         body: message.notification!.body ?? 'You have a new notification',
