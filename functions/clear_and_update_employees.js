@@ -141,6 +141,10 @@ const employees = [
   {clockNo: "1", department: "General", name: "User", position: "Manager"},
 ];
 
+/**
+ * Clears all existing employees and updates with new data.
+ * @return {Promise<void>}
+ */
 async function clearAndUpdate() {
   const db = admin.firestore();
 

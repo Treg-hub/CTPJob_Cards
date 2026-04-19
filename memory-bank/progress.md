@@ -47,7 +47,7 @@
 - **Firebase Integration**: Full Firestore CRUD operations
 - **Null Safety**: Complete Dart null safety implementation
 - **Build System**: Successful debug and release builds
-- **Code Quality**: Passes flutter analyze (warnings only, no errors)
+- **Code Quality**: Passes flutter analyze (minimal warnings, no errors)
 
 ## What's Left to Build 🚧
 
@@ -105,15 +105,15 @@
 - **Data Validation**: Limited client-side validation
 
 ### Technical Debt
-- **Deprecated APIs**: Several Flutter widgets use deprecated properties
+- **Deprecated APIs**: ✅ **FIXED** - All deprecated withOpacity() calls updated to withValues()
 - **Code Duplication**: Some repeated patterns could be abstracted
 - **Error Handling**: Could be more comprehensive
 - **Testing**: Limited automated test coverage
 
-**Code Review Technical Debt (2026-04-18)**:
+**Code Review Technical Debt (2026-04-19)**:
 - **Performance**: StreamBuilder full rebuilds on employee/job lists → paginate + query limits/filters.
-- **Deprecated APIs**: withOpacity(0.3) → withValues(alpha:0.3), pw.Table.fromTextArray → TableHelper.fromTextArray, etc.
-- **Lint Warnings**: Run `flutter analyze` to fix (const runtime, unnecessary null checks).
+- **Deprecated APIs**: ✅ **FIXED** - withOpacity(0.3) → withValues(alpha:0.3), pw.Table.fromTextArray → TableHelper.fromTextArray, etc.
+- **Lint Warnings**: ✅ **REDUCED** - Fixed unnecessary null checks, use_build_context_synchronously, curly_braces_in_flow_control_structures.
 - **Dependencies**: charts_flutter ^0.12.0 outdated → migrate fully to fl_chart?
 - **Backend**: Hardcoded CF emp IDs (23194/23162/22, emp22) → config/env.
 - **Testing**: Expand unit/widget/integration.

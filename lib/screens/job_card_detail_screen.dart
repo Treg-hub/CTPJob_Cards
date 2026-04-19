@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/skeleton_loader.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -14,8 +14,6 @@ import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -46,10 +44,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     super.dispose();
   }
 
-  bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
-  bool get isTech => (currentEmployee?.position ?? '').toLowerCase().contains('technician') || (currentEmployee?.position ?? '').toLowerCase().contains('tech');
-  bool get _canAddNotes => isManager || (currentEmployee?.position ?? '').toLowerCase().contains('electrical') || (currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
-  bool get _canAddComments => !(currentEmployee?.position ?? '').toLowerCase().contains('electrical') && !(currentEmployee?.position ?? '').toLowerCase().contains('mechanical');
+  bool get isManager => currentEmployee?.position.toLowerCase().contains('manager') ?? false;
+  bool get isTech => (currentEmployee?.position.toLowerCase().contains('technician') ?? false) || (currentEmployee?.position.toLowerCase().contains('tech') ?? false);
+  bool get _canAddNotes => isManager || (currentEmployee?.position.toLowerCase().contains('electrical') ?? false) || (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
+  bool get _canAddComments => !(currentEmployee?.position.toLowerCase().contains('electrical') ?? false) && !(currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
 
   Future<void> _refreshJobCard() async {
     if (_currentJobCard.id != null) {
@@ -90,8 +88,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final current = currentEmployee;
     if (current == null) return;
     final updated = jobCard.copyWith(
-      assignedClockNos: [...?jobCard.assignedClockNos, current.clockNo],
-      assignedNames: [...?jobCard.assignedNames, current.name],
+      assignedClockNos: [...(jobCard.assignedClockNos ?? []), current.clockNo],
+      assignedNames: [...(jobCard.assignedNames ?? []), current.name],
       assignedAt: DateTime.now(),
       notes: jobCard.notes,
     );
@@ -183,7 +181,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
   }
 
   Widget _buildPhotosSection() {
-    if (_currentJobCard.photos == null || _currentJobCard.photos!.isEmpty) {
+    if (_currentJobCard.photos.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Text('No photos attached to this job card', style: TextStyle(color: Colors.grey)),
@@ -202,39 +200,46 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _currentJobCard.photos!.length,
+            itemCount: _currentJobCard.photos.length,
             itemBuilder: (context, index) {
-              final photo = _currentJobCard.photos![index];
+              final photo = _currentJobCard.photos[index];
               final url = photo['url'] as String?;
               if (url == null) return const SizedBox.shrink();
 
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CachedNetworkImage(
-                    imageUrl: url,
-                    width: 180,
-                    height: 180,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
+                child: GestureDetector(
+                  onTap: () => _showPhotoDialog(
+                    photo['url'] as String,
+                    photo['addedBy'] as String? ?? 'Unknown',
+                    photo['timestamp'] as String? ?? '',
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: url,
                       width: 180,
                       height: 180,
-                      color: Colors.grey[300],
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 180,
-                      height: 180,
-                      color: Colors.grey[200],
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.broken_image, size: 48, color: Colors.red),
-                          SizedBox(height: 8),
-                          Text('Failed to load', style: TextStyle(fontSize: 12)),
-                          Text('(CORS fixed)', style: TextStyle(fontSize: 10)),
-                        ],
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 180,
+                        height: 180,
+                        color: Colors.grey[300],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 180,
+                        height: 180,
+                        color: Colors.grey[200],
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, size: 48, color: Colors.red),
+                            SizedBox(height: 8),
+                            Text('Failed to load', style: TextStyle(fontSize: 12)),
+                            Text('(CORS fixed)', style: TextStyle(fontSize: 10)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -365,7 +370,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
                                   visualDensity: VisualDensity.compact,
                                   title: Text(
-                                    '${emp.name} - ${emp.position ?? ''} (${emp.department ?? ''})',
+                                    '${emp.name} - ${emp.position} (${emp.department})',
                                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                                   ),
                                   secondary: Icon(
@@ -373,7 +378,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                                     color: emp.isOnSite ? Colors.green : Colors.red[400]!,
                                     size: 16,
                                   ),
-                                  tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 20) : Colors.red.withValues(alpha: 20),
+                                  tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 0.125) : Colors.red.withValues(alpha: 0.125),
                                   value: isSelected,
                                   onChanged: (val) {
                                     setDialogState(() {
@@ -622,84 +627,89 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-  Future<void> _addPhoto() async {
-    final picker = ImagePicker();
-    final source = await showDialog<ImageSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Photo Source'),
-        content: const Text('Choose where to get the photo from.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text('Camera'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.gallery),
-            child: const Text('Gallery'),
-          ),
-        ],
-      ),
-    );
-    if (source == null) return;
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile == null) return;
+    Future<void> _addPhoto() async {
+      try {
+        final picker = ImagePicker();
+        final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
-    // MAXIMUM practical compression for job cards (70-85% smaller files)
-    final compressedFile = await FlutterImageCompress.compressAndGetFile(
-      pickedFile.path,
-      '${pickedFile.path}_compressed.jpg',
-      minWidth: 1024,
-      minHeight: 1024,
-      quality: 70,
-      rotate: 0,
-      keepExif: false,
-      format: CompressFormat.jpeg,
-    );
-    if (compressedFile == null) return;
+        if (pickedFile == null) return;
 
-    // Upload the compressed photo immediately
-    final storage = FirebaseStorage.instance;
-    final uuid = const Uuid();
-    try {
-      final file = File(compressedFile.path);
-      final jobUuid = uuid.v4();
-      final storageRef = storage
-          .ref()
-          .child('job_cards/$jobUuid/photos/photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      await storageRef.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
-      final downloadUrl = await storageRef.getDownloadURL();
 
-      final newPhoto = {
-        'url': downloadUrl,
-        'section': 'job_card',
-        'addedBy': currentEmployee?.name ?? 'Unknown',
-        'timestamp': DateTime.now().toIso8601String(),
-      };
+        String downloadUrl;
 
-      final updatedPhotos = List<Map<String, dynamic>>.from(_currentJobCard.photos ?? []);
-      updatedPhotos.add(newPhoto);
+        if (kIsWeb) {
+          // Web: Read bytes and upload with putData
+          final bytes = await pickedFile.readAsBytes();
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('job_cards/${widget.jobCard.id}/photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      await _firestoreService.saveJobCardOfflineAware(
-        _currentJobCard.copyWith(photos: updatedPhotos),
-      );
+          final uploadTask = storageRef.putData(bytes);
+          final snapshot = await uploadTask;
+          downloadUrl = await snapshot.ref.getDownloadURL();
+        } else {
+          // Mobile: Compress + putFile
+          final compressedFile = await FlutterImageCompress.compressAndGetFile(
+            pickedFile.path,
+            '${pickedFile.path}_compressed.jpg',
+            minWidth: 1024,
+            minHeight: 1024,
+            quality: 70,
+          );
 
-      await _refreshJobCard();
+          if (compressedFile == null) {
+            throw Exception('Failed to compress image');
+          }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo added & heavily compressed!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add photo: $e'), backgroundColor: Colors.red),
-        );
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('job_cards/${widget.jobCard.id}/photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+          final uploadTask = storageRef.putFile(File(compressedFile.path));
+          final snapshot = await uploadTask;
+          downloadUrl = await snapshot.ref.getDownloadURL();
+        }
+
+        // Save Map to Firestore
+        final photoMap = {
+          'url': downloadUrl,
+          'addedBy': currentEmployee?.name ?? 'Unknown',
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+        await FirebaseFirestore.instance
+            .collection('job_cards')
+            .doc(widget.jobCard.id)
+            .update({
+          'photos': FieldValue.arrayUnion([photoMap]),
+        });
+
+        // Update local state
+        setState(() {
+          _currentJobCard = _currentJobCard.copyWith(
+            photos: [..._currentJobCard.photos, photoMap],
+          );
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Photo uploaded successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed to upload photo: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
-  }
 
     void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
     showDialog(
@@ -1377,24 +1387,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                Row(
-                  children: [
-                    if (_canAddNotes)
-                      TextButton.icon(
-                        onPressed: _showAddNoteDialog,
-                        icon: const Icon(Icons.note_add, size: 20),
-                        label: const Text('Add Note'),
-                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
-                      ),
-                    if (_canAddNotes) const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () => _addPhoto(),
-                      icon: const Icon(Icons.camera_alt, size: 20),
-                      label: const Text('Add Photo'),
-                      style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
-                    ),
-                  ],
-                ),
+                if (_canAddNotes)
+                  TextButton.icon(
+                    onPressed: _showAddNoteDialog,
+                    icon: const Icon(Icons.note_add, size: 20),
+                    label: const Text('Add Note'),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1423,7 +1422,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           children: [
             const Text('Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 8),
-            _buildDetailRow('Created By', jobCard.operator ?? 'Unknown'),
+            _buildDetailRow('Created By', jobCard.operator),
             if (jobCard.completedBy != null) _buildDetailRow('Completed By', jobCard.completedBy!),
             if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty) ...[
               const SizedBox(height: 8),

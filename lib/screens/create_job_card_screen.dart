@@ -141,50 +141,50 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     }
   }
 
-    Future<void> _addPhoto() async {
-      final picker = ImagePicker();
-      final source = await showDialog<ImageSource>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Select Photo Source'),
-          content: const Text('Choose where to get the photo from.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, ImageSource.camera),
-              child: const Text('Camera'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, ImageSource.gallery),
-              child: const Text('Gallery'),
-            ),
-          ],
-        ),
-      );
-      if (source == null) return;
-      final pickedFile = await picker.pickImage(source: source);
-      if (pickedFile == null) return;
+  Future<void> _addPhoto() async {
+    final picker = ImagePicker();
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Photo Source'),
+        content: const Text('Choose where to get the photo from.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+        ],
+      ),
+    );
+    if (source == null) return;
+    final pickedFile = await picker.pickImage(source: source);
+    if (pickedFile == null) return;
 
-      // MAXIMUM practical compression for job cards (70-85% smaller files)
-      final compressedFile = await FlutterImageCompress.compressAndGetFile(
-        pickedFile.path,
-        '${pickedFile.path}_compressed.jpg',
-        minWidth: 1024,
-        minHeight: 1024,
-        quality: 70,
-        rotate: 0,
-        keepExif: false,
-        format: CompressFormat.jpeg,
-      );
-      if (compressedFile == null) return;
+    // MAXIMUM practical compression for job cards (70-85% smaller files)
+    final compressedFile = await FlutterImageCompress.compressAndGetFile(
+      pickedFile.path,
+      '${pickedFile.path}_compressed.jpg',
+      minWidth: 1024,
+      minHeight: 1024,
+      quality: 70,
+      rotate: 0,
+      keepExif: false,
+      format: CompressFormat.jpeg,
+    );
+    if (compressedFile == null) return;
 
-      setState(() {
-        photos.add({'file': compressedFile.path});
-      });
+    setState(() {
+      photos.add({'file': compressedFile.path});
+    });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added & heavily compressed!')));
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo added & heavily compressed!')));
     }
+  }
 
   Future<List<Map<String, dynamic>>> _uploadPhotos() async {
     if (photos.isEmpty) return [];
@@ -415,7 +415,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name).withValues(alpha: 51),
+                                    color: _getStatusColor(job.status.name).withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                     child: Text(
@@ -427,7 +427,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                      color: Colors.blueGrey.withValues(alpha: 77),
+                      color: Colors.blueGrey.withValues(alpha: 0.3),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -642,7 +642,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       selected: priority == num,
                       onSelected: (_) => setState(() => priority = num),
                       backgroundColor: priorityColors[num],
-                      selectedColor: priorityColors[num].withValues(alpha: 51),
+                      selectedColor: priorityColors[num].withValues(alpha: 0.2),
                       labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                     );
@@ -653,7 +653,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: priorityColors[priority].withValues(alpha: 26),
+                      color: priorityColors[priority].withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -700,13 +700,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         ? const CircularProgressIndicator(color: Colors.black)
                         : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: _addPhoto,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Add Photo'),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
                 ),
                 const SizedBox(height: 12),
                 _buildSimilarJobCards(),
@@ -882,7 +875,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             selected: priority == num,
                             onSelected: (_) => setState(() => priority = num),
                             backgroundColor: priorityColors[num],
-                           selectedColor: priorityColors[num].withValues(alpha: 51),
+                           selectedColor: priorityColors[num].withValues(alpha: 0.2),
                             labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                           );
@@ -893,7 +886,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                           color: priorityColors[priority].withValues(alpha: 26),
+                           color: priorityColors[priority].withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -942,12 +935,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextButton.icon(
-                        onPressed: _addPhoto,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text('Add Photo'),
-                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
-                      ),
                     ],
                   ),
                 ),
