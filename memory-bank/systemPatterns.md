@@ -26,10 +26,10 @@ Firebase Project
 │   └── copper_transactions/ # Copper transaction history
 ├── Cloud Functions          # Server-side logic
 │   └── functions/
-│       ├── index.js         # Main functions
+│       ├── index.ts         # Main functions with custom token auth
 │       └── lib/             # Helper functions
 ├── Cloud Messaging          # Push notifications
-└── Authentication           # User management (implied)
+└── Authentication           # Custom token authentication for employees
 ```
 
 ## Key Technical Decisions

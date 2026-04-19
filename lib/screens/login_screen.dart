@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import 'home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _login() async {
+  Future _login() async {
     final name = _nameController.text.trim();
     final clockNo = _clockNoController.text.trim();
     if (name.isEmpty || clockNo.isEmpty) {
@@ -55,14 +57,26 @@ class _LoginScreenState extends State<LoginScreen> {
         position: empData['position'] as String? ?? '',
         department: empData['department'] as String? ?? '',
       );
+
+      // === NEW: Custom Token Auth (Option B) ===
+      final functions = FirebaseFunctions.instance;
+      final callable = functions.httpsCallable('createCustomToken');
+      final result = await callable.call({'clockNo': clockNo});
+      final customToken = result.data['customToken'] as String;
+
+      await FirebaseAuth.instance.signInWithCustomToken(customToken);
+      print('✅ Signed in with custom token for clockNo: $clockNo');
+      // ==========================================
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('loggedInName', name);
       await prefs.setString('loggedInClockNo', clockNo);
       currentEmployee = employee;
+
       if (mounted) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
-      // Save FCM token asynchronously after navigation to prevent UI freeze
+      // Save FCM token asynchronously after navigation
       if (!kIsWeb) {
         _saveFcmToken(clockNo);
       }

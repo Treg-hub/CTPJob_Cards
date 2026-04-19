@@ -8,7 +8,7 @@
   - **Firestore**: NoSQL document database
   - **Cloud Functions**: Serverless compute
   - **Cloud Messaging (FCM)**: Push notifications
-  - **Authentication**: User management (configured but not heavily used in visible code)
+- **Authentication**: User management with custom token authentication for employees
 
 ### Development Tools
 - **IDE**: Visual Studio Code with Flutter/Dart extensions
