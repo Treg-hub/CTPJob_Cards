@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -955,6 +956,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          SizedBox(height: _isDesktop ? 32 : 24),
+
+          Card(
+            child: ListTile(
+              leading: Icon(Icons.notifications_active, color: Colors.orange),
+              title: Text('Enable DND Bypass'),
+              subtitle: Text('Grant notification policy access for loud alarms'),
+              trailing: Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () async {
+                final uri = Uri.parse('android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              },
             ),
           ),
 
