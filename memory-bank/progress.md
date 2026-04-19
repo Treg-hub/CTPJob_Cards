@@ -18,7 +18,7 @@
 - **Real-time Updates**: Live data synchronization via Firestore streams
 - **Push Notifications**: FCM notifications sent to assigned employees with job numbers
 - **Local Notifications**: Foreground message handling with flutter_local_notifications
-- **Priority-Based Smart Notifications**: Intelligent escalation system with 3 levels (normal, medium-high, full-loud) based on job priority, custom sounds, vibrations, and full-screen alerts for critical jobs
+- **Priority-Based Smart Notifications**: Intelligent escalation system with 3 levels (normal, medium-high, full-loud) based on job priority, custom sounds, vibrations, full-screen alerts, and alarm audio attributes for critical jobs; 2-minute timer for ALL priorities
 - **Status Tracking**: Complete job lifecycle tracking with timestamps (Open → Monitor → Closed)
 - **Job Status System**: Four statuses (Open, Monitor, Closed, Cancelled) with proper color coding and UI
 - **Simplified Job IDs**: Sequential numeric Job Card IDs (1,2,3...) for easy reference instead of long alphanumeric IDs

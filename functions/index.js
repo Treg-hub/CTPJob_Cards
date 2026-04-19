@@ -257,26 +257,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
     const sevenMinAgo = new Date(Date.now() - 7 * 60 * 1000);
 
-    const jobs1min = await admin.firestore().collection("job_cards")
-        .where("status", "==", "open")
-        .where("assignedClockNos", "==", null)
-        .where("priority", ">=", 5)
-        .where("createdAt", "<=", oneMinAgo)
-        .where("notifiedAt1min", "==", null)
-        .get();
 
-    for (const doc of jobs1min.docs) {
-      const job = doc.data();
-      const creator = await admin.firestore().doc(`employees/${job.operatorClockNo}`).get();
-      const mgrs = await getRelevantManagers(job.type);
-      const foremen = await getOnsiteDeptForemenShiftLeaders(job.department);
-      const creatorData = creator.exists ? creator.data() : null;
-      const recipients = [creatorData, ...mgrs, ...foremen].filter(Boolean);
-      for (const emp of recipients) {
-        await sendNotification(emp.fcmToken, "Escalation: Unassigned Job (1min)", `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`, doc.id, "medium-high");
-      }
-      await doc.ref.update({notifiedAt1min: now});
-    }
 
     const jobs2min = await admin.firestore().collection("job_cards")
         .where("status", "==", "open")

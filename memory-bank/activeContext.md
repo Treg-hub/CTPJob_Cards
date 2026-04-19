@@ -48,15 +48,13 @@
 - **Corrected Comments/Notes Order in Home Screen**: Fixed display order in recent job cards to show comments first, then notes.
   - **Before**: Notes displayed before comments in job card previews
   - **After**: Comments now appear first, followed by notes
-- **Implemented Priority-Based Smart Notifications**: Added intelligent notification escalation system based on job priority (1-5).
-  - **Levels**: Normal (pri1-3), Medium-High (pri4, loud sound+vib), Full-Loud (pri5, max vol+custom sound+repeat vib+fullScreenIntent)
+- **Updated Smart Loud-Notification Logic**: Refined priority-based notification escalation to keep 2-minute timer for ALL priorities, removed early 60s pri5 escalation, added alarm audio attributes for full-loud.
+  - **Levels**: Normal (pri1-3), Medium-High (pri4, loud sound+vib, no fullScreen), Full-Loud (pri5, bypassDnd, max vol, alarm sound, fullScreenIntent, strong vib)
   - **Creation**: Pri1-3 normal, pri4 medium-high, pri5 full-loud to techs+creator
-  - **Escalations**: 60s pri5 medium-high, 2min pri1-3 normal pri4-5 medium-high, 7min pri1-3 normal pri4-5 full-loud
-  - **Implementation**: CF reads priority, passes level in FCM data; Dart creates 3 channels, switches on level for sound/vib/fullscreen
-  - **Android**: Custom sound file, fullScreenIntent permission, MainActivity requests permission
-  - **Bonus**: Pri5 first escalation at 60s instead of 2min
-  - **Reason**: More logical flow - comments are typically more important than work notes
-  - **Applied to**: `_buildJobCardWidget` method in home screen recent jobs section
+  - **Escalations**: 2min pri1-3 normal pri4-5 medium-high, 7min pri1-3 normal pri4-5 full-loud
+  - **Implementation**: CF removed 1min pri5 block, passes level in FCM data; Dart added audioAttributesUsage: alarm for full-loud
+  - **Android**: Custom escalation_alert sound, fullScreenIntent permission, alarm usage for max priority
+  - **Reason**: Align with "keep 2-minute escalation timer for ALL priorities, do not shorten"
 - **Added Timestamps to Notes**: Implemented timestamp functionality for job card notes similar to comments. Notes now append with timestamps when jobs are completed, and display is updated to parse and show individual notes with timestamps.
   - **Before**: `'${emp.displayName} (${emp.clockNo}) - ${emp.department ?? ''} ${emp.position ?? ''}'`
   - **After**: `'${emp.displayName} - ${emp.department ?? ''}'`

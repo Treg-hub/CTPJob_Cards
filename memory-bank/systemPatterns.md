@@ -119,11 +119,11 @@ Notifications  Push Updates       UI State Updates
 6. **Confirmation**: UI feedback and dialog closure
 
 ### Notification Flow
-1. **Trigger**: Job creation, assignment, or timed escalation
+1. **Trigger**: Job creation, assignment, or timed escalation (2min/7min for all priorities)
 2. **Priority Check**: Read job.priority (1-5) to determine level (normal/medium-high/full-loud)
-3. **Recipient Selection**: Techs for creation, assignee for assignment, escalating groups for escalations
-4. **Level Application**: CF passes notificationLevel in FCM data
-5. **Client Handling**: Dart switches on level for channel/sound/vib/fullscreen
+3. **Recipient Selection**: Techs for creation (+creator for pri5), assignee for assignment, escalating groups for escalations
+4. **Level Application**: CF passes notificationLevel in FCM data, full-loud includes bypassDnd and alarm audio
+5. **Client Handling**: Dart switches on level for channel/sound/vib/fullscreen/alarm usage
 6. **Send Operation**: Async FCM with error handling
 7. **Logging**: Debug prints for tracking
 

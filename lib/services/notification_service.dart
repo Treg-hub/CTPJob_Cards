@@ -140,6 +140,7 @@ class NotificationService {
           vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
           category: AndroidNotificationCategory.call,
           fullScreenIntent: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         );
         break;
       default:
