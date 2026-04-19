@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/skeleton_loader.dart';
@@ -188,67 +189,87 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       );
     }
 
+    // Group photos by section
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (final photo in _currentJobCard.photos) {
+      final section = photo['section'] as String? ?? 'General';
+      grouped.putIfAbsent(section, () => []).add(photo);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _currentJobCard.photos.length,
-            itemBuilder: (context, index) {
-              final photo = _currentJobCard.photos[index];
-              final url = photo['url'] as String?;
-              if (url == null) return const SizedBox.shrink();
+      children: grouped.entries.map((entry) {
+        final section = entry.key;
+        final photos = entry.value..sort((a, b) => DateTime.parse(b['timestamp'] ?? '').compareTo(DateTime.parse(a['timestamp'] ?? '')));
 
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: GestureDetector(
-                  onTap: () => _showPhotoDialog(
-                    photo['url'] as String,
-                    photo['addedBy'] as String? ?? 'Unknown',
-                    photo['timestamp'] as String? ?? '',
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: url,
-                      width: 180,
-                      height: 180,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        width: 180,
-                        height: 180,
-                        color: Colors.grey[300],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        width: 180,
-                        height: 180,
-                        color: Colors.grey[200],
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, size: 48, color: Colors.red),
-                            SizedBox(height: 8),
-                            Text('Failed to load', style: TextStyle(fontSize: 12)),
-                            Text('(CORS fixed)', style: TextStyle(fontSize: 10)),
-                          ],
+        return ExpansionTile(
+          title: Text('$section (${photos.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          children: [
+            SizedBox(
+              height: 200,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: photos.length,
+                itemBuilder: (context, index) {
+                  final photo = photos[index];
+                  final url = photo['url'] as String?;
+                  if (url == null) return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showFullScreenPhotoViewer(photo),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: url,
+                              width: 180,
+                              height: 180,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 180,
+                                height: 180,
+                                color: Colors.grey[300],
+                                child: const Center(child: CircularProgressIndicator()),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                width: 180,
+                                height: 180,
+                                color: Colors.grey[200],
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.broken_image, size: 48, color: Colors.red),
+                                    SizedBox(height: 8),
+                                    Text('Failed to load', style: TextStyle(fontSize: 12)),
+                                    Text('(CORS fixed)', style: TextStyle(fontSize: 10)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        if ((photo['addedBy'] == FirebaseAuth.instance.currentUser?.uid || currentEmployee?.clockNo == '22') && _currentJobCard.status != JobStatus.closed && _currentJobCard.status != JobStatus.monitor)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deletePhoto(photo),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      }).toList(),
     );
   }
 
@@ -627,14 +648,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     }
   }
 
-    Future<void> _addPhoto() async {
+    Future<void> _addPhoto(String section) async {
       try {
         final picker = ImagePicker();
         final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
         if (pickedFile == null) return;
-
-
 
         String downloadUrl;
 
@@ -674,8 +693,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
         // Save Map to Firestore
         final photoMap = {
           'url': downloadUrl,
-          'addedBy': currentEmployee?.name ?? 'Unknown',
+          'section': section,
+          'addedBy': FirebaseAuth.instance.currentUser?.uid ?? 'legacy',
           'timestamp': DateTime.now().toIso8601String(),
+          'department': _currentJobCard.department,
+          'machine': _currentJobCard.machine,
+          'location': _currentJobCard.area,
+          'part': _currentJobCard.part,
         };
         await FirebaseFirestore.instance
             .collection('job_cards')
@@ -709,6 +733,77 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           );
         }
       }
+    }
+
+    Future<void> _deletePhoto(Map<String, dynamic> photo) async {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (photo['addedBy'] != currentUid && currentEmployee?.clockNo != '22') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You can only delete your own photos'), backgroundColor: Colors.red));
+        return;
+      }
+      if (_currentJobCard.status == JobStatus.closed || _currentJobCard.status == JobStatus.monitor) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete photos when job is closed or monitoring'), backgroundColor: Colors.red));
+        return;
+      }
+      try {
+        await FirebaseFirestore.instance.collection('job_cards').doc(widget.jobCard.id).update({
+          'photos': FieldValue.arrayRemove([photo]),
+        });
+        setState(() {
+          _currentJobCard = _currentJobCard.copyWith(
+            photos: _currentJobCard.photos.where((p) => p != photo).toList(),
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo deleted')));
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting photo: $e'), backgroundColor: Colors.red));
+      }
+    }
+
+    void _showFullScreenPhotoViewer(Map<String, dynamic> photo) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              title: const Text('Photo Viewer'),
+              backgroundColor: Colors.black,
+            ),
+            body: Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: InteractiveViewer(
+                      child: CachedNetworkImage(
+                        imageUrl: photo['url'] as String,
+                        fit: BoxFit.contain,
+                        placeholder: (context, url) => const CircularProgressIndicator(),
+                        errorWidget: (context, url, error) => const Icon(Icons.error),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.black,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Section: ${photo['section'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
+                      Text('Department: ${photo['department'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
+                      Text('Machine: ${photo['machine'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
+                      Text('Location: ${photo['location'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
+                      Text('Part: ${photo['part'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
+                      Text('Added by: ${photo['addedBy'] ?? 'Unknown'}', style: const TextStyle(color: Colors.white)),
+                      Text('Timestamp: ${DateTime.parse(photo['timestamp'] ?? '').toLocal().toString().substring(0,16)}', style: const TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
@@ -808,7 +903,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                         children: [
                           const Text('Photos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                           TextButton.icon(
-                            onPressed: () => _addPhoto(),
+                            onPressed: () => _addPhoto('Description'),
                             icon: const Icon(Icons.camera_alt, size: 20),
                             label: const Text('Add Photo'),
                             style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
@@ -1363,7 +1458,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       ),
                       const SizedBox(width: 8),
                       TextButton.icon(
-                        onPressed: () => _addPhoto(),
+                        onPressed: () => _addPhoto('Comments'),
                         icon: const Icon(Icons.camera_alt, size: 20),
                         label: const Text('Add Photo'),
                         style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
@@ -1388,11 +1483,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
               children: [
                 const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                 if (_canAddNotes)
-                  TextButton.icon(
-                    onPressed: _showAddNoteDialog,
-                    icon: const Icon(Icons.note_add, size: 20),
-                    label: const Text('Add Note'),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _showAddNoteDialog,
+                        icon: const Icon(Icons.note_add, size: 20),
+                        label: const Text('Add Note'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () => _addPhoto('Notes'),
+                        icon: const Icon(Icons.camera_alt, size: 20),
+                        label: const Text('Add Photo'),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      ),
+                    ],
                   ),
               ],
             ),

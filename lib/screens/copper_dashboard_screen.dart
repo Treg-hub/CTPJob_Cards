@@ -138,6 +138,161 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
     );
   }
 
+  Widget _buildTransactionTab() {
+    return ref.watch(copperNotifierProvider).when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(child: Text('Error: $error')),
+      data: (CopperInventory inv) => SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Current Copper Buckets', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildBucketCard('Sort', inv.sortKg, Colors.blue, Icons.sort),
+                const SizedBox(width: 8),
+                _buildBucketCard('Reuse', inv.reuseKg, Colors.green, Icons.refresh),
+                const SizedBox(width: 8),
+                _buildBucketCard('Sell', inv.sellKg, Colors.amber, Icons.sell),
+              ],
+            ),
+            const SizedBox(height: 32),
+            const Text('New Transaction', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedType,
+              decoration: const InputDecoration(labelText: 'Transaction Type'),
+              items: const [
+                DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
+                DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
+                DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
+                DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
+                DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
+              ],
+              onChanged: (v) => setState(() => _selectedType = v!),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _amountController,
+              decoration: const InputDecoration(labelText: 'Amount (kg)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  _reuseAmount = (double.tryParse(value) ?? 0) - (double.tryParse(_sellAmountController.text) ?? 0);
+                });
+              },
+            ),
+            if (_selectedType == 'removeFromSort') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sellAmountController,
+                decoration: const InputDecoration(labelText: 'Sell Amount (kg)'),
+                keyboardType: TextInputType.number,
+                onChanged: (value) {
+                  setState(() {
+                    _reuseAmount = (double.tryParse(_amountController.text) ?? 0) - (double.tryParse(value) ?? 0);
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Reuse: ${_reuseAmount.toStringAsFixed(1)} kg',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _reuseAmount >= 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+            if (_selectedType == 'recordSale') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _rPerKgController,
+                decoration: const InputDecoration(labelText: 'R per kg'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _commentsController,
+              decoration: const InputDecoration(labelText: 'Comments'),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _executeTransaction,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Execute Transaction', style: TextStyle(fontSize: 18)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryTab() {
+    return StreamBuilder<List<CopperTransaction>>(
+      stream: _copperService.getTransactionsStream(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final txs = snapshot.data!;
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.download),
+                label: const Text('Export CSV'),
+                onPressed: () => _exportCSV(txs),
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {});
+                  await Future.delayed(const Duration(milliseconds: 500));
+                },
+                child: ListView.separated(
+                  itemCount: txs.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final tx = txs[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: ListTile(
+                        leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
+                        title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (tx.fromBucket != null || tx.toBucket != null)
+                              Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
+                            if (tx.rPerKg != null) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
+                            Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                        trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,181 +302,45 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
         backgroundColor: Colors.amber,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          Container(
-            color: Colors.black,
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: Colors.amber,
-              labelColor: Colors.amber,
-              unselectedLabelColor: Colors.white70,
-              tabs: const [
-                Tab(icon: Icon(Icons.swap_horiz), text: 'Make Transaction'),
-                Tab(icon: Icon(Icons.history), text: 'History'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isLargeScreen = constraints.maxWidth > 1200;
+          if (isLargeScreen) {
+            return Row(
               children: [
-                // ==================== TAB 1: MAKE TRANSACTION ====================
-                ref.watch(copperNotifierProvider).when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, stack) => Center(child: Text('Error: $error')),
-                  data: (CopperInventory inv) => SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Current Copper Buckets', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _buildBucketCard('Sort', inv.sortKg, Colors.blue, Icons.sort),
-                            const SizedBox(width: 8),
-                            _buildBucketCard('Reuse', inv.reuseKg, Colors.green, Icons.refresh),
-                            const SizedBox(width: 8),
-                            _buildBucketCard('Sell', inv.sellKg, Colors.amber, Icons.sell),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        const Text('New Transaction', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedType,
-                          decoration: const InputDecoration(labelText: 'Transaction Type'),
-                          items: const [
-                            DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
-                            DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
-                            DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
-                            DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
-                            DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
-                          ],
-                          onChanged: (v) => setState(() => _selectedType = v!),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _amountController,
-                          decoration: const InputDecoration(labelText: 'Amount (kg)'),
-                          keyboardType: TextInputType.number,
-                          onChanged: (value) {
-                            setState(() {
-                              _reuseAmount = (double.tryParse(value) ?? 0) - (double.tryParse(_sellAmountController.text) ?? 0);
-                            });
-                          },
-                        ),
-                        if (_selectedType == 'removeFromSort') ...[
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _sellAmountController,
-                            decoration: const InputDecoration(labelText: 'Sell Amount (kg)'),
-                            keyboardType: TextInputType.number,
-                            onChanged: (value) {
-                              setState(() {
-                                _reuseAmount = (double.tryParse(_amountController.text) ?? 0) - (double.tryParse(value) ?? 0);
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Reuse: ${_reuseAmount.toStringAsFixed(1)} kg',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _reuseAmount >= 0 ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                        if (_selectedType == 'recordSale') ...[
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _rPerKgController,
-                            decoration: const InputDecoration(labelText: 'R per kg'),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _commentsController,
-                          decoration: const InputDecoration(labelText: 'Comments'),
-                          maxLines: 2,
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _executeTransaction,
-                            child: _isLoading
-                                ? const CircularProgressIndicator(color: Colors.white)
-                                : const Text('Execute Transaction', style: TextStyle(fontSize: 18)),
-                          ),
-                        ),
-                      ],
-                    ),
+                Expanded(child: _buildTransactionTab()),
+                Expanded(child: _buildHistoryTab()),
+              ],
+            );
+          } else {
+            return Column(
+              children: [
+                Container(
+                  color: Colors.black,
+                  child: TabBar(
+                    controller: _tabController,
+                    indicatorColor: Colors.amber,
+                    labelColor: Colors.amber,
+                    unselectedLabelColor: Colors.white70,
+                    tabs: const [
+                      Tab(icon: Icon(Icons.swap_horiz), text: 'Make Transaction'),
+                      Tab(icon: Icon(Icons.history), text: 'History'),
+                    ],
                   ),
                 ),
-
-                // ==================== TAB 2: HISTORY ====================
-                StreamBuilder<List<CopperTransaction>>(
-                  stream: _copperService.getTransactionsStream(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final txs = snapshot.data!;
-
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.download),
-                            label: const Text('Export CSV'),
-                            onPressed: () => _exportCSV(txs),
-                          ),
-                        ),
-                        Expanded(
-                          child: RefreshIndicator(
-                            onRefresh: () async {
-                              setState(() {});
-                              await Future.delayed(const Duration(milliseconds: 500));
-                            },
-                            child: ListView.separated(
-                              itemCount: txs.length,
-                              separatorBuilder: (_, __) => const Divider(),
-                              itemBuilder: (context, index) {
-                                final tx = txs[index];
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  child: ListTile(
-                                    leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
-                                    title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (tx.fromBucket != null || tx.toBucket != null)
-                                          Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
-                                        if (tx.rPerKg != null) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
-                                        Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                      ],
-                                    ),
-                                    trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTransactionTab(),
+                      _buildHistoryTab(),
+                    ],
+                  ),
                 ),
               ],
-            ),
-          ),
-        ],
+            );
+          }
+        },
       ),
     );
   }

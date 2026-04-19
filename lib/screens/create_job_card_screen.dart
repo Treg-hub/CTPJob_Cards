@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
@@ -141,7 +142,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     }
   }
 
-  Future<void> _addPhoto() async {
+  Future<void> _addPhoto(String section) async {
     final picker = ImagePicker();
     final source = await showDialog<ImageSource>(
       context: context,
@@ -178,7 +179,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     if (compressedFile == null) return;
 
     setState(() {
-      photos.add({'file': compressedFile.path});
+      photos.add({'file': compressedFile.path, 'section': section});
     });
 
     if (mounted) {
@@ -211,9 +212,13 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
         uploaded.add({
           'url': downloadUrl,
-          'section': 'job_card',
-          'addedBy': operatorName,
+          'section': photoData['section'] as String? ?? 'General',
+          'addedBy': FirebaseAuth.instance.currentUser?.uid ?? 'legacy',
           'timestamp': DateTime.now().toIso8601String(),
+          'department': selectedDepartment,
+          'machine': selectedMachine,
+          'location': selectedArea,
+          'part': part,
         });
 
         if (mounted) {
@@ -679,11 +684,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                 const SizedBox(height: 24),
                 const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: _addPhoto,
-                  icon: const Icon(Icons.add_a_photo),
-                  label: const Text('Add Photo (Camera/Gallery)'),
-                ),
+                if (part.isNotEmpty && description.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: () => _addPhoto('Description'),
+                    icon: const Icon(Icons.add_a_photo),
+                    label: const Text('Add Photo (Camera/Gallery)'),
+                  )
+                else
+                  const Text('Select part and fill description to enable photo upload', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
                 const SizedBox(height: 12),
                 _buildPhotosPreview(),
                 const SizedBox(height: 24),
@@ -912,11 +920,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       const SizedBox(height: 24),
                       const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: _addPhoto,
-                        icon: const Icon(Icons.add_a_photo),
-                        label: const Text('Add Photo (Camera/Gallery)'),
-                      ),
+                      if (part.isNotEmpty && description.isNotEmpty)
+                        ElevatedButton.icon(
+                          onPressed: () => _addPhoto('Description'),
+                          icon: const Icon(Icons.add_a_photo),
+                          label: const Text('Add Photo (Camera/Gallery)'),
+                        )
+                      else
+                        const Text('Select part and fill description to enable photo upload', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
                       const SizedBox(height: 12),
                       _buildPhotosPreview(),
                       const SizedBox(height: 24),

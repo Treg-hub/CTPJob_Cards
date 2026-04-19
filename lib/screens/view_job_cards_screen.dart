@@ -146,103 +146,98 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           // All selected, show nothing
           currentStep = const SizedBox.shrink();
         } else if (selectedMachine != null) {
-          // Show part input
+          // Show part chips only
           currentStep = FutureBuilder<List<String>>(
             future: _firestoreService.getPreviousParts(selectedDepartment!, selectedArea!, selectedMachine!),
             builder: (context, snapshot) {
               final previousParts = snapshot.data ?? [];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (previousParts.isNotEmpty)
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: previousParts.map((part) => ActionChip(
-                        label: Text(part),
-                        onPressed: () => setState(() => selectedPart = part),
-                        backgroundColor: selectedPart == part ? const Color(0xFFFF8C42).withValues(alpha: 51) : null,
-                        labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Colors.white),
-                      )).toList(),
-                    ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Type part or tap suggestion above',
-                      border: OutlineInputBorder(),
-                      labelStyle: TextStyle(color: Colors.white70),
-                    ),
-                    onChanged: (value) => setState(() => selectedPart = value.trim()),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
+              if (previousParts.isEmpty) {
+                return const Text('No previous parts found', style: TextStyle(color: Colors.white70));
+              }
+              return Center(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: previousParts.map((part) => ActionChip(
+                    label: Text(part),
+                    onPressed: () => setState(() => selectedPart = part),
+                    backgroundColor: selectedPart == part ? const Color(0xFFFF8C42).withValues(alpha: 51) : null,
+                    labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Colors.white),
+                  )).toList(),
+                ),
               );
             },
           );
         } else if (selectedArea != null) {
           // Show machine chips
-          currentStep = Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: machines.map((machine) => ChoiceChip(
-              label: Text(machine),
-              selected: selectedMachine == machine,
-              onSelected: (_) => setState(() {
-                selectedMachine = machine;
-                selectedPart = null;
-              }),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
-            )).toList(),
+          currentStep = Center(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: machines.map((machine) => ChoiceChip(
+                label: Text(machine),
+                selected: selectedMachine == machine,
+                onSelected: (_) => setState(() {
+                  selectedMachine = machine;
+                  selectedPart = null;
+                }),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+              )).toList(),
+            ),
           );
         } else if (selectedDepartment != null) {
           // Show area chips
-          currentStep = Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: areas.map((area) => ChoiceChip(
-              label: Text(area),
-              selected: selectedArea == area,
-              onSelected: (_) => setState(() {
-                selectedArea = area;
-                selectedMachine = null;
-                selectedPart = null;
-              }),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
-            )).toList(),
+          currentStep = Center(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: areas.map((area) => ChoiceChip(
+                label: Text(area),
+                selected: selectedArea == area,
+                onSelected: (_) => setState(() {
+                  selectedArea = area;
+                  selectedMachine = null;
+                  selectedPart = null;
+                }),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+              )).toList(),
+            ),
           );
         } else {
           // Show dept chips
-          currentStep = Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              ChoiceChip(
-                label: const Text('All Departments'),
-                selected: selectedDepartment == null,
-                onSelected: (_) => setState(() {
-                  selectedDepartment = null;
-                  selectedArea = null;
-                  selectedMachine = null;
-                  selectedPart = null;
-                }),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
-              ),
-              ...data.keys.map((dept) => ChoiceChip(
-                label: Text(dept),
-                selected: selectedDepartment == dept,
-                onSelected: (_) => setState(() {
-                  selectedDepartment = dept;
-                  selectedArea = null;
-                  selectedMachine = null;
-                  selectedPart = null;
-                }),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
-              )),
-            ],
+          currentStep = Center(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ChoiceChip(
+                  label: const Text('All Departments'),
+                  selected: selectedDepartment == null,
+                  onSelected: (_) => setState(() {
+                    selectedDepartment = null;
+                    selectedArea = null;
+                    selectedMachine = null;
+                    selectedPart = null;
+                  }),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                ),
+                ...data.keys.map((dept) => ChoiceChip(
+                  label: Text(dept),
+                  selected: selectedDepartment == dept,
+                  onSelected: (_) => setState(() {
+                    selectedDepartment = dept;
+                    selectedArea = null;
+                    selectedMachine = null;
+                    selectedPart = null;
+                  }),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                )),
+              ],
+            ),
           );
         }
 
@@ -456,11 +451,42 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           ),
         ],
       ),
-      body: _isWide ? _buildWideLayout() : _buildNarrowLayout(),
+      body: StreamBuilder<List<JobCard>>(
+        stream: _firestoreService.getAllJobCards(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final allJobs = snapshot.data!;
+
+          // Apply staff filter for counts
+          var jobs = allJobs;
+          if (selectedStaffFilter != 'All') {
+            jobs = jobs.where((j) => j.type.name == selectedStaffFilter.toLowerCase()).toList();
+          }
+
+          // Apply location filters for counts
+          if (selectedDepartment != null) jobs = jobs.where((j) => j.department == selectedDepartment).toList();
+          if (selectedArea != null) jobs = jobs.where((j) => j.area == selectedArea).toList();
+          if (selectedMachine != null) jobs = jobs.where((j) => j.machine == selectedMachine).toList();
+          if (selectedPart != null) jobs = jobs.where((j) => j.part == selectedPart).toList();
+
+          // Compute counts
+          final openCount = jobs.where((j) => j.status.name == 'open').length;
+          final monitorCount = jobs.where((j) => j.status.name == 'monitor').length;
+          final closedCount = jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').length;
+
+          return _isWide ? _buildWideLayout(openCount, monitorCount, closedCount) : _buildNarrowLayout(openCount, monitorCount, closedCount);
+        },
+      ),
     );
   }
 
-  Widget _buildNarrowLayout() {
+  Widget _buildNarrowLayout(int openCount, int monitorCount, int closedCount) {
     return Column(
       children: [
         // Status Tabs
@@ -468,10 +494,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           color: Colors.black,
           child: TabBar(
             controller: _tabController,
-            tabs: const [
-              Tab(text: 'Open'),
-              Tab(text: 'Monitor'),
-              Tab(text: 'Closed'),
+            tabs: [
+              Tab(text: 'Open ($openCount)'),
+              Tab(text: 'Monitor ($monitorCount)'),
+              Tab(text: 'Closed ($closedCount)'),
             ],
             labelColor: const Color(0xFFFF8C42),
             unselectedLabelColor: Colors.white70,
@@ -497,57 +523,36 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     );
   }
 
-  Widget _buildWideLayout() {
-    return Row(
+  Widget _buildWideLayout(int openCount, int monitorCount, int closedCount) {
+    return Column(
       children: [
-        // Filters Sidebar
+        // Status Tabs
         Container(
-          width: 300,
-          color: Colors.black12,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 16),
-                _buildCascadingFilters(),
-              ],
-            ),
+          color: Colors.black,
+          child: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: 'Open ($openCount)'),
+              Tab(text: 'Monitor ($monitorCount)'),
+              Tab(text: 'Closed ($closedCount)'),
+            ],
+            labelColor: const Color(0xFFFF8C42),
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: const Color(0xFFFF8C42),
           ),
         ),
 
-        // Main Content
-        Expanded(
-          child: Column(
-            children: [
-              // Status Tabs
-              Container(
-                color: Colors.black,
-                child: TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(text: 'Open'),
-                    Tab(text: 'Monitor'),
-                    Tab(text: 'Closed'),
-                  ],
-                  labelColor: const Color(0xFFFF8C42),
-                  unselectedLabelColor: Colors.white70,
-                  indicatorColor: const Color(0xFFFF8C42),
-                ),
-              ),
+        // Cascading Filters
+        _buildCascadingFilters(),
 
-              // Job List
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildJobListForStatus('open'),
-                    _buildJobListForStatus('monitor'),
-                    _buildJobListForStatus('closed'),
-                  ],
-                ),
-              ),
+        // Job List
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildJobListForStatus('open'),
+              _buildJobListForStatus('monitor'),
+              _buildJobListForStatus('closed'),
             ],
           ),
         ),
