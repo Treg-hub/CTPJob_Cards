@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
       print('🔄 Starting custom token login for clockNo: $clockNo');
       final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
       final callable = functions.httpsCallable('createCustomToken');
-      print('📡 Calling createCustomToken in africa-south1');
+      print('📡 Calling createCustomToken in africa-south1 with data: $clockNo');
 
       final result = await callable.call({'clockNo': clockNo});
       final customToken = result.data['customToken'] as String;
