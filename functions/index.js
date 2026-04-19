@@ -7,6 +7,47 @@ const messaging = admin.messaging();
 
 functions.setGlobalOptions({region: "africa-south1"});
 
+// ==================== NEW: Custom Token Auth (Option B) ====================
+exports.createCustomToken = functions.https.onCall(async (data, context) => {
+  const clockNo = data.clockNo;
+
+  console.log("🔄 createCustomToken called with clockNo:", clockNo);
+
+  if (!clockNo) {
+    console.error("❌ Missing clockNo");
+    throw new functions.https.HttpsError("invalid-argument", "clockNo is required");
+  }
+
+  try {
+    console.log("🔍 Looking up employee doc:", clockNo);
+    const employeeDoc = await admin.firestore().collection("employees").doc(clockNo).get();
+
+    if (!employeeDoc.exists) {
+      console.error("❌ Employee not found for clockNo:", clockNo);
+      throw new functions.https.HttpsError("not-found", "Employee not found");
+    }
+
+    const employeeData = employeeDoc.data();
+    console.log("✅ Employee found:", employeeData.name);
+
+    const uid = `employee_${clockNo}`;
+    console.log("🔑 Creating custom token for UID:", uid);
+
+    const customToken = await admin.auth().createCustomToken(uid, {
+      clockNo: clockNo,
+      name: employeeData.name || "",
+      type: "employee",
+    });
+
+    console.log("✅ Custom token successfully created for", clockNo);
+    return {customToken};
+  } catch (error) {
+    console.error("💥 Error in createCustomToken:", error);
+    throw new functions.https.HttpsError("internal", "Failed to create custom token", error);
+  }
+});
+// ==========================================================================
+
 /**
  * Gets notification level based on priority.
  * @param {number} priority - Job priority (1-5).
@@ -588,3 +629,4 @@ exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "Migration failed: " + error.message);
   }
 });
+

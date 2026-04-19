@@ -24,6 +24,7 @@
   },
   
   "functions": {
+    "region": "africa-south1",
     "predeploy": []
   },
   "firestore": {

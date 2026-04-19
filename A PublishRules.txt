@@ -13,3 +13,15 @@ flutter pub get
 flutter build web --release
 firebase deploy --only hosting
 flutter build apk --target-platform android-arm64 --release
+
+
+
+
+# 1. Go to the functions folder
+cd functions
+# 2. Install dependencies (only needed once)
+npm install
+# 3. Deploy ONLY the functions
+firebase deploy --only functions
+
+

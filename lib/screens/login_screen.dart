@@ -58,14 +58,24 @@ class _LoginScreenState extends State<LoginScreen> {
         department: empData['department'] as String? ?? '',
       );
 
-      // === NEW: Custom Token Auth (Option B) ===
-      final functions = FirebaseFunctions.instance;
+      // === IMPROVED Custom Token Auth (Option B) - africa-south1 ===
+      print('🔄 Starting custom token login for clockNo: $clockNo');
+      final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
       final callable = functions.httpsCallable('createCustomToken');
+      print('📡 Calling createCustomToken in africa-south1');
+
       final result = await callable.call({'clockNo': clockNo});
       final customToken = result.data['customToken'] as String;
+      print('✅ Custom token received from africa-south1');
 
       await FirebaseAuth.instance.signInWithCustomToken(customToken);
-      print('✅ Signed in with custom token for clockNo: $clockNo');
+      print('✅ Signed in with custom token - UID: ${FirebaseAuth.instance.currentUser?.uid}');
+
+      // Wait for auth state to fully propagate
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (FirebaseAuth.instance.currentUser == null) {
+        throw Exception('Auth state did not propagate');
+      }
       // ==========================================
 
       final prefs = await SharedPreferences.getInstance();
