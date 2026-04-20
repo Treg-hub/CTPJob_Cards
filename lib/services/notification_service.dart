@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -69,6 +70,14 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
           // DND permission must be granted manually by the user
           // We will add a button or auto-open the settings screen in the next step
           debugPrint('Notification permission granted. User still needs to grant DND access manually.');
+        }
+      }
+
+      // Request "Display over other apps" permission (required for fullScreenIntent on Android 12+)
+      if (Platform.isAndroid) {
+        final status = await Permission.systemAlertWindow.status;
+        if (!status.isGranted) {
+          await Permission.systemAlertWindow.request();
         }
       }
     }

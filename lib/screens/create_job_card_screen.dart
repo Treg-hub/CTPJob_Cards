@@ -681,18 +681,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
-                const SizedBox(height: 24),
-                const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (part.isNotEmpty && description.isNotEmpty)
-                  ElevatedButton.icon(
-                    onPressed: () => _addPhoto('Description'),
-                    icon: const Icon(Icons.add_a_photo),
-                    label: const Text('Add Photo (Camera/Gallery)'),
-                  )
-                else
-                  const Text('Select part and fill description to enable photo upload', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-                const SizedBox(height: 12),
+                 const SizedBox(height: 24),
+                 const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                 const SizedBox(height: 8),
+                 ElevatedButton.icon(
+                   onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                   icon: const Icon(Icons.add_a_photo),
+                   label: const Text('Add Photo (Camera/Gallery)'),
+                 ),
+                 const SizedBox(height: 12),
                 _buildPhotosPreview(),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -920,14 +917,11 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       const SizedBox(height: 24),
                       const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      if (part.isNotEmpty && description.isNotEmpty)
-                        ElevatedButton.icon(
-                          onPressed: () => _addPhoto('Description'),
-                          icon: const Icon(Icons.add_a_photo),
-                          label: const Text('Add Photo (Camera/Gallery)'),
-                        )
-                      else
-                        const Text('Select part and fill description to enable photo upload', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                      ElevatedButton.icon(
+                        onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text('Add Photo (Camera/Gallery)'),
+                      ),
                       const SizedBox(height: 12),
                       _buildPhotosPreview(),
                       const SizedBox(height: 24),

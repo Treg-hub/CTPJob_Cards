@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -876,186 +878,184 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildSettingsTab(ThemeMode themeMode, WidgetRef ref) {
-    return SingleChildScrollView(
+    return ListView(
       padding: EdgeInsets.all(_screenPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Settings',
+      children: [
+        // Account Section
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+          child: Text(
+            'Account',
             style: TextStyle(
-              fontSize: _isDesktop ? 22 : 24,
+              fontSize: _isDesktop ? 20 : 22,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          SizedBox(height: _isDesktop ? 32 : 24),
-
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(_cardPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Current User: ${currentEmployee?.name ?? 'Unknown'}',
+        ),
+        Card(
+          elevation: 4,
+          child: Padding(
+            padding: EdgeInsets.all(_cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Current User: ${currentEmployee?.name ?? 'Unknown'}',
+                  style: TextStyle(
+                    fontSize: _isDesktop ? 14 : 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Clock No: ${currentEmployee?.clockNo ?? 'Unknown'}',
+                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Department: ${currentEmployee?.department ?? 'Unknown'}',
+                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Card(
+          elevation: 4,
+          child: Padding(
+            padding: EdgeInsets.all(_cardPadding),
+            child: Row(
+              children: [
+                Icon(
+                  isOnSite ? Icons.check_circle : Icons.cancel,
+                  color: isOnSite ? Colors.green : Colors.red,
+                  size: _isDesktop ? 20 : 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
                     style: TextStyle(
                       fontSize: _isDesktop ? 14 : 16,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Clock No: ${currentEmployee?.clockNo ?? 'Unknown'}',
-                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                ),
+                Transform.scale(
+                  scale: _isDesktop ? 0.7 : 0.8,
+                  child: Switch(
+                    value: isOnSite,
+                    onChanged: _toggleOnSite,
+                    activeThumbColor: Colors.green,
+                    inactiveTrackColor: Colors.redAccent,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Department: ${currentEmployee?.department ?? 'Unknown'}',
-                    style: const TextStyle(fontSize: 14, color: Colors.white70),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
+        Card(
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Log Out'),
+            onTap: _logout,
+          ),
+        ),
 
-          SizedBox(height: _isDesktop ? 32 : 24),
-
-          // Theme Switch - Riverpod version
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(_cardPadding),
-              child: Row(
-                children: [
-                  Icon(
-                    isOnSite ? Icons.check_circle : Icons.cancel,
-                    color: isOnSite ? Colors.green : Colors.red,
-                    size: _isDesktop ? 20 : 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                      style: TextStyle(
-                        fontSize: _isDesktop ? 14 : 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Transform.scale(
-                    scale: _isDesktop ? 0.7 : 0.8,
-                    child: Switch(
-                      value: isOnSite,
-                      onChanged: _toggleOnSite,
-                      activeThumbColor: Colors.green,
-                      inactiveTrackColor: Colors.redAccent,
-                    ),
-                  ),
-                ],
-              ),
+        // Notifications Section
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+          child: Text(
+            'Notifications',
+            style: TextStyle(
+              fontSize: _isDesktop ? 20 : 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-
-          SizedBox(height: _isDesktop ? 32 : 24),
-
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.notifications_active, color: Colors.orange),
-              title: Text('Enable DND Bypass'),
-              subtitle: Text('Grant notification policy access for loud alarms'),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () async {
-                final uri = Uri.parse('android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS');
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri);
-                }
-              },
-            ),
+        ),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.notifications_active, color: Colors.orange),
+            title: Text('Enable DND Bypass'),
+            subtitle: Text('Grant notification policy access for loud alarms'),
+            trailing: Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              if (Platform.isAndroid) {
+                final intent = android_intent.AndroidIntent(
+                  action: 'android.settings.APP_NOTIFICATION_SETTINGS',
+                  data: 'package:ctp_job_cards',
+                );
+                intent.launch();
+              }
+            },
           ),
+        ),
 
-          SizedBox(height: _isDesktop ? 32 : 24),
-
-          if (currentEmployee?.name == 'G Peens') ...[
-            Text(
-              'Admin Settings',
+        // Admin Section
+        if (currentEmployee?.name == 'G Peens') ...[
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+            child: Text(
+              'Admin',
               style: TextStyle(
-                fontSize: _isDesktop ? 18 : 20,
+                fontSize: _isDesktop ? 20 : 22,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
             ),
-            SizedBox(height: _isDesktop ? 20 : 16),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-              icon: const Icon(Icons.settings),
-              label: const Text('Manage Collections'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF14B8A6),
-                foregroundColor: Colors.white,
+          ),
+          Card(
+            elevation: 4,
+            child: ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFF14B8A6)),
+              title: const Text('Manage Collections'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+            ),
+          ),
+        ],
+
+        // Developer Section
+        if (!kIsWeb) ...[
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+            child: Text(
+              'Developer',
+              style: TextStyle(
+                fontSize: _isDesktop ? 20 : 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
-            SizedBox(height: _isDesktop ? 32 : 24),
-          ],
-
-           // Logout Button
-           Card(
-             elevation: 4,
-             child: Padding(
-               padding: EdgeInsets.all(_cardPadding),
-               child: ElevatedButton.icon(
-                 onPressed: _logout,
-                 icon: const Icon(Icons.logout),
-                 label: const Text('Log Out'),
-                 style: ElevatedButton.styleFrom(
-                   backgroundColor: Colors.red,
-                   foregroundColor: Colors.white,
-                   minimumSize: const Size(double.infinity, 48),
-                 ),
-               ),
-             ),
-           ),
-
-           if (!kIsWeb) ...[
-             SizedBox(height: _isDesktop ? 32 : 24),
-             Text(
-               'Developer Options',
-               style: TextStyle(
-                 fontSize: _isDesktop ? 18 : 20,
-                 fontWeight: FontWeight.bold,
-                 color: Colors.white,
-               ),
-             ),
-             SizedBox(height: _isDesktop ? 20 : 16),
-             ElevatedButton.icon(
-               onPressed: () async {
-                 try {
-                   await _notificationService.refreshToken();
-                   if (context.mounted) {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                       const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
-                     );
-                   }
-                 } catch (e) {
-                   if (context.mounted) {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                       SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
-                     );
-                   }
-                 }
-               },
-               icon: const Icon(Icons.refresh),
-               label: const Text('Refresh FCM Token'),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.blueGrey,
-                 foregroundColor: Colors.white,
-               ),
-             ),
-           ],
+          ),
+          Card(
+            elevation: 4,
+            child: ListTile(
+              leading: const Icon(Icons.refresh, color: Colors.blueGrey),
+              title: const Text('Refresh FCM Token'),
+              onTap: () async {
+                try {
+                  await _notificationService.refreshToken();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
