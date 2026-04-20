@@ -35,7 +35,7 @@ class GeofenceReceiver : BroadcastReceiver() {
                             // Send local notification
                             sendNotification(context, entering)
                         }
-                        .addOnFailureListener { e ->
+                        .addOnFailureListener { e: Exception ->
                             // Still send notification even if Firestore fails
                             sendNotification(context, entering)
                         }

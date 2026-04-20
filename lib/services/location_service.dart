@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
@@ -22,6 +23,10 @@ class LocationService {
   final NotificationService _notificationService = NotificationService();
 
   Future<void> startNativeMonitoring(String clockNo) async {
+    if (kIsWeb) {
+      debugPrint('📍 Geofencing not supported on web platform');
+      return;
+    }
     _clockNo = clockNo;
     await _requestPermissions();
     await _notificationService.initialize();
@@ -32,12 +37,16 @@ class LocationService {
       'radius': RADIUS_METERS,
     });
     await _checkFallback();
-    print('Geofence started for $clockNo');
+    debugPrint('Geofence started for $clockNo');
   }
 
   Future<void> stopNativeMonitoring() async {
+    if (kIsWeb) {
+      debugPrint('📍 Geofencing stop skipped on web platform');
+      return;
+    }
     await _channel.invokeMethod('stopGeofence');
-    print('Geofence stopped');
+    debugPrint('Geofence stopped');
   }
 
   Future<void> _requestPermissions() async {

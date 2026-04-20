@@ -1080,7 +1080,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (confirm == true) {
       try {
-        LocationService().stopNativeMonitoring();
+        // Stop geofencing (mobile only)
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          LocationService().stopNativeMonitoring();
+        } else if (kIsWeb) {
+          debugPrint('📍 Geofencing stop skipped on web platform');
+        }
         await _firestoreService.clearLoggedInEmployee();
         currentEmployee = null;
         if (mounted) {

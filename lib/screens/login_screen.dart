@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -84,8 +85,12 @@ class _LoginScreenState extends State<LoginScreen> {
        await prefs.setString('loggedInClockNo', clockNo);
        currentEmployee = employee;
 
-        // Start automatic on-site detection
-        LocationService().startNativeMonitoring(clockNo);
+        // Start automatic on-site detection (mobile only)
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          LocationService().startNativeMonitoring(clockNo);
+        } else if (kIsWeb) {
+          debugPrint('📍 Geofencing skipped on web platform');
+        }
 
        if (mounted) {
          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
