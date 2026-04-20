@@ -6,7 +6,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 import '../models/employee.dart';
@@ -14,6 +13,7 @@ import '../models/job_card.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
@@ -159,23 +159,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await prefs.setBool('showDeptOnly', value);
   }
 
-  Future<void> _toggleOnSite(bool value) async {
-    setState(() => isOnSite = value);
-    if (currentEmployee == null) return;
 
-    try {
-      final updatedEmployee = currentEmployee!.copyWith(isOnSite: value);
-      await _firestoreService.updateEmployee(updatedEmployee);
-      currentEmployee = updatedEmployee;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating status: $e'), backgroundColor: Colors.red),
-        );
-      }
-      setState(() => isOnSite = !value);
-    }
-  }
 
   void _showPasswordDialog(BuildContext context) {
     final passwordController = TextEditingController();
@@ -341,15 +325,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         fontSize: _isDesktop ? 14 : 16,
                         fontWeight: FontWeight.w500,
                       ),
-                    ),
-                  ),
-                  Transform.scale(
-                    scale: _isDesktop ? 0.7 : 0.8,
-                    child: Switch(
-                      value: isOnSite,
-                      onChanged: _toggleOnSite,
-                      activeThumbColor: Colors.green,
-                      inactiveTrackColor: Colors.redAccent,
                     ),
                   ),
                 ],
@@ -943,15 +918,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
-                Transform.scale(
-                  scale: _isDesktop ? 0.7 : 0.8,
-                  child: Switch(
-                    value: isOnSite,
-                    onChanged: _toggleOnSite,
-                    activeThumbColor: Colors.green,
-                    inactiveTrackColor: Colors.redAccent,
-                  ),
-                ),
               ],
             ),
           ),
@@ -1114,6 +1080,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (confirm == true) {
       try {
+        LocationService().stopNativeMonitoring();
         await _firestoreService.clearLoggedInEmployee();
         currentEmployee = null;
         if (mounted) {

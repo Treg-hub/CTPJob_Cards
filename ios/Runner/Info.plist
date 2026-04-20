@@ -69,6 +69,11 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>location</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>On-site detection for job notifications.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Background location for reliable on-site status.</string>
 </dict>
 </plist>

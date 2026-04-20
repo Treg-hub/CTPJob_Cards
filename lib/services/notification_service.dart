@@ -10,83 +10,6 @@ class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
-  Future<void> initialize() async {
-    if (kIsWeb) return;
-
-    await _requestPermissions();
-
-    // Initialize local notifications with multiple channels
-    if (Platform.isAndroid) {
-      const AndroidNotificationChannel normalChannel = AndroidNotificationChannel(
-        'normal_channel',
-        'Normal Job Notifications',
-        description: 'Standard notifications for job card assignments',
-        importance: Importance.high,
-        enableVibration: true,
-        playSound: true,
-      );
-
-      const AndroidNotificationChannel mediumChannel = AndroidNotificationChannel(
-        'medium_channel',
-        'Medium-High Job Notifications',
-        description: 'Loud notifications for priority 4 jobs',
-        importance: Importance.high,
-        enableVibration: true,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('escalation_alert'),
-      );
-
-final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
-  'full_channel',
-  'Full-Loud Job Notifications',
-  description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
-  importance: Importance.max,
-  bypassDnd: true,
-  playSound: true,
-  sound: RawResourceAndroidNotificationSound('escalation_alert'),
-  enableVibration: true,
-  vibrationPattern: Int64List.fromList([0, 5001, 500, 500, 500, 500]),
-  audioAttributesUsage: AudioAttributesUsage.alarm,
-);
-
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(normalChannel);
-      await androidPlugin?.createNotificationChannel(mediumChannel);
-      await androidPlugin?.createNotificationChannel(fullChannel);
-
-      // Re-create full_channel to apply bypassDnd setting
-      await androidPlugin?.deleteNotificationChannel(channelId: 'full_channel');
-      await androidPlugin?.createNotificationChannel(fullChannel);
-      debugPrint('Full channel re-created with bypassDnd: true');
-
-      // Request Do Not Disturb access (required for bypassDnd to work)
-      final androidImplementation = _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImplementation != null) {
-        final bool? granted = await androidImplementation.requestNotificationsPermission();
-
-        if (granted == true) {
-          // DND permission must be granted manually by the user
-          // We will add a button or auto-open the settings screen in the next step
-          debugPrint('Notification permission granted. User still needs to grant DND access manually.');
-        }
-      }
-
-      // Request "Display over other apps" permission (required for fullScreenIntent on Android 12+)
-      if (Platform.isAndroid) {
-        final status = await Permission.systemAlertWindow.status;
-        if (!status.isGranted) {
-          await Permission.systemAlertWindow.request();
-        }
-      }
-    }
-
-    // Message handlers
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-  }
-
   Future<void> _requestPermissions() async {
     try {
       final settings = await _messaging.requestPermission(
@@ -101,20 +24,6 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
       }
     } catch (e) {
       debugPrint('❌ Error requesting notification permissions: $e');
-    }
-  }
-
-  Future<String?> getToken() async {
-    try {
-      final token = await _messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        debugPrint('✅ FCM Token retrieved: ${token.substring(0, 20)}...');
-        return token;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('❌ Error getting FCM token: $e');
-      return null;
     }
   }
 
@@ -203,6 +112,104 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
       body: body,
       notificationDetails: details,
     );
+  }
+
+  Future<void> initialize() async {
+    if (kIsWeb) return;
+
+    await _requestPermissions();
+
+    // Initialize local notifications with multiple channels
+    if (Platform.isAndroid) {
+      const AndroidNotificationChannel normalChannel = AndroidNotificationChannel(
+        'normal_channel',
+        'Normal Job Notifications',
+        description: 'Standard notifications for job card assignments',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+      );
+
+      const AndroidNotificationChannel mediumChannel = AndroidNotificationChannel(
+        'medium_channel',
+        'Medium-High Job Notifications',
+        description: 'Loud notifications for priority 4 jobs',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('escalation_alert'),
+      );
+
+final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
+  'full_channel',
+  'Full-Loud Job Notifications',
+  description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
+  importance: Importance.max,
+  bypassDnd: true,
+  playSound: true,
+  sound: RawResourceAndroidNotificationSound('escalation_alert'),
+  enableVibration: true,
+  vibrationPattern: Int64List.fromList([0, 5001, 500, 500, 500, 500]),
+  audioAttributesUsage: AudioAttributesUsage.alarm,
+);
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(normalChannel);
+      await androidPlugin?.createNotificationChannel(mediumChannel);
+      await androidPlugin?.createNotificationChannel(fullChannel);
+
+      // Re-create full_channel to apply bypassDnd setting
+      await androidPlugin?.deleteNotificationChannel(channelId: 'full_channel');
+      await androidPlugin?.createNotificationChannel(fullChannel);
+      debugPrint('Full channel re-created with bypassDnd: true');
+
+      // Request Do Not Disturb access (required for bypassDnd to work)
+      final androidImplementation = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImplementation != null) {
+        final bool? granted = await androidImplementation.requestNotificationsPermission();
+
+        if (granted == true) {
+          // DND permission must be granted manually by the user
+          // We will add a button or auto-open the settings screen in the next step
+          debugPrint('Notification permission granted. User still needs to grant DND access manually.');
+        }
+      }
+    }
+
+    // Request "Display over other apps" permission (required for fullScreenIntent on Android 12+)
+    if (Platform.isAndroid) {
+      final status = await Permission.systemAlertWindow.status;
+      if (!status.isGranted) {
+        await Permission.systemAlertWindow.request();
+      }
+    }
+
+    // Message handlers
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+  }
+
+  Future<void> showOnSiteNotification({
+    required String title,
+    required String body,
+  }) async {
+    await _showLocalNotification(title: title, body: body, level: 'normal');
+  }
+
+  Future<String?> getToken() async {
+    try {
+      final token = await _messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        debugPrint('✅ FCM Token retrieved: ${token.substring(0, 20)}...');
+        return token;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Error getting FCM token: $e');
+      return null;
+    }
   }
 
   Future<void> sendJobAssignmentNotification({

@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
+import '../services/location_service.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -59,17 +60,17 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       // === IMPROVED Custom Token Auth (Option B) - africa-south1 ===
-      print('🔄 Starting custom token login for clockNo: $clockNo');
+      debugPrint('🔄 Starting custom token login for clockNo: $clockNo');
       final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
       final callable = functions.httpsCallable('createCustomToken');
-      print('📡 Calling createCustomToken in africa-south1 with data: $clockNo');
+      debugPrint('📡 Calling createCustomToken in africa-south1 with data: $clockNo');
 
       final result = await callable.call({'clockNo': clockNo});
       final customToken = result.data['customToken'] as String;
-      print('✅ Custom token received from africa-south1');
+      debugPrint('✅ Custom token received from africa-south1');
 
       await FirebaseAuth.instance.signInWithCustomToken(customToken);
-      print('✅ Signed in with custom token - UID: ${FirebaseAuth.instance.currentUser?.uid}');
+      debugPrint('✅ Signed in with custom token - UID: ${FirebaseAuth.instance.currentUser?.uid}');
 
       // Wait for auth state to fully propagate
       await Future.delayed(const Duration(milliseconds: 800));
@@ -78,14 +79,17 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       // ==========================================
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('loggedInName', name);
-      await prefs.setString('loggedInClockNo', clockNo);
-      currentEmployee = employee;
+       final prefs = await SharedPreferences.getInstance();
+       await prefs.setString('loggedInName', name);
+       await prefs.setString('loggedInClockNo', clockNo);
+       currentEmployee = employee;
 
-      if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
-      }
+        // Start automatic on-site detection
+        LocationService().startNativeMonitoring(clockNo);
+
+       if (mounted) {
+         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+       }
       // Save FCM token asynchronously after navigation
       if (!kIsWeb) {
         _saveFcmToken(clockNo);

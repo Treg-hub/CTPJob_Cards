@@ -1,21 +1,102 @@
 package com.example.ctp_job_cards
 
 import android.Manifest
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofencingClient
+import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.location.LocationServices
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private val CHANNEL = "ctp/geofence"
+    private lateinit var geofencingClient: GeofencingClient
+    private val geofencePendingIntent: PendingIntent by lazy {
+        val intent = Intent(this, GeofenceReceiver::class.java)
+        PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        geofencingClient = LocationServices.getGeofencingClient(this)
 
         // Request USE_FULL_SCREEN_INTENT permission for full-screen notifications (API 34+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.USE_FULL_SCREEN_INTENT) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.USE_FULL_SCREEN_INTENT), 1001)
+            }
+        }
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startGeofence" -> {
+                    val clockNo = call.argument<String>("clockNo")
+                    val lat = call.argument<Double>("lat")
+                    val lng = call.argument<Double>("lng")
+                    val radius = call.argument<Double>("radius")
+                    if (clockNo != null && lat != null && lng != null && radius != null) {
+                        startGeofence(clockNo, lat, lng, radius, result)
+                    } else {
+                        result.error("INVALID_ARGUMENTS", "Missing arguments", null)
+                    }
+                }
+                "stopGeofence" -> {
+                    stopGeofence(result)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+    }
+
+    private fun startGeofence(clockNo: String, lat: Double, lng: Double, radius: Double, result: MethodChannel.Result) {
+        val geofence = Geofence.Builder()
+            .setRequestId("company_geofence_$clockNo")
+            .setCircularRegion(lat, lng, radius.toFloat())
+            .setExpirationDuration(Geofence.NEVER_EXPIRE)
+            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+            .build()
+
+        val geofencingRequest = GeofencingRequest.Builder()
+            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+            .addGeofence(geofence)
+            .build()
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            result.error("PERMISSION_DENIED", "Location permission not granted", null)
+            return
+        }
+
+        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
+            addOnSuccessListener {
+                result.success("Geofence started")
+            }
+            addOnFailureListener { e ->
+                result.error("GEOFENCE_ERROR", "Failed to add geofence: ${e.message}", null)
+            }
+        }
+    }
+
+    private fun stopGeofence(result: MethodChannel.Result) {
+        geofencingClient.removeGeofences(geofencePendingIntent).run {
+            addOnSuccessListener {
+                result.success("Geofence stopped")
+            }
+            addOnFailureListener { e ->
+                result.error("GEOFENCE_ERROR", "Failed to remove geofence: ${e.message}", null)
             }
         }
     }

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <application
         android:label="CTP Job Cards"
@@ -33,6 +36,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data android:name="com.baseflow.geolocator.initForegroundMode" android:value="true" />
+
+        <receiver android:name=".GeofenceReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.location.ACTION_GEOFENCE_TRIGGERED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <queries>
