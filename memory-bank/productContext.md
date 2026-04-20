@@ -13,9 +13,10 @@ The CTP Job Cards app addresses critical inefficiencies in manual maintenance ma
 2. **Delayed Assignments**: Real-time notifications ensure technicians are immediately aware of new assignments.
 3. **Poor Communication**: Built-in comment system allows continuous updates on job progress.
 4. **Inefficient Filtering**: Smart filtering by department, position, and onsite status ensures jobs go to the right people.
-5. **Recurring Issues**: Reoccurrence tracking helps identify and address systemic problems.
-6. **Status Visibility**: Real-time status updates provide managers with accurate oversight.
-7. **Visual Documentation**: Photo attachments with maximum compression provide visual evidence of issues and work completed while optimizing storage.
+5. **Automatic Status Updates**: Native geofencing automatically detects when technicians enter/leave the site, updating their availability without manual input.
+6. **Recurring Issues**: Reoccurrence tracking helps identify and address systemic problems.
+7. **Status Visibility**: Real-time status updates provide managers with accurate oversight.
+8. **Visual Documentation**: Photo attachments with maximum compression provide visual evidence of issues and work completed while optimizing storage.
 
 ## User Experience Goals
 ### For Operators (Job Creators)

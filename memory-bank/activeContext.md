@@ -9,6 +9,7 @@
 - **Monitoring Status Feature**: Added optional 7-day monitoring for completed jobs, auto-close if no adjustments, in-app dashboard for visibility
 - **Assignment History Tracking**: Implemented detailed assignment history in activity log, showing who assigned whom with timestamps for all assignments and unassignments
 - **Copper Inventory Module**: Complete copper tracking system for managers with dashboard, sorting, transactions, password auth, atomic updates
+- **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications
 
 ## Recent Changes
 - **Hidden Recent Job Cards on Home Screen for Non-Managers**: Recent job cards list now only visible to managers and super-managers (department == 'general'), hiding it completely for operators and technicians.
@@ -232,6 +233,7 @@
 - ✅ Job Status Standardization: Updated to Open, Monitor, Closed with consistent UI and data migration
 - ✅ Enhanced Manager Dashboard Analytics: Added comprehensive job card analytics with created vs closed trends and department breakdowns
 - ✅ **Lint Errors Fixed**: Resolved all solvable errors in job_card_detail_screen.dart (reduced from 22 to 13 warnings) and create_job_card_screen.dart (0 issues), updated deprecated withOpacity() to withValues(), fixed null checks, use_build_context_synchronously, and curly_braces_in_flow_control_structures
+- ✅ **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications - 2km radius around company coordinates, battery efficient, works in background, no manual toggles
 - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps

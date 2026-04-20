@@ -6,9 +6,10 @@ CTP Job Cards is a Flutter mobile application designed for maintenance departmen
 ## Core Functionality
 - **Job Card Creation**: Operators can create detailed job cards with priority levels, descriptions, locations (department/area/machine/part), types (mechanical/electrical), and photo attachments with maximum compression for storage efficiency.
 - **Employee Management**: Maintains a database of employees with clock numbers, positions, departments, and onsite status.
+- **Automatic On-Site Detection**: Native geofencing (2km radius around company coordinates) automatically updates employee onsite status and sends notifications on entry/exit.
 - **Assignment System**: Managers can assign jobs to employees with filtering by department, position, and onsite status.
 - **Real-time Tracking**: Track job status (pending, assigned, started, completed) with timestamps and comments.
-- **Notifications**: Push notifications to assigned employees via FCM.
+- **Notifications**: Push notifications to assigned employees via FCM, plus local notifications for onsite status changes.
 - **Reporting**: Dashboard views for managers with job statistics and trends.
 - **Copper Inventory Management**: Complete copper tracking system for managers with real-time dashboard, transactions, sorting, and password authentication.
 

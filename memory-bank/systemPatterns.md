@@ -9,7 +9,7 @@ lib/
 ├── models/                   # Data models (Employee, JobCard, CopperInventory, etc.)
 ├── providers/                # Riverpod state management (theme, copper inventory)
 ├── screens/                  # UI screens (home, detail, create, admin, etc.)
-├── services/                 # Business logic (Firestore, Notifications, Sync)
+├── services/                 # Business logic (Firestore, Notifications, Location, Sync)
 ├── theme/                    # App theming (colors, extensions)
 ├── widgets/                  # Reusable UI components (skeleton, sync indicator)
 ├── firebase_options.dart     # Firebase configuration
@@ -148,6 +148,15 @@ Notifications  Push Updates       UI State Updates
 6. **URL Retrieval**: Get download URL from uploaded file
 7. **Job Card Update**: Add photo metadata to job card photos array, save via FirestoreService
 8. **UI Refresh**: Update job card state and show success message
+
+### Geofencing Flow
+1. **Login Trigger**: LocationService.startNativeMonitoring() called with employee clockNo after successful login
+2. **Platform Channel**: MethodChannel 'ctp/geofence' invokes native platform code (Android GeofencingClient, iOS CLLocationManager)
+3. **Geofence Setup**: 2km circular region around company coordinates (-29.994938052011612, 30.939421740548614)
+4. **Entry/Exit Events**: OS-level callbacks trigger platform channel method calls to Dart
+5. **Status Update**: LocationService._handleMethodCall() processes 'onEnter'/'onExit', updates Firestore employees/{clockNo}.isOnSite
+6. **Notification**: showOnSiteNotification() called with appropriate title/body for entry/exit
+7. **Logout Cleanup**: LocationService.stopNativeMonitoring() removes geofence and stops monitoring
 
 ## Performance Considerations
 - **Stream Efficiency**: Firestore streams update entire lists - monitor for large datasets

@@ -49,10 +49,13 @@ dependencies:
   file_picker: ^8.1.2
   csv: ^6.0.0
 
-  # Photo upload
-  image_picker: ^1.1.2
-  flutter_image_compress: ^2.3.0
-  uuid: ^4.5.3
+   # Photo upload
+   image_picker: ^1.1.2
+   flutter_image_compress: ^2.3.0
+   uuid: ^4.5.3
+
+   # Geofencing
+   geolocator: ^12.0.0
 
 dev_dependencies:
   flutter_test: SDK
@@ -115,6 +118,7 @@ dev_dependencies:
 - **flutter_image_compress**: Photo compression for storage optimization
 - **cached_network_image**: Efficient photo loading and caching
 - **uuid**: Unique identifier generation for photo paths
+- **geolocator**: Location permissions and last known position for geofencing fallback
 - **intl**: Date/time formatting and localization
 
 ### Code Patterns
