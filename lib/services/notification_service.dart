@@ -35,15 +35,18 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('escalation_alert'),
       );
 
-      const AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
-        'full_channel',
-        'Full-Loud Job Notifications',
-        description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
-        importance: Importance.max,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('escalation_alert'),
-        enableVibration: true,
-      );
+final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
+  'full_channel',
+  'Full-Loud Job Notifications',
+  description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
+  importance: Importance.max,
+  bypassDnd: true,
+  playSound: true,
+  sound: RawResourceAndroidNotificationSound('escalation_alert'),
+  enableVibration: true,
+  vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
+  audioAttributesUsage: AudioAttributesUsage.alarm,
+);
 
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -179,10 +182,10 @@ class NotificationService {
     final NotificationDetails details = NotificationDetails(android: androidDetails);
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,   // id
-      title,                                            // title
-      body,                                             // body
-      details,                                          // notificationDetails (positional)
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: title,
+      body: body,
+      notificationDetails: details,
     );
   }
 
