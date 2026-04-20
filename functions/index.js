@@ -225,6 +225,9 @@ async function sendNotification(token, title, body, jobId, level, priority) {
     });
   } catch (e) {
     console.error("FCM send error for token:", token, e);
+    if (e.code === 'messaging/invalid-registration-token') {
+      console.error(`Invalid token ${token}: ${e.message}`);
+    }
   }
 }
 

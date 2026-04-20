@@ -44,7 +44,7 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
   playSound: true,
   sound: RawResourceAndroidNotificationSound('escalation_alert'),
   enableVibration: true,
-  vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
+  vibrationPattern: Int64List.fromList([0, 5001, 500, 500, 500, 500]),
   audioAttributesUsage: AudioAttributesUsage.alarm,
 );
 
@@ -53,6 +53,11 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
       await androidPlugin?.createNotificationChannel(normalChannel);
       await androidPlugin?.createNotificationChannel(mediumChannel);
       await androidPlugin?.createNotificationChannel(fullChannel);
+
+      // Re-create full_channel to apply bypassDnd setting
+      await androidPlugin?.deleteNotificationChannel(channelId: 'full_channel');
+      await androidPlugin?.createNotificationChannel(fullChannel);
+      debugPrint('Full channel re-created with bypassDnd: true');
 
       // Request Do Not Disturb access (required for bypassDnd to work)
       final androidImplementation = _localNotifications
@@ -112,6 +117,7 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
     if (message.notification != null || message.data.isNotEmpty) {
       final level = message.data['notificationLevel'] ?? 'normal';
       debugPrint('Received notificationLevel: $level');
+      debugPrint('FCM message level: $level');
 
       final title = message.data['title'] ?? message.notification?.title ?? 'New Notification';
       final body = message.data['body'] ?? message.notification?.body ?? 'You have a new notification';
@@ -134,6 +140,7 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
     required String level,
   }) async {
     debugPrint('=== RECEIVED LEVEL: $level | Using channel: ${level == "full-loud" ? "full_channel" : "normal/medium"} ===');
+    debugPrint('Showing local notification for level: $level');
     if (kIsWeb) return;
 
     late AndroidNotificationDetails androidDetails;
