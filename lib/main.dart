@@ -2,11 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, FlutterError, PlatformDispatcher;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kDebugMode, FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'firebase_options.dart';
 import 'models/employee.dart';
@@ -14,6 +15,7 @@ import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
+import 'services/location_service.dart';
 import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
 
@@ -22,6 +24,21 @@ Employee? currentEmployee;
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('Background message received: ${message.messageId}');
+}
+
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    switch (task) {
+      case 'geofence-check':
+        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        await LocationService().backgroundCheck();
+        break;
+      default:
+        debugPrint('Unknown task: $task');
+    }
+    return Future.value(true);
+  });
 }
 
 void main() async {
@@ -42,6 +59,7 @@ void main() async {
 
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
   }
 
   final firestoreService = FirestoreService();

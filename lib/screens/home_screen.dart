@@ -34,13 +34,15 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
+  final LocationService _locationService = LocationService();
 
   bool isOnSite = true;
+  bool _overrideOnSite = false;
   String? _pendingJobId;
   bool _showDeptOnly = true;
   int _openJobCount = 0;
@@ -85,8 +87,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadOnSiteStatus();
     _loadShowDeptOnly();
+    _loadOverrideOnSite();
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
         final count = jobs.where((j) => !j.isClosed && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
@@ -100,8 +104,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_overrideOnSite) {
+      _locationService.checkCurrentLocation(context);
+    }
   }
 
   Future<void> _setupFirebaseMessaging() async {
@@ -157,6 +169,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _saveShowDeptOnly(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('showDeptOnly', value);
+  }
+
+  Future<void> _loadOverrideOnSite() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _overrideOnSite = prefs.getBool('overrideOnSite') ?? false);
+  }
+
+  Future<void> _saveOverrideOnSite(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('overrideOnSite', value);
+    setState(() => _overrideOnSite = value);
+    setState(() => isOnSite = value); // Update UI immediately
   }
 
 
@@ -306,31 +330,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
         children: [
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(_cardPadding),
-              child: Row(
-                children: [
-                  Icon(
-                    isOnSite ? Icons.check_circle : Icons.cancel,
-                    color: isOnSite ? Colors.green : Colors.red,
-                    size: _isDesktop ? 20 : 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                      style: TextStyle(
-                        fontSize: _isDesktop ? 14 : 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+        Card(
+          elevation: 4,
+          child: Padding(
+            padding: EdgeInsets.all(_cardPadding),
+            child: Row(
+              children: [
+                Icon(
+                  isOnSite ? Icons.check_circle : Icons.cancel,
+                  color: isOnSite ? Colors.green : Colors.red,
+                  size: _isDesktop ? 20 : 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
+                    style: TextStyle(
+                      fontSize: _isDesktop ? 14 : 16,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
+        Card(
+          elevation: 4,
+          child: SwitchListTile(
+            title: const Text('Override On-Site Status'),
+            subtitle: const Text('Force show as on-site for UI filtering'),
+            value: _overrideOnSite,
+            onChanged: (value) => _saveOverrideOnSite(value),
+            activeColor: const Color(0xFFFF8C42),
+          ),
+        ),
           const SizedBox(height: 16),
 
           Text(

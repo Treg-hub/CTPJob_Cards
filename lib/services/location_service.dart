@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
 
@@ -37,6 +40,18 @@ class LocationService {
       'radius': RADIUS_METERS,
     });
     await _checkFallback();
+
+    // Register background task
+    await Workmanager().registerPeriodicTask(
+      'geofence-check',
+      'geofence-check',
+      frequency: const Duration(minutes: 30),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+        requiresBatteryNotLow: true,
+      ),
+    );
+
     debugPrint('Geofence started for $clockNo');
   }
 
@@ -102,5 +117,68 @@ class LocationService {
     final title = onSite ? '✅ On-Site Detected' : '📍 Left Site Area';
     final body = onSite ? 'Within 2km of CTP. Ready for jobs.' : 'Off-site. Filtering updated.';
     await _notificationService.showOnSiteNotification(title: title, body: body);
+  }
+
+  // GEOLOCATION FALLBACK SYSTEM (Option C)
+  // Part A: Checks on app resume
+  // Part B: Background task every 30 minutes while on-site
+  // Expected battery impact: ~2-4% per day
+  Future<void> checkCurrentLocation(BuildContext context) async {
+    if (kIsWeb) return;
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
+
+      final prefs = await SharedPreferences.getInstance();
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo == null) return;
+
+      final emp = await _firestoreService.getEmployee(clockNo);
+      if (emp != null && emp.isOnSite != onSite) {
+        await _updateFirestore(onSite);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location status updated')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('checkCurrentLocation failed: $e');
+    }
+  }
+
+  // Part B: Background check
+  Future<void> backgroundCheck() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo == null) return;
+
+      final emp = await _firestoreService.getEmployee(clockNo);
+      if (emp == null || !emp.isOnSite) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
+
+      if (!onSite) {
+        await _updateFirestore(false);
+        await Workmanager().cancelByUniqueName('geofence-check');
+      }
+    } catch (e) {
+      debugPrint('backgroundCheck failed: $e');
+    }
   }
 }
