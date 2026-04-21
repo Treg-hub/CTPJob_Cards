@@ -21,41 +21,44 @@
 ```yaml
 dependencies:
   flutter: SDK
-  flutter_riverpod: ^2.5.3 (state management)
-  firebase_core: ^3.15.2
-  cloud_firestore: ^5.4.4
-  firebase_auth: ^5.3.1
-  firebase_storage: ^12.3.3
-  firebase_messaging: ^15.1.3
-  firebase_crashlytics: ^4.1.0
-  cloud_functions: ^5.3.0
-  connectivity_plus: ^6.0.5
+  flutter_riverpod: ^2.5.3
+  firebase_core: ^4.7.0
+  cloud_firestore: ^6.3.0
+  firebase_auth: ^6.4.0
+  firebase_storage: ^13.3.0
+  firebase_messaging: ^16.2.0
+  firebase_crashlytics: ^5.2.0
+  cloud_functions: ^6.2.0
+  firebase_remote_config: ^6.4.0
+  connectivity_plus: ^7.1.1
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   shared_preferences: ^2.3.0
-  fl_chart: ^0.70.0
-  charts_flutter: ^0.12.0
+  fl_chart: ^1.2.0
   pdf: ^3.11.1
-  share_plus: ^10.0.2
+  share_plus: ^10.1.4
   path_provider: ^2.1.4
   cached_network_image: ^3.4.1
   pull_to_refresh_flutter3: ^2.0.2
   flutter_staggered_animations: ^1.1.1
-  flutter_local_notifications: ^17.2.3
+  flutter_local_notifications: ^21.0.0
+  permission_handler: ^11.3.1
+  geolocator: ^12.0.0
+  android_intent_plus: ^5.1.0
   build_runner: ^2.4.13
   hive_generator: ^2.0.1
 
   # Admin bulk operations
-  file_picker: ^8.1.2
+  file_picker: ^9.0.0
   csv: ^6.0.0
 
-   # Photo upload
-   image_picker: ^1.1.2
-   flutter_image_compress: ^2.3.0
-   uuid: ^4.5.3
-
-   # Geofencing
-   geolocator: ^12.0.0
+  # Photo upload
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+  uuid: ^4.5.3
+  intl: ^0.20.2
+  url_launcher: ^6.3.0
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test: SDK

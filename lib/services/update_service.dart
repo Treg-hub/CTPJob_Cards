@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -38,25 +38,16 @@ class UpdateService {
 
       debugPrint('Current app version: $currentVersion+$currentBuild');
 
-      // Fetch latest version from Firestore
-      final doc = await FirebaseFirestore.instance
-          .collection('app_config')
-          .doc('latest_version')
-          .get();
+      // Fetch latest version from Remote Config
+      await FirebaseRemoteConfig.instance.fetchAndActivate();
 
-      if (!doc.exists) {
-        debugPrint('No update config found in Firestore');
-        return;
-      }
+      final latestVersion = FirebaseRemoteConfig.instance.getString('latest_version');
+      final latestBuild = FirebaseRemoteConfig.instance.getString('latest_build');
+      final downloadUrl = FirebaseRemoteConfig.instance.getString('download_url');
+      final forceUpdate = FirebaseRemoteConfig.instance.getBool('force_update');
+      final releaseNotes = FirebaseRemoteConfig.instance.getString('release_notes');
 
-      final data = doc.data()!;
-      final latestVersion = data['version'] as String?;
-      final latestBuild = data['buildNumber'] as String?;
-      final downloadUrl = data['downloadUrl'] as String?;
-      final forceUpdate = data['forceUpdate'] as bool? ?? false;
-      final releaseNotes = data['releaseNotes'] as String?;
-
-      if (latestVersion == null || downloadUrl == null) {
+      if (latestVersion.isEmpty || downloadUrl.isEmpty) {
         debugPrint('Incomplete update config');
         return;
       }

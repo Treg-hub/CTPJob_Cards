@@ -129,7 +129,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         }
         if (!snapshot.hasData) {
           return const Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: CircularProgressIndicator(),
           );
         }

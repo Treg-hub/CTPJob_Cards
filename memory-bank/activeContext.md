@@ -195,6 +195,7 @@
   - **Security**: Tokens tied to employee clock numbers, secure authentication without passwords
   - **TypeScript Fix**: Added explicit 'any' typing to CF data parameter to resolve TypeScript error
   - **Result**: Employees now authenticated via Firebase Auth, enabling secure access control and user-specific features
+- **Update Checking Migration**: Migrated app update checking from Firestore `app_config/latest_version` to Firebase Remote Config for easier management. Now fetches `latest_version`, `latest_build`, `download_url`, `force_update`, `release_notes` from Remote Config, compatible with Firebase App Distribution APK URLs.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI

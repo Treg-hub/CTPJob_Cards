@@ -39,11 +39,11 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
   int _createdThisMonth = 0;
   int _closedThisMonth = 0;
 
-  Map<DateTime, int> _createdDaily = {};
-  Map<DateTime, int> _closedDaily = {};
-  Map<String, int> _createdByDept = {};
-  Map<String, int> _closedByDept = {};
-  Map<DateTime, Map<String, int>> _outstandingByDeptDaily = {};
+  final Map<DateTime, int> _createdDaily = {};
+  final Map<DateTime, int> _closedDaily = {};
+  final Map<String, int> _createdByDept = {};
+  final Map<String, int> _closedByDept = {};
+  final Map<DateTime, Map<String, int>> _outstandingByDeptDaily = {};
 
   bool _isLoading = true;
 
