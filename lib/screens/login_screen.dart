@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/location_service.dart';
+import '../services/update_service.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -90,6 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
           LocationService().startNativeMonitoring(clockNo);
         } else if (kIsWeb) {
           debugPrint('📍 Geofencing skipped on web platform');
+        }
+
+        // Check for app updates (mobile only)
+        if (!kIsWeb && mounted) {
+          await UpdateService().checkForUpdate(context);
         }
 
        if (mounted) {
