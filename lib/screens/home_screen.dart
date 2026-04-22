@@ -330,41 +330,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
         children: [
-        Card(
-          elevation: 4,
-          child: Padding(
-            padding: EdgeInsets.all(_cardPadding),
-            child: Row(
-              children: [
-                Icon(
-                  isOnSite ? Icons.check_circle : Icons.cancel,
-                  color: isOnSite ? Colors.green : Colors.red,
-                  size: _isDesktop ? 20 : 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                    style: TextStyle(
-                      fontSize: _isDesktop ? 14 : 16,
-                      fontWeight: FontWeight.w500,
+          SizedBox(
+            height: 72,
+            child: Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(_cardPadding),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOnSite ? Icons.check_circle : Icons.cancel,
+                      color: isOnSite ? Colors.green : Colors.red,
+                      size: _isDesktop ? 20 : 24,
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
+                        style: TextStyle(
+                          fontSize: _isDesktop ? 14 : 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-        Card(
-          elevation: 4,
-          child: SwitchListTile(
-            title: const Text('Override On-Site Status'),
-            subtitle: const Text('Force show as on-site for UI filtering'),
-            value: _overrideOnSite,
-            onChanged: (value) => _saveOverrideOnSite(value),
-            activeColor: const Color(0xFFFF8C42),
-          ),
-        ),
           const SizedBox(height: 16),
 
           Text(
@@ -885,8 +878,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
     return const ManagerDashboardScreen();
   }
-
-  Widget _buildSettingsTab(ThemeMode themeMode, WidgetRef ref) {
+    Widget _buildSettingsTab(ThemeMode themeMode) {
     return ListView(
       padding: EdgeInsets.all(_screenPadding),
       children: [
@@ -898,10 +890,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             style: TextStyle(
               fontSize: _isDesktop ? 20 : 22,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
+
+        // Current User Card - REMOVED fixed height
         Card(
           elevation: 4,
           child: Padding(
@@ -914,23 +908,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   style: TextStyle(
                     fontSize: _isDesktop ? 14 : 16,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Clock No: ${currentEmployee?.clockNo ?? 'Unknown'}',
-                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Department: ${currentEmployee?.department ?? 'Unknown'}',
-                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
+
+        // On-Site Status Card - REMOVED fixed height
         Card(
           elevation: 4,
           child: Padding(
@@ -949,6 +947,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     style: TextStyle(
                       fontSize: _isDesktop ? 14 : 16,
                       fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -956,6 +955,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
+
+        // Override On-Site Status - Now uses natural height
+        Card(
+          elevation: 4,
+          child: SwitchListTile(
+            title: const Text('Override On-Site Status'),
+            subtitle: const Text('Force show as on-site for UI filtering'),
+            value: _overrideOnSite,
+            onChanged: (value) => _saveOverrideOnSite(value),
+            activeColor: const Color(0xFFFF8C42),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Log Out Card
         Card(
           elevation: 4,
           child: ListTile(
@@ -973,16 +990,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             style: TextStyle(
               fontSize: _isDesktop ? 20 : 22,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
+
+        // DND Bypass Card
         Card(
+          elevation: 4,
           child: ListTile(
             leading: Icon(Icons.notifications_active, color: Colors.orange),
-            title: Text('Enable DND Bypass'),
-            subtitle: Text('Grant notification policy access for loud alarms'),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16),
+            title: const Text('Enable DND Bypass'),
+            subtitle: const Text('Grant notification policy access for loud alarms'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {
               if (Platform.isAndroid) {
                 final intent = android_intent.AndroidIntent(
@@ -1004,7 +1024,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: _isDesktop ? 20 : 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -1027,7 +1047,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: _isDesktop ? 20 : 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -1041,13 +1061,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   await _notificationService.refreshToken();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('✅ FCM Token refreshed successfully!'), backgroundColor: Colors.green),
+                      const SnackBar(
+                        content: Text('✅ FCM Token refreshed successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('❌ Error refreshing token: $e'), backgroundColor: Colors.red),
+                      SnackBar(
+                        content: Text('❌ Error refreshing token: $e'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
                   }
                 }
@@ -1156,7 +1182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(ref.watch(themeNotifierProvider), ref),   // ← fixed
+      _buildSettingsTab(ref.watch(themeNotifierProvider)),   // ← fixed
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
@@ -1194,7 +1220,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(themeMode, ref),   // ← fixed
+      _buildSettingsTab(themeMode),   // ← fixed
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];

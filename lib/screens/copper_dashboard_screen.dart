@@ -21,6 +21,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   final CopperService _copperService = CopperService();
   final FirestoreService _firestoreService = FirestoreService();
   String? _currentClockNo;
+  bool _isGPeens = false;
   bool _isLoading = false;
 
   // Transaction form controllers
@@ -40,6 +41,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
 
   Future<void> _loadClockNo() async {
     _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
+    _isGPeens = _currentClockNo == '22';
     if (mounted) setState(() {});
   }
 
@@ -151,11 +153,11 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
             const SizedBox(height: 12),
             Row(
               children: [
-                _buildBucketCard('Sort', inv.sortKg, Colors.blue, Icons.sort),
+                _buildBucketCard('To Sort', inv.sortKg, Colors.blue, Icons.sort),
                 const SizedBox(width: 8),
-                _buildBucketCard('Reuse', inv.reuseKg, Colors.green, Icons.refresh),
+                _buildBucketCard('To Reuse', inv.reuseKg, Colors.green, Icons.refresh),
                 const SizedBox(width: 8),
-                _buildBucketCard('Sell', inv.sellKg, Colors.amber, Icons.sell),
+                _buildBucketCard('To Sell', inv.sellKg, Colors.amber, Icons.sell),
               ],
             ),
             const SizedBox(height: 32),
@@ -164,12 +166,12 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
             DropdownButtonFormField<String>(
               initialValue: _selectedType,
               decoration: const InputDecoration(labelText: 'Transaction Type'),
-              items: const [
-                DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
-                DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
-                DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
-                DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
-                DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
+              items: [
+                const DropdownMenuItem(value: 'addToSort', child: Text('Add to Sort (from baths)')),
+                const DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
+                const DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
+                const DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
+                if (_isGPeens) const DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
               ],
               onChanged: (v) => setState(() => _selectedType = v!),
             ),
@@ -206,7 +208,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                 ),
               ),
             ],
-            if (_selectedType == 'recordSale') ...[
+            if (_selectedType == 'recordSale' && _isGPeens) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _rPerKgController,
@@ -276,7 +278,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                           children: [
                             if (tx.fromBucket != null || tx.toBucket != null)
                               Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
-                            if (tx.rPerKg != null) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
+                            if (tx.rPerKg != null && _isGPeens) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
                             Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),

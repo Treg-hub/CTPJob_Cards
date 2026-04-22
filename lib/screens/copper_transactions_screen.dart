@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/copper_service.dart';
+import '../services/firestore_service.dart';
 import '../models/copper_transaction.dart';
 
 class CopperTransactionsScreen extends StatefulWidget {
@@ -12,8 +13,12 @@ class CopperTransactionsScreen extends StatefulWidget {
 
 class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
   final CopperService _copperService = CopperService();
+  final FirestoreService _firestoreService = FirestoreService();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _editCommentsController = TextEditingController();
+
+  String? _currentClockNo;
+  bool _isGPeens = false;
 
   DateTimeRange? _dateRange;
   String _searchQuery = '';
@@ -22,6 +27,13 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() => _searchQuery = _searchController.text));
+    _loadCurrentClockNo();
+  }
+
+  Future<void> _loadCurrentClockNo() async {
+    _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
+    _isGPeens = _currentClockNo == '22';
+    setState(() {});
   }
 
   @override
@@ -199,9 +211,9 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
                                 Text(tx.type, style: const TextStyle(fontSize: 14)),
                                 if (tx.fromBucket != null || tx.toBucket != null)
                                   Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                if (tx.rPerKg != null)
+                                if (tx.rPerKg != null && _isGPeens)
                                   Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
-                                if (tx.totalValueR != null)
+                                if (tx.totalValueR != null && _isGPeens)
                                   Text('Total: R ${tx.totalValueR!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
                                 const SizedBox(height: 4),
                                 Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),

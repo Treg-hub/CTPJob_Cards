@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import '../widgets/skeleton_loader.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import '../models/assignment_event.dart';
@@ -25,23 +24,30 @@ class JobCardDetailScreen extends StatefulWidget {
   State<JobCardDetailScreen> createState() => _JobCardDetailScreenState();
 }
 
-class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
+class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerProviderStateMixin {
   late int _reoccurrenceCount;
   late JobCard _currentJobCard;
   final TextEditingController _commentController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
+  late TabController _tabController;
+  int _relatedCount = 0;
+  StreamSubscription<List<JobCard>>? _relatedSub;
 
   @override
   void initState() {
     super.initState();
     _reoccurrenceCount = widget.jobCard.reoccurrenceCount;
     _currentJobCard = widget.jobCard;
+    _tabController = TabController(initialIndex: 1, length: 3, vsync: this);
+    _setupRelatedStream();
   }
 
   @override
   void dispose() {
     _commentController.dispose();
+    _tabController.dispose();
+    _relatedSub?.cancel();
     super.dispose();
   }
 
@@ -152,8 +158,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
     final current = currentEmployee;
     if (current == null) return;
     final updated = jobCard.copyWith(
-      assignedClockNos: jobCard.assignedClockNos?.where((c) => c != current.clockNo).toList(),
-      assignedNames: jobCard.assignedNames?.where((n) => n != current.name).toList(),
+      assignedClockNos: (jobCard.assignedClockNos ?? []).where((c) => c != current.clockNo).toList(),
+      assignedNames: (jobCard.assignedNames ?? []).where((n) => n != current.name).toList(),
     );
     final event = AssignmentEvent(
       assignedByName: current.name,
@@ -806,57 +812,51 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       );
     }
 
-    void _showPhotoDialog(String photoUrl, String addedBy, String timestamp) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CachedNetworkImage(
-              imageUrl: photoUrl,                    // ← fixed: use the parameter, not job.photoUrl
-              fit: BoxFit.cover,
-              placeholder: (context, url) => const SkeletonLoader(height: 200),
-              errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.red),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                'Added by $addedBy on ${DateTime.parse(timestamp).toLocal().toString().substring(0,16)}',
-                style: const TextStyle(fontSize: 12, color: Colors.white70),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _setupRelatedStream() {
+    _relatedSub = _getRelatedJobsStream().listen((list) {
+      setState(() => _relatedCount = list.length);
+    });
+  }
+
+  Stream<List<JobCard>> _getRelatedJobsStream() {
+    return _firestoreService.getAllJobCards().map((all) {
+      var recent = all.where((j) => j.createdAt != null).toList()
+        ..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+      recent = recent.take(200).toList();
+      var similar = recent.where((j) => j.id != _currentJobCard.id && (
+        (j.department == _currentJobCard.department && _currentJobCard.department.isNotEmpty) ||
+        (j.machine == _currentJobCard.machine && _currentJobCard.machine.isNotEmpty) ||
+        (j.area == _currentJobCard.area && _currentJobCard.area.isNotEmpty) ||
+        (j.part == _currentJobCard.part && _currentJobCard.part.isNotEmpty)
+      )).toList();
+      similar.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+      return similar.take(20).toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     const double sectionSpacing = 5.0;
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
+    return Scaffold(
         appBar: AppBar(
           title: const Text('Job Card Details'),
           backgroundColor: const Color(0xFFFF8C42),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(48),
+            preferredSize: const Size.fromHeight(48.0),
             child: Container(
               color: Colors.black,
               child: TabBar(
+                controller: _tabController,
                 labelColor: const Color(0xFFFF8C42),
-                unselectedLabelColor: Colors.white70,
+                unselectedLabelColor: const Color(0xFFFF8C42),
+                labelStyle: const TextStyle(color: Color(0xFFFF8C42), fontWeight: FontWeight.bold),
+                unselectedLabelStyle: const TextStyle(color: Color(0xFFFF8C42), fontWeight: FontWeight.bold),
                 indicatorColor: const Color(0xFFFF8C42),
-                tabs: const [
-                  Tab(text: 'Details'),
-                  Tab(text: 'Photos'),
+                tabs: [
+                  Tab(text: 'Related ($_relatedCount)'),
+                  const Tab(text: 'Details'),
+                  const Tab(text: 'Photos'),
                 ],
               ),
             ),
@@ -868,7 +868,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
             final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
             _currentJobCard = jobCard;
             return TabBarView(
+              controller: _tabController,
               children: [
+                // Related Tab
+                RelatedTabContent(relatedStream: _getRelatedJobsStream()),
                 // Details Tab
                 RefreshIndicator(
                   onRefresh: _refreshJobCard,
@@ -919,8 +922,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
           },
         ),
         bottomNavigationBar: _buildBottomBanner(_currentJobCard),
-      ),
-    );
+      );
   }
 
   Widget _buildBottomBanner(JobCard jobCard) {
@@ -1415,10 +1417,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  TextSpan(
-                    text: ' | ${jobCard.department ?? 'N/A'} > ${jobCard.area ?? 'N/A'} > ${jobCard.machine ?? 'N/A'} > ${jobCard.part ?? 'N/A'}',
-                    style: const TextStyle(fontSize: 15.5, color: Colors.white),
-                  ),
+                   TextSpan(
+                     text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
+                     style: const TextStyle(fontSize: 15.5, color: Colors.white),
+                   ),
                 ],
               ),
             ),
@@ -1652,6 +1654,182 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> {
       return '[${_formatDateTime(event.timestamp)}] $formatted';
     }).toList();
   }
+
+  Color _getPriorityColor(String priority) {
+    final num = int.tryParse(priority.substring(1)) ?? 0;
+    switch (num) {
+      case 1: return Colors.green[600]!;
+      case 2: return Colors.lightGreen[500]!;
+      case 3: return Colors.amber[600]!;
+      case 4: return Colors.deepOrange[600]!;
+      case 5: return const Color(0xFFFF3D00);
+      default: return Colors.grey;
+    }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+
+}
+
+class RelatedTabContent extends StatelessWidget {
+  final Stream<List<JobCard>> relatedStream;
+
+  const RelatedTabContent({super.key, required this.relatedStream});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<JobCard>>(
+      stream: relatedStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final jobs = snapshot.data!;
+        if (jobs.isEmpty) {
+          return const Center(child: Text('No similar jobs found', style: TextStyle(color: Colors.grey)));
+        }
+        return ListView.builder(
+          padding: EdgeInsets.zero,
+          itemCount: jobs.length,
+          itemBuilder: (context, index) {
+            final job = jobs[index];
+            return ExpansionTile(
+              title: _buildRelatedCardItem(job, context),
+              trailing: SizedBox(),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Description:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text(job.description, style: const TextStyle(fontSize: 15, color: Colors.white, height: 1.3)),
+                      const SizedBox(height: 16),
+                      if (job.comments.isNotEmpty) ...[
+                        Text('Comments:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(height: 8),
+                        ..._parseComments(job.comments).map((comment) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(comment, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                        )),
+                      ],
+                      if (job.notes.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text('Notes:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(height: 8),
+                        ..._parseNotes(job.notes).map((note) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(note, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                        )),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRelatedCardItem(JobCard job, BuildContext context) {
+    return Card(
+      elevation: 6,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'P${job.priority}',
+                    style: TextStyle(
+                      color: _getPriorityColor('P${job.priority}'),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' | ${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part} | ${job.operator.isEmpty ? 'Unknown' : job.operator}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11.5,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (job.jobCardNumber != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 204),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'JC #${job.jobCardNumber}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    job.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.normal,
+                      fontSize: 15,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Spacer(),
+                Text(
+                  job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
+                  style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> _parseComments(String comments) => comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+
+  List<String> _parseNotes(String notes) => notes.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
