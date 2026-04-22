@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:workmanager/workmanager.dart';
 
 import 'firebase_options.dart';
 import 'models/employee.dart';
@@ -17,6 +16,7 @@ import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/location_service.dart';
 import 'services/sync_service.dart';
+import 'services/background_geofence_service.dart';
 import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
@@ -26,21 +26,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('Background message received: ${message.messageId}');
 }
 
-@pragma('vm:entry-point')
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    switch (task) {
-      case 'geofence-check':
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-        await LocationService().backgroundCheck();
-        break;
-      default:
-        debugPrint('Unknown task: $task');
-    }
-    return Future.value(true);
-  });
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
@@ -48,6 +33,7 @@ void main() async {
   Hive.registerAdapter(SyncQueueItemAdapter());
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await BackgroundGeofenceService.initializeService();
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {
@@ -59,7 +45,6 @@ void main() async {
 
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    await Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
   }
 
   final firestoreService = FirestoreService();

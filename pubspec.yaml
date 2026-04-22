@@ -53,8 +53,8 @@ dependencies:
   flutter_local_notifications: ^21.0.0
   permission_handler: ^11.3.1
   geolocator: ^12.0.0
+  flutter_background_service: ^5.0.0
   android_intent_plus: ^5.1.0
-  workmanager: ^0.5.2
   build_runner: ^2.4.13
   hive_generator: ^2.0.1
 
