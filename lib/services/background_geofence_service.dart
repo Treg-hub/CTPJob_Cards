@@ -25,6 +25,9 @@ class BackgroundGeofenceService {
   static const double RADIUS_METERS = 2000.0;
 
   static Future<void> initializeService() async {
+    // Early return on web: flutter_background_service unsupported on web platform.
+    if (kIsWeb) return;
+
     final service = FlutterBackgroundService();
 
     /// Android config: background mode, no foreground notification

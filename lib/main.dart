@@ -32,8 +32,11 @@ void main() async {
 
   Hive.registerAdapter(SyncQueueItemAdapter());
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await BackgroundGeofenceService.initializeService();
+   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+   // Initialize background geofence service only on mobile (Android/iOS), as flutter_background_service does not support web.
+   if (!kIsWeb) {
+     await BackgroundGeofenceService.initializeService();
+   }
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {

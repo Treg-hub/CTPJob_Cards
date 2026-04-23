@@ -819,19 +819,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Stream<List<JobCard>> _getRelatedJobsStream() {
-    return _firestoreService.getAllJobCards().map((all) {
-      var recent = all.where((j) => j.createdAt != null).toList()
-        ..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
-      recent = recent.take(200).toList();
-      var similar = recent.where((j) => j.id != _currentJobCard.id && (
-        (j.department == _currentJobCard.department && _currentJobCard.department.isNotEmpty) ||
-        (j.machine == _currentJobCard.machine && _currentJobCard.machine.isNotEmpty) ||
-        (j.area == _currentJobCard.area && _currentJobCard.area.isNotEmpty) ||
-        (j.part == _currentJobCard.part && _currentJobCard.part.isNotEmpty)
-      )).toList();
-      similar.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
-      return similar.take(20).toList();
-    });
+    return _firestoreService.getRelatedJobCardsStream(
+      department: _currentJobCard.department,
+      area: _currentJobCard.area,
+      machine: _currentJobCard.machine,
+      part: _currentJobCard.part,
+      type: _currentJobCard.type.name,
+      excludeId: _currentJobCard.id!,
+    );
   }
 
   @override

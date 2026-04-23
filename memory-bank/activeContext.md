@@ -12,6 +12,11 @@
 - **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications
 
 ## Recent Changes
+- **Enhanced Related Jobs Filtering in Job Card Detail Screen**: Updated Related tab to show only monitor/closed jobs with exact matches on department, area, machine, part, and type, excluding the current job.
+  - **Before**: Client-side OR filter on any location field, included all statuses, inefficient for large datasets
+  - **After**: Server-side AND filter on all fields, status whereIn ['monitor','closed'], id != current, orderBy createdAt desc, limit 20
+  - **Implementation**: Added `getRelatedJobCardsStream()` in FirestoreService, updated `_getRelatedJobsStream()` in job_card_detail_screen.dart, added composite Firestore index
+  - **Rationale**: Precise filtering for relevant similar jobs, improved performance and accuracy
 - **Hidden Recent Job Cards on Home Screen for Non-Managers**: Recent job cards list now only visible to managers and super-managers (department == 'general'), hiding it completely for operators and technicians.
   - **Before**: Recent job cards visible to all users on home screen
   - **After**: Only managers/super-managers see the list with "Show Dept Only" toggle
