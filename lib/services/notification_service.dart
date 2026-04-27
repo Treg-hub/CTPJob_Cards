@@ -163,7 +163,7 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final level = message.data['notificationLevel'] ?? 'normal';
     final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
     final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
@@ -171,15 +171,14 @@ class NotificationService {
     // Show local notification for all levels
     _showLocalNotification(title: title, body: body, level: level);
 
-    // Trigger urgent alert for full-loud notifications
+    // Trigger native full-screen urgent alert for Priority 5 jobs (full-loud level)
     if (level == 'full-loud') {
       try {
-        // Extract job card number from title (format: "Job Assigned by [assigner] Job#[number]")
-        final jobNumberMatch = RegExp(r'Job#(\d+)').firstMatch(title);
-        final jobCardNumber = jobNumberMatch?.group(1) ?? 'Unknown';
-
-        JobAlertService.triggerUrgentAlert(jobCardNumber, body);
-        debugPrint('✅ Urgent alert triggered for job #$jobCardNumber');
+        await JobAlertService.triggerUrgentAlert(
+          message.data['jobCardNumber']?.toString() ?? 'N/A',
+          message.data['body'] ?? message.data['description'] ?? 'Urgent job assigned',
+        );
+        debugPrint('✅ Urgent alert triggered for job #${message.data['jobCardNumber'] ?? 'N/A'}');
       } catch (e) {
         debugPrint('❌ Error triggering urgent alert: $e');
       }
