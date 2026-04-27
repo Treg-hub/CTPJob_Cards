@@ -58,33 +58,45 @@ function getNotificationLevel(priority) {
 }
 
 exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
-  console.log("📥 data keys:", Object.keys(data));
   const innerData = data.data || data;
-  const recipientToken = innerData.recipientToken;
-  const jobCardId = innerData.jobCardId;
-  const jobCardNumber = innerData.jobCardNumber;
-  const operator = innerData.operator;
-  const creator = innerData.creator;
-  const area = innerData.area;
-  const description = innerData.description;
-  const priority = innerData.priority || 1;
-  const level = getNotificationLevel(priority);
+  const { recipientToken, jobCardId, jobCardNumber, operator, creator, area, description, priority = 1 } = innerData;
 
-  if (!recipientToken || !recipientToken.trim()) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
+  if (!recipientToken) throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
+
+  const level = getNotificationLevel(priority);
+  const title = `Job Assigned by ${operator} #${jobCardNumber || "N/A"}`;
+  const body = `Created by ${creator}\nLocation: ${area}\n${description}`;
+
+  const isFullLoud = level === "full-loud";
+
+  const messagePayload = {
+    token: recipientToken,
+    data: {
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+      jobId: jobCardId,
+      notificationType: "assigned",
+      notificationLevel: level,
+      title,
+      body,
+    },
+    android: {
+      priority: "high",
+      ...(isFullLoud && {
+        notification: {
+          channelId: "full_channel",
+          priority: "max",
+          visibility: "public",
+        },
+      }),
+    },
+  };
+
+  if (!isFullLoud) {
+    messagePayload.notification = { title, body };
   }
 
-  const title = `Job Assigned by ${operator} Job#${jobCardNumber || "N/A"}`;
-  const body = `Created by ${creator}\nLocation: ${area}\nDescription: ${description}`;
-
   try {
-    const response = await messaging.send({
-      token: recipientToken,
-      notification: { title, body },
-      data: { click_action: "FLUTTER_NOTIFICATION_CLICK", jobId: jobCardId, notificationType: "assigned", notificationLevel: level },
-      android: { priority: "high" },
-    });
-    console.log("✅ Notification sent successfully");
+    const response = await messaging.send(messagePayload);
     return { success: true, messageId: response };
   } catch (error) {
     console.error("FCM Error:", error);

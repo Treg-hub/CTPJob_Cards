@@ -10,93 +10,131 @@ class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
+  // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
     try {
-      final settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        debugPrint('✅ Notification permissions granted');
-      } else {
-        debugPrint('⚠️ Notification permissions denied');
-      }
+      final settings = await _messaging.requestPermission(alert: true, badge: true, sound: true);
+      debugPrint('FCM Permission: ${settings.authorizationStatus}');
     } catch (e) {
-      debugPrint('❌ Error requesting notification permissions: $e');
+      debugPrint('Error requesting FCM permissions: $e');
     }
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('📨 Foreground message received: ${message.messageId}');
-    debugPrint('📨 RAW FCM DATA RECEIVED: ${message.data}');
+  Future<Map<String, bool>> checkAllCriticalPermissions() async {
+    final results = <String, bool>{};
 
-    // Handle both notification messages (with notification field) and data messages
-    if (message.notification != null || message.data.isNotEmpty) {
-      final level = message.data['notificationLevel'] ?? 'normal';
-      debugPrint('Received notificationLevel: $level');
-      debugPrint('FCM message level: $level');
+    results['post_notifications'] = await Permission.notification.isGranted;
+    results['system_alert_window'] = await Permission.systemAlertWindow.isGranted;
+    results['notification_policy'] = await Permission.accessNotificationPolicy.isGranted;
+    results['ignore_battery'] = await Permission.ignoreBatteryOptimizations.isGranted;
 
-      final title = message.data['title'] ?? message.notification?.title ?? 'New Notification';
-      final body = message.data['body'] ?? message.notification?.body ?? 'You have a new notification';
+    return results;
+  }
 
-      _showLocalNotification(
-        title: title,
-        body: body,
-        level: level,
-      );
+  Future<void> requestAllCriticalPermissions() async {
+    if (!Platform.isAndroid) return;
+
+    await Permission.notification.request();
+    await Permission.systemAlertWindow.request();
+    await Permission.accessNotificationPolicy.request();
+    await Permission.ignoreBatteryOptimizations.request();
+
+    // Open settings if still missing
+    final status = await Permission.systemAlertWindow.status;
+    if (!status.isGranted) {
+      await openAppSettings();
     }
   }
 
-  void _handleMessageOpenedApp(RemoteMessage message) {
-    debugPrint('📱 Message opened app: ${message.messageId}');
+  // ==================== CHANNELS ====================
+  Future<void> _createNotificationChannels() async {
+    if (!Platform.isAndroid) return;
+
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    // Normal Channel
+    await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
+      'normal_channel',
+      'Normal Job Notifications',
+      description: 'Standard notifications for job card assignments',
+      importance: Importance.high,
+      enableVibration: true,
+      playSound: true,
+    ));
+
+    // Medium Channel
+    await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
+      'medium_channel',
+      'Medium-High Job Notifications',
+      description: 'Loud notifications for priority 4 jobs',
+      importance: Importance.high,
+      enableVibration: true,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('escalation_alert'),
+    ));
+
+    // FULL CHANNEL - WITH CALL CATEGORY (Critical Fix)
+    await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
+      'full_channel',
+      'Full-Loud Job Notifications',
+      description: 'Maximum priority notifications for priority 5 jobs',
+      importance: Importance.max,
+      bypassDnd: true,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('escalation_alert'),
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 5001, 500, 500, 500, 500]),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ));
+
+    debugPrint('All notification channels created successfully');
   }
 
+  // ==================== SHOW NOTIFICATION ====================
   Future<void> _showLocalNotification({
     required String title,
     required String body,
     required String level,
   }) async {
-    debugPrint('=== RECEIVED LEVEL: $level | Using channel: ${level == "full-loud" ? "full_channel" : "normal/medium"} ===');
-    debugPrint('Showing local notification for level: $level');
     if (kIsWeb) return;
 
     late AndroidNotificationDetails androidDetails;
+
     switch (level) {
       case 'medium-high':
         androidDetails = AndroidNotificationDetails(
           'medium_channel',
           'Medium-High Job Notifications',
-          channelDescription: 'Loud notifications for priority 4 jobs',
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
           playSound: true,
-          sound: RawResourceAndroidNotificationSound('escalation_alert'),
+          sound: const RawResourceAndroidNotificationSound('escalation_alert'),
           vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
         );
         break;
+
       case 'full-loud':
         androidDetails = AndroidNotificationDetails(
           'full_channel',
           'Full-Loud Job Notifications',
-          channelDescription: 'Maximum priority notifications for priority 5 jobs',
           importance: Importance.max,
           priority: Priority.max,
           enableVibration: true,
           playSound: true,
-          sound: RawResourceAndroidNotificationSound('escalation_alert'),
+          sound: const RawResourceAndroidNotificationSound('escalation_alert'),
           vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
           category: AndroidNotificationCategory.call,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );
         break;
+
       default:
         androidDetails = AndroidNotificationDetails(
           'normal_channel',
           'Normal Job Notifications',
-          channelDescription: 'Standard notifications for job card assignments',
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
@@ -104,98 +142,45 @@ class NotificationService {
         );
     }
 
-    final NotificationDetails details = NotificationDetails(android: androidDetails);
-
     await _localNotifications.show(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: title,
       body: body,
-      notificationDetails: details,
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 
+  // ==================== INITIALIZE ====================
   Future<void> initialize() async {
     if (kIsWeb) return;
 
     await _requestPermissions();
+    await _createNotificationChannels();
+    await requestAllCriticalPermissions(); // Auto-request on startup
 
-    // Initialize local notifications with multiple channels
-    if (Platform.isAndroid) {
-      const AndroidNotificationChannel normalChannel = AndroidNotificationChannel(
-        'normal_channel',
-        'Normal Job Notifications',
-        description: 'Standard notifications for job card assignments',
-        importance: Importance.high,
-        enableVibration: true,
-        playSound: true,
-      );
-
-      const AndroidNotificationChannel mediumChannel = AndroidNotificationChannel(
-        'medium_channel',
-        'Medium-High Job Notifications',
-        description: 'Loud notifications for priority 4 jobs',
-        importance: Importance.high,
-        enableVibration: true,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('escalation_alert'),
-      );
-
-final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
-  'full_channel',
-  'Full-Loud Job Notifications',
-  description: 'Maximum priority notifications for priority 5 jobs and urgent escalations',
-  importance: Importance.max,
-  bypassDnd: true,
-  playSound: true,
-  sound: RawResourceAndroidNotificationSound('escalation_alert'),
-  enableVibration: true,
-  vibrationPattern: Int64List.fromList([0, 5001, 500, 500, 500, 500]),
-  audioAttributesUsage: AudioAttributesUsage.alarm,
-);
-
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(normalChannel);
-      await androidPlugin?.createNotificationChannel(mediumChannel);
-      await androidPlugin?.createNotificationChannel(fullChannel);
-
-      // Re-create full_channel to apply bypassDnd setting
-      await androidPlugin?.deleteNotificationChannel(channelId: 'full_channel');
-      await androidPlugin?.createNotificationChannel(fullChannel);
-      debugPrint('Full channel re-created with bypassDnd: true');
-
-      // Request Do Not Disturb access (required for bypassDnd to work)
-      final androidImplementation = _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImplementation != null) {
-        final bool? granted = await androidImplementation.requestNotificationsPermission();
-
-        if (granted == true) {
-          // DND permission must be granted manually by the user
-          // We will add a button or auto-open the settings screen in the next step
-          debugPrint('Notification permission granted. User still needs to grant DND access manually.');
-        }
-      }
-    }
-
-    // Request "Display over other apps" permission (required for fullScreenIntent on Android 12+)
-    if (Platform.isAndroid) {
-      final status = await Permission.systemAlertWindow.status;
-      if (!status.isGranted) {
-        await Permission.systemAlertWindow.request();
-      }
-    }
-
-    // Message handlers
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
   }
 
-  Future<void> showOnSiteNotification({
-    required String title,
-    required String body,
-  }) async {
-    await _showLocalNotification(title: title, body: body, level: 'normal');
+  void _handleForegroundMessage(RemoteMessage message) {
+    final level = message.data['notificationLevel'] ?? 'normal';
+    final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
+    final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
+
+    _showLocalNotification(title: title, body: body, level: level);
+  }
+
+  void _handleMessageOpenedApp(RemoteMessage message) {
+    debugPrint('App opened from notification: ${message.data}');
+  }
+
+  // ==================== TEST FULLSCREEN ====================
+  Future<void> testFullscreenNotification() async {
+    await _showLocalNotification(
+      title: "TEST - URGENT JOB",
+      body: "This is a test full-screen notification (Priority 5)",
+      level: "full-loud",
+    );
   }
 
   Future<String?> getToken() async {
@@ -313,5 +298,12 @@ final AndroidNotificationChannel fullChannel = AndroidNotificationChannel(
       debugPrint('❌ Error refreshing FCM token: $e');
       throw Exception('Failed to refresh FCM token: $e');
     }
+  }
+
+  Future<void> showOnSiteNotification({
+    required String title,
+    required String body,
+  }) async {
+    await _showLocalNotification(title: title, body: body, level: 'normal');
   }
 }

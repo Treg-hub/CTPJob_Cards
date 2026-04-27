@@ -26,6 +26,7 @@ import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'login_screen.dart';
+import 'notification_diagnostics_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -1013,6 +1014,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               }
             },
           ),
+        ),
+
+        // Notification Permissions
+        ListTile(
+          leading: const Icon(Icons.security, color: Colors.orange),
+          title: const Text("Notification Permissions"),
+          subtitle: const Text("Required for urgent job alerts to take over the screen"),
+          trailing: ElevatedButton(
+            onPressed: () async {
+              await NotificationService().requestAllCriticalPermissions();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Permissions requested. Please grant 'Display over other apps' if prompted.")),
+                );
+              }
+            },
+            child: const Text("Grant Now"),
+          ),
+        ),
+
+        // Notification Diagnostics
+        ListTile(
+          leading: const Icon(Icons.bug_report, color: Colors.blue),
+          title: const Text("Notification Diagnostics"),
+          subtitle: const Text("Test fullscreen notifications and check permissions"),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
         ),
 
         // Admin Section

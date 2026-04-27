@@ -23,7 +23,9 @@ Employee? currentEmployee;
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint('Background message received: ${message.messageId}');
+
+  final level = message.data['notificationLevel'] ?? 'normal';
+  debugPrint('Background notification received with level: $level');
 }
 
 void main() async {
