@@ -161,6 +161,10 @@ class NotificationService {
 
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+
+    // Background messages are now handled by native FirebaseMessagingService
+    // This avoids the MissingPluginException in background isolate
+    // FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {

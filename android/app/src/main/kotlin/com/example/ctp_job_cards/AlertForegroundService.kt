@@ -19,6 +19,7 @@ class AlertForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d("AlertForegroundService", "🚀 Service onCreate called!")
         createNotificationChannel()
     }
 
@@ -81,46 +82,44 @@ class AlertForegroundService : Service() {
     }
 
     private fun checkAndScheduleAlert(jobCardNumber: String, description: String) {
-        Log.d("AlertForegroundService", "Scheduling full-screen alert for job #$jobCardNumber")
+        Log.d("AlertForegroundService", "🚀 Starting to schedule alert for job #$jobCardNumber")
         
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-
+        
+        // Check exact alarm permission (Android 12+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (!alarmManager.canScheduleExactAlarms()) {
-                Log.w("AlertForegroundService", "Cannot schedule exact alarms - opening settings")
-                // Open settings to request permission
-                val intent = Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
+                Log.e("AlertForegroundService", "❌ Cannot schedule exact alarms - permission denied!")
                 stopSelf()
                 return
             }
+            Log.d("AlertForegroundService", "✅ Exact alarm permission granted")
         }
-
-        // Schedule the full-screen activity to start after 2 seconds
+        
+        val triggerTime = System.currentTimeMillis() + 2000
+        
         val intent = Intent(this, FullScreenJobAlertActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-
+        
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val triggerTime = System.currentTimeMillis() + 2000 // 2 seconds from now
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        
+        try {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            Log.d("AlertForegroundService", "✅ Alarm scheduled successfully!")
+        } catch (e: Exception) {
+            Log.e("AlertForegroundService", "❌ Failed to schedule alarm: ${e.message}")
         }
-
-        // Stop the service after scheduling
+        
+        // Stop service after 3 seconds
         handler.postDelayed({
             stopSelf()
-        }, 3000) // Stop after 3 seconds
+        }, 3000)
     }
 
     override fun onBind(intent: Intent?): IBinder? {

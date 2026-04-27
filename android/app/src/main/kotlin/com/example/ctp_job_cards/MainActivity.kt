@@ -40,6 +40,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        Log.d("MainActivity", "🚀 configureFlutterEngine called - Registering channels")
         super.configureFlutterEngine(flutterEngine)
 
         // Geofence channel
@@ -66,18 +67,24 @@ class MainActivity : FlutterActivity() {
         }
 
         // Job alert channel
+        Log.d("MainActivity", "🚨 Registering job_alert_channel")
+        Log.d("MainActivity", "🚀 MethodChannel job_alert_channel registered")
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JOB_ALERT_CHANNEL).setMethodCallHandler { call, result ->
+            Log.d("MainActivity", "🚨 Job alert channel received method: ${call.method}")
             when (call.method) {
                 "triggerUrgentAlert" -> {
                     val jobCardNumber = call.argument<String>("jobCardNumber")
                     val description = call.argument<String>("description")
+                    Log.d("MainActivity", "🚨 triggerUrgentAlert called with jobCardNumber=$jobCardNumber, description=$description")
                     if (jobCardNumber != null && description != null) {
                         triggerUrgentAlert(jobCardNumber, description, result)
                     } else {
+                        Log.e("MainActivity", "🚨 INVALID_ARGUMENTS: jobCardNumber=$jobCardNumber, description=$description")
                         result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
                     }
                 }
                 else -> {
+                    Log.w("MainActivity", "🚨 Unknown method: ${call.method}")
                     result.notImplemented()
                 }
             }
