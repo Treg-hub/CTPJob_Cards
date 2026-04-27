@@ -172,7 +172,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "id",
+          "fieldPath": "jobCardNumber",
           "order": "ASCENDING"
         },
         {
@@ -190,7 +190,7 @@
         { "fieldPath": "machine", "order": "ASCENDING" },
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "id", "order": "ASCENDING" },
+        { "fieldPath": "jobCardNumber", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
@@ -202,7 +202,7 @@
         { "fieldPath": "area", "order": "ASCENDING" },
         { "fieldPath": "machine", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "id", "order": "ASCENDING" },
+        { "fieldPath": "jobCardNumber", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }

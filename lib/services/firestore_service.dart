@@ -199,7 +199,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getExactRelatedJobCardsStream({
     required String department, required String area, required String machine,
-    required String part, required String type, required String excludeId,
+    required String part, required String type, required int jobCardNumber,
   }) {
     return _firestore
         .collection('job_cards')
@@ -209,7 +209,7 @@ class FirestoreService {
         .where('part', isEqualTo: part)
         .where('type', isEqualTo: type)
         .where('status', whereIn: ['monitor', 'closed'])
-        .where('id', isNotEqualTo: excludeId)
+        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
         .orderBy('createdAt', descending: true)
         .limit(20)
         .snapshots()
@@ -218,7 +218,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getRelatedExcludingPartStream({
     required String department, required String area, required String machine,
-    required String type, required String excludeId,
+    required String type, required int jobCardNumber,
   }) {
     return _firestore
         .collection('job_cards')
@@ -227,7 +227,7 @@ class FirestoreService {
         .where('machine', isEqualTo: machine)
         .where('type', isEqualTo: type)
         .where('status', whereIn: ['monitor', 'closed'])
-        .where('id', isNotEqualTo: excludeId)
+        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
         .orderBy('createdAt', descending: true)
         .limit(20)
         .snapshots()
@@ -236,7 +236,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getRelatedAllTypesStream({
     required String department, required String area, required String machine,
-    required String excludeId,
+    required int jobCardNumber,
   }) {
     return _firestore
         .collection('job_cards')
@@ -244,7 +244,7 @@ class FirestoreService {
         .where('area', isEqualTo: area)
         .where('machine', isEqualTo: machine)
         .where('status', whereIn: ['monitor', 'closed'])
-        .where('id', isNotEqualTo: excludeId)
+        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
         .orderBy('createdAt', descending: true)
         .limit(20)
         .snapshots()

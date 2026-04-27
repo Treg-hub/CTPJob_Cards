@@ -1780,7 +1780,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             }
             final jobs = snap.data!;
             if (jobs.isEmpty) {
-              return ListTile(title: Text('No $title.toLowerCase() found.', style: const TextStyle(color: Colors.grey)));
+              return ListTile(title: Text('No similar jobs found', style: const TextStyle(color: Colors.grey)));
             }
             return ListView.separated(
               shrinkWrap: true,
@@ -1804,14 +1804,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         _buildSection(
           title: 'Exact Related Jobs',
           subtitle: 'Same department, area, machine, part & type (Monitor/Closed only)',
-          stream: _firestoreService.getExactRelatedJobCardsStream(
-            department: _currentJobCard.department,
-            area: _currentJobCard.area,
-            machine: _currentJobCard.machine,
-            part: _currentJobCard.part,
-            type: _currentJobCard.type.name,
-            excludeId: _currentJobCard.id!,
-          ),
+            stream: _firestoreService.getExactRelatedJobCardsStream(
+              department: _currentJobCard.department,
+              area: _currentJobCard.area,
+              machine: _currentJobCard.machine,
+              part: _currentJobCard.part,
+              type: _currentJobCard.type.name,
+              jobCardNumber: _currentJobCard.jobCardNumber!,
+            ),
           initiallyExpanded: true,
         ),
         _buildSection(
@@ -1822,7 +1822,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             area: _currentJobCard.area,
             machine: _currentJobCard.machine,
             type: _currentJobCard.type.name,
-            excludeId: _currentJobCard.id!,
+            jobCardNumber: _currentJobCard.jobCardNumber!,
           ),
           initiallyExpanded: false,
         ),
@@ -1833,7 +1833,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             department: _currentJobCard.department,
             area: _currentJobCard.area,
             machine: _currentJobCard.machine,
-            excludeId: _currentJobCard.id!,
+            jobCardNumber: _currentJobCard.jobCardNumber!,
           ),
           initiallyExpanded: false,
         ),
