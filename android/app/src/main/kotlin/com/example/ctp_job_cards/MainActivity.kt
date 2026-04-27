@@ -18,7 +18,8 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "ctp/geofence"
+    private val GEOFENCE_CHANNEL = "ctp/geofence"
+    private val JOB_ALERT_CHANNEL = "job_alert_channel"
     private lateinit var geofencingClient: GeofencingClient
     private val geofencePendingIntent: PendingIntent by lazy {
         val intent = Intent(this, GeofenceReceiver::class.java)
@@ -40,7 +41,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+
+        // Geofence channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startGeofence" -> {
                     val clockNo = call.argument<String>("clockNo")
@@ -55,6 +58,24 @@ class MainActivity : FlutterActivity() {
                 }
                 "stopGeofence" -> {
                     stopGeofence(result)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+
+        // Job alert channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JOB_ALERT_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "triggerUrgentAlert" -> {
+                    val jobCardNumber = call.argument<String>("jobCardNumber")
+                    val description = call.argument<String>("description")
+                    if (jobCardNumber != null && description != null) {
+                        triggerUrgentAlert(jobCardNumber, description, result)
+                    } else {
+                        result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
+                    }
                 }
                 else -> {
                     result.notImplemented()
@@ -103,6 +124,21 @@ class MainActivity : FlutterActivity() {
                 Log.e("MainActivity", "Geofence remove failed: $e")
                 result.error("GEOFENCE_ERROR", "Failed to remove geofence: ${e.message}", null)
             }
+        }
+    }
+
+    private fun triggerUrgentAlert(jobCardNumber: String, description: String, result: MethodChannel.Result) {
+        try {
+            val intent = Intent(this, AlertForegroundService::class.java).apply {
+                putExtra("jobCardNumber", jobCardNumber)
+                putExtra("description", description)
+            }
+            startForegroundService(intent)
+            Log.d("MainActivity", "Urgent alert triggered for job #$jobCardNumber")
+            result.success("Urgent alert triggered")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to trigger urgent alert: $e")
+            result.error("ALERT_ERROR", "Failed to trigger urgent alert: ${e.message}", null)
         }
     }
 }

@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'job_alert_service.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -167,7 +168,22 @@ class NotificationService {
     final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
     final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
 
+    // Show local notification for all levels
     _showLocalNotification(title: title, body: body, level: level);
+
+    // Trigger urgent alert for full-loud notifications
+    if (level == 'full-loud') {
+      try {
+        // Extract job card number from title (format: "Job Assigned by [assigner] Job#[number]")
+        final jobNumberMatch = RegExp(r'Job#(\d+)').firstMatch(title);
+        final jobCardNumber = jobNumberMatch?.group(1) ?? 'Unknown';
+
+        JobAlertService.triggerUrgentAlert(jobCardNumber, body);
+        debugPrint('✅ Urgent alert triggered for job #$jobCardNumber');
+      } catch (e) {
+        debugPrint('❌ Error triggering urgent alert: $e');
+      }
+    }
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {

@@ -16,6 +16,7 @@ import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/sync_service.dart';
 import 'services/background_geofence_service.dart';
+import 'services/job_alert_service.dart';
 import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 
@@ -25,7 +26,24 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final level = message.data['notificationLevel'] ?? 'normal';
+  final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
+  final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
+
   debugPrint('Background notification received with level: $level');
+
+  // Trigger urgent alert for full-loud notifications in background (if possible)
+  if (level == 'full-loud') {
+    try {
+      // Extract job card number from title (format: "Job Assigned by [assigner] Job#[number]")
+      final jobNumberMatch = RegExp(r'Job#(\d+)').firstMatch(title);
+      final jobCardNumber = jobNumberMatch?.group(1) ?? 'Unknown';
+
+      await JobAlertService.triggerUrgentAlert(jobCardNumber, body);
+      debugPrint('✅ Background urgent alert triggered for job #$jobCardNumber');
+    } catch (e) {
+      debugPrint('❌ Error triggering background urgent alert: $e');
+    }
+  }
 }
 
 void main() async {
