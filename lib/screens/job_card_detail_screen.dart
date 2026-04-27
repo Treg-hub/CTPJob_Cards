@@ -31,8 +31,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
   late TabController _tabController;
-  int _relatedCount = 0;
-  StreamSubscription<List<JobCard>>? _relatedSub;
+
 
   @override
   void initState() {
@@ -40,14 +39,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     _reoccurrenceCount = widget.jobCard.reoccurrenceCount;
     _currentJobCard = widget.jobCard;
     _tabController = TabController(initialIndex: 1, length: 3, vsync: this);
-    _setupRelatedStream();
   }
 
   @override
   void dispose() {
     _commentController.dispose();
     _tabController.dispose();
-    _relatedSub?.cancel();
     super.dispose();
   }
 
@@ -812,22 +809,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       );
     }
 
-  void _setupRelatedStream() {
-    _relatedSub = _getRelatedJobsStream().listen((list) {
-      setState(() => _relatedCount = list.length);
-    });
-  }
 
-  Stream<List<JobCard>> _getRelatedJobsStream() {
-    return _firestoreService.getRelatedJobCardsStream(
-      department: _currentJobCard.department,
-      area: _currentJobCard.area,
-      machine: _currentJobCard.machine,
-      part: _currentJobCard.part,
-      type: _currentJobCard.type.name,
-      excludeId: _currentJobCard.id!,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -849,7 +831,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 unselectedLabelStyle: const TextStyle(color: Color(0xFFFF8C42), fontWeight: FontWeight.bold),
                 indicatorColor: const Color(0xFFFF8C42),
                 tabs: [
-                  Tab(text: 'Related ($_relatedCount)'),
+                  const Tab(text: 'Related'),
                   const Tab(text: 'Details'),
                   const Tab(text: 'Photos'),
                 ],
@@ -866,7 +848,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               controller: _tabController,
               children: [
                 // Related Tab
-                RelatedTabContent(relatedStream: _getRelatedJobsStream()),
+                _buildRelatedTab(),
                 // Details Tab
                 RefreshIndicator(
                   onRefresh: _refreshJobCard,
@@ -1666,75 +1648,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
-
-}
-
-class RelatedTabContent extends StatelessWidget {
-  final Stream<List<JobCard>> relatedStream;
-
-  const RelatedTabContent({super.key, required this.relatedStream});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<JobCard>>(
-      stream: relatedStream,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final jobs = snapshot.data!;
-        if (jobs.isEmpty) {
-          return const Center(child: Text('No similar jobs found', style: TextStyle(color: Colors.grey)));
-        }
-        return ListView.builder(
-          padding: EdgeInsets.zero,
-          itemCount: jobs.length,
-          itemBuilder: (context, index) {
-            final job = jobs[index];
-            return ExpansionTile(
-              title: _buildRelatedCardItem(job, context),
-              trailing: SizedBox(),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Description:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                      Text(job.description, style: const TextStyle(fontSize: 15, color: Colors.white, height: 1.3)),
-                      const SizedBox(height: 16),
-                      if (job.comments.isNotEmpty) ...[
-                        Text('Comments:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        ..._parseComments(job.comments).map((comment) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(comment, style: const TextStyle(fontSize: 15, color: Colors.white)),
-                        )),
-                      ],
-                      if (job.notes.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text('Notes:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        ..._parseNotes(job.notes).map((note) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(note, style: const TextStyle(fontSize: 15, color: Colors.white)),
-                        )),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildRelatedCardItem(JobCard job, BuildContext context) {
+  Widget _buildRelatedCardItem(JobCard job) {
     return Card(
       elevation: 6,
       margin: EdgeInsets.zero,
@@ -1822,23 +1736,113 @@ class RelatedTabContent extends StatelessWidget {
     );
   }
 
-  List<String> _parseComments(String comments) => comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
-
-  List<String> _parseNotes(String notes) => notes.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
-
-  Color _getPriorityColor(String priority) {
-    final num = int.tryParse(priority.substring(1)) ?? 0;
-    switch (num) {
-      case 1: return Colors.green[600]!;
-      case 2: return Colors.lightGreen[500]!;
-      case 3: return Colors.amber[600]!;
-      case 4: return Colors.deepOrange[600]!;
-      case 5: return const Color(0xFFFF3D00);
-      default: return Colors.grey;
-    }
+  Widget _buildSection({
+    required String title,
+    required String subtitle,
+    required Stream<List<JobCard>> stream,
+    required bool initiallyExpanded,
+  }) {
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
+          StreamBuilder<int>(
+            stream: stream.map((jobs) => jobs.length),
+            builder: (ctx, countSnap) {
+              final count = countSnap.data ?? 0;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8C42),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      subtitle: Text(subtitle),
+      children: [
+        StreamBuilder<List<JobCard>>(
+          stream: stream,
+          builder: (ctx, snap) {
+            if (snap.hasError) {
+              return ListTile(title: Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red)));
+            }
+            if (!snap.hasData) {
+              return const ListTile(title: Center(child: CircularProgressIndicator()));
+            }
+            final jobs = snap.data!;
+            if (jobs.isEmpty) {
+              return ListTile(title: Text('No $title.toLowerCase() found.', style: const TextStyle(color: Colors.grey)));
+            }
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
+              itemCount: jobs.length,
+              itemBuilder: (ctx, i) => InkWell(
+                onTap: () => Navigator.push(ctx, MaterialPageRoute(builder: (c) => JobCardDetailScreen(jobCard: jobs[i]))),
+                child: _buildRelatedCardItem(jobs[i]),
+              ),
+              separatorBuilder: (_, __) => const Divider(height: 1),
+            );
+          },
+        ),
+      ],
+    );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildRelatedTab() {
+    return Column(
+      children: [
+        _buildSection(
+          title: 'Exact Related Jobs',
+          subtitle: 'Same department, area, machine, part & type (Monitor/Closed only)',
+          stream: _firestoreService.getExactRelatedJobCardsStream(
+            department: _currentJobCard.department,
+            area: _currentJobCard.area,
+            machine: _currentJobCard.machine,
+            part: _currentJobCard.part,
+            type: _currentJobCard.type.name,
+            excludeId: _currentJobCard.id!,
+          ),
+          initiallyExpanded: true,
+        ),
+        _buildSection(
+          title: 'Similar Jobs (Excluding Part)',
+          subtitle: 'Same department, area, machine & type — any part',
+          stream: _firestoreService.getRelatedExcludingPartStream(
+            department: _currentJobCard.department,
+            area: _currentJobCard.area,
+            machine: _currentJobCard.machine,
+            type: _currentJobCard.type.name,
+            excludeId: _currentJobCard.id!,
+          ),
+          initiallyExpanded: false,
+        ),
+        _buildSection(
+          title: 'Related Jobs (All Types)',
+          subtitle: 'Same department, area & machine — any type or part',
+          stream: _firestoreService.getRelatedAllTypesStream(
+            department: _currentJobCard.department,
+            area: _currentJobCard.area,
+            machine: _currentJobCard.machine,
+            excludeId: _currentJobCard.id!,
+          ),
+          initiallyExpanded: false,
+        ),
+      ],
+    );
   }
+
+
 }
+
+
+
