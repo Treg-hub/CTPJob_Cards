@@ -242,6 +242,7 @@
 - ✅ **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications - 2km radius around company coordinates, battery efficient, works in background, no manual toggles
 - ✅ **Fixed Related Jobs Loading Spinner Bug**: ExpansionTiles in Related Jobs tab were getting stuck on loading spinners when expanding/collapsing. Fixed by adding `key: ValueKey(title)` to ExpansionTile for state preservation and `initialData` to StreamBuilders to prevent loading states on rebuilds.
 - ✅ **Moved App Update Check to Startup**: Update checking now happens immediately when the app opens (on mobile) instead of only after login. Uses `WidgetsBinding.instance.addPostFrameCallback` in `CtpJobCardsApp.build()` to get UI context and show update dialogs. Keeps existing daily throttling logic.
+- ✅ **Enhanced Related Jobs Display**: Updated Related tab in JobCardDetailScreen with detailed job card format showing Job card number | Created by person | Status, Location, Description, All comments, All notes. Added pagination (max 10 jobs, "Load More" button), removed tap-to-detail, added "View Details" button. Added debug logging to identify why sections show counts but no jobs.
  - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps

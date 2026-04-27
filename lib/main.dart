@@ -14,7 +14,6 @@ import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
-import 'services/location_service.dart';
 import 'services/sync_service.dart';
 import 'services/background_geofence_service.dart';
 import 'services/update_service.dart';

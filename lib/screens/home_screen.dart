@@ -966,7 +966,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             subtitle: const Text('Force show as on-site for UI filtering'),
             value: _overrideOnSite,
             onChanged: (value) => _saveOverrideOnSite(value),
-            activeColor: const Color(0xFFFF8C42),
+            activeThumbColor: const Color(0xFFFF8C42),
           ),
         ),
 

@@ -32,6 +32,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   final NotificationService _notificationService = NotificationService();
   late TabController _tabController;
 
+  // Pagination for Related Jobs sections
+  final Map<String, int> _sectionPageSizes = {};
+  final Map<String, bool> _sectionHasMore = {};
+
 
   @override
   void initState() {
@@ -1644,8 +1648,177 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     }
   }
 
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return Colors.blue;
+      case 'monitor':
+        return Colors.orange;
+      case 'closed':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildRelatedJobCardDetailed(JobCard job) {
+    final parsedComments = _parseComments(job.comments);
+    final parsedNotes = _parseNotes(job.notes);
+
+    return Card(
+      elevation: 6,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row: Job card number | Created by person | Status
+            Row(
+              children: [
+                if (job.jobCardNumber != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 204),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'JC #${job.jobCardNumber}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    'Created by: ${job.operator.isEmpty ? 'Unknown' : job.operator}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(job.status.name).withValues(alpha: 128),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    job.status.displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+
+            // Location
+            Text(
+              '${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.white70,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+
+            // Description
+            Text(
+              job.description,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 2),
+
+            // All comments
+            if (parsedComments.isNotEmpty) ...[
+              const Text(
+                'Comments:',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              ...parsedComments.map((comment) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  comment,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white70,
+                    height: 1.2,
+                  ),
+                ),
+              )),
+              const SizedBox(height: 2),
+            ],
+
+            // All notes
+            if (parsedNotes.isNotEmpty) ...[
+              const Text(
+                'Notes:',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              ...parsedNotes.map((note) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  note,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white70,
+                    height: 1.2,
+                  ),
+                ),
+              )),
+            ],
+
+            // View Details button (right-aligned)
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
+                icon: const Icon(Icons.visibility, size: 14),
+                label: const Text('View Details'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8C42),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildRelatedCardItem(JobCard job) {
@@ -1742,6 +1915,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     required Stream<List<JobCard>> stream,
     required bool initiallyExpanded,
   }) {
+    // Initialize pagination for this section
+    _sectionPageSizes.putIfAbsent(title, () => 10);
+    _sectionHasMore.putIfAbsent(title, () => true);
+
     return ExpansionTile(
       key: ValueKey(title), // Preserve state when collapsing/expanding
       initiallyExpanded: initiallyExpanded,
@@ -1749,11 +1926,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         mainAxisSize: MainAxisSize.min,
         children: [
           Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
-          StreamBuilder<int>(
-            stream: stream.map((jobs) => jobs.length),
-            initialData: 0, // Prevent loading state for count
-            builder: (ctx, countSnap) {
-              final count = countSnap.data ?? 0;
+          StreamBuilder<List<JobCard>>(
+            stream: stream,
+            initialData: const [],
+            builder: (ctx, snap) {
+              final jobs = snap.data ?? [];
+              final filteredCount = title == 'Exact Match'
+                ? jobs.where((job) => job.id != _currentJobCard.id).length
+                : title == 'Same Part, Different Type'
+                ? jobs.where((job) => job.id != _currentJobCard.id && job.type != _currentJobCard.type).length
+                : jobs.where((job) => job.id != _currentJobCard.id && job.part != _currentJobCard.part).length;
+
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -1761,7 +1944,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '$count',
+                  '$filteredCount',
                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               );
@@ -1794,18 +1977,43 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               return const ListTile(title: Center(child: CircularProgressIndicator()));
             }
             final jobs = snap.data!;
+            debugPrint('[$title] Raw jobs count: ${jobs.length}');
             if (jobs.isEmpty) {
-              return ListTile(title: Text('No similar jobs found', style: const TextStyle(color: Colors.grey)));
+              return ListTile(title: Text('No similar jobs found for this criteria', style: const TextStyle(color: Colors.grey)));
             }
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const ClampingScrollPhysics(),
-              itemCount: jobs.length,
-              itemBuilder: (ctx, i) => InkWell(
-                onTap: () => Navigator.push(ctx, MaterialPageRoute(builder: (c) => JobCardDetailScreen(jobCard: jobs[i]))),
-                child: _buildRelatedCardItem(jobs[i]),
-              ),
-              separatorBuilder: (_, __) => const Divider(height: 1),
+
+            // Apply pagination
+            final pageSize = _sectionPageSizes[title] ?? 10;
+            final displayedJobs = jobs.take(pageSize).toList();
+            final hasMore = jobs.length > pageSize;
+
+            return Column(
+              children: [
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const ClampingScrollPhysics(),
+                  itemCount: displayedJobs.length,
+                  itemBuilder: (ctx, i) => _buildRelatedJobCardDetailed(displayedJobs[i]),
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                ),
+                if (hasMore)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _sectionPageSizes[title] = (_sectionPageSizes[title] ?? 10) + 10;
+                        });
+                      },
+                      icon: const Icon(Icons.expand_more),
+                      label: const Text('Load More'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8C42),
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),
