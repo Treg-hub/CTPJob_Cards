@@ -173,6 +173,7 @@ class NotificationService {
 
     // Trigger native full-screen urgent alert for Priority 5 jobs (full-loud level)
     if (level == 'full-loud') {
+      debugPrint('🔥 FULL-LOUD detected! Calling native service...');   // ← ADD THIS LINE
       try {
         await JobAlertService.triggerUrgentAlert(
           message.data['jobCardNumber']?.toString() ?? 'N/A',
