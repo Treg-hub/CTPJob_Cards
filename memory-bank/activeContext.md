@@ -243,7 +243,10 @@
 - ✅ **Fixed Related Jobs Loading Spinner Bug**: ExpansionTiles in Related Jobs tab were getting stuck on loading spinners when expanding/collapsing. Fixed by adding `key: ValueKey(title)` to ExpansionTile for state preservation and `initialData` to StreamBuilders to prevent loading states on rebuilds.
 - ✅ **Moved App Update Check to Startup**: Update checking now happens immediately when the app opens (on mobile) instead of only after login. Uses `WidgetsBinding.instance.addPostFrameCallback` in `CtpJobCardsApp.build()` to get UI context and show update dialogs. Keeps existing daily throttling logic.
 - ✅ **Enhanced Related Jobs Display**: Updated Related tab in JobCardDetailScreen with detailed job card format showing Job card number | Created by person | Status, Location, Description, All comments, All notes. Added pagination (max 10 jobs, "Load More" button), removed tap-to-detail, added "View Details" button. Added debug logging to identify why sections show counts but no jobs.
- - 🔄 Ready for next feature development or bug fixes
+- ✅ **Fixed Related Tab Expansion Bug**: Resolved ExpansionTile StreamBuilder disposal issue causing "No similar jobs found" on expand despite correct counts. Implemented RelatedSection StatefulWidget with AutomaticKeepAliveClientMixin, Visibility(maintainState: true) for persistent streams, and custom expansion UI with animated chevron.
+- ✅ **Added Related Tab Scrolling and Overflow Fix**: Wrapped Related tab in SingleChildScrollView for vertical scrolling, changed ListView physics to NeverScrollableScrollPhysics to prevent RenderFlex overflow, and added TickerProviderStateMixin for smooth animations.
+- ✅ **Enhanced Related Job Cards with Type Display**: Added job type display in related job cards, positioned on the left side of the "View Details" button for better information hierarchy.
+  - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps
 - Monitor for additional UI inconsistencies

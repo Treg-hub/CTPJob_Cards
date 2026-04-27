@@ -1665,6 +1665,176 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
+
+
+  Widget _buildRelatedCardItem(JobCard job) {
+    return Card(
+      elevation: 6,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'P${job.priority}',
+                    style: TextStyle(
+                      color: _getPriorityColor('P${job.priority}'),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' | ${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part} | ${job.operator.isEmpty ? 'Unknown' : job.operator}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11.5,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (job.jobCardNumber != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 204),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'JC #${job.jobCardNumber}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    job.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.normal,
+                      fontSize: 15,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Spacer(),
+                Text(
+                  job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
+                  style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  Widget _buildRelatedTab() {
+    final current = _currentJobCard;
+
+    // 1. Exact Match Stream (same everything including type)
+    final exactMatchStream = _firestoreService
+        .getExactRelatedJobCardsStream(
+          department: current.department,
+          area: current.area,
+          machine: current.machine,
+          part: current.part,
+          type: current.type.name,
+        )
+        .map((jobs) => jobs.where((j) => j.id != current.id).toList());
+
+    // 2. Same Part, Different Type (exclude Exact Match jobs)
+    final samePartStream = _firestoreService
+        .getExactAllTypesStream(
+          department: current.department,
+          area: current.area,
+          machine: current.machine,
+          part: current.part,
+        )
+        .map((jobs) {
+          return jobs
+              .where((j) =>
+                  j.id != current.id &&
+                  j.type != current.type)
+              .toList();
+        });
+
+    // 3. Same Machine, Different Part (exclude both previous sections)
+    final sameMachineStream = _firestoreService
+        .getAllPartsStream(
+          department: current.department,
+          area: current.area,
+          machine: current.machine,
+        )
+        .map((jobs) {
+          return jobs
+              .where((j) =>
+                  j.id != current.id &&
+                  j.part != current.part)
+              .toList();
+        });
+
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Column(
+        children: [
+          RelatedSection(
+            title: 'Exact Match',
+            subtitle: 'Same department, area, machine, part & type (Monitor/Closed only)',
+            stream: exactMatchStream,
+            initiallyExpanded: true,
+            pageSizes: _sectionPageSizes,
+            itemBuilder: _buildRelatedJobCardDetailed,
+          ),
+          RelatedSection(
+            title: 'Same Part, Different Type',
+            subtitle: 'Same department, area, machine & part — different types (Monitor/Closed only)',
+            stream: samePartStream,
+            initiallyExpanded: false,
+            pageSizes: _sectionPageSizes,
+            itemBuilder: _buildRelatedJobCardDetailed,
+          ),
+          RelatedSection(
+            title: 'Same Machine, Different Part',
+            subtitle: 'Same department, area & machine — different parts, all types (Monitor/Closed only)',
+            stream: sameMachineStream,
+            initiallyExpanded: false,
+            pageSizes: _sectionPageSizes,
+            itemBuilder: _buildRelatedJobCardDetailed,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRelatedJobCardDetailed(JobCard job) {
     final parsedComments = _parseComments(job.comments);
     final parsedNotes = _parseNotes(job.notes);
@@ -1799,263 +1969,200 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               )),
             ],
 
-            // View Details button (right-aligned)
+            // Type and View Details button
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
-                icon: const Icon(Icons.visibility, size: 16),
-                label: const Text('View Details'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8C42),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Text(
+                  'Type: ${job.type.displayName}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white70,
+                  ),
                 ),
-              ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
+                  icon: const Icon(Icons.visibility, size: 16),
+                  label: const Text('View Details'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C42),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildRelatedCardItem(JobCard job) {
-    return Card(
-      elevation: 6,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'P${job.priority}',
-                    style: TextStyle(
-                      color: _getPriorityColor('P${job.priority}'),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' | ${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part} | ${job.operator.isEmpty ? 'Unknown' : job.operator}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11.5,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (job.jobCardNumber != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+class RelatedSection extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final Stream<List<JobCard>> stream;
+  final bool initiallyExpanded;
+  final Map<String, int> pageSizes;
+  final Widget Function(JobCard) itemBuilder;
+
+  const RelatedSection({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.stream,
+    required this.initiallyExpanded,
+    required this.pageSizes,
+    required this.itemBuilder,
+  });
+
+  @override
+  State<RelatedSection> createState() => _RelatedSectionState();
+}
+
+class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
+  late bool _expanded;
+  late AnimationController _controller;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    if (_expanded) _controller.value = 0.5;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Column(
+      children: [
+        ListTile(
+          onTap: _toggleExpanded,
+          title: Row(
+            children: [
+              Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium)),
+              StreamBuilder<int>(
+                stream: widget.stream.map((jobs) => jobs.length),
+                initialData: 0,
+                builder: (ctx, countSnap) {
+                  final count = countSnap.data ?? 0;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 204),
-                      borderRadius: BorderRadius.circular(6),
+                      color: const Color(0xFFFF8C42),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'JC #${job.jobCardNumber}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                      '$count',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          subtitle: Text(widget.subtitle),
+          trailing: RotationTransition(
+            turns: Tween(begin: 0.0, end: 0.5).animate(_controller),
+            child: const Icon(Icons.expand_more),
+          ),
+        ),
+        Visibility(
+          maintainState: true,
+          visible: _expanded,
+          child: StreamBuilder<List<JobCard>>(
+            stream: widget.stream,
+            initialData: const [],
+            builder: (ctx, snap) {
+              if (snap.hasError) {
+                final errorMessage = snap.error.toString();
+                if (errorMessage.contains('failed-precondition') && errorMessage.contains('index')) {
+                  return ListTile(
+                    title: const Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
+                    leading: const Icon(Icons.warning, color: Colors.orange),
+                  );
+                }
+                return ListTile(
+                  title: const Text('Error Loading Related Jobs', style: TextStyle(color: Colors.red)),
+                  subtitle: Text('Please try again later. ${snap.error}', style: const TextStyle(color: Colors.white70)),
+                  leading: const Icon(Icons.error, color: Colors.red),
+                );
+              }
+              if (!snap.hasData) {
+                return const ListTile(title: Center(child: CircularProgressIndicator()));
+              }
+              final jobs = snap.data!;
+              debugPrint('[${widget.title}] Raw jobs count: ${jobs.length}');
+              if (jobs.isEmpty) {
+                return ListTile(title: Text('No similar jobs found for this criteria', style: const TextStyle(color: Colors.grey)));
+              }
+
+              // Apply pagination
+              final pageSize = widget.pageSizes[widget.title] ?? 10;
+              final displayedJobs = jobs.take(pageSize).toList();
+              final hasMore = jobs.length > pageSize;
+
+              return Column(
+                children: [
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: displayedJobs.length,
+                    itemBuilder: (ctx, i) => widget.itemBuilder(displayedJobs[i]),
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                  ),
+                  if (hasMore)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            widget.pageSizes[widget.title] = (widget.pageSizes[widget.title] ?? 10) + 10;
+                          });
+                        },
+                        icon: const Icon(Icons.expand_more),
+                        label: const Text('Load More'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8C42),
+                          foregroundColor: Colors.black,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
                 ],
-                Expanded(
-                  child: Text(
-                    job.description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontWeight: FontWeight.normal,
-                      fontSize: 15,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Spacer(),
-                Text(
-                  job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
-                  style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required String subtitle,
-    required Stream<List<JobCard>> stream,
-    required bool initiallyExpanded,
-  }) {
-    // Initialize pagination for this section
-    _sectionPageSizes.putIfAbsent(title, () => 10);
-    _sectionHasMore.putIfAbsent(title, () => true);
-
-    return ExpansionTile(
-      key: ValueKey(title), // Preserve state when collapsing/expanding
-      initiallyExpanded: initiallyExpanded,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
-          StreamBuilder<int>(
-            stream: stream.map((jobs) => jobs.length),
-            initialData: 0, // Prevent loading state for count
-            builder: (ctx, countSnap) {
-              final count = countSnap.data ?? 0;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8C42),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$count',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
               );
             },
           ),
-        ],
-      ),
-      subtitle: Text(subtitle),
-      children: [
-        StreamBuilder<List<JobCard>>(
-          stream: stream,
-          initialData: const [], // Prevent loading spinner on expand/collapse
-          builder: (ctx, snap) {
-            if (snap.hasError) {
-              final errorMessage = snap.error.toString();
-              if (errorMessage.contains('failed-precondition') && errorMessage.contains('index')) {
-                return ListTile(
-                  title: const Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
-                  leading: const Icon(Icons.warning, color: Colors.orange),
-                );
-              }
-              return ListTile(
-                title: const Text('Error Loading Related Jobs', style: TextStyle(color: Colors.red)),
-                subtitle: Text('Please try again later. ${snap.error}', style: const TextStyle(color: Colors.white70)),
-                leading: const Icon(Icons.error, color: Colors.red),
-              );
-            }
-            if (!snap.hasData) {
-              return const ListTile(title: Center(child: CircularProgressIndicator()));
-            }
-            final jobs = snap.data!;
-            debugPrint('[$title] Raw jobs count: ${jobs.length}');
-            if (jobs.isEmpty) {
-              return ListTile(title: Text('No similar jobs found for this criteria', style: const TextStyle(color: Colors.grey)));
-            }
-
-            // Apply pagination
-            final pageSize = _sectionPageSizes[title] ?? 10;
-            final displayedJobs = jobs.take(pageSize).toList();
-            final hasMore = jobs.length > pageSize;
-
-            return Column(
-              children: [
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const ClampingScrollPhysics(),
-                  itemCount: displayedJobs.length,
-                  itemBuilder: (ctx, i) => _buildRelatedJobCardDetailed(displayedJobs[i]),
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                ),
-                if (hasMore)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _sectionPageSizes[title] = (_sectionPageSizes[title] ?? 10) + 10;
-                        });
-                      },
-                      icon: const Icon(Icons.expand_more),
-                      label: const Text('Load More'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8C42),
-                        foregroundColor: Colors.black,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
         ),
       ],
     );
   }
-
-  Widget _buildRelatedTab() {
-    return Column(
-      children: [
-        _buildSection(
-          title: 'Exact Match',
-          subtitle: 'Same department, area, machine, part & type (Monitor/Closed only)',
-            stream: _firestoreService.getExactRelatedJobCardsStream(
-              department: _currentJobCard.department,
-              area: _currentJobCard.area,
-              machine: _currentJobCard.machine,
-              part: _currentJobCard.part,
-              type: _currentJobCard.type.name,
-            ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id).toList()),
-          initiallyExpanded: true,
-        ),
-        _buildSection(
-          title: 'Same Part, Different Type',
-          subtitle: 'Same department, area, machine & part — different types (Monitor/Closed only)',
-          stream: _firestoreService.getExactAllTypesStream(
-            department: _currentJobCard.department,
-            area: _currentJobCard.area,
-            machine: _currentJobCard.machine,
-            part: _currentJobCard.part,
-          ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id && job.type != _currentJobCard.type).toList()),
-          initiallyExpanded: false,
-        ),
-        _buildSection(
-          title: 'Same Machine, Different Part',
-          subtitle: 'Same department, area & machine — different parts, all types (Monitor/Closed only)',
-          stream: _firestoreService.getAllPartsStream(
-            department: _currentJobCard.department,
-            area: _currentJobCard.area,
-            machine: _currentJobCard.machine,
-          ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id && job.part != _currentJobCard.part).toList()),
-          initiallyExpanded: false,
-        ),
-      ],
-    );
-  }
-
-
 }
 
 

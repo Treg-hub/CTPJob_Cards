@@ -189,17 +189,29 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
-    {
-      "collectionGroup": "job_cards",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "department", "order": "ASCENDING" },
-        { "fieldPath": "area", "order": "ASCENDING" },
-        { "fieldPath": "machine", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    }
+     {
+       "collectionGroup": "job_cards",
+       "queryScope": "COLLECTION",
+       "fields": [
+         { "fieldPath": "department", "order": "ASCENDING" },
+         { "fieldPath": "area", "order": "ASCENDING" },
+         { "fieldPath": "machine", "order": "ASCENDING" },
+         { "fieldPath": "status", "order": "ASCENDING" },
+         { "fieldPath": "createdAt", "order": "DESCENDING" }
+       ]
+     },
+     {
+       "collectionGroup": "job_cards",
+       "queryScope": "COLLECTION",
+       "fields": [
+         { "fieldPath": "department", "order": "ASCENDING" },
+         { "fieldPath": "area", "order": "ASCENDING" },
+         { "fieldPath": "machine", "order": "ASCENDING" },
+         { "fieldPath": "part", "order": "ASCENDING" },
+         { "fieldPath": "status", "order": "ASCENDING" },
+         { "fieldPath": "createdAt", "order": "DESCENDING" }
+       ]
+     }
    ],
    "fieldOverrides": []
 }
