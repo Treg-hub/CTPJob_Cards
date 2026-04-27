@@ -101,10 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
           debugPrint('📍 Geofencing skipped on web platform');
         }
 
-        // Check for app updates (mobile only)
-        if (!kIsWeb && mounted) {
-          await UpdateService().checkForUpdate(context);
-        }
+         // Update check moved to app startup in main.dart
 
        if (mounted) {
          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));

@@ -240,7 +240,9 @@
 - ✅ Enhanced Manager Dashboard Analytics: Added comprehensive job card analytics with created vs closed trends and department breakdowns
 - ✅ **Lint Errors Fixed**: Resolved all solvable errors in job_card_detail_screen.dart (reduced from 22 to 13 warnings) and create_job_card_screen.dart (0 issues), updated deprecated withOpacity() to withValues(), fixed null checks, use_build_context_synchronously, and curly_braces_in_flow_control_structures
 - ✅ **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications - 2km radius around company coordinates, battery efficient, works in background, no manual toggles
-- 🔄 Ready for next feature development or bug fixes
+- ✅ **Fixed Related Jobs Loading Spinner Bug**: ExpansionTiles in Related Jobs tab were getting stuck on loading spinners when expanding/collapsing. Fixed by adding `key: ValueKey(title)` to ExpansionTile for state preservation and `initialData` to StreamBuilders to prevent loading states on rebuilds.
+- ✅ **Moved App Update Check to Startup**: Update checking now happens immediately when the app opens (on mobile) instead of only after login. Uses `WidgetsBinding.instance.addPostFrameCallback` in `CtpJobCardsApp.build()` to get UI context and show update dialogs. Keeps existing daily throttling logic.
+ - 🔄 Ready for next feature development or bug fixes
 
 ## Next Steps
 - Monitor for additional UI inconsistencies

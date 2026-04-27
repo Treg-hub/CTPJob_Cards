@@ -17,6 +17,7 @@ import 'services/firestore_service.dart';
 import 'services/location_service.dart';
 import 'services/sync_service.dart';
 import 'services/background_geofence_service.dart';
+import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
@@ -78,6 +79,17 @@ class CtpJobCardsApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeNotifierProvider);
+
+    // Check for app updates on app startup (mobile only)
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await UpdateService().checkForUpdate(context);
+        } catch (e) {
+          debugPrint('Error checking for updates on startup: $e');
+        }
+      });
+    }
 
     return MaterialApp(
       title: 'CTP Job Cards',

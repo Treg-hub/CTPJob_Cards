@@ -174,82 +174,90 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }
 
-  Stream<List<JobCard>> getRelatedJobCardsStream({
-    required String department,
-    required String area,
-    required String machine,
-    required String part,
-    required String type,
-    required String excludeId,
-  }) {
-    return _firestore
-        .collection('job_cards')
-        .where('department', isEqualTo: department)
-        .where('area', isEqualTo: area)
-        .where('machine', isEqualTo: machine)
-        .where('part', isEqualTo: part)
-        .where('type', isEqualTo: type)
-        .where('status', whereIn: ['monitor', 'closed'])
-        .where('id', isNotEqualTo: excludeId)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
-  }
+  // ============================================================
+    // TEST VERSION - WITHOUT jobCardNumber FILTER
+    // Use this temporarily to debug
+    // ============================================================
 
-  Stream<List<JobCard>> getExactRelatedJobCardsStream({
-    required String department, required String area, required String machine,
-    required String part, required String type, required int jobCardNumber,
-  }) {
-    return _firestore
-        .collection('job_cards')
-        .where('department', isEqualTo: department)
-        .where('area', isEqualTo: area)
-        .where('machine', isEqualTo: machine)
-        .where('part', isEqualTo: part)
-        .where('type', isEqualTo: type)
-        .where('status', whereIn: ['monitor', 'closed'])
-        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
-  }
+    /// 1. Exact Related Jobs
+    Stream<List<JobCard>> getExactRelatedJobCardsStream({
+      required String department,
+      required String area,
+      required String machine,
+      required String part,
+      required String type,
+    }) {
+      return _firestore
+          .collection('job_cards')
+          .where('department', isEqualTo: department)
+          .where('area', isEqualTo: area)
+          .where('machine', isEqualTo: machine)
+          .where('part', isEqualTo: part)
+          .where('type', isEqualTo: type)
+          .where('status', whereIn: ['monitor', 'closed'])
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+    }
 
-  Stream<List<JobCard>> getRelatedExcludingPartStream({
-    required String department, required String area, required String machine,
-    required String type, required int jobCardNumber,
-  }) {
-    return _firestore
-        .collection('job_cards')
-        .where('department', isEqualTo: department)
-        .where('area', isEqualTo: area)
-        .where('machine', isEqualTo: machine)
-        .where('type', isEqualTo: type)
-        .where('status', whereIn: ['monitor', 'closed'])
-        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
-  }
+    /// 2. Similar Jobs (Excluding Part)
+    Stream<List<JobCard>> getRelatedExcludingPartStream({
+      required String department,
+      required String area,
+      required String machine,
+      required String type,
+    }) {
+      return _firestore
+          .collection('job_cards')
+          .where('department', isEqualTo: department)
+          .where('area', isEqualTo: area)
+          .where('machine', isEqualTo: machine)
+          .where('type', isEqualTo: type)
+          .where('status', whereIn: ['monitor', 'closed'])
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+    }
 
-  Stream<List<JobCard>> getRelatedAllTypesStream({
-    required String department, required String area, required String machine,
-    required int jobCardNumber,
-  }) {
-    return _firestore
-        .collection('job_cards')
-        .where('department', isEqualTo: department)
-        .where('area', isEqualTo: area)
-        .where('machine', isEqualTo: machine)
-        .where('status', whereIn: ['monitor', 'closed'])
-        .where('jobCardNumber', isNotEqualTo: jobCardNumber)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
-  }
+    /// 2. Exact All Types (same dept/area/machine/part, different type)
+    Stream<List<JobCard>> getExactAllTypesStream({
+      required String department,
+      required String area,
+      required String machine,
+      required String part,
+    }) {
+      return _firestore
+          .collection('job_cards')
+          .where('department', isEqualTo: department)
+          .where('area', isEqualTo: area)
+          .where('machine', isEqualTo: machine)
+          .where('part', isEqualTo: part)
+          .where('status', whereIn: ['monitor', 'closed'])
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+    }
+
+    /// 3. All Parts (same dept/area/machine, different part, all types)
+    Stream<List<JobCard>> getAllPartsStream({
+      required String department,
+      required String area,
+      required String machine,
+    }) {
+      return _firestore
+          .collection('job_cards')
+          .where('department', isEqualTo: department)
+          .where('area', isEqualTo: area)
+          .where('machine', isEqualTo: machine)
+          .where('status', whereIn: ['monitor', 'closed'])
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+    }
 
   Future<List<JobCard>> getAllJobCardsFuture() async {
     try {

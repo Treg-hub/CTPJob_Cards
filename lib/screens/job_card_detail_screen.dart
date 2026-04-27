@@ -1743,6 +1743,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     required bool initiallyExpanded,
   }) {
     return ExpansionTile(
+      key: ValueKey(title), // Preserve state when collapsing/expanding
       initiallyExpanded: initiallyExpanded,
       title: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1750,6 +1751,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
           Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
           StreamBuilder<int>(
             stream: stream.map((jobs) => jobs.length),
+            initialData: 0, // Prevent loading state for count
             builder: (ctx, countSnap) {
               final count = countSnap.data ?? 0;
               return Container(
@@ -1771,9 +1773,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       children: [
         StreamBuilder<List<JobCard>>(
           stream: stream,
+          initialData: const [], // Prevent loading spinner on expand/collapse
           builder: (ctx, snap) {
             if (snap.hasError) {
-              return ListTile(title: Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red)));
+              final errorMessage = snap.error.toString();
+              if (errorMessage.contains('failed-precondition') && errorMessage.contains('index')) {
+                return ListTile(
+                  title: const Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
+                  leading: const Icon(Icons.warning, color: Colors.orange),
+                );
+              }
+              return ListTile(
+                title: const Text('Error Loading Related Jobs', style: TextStyle(color: Colors.red)),
+                subtitle: Text('Please try again later. ${snap.error}', style: const TextStyle(color: Colors.white70)),
+                leading: const Icon(Icons.error, color: Colors.red),
+              );
             }
             if (!snap.hasData) {
               return const ListTile(title: Center(child: CircularProgressIndicator()));
@@ -1802,7 +1817,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     return Column(
       children: [
         _buildSection(
-          title: 'Exact Related Jobs',
+          title: 'Exact Match',
           subtitle: 'Same department, area, machine, part & type (Monitor/Closed only)',
             stream: _firestoreService.getExactRelatedJobCardsStream(
               department: _currentJobCard.department,
@@ -1810,31 +1825,28 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               machine: _currentJobCard.machine,
               part: _currentJobCard.part,
               type: _currentJobCard.type.name,
-              jobCardNumber: _currentJobCard.jobCardNumber!,
-            ),
+            ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id).toList()),
           initiallyExpanded: true,
         ),
         _buildSection(
-          title: 'Similar Jobs (Excluding Part)',
-          subtitle: 'Same department, area, machine & type — any part',
-          stream: _firestoreService.getRelatedExcludingPartStream(
+          title: 'Same Part, Different Type',
+          subtitle: 'Same department, area, machine & part — different types (Monitor/Closed only)',
+          stream: _firestoreService.getExactAllTypesStream(
             department: _currentJobCard.department,
             area: _currentJobCard.area,
             machine: _currentJobCard.machine,
-            type: _currentJobCard.type.name,
-            jobCardNumber: _currentJobCard.jobCardNumber!,
-          ),
+            part: _currentJobCard.part,
+          ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id && job.type != _currentJobCard.type).toList()),
           initiallyExpanded: false,
         ),
         _buildSection(
-          title: 'Related Jobs (All Types)',
-          subtitle: 'Same department, area & machine — any type or part',
-          stream: _firestoreService.getRelatedAllTypesStream(
+          title: 'Same Machine, Different Part',
+          subtitle: 'Same department, area & machine — different parts, all types (Monitor/Closed only)',
+          stream: _firestoreService.getAllPartsStream(
             department: _currentJobCard.department,
             area: _currentJobCard.area,
             machine: _currentJobCard.machine,
-            jobCardNumber: _currentJobCard.jobCardNumber!,
-          ),
+          ).map((jobs) => jobs.where((job) => job.id != _currentJobCard.id && job.part != _currentJobCard.part).toList()),
           initiallyExpanded: false,
         ),
       ],
