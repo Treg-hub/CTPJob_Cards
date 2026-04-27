@@ -1674,7 +1674,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1683,96 +1683,96 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               children: [
                 if (job.jobCardNumber != null) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.blue.withValues(alpha: 204),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       'JC #${job.jobCardNumber}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                 ],
                 Expanded(
                   child: Text(
                     'Created by: ${job.operator.isEmpty ? 'Unknown' : job.operator}',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: Colors.white,
                     ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: _getStatusColor(job.status.name).withValues(alpha: 128),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     job.status.displayName,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 12),
 
             // Location
             Text(
               '${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part}',
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 13,
                 color: Colors.white70,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 8),
 
             // Description
             Text(
               job.description,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 14,
                 color: Colors.white,
-                height: 1.2,
+                height: 1.4,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 12),
 
             // All comments
             if (parsedComments.isNotEmpty) ...[
               const Text(
                 'Comments:',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               ...parsedComments.map((comment) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   comment,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: Colors.white70,
-                    height: 1.2,
+                    height: 1.3,
                   ),
                 ),
               )),
-              const SizedBox(height: 2),
+              const SizedBox(height: 8),
             ],
 
             // All notes
@@ -1780,38 +1780,38 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               const Text(
                 'Notes:',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               ...parsedNotes.map((note) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   note,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: Colors.white70,
-                    height: 1.2,
+                    height: 1.3,
                   ),
                 ),
               )),
             ],
 
             // View Details button (right-aligned)
-            const SizedBox(height: 2),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton.icon(
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
-                icon: const Icon(Icons.visibility, size: 14),
+                icon: const Icon(Icons.visibility, size: 16),
                 label: const Text('View Details'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF8C42),
                   foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -1926,17 +1926,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         mainAxisSize: MainAxisSize.min,
         children: [
           Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
-          StreamBuilder<List<JobCard>>(
-            stream: stream,
-            initialData: const [],
-            builder: (ctx, snap) {
-              final jobs = snap.data ?? [];
-              final filteredCount = title == 'Exact Match'
-                ? jobs.where((job) => job.id != _currentJobCard.id).length
-                : title == 'Same Part, Different Type'
-                ? jobs.where((job) => job.id != _currentJobCard.id && job.type != _currentJobCard.type).length
-                : jobs.where((job) => job.id != _currentJobCard.id && job.part != _currentJobCard.part).length;
-
+          StreamBuilder<int>(
+            stream: stream.map((jobs) => jobs.length),
+            initialData: 0, // Prevent loading state for count
+            builder: (ctx, countSnap) {
+              final count = countSnap.data ?? 0;
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -1944,7 +1938,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '$filteredCount',
+                  '$count',
                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               );
