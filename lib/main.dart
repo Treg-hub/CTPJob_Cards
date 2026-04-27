@@ -22,7 +22,9 @@ import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
 
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📩 BACKGROUND notification received - Level: ${message.data['notificationLevel']}');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final level = message.data['notificationLevel'] ?? 'normal';
@@ -31,12 +33,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   debugPrint('Background notification received with level: $level');
 
-  // Trigger urgent alert for full-loud notifications in background (if possible)
+  // Trigger urgent alert for full-loud notifications in background
   if (level == 'full-loud') {
     try {
-      // Extract job card number from title (format: "Job Assigned by [assigner] Job#[number]")
-      final jobNumberMatch = RegExp(r'Job#(\d+)').firstMatch(title);
-      final jobCardNumber = jobNumberMatch?.group(1) ?? 'Unknown';
+      final jobCardNumber = message.data['jobCardNumber']?.toString() ?? 'Unknown';
 
       await JobAlertService.triggerUrgentAlert(jobCardNumber, body);
       debugPrint('✅ Background urgent alert triggered for job #$jobCardNumber');

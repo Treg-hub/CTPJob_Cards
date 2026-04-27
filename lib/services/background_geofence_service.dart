@@ -50,8 +50,11 @@ class BackgroundGeofenceService {
 /// Entry point for background service
 @pragma('vm:entry-point')
 Future<bool> onStart(ServiceInstance service) async {
+  
   // Initialize Firebase for background
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  }
 
   DartPluginRegistrant.ensureInitialized();
 

@@ -81,6 +81,8 @@ class AlertForegroundService : Service() {
     }
 
     private fun checkAndScheduleAlert(jobCardNumber: String, description: String) {
+        Log.d("AlertForegroundService", "Scheduling full-screen alert for job #$jobCardNumber")
+        
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
