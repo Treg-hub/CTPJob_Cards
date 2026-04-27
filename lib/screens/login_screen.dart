@@ -88,7 +88,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Start automatic on-site detection (mobile only)
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          LocationService().startNativeMonitoring(clockNo);
+          try {
+            await LocationService().startNativeMonitoring(clockNo);
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to start location monitoring: $e')),
+              );
+            }
+          }
         } else if (kIsWeb) {
           debugPrint('📍 Geofencing skipped on web platform');
         }

@@ -6,7 +6,6 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -14,15 +13,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../firebase_options.dart';
-import '../../models/employee.dart';
 import 'firestore_service.dart';
-import 'package:flutter/services.dart';
 
 class BackgroundGeofenceService {
   // Company coordinates (duplicated from LocationService for self-containment)
   static const double COMPANY_LAT = -29.994938052011612;
   static const double COMPANY_LON = 30.939421740548614;
-  static const double RADIUS_METERS = 2000.0;
+  static const double RADIUS_METERS = 800.0; // Reduced from 2000m for better accuracy/reliability. Future: configurable via Firestore settings.
 
   static Future<void> initializeService() async {
     // Early return on web: flutter_background_service unsupported on web platform.
@@ -87,7 +84,7 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   return true;
 }
 
-/// Core logic: mirror LocationService.backgroundCheck()
+/// Core logic: Smarter 30min background check with conditional execution and bidirectional updates
 Future<void> _performGeofenceCheck() async {
   if (kIsWeb) return;
 
@@ -100,7 +97,21 @@ Future<void> _performGeofenceCheck() async {
     // Get employee
     final firestoreService = FirestoreService();
     final emp = await firestoreService.getEmployee(clockNo);
-    if (emp == null || !emp.isOnSite) return;
+    if (emp == null) return;
+
+    // Conditional execution: Check if was onSite recently OR last check >45min ago
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastCheckTime = prefs.getInt('lastCheckTime') ?? 0;
+    final lastOnSiteTime = prefs.getInt('lastOnSiteTime') ?? 0;
+    final timeSinceLastCheck = now - lastCheckTime;
+    final timeSinceLastOnSite = now - lastOnSiteTime;
+    final wasOnSiteRecently = timeSinceLastOnSite < const Duration(hours: 3).inMilliseconds;
+    final checkOld = timeSinceLastCheck > const Duration(minutes: 45).inMilliseconds;
+
+    if (!wasOnSiteRecently && !checkOld) {
+      debugPrint('Bg geofence: Skipping check - not onSite recently and checked recently');
+      return;
+    }
 
     // Check location permission briefly
     final permission = await Geolocator.checkPermission();
@@ -108,10 +119,10 @@ Future<void> _performGeofenceCheck() async {
       return;
     }
 
-    // Get position
+    // Get position (increased timeout to 15s for reliability)
     final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.medium,
-      timeLimit: const Duration(seconds: 10),
+      timeLimit: const Duration(seconds: 15),
     );
 
     // Calculate distance
@@ -124,11 +135,20 @@ Future<void> _performGeofenceCheck() async {
 
     final onSite = distance <= BackgroundGeofenceService.RADIUS_METERS;
 
-    // Update if off-site
-    if (!onSite) {
-      final updatedEmp = emp.copyWith(isOnSite: false);
+    // Bidirectional update: Set true if onSite, false if offSite (regardless of current state)
+    if (onSite != emp.isOnSite) {
+      final updatedEmp = emp.copyWith(isOnSite: onSite);
       await firestoreService.updateEmployee(updatedEmp);
+      if (onSite) {
+        prefs.setInt('lastOnSiteTime', now);
+      }
+      debugPrint('Bg geofence: Updated isOnSite to $onSite (distance: ${distance.toStringAsFixed(1)}m)');
+    } else {
+      debugPrint('Bg geofence: No change needed (distance: ${distance.toStringAsFixed(1)}m, onSite: $onSite)');
     }
+
+    // Update last check time
+    prefs.setInt('lastCheckTime', now);
   } catch (e) {
     debugPrint('Background geofence check failed: $e');
   }

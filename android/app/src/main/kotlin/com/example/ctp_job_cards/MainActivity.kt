@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
@@ -82,9 +83,11 @@ class MainActivity : FlutterActivity() {
 
         geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
             addOnSuccessListener {
+                Log.d("MainActivity", "Geofence added successfully for clockNo=$clockNo")
                 result.success("Geofence started")
             }
             addOnFailureListener { e ->
+                Log.e("MainActivity", "Geofence add failed: $e")
                 result.error("GEOFENCE_ERROR", "Failed to add geofence: ${e.message}", null)
             }
         }
@@ -93,9 +96,11 @@ class MainActivity : FlutterActivity() {
     private fun stopGeofence(result: MethodChannel.Result) {
         geofencingClient.removeGeofences(geofencePendingIntent).run {
             addOnSuccessListener {
+                Log.d("MainActivity", "Geofence removed successfully")
                 result.success("Geofence stopped")
             }
             addOnFailureListener { e ->
+                Log.e("MainActivity", "Geofence remove failed: $e")
                 result.error("GEOFENCE_ERROR", "Failed to remove geofence: ${e.message}", null)
             }
         }

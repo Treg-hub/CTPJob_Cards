@@ -17,12 +17,17 @@ class LocationService {
 
   static const double COMPANY_LAT = -29.994938052011612;
   static const double COMPANY_LON = 30.939421740548614;
-  static const double RADIUS_METERS = 2000.0;
+  static const double RADIUS_METERS = 800.0; // Reduced from 2000m for better accuracy/reliability. Future: configurable via Firestore settings.
 
   final MethodChannel _channel = const MethodChannel('ctp/geofence');
   String? _clockNo;
   final FirestoreService _firestoreService = FirestoreService();
   final NotificationService _notificationService = NotificationService();
+
+  Future<bool> _isDebugMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('debugGeofenceMode') ?? false;
+  }
 
   Future<void> startNativeMonitoring(String clockNo) async {
     if (kIsWeb) {
@@ -32,12 +37,18 @@ class LocationService {
     _clockNo = clockNo;
     await _requestPermissions();
     await _notificationService.initialize();
-    await _channel.invokeMethod('startGeofence', {
-      'clockNo': clockNo,
-      'lat': COMPANY_LAT,
-      'lng': COMPANY_LON,
-      'radius': RADIUS_METERS,
-    });
+    try {
+      await _channel.invokeMethod('startGeofence', {
+        'clockNo': clockNo,
+        'lat': COMPANY_LAT,
+        'lng': COMPANY_LON,
+        'radius': RADIUS_METERS,
+      });
+      if (await _isDebugMode()) debugPrint('Geofence: Native start successful for $clockNo');
+    } catch (e) {
+      debugPrint('Geofence: Native start failed: $e');
+      rethrow;
+    }
     await _checkFallback();
 
     debugPrint('Geofence started for $clockNo');
@@ -72,10 +83,10 @@ class LocationService {
         bool onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
         await _updateFirestore(onSite);
         await _sendNotification(onSite);
-        print('Fallback check: onSite=$onSite');
+        debugPrint('Fallback check: onSite=$onSite');
       }
     } catch (e) {
-      print('Fallback check failed: $e');
+      debugPrint('Fallback check failed: $e');
     }
   }
 
@@ -85,7 +96,7 @@ class LocationService {
         final entering = call.arguments['entering'] as bool;
         await _updateFirestore(entering);
         await _sendNotification(entering);
-        print('Geofence event: entering=$entering');
+        debugPrint('Geofence event: entering=$entering');
         break;
       default:
         throw MissingPluginException();
