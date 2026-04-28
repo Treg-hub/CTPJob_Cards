@@ -1,12 +1,15 @@
 package com.example.ctp_job_cards
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -47,7 +50,7 @@ class AlertForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Urgent Job Alerts"
             val descriptionText = "Channel for urgent job card notifications"
-            val importance = NotificationManager.IMPORTANCE_HIGH
+            val importance = NotificationManager.IMPORTANCE_MAX // MAX for full-screen intents
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 setSound(null, null) // No sound for this channel
@@ -55,6 +58,7 @@ class AlertForegroundService : Service() {
             }
             val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+            Log.d("AlertForegroundService", "✅ Notification channel created with IMPORTANCE_MAX")
         }
     }
 
@@ -85,9 +89,24 @@ class AlertForegroundService : Service() {
 
     private fun checkAndScheduleAlert(jobCardNumber: String, description: String) {
         Log.d("AlertForegroundService", "🚀 Starting to schedule alert for job #$jobCardNumber")
-        
+
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-        
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Check Full-Screen Intent permission (Android 14+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            if (!notificationManager.canUseFullScreenIntent()) {
+                Log.e("AlertForegroundService", "❌ Full-Screen Intent permission revoked! Redirecting to settings...")
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                intent.data = Uri.fromParts("package", packageName, null)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                stopSelf()
+                return
+            }
+            Log.d("AlertForegroundService", "✅ Full-Screen Intent permission granted")
+        }
+
         // Check exact alarm permission (Android 12+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (!alarmManager.canScheduleExactAlarms()) {
@@ -99,16 +118,26 @@ class AlertForegroundService : Service() {
         }
         
         val triggerTime = System.currentTimeMillis() + 2000
-        
+
         val intent = Intent(this, FullScreenJobAlertActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-        
+
+        // Create PendingIntent with ActivityOptions for Android 14+ background activity launch
+        val options = ActivityOptions.makeBasic()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            options.setPendingIntentBackgroundActivityStartMode(
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+            )
+            Log.d("AlertForegroundService", "✅ Background activity start mode set for Android 14+")
+        }
+
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            options.toBundle()
         )
         
         try {
