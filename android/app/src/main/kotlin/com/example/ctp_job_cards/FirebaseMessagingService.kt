@@ -13,8 +13,14 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
         val level = remoteMessage.data["notificationLevel"] ?: ""
         if (level == "full-loud") {
-            val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
-            val description = remoteMessage.data["body"] ?: remoteMessage.data["description"] ?: "Urgent job alert"
+            val jobCardNumber = remoteMessage.data["jobCardNumber"]
+                ?: remoteMessage.data["jobcardnumber"]
+                ?: remoteMessage.data["job_card_number"]
+                ?: "Unknown"
+            val description = remoteMessage.data["body"]
+                ?: remoteMessage.data["description"]
+                ?: remoteMessage.data["message"]
+                ?: "Urgent job alert"
 
             Log.d("FirebaseMessagingService", "🚨 BACKGROUND FULL-LOUD detected! Job: $jobCardNumber")
 

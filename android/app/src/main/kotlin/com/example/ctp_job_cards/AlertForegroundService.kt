@@ -82,7 +82,6 @@ class AlertForegroundService : Service() {
             .setContentText("Job #$jobCardNumber: $description")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
             .build()
     }

@@ -1,10 +1,13 @@
+import 'dart:async' show Timer;
 import 'dart:io' show Platform;
 import 'dart:typed_data' show Int64List;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:torch_light/torch_light.dart';
 import 'job_alert_service.dart';
 
 class NotificationService {
@@ -127,10 +130,15 @@ class NotificationService {
           enableVibration: true,
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-          vibrationPattern: Int64List.fromList([0, 500, 500, 500, 500, 500]),
+          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
           category: AndroidNotificationCategory.call,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
+          color: const Color(0xFFFF0000),
+          ledColor: const Color(0xFFFF0000),
+          ledOnMs: 500,
+          ledOffMs: 500,
+          styleInformation: BigTextStyleInformation(body),
         );
         break;
 
@@ -178,19 +186,8 @@ class NotificationService {
     // Show local notification for all levels
     _showLocalNotification(title: title, body: body, level: level);
 
-    // Trigger native full-screen urgent alert for Priority 5 jobs (full-loud level)
-    if (level == 'full-loud') {
-      debugPrint('🔥 FULL-LOUD detected! Calling native service...');   // ← ADD THIS LINE
-      try {
-        await JobAlertService.triggerUrgentAlert(
-          message.data['jobCardNumber']?.toString() ?? 'N/A',
-          message.data['body'] ?? message.data['description'] ?? 'Urgent job assigned',
-        );
-        debugPrint('✅ Urgent alert triggered for job #${message.data['jobCardNumber'] ?? 'N/A'}');
-      } catch (e) {
-        debugPrint('❌ Error triggering urgent alert: $e');
-      }
-    }
+    // Reliable heads-up notification fallback for Android 14/16+ / Honor/Samsung (abandoned unreliable full-screen Activity approach)
+    // Torch flash not implemented due to plugin API issue (TorchLight.flash not recognized)
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {
