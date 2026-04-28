@@ -10,7 +10,6 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import androidx.core.app.AudioAttributesCompat
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -54,13 +53,11 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         var fullScreen: Boolean = false
         var notificationId: Int = 1000
         var autoCancel: Boolean = true
-        var audioAttributes: AudioAttributesCompat? = null
-
         when (level) {
             "full-loud" -> {
                 channelId = "full_channel"
                 priority = NotificationCompat.PRIORITY_MAX
-                soundUri = Uri.parse("android.resource://${packageName}/raw/escalation_alert")
+                soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 vibration = longArrayOf(0, 1000, 500, 1000, 500, 1000)
                 lights = Color.RED
                 category = NotificationCompat.CATEGORY_CALL
@@ -68,10 +65,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 fullScreen = true
                 notificationId = 1001
                 autoCancel = false
-                audioAttributes = AudioAttributesCompat.Builder()
-                    .setUsage(AudioAttributesCompat.USAGE_ALARM)
-                    .setContentType(AudioAttributesCompat.CONTENT_TYPE_SONIFICATION)
-                    .build()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     val channel = NotificationChannel(
                         channelId,
@@ -88,9 +81,9 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 }
             }
             "medium-high" -> {
-                channelId = "medium_high_channel"
+                channelId = "medium_channel"
                 priority = NotificationCompat.PRIORITY_HIGH
-                soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                soundUri = Uri.parse("android.resource://${packageName}/raw/escalation_alert")
                 vibration = longArrayOf(0, 500, 200, 500)
                 lights = Color.YELLOW
                 color = Color.YELLOW
@@ -149,13 +142,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .setColor(color)
             .setLights(lights, 500, 500)
             .setVibrate(vibration)
+            .setSound(soundUri)
             .setAutoCancel(autoCancel)
-
-        if (audioAttributes != null) {
-            builder.setSound(soundUri, audioAttributes)
-        } else {
-            builder.setSound(soundUri)
-        }
 
         if (category != null) {
             builder.setCategory(category)
