@@ -25,7 +25,10 @@ flutter build apk --target-platform android-arm64 --release
                 force_update → false (or true if critical)
     Click Publish changes
 
-
+#while debugging
+            flutter clean
+            flutter pub get
+            flutter run 
 
 # 1. Go to the functions folder
 cd functions

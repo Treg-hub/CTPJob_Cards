@@ -1,6 +1,7 @@
 package com.example.ctp_job_cards
 
 import android.Manifest
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -35,6 +36,9 @@ class MainActivity : FlutterActivity() {
         Log.d("FullScreenJobAlertActivity", "Job: ${intent.getStringExtra("jobCardNumber")}")
         super.onCreate(savedInstanceState)
 
+        // ✅ Create urgent notification channel early (IMPORTANT!)
+        createUrgentNotificationChannel()
+
         geofencingClient = LocationServices.getGeofencingClient(this)
 
         // Check Full-Screen Intent permission (Android 14+)
@@ -53,6 +57,26 @@ class MainActivity : FlutterActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.USE_FULL_SCREEN_INTENT) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.USE_FULL_SCREEN_INTENT), 1001)
             }
+        }
+    }
+
+    // ✅ NEW METHOD - Creates the urgent channel early
+    private fun createUrgentNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "urgent_alert_channel",
+                "Urgent Job Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "High priority alerts for Priority 5 jobs"
+                enableLights(true)
+                lightColor = android.graphics.Color.RED
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500)
+            }
+
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
