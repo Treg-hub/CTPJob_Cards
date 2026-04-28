@@ -63,12 +63,14 @@ class AlertForegroundService : Service() {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            Log.d("AlertForegroundService", "🚨 Alarm intent created for job #$jobCardNumber")
         }
 
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        Log.d("AlertForegroundService", "🚨 PendingIntent created")
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)

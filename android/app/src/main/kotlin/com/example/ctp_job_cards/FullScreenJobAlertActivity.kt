@@ -18,11 +18,11 @@ class FullScreenJobAlertActivity : Activity() {
         super.onCreate(savedInstanceState)
         Log.d("FullScreenJobAlertActivity", "🚀🚀🚀 FULL SCREEN ACTIVITY STARTED! Job: ${intent?.getStringExtra("jobCardNumber")}")
 
-
         // Modern way to show on lock screen + turn screen on (Android 8.1+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
+            Log.d("FullScreenJobAlertActivity", "✅ Set showWhenLocked and turnScreenOn")
         }
 
         // Full screen flags
@@ -33,9 +33,11 @@ class FullScreenJobAlertActivity : Activity() {
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
+        Log.d("FullScreenJobAlertActivity", "✅ Added window flags: ${window.attributes.flags}")
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_full_screen_alert)
+        Log.d("FullScreenJobAlertActivity", "✅ Content view set")
 
         // Get data from intent
         val jobCardNumber = intent?.getStringExtra("jobCardNumber") ?: "Unknown"
