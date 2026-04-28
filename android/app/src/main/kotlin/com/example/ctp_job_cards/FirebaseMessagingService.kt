@@ -14,12 +14,12 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
         // Check if this is a full-loud urgent notification
         val notificationLevel = remoteMessage.data["notificationLevel"]
-        val jobCardNumber = remoteMessage.data["jobCardNumber"]
-        val description = remoteMessage.data["body"] ?: remoteMessage.data["description"]
+        val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
+        val description = remoteMessage.data["body"] ?: remoteMessage.data["description"] ?: "Urgent job assigned"
 
         Log.d("FirebaseMessagingService", "📩 Level: $notificationLevel, Job: $jobCardNumber")
 
-        if (notificationLevel == "full-loud" && jobCardNumber != null && description != null) {
+        if (notificationLevel == "full-loud") {
             Log.d("FirebaseMessagingService", "🚨 BACKGROUND FULL-LOUD detected! Starting AlertForegroundService")
 
             // Start the AlertForegroundService directly (same as MainActivity)

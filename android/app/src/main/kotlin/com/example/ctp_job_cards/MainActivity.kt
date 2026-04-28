@@ -27,6 +27,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d("FullScreenJobAlertActivity", "🚀 FULL SCREEN ACTIVITY STARTED!")
+        Log.d("FullScreenJobAlertActivity", "Job: ${intent.getStringExtra("jobCardNumber")}")
         super.onCreate(savedInstanceState)
 
         geofencingClient = LocationServices.getGeofencingClient(this)

@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.core.view.WindowCompat
@@ -15,6 +16,8 @@ class FullScreenJobAlertActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("FullScreenJobAlertActivity", "🚀🚀🚀 FULL SCREEN ACTIVITY STARTED! Job: ${intent?.getStringExtra("jobCardNumber")}")
+
 
         // Modern way to show on lock screen + turn screen on (Android 8.1+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {

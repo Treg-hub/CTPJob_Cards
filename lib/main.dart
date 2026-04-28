@@ -33,16 +33,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   debugPrint('Background notification received with level: $level');
 
-  // Trigger urgent alert for full-loud notifications in background
+  // Background urgent alerts are now handled by native FirebaseMessagingService
+  // This avoids the MissingPluginException in background isolate
   if (level == 'full-loud') {
-    try {
-      final jobCardNumber = message.data['jobCardNumber']?.toString() ?? 'Unknown';
-
-      await JobAlertService.triggerUrgentAlert(jobCardNumber, body);
-      debugPrint('✅ Background urgent alert triggered for job #$jobCardNumber');
-    } catch (e) {
-      debugPrint('❌ Error triggering background urgent alert: $e');
-    }
+    final jobCardNumber = message.data['jobCardNumber']?.toString() ?? 'Unknown';
+    debugPrint('✅ Background full-loud detected - handled by native FirebaseMessagingService for job #$jobCardNumber');
+    // Native service handles urgent alert directly - no MethodChannel call needed
   }
 }
 

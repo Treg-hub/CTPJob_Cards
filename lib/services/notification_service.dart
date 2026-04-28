@@ -107,6 +107,7 @@ class NotificationService {
         androidDetails = AndroidNotificationDetails(
           'medium_channel',
           'Medium-High Job Notifications',
+          icon: '@mipmap/ic_launcher',
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
@@ -120,6 +121,7 @@ class NotificationService {
         androidDetails = AndroidNotificationDetails(
           'full_channel',
           'Full-Loud Job Notifications',
+          icon: '@mipmap/ic_launcher',
           importance: Importance.max,
           priority: Priority.max,
           enableVibration: true,
@@ -136,6 +138,7 @@ class NotificationService {
         androidDetails = AndroidNotificationDetails(
           'normal_channel',
           'Normal Job Notifications',
+          icon: '@mipmap/ic_launcher',
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
