@@ -9,6 +9,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         Log.d("FirebaseMessagingService", "📩 BACKGROUND FCM received")
+        Log.d("FirebaseMessagingService", "📊 Full data payload: ${remoteMessage.data}")
 
         val level = remoteMessage.data["notificationLevel"] ?: ""
         if (level == "full-loud") {
