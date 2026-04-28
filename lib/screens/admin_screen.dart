@@ -858,22 +858,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   void _exportTemplate() {
-    final csv = const ListToCsvConverter().convert([
+    final csvString = const CsvEncoder().convert([
       ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken'],
       ['', '', '', '', 'true', '']
     ]);
     if (kIsWeb) {
-      final blob = html.Blob([csv], 'text/csv');
+      final blob = html.Blob([csvString], 'text/csv');
       final url = html.Url.createObjectUrlFromBlob(blob);
       html.AnchorElement(href: url)..download = 'employees_template.csv'..click();
       html.Url.revokeObjectUrl(url);
     } else {
-      Share.share(csv, subject: 'Employees Template');
+      Share.share(csvString, subject: 'Employees Template');
     }
   }
 
   void _importCsv() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
     if (result != null) {
       final file = result.files.first;
       String csvString;
@@ -884,7 +884,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       } else {
         return;
       }
-      final csvTable = const CsvToListConverter().convert(csvString);
+      final csvTable = const CsvDecoder().convert(csvString);
       if (csvTable.isEmpty || csvTable[0].length < 6) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid CSV format: found ${csvTable.isEmpty ? 0 : csvTable[0].length} columns, expected at least 6')));
         return;

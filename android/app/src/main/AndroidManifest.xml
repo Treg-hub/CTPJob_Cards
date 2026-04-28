@@ -42,6 +42,9 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <meta-data android:name="com.baseflow.geolocator.initForegroundMode" android:value="true" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="urgent_alert_channel" />
 
         <receiver android:name=".GeofenceReceiver" android:exported="true">
             <intent-filter>

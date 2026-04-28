@@ -8,30 +8,20 @@ import com.google.firebase.messaging.RemoteMessage
 class FirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        super.onMessageReceived(remoteMessage)
-
         Log.d("FirebaseMessagingService", "📩 BACKGROUND FCM received")
 
-        // Check if this is a full-loud urgent notification
-        val notificationLevel = remoteMessage.data["notificationLevel"]
-        val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
-        val description = remoteMessage.data["body"] ?: remoteMessage.data["description"] ?: "Urgent job assigned"
+        val level = remoteMessage.data["notificationLevel"] ?: ""
+        if (level == "full-loud") {
+            val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
+            val description = remoteMessage.data["body"] ?: remoteMessage.data["description"] ?: "Urgent job alert"
 
-        Log.d("FirebaseMessagingService", "📩 Level: $notificationLevel, Job: $jobCardNumber")
+            Log.d("FirebaseMessagingService", "🚨 BACKGROUND FULL-LOUD detected! Job: $jobCardNumber")
 
-        if (notificationLevel == "full-loud") {
-            Log.d("FirebaseMessagingService", "🚨 BACKGROUND FULL-LOUD detected! Starting AlertForegroundService")
-
-            // Start the AlertForegroundService directly (same as MainActivity)
             val intent = Intent(this, AlertForegroundService::class.java).apply {
                 putExtra("jobCardNumber", jobCardNumber)
                 putExtra("description", description)
             }
             startForegroundService(intent)
-
-            Log.d("FirebaseMessagingService", "✅ AlertForegroundService started from background")
-        } else {
-            Log.d("FirebaseMessagingService", "📩 Normal notification - not urgent")
         }
     }
 

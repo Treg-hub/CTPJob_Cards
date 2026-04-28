@@ -1,11 +1,15 @@
 package com.example.ctp_job_cards
 
 import android.Manifest
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -32,6 +36,17 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
 
         geofencingClient = LocationServices.getGeofencingClient(this)
+
+        // Check Full-Screen Intent permission (Android 14+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!notificationManager.canUseFullScreenIntent()) {
+                Log.w("MainActivity", "Full-Screen Intent permission not granted - opening settings")
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                intent.data = Uri.fromParts("package", packageName, null)
+                startActivity(intent)
+            }
+        }
 
         // Request USE_FULL_SCREEN_INTENT permission for full-screen notifications (API 34+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

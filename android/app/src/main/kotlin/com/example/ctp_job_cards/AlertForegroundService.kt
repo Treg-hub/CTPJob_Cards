@@ -91,23 +91,7 @@ class AlertForegroundService : Service() {
         Log.d("AlertForegroundService", "🚀 Starting to schedule alert for job #$jobCardNumber")
 
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Check Full-Screen Intent permission (Android 14+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            if (!notificationManager.canUseFullScreenIntent()) {
-                Log.e("AlertForegroundService", "❌ Full-Screen Intent permission revoked! Redirecting to settings...")
-                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                intent.data = Uri.fromParts("package", packageName, null)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                stopSelf()
-                return
-            }
-            Log.d("AlertForegroundService", "✅ Full-Screen Intent permission granted")
-        }
-
-        // Check exact alarm permission (Android 12+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (!alarmManager.canScheduleExactAlarms()) {
                 Log.e("AlertForegroundService", "❌ Cannot schedule exact alarms - permission denied!")
@@ -116,41 +100,42 @@ class AlertForegroundService : Service() {
             }
             Log.d("AlertForegroundService", "✅ Exact alarm permission granted")
         }
-        
+
         val triggerTime = System.currentTimeMillis() + 2000
 
-        val intent = Intent(this, FullScreenJobAlertActivity::class.java).apply {
+        val fullScreenIntent = Intent(this, FullScreenJobAlertActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
 
-        // Create PendingIntent with ActivityOptions for Android 14+ background activity launch
         val options = ActivityOptions.makeBasic()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= 34) {
             options.setPendingIntentBackgroundActivityStartMode(
                 ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
             )
-            Log.d("AlertForegroundService", "✅ Background activity start mode set for Android 14+")
         }
 
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            this, 0, fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             options.toBundle()
         )
-        
+
+        val showIntent = PendingIntent.getActivity(
+            this, 1, fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-            Log.d("AlertForegroundService", "✅ Alarm scheduled successfully!")
+            val alarmInfo = AlarmManager.AlarmClockInfo(triggerTime, showIntent)
+            alarmManager.setAlarmClock(alarmInfo, fullScreenPendingIntent)
+            Log.d("AlertForegroundService", "✅ AlarmClock scheduled successfully!")
         } catch (e: Exception) {
             Log.e("AlertForegroundService", "❌ Failed to schedule alarm: ${e.message}")
         }
-        
-        // Stop service after 3 seconds
-        handler.postDelayed({
-            stopSelf()
-        }, 3000)
+
+        handler.postDelayed({ stopSelf() }, 3000)
     }
 
     override fun onBind(intent: Intent?): IBinder? {
