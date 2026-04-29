@@ -21,12 +21,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         Log.d("FirebaseMessagingService", "Data keys: ${remoteMessage.data.keys.joinToString()}")
 
         val level = remoteMessage.data["notificationLevel"] ?: ""
-
-        val jobCardNumber = remoteMessage.data["jobCardNumber"]
-            ?: remoteMessage.data["jobcardnumber"]
-            ?: remoteMessage.data["job_card_number"]
-            ?: "Unknown"
-
+        val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
         val priority = remoteMessage.data["priority"] ?: "1"
         val createdBy = remoteMessage.data["createdBy"] ?: "Unknown"
         val department = remoteMessage.data["department"] ?: ""
