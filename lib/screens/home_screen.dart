@@ -118,34 +118,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Future<void> _setupFirebaseMessaging() async {
-    try {
-      await _notificationService.initialize();
-      FirebaseMessaging.onMessage.listen((message) {
-        if (message.notification != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message.notification!.body ?? 'New notification'),
-              duration: const Duration(seconds: 5),
-              backgroundColor: const Color(0xFFFF8C42),
-            ),
-          );
-        }
-        if (message.data['jobId'] != null) {
-          setState(() => _pendingJobId = message.data['jobId']);
-        }
-      });
+  try {
+    await _notificationService.initialize();
 
-      FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        if (message.data['notificationType'] == 'assigned') {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
-        } else if (message.data['jobId'] != null) {
-          _handleJobDeepLink(message.data['jobId']);
-        }
-      });
-    } catch (e) {
-      debugPrint('❌ Error setting up Firebase Messaging: $e');
-    }
+    // NOTE: Removed the duplicate FirebaseMessaging.onMessage.listen() that was showing
+    // a SnackBar for every foreground notification. NotificationService now handles
+    // all foreground display (rich local notifications with proper channels, vibration,
+    // colors, BigText, and fullScreenIntent for priority 5).
+    //
+    // The onMessageOpenedApp listener below is kept for deep linking / navigation
+    // when the user taps a notification.
+
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (message.data['notificationType'] == 'assigned') {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
+      } else if (message.data['jobId'] != null) {
+        _handleJobDeepLink(message.data['jobId']);
+      }
+    });
+  } catch (e) {
+    debugPrint('❌ Error setting up Firebase Messaging: $e');
   }
+}
 
   Future<void> _loadOnSiteStatus() async {
     if (currentEmployee == null) return;

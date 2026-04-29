@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ==================== PERMISSIONS ==================== -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -14,13 +15,13 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:label="CTP Job Cards"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
+        <!-- ==================== MAIN ACTIVITY ==================== -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -39,6 +40,12 @@
             </intent-filter>
         </activity>
 
+        <!-- ==================== ALARM RECEIVER (NEW - v2) ==================== -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <!-- ==================== META DATA ==================== -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -47,12 +54,14 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="urgent_alert_channel" />
 
+        <!-- ==================== EXISTING RECEIVER ==================== -->
         <receiver android:name=".GeofenceReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.location.ACTION_GEOFENCE_TRIGGERED" />
             </intent-filter>
         </receiver>
 
+        <!-- ==================== SERVICES ==================== -->
         <service android:name=".AlertForegroundService" android:foregroundServiceType="specialUse" android:exported="false" />
 
         <service android:name=".FirebaseMessagingService" android:exported="false">
@@ -61,12 +70,14 @@
             </intent-filter>
         </service>
 
+        <!-- ==================== FULL SCREEN ALERT ACTIVITY ==================== -->
         <activity android:name=".FullScreenJobAlertActivity"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen" />
+
     </application>
 
     <queries>
