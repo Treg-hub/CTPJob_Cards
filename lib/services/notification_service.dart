@@ -116,7 +116,16 @@ class NotificationService {
           enableVibration: true,
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
+          vibrationPattern: Int64List.fromList([0, 800, 300, 800, 300, 800]),
+          ongoing: true,
+          visibility: NotificationVisibility.public,
+          category: AndroidNotificationCategory.message,
+          color: const Color(0xFFFFFF00),
+          ledColor: const Color(0xFFFFFF00),
+          ledOnMs: 500,
+          ledOffMs: 500,
+          onlyAlertOnce: false,
+          styleInformation: BigTextStyleInformation(body),
         );
         break;
 
@@ -130,14 +139,17 @@ class NotificationService {
           enableVibration: true,
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
-          category: AndroidNotificationCategory.call,
+          vibrationPattern: Int64List.fromList([0, 1500, 500, 1500, 500, 1500, 500, 1500]),
+          category: AndroidNotificationCategory.alarm,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
+          ongoing: true,
+          visibility: NotificationVisibility.public,
           color: const Color(0xFFFF0000),
           ledColor: const Color(0xFFFF0000),
           ledOnMs: 500,
           ledOffMs: 500,
+          onlyAlertOnce: false,
           styleInformation: BigTextStyleInformation(body),
         );
         break;
@@ -151,6 +163,14 @@ class NotificationService {
           priority: Priority.high,
           enableVibration: true,
           playSound: true,
+          vibrationPattern: Int64List.fromList([0, 250, 100, 250]),
+          visibility: NotificationVisibility.public,
+          category: AndroidNotificationCategory.message,
+          color: const Color(0xFF0000FF),
+          ledColor: const Color(0xFF0000FF),
+          ledOnMs: 500,
+          ledOffMs: 500,
+          styleInformation: BigTextStyleInformation(body),
         );
     }
 
