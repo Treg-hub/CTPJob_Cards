@@ -1,153 +1,283 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#CC000000"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="32dp">
+    android:background="#1A0000"
+    android:padding="16dp">
 
-    <!-- Job Number -->
-    <TextView
-        android:id="@+id/tvJobNumber"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="JOB #000"
-        android:textColor="#FFFFFF"
-        android:textSize="36sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="24dp" />
-
-    <!-- Info Container -->
+    <!-- Top Urgent Header with pulsing effect container -->
     <LinearLayout
+        android:id="@+id/headerContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="#1AFFFFFF"
-        android:padding="20dp"
-        android:layout_marginBottom="32dp"
-        android:gravity="center_horizontal">
+        android:background="#B71C1C"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
-        <!-- Location -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_mylocation"
-                android:tint="#FF8C42"
-                android:layout_marginEnd="12dp" />
-
-            <TextView
-                android:id="@+id/tvLocation"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Location: Factory Floor A"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp" />
-        </LinearLayout>
-
-        <!-- Created By -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_myplaces"
-                android:tint="#FF8C42"
-                android:layout_marginEnd="12dp" />
-
-            <TextView
-                android:id="@+id/tvCreatedBy"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Created by: John Doe"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp" />
-        </LinearLayout>
-
-        <!-- Description -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Description:"
-            android:textColor="#AAAAAA"
-            android:textSize="14sp"
-            android:layout_marginBottom="4dp" />
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="12dp"
+            android:src="@android:drawable/ic_dialog_alert"
+            android:tint="#FFEB3B" />
 
         <TextView
-            android:id="@+id/tvDescription"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Motor overheating on Press Line 3. Urgent attention required."
+            android:text="🚨 URGENT JOB ALERT"
             android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:lineSpacingExtra="4dp" />
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tvPriorityBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#FF5722"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:text="P5"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Spacer -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <!-- Buttons -->
+    <!-- Job Number Hero -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
         android:orientation="vertical"
-        android:gravity="center">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/headerContainer">
 
-        <!-- Assign Self -->
-        <Button
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="JOB"
+            android:textColor="#FFCDD2"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvJobNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="#0000"
+            android:textColor="#FFFFFF"
+            android:textSize="52sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvLevel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="#4CAF50"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:text="HIGH PRIORITY"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Details Card -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="#2D0000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/headerContainer"
+        app:layout_constraintBottom_toTopOf="@id/actionsContainer">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Location -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@android:drawable/ic_menu_mylocation"
+                    android:tint="#FF8C42" />
+
+                <TextView
+                    android:id="@+id/tvLocation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Location: Not specified"
+                    android:textColor="#E0E0E0"
+                    android:textSize="17sp" />
+            </LinearLayout>
+
+            <!-- Created By -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@android:drawable/ic_menu_myplaces"
+                    android:tint="#FF8C42" />
+
+                <TextView
+                    android:id="@+id/tvCreatedBy"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Created by: Unknown"
+                    android:textColor="#E0E0E0"
+                    android:textSize="17sp" />
+            </LinearLayout>
+
+            <!-- Due Date / Time -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@android:drawable/ic_menu_recent_history"
+                    android:tint="#FF8C42" />
+
+                <TextView
+                    android:id="@+id/tvDueInfo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Due: ASAP - No due date set"
+                    android:textColor="#E0E0E0"
+                    android:textSize="17sp" />
+            </LinearLayout>
+
+            <!-- Description Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="JOB DESCRIPTION"
+                android:textColor="#FFCDD2"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#1AFFFFFF"
+                android:lineSpacingExtra="6dp"
+                android:padding="14dp"
+                android:text="No description provided."
+                android:textColor="#FFFFFF"
+                android:textSize="18sp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Action Buttons Container -->
+    <LinearLayout
+        android:id="@+id/actionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Assign Self - Primary Action -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAssignSelf"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="64dp"
             android:layout_marginBottom="12dp"
-            android:backgroundTint="#4CAF50"
-            android:text="ASSIGN SELF"
+            android:backgroundTint="#2E7D32"
+            android:text="✅  ASSIGN TO ME"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:elevation="4dp" />
+            app:cornerRadius="12dp"
+            app:elevation="6dp" />
 
-        <!-- I'm Busy (Only shows during night/weekend hours) -->
-        <Button
+        <!-- I'm Busy -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnImBusy"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="56dp"
             android:layout_marginBottom="12dp"
-            android:backgroundTint="#FF9800"
-            android:text="I'M BUSY ON ANOTHER JOB"
+            android:backgroundTint="#E65100"
+            android:text="⏸️  I'M BUSY ON ANOTHER JOB"
             android:textColor="#FFFFFF"
-            android:textSize="18sp"
+            android:textSize="17sp"
             android:textStyle="bold"
-            android:elevation="4dp" />
+            app:cornerRadius="12dp"
+            app:elevation="4dp" />
 
         <!-- Dismiss -->
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDismiss"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:backgroundTint="#F44336"
-            android:text="DISMISS"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
+            android:layout_height="56dp"
+            android:text="✕  DISMISS ALERT"
+            android:textColor="#EF5350"
+            android:textSize="18sp"
             android:textStyle="bold"
-            android:elevation="4dp" />
-
+            app:cornerRadius="12dp"
+            app:strokeColor="#EF5350"
+            app:strokeWidth="2dp" />
     </LinearLayout>
 
-</LinearLayout>
+    <!-- Footer Note -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="This alarm will continue sounding until you take action"
+        android:textColor="#80FFFFFF"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
