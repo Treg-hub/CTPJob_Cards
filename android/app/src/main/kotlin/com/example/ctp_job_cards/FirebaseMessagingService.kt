@@ -16,19 +16,28 @@ import com.google.firebase.messaging.RemoteMessage
 class FirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        Log.d("FCM_DEBUG", "📩 FCM received - Level: ${remoteMessage.data["notificationLevel"]}")
+        Log.d("FCM_DEBUG", "═══════════════════════════════════════════════")
+        Log.d("FCM_DEBUG", "📩 FCM MESSAGE RECEIVED IN NATIVE SERVICE")
+        Log.d("FCM_DEBUG", "Level: ${remoteMessage.data["notificationLevel"]}")
+        Log.d("FCM_DEBUG", "Job #: ${remoteMessage.data["jobCardNumber"]}")
+        Log.d("FCM_DEBUG", "═══════════════════════════════════════════════")
 
         val level = remoteMessage.data["notificationLevel"] ?: "normal"
         val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
         val description = remoteMessage.data["description"] ?: remoteMessage.data["body"] ?: "Job update"
 
-        // Always show a notification as fallback
-        showNotification(level, "Job #$jobCardNumber", jobCardNumber, description)
-
-        // P4 and P5 → Always try full-screen alarm
-        if (level == "full-loud" || level == "medium-high") {
-            Log.d("FCM_DEBUG", "🚨 P4/P5 job #$jobCardNumber - Scheduling full-screen alarm")
+        if (level == "full-loud") {
+            // P5 → Full-screen only (no banner)
+            Log.d("FCM_DEBUG", "🚨 P5 job #$jobCardNumber - Full-screen only mode")
             scheduleFullScreenAlarm(jobCardNumber, description, level)
+        } else {
+            // P4 and lower → Show banner with buttons
+            showNotificationWithButtons(level, "Job #$jobCardNumber", jobCardNumber, description)
+            
+            if (level == "medium-high") {
+                Log.d("FCM_DEBUG", "🚨 P4 job #$jobCardNumber - Trying full-screen alarm")
+                scheduleFullScreenAlarm(jobCardNumber, description, level)
+            }
         }
     }
 
@@ -40,7 +49,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             return
         }
 
-        val triggerTime = System.currentTimeMillis() + 3000 // 3 second delay
+        val triggerTime = System.currentTimeMillis() + 3000
 
         val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
@@ -66,13 +75,13 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             val alarmInfo = AlarmManager.AlarmClockInfo(triggerTime, showIntent)
             alarmManager.setAlarmClock(alarmInfo, pendingIntent)
 
-            Log.d("FCM_DEBUG", "✅ Full-screen alarm scheduled for job #$jobCardNumber (Level: $level)")
+            Log.d("FCM_DEBUG", "✅ Full-screen alarm scheduled for job #$jobCardNumber")
         } catch (e: Exception) {
             Log.e("FCM_DEBUG", "❌ Failed to schedule alarm: ${e.message}")
         }
     }
 
-    private fun showNotification(level: String, title: String, jobCardNumber: String, description: String) {
+    private fun showNotificationWithButtons(level: String, title: String, jobCardNumber: String, description: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = if (level == "full-loud" || level == "medium-high") "urgent_alert_channel" else "normal_channel"
 
@@ -80,9 +89,9 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             val channel = NotificationChannel(
                 channelId,
                 if (level == "full-loud" || level == "medium-high") "Urgent Job Alerts" else "Normal Job Notifications",
-                if (level == "full-loud" || level == "medium-high") NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                this.description = "Job notifications"
+                this.description = "Job notifications with action buttons"
                 enableLights(true)
                 lightColor = if (level == "full-loud") Color.RED else Color.YELLOW
                 enableVibration(true)
@@ -90,12 +99,23 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val intent = Intent(this, MainActivity::class.java).apply {
+        // Intent for "View Job" button
+        val viewIntent = Intent(this, MainActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("action", "view_job")
         }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+        val viewPendingIntent = PendingIntent.getActivity(
+            this, 0, viewIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Intent for "Assign Self" button
+        val assignIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra("jobCardNumber", jobCardNumber)
+            putExtra("action", "assign_self")
+        }
+        val assignPendingIntent = PendingIntent.getActivity(
+            this, 1, assignIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -104,9 +124,11 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .setContentTitle(title)
             .setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle().bigText(description))
-            .setPriority(if (level == "full-loud" || level == "medium-high") NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(viewPendingIntent)
             .setAutoCancel(true)
+            .addAction(0, "Assign Self", assignPendingIntent)
+            .addAction(0, "View Job", viewPendingIntent)
 
         if (level == "full-loud") {
             builder.setColor(Color.RED)

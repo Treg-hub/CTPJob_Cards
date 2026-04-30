@@ -32,42 +32,135 @@ class _LoginScreenState extends State<LoginScreen> {
     // Existing auto-login logic
     if (currentEmployee != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        }
       });
     }
 
     // ==================== HANDLE NOTIFICATION ARGUMENTS ====================
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args == null) return;
 
-      if (args != null) {
-        final jobCardNumber = args['jobCardNumber'] as String?;
-        final action = args['action'] as String?;
+      final jobCardNumberStr = args['jobCardNumber'] as String?;
+      final action = args['action'] as String?;
 
-        if (jobCardNumber != null) {
-          try {
-            final jobCardDoc = await FirebaseFirestore.instance.collection('job_cards').doc(jobCardNumber).get();
-            if (jobCardDoc.exists && mounted) {
-              final jobCard = JobCard.fromFirestore(jobCardDoc);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => JobCardDetailScreen(jobCard: jobCard),
-                ),
-              );
-            }
-          } catch (e) {
-            debugPrint('Error fetching job card: $e');
-          }
+      if (jobCardNumberStr == null) return;
 
-          if (action == 'assign_self') {
-            debugPrint('Auto-assign triggered for job #$jobCardNumber');
-            // TODO: Add your auto-assign logic here later
-          }
+      try {
+        // Query job card by jobCardNumber field (not document ID)
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('job_cards')
+            .where('jobCardNumber', isEqualTo: int.tryParse(jobCardNumberStr) ?? 0)
+            .limit(1)
+            .get();
+
+        if (querySnapshot.docs.isEmpty || !mounted) {
+          debugPrint('Job card not found: $jobCardNumberStr');
+          return;
+        }
+
+        final jobCardDoc = querySnapshot.docs.first;
+        final jobCard = JobCard.fromFirestore(jobCardDoc);
+
+        if (action == 'assign_self') {
+          // === AUTO ASSIGN + NAVIGATE ===
+          await _autoAssignAndNavigate(jobCard);
+        } else {
+          // Just navigate to Job Card Detail
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => JobCardDetailScreen(jobCard: jobCard),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error handling notification argument: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading job: $e')),
+          );
         }
       }
     });
+  }
+
+  // ==================== AUTO ASSIGN HELPER ====================
+  Future<void> _autoAssignAndNavigate(JobCard jobCard) async {
+    try {
+      final currentUser = currentEmployee;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please log in first')),
+          );
+        }
+        return;
+      }
+
+      // Get current assigned lists (safe handling)
+      final assignedClockNos = List<String>.from(jobCard.assignedClockNos ?? []);
+      final assignedNames = List<String>.from(jobCard.assignedNames ?? []);
+
+      // Check if user is already assigned
+      if (assignedClockNos.contains(currentUser.clockNo)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('You are already assigned to Job #${jobCard.jobCardNumber}')),
+          );
+        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => JobCardDetailScreen(jobCard: jobCard),
+          ),
+        );
+        return;
+      }
+
+      // === AUTO ASSIGN ===
+      assignedClockNos.add(currentUser.clockNo);
+      assignedNames.add(currentUser.name);
+
+      await FirebaseFirestore.instance
+          .collection('job_cards')
+          .doc(jobCard.id)
+          .update({
+        'assignedClockNos': assignedClockNos,
+        'assignedNames': assignedNames,
+        'assignedAt': FieldValue.serverTimestamp(),
+        'status': 'in_progress',
+      });
+
+      debugPrint('✅ Auto-assigned ${currentUser.name} (${currentUser.clockNo}) to job #${jobCard.jobCardNumber}');
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => JobCardDetailScreen(jobCard: jobCard),
+          ),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Assigned to Job #${jobCard.jobCardNumber}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Auto-assign failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to assign: $e')),
+        );
+      }
+    }
   }
 
   Future _login() async {

@@ -79,16 +79,10 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
       notificationLevel: level,
       title,
       body,
+      chanelId: isFullLoud ? "full_loud_channel" : "normal_channel",
     },
     android: {
-      priority: "high",
-      ...(isFullLoud && {
-        notification: {
-          channelId: "full_channel",
-          priority: "max",
-          visibility: "public",
-        },
-      }),
+      priority: "high"
     },
   };
 
@@ -116,6 +110,7 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
   const assigneeName = innerData.assigneeName;
   const priority = innerData.priority || 1;
   const level = getNotificationLevel(priority);
+  const isFullLoud = level === "full-loud";
 
   if (!recipientToken || !recipientToken.trim()) {
     throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
@@ -133,13 +128,26 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
     body = `Update from ${assigneeName}\nLocation: ${area}\nDescription: ${description}`;
   }
 
+  const messagePayload = {
+    token: recipientToken,
+    data: {
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+      jobId: jobCardId,
+      notificationType: notificationType,
+      notificationLevel: level,
+      title,
+      body,
+    },
+    android: { priority: "high" },
+  };
+
+  // Only add notification payload for non-P5 jobs
+  if (!isFullLoud) {
+    messagePayload.notification = { title, body };
+  }
+
   try {
-    const response = await messaging.send({
-      token: recipientToken,
-      notification: { title, body },
-      data: { click_action: "FLUTTER_NOTIFICATION_CLICK", jobId: jobCardId, notificationType: notificationType, notificationLevel: level },
-      android: { priority: "high" },
-    });
+    const response = await messaging.send(messagePayload);
     console.log("✅ Creator notification sent successfully");
     return { success: true, messageId: response };
   } catch (error) {
@@ -219,33 +227,37 @@ async function getWorkshopManager() {
 
 async function sendNotification(token, title, body, jobCardNumber, level, priority, createdBy, department, area, location, part) {
   if (!token) return;
+
+  const isFullLoud = level === "full-loud";
+
+  const messagePayload = {
+    token,
+    data: {
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+      jobCardNumber: jobCardNumber.toString(),
+      notificationLevel: level,
+      priority: priority.toString(),
+      createdBy: createdBy || "Unknown",
+      department: department || "",
+      area: area || "",
+      location: location || "",
+      part: part || "",
+      title,
+      body,
+    },
+    android: {
+      priority: "high",
+    },
+  };
+
+  if (!isFullLoud) {
+    messagePayload.notification = { title, body };
+  }
+
   try {
-    await messaging.send({
-      token,
-      notification: {
-        title: title,
-        body: body,
-      },
-      data: {
-        click_action: "FLUTTER_NOTIFICATION_CLICK",
-        jobCardNumber: jobCardNumber.toString(),
-        notificationLevel: level,
-        priority: priority.toString(),
-        createdBy: createdBy || "Unknown",
-        department: department || "",
-        area: area || "",
-        location: location || "",
-        part: part || "",
-      },
-      android: {
-        priority: "high",
-      },
-    });
+    await messaging.send(messagePayload);
   } catch (e) {
     console.error("FCM send error for token:", token, e);
-    if (e.code === 'messaging/invalid-registration-token') {
-      console.error(`Invalid token ${token}: ${e.message}`);
-    }
   }
 }
 

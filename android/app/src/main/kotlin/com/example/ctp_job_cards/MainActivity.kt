@@ -36,9 +36,11 @@ class MainActivity : FlutterActivity() {
         Log.d("FullScreenJobAlertActivity", "Job: ${intent.getStringExtra("jobCardNumber")}")
         super.onCreate(savedInstanceState)
 
+        handleDeepLink(intent)
+        
         // ✅ Create urgent notification channel early (IMPORTANT!)
         createUrgentNotificationChannel()
-
+        
         geofencingClient = LocationServices.getGeofencingClient(this)
 
         // Check Full-Screen Intent permission (Android 14+)
@@ -57,6 +59,23 @@ class MainActivity : FlutterActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.USE_FULL_SCREEN_INTENT) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.USE_FULL_SCREEN_INTENT), 1001)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val jobCardNumber = intent?.getStringExtra("jobCardNumber")
+        val action = intent?.getStringExtra("action")
+
+        if (jobCardNumber != null) {
+            Log.d("MainActivity", "🔗 Deep link received - Job: $jobCardNumber, Action: $action")
+            
+            // The LoginScreen will pick this up via ModalRoute arguments
+            // If you want to send it to Flutter, you can use a MethodChannel here
         }
     }
 

@@ -65,9 +65,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     private fun setupUI() {
         val tvJobNumber = findViewById<TextView>(R.id.tvJobNumber)
         val tvDescription = findViewById<TextView>(R.id.tvDescription)
-
         val btnAssignSelf = findViewById<Button>(R.id.btnAssignSelf)
-        val btnViewJob = findViewById<Button>(R.id.btnViewJob)
         val btnImBusy = findViewById<Button>(R.id.btnImBusy)
         val btnDismiss = findViewById<Button>(R.id.btnDismiss)
 
@@ -80,18 +78,6 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             val intent = Intent(this, MainActivity::class.java).apply {
                 putExtra("jobCardNumber", jobCardNumber)
                 putExtra("action", "assign_self")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
-            startActivity(intent)
-            finish()
-        }
-
-        // === VIEW JOB ===
-        btnViewJob.setOnClickListener {
-            stopAlarm()
-            val intent = Intent(this, MainActivity::class.java).apply {
-                putExtra("jobCardNumber", jobCardNumber)
-                putExtra("action", "view_job")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             startActivity(intent)
@@ -156,9 +142,8 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             .addOnSuccessListener { documents ->
                 if (!documents.isEmpty) {
                     val job = documents.documents[0]
-                    val assignedTo = job.get("assignedTo") as? String
                     val assignedClockNos = job.get("assignedClockNos") as? List<*>
-                    val isAssigned = !assignedTo.isNullOrEmpty() || (assignedClockNos?.isNotEmpty() == true)
+                    val isAssigned = assignedClockNos?.isNotEmpty() == true
                     callback(isAssigned)
                 } else {
                     callback(false)
@@ -175,7 +160,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             "jobCardNumber" to jobCardNumber,
             "dismissedAt" to com.google.firebase.Timestamp.now(),
             "level" to level,
-            "dismissedBy" to "unknown" // TODO: Replace with actual user clock number
+            "dismissedBy" to "unknown" // TODO: Get current user clock number from SharedPreferences
         )
         db.collection("dismissedAlerts").add(dismissal)
         Log.d("FullScreenJobAlert", "📝 Dismissal logged for job #$jobCardNumber")

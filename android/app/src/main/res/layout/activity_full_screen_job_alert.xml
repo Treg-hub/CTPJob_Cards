@@ -5,7 +5,7 @@
     android:background="#CC000000"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="24dp">
+    android:padding="32dp">
 
     <!-- Job Number -->
     <TextView
@@ -14,19 +14,88 @@
         android:layout_height="wrap_content"
         android:text="JOB #000"
         android:textColor="#FFFFFF"
-        android:textSize="28sp"
-        android:textStyle="bold" />
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
 
-    <!-- Description -->
-    <TextView
-        android:id="@+id/tvDescription"
+    <!-- Info Container -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center"
-        android:text="Job description here..."
-        android:textColor="#FFFFFF"
-        android:textSize="18sp" />
+        android:orientation="vertical"
+        android:background="#1AFFFFFF"
+        android:padding="20dp"
+        android:layout_marginBottom="32dp"
+        android:gravity="center_horizontal">
+
+        <!-- Location -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_mylocation"
+                android:tint="#FF8C42"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/tvLocation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Location: Factory Floor A"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <!-- Created By -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_myplaces"
+                android:tint="#FF8C42"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/tvCreatedBy"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Created by: John Doe"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <!-- Description -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Description:"
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Motor overheating on Press Line 3. Urgent attention required."
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:lineSpacingExtra="4dp" />
+    </LinearLayout>
 
     <!-- Spacer -->
     <View
@@ -45,44 +114,39 @@
         <Button
             android:id="@+id/btnAssignSelf"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="60dp"
             android:layout_marginBottom="12dp"
             android:backgroundTint="#4CAF50"
             android:text="ASSIGN SELF"
             android:textColor="#FFFFFF"
-            android:textSize="18sp" />
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:elevation="4dp" />
 
-        <!-- View Job -->
-        <Button
-            android:id="@+id/btnViewJob"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:backgroundTint="#2196F3"
-            android:text="VIEW JOB"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp" />
-
-        <!-- I'm Busy -->
+        <!-- I'm Busy (Only shows during night/weekend hours) -->
         <Button
             android:id="@+id/btnImBusy"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="60dp"
             android:layout_marginBottom="12dp"
             android:backgroundTint="#FF9800"
             android:text="I'M BUSY ON ANOTHER JOB"
             android:textColor="#FFFFFF"
-            android:textSize="16sp" />
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:elevation="4dp" />
 
         <!-- Dismiss -->
         <Button
             android:id="@+id/btnDismiss"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="60dp"
             android:backgroundTint="#F44336"
             android:text="DISMISS"
             android:textColor="#FFFFFF"
-            android:textSize="18sp" />
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:elevation="4dp" />
 
     </LinearLayout>
 
