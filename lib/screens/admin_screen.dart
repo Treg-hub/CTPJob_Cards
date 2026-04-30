@@ -1271,9 +1271,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               final jobCards = snapshot.data ?? _allJobCards;
               _allJobCards = jobCards;
               _filterJobCards();
+
               return PaginatedDataTable(
                 header: const Text('Job Cards'),
-                rowsPerPage: 50,
+                rowsPerPage: 10,
                 columns: const [
                   DataColumn(label: Text('Select')),
                   DataColumn(label: Text('Job #')),

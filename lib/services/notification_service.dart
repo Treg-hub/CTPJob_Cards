@@ -241,12 +241,12 @@ class NotificationService {
     if ((level == 'full-loud' || priority == '5') && !_isAppInForeground) {
       try {
         await JobAlertService.triggerUrgentAlert(
-          jobCardNumber,
-          body,
-          location ?? 'Not specified',
-          createdBy ?? 'Manager',
-          priority ?? '5',
-          dueDate ?? 'ASAP',
+          jobCardNumber: jobCardNumber,
+          description: body,
+          location: location,           // department > area > location > part
+          createdBy: createdBy,
+          priority: priority,
+          dueDate: dueDate,
         );
         debugPrint('🚨 Full-screen urgent alert triggered (background)');
       } catch (e) {
