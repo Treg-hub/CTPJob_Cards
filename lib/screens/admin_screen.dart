@@ -349,26 +349,27 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   decoration: const InputDecoration(labelText: 'Department name'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    if (deptController.text.isEmpty) return;
-                    try {
-                      _structure[deptController.text] = {};
-                      await _firestoreService.updateFactoryStructure(_structure);
-                      deptController.clear();
-                      setState(() {});
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Department added')),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error adding department: $e'), backgroundColor: Colors.red),
-                        );
-                      }
-                    }
-                  },
+                          onPressed: () async {
+                            if (!mounted) return;
+                            try {
+                              final structure = await _firestoreService.getFactoryStructure();
+                              (structure[selectedDeptForArea] as Map<String, dynamic>)[areaController.text] = [];
+                              await _firestoreService.updateFactoryStructure(structure);
+                              areaController.clear();
+                              _loadStructure();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Area added')),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error adding area: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
                   child: const Text('Add Department'),
                 ),
                 const Divider(height: 20),

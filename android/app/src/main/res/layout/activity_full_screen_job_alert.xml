@@ -2,20 +2,10 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#B71C1C"
+    android:background="#CC000000"
+    android:gravity="center"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center">
-
-    <!-- Urgent Header -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🚨 URGENT JOB ALERT"
-        android:textColor="#FFFFFF"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
+    android:padding="24dp">
 
     <!-- Job Number -->
     <TextView
@@ -23,27 +13,26 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="JOB #000"
-        android:textColor="#FFEB3B"
-        android:textSize="48sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="24dp" />
+        android:textColor="#FFFFFF"
+        android:textSize="28sp"
+        android:textStyle="bold" />
 
     <!-- Description -->
-    <ScrollView
+    <TextView
+        android:id="@+id/tvDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Job description here..."
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
+
+    <!-- Spacer -->
+    <View
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginBottom="32dp">
-
-        <TextView
-            android:id="@+id/tvDescription"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp"
-            android:lineSpacingExtra="6dp"
-            android:gravity="center" />
-    </ScrollView>
+        android:layout_weight="1" />
 
     <!-- Buttons -->
     <LinearLayout
@@ -52,25 +41,49 @@
         android:orientation="vertical"
         android:gravity="center">
 
+        <!-- Assign Self -->
         <Button
-            android:id="@+id/btnAcknowledge"
+            android:id="@+id/btnAssignSelf"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:text="ACKNOWLEDGE &amp; OPEN APP"
-            android:textSize="20sp"
-            android:textStyle="bold"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
             android:backgroundTint="#4CAF50"
+            android:text="ASSIGN SELF"
             android:textColor="#FFFFFF"
-            android:layout_marginBottom="16dp" />
+            android:textSize="18sp" />
 
+        <!-- View Job -->
+        <Button
+            android:id="@+id/btnViewJob"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#2196F3"
+            android:text="VIEW JOB"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <!-- I'm Busy -->
+        <Button
+            android:id="@+id/btnImBusy"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#FF9800"
+            android:text="I'M BUSY ON ANOTHER JOB"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+
+        <!-- Dismiss -->
         <Button
             android:id="@+id/btnDismiss"
             android:layout_width="match_parent"
-            android:layout_height="64dp"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#F44336"
             android:text="DISMISS"
-            android:textSize="18sp"
-            android:backgroundTint="#757575"
-            android:textColor="#FFFFFF" />
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
     </LinearLayout>
 
 </LinearLayout>

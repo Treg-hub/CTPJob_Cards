@@ -62,6 +62,7 @@ Firebase Project
 - **Theme Switching**: Dynamic light/dark mode toggle in settings, persisted via SharedPreferences, with orange primary maintained across themes
 - **Copper-themed UI**: Amber/orange colors for copper inventory module
 - **Password Authentication**: Modal password dialog for sensitive copper operations
+- **Global Navigator Deep-Links**: Notification actions use global navigatorKey for direct navigation to job screens with payload data
 
 ## Design Patterns
 
@@ -126,6 +127,7 @@ Notifications  Push Updates       UI State Updates
 5. **Client Handling**: Dart switches on level for channel/sound/vib/fullscreen/alarm usage
 6. **Send Operation**: Async FCM with error handling
 7. **Logging**: Debug prints for tracking
+8. **Full-Screen Display (P5 only)**: For full-loud, Android FullScreenJobAlertActivity shows lock-screen alert with alarm sound, vibration, and action buttons (Assign Self/View Job/I'm Busy/Dismiss)
 
 ### Comment System
 1. **Dialog Display**: Bottom sheet with reoccurrence counter

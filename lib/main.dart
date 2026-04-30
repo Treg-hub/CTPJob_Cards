@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kDebugMode, FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,24 +23,30 @@ import 'theme/app_theme.dart';
 
 Employee? currentEmployee;
 
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('📩 BACKGROUND notification received - Level: ${message.data['notificationLevel']}');
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+// ==================== GLOBAL NAVIGATOR KEY ====================
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  final level = message.data['notificationLevel'] ?? 'normal';
-  final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
-  final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
+// ==================== NOTIFICATION ACTION HANDLER ====================
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
-  debugPrint('Background notification received with level: $level');
+Future<void> _handleNotificationAction(NotificationResponse response) async {
+  final String? payload = response.payload;
+  final String? actionId = response.actionId;
 
-  // Background urgent alerts are now handled by native FirebaseMessagingService
-  // This avoids the MissingPluginException in background isolate
-  if (level == 'full-loud') {
-    final jobCardNumber = message.data['jobCardNumber']?.toString() ?? 'Unknown';
-    debugPrint('✅ Background full-loud detected - handled by native FirebaseMessagingService for job #$jobCardNumber');
-    // Native service handles urgent alert directly - no MethodChannel call needed
-  }
+  if (payload == null) return;
+
+  final jobCardNumber = payload;
+
+  // Navigate using global navigator key
+  navigatorKey.currentState?.pushNamedAndRemoveUntil(
+    '/',
+    (route) => false,
+    arguments: {
+      'jobCardNumber': jobCardNumber,
+      'action': actionId ?? 'view_job',
+    },
+  );
 }
 
 void main() async {
@@ -48,11 +55,12 @@ void main() async {
 
   Hive.registerAdapter(SyncQueueItemAdapter());
 
-   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-   // Initialize background geofence service only on mobile (Android/iOS), as flutter_background_service does not support web.
-   if (!kIsWeb) {
-     await BackgroundGeofenceService.initializeService();
-   }
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize background geofence service only on mobile (Android/iOS)
+  if (!kIsWeb) {
+    await BackgroundGeofenceService.initializeService();
+  }
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {
@@ -62,9 +70,13 @@ void main() async {
 
   FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
 
-  if (!kIsWeb) {
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  }
+  // ==================== INITIALIZE LOCAL NOTIFICATIONS ====================
+  await flutterLocalNotificationsPlugin.initialize(
+    settings: InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ),
+    onDidReceiveNotificationResponse: _handleNotificationAction,
+  );
 
   final firestoreService = FirestoreService();
   await firestoreService.initializeSettings();
@@ -95,7 +107,6 @@ class CtpJobCardsApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeNotifierProvider);
 
-    // Check for app updates on app startup (mobile only)
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         try {
@@ -107,6 +118,7 @@ class CtpJobCardsApp extends ConsumerWidget {
     }
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'CTP Job Cards',
       themeMode: themeMode,
       theme: ThemeData(

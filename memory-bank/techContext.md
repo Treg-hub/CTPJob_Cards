@@ -36,21 +36,22 @@ dependencies:
   shared_preferences: ^2.3.0
   fl_chart: ^1.2.0
   pdf: ^3.11.1
-  share_plus: ^10.1.4
+  share_plus: ^12.0.2
   path_provider: ^2.1.4
   cached_network_image: ^3.4.1
   pull_to_refresh_flutter3: ^2.0.2
   flutter_staggered_animations: ^1.1.1
   flutter_local_notifications: ^21.0.0
-  permission_handler: ^11.3.1
-  geolocator: ^12.0.0
-  android_intent_plus: ^5.1.0
+  permission_handler: ^12.0.1
+  geolocator: ^14.0.2
+  flutter_background_service: ^5.0.0
+  android_intent_plus: ^6.0.0
   build_runner: ^2.4.13
   hive_generator: ^2.0.1
 
   # Admin bulk operations
-  file_picker: ^9.0.0
-  csv: ^6.0.0
+  file_picker: ^11.0.2
+  csv: ^8.0.0
 
   # Photo upload
   image_picker: ^1.1.2
@@ -58,11 +59,12 @@ dependencies:
   uuid: ^4.5.3
   intl: ^0.20.2
   url_launcher: ^6.3.0
-  package_info_plus: ^8.0.0
+  package_info_plus: ^9.0.1
+  torch_light: ^1.1.0
 
 dev_dependencies:
   flutter_test: SDK
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
   flutter_lints: ^6.0.0
 ```
 
@@ -122,6 +124,8 @@ dev_dependencies:
 - **cached_network_image**: Efficient photo loading and caching
 - **uuid**: Unique identifier generation for photo paths
 - **geolocator**: Location permissions and last known position for geofencing fallback
+- **flutter_background_service**: Background processing for notifications and geofencing
+- **torch_light**: Flashlight alerts for critical notifications (planned feature)
 - **intl**: Date/time formatting and localization
 
 ### Code Patterns

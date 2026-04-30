@@ -130,6 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // when the user taps a notification.
 
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (!mounted) return;
       if (message.data['notificationType'] == 'assigned') {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
       } else if (message.data['jobId'] != null) {
@@ -1077,28 +1078,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             child: ListTile(
               leading: const Icon(Icons.refresh, color: Colors.blueGrey),
               title: const Text('Refresh FCM Token'),
-              onTap: () async {
-                try {
-                  await _notificationService.refreshToken();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ FCM Token refreshed successfully!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Error refreshing token: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+            onTap: () async {
+              if (!mounted) return;
+              try {
+                await _notificationService.refreshToken();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ FCM Token refreshed successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
                 }
-              },
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error refreshing token: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
             ),
           ),
         ],

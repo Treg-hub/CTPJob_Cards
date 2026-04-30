@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
+import '../models/job_card.dart';
 import '../main.dart' show currentEmployee;
 import '../services/location_service.dart';
 import 'home_screen.dart';
+import 'job_card_detail_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -26,11 +28,46 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Existing auto-login logic
     if (currentEmployee != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
       });
     }
+
+    // ==================== HANDLE NOTIFICATION ARGUMENTS ====================
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      if (args != null) {
+        final jobCardNumber = args['jobCardNumber'] as String?;
+        final action = args['action'] as String?;
+
+        if (jobCardNumber != null) {
+          try {
+            final jobCardDoc = await FirebaseFirestore.instance.collection('job_cards').doc(jobCardNumber).get();
+            if (jobCardDoc.exists && mounted) {
+              final jobCard = JobCard.fromFirestore(jobCardDoc);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => JobCardDetailScreen(jobCard: jobCard),
+                ),
+              );
+            }
+          } catch (e) {
+            debugPrint('Error fetching job card: $e');
+          }
+
+          if (action == 'assign_self') {
+            debugPrint('Auto-assign triggered for job #$jobCardNumber');
+            // TODO: Add your auto-assign logic here later
+          }
+        }
+      }
+    });
   }
 
   Future _login() async {
@@ -47,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final query = FirebaseFirestore.instance.collection('employees').where('name', isEqualTo: name).where('clockNo', isEqualTo: clockNo).limit(1);
       final snapshot = await query.get();
       if (snapshot.docs.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid name or clock card number'), backgroundColor: Colors.red),
         );

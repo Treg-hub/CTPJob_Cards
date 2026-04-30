@@ -100,6 +100,7 @@ class NotificationService {
     required String title,
     required String body,
     required String level,
+    String jobCardNumber = "unknown",
   }) async {
     if (kIsWeb) return;
 
@@ -120,12 +121,16 @@ class NotificationService {
           ongoing: true,
           visibility: NotificationVisibility.public,
           category: AndroidNotificationCategory.message,
-          color: const Color(0xFFFFFF00),
-          ledColor: const Color(0xFFFFFF00),
+          color: const Color(0xFFFF9800),
+          ledColor: const Color(0xFFFF9800),
           ledOnMs: 500,
           ledOffMs: 500,
           onlyAlertOnce: false,
           styleInformation: BigTextStyleInformation(body),
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction('assign_self', 'Assign Self'),
+            AndroidNotificationAction('view_job', 'View Job'),
+          ],
         );
         break;
 
@@ -151,6 +156,10 @@ class NotificationService {
           ledOffMs: 500,
           onlyAlertOnce: false,
           styleInformation: BigTextStyleInformation(body),
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction('assign_self', 'Assign Self'),
+            AndroidNotificationAction('view_job', 'View Job'),
+          ],
         );
         break;
 
@@ -171,6 +180,10 @@ class NotificationService {
           ledOnMs: 500,
           ledOffMs: 500,
           styleInformation: BigTextStyleInformation(body),
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction('assign_self', 'Assign Self'),
+            AndroidNotificationAction('view_job', 'View Job'),
+          ],
         );
     }
 
@@ -179,9 +192,9 @@ class NotificationService {
       title: title,
       body: body,
       notificationDetails: NotificationDetails(android: androidDetails),
+      payload: jobCardNumber, // Pass jobCardNumber for handling
     );
   }
-
   // ==================== INITIALIZE ====================
   Future<void> initialize() async {
     if (kIsWeb) return;

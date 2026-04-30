@@ -201,6 +201,13 @@
   - **TypeScript Fix**: Added explicit 'any' typing to CF data parameter to resolve TypeScript error
   - **Result**: Employees now authenticated via Firebase Auth, enabling secure access control and user-specific features
 - **Update Checking Migration**: Migrated app update checking from Firestore `app_config/latest_version` to Firebase Remote Config for easier management. Now fetches `latest_version`, `latest_build`, `download_url`, `force_update`, `release_notes` from Remote Config, compatible with Firebase App Distribution APK URLs.
+- **Full-Screen Critical Job Alerts**: Implemented native Android FullScreenJobAlertActivity for P5 priority jobs - shows on lock screen, turns screen on, loops alarm sound with strong vibration, provides action buttons (Assign Self, View Job, I'm Busy, Dismiss).
+- **Enhanced Notification Permissions**: Added critical Android permissions (systemAlertWindow, accessNotificationPolicy, ignoreBatteryOptimizations) with auto-request on startup.
+- **Advanced Local Notification Channels**: Created 3 channels (normal, medium-high with loud sound, full-loud with bypassDND, alarm audio, fullScreenIntent) for priority-based escalation.
+- **Notification Action Handling**: Implemented global navigatorKey and local notification actions for deep-linking (Assign Self/View Job) directly from notifications.
+- **Native Background Notification Handling**: Migrated background message processing to native FirebaseMessagingService to avoid isolate issues.
+- **Torch Light Integration**: Added torch_light dependency for planned flashlight alerts (currently disabled due plugin API issues).
+- **Uncommitted WIP**: Current working changes include UI adjustments in home/login/admin screens for alert system accommodation.
 
 ## Active Decisions and Considerations
 - **Employee Display Format**: Using `displayName` (name + clockNo + position) + department for clean, non-redundant UI
