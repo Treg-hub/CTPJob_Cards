@@ -126,6 +126,14 @@ class FirestoreService {
     }
   }
 
+  Future<void> deleteJobCard(String jobCardId) async {
+    try {
+      await _firestore.collection('job_cards').doc(jobCardId).delete();
+    } catch (e) {
+      throw Exception('Failed to delete job card: $e');
+    }
+  }
+
   Future<JobCard?> getJobCard(String jobCardId) async {
     try {
       final doc = await _firestore.collection('job_cards').doc(jobCardId).get();
@@ -367,14 +375,15 @@ class FirestoreService {
   Future<void> initializeSettings() async {
     try {
       final doc = await _firestore.collection('settings').doc('app').get();
-      if (!doc.exists) {
-        await _firestore.collection('settings').doc('app').set({
-          'switchUserPassword': 'admin123',
-          'initialized': true,
-        });
+      
+      if (doc.exists) {
+        debugPrint('Settings loaded successfully');
+      } else {
+        debugPrint('Warning: settings/app document does not exist');
       }
     } catch (e) {
-      throw Exception('Failed to initialize settings: $e');
+      debugPrint('Warning: Could not load settings: $e');
+      // Do NOT throw - let the app continue
     }
   }
 

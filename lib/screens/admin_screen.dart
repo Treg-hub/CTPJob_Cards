@@ -7,7 +7,83 @@ import 'package:share_plus/share_plus.dart';
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
+import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
+
+class JobCardsDataTableSource extends DataTableSource {
+  final List<JobCard> jobCards;
+  final Set<int> selectedRows;
+  final int? editingIndex;
+  final Function(int) onSelectChanged;
+  final Function(int) onEditToggle;
+  final Function(JobCard) onDelete;
+  final TextEditingController priorityController;
+  final TextEditingController statusController;
+  final TextEditingController descriptionController;
+
+  JobCardsDataTableSource({
+    required this.jobCards,
+    required this.selectedRows,
+    required this.editingIndex,
+    required this.onSelectChanged,
+    required this.onEditToggle,
+    required this.onDelete,
+    required this.priorityController,
+    required this.statusController,
+    required this.descriptionController,
+  });
+
+  static Color _getPriorityColor(int p) {
+    switch (p) {
+      case 1: return Colors.red;
+      case 2: return Colors.orange;
+      case 3: return Colors.yellow;
+      case 4: return Colors.lightGreen;
+      case 5: return Colors.green;
+      default: return Colors.grey;
+    }
+  }
+
+  static Color _getStatusColor(JobStatus s) {
+    switch (s) {
+      case JobStatus.open: return Colors.blue;
+      case JobStatus.monitor: return Colors.orange;
+      case JobStatus.closed: return Colors.green;
+      default: return Colors.grey;
+    }
+  }
+
+  @override
+  DataRow getRow(int index) {
+    final jc = jobCards[index];
+    final isEditing = editingIndex == index;
+    return DataRow(
+      selected: selectedRows.contains(index),
+      onSelectChanged: (selected) => onSelectChanged(index),
+      cells: [
+        DataCell(Checkbox(value: selectedRows.contains(index), onChanged: (v) => onSelectChanged(index))),
+        DataCell(Text(jc.jobCardNumber?.toString() ?? '')),
+        DataCell(isEditing ? DropdownButton<int>(value: jc.priority, items: [1,2,3,4,5].map((p) => DropdownMenuItem(value: p, child: Text('P$p'))).toList(), onChanged: (v) => priorityController.text = v.toString()) : Chip(label: Text('P${jc.priority}'), backgroundColor: _getPriorityColor(jc.priority))),
+        DataCell(isEditing ? DropdownButton<JobStatus>(value: jc.status, items: JobStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.displayName))).toList(), onChanged: (v) => statusController.text = v?.name ?? '') : Chip(label: Text(jc.status.displayName), backgroundColor: _getStatusColor(jc.status))),
+        DataCell(Text(jc.type.displayName)),
+        DataCell(Text('${jc.department} > ${jc.area} > ${jc.machine} > ${jc.part}')),
+        DataCell(isEditing ? TextField(controller: descriptionController) : Text(jc.description.length > 50 ? '${jc.description.substring(0,50)}...' : jc.description)),
+        DataCell(Text(jc.operator)),
+        DataCell(Text(jc.assignedClockNos?.length.toString() ?? '0')),
+        DataCell(Row(children: [IconButton(icon: Icon(isEditing ? Icons.save : Icons.edit), onPressed: () => onEditToggle(index)), IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => onDelete(jc))])),
+      ],
+    );
+  }
+
+  @override
+  int get rowCount => jobCards.length;
+
+  @override
+  bool get isRowCountApproximate => false;
+
+  @override
+  int get selectedRowCount => selectedRows.length;
+}
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -50,11 +126,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _departmentController = TextEditingController();
   final TextEditingController _fcmController = TextEditingController();
 
+  // Job Cards tab
+  final TextEditingController _jobCardSearchController = TextEditingController();
+  List<JobCard> _allJobCards = [];
+  List<JobCard> _filteredJobCards = [];
+  String? _selectedOperator;
+  int? _editingJobCardIndex;
+  final TextEditingController _jobCardPriorityController = TextEditingController();
+  final TextEditingController _jobCardStatusController = TextEditingController();
+  final TextEditingController _jobCardDescriptionController = TextEditingController();
+  Set<int> _selectedJobCardRows = {};
+
   @override
   void initState() {
     super.initState();
     debugPrint('AdminScreen initState'); // Debug
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -62,6 +149,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _loadStructure();
     _loadSettings();
     _loadCurrentClockNo();
+    _loadJobCards();
   }
 
   @override
@@ -78,6 +166,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _positionController.dispose();
     _departmentController.dispose();
     _fcmController.dispose();
+    _jobCardSearchController.dispose();
+    _jobCardPriorityController.dispose();
+    _jobCardStatusController.dispose();
+    _jobCardDescriptionController.dispose();
     super.dispose();
   }
 
@@ -126,6 +218,28 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     ).toList();
   }
 
+  Future<void> _loadJobCards() async {
+    try {
+      _allJobCards = await _firestoreService.getAllJobCardsFuture();
+      _filterJobCards();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading job cards: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _filterJobCards() {
+    final query = _jobCardSearchController.text.toLowerCase();
+    _filteredJobCards = _allJobCards.where((jc) =>
+      jc.description.toLowerCase().contains(query) ||
+      jc.comments.toLowerCase().contains(query) ||
+      jc.notes.toLowerCase().contains(query)
+    ).where((jc) => _selectedOperator == null || jc.operator == _selectedOperator).toList();
+  }
+
   Future<void> _loadStructure() async {
     try {
       _structure = _normalizeStructure(await _firestoreService.getFactoryStructure());
@@ -171,6 +285,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             Tab(text: 'Employees'),
             Tab(text: 'Structures'),
             Tab(text: 'Settings'),
+            Tab(text: 'Job Cards'),
           ],
         ),
       ),
@@ -180,10 +295,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           _buildEmployeesTab(),
           _buildStructuresTab(),
           _buildSettingsTab(),
+          _buildJobCardsTab(),
         ],
       ),
-      floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
-        onPressed: () => _showEmployeeDialog(),
+      floatingActionButton: (_tabController.index == 0 || _tabController.index == 3) ? FloatingActionButton(
+        onPressed: () => _tabController.index == 0 ? _showEmployeeDialog() : null, // No add for job cards yet
         child: const Icon(Icons.add),
       ) : null,
     );
@@ -1005,6 +1121,195 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
     _selectedRows.clear();
     setState(() {});
+  }
+
+  void _toggleJobCardEdit(int index) {
+    if (_editingJobCardIndex == index) {
+      // save
+      final jc = _filteredJobCards[index];
+      final updatedJc = jc.copyWith(
+        priority: int.tryParse(_jobCardPriorityController.text) ?? jc.priority,
+        status: JobStatusExtension.fromString(_jobCardStatusController.text) ?? jc.status,
+        description: _jobCardDescriptionController.text,
+      );
+      _firestoreService.updateJobCard(jc.id!, updatedJc);
+      _editingJobCardIndex = null;
+    } else {
+      _editingJobCardIndex = index;
+      final jc = _filteredJobCards[index];
+      _jobCardPriorityController.text = jc.priority.toString();
+      _jobCardStatusController.text = jc.status.name;
+      _jobCardDescriptionController.text = jc.description;
+    }
+    setState(() {});
+  }
+
+  void _deleteJobCard(JobCard jc) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Job Card'),
+        content: const Text('Are you sure?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      try {
+        await _firestoreService.deleteJobCard(jc.id!);
+        _loadJobCards();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Job card deleted')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  void _bulkDeleteJobCards() async {
+    final toDelete = _selectedJobCardRows.map((i) => _filteredJobCards[i]).toList();
+    for (final jc in toDelete) {
+      await _firestoreService.deleteJobCard(jc.id!);
+    }
+    _selectedJobCardRows.clear();
+    setState(() {});
+  }
+
+  void _exportJobCardsCsv() {
+    final csvData = [
+      ['Job #', 'Priority', 'Status', 'Type', 'Department', 'Area', 'Machine', 'Part', 'Description', 'Operator', 'Assigned Count', 'Created At'],
+      ..._allJobCards.map((jc) => [
+        jc.jobCardNumber?.toString() ?? '',
+        jc.priority.toString(),
+        jc.status.displayName,
+        jc.type.displayName,
+        jc.department,
+        jc.area,
+        jc.machine,
+        jc.part,
+        jc.description,
+        jc.operator,
+        jc.assignedClockNos?.length.toString() ?? '0',
+        jc.createdAt?.toString() ?? '',
+      ]),
+    ];
+    final csvString = const CsvEncoder().convert(csvData);
+    if (kIsWeb) {
+      final blob = html.Blob([csvString], 'text/csv');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)..download = 'job_cards.csv'..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      Share.share(csvString, subject: 'Job Cards Export');
+    }
+  }
+
+  Widget _buildJobCardsTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _jobCardSearchController,
+                  decoration: const InputDecoration(
+                    labelText: 'Search Job Cards',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (_) => setState(() => _filterJobCards()),
+                ),
+              ),
+              const SizedBox(width: 16),
+              DropdownButton<String>(
+                value: _selectedOperator,
+                hint: const Text('Filter by Operator'),
+                items: _allJobCards.map((jc) => jc.operator).toSet().map((op) => DropdownMenuItem(value: op, child: Text(op))).toList(),
+                onChanged: (v) => setState(() {
+                  _selectedOperator = v;
+                  _filterJobCards();
+                }),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton.icon(
+                onPressed: _exportJobCardsCsv,
+                icon: const Icon(Icons.download),
+                label: const Text('Export All'),
+              ),
+              if (_selectedJobCardRows.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _bulkDeleteJobCards,
+                  icon: const Icon(Icons.delete, color: Colors.white),
+                  label: const Text('Delete Selected'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<JobCard>>(
+            stream: _firestoreService.getAllJobCards(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && _allJobCards.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final jobCards = snapshot.data ?? _allJobCards;
+              _allJobCards = jobCards;
+              _filterJobCards();
+              return PaginatedDataTable(
+                header: const Text('Job Cards'),
+                rowsPerPage: 50,
+                columns: const [
+                  DataColumn(label: Text('Select')),
+                  DataColumn(label: Text('Job #')),
+                  DataColumn(label: Text('Priority')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Type')),
+                  DataColumn(label: Text('Location')),
+                  DataColumn(label: Text('Description')),
+                  DataColumn(label: Text('Operator')),
+                  DataColumn(label: Text('Assigned')),
+                  DataColumn(label: Text('Actions')),
+                ],
+                source: JobCardsDataTableSource(
+                  jobCards: _filteredJobCards,
+                  selectedRows: _selectedJobCardRows,
+                  editingIndex: _editingJobCardIndex,
+                  onSelectChanged: (index) {
+                    if (_selectedJobCardRows.contains(index)) {
+                      _selectedJobCardRows.remove(index);
+                    } else {
+                      _selectedJobCardRows.add(index);
+                    }
+                    setState(() {});
+                  },
+                  onEditToggle: _toggleJobCardEdit,
+                  onDelete: _deleteJobCard,
+                  priorityController: _jobCardPriorityController,
+                  statusController: _jobCardStatusController,
+                  descriptionController: _jobCardDescriptionController,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 
