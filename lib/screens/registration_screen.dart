@@ -47,7 +47,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       // 2. IMPORTANT: Wait for auth to fully propagate
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 2000));
 
       // 3. Now query the employee document
       final empQuery = await FirebaseFirestore.instance
@@ -69,11 +69,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       await FirebaseFirestore.instance
           .collection('employees')
           .doc(clockNo)
-          .update({
+          .set({
         'uid': credential.user!.uid,
         'email': email,
         'registeredAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));   // ← This is safer
 
       // 5. Create Employee object and save
       final employee = Employee(
