@@ -19,32 +19,36 @@ class BackgroundGeofenceService {
   // Company coordinates (duplicated from LocationService for self-containment)
   static const double COMPANY_LAT = -29.994938052011612;
   static const double COMPANY_LON = 30.939421740548614;
-  static const double RADIUS_METERS = 800.0; // Reduced from 2000m for better accuracy/reliability. Future: configurable via Firestore settings.
+  static const double RADIUS_METERS = 500.0; // Reduced from 2000m for better accuracy/reliability. Future: configurable via Firestore settings.
 
   static Future<void> initializeService() async {
-    // Early return on web: flutter_background_service unsupported on web platform.
-    if (kIsWeb) return;
+  if (kIsWeb) return;
 
+  try {
     final service = FlutterBackgroundService();
 
-    /// Android config: background mode, no foreground notification
     await service.configure(
       androidConfiguration: AndroidConfiguration(
-        // this will be executed when app is in foreground/isolated
         onStart: onStart,
-        // this will be executed when app is in background/terminated
-        autoStart: true,
+        autoStart: false,                    // ← Changed from true
         autoStartOnBoot: true,
-        isForegroundMode: false, // Pure background periodic task
+        isForegroundMode: false,
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
-        // autoStart: true, // Not supported in iOS background service
         onForeground: onStart,
         onBackground: onIosBackground,
       ),
     );
+
+    // Start the service manually after a short delay
+    await Future.delayed(const Duration(milliseconds: 1500));
+    await service.startService();
+    
+  } catch (e) {
+    debugPrint('Background service init failed: $e');
   }
+}
 }
 
 /// Entry point for background service
@@ -52,8 +56,12 @@ class BackgroundGeofenceService {
 Future<bool> onStart(ServiceInstance service) async {
   
   // Initialize Firebase for background
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    }
+  } catch (e) {
+    debugPrint('Firebase already initialized in background: $e');
   }
 
   DartPluginRegistrant.ensureInitialized();

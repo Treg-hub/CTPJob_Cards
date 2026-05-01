@@ -67,8 +67,12 @@ void main() async {
     await Hive.openBox<SyncQueueItem>(syncBoxName);
   }
 
-  // ==================== FIREBASE ====================
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+// ==================== FIREBASE (Safe - prevents duplicate init) ====================
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } else {
+    Firebase.app(); // Use existing instance
+  }
 
   if (!kIsWeb) {
     await BackgroundGeofenceService.initializeService();
