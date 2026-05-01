@@ -35,6 +35,8 @@
 - **Automatic On-Site Detection**: Native geofencing implementation with 2km radius around company coordinates, automatic Firestore updates, local notifications, battery-efficient OS-level events, works in background/killed app, fallback to last known position
 - **Automatic In-App Update Checking**: Runs after login on mobile, checks Firebase Remote Config for latest version, shows update dialog with release notes, supports force updates, daily check throttling, opens download URL (compatible with Firebase App Distribution APK URLs)
 - **Full-Screen Critical Job Alerts**: Native Android full-screen alerts for P5 priority jobs - shows on lock screen, turns screen on, loops alarm sound with strong vibration, provides action buttons (Assign Self, View Job, I'm Busy, Dismiss)
+- **Enhanced Notification Details**: Added createdBy field to notifications, ensure escalation notifications are sent to the job creator as well, update banner trigger whilst in app (foreground), add job card number to notification data payload.
+- **Test Notification Screen**: Added TestNotificationScreen.dart for testing notification levels (persistent banner, fullscreen alarm, normal, medium-high) using NotificationService.
 
 ### UI/UX Features
 - **Responsive Design**: Works on mobile devices

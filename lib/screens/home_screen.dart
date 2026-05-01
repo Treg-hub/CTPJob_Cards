@@ -148,6 +148,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final emp = await _firestoreService.getEmployee(currentEmployee!.clockNo);
       if (emp != null) {
         setState(() => isOnSite = emp.isOnSite);
+        // Check if FCM token is missing and prompt user
+        if (emp.fcmToken == null && !kIsWeb && mounted) {
+          _promptEnableNotifications();
+        }
       }
     } catch (e) {
       debugPrint('Error loading on-site status: $e');
@@ -170,6 +174,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _loadOverrideOnSite() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() => _overrideOnSite = prefs.getBool('overrideOnSite') ?? false);
+  }
+
+  void _promptEnableNotifications() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enable Notifications'),
+        content: const Text('Notifications are not enabled for your account. Enable them to receive job alerts?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                final token = await _notificationService.getToken();
+                if (token != null && currentEmployee != null) {
+                  await _firestoreService.updateEmployee(
+                    currentEmployee!.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Notifications enabled!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to enable notifications. Check permissions.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error enabling notifications: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveOverrideOnSite(bool value) async {
