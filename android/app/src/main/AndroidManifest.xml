@@ -71,13 +71,14 @@
         </service>
 
         <!-- ==================== FULL SCREEN ALERT ACTIVITY ==================== -->
-        <activity android:name=".FullScreenJobAlertActivity"
+        <activity
+            android:name=".FullScreenJobAlertActivity"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
-            android:theme="@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen" />
-
+            android:noHistory="true"
+            android:theme="@style/FullScreenAlertTheme" />
     </application>
 
     <queries>

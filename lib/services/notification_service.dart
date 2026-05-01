@@ -225,44 +225,52 @@ class NotificationService {
   }
 
   // ==================== FOREGROUND MESSAGE HANDLER ====================
-  Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    final level = message.data['notificationLevel'] ?? 'normal';
-    final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
-    final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
-    final jobCardNumber = message.data['jobCardNumber'] ?? '0000';
-    final location = message.data['location'];
-    final createdBy = message.data['createdBy'];
-    final priority = message.data['priority'];
-    final dueDate = message.data['dueDate'];
+    Future<void> _handleForegroundMessage(RemoteMessage message) async {
+      final level = message.data['notificationLevel'] ?? 'normal';
+      final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
+      final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
+      final jobCardNumber = message.data['jobCardNumber'] ?? '0000';
+      final priority = message.data['priority'] ?? '1';
+      final createdBy = message.data['createdBy'] ?? message.data['operator'] ?? 'Unknown';
+      final department = message.data['department'] ?? '';
+      final area = message.data['area'] ?? '';
+      final machine = message.data['machine'] ?? '';
+      final part = message.data['part'] ?? '';
+      final description = message.data['description'] ?? body;
 
-    debugPrint('📩 Foreground message | Level: $level | Priority: $priority | Foreground: $_isAppInForeground');
+      final bool isForeground = _isAppInForeground;
+      final bool isPriority5 = level == 'full-loud' || priority == '5';
 
-    if ((level == 'full-loud' || priority == '5') && !_isAppInForeground) {
-      try {
-        await JobAlertService.triggerUrgentAlert(
-          jobCardNumber: jobCardNumber,
-          description: body,
-          location: location,           // department > area > location > part
-          createdBy: createdBy,
-          priority: priority,
-          dueDate: dueDate,
-        );
-        debugPrint('🚨 Full-screen urgent alert triggered (background)');
-      } catch (e) {
-        debugPrint('JobAlertService failed: $e');
+      debugPrint('📩 Foreground message | Level: $level | Priority: $priority | Foreground: $isForeground');
+
+      if (isPriority5 && !isForeground) {
+        try {
+          final locationString = [department, area, machine, part]
+              .where((e) => e.isNotEmpty)
+              .join(' > ');
+
+          await JobAlertService.triggerUrgentAlert(
+            jobCardNumber: jobCardNumber,
+            description: description,
+            createdBy: createdBy,
+            priority: priority,
+            location: locationString,
+          );
+        } catch (e) {
+          debugPrint('JobAlertService failed: $e');
+        }
       }
-    }
 
-    await _showLocalNotification(
-      title: title,
-      body: body,
-      level: level,
-      jobCardNumber: jobCardNumber,
-      location: location,
-      createdBy: createdBy,
-      priority: priority,
-      dueDate: dueDate,
-    );
+      await _showLocalNotification(
+        title: title,
+        body: body,
+        level: level,
+        jobCardNumber: jobCardNumber,
+        location: [department, area, machine, part].where((e) => e.isNotEmpty).join(' > '),
+        createdBy: createdBy,
+        priority: priority,
+      );
+    }
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {

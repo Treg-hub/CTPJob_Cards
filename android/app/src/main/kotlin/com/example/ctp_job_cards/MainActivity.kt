@@ -133,19 +133,19 @@ class MainActivity : FlutterActivity() {
             Log.d("MainActivity", "🚨 Job alert channel received method: ${call.method}")
             when (call.method) {
                 "triggerUrgentAlert" -> {
-                    val jobCardNumber = call.argument<String>("jobCardNumber")
-                    val description = call.argument<String>("description")
-                    Log.d("MainActivity", "🚨 triggerUrgentAlert called with jobCardNumber=$jobCardNumber, description=$description")
-                    if (jobCardNumber != null && description != null) {
-                        triggerUrgentAlert(jobCardNumber, description, result)
-                    } else {
-                        Log.e("MainActivity", "🚨 INVALID_ARGUMENTS: jobCardNumber=$jobCardNumber, description=$description")
-                        result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
-                    }
-                }
-                else -> {
-                    Log.w("MainActivity", "🚨 Unknown method: ${call.method}")
-                    result.notImplemented()
+                val jobCardNumber = call.argument<String>("jobCardNumber")
+                val description = call.argument<String>("description")
+                val location = call.argument<String>("location") ?: "Location not specified"
+                val createdBy = call.argument<String>("createdBy") ?: "Unknown"
+                val priority = call.argument<String>("priority") ?: "5"
+
+                Log.d("MainActivity", "🚨 triggerUrgentAlert called with jobCardNumber=$jobCardNumber, priority=$priority")
+
+                if (jobCardNumber != null && description != null) {
+                    triggerUrgentAlert(jobCardNumber, description, location, createdBy, priority, result)
+                } else {
+                    Log.e("MainActivity", "🚨 INVALID_ARGUMENTS: jobCardNumber=$jobCardNumber, description=$description")
+                    result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
                 }
             }
         }
@@ -194,18 +194,32 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun triggerUrgentAlert(jobCardNumber: String, description: String, result: MethodChannel.Result) {
-        try {
-            val intent = Intent(this, AlertForegroundService::class.java).apply {
-                putExtra("jobCardNumber", jobCardNumber)
-                putExtra("description", description)
-            }
-            startForegroundService(intent)
-            Log.d("MainActivity", "Urgent alert triggered for job #$jobCardNumber")
-            result.success("Urgent alert triggered")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Failed to trigger urgent alert: $e")
-            result.error("ALERT_ERROR", "Failed to trigger urgent alert: ${e.message}", null)
+    private fun triggerUrgentAlert(call: MethodCall, result: MethodChannel.Result) {
+    try {
+        val jobCardNumber = call.argument<String>("jobCardNumber") ?: "Unknown"
+        val description = call.argument<String>("description") ?: "Urgent job"
+        val location = call.argument<String>("location") ?: "Location not specified"
+        val createdBy = call.argument<String>("createdBy") ?: "Unknown"
+        val priority = call.argument<String>("priority") ?: "5"
+
+        val serviceIntent = Intent(this, AlertForegroundService::class.java).apply {
+            putExtra("jobCardNumber", jobCardNumber)
+            putExtra("description", description)
+            putExtra("location", location)
+            putExtra("createdBy", createdBy)
+            putExtra("priority", priority)
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+
+        Log.d("MainActivity", "🚨 Urgent alert triggered for job #$jobCardNumber (P$priority)")
+        result.success("Urgent alert triggered")
+    } catch (e: Exception) {
+        Log.e("MainActivity", "Failed to trigger urgent alert: $e")
+        result.error("ALERT_ERROR", e.message, null)
     }
 }

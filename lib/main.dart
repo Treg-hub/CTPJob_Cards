@@ -67,18 +67,31 @@ void main() async {
     await Hive.openBox<SyncQueueItem>(syncBoxName);
   }
 
-// ==================== FIREBASE (Safe - prevents duplicate init) ====================
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  } else {
-    Firebase.app(); // Use existing instance
+  // ==================== FIREBASE (SAFE INITIALIZATION) ====================
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('✅ Firebase initialized successfully');
+    } else {
+      debugPrint('ℹ️ Firebase already initialized — using existing [DEFAULT] app');
+      Firebase.app();
+    }
+  } catch (e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('already exists')) {
+      debugPrint('ℹ️ FirebaseApp [DEFAULT] already exists — continuing safely');
+    } else {
+      debugPrint('⚠️ Firebase initialization warning: $e');
+    }
   }
 
   if (!kIsWeb) {
     await BackgroundGeofenceService.initializeService();
   }
 
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;

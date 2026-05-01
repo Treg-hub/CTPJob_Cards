@@ -1,18 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
-    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+    <style name="LaunchTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
+
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
          Flutter UI initializes, as well as behind your Flutter UI while its
          running.
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
-    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+    <style name="NormalTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        
+        <!-- Optional: your brand colors (recommended) -->
+        <item name="colorPrimary">@color/orange</item>
+        <item name="colorPrimaryVariant">@color/orange_dark</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+    </style>
+
+    <!-- ==================== FULL SCREEN ALERT THEME ==================== -->
+    <style name="FullScreenAlertTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- True fullscreen + no title bar -->
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        
+        <!-- Make it truly immersive on lock screen -->
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+        
+        <!-- Optional: keep screen on while alert is visible -->
+        <item name="android:keepScreenOn">true</item>
     </style>
 </resources>
