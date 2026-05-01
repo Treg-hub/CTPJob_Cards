@@ -42,7 +42,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Check if clock number exists
+      // 1. Create Firebase Auth account
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      // 2. IMPORTANT: Wait for auth to fully propagate
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      // 3. Now query the employee document
       final empQuery = await FirebaseFirestore.instance
           .collection('employees')
           .where('clockNo', isEqualTo: clockNo)
@@ -58,19 +65,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final empDoc = empQuery.docs.first;
       final empData = empDoc.data();
 
-      // Create Auth account
-      final credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(email: email, password: password);
-
-      final uid = credential.user!.uid;
-
-      // Update employee document
-      await FirebaseFirestore.instance.collection('employees').doc(clockNo).update({
-        'uid': uid,
+      // 4. Update the employee document with uid + email
+      await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(clockNo)
+          .update({
+        'uid': credential.user!.uid,
         'email': email,
         'registeredAt': FieldValue.serverTimestamp(),
       });
 
+      // 5. Create Employee object and save
       final employee = Employee(
         clockNo: clockNo,
         name: empData['name'] ?? '',
@@ -79,12 +84,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('loggedInUid', credential.user!.uid);
       await prefs.setString('loggedInName', employee.name);
       await prefs.setString('loggedInClockNo', clockNo);
       currentEmployee = employee;
 
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
         _showSnack('Account created successfully!', Colors.green);
       }
     } on FirebaseAuthException catch (e) {

@@ -15,7 +15,7 @@ class SyncService {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   Future<void> init() async {
-    _queueBox = Hive.box<SyncQueueItem>('syncQueue');
+    _queueBox = Hive.box<SyncQueueItem>('sync_queue');   // ← FIXED
     _startListening();
   }
 
@@ -57,7 +57,6 @@ class SyncService {
     for (var item in items) {
       try {
         if (item.collection == 'copper_inventory') {
-          // Special handling for document updates
           final docRef = firestore.doc('copper_inventory/main');
           await docRef.set(item.data, SetOptions(merge: true));
         } else {

@@ -49,7 +49,7 @@ class JobCardsDataTableSource extends DataTableSource {
       case JobStatus.open: return Colors.blue;
       case JobStatus.monitor: return Colors.orange;
       case JobStatus.closed: return Colors.green;
-      default: return Colors.grey;
+
     }
   }
 
@@ -135,7 +135,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _jobCardPriorityController = TextEditingController();
   final TextEditingController _jobCardStatusController = TextEditingController();
   final TextEditingController _jobCardDescriptionController = TextEditingController();
-  Set<int> _selectedJobCardRows = {};
+  final Set<int> _selectedJobCardRows = {};
 
   @override
   void initState() {

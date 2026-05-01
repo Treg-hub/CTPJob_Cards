@@ -1,14 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kDebugMode, FlutterError, PlatformDispatcher;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb,  FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'TestNotificationScreen.dart';
 import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'models/sync_queue_item.dart';
@@ -17,7 +15,6 @@ import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/sync_service.dart';
 import 'services/background_geofence_service.dart';
-import 'services/job_alert_service.dart';
 import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 
@@ -38,7 +35,6 @@ Future<void> _handleNotificationAction(NotificationResponse response) async {
 
   final jobCardNumber = payload;
 
-  // Navigate using global navigator key
   navigatorKey.currentState?.pushNamedAndRemoveUntil(
     '/',
     (route) => false,
@@ -51,45 +47,75 @@ Future<void> _handleNotificationAction(NotificationResponse response) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
 
+  // ==================== HIVE (Aggressive Recovery) ====================
+  await Hive.initFlutter();
   Hive.registerAdapter(SyncQueueItemAdapter());
 
+  const String syncBoxName = 'sync_queue';
+
+  try {
+    if (Hive.isBoxOpen(syncBoxName)) {
+      await Hive.box<SyncQueueItem>(syncBoxName).close();
+    }
+    await Hive.openBox<SyncQueueItem>(syncBoxName);
+  } catch (e) {
+    debugPrint('Hive box error, forcing delete: $e');
+    try {
+      await Hive.deleteBoxFromDisk(syncBoxName);
+    } catch (_) {}
+    await Hive.openBox<SyncQueueItem>(syncBoxName);
+  }
+
+  // ==================== FIREBASE ====================
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Initialize background geofence service only on mobile (Android/iOS)
   if (!kIsWeb) {
     await BackgroundGeofenceService.initializeService();
   }
 
-  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
 
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  // ==================== FIRESTORE SETTINGS ====================
+  FirebaseFirestore.instance.settings = Settings(
+    persistenceEnabled: !kIsWeb,
+  );
 
-  // ==================== INITIALIZE LOCAL NOTIFICATIONS ====================
+  // ==================== LOCAL NOTIFICATIONS ====================
   await flutterLocalNotificationsPlugin.initialize(
-    settings: InitializationSettings(
+    settings: const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
     onDidReceiveNotificationResponse: _handleNotificationAction,
   );
 
   final firestoreService = FirestoreService();
-  await firestoreService.initializeSettings();
 
-  await Hive.openBox<SyncQueueItem>('syncQueue');
+  // Safe initialize with error handling
+  try {
+    await firestoreService.initializeSettings();
+  } catch (e) {
+    debugPrint('Could not load settings (permission or network): $e');
+  }
+
   await SyncService().init();
 
+  // ==================== AUTO LOGIN ====================
   final prefs = await SharedPreferences.getInstance();
   final hasLogin = prefs.containsKey('loggedInClockNo');
   if (hasLogin) {
     final clockNo = prefs.getString('loggedInClockNo');
     if (clockNo != null) {
-      currentEmployee = await firestoreService.getEmployee(clockNo);
+      try {
+        currentEmployee = await firestoreService.getEmployee(clockNo);
+      } catch (e) {
+        debugPrint('Auto-login failed (permission): $e');
+        currentEmployee = null;
+      }
     }
   }
 
