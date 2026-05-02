@@ -1,6 +1,5 @@
 package com.example.ctp_job_cards
 
-import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,13 +17,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         Log.d("AlarmReceiver", "🚨 AlarmReceiver triggered for job: $jobCardNumber (P$priority)")
 
-        // ==================== ONLY SHOW FULL-SCREEN IF APP IS NOT IN FOREGROUND ====================
-        if (isAppInForeground(context)) {
-            Log.d("AlarmReceiver", "App is in foreground → skipping full-screen for job #$jobCardNumber")
-            return
-        }
-
-        // Launch FullScreenJobAlertActivity
+        // Always launch full-screen (this receiver only fires when app is not visible)
         val fullScreenIntent = Intent(context, FullScreenJobAlertActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
@@ -36,16 +29,5 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         context.startActivity(fullScreenIntent)
-    }
-
-    private fun isAppInForeground(context: Context): Boolean {
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val appProcesses = activityManager.runningAppProcesses ?: return false
-        val packageName = context.packageName
-
-        val processInfo = appProcesses.find { it.processName == packageName }
-            ?: return false
-
-        return processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
     }
 }

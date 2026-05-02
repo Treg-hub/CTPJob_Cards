@@ -171,6 +171,7 @@ class NotificationService {
         fullScreenIntent: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: true,
+        autoCancel: false,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),           // ← Dynamic color
         styleInformation: BigTextStyleInformation(body),
@@ -191,6 +192,7 @@ class NotificationService {
         sound: const RawResourceAndroidNotificationSound('escalation_alert'),
         vibrationPattern: Int64List.fromList([0, 600, 200, 600]),
         ongoing: true,
+        autoCancel: false,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),           // ← Dynamic color
         styleInformation: BigTextStyleInformation(body),
