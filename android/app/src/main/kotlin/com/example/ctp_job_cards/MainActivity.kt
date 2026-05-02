@@ -12,12 +12,17 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -33,31 +38,19 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d("MainActivity", "🚀 MainActivity started")
-        Log.d("FullScreenJobAlertActivity", "Job: ${intent.getStringExtra("jobCardNumber")}")
         super.onCreate(savedInstanceState)
 
         handleDeepLink(intent)
-        
-        // ✅ Create urgent notification channel early (IMPORTANT!)
         createUrgentNotificationChannel()
         
         geofencingClient = LocationServices.getGeofencingClient(this)
 
-        // Check Full-Screen Intent permission (Android 14+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (!notificationManager.canUseFullScreenIntent()) {
-                Log.w("MainActivity", "Full-Screen Intent permission not granted - opening settings")
                 val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
                 intent.data = Uri.fromParts("package", packageName, null)
                 startActivity(intent)
-            }
-        }
-
-        // Request USE_FULL_SCREEN_INTENT permission for full-screen notifications (API 34+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.USE_FULL_SCREEN_INTENT) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.USE_FULL_SCREEN_INTENT), 1001)
             }
         }
     }
@@ -68,18 +61,97 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        val jobCardNumber = intent?.getStringExtra("jobCardNumber")
-        val action = intent?.getStringExtra("action")
+        val jobCardNumber = intent?.getStringExtra("jobCardNumber") ?: return
+        val action = intent.getStringExtra("action")
+        val operator = intent.getStringExtra("operator") ?: "Unknown"
 
-        if (jobCardNumber != null) {
-            Log.d("MainActivity", "🔗 Deep link received - Job: $jobCardNumber, Action: $action")
-            
-            // The LoginScreen will pick this up via ModalRoute arguments
-            // If you want to send it to Flutter, you can use a MethodChannel here
+        Log.d("MainActivity", "🔗 Deep link received - Job: $jobCardNumber, Action: $action")
+
+        when (action) {
+            "assign_self" -> assignJobToCurrentUser(jobCardNumber)
+            "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator)
+            "dismiss" -> logDismissedAlert(jobCardNumber, operator)
+            else -> {}
         }
     }
 
-    // ✅ NEW METHOD - Creates the urgent channel early
+    // ==================== NOTIFICATION ACTION HANDLERS ====================
+
+    private fun assignJobToCurrentUser(jobCardNumber: String) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser == null) {
+            Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val userId = currentUser.uid
+        val userName = currentUser.displayName ?: currentUser.email ?: "Unknown User"
+
+        FirebaseFirestore.getInstance()
+            .collection("jobCards")
+            .document(jobCardNumber)
+            .update(
+                mapOf(
+                    "assignedTo" to userId,
+                    "assignedToName" to userName,
+                    "status" to "assigned",
+                    "assignedAt" to FieldValue.serverTimestamp()
+                )
+            )
+            .addOnSuccessListener {
+                Toast.makeText(this, "✅ Job assigned to you!", Toast.LENGTH_LONG).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to assign job: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun sendBusyNotificationToOperator(jobCardNumber: String, originalOperator: String) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        val busyUserName = currentUser?.displayName ?: currentUser?.email ?: "Unknown User"
+        val busyUserId = currentUser?.uid ?: "unknown"
+
+        val functions = FirebaseFunctions.getInstance()
+
+        val data = hashMapOf(
+            "jobCardNumber" to jobCardNumber,
+            "originalOperator" to originalOperator,
+            "busyUserName" to busyUserName,
+            "busyUserId" to busyUserId
+        )
+
+        functions
+            .getHttpsCallable("sendBusyNotification")
+            .call(data)
+            .addOnSuccessListener { result ->
+                Toast.makeText(this, "✅ Busy notification sent to operator", Toast.LENGTH_LONG).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to notify operator: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun logDismissedAlert(jobCardNumber: String, operator: String) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        val dismissedData = hashMapOf(
+            "jobCardNumber" to jobCardNumber,
+            "dismissedBy" to (currentUser?.uid ?: "unknown"),
+            "dismissedByName" to (currentUser?.displayName ?: currentUser?.email ?: "Unknown"),
+            "originalOperator" to operator,
+            "dismissedAt" to FieldValue.serverTimestamp()
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("dismissedAlerts")
+            .add(dismissedData)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Alert dismissed and logged", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to log dismiss: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
     private fun createUrgentNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -93,7 +165,6 @@ class MainActivity : FlutterActivity() {
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 200, 500)
             }
-
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
@@ -102,7 +173,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Geofence channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startGeofence" -> {
@@ -116,16 +186,11 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGUMENTS", "Missing arguments", null)
                     }
                 }
-                "stopGeofence" -> {
-                    stopGeofence(result)
-                }
-                else -> {
-                    result.notImplemented()
-                }
+                "stopGeofence" -> stopGeofence(result)
+                else -> result.notImplemented()
             }
         }
 
-        // Job alert channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JOB_ALERT_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "triggerUrgentAlert" -> {
@@ -141,14 +206,11 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
                     }
                 }
-                else -> {
-                    result.notImplemented()
-                }
+                else -> result.notImplemented()
             }
         }
     }
 
-    // ==================== GEOFENCE METHODS ====================
     private fun startGeofence(clockNo: String, lat: Double, lng: Double, radius: Double, result: MethodChannel.Result) {
         val geofence = Geofence.Builder()
             .setRequestId("company_geofence_$clockNo")
@@ -169,7 +231,7 @@ class MainActivity : FlutterActivity() {
 
         geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
             addOnSuccessListener {
-                Log.d("MainActivity", "Geofence added successfully for clockNo=$clockNo")
+                Log.d("MainActivity", "Geofence added successfully")
                 result.success("Geofence started")
             }
             addOnFailureListener { e ->
@@ -192,7 +254,6 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // ==================== URGENT ALERT METHOD ====================
     private fun triggerUrgentAlert(
         jobCardNumber: String,
         description: String,

@@ -512,3 +512,70 @@ exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "Migration failed: " + error.message);
   }
 });
+
+// ==================== BUSY NOTIFICATION ====================
+exports.sendBusyNotification = functions.https.onCall(async (data, context) => {
+  const innerData = data.data || data;
+  const { jobCardNumber, originalOperator, busyUserName, busyUserId } = innerData;
+
+  if (!jobCardNumber || !originalOperator) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing jobCardNumber or originalOperator");
+  }
+
+  try {
+    // Find the original operator by clockNo
+    const operatorSnap = await admin.firestore()
+      .collection("employees")
+      .where("clockNo", "==", originalOperator)
+      .limit(1)
+      .get();
+
+    if (operatorSnap.empty) {
+      console.log(`No employee found with clockNo: ${originalOperator}`);
+      return { success: false, message: "Operator not found" };
+    }
+
+    const operatorDoc = operatorSnap.docs[0];
+    const fcmToken = operatorDoc.data().fcmToken;
+
+    if (!fcmToken) {
+      console.log(`No FCM token for operator: ${originalOperator}`);
+      return { success: false, message: "No FCM token" };
+    }
+
+    const title = "User is Busy";
+    const body = `${busyUserName || "Someone"} is busy elsewhere and cannot take Job #${jobCardNumber}`;
+
+    const messagePayload = {
+      token: fcmToken,
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        jobCardNumber: jobCardNumber.toString(),
+        notificationLevel: "medium-high",
+        type: "busy_response",
+        title,
+        body,
+      },
+      android: { priority: "high" },
+      notification: { title, body }   // Always show visible banner
+    };
+
+    await messaging.send(messagePayload);
+
+    // Log the busy event for audit
+    await admin.firestore().collection("busyLogs").add({
+      jobCardNumber,
+      busyUserId: busyUserId || "unknown",
+      busyUserName: busyUserName || "Unknown",
+      originalOperator,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`✅ Busy notification sent to ${originalOperator} for job ${jobCardNumber}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error("sendBusyNotification error:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});

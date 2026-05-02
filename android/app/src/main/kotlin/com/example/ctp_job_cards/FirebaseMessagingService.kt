@@ -28,7 +28,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         val priority = remoteMessage.data["priority"] ?: "5"
         val operator = remoteMessage.data["operator"] ?: remoteMessage.data["createdBy"] ?: "Unknown"
 
-        // Build location string from individual fields (same as Dart side)
         val department = remoteMessage.data["department"] ?: ""
         val area = remoteMessage.data["area"] ?: ""
         val machine = remoteMessage.data["machine"] ?: ""
@@ -39,12 +38,11 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .ifEmpty { "Not specified" }
 
         if (level == "full-loud") {
-            // P5 → Full-screen only (no banner)
             Log.d("FCM_DEBUG", "🚨 P5 job #$jobCardNumber - Full-screen only mode")
             scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
         } else {
-            // P4 and lower → Show banner with buttons
-            showNotificationWithButtons(level, "Job #$jobCardNumber", jobCardNumber, description)
+            val operator = remoteMessage.data["operator"] ?: "Unknown"
+            showNotificationWithButtons(level, "Job #$jobCardNumber", jobCardNumber, description, operator)
 
             if (level == "medium-high") {
                 Log.d("FCM_DEBUG", "🚨 P4 job #$jobCardNumber - Trying full-screen alarm")
@@ -68,7 +66,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         }
 
         val triggerTime = System.currentTimeMillis() + 3000
-
         val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
@@ -100,41 +97,68 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun showNotificationWithButtons(level: String, title: String, jobCardNumber: String, description: String) {
+    private fun showNotificationWithButtons(
+        level: String,
+        title: String,
+        jobCardNumber: String,
+        description: String,
+        operator: String = "Unknown"
+    ) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = if (level == "full-loud" || level == "medium-high") "urgent_alert_channel" else "normal_channel"
+        val channelId = "persistent_banner_channel"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                if (level == "full-loud" || level == "medium-high") "Urgent Job Alerts" else "Normal Job Notifications",
+                "Persistent Job Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                this.description = "Job notifications with action buttons"
+                this.description = "Job notifications that stay until dismissed"
                 enableLights(true)
-                lightColor = if (level == "full-loud") Color.RED else Color.YELLOW
+                lightColor = if (level == "full-loud") Color.RED else Color.parseColor("#FF9800")
                 enableVibration(true)
+                setBypassDnd(true)
             }
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Intent for "View Job" button
         val viewIntent = Intent(this, MainActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("action", "view_job")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val viewPendingIntent = PendingIntent.getActivity(
             this, 0, viewIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Intent for "Assign Self" button
         val assignIntent = Intent(this, MainActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("action", "assign_self")
+            putExtra("operator", operator)
         }
         val assignPendingIntent = PendingIntent.getActivity(
             this, 1, assignIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val busyIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra("jobCardNumber", jobCardNumber)
+            putExtra("action", "busy")
+            putExtra("operator", operator)
+        }
+        val busyPendingIntent = PendingIntent.getActivity(
+            this, 2, busyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dismissIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra("jobCardNumber", jobCardNumber)
+            putExtra("action", "dismiss")
+            putExtra("operator", operator)
+        }
+        val dismissPendingIntent = PendingIntent.getActivity(
+            this, 3, dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -143,19 +167,15 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .setContentTitle(title)
             .setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle().bigText(description))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setContentIntent(viewPendingIntent)
-            .setAutoCancel(true)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setColor(if (level == "full-loud") Color.RED else Color.parseColor("#FF9800"))
             .addAction(0, "Assign Self", assignPendingIntent)
-            .addAction(0, "View Job", viewPendingIntent)
+            .addAction(0, "Busy", busyPendingIntent)
+            .addAction(0, "Dismiss", dismissPendingIntent)
 
-        if (level == "full-loud") {
-            builder.setColor(Color.RED)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-        } else if (level == "medium-high") {
-            builder.setColor(Color.parseColor("#FF9800"))
-        }
-
-        notificationManager.notify(jobCardNumber.hashCode(), builder.build())
+        notificationManager.notify(jobCardNumber.toIntOrNull() ?: 9999, builder.build())
     }
 }
