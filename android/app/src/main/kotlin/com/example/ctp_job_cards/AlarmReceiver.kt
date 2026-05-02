@@ -13,7 +13,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val description = intent.getStringExtra("description") ?: "Urgent job"
         val level = intent.getStringExtra("level") ?: "normal"
         val priority = intent.getStringExtra("priority") ?: "5"
-        val createdBy = intent.getStringExtra("createdBy") ?: intent.getStringExtra("operator") ?: "Unknown"
+        val createdBy = intent.getStringExtra("operator") ?: "Unknown"
         val location = intent.getStringExtra("location") ?: "Not specified"
 
         Log.d("AlarmReceiver", "🚨 AlarmReceiver triggered for job: $jobCardNumber (P$priority)")

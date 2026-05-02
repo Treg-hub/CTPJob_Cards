@@ -25,25 +25,43 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         val level = remoteMessage.data["notificationLevel"] ?: "normal"
         val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
         val description = remoteMessage.data["description"] ?: remoteMessage.data["body"] ?: "Job update"
+        val priority = remoteMessage.data["priority"] ?: "5"
+        val operator = remoteMessage.data["operator"] ?: remoteMessage.data["createdBy"] ?: "Unknown"
+
+        // Build location string from individual fields (same as Dart side)
+        val department = remoteMessage.data["department"] ?: ""
+        val area = remoteMessage.data["area"] ?: ""
+        val machine = remoteMessage.data["machine"] ?: ""
+        val part = remoteMessage.data["part"] ?: ""
+        val location = listOf(department, area, machine, part)
+            .filter { it.isNotEmpty() }
+            .joinToString(" > ")
+            .ifEmpty { "Not specified" }
 
         if (level == "full-loud") {
             // P5 → Full-screen only (no banner)
             Log.d("FCM_DEBUG", "🚨 P5 job #$jobCardNumber - Full-screen only mode")
-            scheduleFullScreenAlarm(jobCardNumber, description, level)
+            scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
         } else {
             // P4 and lower → Show banner with buttons
             showNotificationWithButtons(level, "Job #$jobCardNumber", jobCardNumber, description)
-            
+
             if (level == "medium-high") {
                 Log.d("FCM_DEBUG", "🚨 P4 job #$jobCardNumber - Trying full-screen alarm")
-                scheduleFullScreenAlarm(jobCardNumber, description, level)
+                scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
             }
         }
     }
 
-    private fun scheduleFullScreenAlarm(jobCardNumber: String, description: String, level: String) {
+    private fun scheduleFullScreenAlarm(
+        jobCardNumber: String,
+        description: String,
+        level: String,
+        priority: String = "5",
+        createdBy: String = "Unknown",
+        location: String = "Not specified"
+    ) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
             Log.e("FCM_DEBUG", "❌ Cannot schedule exact alarms - permission missing")
             return
@@ -55,6 +73,9 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
             putExtra("level", level)
+            putExtra("priority", priority)
+            putExtra("createdBy", createdBy)
+            putExtra("location", location)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -71,10 +92,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 alarmIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-
             val alarmInfo = AlarmManager.AlarmClockInfo(triggerTime, showIntent)
             alarmManager.setAlarmClock(alarmInfo, pendingIntent)
-
             Log.d("FCM_DEBUG", "✅ Full-screen alarm scheduled for job #$jobCardNumber")
         } catch (e: Exception) {
             Log.e("FCM_DEBUG", "❌ Failed to schedule alarm: ${e.message}")
