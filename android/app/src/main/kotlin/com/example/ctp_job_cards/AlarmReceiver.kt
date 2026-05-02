@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.google.firebase.firestore.FirebaseFirestore
 
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -18,7 +17,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         Log.d("AlarmReceiver", "🚨 AlarmReceiver triggered for job: $jobCardNumber (P$priority)")
 
-        // === LAUNCH FULL SCREEN ALERT WITH COMPLETE DATA ===
+        // === LAUNCH FULL SCREEN ALERT WITH COMPLETE DATA + FORCE FLAG ===
         val fullScreenIntent = Intent(context, FullScreenJobAlertActivity::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
@@ -26,6 +25,7 @@ class AlarmReceiver : BroadcastReceiver() {
             putExtra("priority", priority)
             putExtra("createdBy", createdBy)
             putExtra("location", location)
+            putExtra("forceShow", true)                    // ← ADDED THIS LINE
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
 

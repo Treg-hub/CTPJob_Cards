@@ -25,7 +25,6 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FirebaseFirestore
 
 class FullScreenJobAlertActivity : ComponentActivity() {
-
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var pulseAnimator: ValueAnimator? = null
@@ -33,8 +32,10 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Skip full-screen if app is in foreground
-        if (isAppInForeground(this)) {
+        val forceShow = intent.getBooleanExtra("forceShow", false)
+
+        // Skip full-screen ONLY if NOT forced AND app is in foreground
+        if (!forceShow && isAppInForeground(this)) {
             Log.d("FullScreenJobAlert", "App in foreground → skipping full-screen")
             finish()
             return
@@ -69,22 +70,19 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         val appProcesses = activityManager.runningAppProcesses ?: return false
         val packageName = context.packageName
 
-        // Check if our process is in foreground
-        val isProcessForeground = appProcesses.any {
-            it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-            it.processName == packageName
+        val processInfo = appProcesses.find { it.processName == packageName }
+            ?: return false
+
+        if (processInfo.importance != ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+            return false
         }
 
-        if (!isProcessForeground) return false
-
-        // Additional checks: screen on + not locked
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
 
         val isScreenOn = powerManager.isInteractive
         val isKeyguardLocked = keyguardManager.isKeyguardLocked
 
-        // Only consider "foreground" if screen is on AND not locked
         return isScreenOn && !isKeyguardLocked
     }
 
@@ -186,21 +184,18 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             }
             val pattern = longArrayOf(0, 600, 200, 600, 200, 600, 200, 1200)
             val vibrationEffect = VibrationEffect.createWaveform(pattern, 0)
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Android 12+
                 val audioAttributes = android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_ALARM)
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
                 vibrator?.vibrate(vibrationEffect, audioAttributes)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // Android 8.0 - 11
                 vibrator?.vibrate(vibrationEffect)
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(pattern, 0)
-            }                                                                                      
+            }
         } catch (e: Exception) {
             Log.e("FullScreenJobAlert", "Alarm error: ${e.message}")
         }

@@ -73,10 +73,10 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'persistent_banner_channel', 'Persistent Job Alerts',
       description: 'Non-intrusive persistent banner for Priority 5 (foreground)',
-      importance: Importance.high, enableVibration: true, playSound: true,
+      importance: Importance.max, enableVibration: true, playSound: true,
       sound: const RawResourceAndroidNotificationSound('escalation_alert'),
       vibrationPattern: Int64List.fromList([0, 300, 150, 300]),
-    ));
+    )); 
 
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'full_channel', 'Full-Loud Job Notifications',
@@ -111,8 +111,8 @@ class NotificationService {
       androidDetails = AndroidNotificationDetails(
         'persistent_banner_channel', 'Persistent Job Alerts',
         icon: '@mipmap/ic_launcher',
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         enableVibration: true,
         playSound: true,
         sound: const RawResourceAndroidNotificationSound('escalation_alert'),
