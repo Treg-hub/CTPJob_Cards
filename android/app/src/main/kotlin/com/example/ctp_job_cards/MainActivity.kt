@@ -100,7 +100,6 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        Log.d("MainActivity", "🚀 configureFlutterEngine called - Registering channels")
         super.configureFlutterEngine(flutterEngine)
 
         // Geofence channel
@@ -127,30 +126,29 @@ class MainActivity : FlutterActivity() {
         }
 
         // Job alert channel
-        Log.d("MainActivity", "🚨 Registering job_alert_channel")
-        Log.d("MainActivity", "🚀 MethodChannel job_alert_channel registered")
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JOB_ALERT_CHANNEL).setMethodCallHandler { call, result ->
-            Log.d("MainActivity", "🚨 Job alert channel received method: ${call.method}")
             when (call.method) {
                 "triggerUrgentAlert" -> {
-                val jobCardNumber = call.argument<String>("jobCardNumber")
-                val description = call.argument<String>("description")
-                val location = call.argument<String>("location") ?: "Location not specified"
-                val createdBy = call.argument<String>("createdBy") ?: "Unknown"
-                val priority = call.argument<String>("priority") ?: "5"
+                    val jobCardNumber = call.argument<String>("jobCardNumber")
+                    val description = call.argument<String>("description")
+                    val location = call.argument<String>("location") ?: "Location not specified"
+                    val createdBy = call.argument<String>("createdBy") ?: "Unknown"
+                    val priority = call.argument<String>("priority") ?: "5"
 
-                Log.d("MainActivity", "🚨 triggerUrgentAlert called with jobCardNumber=$jobCardNumber, priority=$priority")
-
-                if (jobCardNumber != null && description != null) {
-                    triggerUrgentAlert(jobCardNumber, description, location, createdBy, priority, result)
-                } else {
-                    Log.e("MainActivity", "🚨 INVALID_ARGUMENTS: jobCardNumber=$jobCardNumber, description=$description")
-                    result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
+                    if (jobCardNumber != null && description != null) {
+                        triggerUrgentAlert(jobCardNumber, description, location, createdBy, priority, result)
+                    } else {
+                        result.error("INVALID_ARGUMENTS", "Missing jobCardNumber or description", null)
+                    }
+                }
+                else -> {
+                    result.notImplemented()
                 }
             }
         }
     }
 
+    // ==================== GEOFENCE METHODS ====================
     private fun startGeofence(clockNo: String, lat: Double, lng: Double, radius: Double, result: MethodChannel.Result) {
         val geofence = Geofence.Builder()
             .setRequestId("company_geofence_$clockNo")
@@ -194,32 +192,31 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun triggerUrgentAlert(call: MethodCall, result: MethodChannel.Result) {
-    try {
-        val jobCardNumber = call.argument<String>("jobCardNumber") ?: "Unknown"
-        val description = call.argument<String>("description") ?: "Urgent job"
-        val location = call.argument<String>("location") ?: "Location not specified"
-        val createdBy = call.argument<String>("createdBy") ?: "Unknown"
-        val priority = call.argument<String>("priority") ?: "5"
-
-        val serviceIntent = Intent(this, AlertForegroundService::class.java).apply {
-            putExtra("jobCardNumber", jobCardNumber)
-            putExtra("description", description)
-            putExtra("location", location)
-            putExtra("createdBy", createdBy)
-            putExtra("priority", priority)
+    // ==================== URGENT ALERT METHOD ====================
+    private fun triggerUrgentAlert(
+        jobCardNumber: String,
+        description: String,
+        location: String,
+        createdBy: String,
+        priority: String,
+        result: MethodChannel.Result
+    ) {
+        try {
+            val serviceIntent = Intent(this, AlertForegroundService::class.java).apply {
+                putExtra("jobCardNumber", jobCardNumber)
+                putExtra("description", description)
+                putExtra("location", location)
+                putExtra("createdBy", createdBy)
+                putExtra("priority", priority)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            result.success("Urgent alert triggered")
+        } catch (e: Exception) {
+            result.error("ALERT_ERROR", e.message, null)
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
-
-        Log.d("MainActivity", "🚨 Urgent alert triggered for job #$jobCardNumber (P$priority)")
-        result.success("Urgent alert triggered")
-    } catch (e: Exception) {
-        Log.e("MainActivity", "Failed to trigger urgent alert: $e")
-        result.error("ALERT_ERROR", e.message, null)
     }
 }

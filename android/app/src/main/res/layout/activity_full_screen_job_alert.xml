@@ -16,11 +16,13 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
-        <ImageView
+        <TextView
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:src="@drawable/ic_warning"
-            android:tint="#FFFFFF" />
+            android:text="⚠️"
+            android:textSize="24sp"
+            android:gravity="center"
+            android:textColor="#FFFFFF" />
 
         <TextView
             android:layout_width="0dp"
