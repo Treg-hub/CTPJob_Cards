@@ -14,7 +14,6 @@ import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/sync_service.dart';
-import 'services/background_geofence_service.dart';
 import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 
@@ -76,8 +75,19 @@ void main() async {
       debugPrint('✅ Firebase initialized successfully');
     } else {
       debugPrint('ℹ️ Firebase already initialized — using existing [DEFAULT] app');
-      Firebase.app();
     }
+
+    // Only set up Crashlytics and Firestore if Firebase initialized successfully
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
+    FirebaseFirestore.instance.settings = Settings(
+      persistenceEnabled: !kIsWeb,
+    );
+
   } catch (e) {
     final msg = e.toString().toLowerCase();
     if (msg.contains('already exists')) {
@@ -86,16 +96,6 @@ void main() async {
       debugPrint('⚠️ Firebase initialization warning: $e');
     }
   }
-
-  if (!kIsWeb) {
-    await BackgroundGeofenceService.initializeService();
-  }
-
-  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
 
   // ==================== FIRESTORE SETTINGS ====================
   FirebaseFirestore.instance.settings = Settings(

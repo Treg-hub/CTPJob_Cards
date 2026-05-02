@@ -3,6 +3,7 @@ package com.example.ctp_job_cards
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.ActivityManager
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
@@ -12,6 +13,7 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.os.PowerManager
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -63,11 +65,27 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     }
 
     private fun isAppInForeground(context: Context): Boolean {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return am.runningAppProcesses?.any {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val appProcesses = activityManager.runningAppProcesses ?: return false
+        val packageName = context.packageName
+
+        // Check if our process is in foreground
+        val isProcessForeground = appProcesses.any {
             it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-            it.processName == context.packageName
-        } ?: false
+            it.processName == packageName
+        }
+
+        if (!isProcessForeground) return false
+
+        // Additional checks: screen on + not locked
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+
+        val isScreenOn = powerManager.isInteractive
+        val isKeyguardLocked = keyguardManager.isKeyguardLocked
+
+        // Only consider "foreground" if screen is on AND not locked
+        return isScreenOn && !isKeyguardLocked
     }
 
     private fun setupUI() {
