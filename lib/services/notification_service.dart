@@ -22,9 +22,7 @@ class NotificationService {
   // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
     try {
-      final settings = await _messaging.requestPermission(
-        alert: true, badge: true, sound: true,
-      );
+      final settings = await _messaging.requestPermission(alert: true, badge: true, sound: true);
       debugPrint('FCM Permission: ${settings.authorizationStatus}');
     } catch (e) {
       debugPrint('Error requesting FCM permissions: $e');
@@ -57,31 +55,44 @@ class NotificationService {
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
+    // Normal (P1)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'normal_channel', 'Normal Job Notifications',
       description: 'Standard notifications for job card assignments',
-      importance: Importance.high, enableVibration: true, playSound: true,
+      importance: Importance.defaultImportance,
+      enableVibration: true,
+      playSound: true,
     ));
 
+    // Medium (P2 & P3)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
-      'medium_channel', 'Medium-High Job Notifications',
-      description: 'Loud notifications for priority 4 jobs',
-      importance: Importance.high, enableVibration: true, playSound: true,
+      'medium_channel', 'Medium Job Notifications',
+      description: 'Notifications for priority 2 & 3 jobs',
+      importance: Importance.high,
+      enableVibration: true,
+      playSound: true,
       sound: const RawResourceAndroidNotificationSound('escalation_alert'),
+      vibrationPattern: Int64List.fromList([0, 600, 200, 600]),
     ));
 
+    // Persistent Banner (P4 & P5 when app is open)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'persistent_banner_channel', 'Persistent Job Alerts',
-      description: 'Non-intrusive persistent banner for Priority 5 (foreground)',
-      importance: Importance.max, enableVibration: true, playSound: true,
+      description: 'Persistent banner for Priority 4 & 5 (when app is open)',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
       sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-      vibrationPattern: Int64List.fromList([0, 300, 150, 300]),
-    )); 
+      vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
+    ));
 
+    // Full-screen (P4 & P5 when app is not visible)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'full_channel', 'Full-Loud Job Notifications',
-      description: 'Maximum priority notifications for priority 5 jobs (background only)',
-      importance: Importance.max, bypassDnd: true, playSound: true,
+      description: 'Maximum priority full-screen alerts for priority 4 & 5',
+      importance: Importance.max,
+      bypassDnd: true,
+      playSound: true,
       sound: const RawResourceAndroidNotificationSound('escalation_alert'),
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 1500, 500, 1500, 500, 1500, 500, 1500]),
@@ -92,7 +103,7 @@ class NotificationService {
   }
 
   // ==================== SHOW NOTIFICATION ====================
-  Future<void> _showLocalNotification({
+    Future<void> _showLocalNotification({
     required String title,
     required String body,
     required String level,
@@ -103,11 +114,28 @@ class NotificationService {
   }) async {
     if (kIsWeb) return;
 
-    late AndroidNotificationDetails androidDetails;
-    final bool isForeground = _isAppInForeground;
-    final bool isPriority5 = level == 'full-loud' || (priority != null && priority == '5');
+    // ==================== DYNAMIC COLOR BASED ON PRIORITY ====================
+    Color _getPriorityColor(String? priority) {
+      switch (priority) {
+        case '5':
+          return const Color(0xFFFF0000); // Red - Critical (P5)
+        case '4':
+          return const Color(0xFFFF5722); // Deep Orange - High (P4)
+        case '3':
+        case '2':
+          return const Color(0xFFFF9800); // Orange - Medium (P2 & P3)
+        default:
+          return const Color(0xFF2196F3); // Blue - Normal (P1)
+      }
+    }
 
-    if (isPriority5 && isForeground) {
+    final bool isForeground = _isAppInForeground;
+    final bool isHighPriority = level == 'full-loud' || (priority != null && (priority == '5' || priority == '4'));
+
+    late AndroidNotificationDetails androidDetails;
+
+    if (isHighPriority && isForeground) {
+      // P5 or P4 when app is OPEN → Persistent banner + medium sound
       androidDetails = AndroidNotificationDetails(
         'persistent_banner_channel', 'Persistent Job Alerts',
         icon: '@mipmap/ic_launcher',
@@ -116,26 +144,20 @@ class NotificationService {
         enableVibration: true,
         playSound: true,
         sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-        vibrationPattern: Int64List.fromList([0, 250, 100, 250]),
+        vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
         ongoing: true,
         autoCancel: false,
+        color: _getPriorityColor(priority),           // ← Dynamic color
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.message,
-        color: const Color(0xFFFF0000),
-        ledColor: const Color(0xFFFF0000),
-        ledOnMs: 500,
-        ledOffMs: 500,
-        styleInformation: BigTextStyleInformation(
-          body,
-          contentTitle: title,
-          summaryText: location != null ? '📍 $location' : null,
-        ),
+        styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
           AndroidNotificationAction('view_job', 'View Job'),
         ],
       );
-    } else if (isPriority5) {
+    } else if (isHighPriority) {
+      // P5 or P4 when app is NOT visible → Full-screen + loud alarm
       androidDetails = AndroidNotificationDetails(
         'full_channel', 'Full-Loud Job Notifications',
         icon: '@mipmap/ic_launcher',
@@ -150,30 +172,27 @@ class NotificationService {
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: true,
         visibility: NotificationVisibility.public,
-        color: const Color(0xFFFF0000),
-        ledColor: const Color(0xFFFF0000),
-        ledOnMs: 500,
-        ledOffMs: 500,
+        color: _getPriorityColor(priority),           // ← Dynamic color
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
           AndroidNotificationAction('view_job', 'View Job'),
         ],
       );
-    } else if (level == 'medium-high') {
+    } else if (level == 'medium-high' || level == 'medium') {
+      // P2 & P3
       androidDetails = AndroidNotificationDetails(
-        'medium_channel', 'Medium-High Job Notifications',
+        'medium_channel', 'Medium Job Notifications',
         icon: '@mipmap/ic_launcher',
-        importance: Importance.high, priority: Priority.high,
-        enableVibration: true, playSound: true,
+        importance: Importance.high,
+        priority: Priority.high,
+        enableVibration: true,
+        playSound: true,
         sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-        vibrationPattern: Int64List.fromList([0, 800, 300, 800, 300, 800]),
+        vibrationPattern: Int64List.fromList([0, 600, 200, 600]),
         ongoing: true,
         visibility: NotificationVisibility.public,
-        category: AndroidNotificationCategory.message,
-        color: const Color(0xFFFF9800),
-        ledColor: const Color(0xFFFF9800),
-        ledOnMs: 500, ledOffMs: 500,
+        color: _getPriorityColor(priority),           // ← Dynamic color
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
@@ -181,17 +200,16 @@ class NotificationService {
         ],
       );
     } else {
+      // P1
       androidDetails = AndroidNotificationDetails(
         'normal_channel', 'Normal Job Notifications',
         icon: '@mipmap/ic_launcher',
-        importance: Importance.high, priority: Priority.high,
-        enableVibration: true, playSound: true,
-        vibrationPattern: Int64List.fromList([0, 250, 100, 250]),
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        enableVibration: true,
+        playSound: true,
         visibility: NotificationVisibility.public,
-        category: AndroidNotificationCategory.message,
-        color: const Color(0xFF0000FF),
-        ledColor: const Color(0xFF0000FF),
-        ledOnMs: 500, ledOffMs: 500,
+        color: _getPriorityColor(priority),           // ← Dynamic color
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
@@ -212,13 +230,10 @@ class NotificationService {
   // ==================== INITIALIZE ====================
   Future<void> initialize() async {
     if (kIsWeb) return;
-
     await _requestPermissions();
     await _createNotificationChannels();
     await requestAllCriticalPermissions();
-
     WidgetsBinding.instance.addObserver(_lifecycleObserver);
-
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
   }
@@ -237,29 +252,10 @@ class NotificationService {
     final part = message.data['part'] ?? '';
     final description = message.data['description'] ?? body;
 
-    final bool isForeground = _isAppInForeground;
-    final bool isPriority5 = level == 'full-loud' || priority == '5';
+    debugPrint('📩 Foreground message | Level: $level | Priority: $priority | Foreground: $_isAppInForeground');
 
-    debugPrint('📩 Foreground message | Level: $level | Priority: $priority | Foreground: $isForeground');
-
-    if (isPriority5 && !isForeground) {
-      try {
-        final locationString = [department, area, machine, part]
-            .where((e) => e.isNotEmpty)
-            .join(' > ');
-
-        await JobAlertService.triggerUrgentAlert(
-          jobCardNumber: jobCardNumber,
-          description: description,
-          createdBy: createdBy,
-          priority: priority,
-          location: locationString,
-        );
-      } catch (e) {
-        debugPrint('JobAlertService failed: $e');
-      }
-    }
-
+    // Always show the banner (persistent for P4/P5, normal for others)
+    // Full-screen is now handled ONLY by the native side (AlarmReceiver + forceShow)
     await _showLocalNotification(
       title: title,
       body: body,
@@ -276,19 +272,20 @@ class NotificationService {
   }
 
   // ==================== TEST METHODS ====================
-  Future<void> testFullscreenNotification() async {
-    await _showLocalNotification(
-      title: "TEST - URGENT JOB",
-      body: "This is a test full-screen notification (Priority 5)",
-      level: "full-loud",
-    );
-  }
-
   Future<void> testPersistentBanner() async {
     _isAppInForeground = true;
     await _showLocalNotification(
-      title: "TEST - PERSISTENT BANNER",
-      body: "This should be a non-intrusive persistent banner (Priority 5 foreground)",
+      title: "TEST - PERSISTENT BANNER (P5)",
+      body: "This should be a red persistent banner with medium sound",
+      level: "full-loud",
+      priority: "5",
+    );
+  }
+
+  Future<void> testFullscreenNotification() async {
+    await _showLocalNotification(
+      title: "TEST - FULL SCREEN (P5)",
+      body: "This should trigger full-screen alert",
       level: "full-loud",
       priority: "5",
     );
@@ -400,28 +397,19 @@ class NotificationService {
     }
   }
 
-  Future<void> showOnSiteNotification({
-    required String title,
-    required String body,
-    String level = 'normal',
-  }) async {
-    await _showLocalNotification(
-      title: title,
-      body: body,
-      level: level,
-    );
+ Future<void> showOnSiteNotification({required String title, required String body, String level = 'normal'}) async {
+    await _showLocalNotification(title: title, body: body, level: level);
+    }
   }
-}
 
-// ==================== LIFECYCLE OBSERVER ====================
-class _AppLifecycleObserver extends WidgetsBindingObserver {
-  final NotificationService service;
+  // ==================== LIFECYCLE OBSERVER ====================
+  class _AppLifecycleObserver extends WidgetsBindingObserver {
+    final NotificationService service;
+    _AppLifecycleObserver(this.service);
 
-  _AppLifecycleObserver(this.service);
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    service._isAppInForeground = (state == AppLifecycleState.resumed);
-    debugPrint('App lifecycle changed → Foreground: ${service._isAppInForeground}');
+    @override
+    void didChangeAppLifecycleState(AppLifecycleState state) {
+      service._isAppInForeground = (state == AppLifecycleState.resumed);
+      debugPrint('App lifecycle changed → Foreground: ${service._isAppInForeground}');
+    }
   }
-}

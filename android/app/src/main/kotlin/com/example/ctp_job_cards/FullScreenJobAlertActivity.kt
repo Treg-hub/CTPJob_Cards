@@ -34,7 +34,6 @@ class FullScreenJobAlertActivity : ComponentActivity() {
 
         val forceShow = intent.getBooleanExtra("forceShow", false)
 
-        // Skip full-screen ONLY if NOT forced AND app is in foreground
         if (!forceShow && isAppInForeground(this)) {
             Log.d("FullScreenJobAlert", "App in foreground → skipping full-screen")
             finish()
