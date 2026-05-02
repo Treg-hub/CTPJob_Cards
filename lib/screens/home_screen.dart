@@ -1071,6 +1071,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ),
         ),
 
+        // ==================== TEST PERSISTENT BANNER BUTTON ====================
+        Card(
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
+            title: const Text(
+              'Test Persistent Banner (P5)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text('Test red persistent banner with 3 buttons (Assign Self, Busy, Dismiss)'),
+            trailing: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  await _notificationService.testPersistentBanner();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Persistent P5 banner triggered! Check notification panel'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('TEST'),
+            ),
+          ),
+        ),
+
+        Card(
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.battery_charging_full, color: Colors.orange, size: 28),
+            title: const Text('Exclude from Battery Optimization'),
+            subtitle: const Text('Required for persistent notifications on Samsung'),
+            trailing: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              onPressed: () async {
+                final intent = android_intent.AndroidIntent(
+                  action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+                );
+                await intent.launch();
+              },
+              child: const Text('OPEN'),
+            ),
+          ),
+        ),
+
         // Notification Permissions
         ListTile(
           leading: const Icon(Icons.security, color: Colors.orange),
