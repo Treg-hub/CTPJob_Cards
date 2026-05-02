@@ -32,13 +32,8 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val forceShow = intent.getBooleanExtra("forceShow", false)
-
-        if (!forceShow && isAppInForeground(this)) {
-            Log.d("FullScreenJobAlert", "App in foreground → skipping full-screen")
-            finish()
-            return
-        }
+        // Always show full-screen when this activity is launched
+        // (AlarmReceiver only calls this when app is not visible)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -54,7 +49,6 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setContentView(R.layout.activity_full_screen_job_alert)
-
         setupUI()
         startAlarmSoundAndVibration()
         startHeaderPulseAnimation()

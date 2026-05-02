@@ -148,6 +148,7 @@ class NotificationService {
         ongoing: true,
         autoCancel: false,
         color: _getPriorityColor(priority),           // ← Dynamic color
+        colorized: true,
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.message,
         styleInformation: BigTextStyleInformation(body),
@@ -174,6 +175,7 @@ class NotificationService {
         autoCancel: false,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),           // ← Dynamic color
+        colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
@@ -195,6 +197,7 @@ class NotificationService {
         autoCancel: false,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),           // ← Dynamic color
+        colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
@@ -212,6 +215,7 @@ class NotificationService {
         playSound: true,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),           // ← Dynamic color
+        colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction('assign_self', 'Assign Self'),
