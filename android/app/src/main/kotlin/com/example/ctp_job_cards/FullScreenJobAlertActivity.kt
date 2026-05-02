@@ -6,6 +6,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -166,12 +167,22 @@ class FullScreenJobAlertActivity : ComponentActivity() {
                 getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
             val pattern = longArrayOf(0, 600, 200, 600, 200, 600, 200, 1200)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            val vibrationEffect = VibrationEffect.createWaveform(pattern, 0)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+
+                val audioAttributes = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                vibrator?.vibrate(vibrationEffect, audioAttributes)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // Android 8.0 - 11
+                vibrator?.vibrate(vibrationEffect)
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(pattern, 0)
-            }                                                                                               
+            }                                                                                      
         } catch (e: Exception) {
             Log.e("FullScreenJobAlert", "Alarm error: ${e.message}")
         }
