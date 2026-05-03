@@ -3,7 +3,8 @@ flutter pub get
 flutter build web --release
 firebase deploy --only hosting
 flutter build apk --target-platform android-arm64 --release
-
+ 
+ 
 ### Admin Workflow:
     When releaseing a new version do the below
         Increase version in pubspec.yaml:YAML   version: 1.0.1+3     # ← Increase this
