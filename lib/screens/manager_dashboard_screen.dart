@@ -44,6 +44,11 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
   final Map<String, int> _createdByDept = {};
   final Map<String, int> _closedByDept = {};
   final Map<DateTime, Map<String, int>> _outstandingByDeptDaily = {};
+  final Map<DateTime, Map<String, int>> _outstandingByAreaDaily = {};
+
+  Set<String> _selectedDepts = {};
+  Set<String> _selectedAreas = {};
+  Set<String> _selectedPieDepts = {};
 
   bool _isLoading = true;
 
@@ -196,6 +201,30 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
         }
         _outstandingByDeptDaily[day] = outstanding;
       }
+
+      // Compute outstanding by area daily
+      _outstandingByAreaDaily.clear();
+      for (int i = 29; i >= 0; i--) {
+        final date = now.subtract(Duration(days: i));
+        final day = DateTime(date.year, date.month, date.day);
+        final outstanding = <String, int>{};
+        for (var job in jobs) {
+          if (job.createdAt != null && job.createdAt!.toLocal().isBefore(day.add(const Duration(days: 1))) &&
+              (job.completedAt == null || job.completedAt!.toLocal().isAfter(day))) {
+            final area = job.area ?? 'Other';
+            outstanding[area] = (outstanding[area] ?? 0) + 1;
+          }
+        }
+        _outstandingByAreaDaily[day] = outstanding;
+      }
+
+      // Initialize selected sets
+      final allDepts = _outstandingByDeptDaily.values.expand((m) => m.keys).toSet().toList()..sort();
+      final allAreas = _outstandingByAreaDaily.values.expand((m) => m.keys).toSet().toList()..sort();
+      final allPieDepts = _filteredJobsCache.map((j) => j.department ?? 'Other').toSet().toList()..sort();
+      _selectedDepts = allDepts.toSet();
+      _selectedAreas = allAreas.toSet();
+      _selectedPieDepts = allPieDepts.toSet();
 
       _lastUpdated = DateTime.now();
     } catch (e) {
@@ -438,7 +467,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
         mainAxisSpacing: 12,
         childAspectRatio: 1.8,
       ),
-      itemCount: 8,
+      itemCount: 11,
       itemBuilder: (context, index) {
         final data = [
           {'title': 'Total Jobs', 'value': _totalJobs.toString(), 'color': Colors.blue},
@@ -449,6 +478,9 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
           {'title': 'Aged >7d', 'value': _agedOpen7d.toString(), 'color': Colors.redAccent},
           {'title': 'Created (Month)', 'value': _createdThisMonth.toString(), 'color': Colors.blueAccent},
           {'title': 'Closed (Month)', 'value': _closedThisMonth.toString(), 'color': Colors.greenAccent},
+          {'title': 'Avg Completion Time', 'value': _averageCompletionTime != null ? '${_averageCompletionTime!.inDays}d ${_averageCompletionTime!.inHours % 24}h' : 'N/A', 'color': Colors.teal},
+          {'title': 'Avg Response Time', 'value': _avgResponseTime != null ? '${_avgResponseTime!.inDays}d ${_avgResponseTime!.inHours % 24}h' : 'N/A', 'color': Colors.indigo},
+          {'title': 'Aged >30d', 'value': _agedOpen30d.toString(), 'color': Colors.deepOrange},
         ][index];
 
         return Card(
@@ -529,8 +561,29 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Chip(
+                  avatar: const CircleAvatar(backgroundColor: Colors.blue, radius: 6),
+                  label: const Text('Created'),
+                  backgroundColor: Colors.blue.withValues(alpha: 51),
+                ),
+                const SizedBox(width: 8),
+                Chip(
+                  avatar: const CircleAvatar(backgroundColor: Colors.green, radius: 6),
+                  label: const Text('Closed'),
+                  backgroundColor: Colors.green.withValues(alpha: 51),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             _buildDeptChart(),
+            const SizedBox(height: 16),
+            _buildAreaChart(),
+            const SizedBox(height: 16),
+            _buildPieChart(),
           ],
         ),
       ),
@@ -539,12 +592,13 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
 
   Widget _buildDeptChart() {
     final now = DateTime.now();
-    final depts = ['Pre Press', 'Pressroom', 'Post Press'];
-    final colors = [Colors.green, Colors.blue, Colors.brown];
+    final allDepts = _outstandingByDeptDaily.values.expand((m) => m.keys).toSet().toList()..sort();
+    const List<Color> deptColors = [Colors.green, Colors.blue, Colors.brown, Colors.red, Colors.orange, Colors.purple, Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan, Colors.lime];
 
     final lineBarsData = <LineChartBarData>[];
-    for (int i = 0; i < depts.length; i++) {
-      final dept = depts[i];
+    for (int i = 0; i < allDepts.length; i++) {
+      final dept = allDepts[i];
+      if (!_selectedDepts.contains(dept)) continue;
       final spots = <FlSpot>[];
       for (int j = 29; j >= 0; j--) {
         final date = now.subtract(Duration(days: j));
@@ -554,7 +608,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
       lineBarsData.add(LineChartBarData(
         spots: spots,
         isCurved: true,
-        color: colors[i],
+        color: deptColors[i % deptColors.length],
         barWidth: 3,
         belowBarData: BarAreaData(show: false),
         dotData: const FlDotData(show: false),
@@ -588,6 +642,157 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
               lineBarsData: lineBarsData,
             ),
           ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: allDepts.asMap().entries.map((entry) {
+            final index = entry.key;
+            final dept = entry.value;
+            return FilterChip(
+              avatar: CircleAvatar(backgroundColor: deptColors[index % deptColors.length], radius: 6),
+              label: Text(dept),
+              selected: _selectedDepts.contains(dept),
+              onSelected: (selected) => setState(() => selected ? _selectedDepts.add(dept) : _selectedDepts.remove(dept)),
+              backgroundColor: deptColors[index % deptColors.length].withValues(alpha: 51),
+              selectedColor: deptColors[index % deptColors.length].withValues(alpha: 128),
+              checkmarkColor: Colors.white,
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAreaChart() {
+    final now = DateTime.now();
+    final allAreas = _outstandingByAreaDaily.values.expand((m) => m.keys).toSet().toList()..sort();
+    const List<Color> deptColors = [Colors.green, Colors.blue, Colors.brown, Colors.red, Colors.orange, Colors.purple, Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan, Colors.lime];
+
+    final lineBarsData = <LineChartBarData>[];
+    for (int i = 0; i < allAreas.length; i++) {
+      final area = allAreas[i];
+      if (!_selectedAreas.contains(area)) continue;
+      final spots = <FlSpot>[];
+      for (int j = 29; j >= 0; j--) {
+        final date = now.subtract(Duration(days: j));
+        final day = DateTime(date.year, date.month, date.day);
+        spots.add(FlSpot((29 - j).toDouble(), (_outstandingByAreaDaily[day]?[area] ?? 0).toDouble()));
+      }
+      lineBarsData.add(LineChartBarData(
+        spots: spots,
+        isCurved: true,
+        color: deptColors[i % deptColors.length],
+        barWidth: 3,
+        belowBarData: BarAreaData(show: false),
+        dotData: const FlDotData(show: false),
+      ));
+    }
+
+    return Column(
+      children: [
+        const Text('Outstanding Job Cards by Area (Last 30 days)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        SizedBox(
+          height: 220,
+          child: LineChart(
+            LineChartData(
+              gridData: const FlGridData(show: true),
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      if (value % 7 == 0) {
+                        final date = now.subtract(Duration(days: 29 - value.toInt()));
+                        return Text('${date.day}/${date.month}', style: const TextStyle(fontSize: 10));
+                      }
+                      return const Text('');
+                    },
+                  ),
+                ),
+                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true)),
+              ),
+              borderData: FlBorderData(show: true),
+              lineBarsData: lineBarsData,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: allAreas.asMap().entries.map((entry) {
+            final index = entry.key;
+            final area = entry.value;
+            return FilterChip(
+              avatar: CircleAvatar(backgroundColor: deptColors[index % deptColors.length], radius: 6),
+              label: Text(area),
+              selected: _selectedAreas.contains(area),
+              onSelected: (selected) => setState(() => selected ? _selectedAreas.add(area) : _selectedAreas.remove(area)),
+              backgroundColor: deptColors[index % deptColors.length].withValues(alpha: 51),
+              selectedColor: deptColors[index % deptColors.length].withValues(alpha: 128),
+              checkmarkColor: Colors.white,
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPieChart() {
+    final allDepts = _filteredJobsCache.map((j) => j.department ?? 'Other').toSet().toList()..sort();
+    const List<Color> deptColors = [Colors.green, Colors.blue, Colors.brown, Colors.red, Colors.orange, Colors.purple, Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan, Colors.lime];
+    final sections = <PieChartSectionData>[];
+
+    for (int i = 0; i < allDepts.length; i++) {
+      final dept = allDepts[i];
+      if (!_selectedPieDepts.contains(dept)) continue;
+      final count = _filteredJobsCache.where((j) => j.status == JobStatus.open && j.department == dept).length;
+      if (count > 0) {
+        sections.add(PieChartSectionData(
+          value: count.toDouble(),
+          color: deptColors[i % deptColors.length],
+          title: '$count',
+          radius: 80,
+          titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+        ));
+      }
+    }
+
+    return Column(
+      children: [
+        const Text('Open Job Cards by Department', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        SizedBox(
+          height: 220,
+          child: PieChart(
+            PieChartData(
+              sections: sections,
+              centerSpaceRadius: 40,
+              sectionsSpace: 2,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: allDepts.asMap().entries.map((entry) {
+            final index = entry.key;
+            final dept = entry.value;
+            return FilterChip(
+              avatar: CircleAvatar(backgroundColor: deptColors[index % deptColors.length], radius: 6),
+              label: Text(dept),
+              selected: _selectedPieDepts.contains(dept),
+              onSelected: (selected) => setState(() => selected ? _selectedPieDepts.add(dept) : _selectedPieDepts.remove(dept)),
+              backgroundColor: deptColors[index % deptColors.length].withValues(alpha: 51),
+              selectedColor: deptColors[index % deptColors.length].withValues(alpha: 128),
+              checkmarkColor: Colors.white,
+            );
+          }).toList(),
         ),
       ],
     );
@@ -818,11 +1023,7 @@ class _ManagerDashboardScreenState extends ConsumerState<ManagerDashboardScreen>
                     SizedBox(height: _sectionSpacing),
                     Text('Analytics & Breakdowns', style: TextStyle(fontSize: _isDesktop ? 26 : 24, fontWeight: FontWeight.bold)),
                     SizedBox(height: _isDesktop ? 24 : 16),
-                    _buildChartsSection(),
-                    SizedBox(height: _sectionSpacing),
-                    Text('Live Active Job Cards', style: TextStyle(fontSize: _isDesktop ? 26 : 24, fontWeight: FontWeight.bold)),
-                    SizedBox(height: _isDesktop ? 24 : 16),
-                    _buildLiveJobCardsList(),
+                     _buildChartsSection(),
                   ],
                 ),
               ],

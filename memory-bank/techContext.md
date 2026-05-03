@@ -20,7 +20,7 @@
 ### Key Dependencies (from pubspec.yaml)
 ```yaml
 dependencies:
-  flutter: SDK
+  flutter: sdk flutter
   flutter_riverpod: ^2.5.3
   firebase_core: ^4.7.0
   cloud_firestore: ^6.3.0
@@ -41,7 +41,6 @@ dependencies:
   cached_network_image: ^3.4.1
   pull_to_refresh_flutter3: ^2.0.2
   flutter_staggered_animations: ^1.1.1
-  flutter_local_notifications: ^21.0.0
   permission_handler: ^12.0.1
   geolocator: ^14.0.2
   flutter_background_service: ^5.0.0
@@ -61,9 +60,10 @@ dependencies:
   url_launcher: ^6.3.0
   package_info_plus: ^9.0.1
   torch_light: ^1.1.0
+  flutter_local_notifications: ^21.0.0
 
 dev_dependencies:
-  flutter_test: SDK
+  flutter_test: sdk flutter
   flutter_launcher_icons: ^0.14.4
   flutter_lints: ^6.0.0
 ```

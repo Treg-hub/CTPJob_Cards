@@ -659,19 +659,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
-                  const Spacer(),
-                  Flexible(
-                    child: Text(
-                      job.assignedNames?.join(', ') ?? 'Unassigned',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          job.assignedNames?.join(', ') ?? 'Unassigned',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
+                          style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
+                          textAlign: TextAlign.end,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
-                    style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
                   ),
                   const SizedBox(width: 12),
                   Row(
@@ -748,25 +753,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           topJobs = topJobs.where((j) => j.department == currentEmployee!.department).toList();
         }
 
-        return AnimationLimiter(
-          child: Column(
+        if (kIsWeb && (isManager || isSuperManager)) {
+          return Column(
             children: [
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: topJobs.length,
-                itemBuilder: (context, index) {
-                  return AnimationConfiguration.staggeredList(
-                    position: index,
-                    duration: const Duration(milliseconds: 375),
-                    child: SlideAnimation(
-                      verticalOffset: 50.0,
-                      child: FadeInAnimation(
-                        child: _buildJobCardWidget(topJobs[index]),
-                      ),
-                    ),
-                  );
-                },
+              Row(
+                children: [
+                  Expanded(child: _buildFilteredRecentJobs(JobType.electrical)),
+                  Expanded(child: _buildFilteredRecentJobs(JobType.mechanical)),
+                ],
               ),
               const SizedBox(height: 16),
               Center(
@@ -778,6 +772,117 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 ),
               ),
             ],
+          );
+        } else {
+          return AnimationLimiter(
+            child: Column(
+              children: [
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: topJobs.length,
+                  itemBuilder: (context, index) {
+                    return AnimationConfiguration.staggeredList(
+                      position: index,
+                      duration: const Duration(milliseconds: 375),
+                      child: SlideAnimation(
+                        verticalOffset: 50.0,
+                        child: FadeInAnimation(
+                          child: _buildJobCardWidget(topJobs[index]),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: const Text('View All Job Cards', style: TextStyle(fontSize: 15)),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildFilteredRecentJobs(JobType type) {
+    return StreamBuilder<List<JobCard>>(
+      stream: _firestoreService.getAllJobCards(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red))),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          // Loading skeletons
+          return Card(
+            elevation: 4,
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 12),
+                    SkeletonLoader(height: 80),
+                    SizedBox(height: 12),
+                    SkeletonLoader(height: 80),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        final allJobs = snapshot.data!;
+        if (allJobs.isEmpty) {
+          return Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text('No ${type.displayName} jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ),
+            ),
+          );
+        }
+
+        var recentJobs = allJobs
+            .where((job) => job.lastUpdatedAt != null && job.type == type)
+            .toList()
+          ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+
+        var topJobs = recentJobs.take(10).toList();
+
+        return AnimationLimiter(
+          child: ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: topJobs.length,
+            itemBuilder: (context, index) {
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: _buildJobCardWidget(topJobs[index]),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -785,30 +890,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildMyWorkTab() {
-    return DefaultTabController(
-      length: 2,
-      child: Column(
+    if (kIsWeb) {
+      return Column(
         children: [
-          TabBar(
-            tabs: const [
-              Tab(text: 'Assigned'),
-              Tab(text: 'History'),
-            ],
-            labelColor: const Color(0xFFFF8C42),
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-            indicatorColor: const Color(0xFFFF8C42),
+          Text(
+            'Assigned | History',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
+          const SizedBox(height: 16),
           Expanded(
-            child: TabBarView(
+            child: Row(
               children: [
-                _buildAssignedJobs(),
-                _buildWorkHistory(),
+                Expanded(child: _buildAssignedJobs()),
+                Expanded(child: _buildWorkHistory()),
               ],
             ),
           ),
         ],
-      ),
-    );
+      );
+    } else {
+      return DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: const [
+                Tab(text: 'Assigned'),
+                Tab(text: 'History'),
+              ],
+              labelColor: const Color(0xFFFF8C42),
+              unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              indicatorColor: const Color(0xFFFF8C42),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildAssignedJobs(),
+                  _buildWorkHistory(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildAssignedJobs() {
@@ -856,7 +985,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getClosedJobCards(),
+      stream: _firestoreService.getAllJobCards(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -868,20 +997,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           return const Center(child: CircularProgressIndicator());
         }
 
-        final completedJobs = snapshot.data!
-            .where((job) => job.completedBy == currentEmployee!.clockNo)
-            .toList();
+        final allJobs = snapshot.data!;
+        final assignedJobs = allJobs
+            .where((job) => (job.status == JobStatus.monitor || job.status == JobStatus.closed) &&
+                            (job.assignedClockNos?.contains(currentEmployee!.clockNo) ?? false))
+            .toList()
+          ..sort((a, b) {
+            // Monitor first, then closed, by lastUpdatedAt desc
+            if (a.status == JobStatus.monitor && b.status != JobStatus.monitor) return -1;
+            if (a.status != JobStatus.monitor && b.status == JobStatus.monitor) return 1;
+            return (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0));
+          });
 
-        if (completedJobs.isEmpty) {
+        if (assignedJobs.isEmpty) {
           return const Center(
-            child: Text('No completed work history', style: TextStyle(color: Colors.white70)),
+            child: Text('No work history', style: TextStyle(color: Colors.white70)),
           );
         }
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: completedJobs.length,
-          itemBuilder: (context, index) => _buildJobCardWidget(completedJobs[index]),
+          itemCount: assignedJobs.length,
+          itemBuilder: (context, index) => _buildJobCardWidget(assignedJobs[index]),
         );
       },
     );

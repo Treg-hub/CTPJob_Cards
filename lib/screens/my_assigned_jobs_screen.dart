@@ -263,23 +263,25 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    if (job.startedAt == null)
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: () => _startWork(job),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.blue,
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
-                                          ),
-                                          child: const Text('Start'),
-                                        ),
-                                      ),
+                                     if (job.startedAt == null)
+                                       Expanded(
+                                         child: ElevatedButton(
+                                           onPressed: () => _startWork(job),
+                                           style: ElevatedButton.styleFrom(
+                                             backgroundColor: Colors.blue,
+                                             foregroundColor: Colors.black,
+                                             padding: const EdgeInsets.symmetric(vertical: 8),
+                                           ),
+                                           child: const Text('Start'),
+                                         ),
+                                       ),
                                     if (job.startedAt == null) const SizedBox(width: 8),
                                     Expanded(
                                       child: ElevatedButton(
                                         onPressed: () => _showCompleteDialog(context, job),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
+                                          foregroundColor: Colors.black,
                                           padding: const EdgeInsets.symmetric(vertical: 8),
                                         ),
                                         child: const Text('Complete'),
@@ -291,6 +293,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                         onPressed: () => _showMonitorDialog(context, job),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.orange,
+                                          foregroundColor: Colors.black,
                                           padding: const EdgeInsets.symmetric(vertical: 8),
                                         ),
                                         child: const Text('Monitor'),
