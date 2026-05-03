@@ -7,9 +7,10 @@ class JobAlertService {
   static Future<void> triggerUrgentAlert({
     required String jobCardNumber,
     required String description,
-    String? location,           // e.g. "Mechanical > Workshop A > Lathe 3 > Spindle Bearing"
+    String? location,
     String? createdBy,
     String? priority,
+    String? clockNo,                    // ← ADD THIS PARAMETER
   }) async {
     try {
       await _channel.invokeMethod('triggerUrgentAlert', {
@@ -18,6 +19,7 @@ class JobAlertService {
         'location': location ?? 'Location not specified',
         'createdBy': createdBy ?? 'Unknown',
         'priority': priority ?? '5',
+        'clockNo': clockNo ?? 'unknown',
       });
     } on PlatformException catch (e) {
       throw 'Failed to trigger urgent alert: ${e.message}';

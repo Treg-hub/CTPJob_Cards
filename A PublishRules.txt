@@ -38,4 +38,7 @@ npm install
 # 3. Deploy ONLY the functions
 firebase deploy --only functions
 
+Check functions log
+firebase functions:log
+
 

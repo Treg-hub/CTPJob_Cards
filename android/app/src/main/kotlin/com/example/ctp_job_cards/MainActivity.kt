@@ -106,49 +106,55 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    // ==================== BUSY RESPONSE ====================
     private fun sendBusyNotificationToOperator(jobCardNumber: String, originalOperator: String) {
         val currentUser = FirebaseAuth.getInstance().currentUser
-        val busyUserName = currentUser?.displayName ?: currentUser?.email ?: "Unknown User"
-        val busyUserId = currentUser?.uid ?: "unknown"
+        if (currentUser == null) {
+            Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        val functions = FirebaseFunctions.getInstance()
-
-        val data = hashMapOf(
+        val busyData = hashMapOf(
+            "action" to "busy",
             "jobCardNumber" to jobCardNumber,
+            "clockNo" to (currentUser.uid ?: "unknown"),
+            "userName" to (currentUser.displayName ?: currentUser.email ?: "Unknown User"),
             "originalOperator" to originalOperator,
-            "busyUserName" to busyUserName,
-            "busyUserId" to busyUserId
-        )
-
-        functions
-            .getHttpsCallable("sendBusyNotification")
-            .call(data)
-            .addOnSuccessListener { result ->
-                Toast.makeText(this, "✅ Busy notification sent to operator", Toast.LENGTH_LONG).show()
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to notify operator: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-    }
-
-    private fun logDismissedAlert(jobCardNumber: String, operator: String) {
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        val dismissedData = hashMapOf(
-            "jobCardNumber" to jobCardNumber,
-            "dismissedBy" to (currentUser?.uid ?: "unknown"),
-            "dismissedByName" to (currentUser?.displayName ?: currentUser?.email ?: "Unknown"),
-            "originalOperator" to operator,
-            "dismissedAt" to FieldValue.serverTimestamp()
+            "timestamp" to FieldValue.serverTimestamp()
         )
 
         FirebaseFirestore.getInstance()
-            .collection("dismissedAlerts")
-            .add(dismissedData)
+            .collection("alertResponses")
+            .add(busyData)
             .addOnSuccessListener {
-                Toast.makeText(this, "Alert dismissed and logged", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "✅ Busy response sent. Creator will be notified.", Toast.LENGTH_LONG).show()
             }
             .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to log dismiss: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Failed to send busy response: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    // ==================== DISMISSED ALERT ====================
+    private fun logDismissedAlert(jobCardNumber: String, operator: String) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+
+        val dismissData = hashMapOf(
+            "action" to "dismissed",
+            "jobCardNumber" to jobCardNumber,
+            "clockNo" to (currentUser?.uid ?: "unknown"),
+            "userName" to (currentUser?.displayName ?: currentUser?.email ?: "Unknown"),
+            "originalOperator" to operator,
+            "timestamp" to FieldValue.serverTimestamp()
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("alertResponses")   // ← Using single collection
+            .add(dismissData)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Alert dismissed", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to dismiss: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -250,28 +252,102 @@ class NotificationService {
 
   Future<void> _assignJobToCurrentUser(String jobCardNumber) async {
     debugPrint('Assign Self tapped for job $jobCardNumber');
-    // TODO: Add your Firestore update logic here or call MethodChannel
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      debugPrint('❌ No user logged in');
+      return;
+    }
+
+    final userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
+
+    try {
+      // Find the job by jobCardNumber
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('job_cards')
+          .where('jobCardNumber', isEqualTo: int.tryParse(jobCardNumber))
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint('❌ Job not found: $jobCardNumber');
+        return;
+      }
+
+      final jobDoc = querySnapshot.docs.first;
+
+      // Update the job with assignment
+      await jobDoc.reference.update({
+        'assignedTo': currentUser.uid,
+        'assignedToName': userName,
+        'status': 'assigned',
+        'assignedAt': FieldValue.serverTimestamp(),
+        'lastUpdatedBy': currentUser.uid,
+        'lastUpdatedByName': userName,
+      });
+
+      debugPrint('✅ Job $jobCardNumber successfully assigned to $userName');
+
+      // Optional: Show success message
+      // You can also call a Cloud Function here if needed
+
+    } catch (e) {
+      debugPrint('❌ Failed to assign job: $e');
+    }
   }
 
-  Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
-    debugPrint('Busy tapped for job $jobCardNumber - notifying operator: $operator');
+    Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
+    debugPrint('Busy tapped for job $jobCardNumber');
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final clockNo = currentUser?.uid ?? "unknown";
+    final userName = currentUser?.displayName ?? currentUser?.email ?? "Unknown User";
+
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
-          .httpsCallable('sendBusyNotification');
-      await callable.call({
+      final busyData = {
+        'action': 'busy',
         'jobCardNumber': jobCardNumber,
+        'clockNo': clockNo,
+        'userName': userName,
         'originalOperator': operator,
-        'busyUserName': 'Current User', // TODO: Get real name
-      });
-      debugPrint('✅ Busy notification sent via Cloud Function');
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('alertResponses')
+          .add(busyData);
+
+      debugPrint('✅ Busy response written to alertResponses');
     } catch (e) {
-      debugPrint('❌ Failed to send busy notification: $e');
+      debugPrint('❌ Failed to write busy response: $e');
     }
   }
 
   Future<void> _logDismissedAlert(String jobCardNumber, String operator) async {
     debugPrint('Dismiss tapped for job $jobCardNumber');
-    // TODO: Add Firestore write to dismissedAlerts collection
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final clockNo = currentUser?.uid ?? "unknown";
+    final userName = currentUser?.displayName ?? currentUser?.email ?? "Unknown User";
+
+    try {
+      final dismissData = {
+        'action': 'dismissed',
+        'jobCardNumber': jobCardNumber,
+        'clockNo': clockNo,
+        'userName': userName,
+        'originalOperator': operator,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('alertResponses')
+          .add(dismissData);
+
+      debugPrint('✅ Dismissed alert written to alertResponses');
+    } catch (e) {
+      debugPrint('❌ Failed to write dismiss: $e');
+    }
   }
 
   // ==================== INITIALIZE ====================
