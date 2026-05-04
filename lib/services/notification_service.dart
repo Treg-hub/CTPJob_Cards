@@ -1,15 +1,15 @@
-import 'dart:async';
-import 'dart:io';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'dart:async' show Timer;
+import 'dart:io' show Platform;
+import 'dart:typed_data' show Int64List;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:torch_light/torch_light.dart';
+import 'job_alert_service.dart';
 import '../main.dart' show currentEmployee;
 
 class NotificationService {
@@ -102,7 +102,93 @@ class NotificationService {
     debugPrint('All notification channels created successfully');
   }
 
-  // ==================== SHOW NOTIFICATION WITH 3 BUTTONS ====================
+  // ==================== HANDLE ACTION BUTTONS ====================
+  Future<void> _handleNotificationAction(NotificationResponse response) async {
+    final String? actionId = response.actionId;
+    final String? payload = response.payload;
+
+    if (actionId == null || payload == null) return;
+
+    final user = currentEmployee;
+    if (user == null) {
+      debugPrint('❌ No logged in user for notification action');
+      return;
+    }
+
+    final clockNo = user.clockNo;
+    final name = user.name ?? 'Unknown User';
+
+    debugPrint('🔔 Action: $actionId for job #$payload by $name ($clockNo)');
+
+    try {
+      if (actionId == 'assign_self') {
+        final query = await FirebaseFirestore.instance
+            .collection('job_cards')
+            .where('jobCardNumber', isEqualTo: int.tryParse(payload))
+            .limit(1)
+            .get();
+
+        if (query.docs.isEmpty) {
+          debugPrint('❌ Job not found');
+          return;
+        }
+
+        final doc = query.docs.first;
+        final jobData = doc.data();
+
+        await doc.reference.update({
+          'assignedTo': clockNo,
+          'assignedNames': name,
+          'assignedClockNos': clockNo,
+          'status': 'open',
+          'lastUpdatedAt': FieldValue.serverTimestamp(),
+        });
+
+        debugPrint('✅ Job #$payload assigned to $name');
+
+        // Notify creator
+        final creatorClockNo = jobData['operatorClockNo'];
+        if (creatorClockNo != null) {
+          final creatorDoc = await FirebaseFirestore.instance
+              .collection('employees')
+              .doc(creatorClockNo)
+              .get();
+
+          if (creatorDoc.exists && creatorDoc.data()?['fcmToken'] != null) {
+            await FirebaseFunctions.instance
+                .httpsCallable('sendCreatorNotification')
+                .call({
+              'recipientToken': creatorDoc.data()!['fcmToken'],
+              'jobCardId': doc.id,
+              'jobCardNumber': int.parse(payload),
+              'notificationType': 'self_assign',
+              'assigneeName': name,
+              'area': jobData['area'] ?? '',
+              'description': jobData['description'] ?? '',
+              'priority': jobData['priority'] ?? 1,
+              'initiatedByClockNo': clockNo,
+              'initiatedByName': name,
+            });
+          }
+        }
+      } 
+      else if (actionId == 'busy' || actionId == 'dismiss') {
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'jobCardNumber': int.tryParse(payload),
+          'triggeredBy': actionId,
+          'initiatedByClockNo': clockNo,
+          'initiatedByName': name,
+          'timestamp': FieldValue.serverTimestamp(),
+          'level': 'normal',
+        });
+        debugPrint('✅ Logged $actionId for job #$payload');
+      }
+    } catch (e) {
+      debugPrint('❌ Error in action $actionId: $e');
+    }
+  }
+
+  // ==================== SHOW LOCAL NOTIFICATION ====================
   Future<void> _showLocalNotification({
     required String title,
     required String body,
@@ -113,15 +199,6 @@ class NotificationService {
     String? priority,
   }) async {
     if (kIsWeb) return;
-
-    Color getPriorityColor(String? priority) {
-      switch (priority) {
-        case '5': return const Color(0xFFFF0000);
-        case '4': return const Color(0xFFFF5722);
-        case '3': case '2': return const Color(0xFFFF9800);
-        default: return const Color(0xFF2196F3);
-      }
-    }
 
     final bool isHighPriority = level == 'full-loud' || (priority != null && (priority == '5' || priority == '4'));
 
@@ -139,7 +216,7 @@ class NotificationService {
         vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
         ongoing: true,
         autoCancel: false,
-        color: getPriorityColor(priority),
+        color: _getPriorityColor(priority),
         colorized: true,
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.message,
@@ -166,7 +243,7 @@ class NotificationService {
         ongoing: true,
         autoCancel: false,
         visibility: NotificationVisibility.public,
-        color: getPriorityColor(priority),
+        color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
@@ -188,7 +265,7 @@ class NotificationService {
         ongoing: true,
         autoCancel: false,
         visibility: NotificationVisibility.public,
-        color: getPriorityColor(priority),
+        color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
@@ -206,7 +283,7 @@ class NotificationService {
         enableVibration: true,
         playSound: true,
         visibility: NotificationVisibility.public,
-        color: getPriorityColor(priority),
+        color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
         actions: <AndroidNotificationAction>[
@@ -217,363 +294,61 @@ class NotificationService {
       );
     }
 
+    final notificationDetails = NotificationDetails(android: androidDetails);
+
     await _localNotifications.show(
-      id: int.tryParse(jobCardNumber) ?? 9999,
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(android: androidDetails),
-      payload: '$jobCardNumber|${createdBy ?? "Unknown"}',
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      notificationDetails,
+      payload: jobCardNumber,
     );
   }
 
-  // ==================== HANDLE 3 BUTTON ACTIONS ====================
-  void _handleNotificationAction(NotificationResponse response) {
-    final payload = response.payload;
-    if (payload == null) return;
-
-    final parts = payload.split('|');
-    final jobCardNumber = parts[0];
-    final operator = parts.length > 1 ? parts[1] : 'Unknown';
-
-    switch (response.actionId) {
-      case 'assign_self':
-        _assignJobToCurrentUser(jobCardNumber);
-        break;
-      case 'busy':
-        _sendBusyNotificationToOperator(jobCardNumber, operator);
-        break;
-      case 'dismiss':
-        _logDismissedAlert(jobCardNumber, operator);
-        break;
-      default:
-        debugPrint('Open job card: $jobCardNumber');
-    }
-  }
-
-  // ==================== ASSIGN SELF ====================
-  Future<void> _assignJobToCurrentUser(String jobCardNumber) async {
-    debugPrint('Assign Self tapped for job $jobCardNumber');
-
-    String? clockNo;
-    String userName = "Unknown User";
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && currentUser.uid.isNotEmpty) {
-      clockNo = currentUser.uid;
-      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
-    } else {
-      final prefs = await SharedPreferences.getInstance();
-      clockNo = prefs.getString('loggedInClockNo');
-    }
-
-    if (clockNo == null || clockNo.isEmpty) {
-      debugPrint('❌ No clock number found');
-      return;
-    }
-
-    try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('job_cards')
-          .where('jobCardNumber', isEqualTo: jobCardNumber)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        debugPrint('❌ Job not found: $jobCardNumber');
-        return;
-      }
-
-      final jobDoc = querySnapshot.docs.first;
-
-      await jobDoc.reference.update({
-        'assignedTo': clockNo,
-        'assignedToName': userName,
-        'status': 'assigned',
-        'assignedAt': FieldValue.serverTimestamp(),
-        'lastUpdatedBy': clockNo,
-        'lastUpdatedByName': userName,
-      });
-
-      debugPrint('✅ Job $jobCardNumber assigned to $userName ($clockNo)');
-    } catch (e) {
-      debugPrint('❌ Failed to assign job: $e');
-    }
-  }
-
-  // ==================== BUSY RESPONSE ====================
-  Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
-    debugPrint('Busy tapped for job $jobCardNumber');
-
-    String clockNo = "unknown";
-    String userName = "Unknown User";
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && currentUser.uid.isNotEmpty) {
-      clockNo = currentUser.uid;
-      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
-    } else {
-      final prefs = await SharedPreferences.getInstance();
-      clockNo = prefs.getString('loggedInClockNo') ?? "unknown";
-    }
-
-    try {
-      final busyData = {
-        'action': 'busy',
-        'jobCardNumber': jobCardNumber,
-        'clockNo': clockNo,
-        'userName': userName,
-        'originalOperator': operator,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-
-      await FirebaseFirestore.instance.collection('alertResponses').add(busyData);
-      debugPrint('✅ Busy response written: $userName ($clockNo)');
-    } catch (e) {
-      debugPrint('❌ Failed to write busy: $e');
-    }
-  }
-
-  // ==================== DISMISSED ALERT ====================
-  Future<void> _logDismissedAlert(String jobCardNumber, String operator) async {
-    debugPrint('Dismiss tapped for job $jobCardNumber');
-
-    String clockNo = "unknown";
-    String userName = "Unknown User";
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && currentUser.uid.isNotEmpty) {
-      clockNo = currentUser.uid;
-      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
-    } else {
-      final prefs = await SharedPreferences.getInstance();
-      clockNo = prefs.getString('loggedInClockNo') ?? "unknown";
-    }
-
-    try {
-      final dismissData = {
-        'action': 'dismissed',
-        'jobCardNumber': jobCardNumber,
-        'clockNo': clockNo,
-        'userName': userName,
-        'originalOperator': operator,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-
-      await FirebaseFirestore.instance.collection('alertResponses').add(dismissData);
-      debugPrint('✅ Dismissed alert written: $userName ($clockNo)');
-    } catch (e) {
-      debugPrint('❌ Failed to write dismiss: $e');
+  Color _getPriorityColor(String? priority) {
+    switch (priority) {
+      case '5': return const Color(0xFFFF0000);
+      case '4': return const Color(0xFFFF5722);
+      case '3': case '2': return const Color(0xFFFF9800);
+      default: return const Color(0xFF2196F3);
     }
   }
 
   // ==================== INITIALIZE ====================
   Future<void> initialize() async {
-    if (kIsWeb) return;
-
     await _requestPermissions();
     await _createNotificationChannels();
-    await requestAllCriticalPermissions();
-    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    final initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
 
     await _localNotifications.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      ),
+      initSettings,
       onDidReceiveNotificationResponse: _handleNotificationAction,
     );
 
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-  }
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('Foreground message: ${message.notification?.title}');
+    });
 
-  // ==================== FOREGROUND MESSAGE HANDLER ====================
-  Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    final level = message.data['notificationLevel'] ?? 'normal';
-    final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
-    final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
-    final jobCardNumber = message.data['jobCardNumber'] ?? '0000';
-    final priority = message.data['priority'] ?? '1';
-    final createdBy = message.data['createdBy'] ?? message.data['operator'] ?? 'Unknown';
-    final department = message.data['department'] ?? '';
-    final area = message.data['area'] ?? '';
-    final machine = message.data['machine'] ?? '';
-    final part = message.data['part'] ?? '';
-
-    debugPrint('📩 Foreground message | Level: $level | Priority: $priority | Foreground: $_isAppInForeground');
-
-    await _showLocalNotification(
-      title: title,
-      body: body,
-      level: level,
-      jobCardNumber: jobCardNumber,
-      location: [department, area, machine, part].where((e) => e.isNotEmpty).join(' > '),
-      createdBy: createdBy,
-      priority: priority,
-    );
-  }
-
-  void _handleMessageOpenedApp(RemoteMessage message) {
-    debugPrint('App opened from notification: ${message.data}');
-  }
-
-  // ==================== TEST METHODS ====================
-  Future<void> testPersistentBanner() async {
-    _isAppInForeground = true;
-    await _showLocalNotification(
-      title: "TEST - PERSISTENT BANNER (P5)",
-      body: "This should be a red persistent banner with 3 buttons",
-      level: "full-loud",
-      priority: "5",
-    );
-  }
-
-  Future<void> testFullscreenNotification() async {
-    await _showLocalNotification(
-      title: "TEST - FULL SCREEN (P5)",
-      body: "This should trigger full-screen alert",
-      level: "full-loud",
-      priority: "5",
-    );
-  }
-
-  // ==================== showOnSiteNotification ====================
-  Future<void> showOnSiteNotification({
-    required String title,
-    required String body,
-    String level = 'normal',
-  }) async {
-    await _showLocalNotification(
-      title: title,
-      body: body,
-      level: level,
-    );
-  }
-
-  // ==================== PUBLIC METHODS ====================
-  Future<String?> getToken() async {
-    try {
-      final token = await _messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        debugPrint('✅ FCM Token: ${token.substring(0, 20)}...');
-        return token;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('❌ Error getting FCM token: $e');
-      return null;
-    }
+    debugPrint('✅ NotificationService initialized with working buttons');
   }
 
   Future<void> refreshToken() async {
     try {
-      final token = await getToken();
-      if (token == null || currentEmployee == null) {
-        throw Exception('Failed to get new token or no employee logged in');
-      }
-
-      await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(currentEmployee!.clockNo)
-          .update({
-        'fcmToken': token,
-        'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint('✅ FCM Token refreshed and saved to Firestore: ${token.substring(0, 20)}...');
+      final token = await _messaging.getToken();
+      if (token != null) debugPrint('✅ FCM Token refreshed');
     } catch (e) {
-      debugPrint('❌ Error refreshing FCM token: $e');
-      rethrow;
+      debugPrint('❌ Error refreshing token: $e');
     }
-  }
-
-  Future<void> sendJobAssignmentNotification({
-    required String recipientToken,
-    required String jobCardId,
-    required int? jobCardNumber,
-    required String operator,
-    required String creator,
-    required String department,
-    required String area,
-    required String machine,
-    required String part,
-    required String description,
-    int? priority,
-  }) async {
-    if (recipientToken.isEmpty) return;
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
-          .httpsCallable('sendJobAssignmentNotification');
-      await callable.call({
-        'recipientToken': recipientToken,
-        'jobCardId': jobCardId,
-        'jobCardNumber': jobCardNumber,
-        'operator': operator,
-        'creator': creator,
-        'department': department,
-        'area': area,
-        'machine': machine,
-        'part': part,
-        'description': description,
-        'priority': priority ?? 1,
-      });
-      debugPrint('✅ Notification sent successfully');
-    } catch (e) {
-      debugPrint('❌ Error sending notification: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> sendCreatorNotification({
-    required String recipientToken,
-    required String jobCardId,
-    required int? jobCardNumber,
-    required String operator,
-    required String creator,
-    required String department,
-    required String area,
-    required String machine,
-    required String part,
-    required String description,
-    required String notificationType,
-    required String assigneeName,
-    int? priority,
-  }) async {
-    if (recipientToken.isEmpty) return;
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
-          .httpsCallable('sendCreatorNotification');
-      await callable.call({
-        'recipientToken': recipientToken,
-        'jobCardId': jobCardId,
-        'jobCardNumber': jobCardNumber,
-        'operator': operator,
-        'creator': creator,
-        'department': department,
-        'area': area,
-        'machine': machine,
-        'part': part,
-        'description': description,
-        'notificationType': notificationType,
-        'assigneeName': assigneeName,
-        'priority': priority ?? 1,
-      });
-      debugPrint('✅ Creator notification sent successfully');
-    } catch (e) {
-      debugPrint('❌ Error sending creator notification: $e');
-      rethrow;
-    }
-  }
-}
-
-// ==================== LIFECYCLE OBSERVER ====================
-class _AppLifecycleObserver extends WidgetsBindingObserver {
-  final NotificationService service;
-
-  _AppLifecycleObserver(this.service);
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    service._isAppInForeground = (state == AppLifecycleState.resumed);
-    debugPrint('App lifecycle changed → Foreground: ${service._isAppInForeground}');
   }
 }
