@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../main.dart' show currentEmployee;
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -125,7 +126,6 @@ class NotificationService {
     late AndroidNotificationDetails androidDetails;
 
     if (isHighPriority && _isAppInForeground) {
-      // P4/P5 when app is OPEN → Persistent red/orange banner + 3 buttons
       androidDetails = AndroidNotificationDetails(
         'persistent_banner_channel', 'Persistent Job Alerts',
         icon: '@mipmap/ic_launcher',
@@ -149,7 +149,6 @@ class NotificationService {
         ],
       );
     } else if (isHighPriority) {
-      // P4/P5 when app is NOT visible → Full-screen (handled by native AlarmReceiver)
       androidDetails = AndroidNotificationDetails(
         'full_channel', 'Full-Loud Job Notifications',
         icon: '@mipmap/ic_launcher',
@@ -245,7 +244,6 @@ class NotificationService {
         _logDismissedAlert(jobCardNumber, operator);
         break;
       default:
-        // Tap on notification body
         debugPrint('Open job card: $jobCardNumber');
     }
   }
@@ -253,21 +251,28 @@ class NotificationService {
   Future<void> _assignJobToCurrentUser(String jobCardNumber) async {
     debugPrint('Assign Self tapped for job $jobCardNumber');
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      debugPrint('❌ No user logged in');
+    if (currentEmployee == null) {
+      debugPrint('❌ No employee logged in');
       return;
     }
 
-    final userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
+    final clockNo = currentEmployee!.clockNo;
+    final userName = currentEmployee!.name;
 
     try {
-      // Find the job by jobCardNumber
-      final querySnapshot = await FirebaseFirestore.instance
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('job_cards')
           .where('jobCardNumber', isEqualTo: int.tryParse(jobCardNumber))
           .limit(1)
           .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('job_cards')
+            .where('jobCardNumber', isEqualTo: jobCardNumber)
+            .limit(1)
+            .get();
+      }
 
       if (querySnapshot.docs.isEmpty) {
         debugPrint('❌ Job not found: $jobCardNumber');
@@ -276,32 +281,28 @@ class NotificationService {
 
       final jobDoc = querySnapshot.docs.first;
 
-      // Update the job with assignment
       await jobDoc.reference.update({
-        'assignedTo': currentUser.uid,
+        'assignedTo': clockNo,
         'assignedToName': userName,
         'status': 'assigned',
         'assignedAt': FieldValue.serverTimestamp(),
-        'lastUpdatedBy': currentUser.uid,
+        'lastUpdatedBy': clockNo,
         'lastUpdatedByName': userName,
       });
 
-      debugPrint('✅ Job $jobCardNumber successfully assigned to $userName');
-
-      // Optional: Show success message
-      // You can also call a Cloud Function here if needed
-
+      debugPrint('✅ Job $jobCardNumber successfully assigned to $userName ($clockNo)');
     } catch (e) {
       debugPrint('❌ Failed to assign job: $e');
     }
   }
 
-    Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
+  Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
     debugPrint('Busy tapped for job $jobCardNumber');
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final clockNo = currentUser?.uid ?? "unknown";
-    final userName = currentUser?.displayName ?? currentUser?.email ?? "Unknown User";
+    if (currentEmployee == null) return;
+
+    final clockNo = currentEmployee!.clockNo;
+    final userName = currentEmployee!.name;
 
     try {
       final busyData = {
@@ -317,7 +318,7 @@ class NotificationService {
           .collection('alertResponses')
           .add(busyData);
 
-      debugPrint('✅ Busy response written to alertResponses');
+      debugPrint('✅ Busy response written to alertResponses by $userName ($clockNo)');
     } catch (e) {
       debugPrint('❌ Failed to write busy response: $e');
     }
@@ -326,9 +327,10 @@ class NotificationService {
   Future<void> _logDismissedAlert(String jobCardNumber, String operator) async {
     debugPrint('Dismiss tapped for job $jobCardNumber');
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final clockNo = currentUser?.uid ?? "unknown";
-    final userName = currentUser?.displayName ?? currentUser?.email ?? "Unknown User";
+    if (currentEmployee == null) return;
+
+    final clockNo = currentEmployee!.clockNo;
+    final userName = currentEmployee!.name;
 
     try {
       final dismissData = {
@@ -344,7 +346,7 @@ class NotificationService {
           .collection('alertResponses')
           .add(dismissData);
 
-      debugPrint('✅ Dismissed alert written to alertResponses');
+      debugPrint('✅ Dismissed alert written to alertResponses by $userName ($clockNo)');
     } catch (e) {
       debugPrint('❌ Failed to write dismiss: $e');
     }
@@ -359,16 +361,16 @@ class NotificationService {
     await requestAllCriticalPermissions();
     WidgetsBinding.instance.addObserver(_lifecycleObserver);
 
-      await _localNotifications.initialize(
-    settings: const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: _handleNotificationAction,
-  );
+    await _localNotifications.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+      onDidReceiveNotificationResponse: _handleNotificationAction,
+    );
 
-  FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-  FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-}
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+  }
 
   // ==================== FOREGROUND MESSAGE HANDLER ====================
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
@@ -420,6 +422,19 @@ class NotificationService {
     );
   }
 
+  // ==================== showOnSiteNotification (FIXED) ====================
+  Future<void> showOnSiteNotification({
+    required String title,
+    required String body,
+    String level = 'normal',
+  }) async {
+    await _showLocalNotification(
+      title: title,
+      body: body,
+      level: level,
+    );
+  }
+
   // ==================== PUBLIC METHODS ====================
   Future<String?> getToken() async {
     try {
@@ -432,6 +447,28 @@ class NotificationService {
     } catch (e) {
       debugPrint('❌ Error getting FCM token: $e');
       return null;
+    }
+  }
+
+  Future<void> refreshToken() async {
+    try {
+      final token = await getToken();
+      if (token == null || currentEmployee == null) {
+        throw Exception('Failed to get new token or no employee logged in');
+      }
+
+      await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(currentEmployee!.clockNo)
+          .update({
+        'fcmToken': token,
+        'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('✅ FCM Token refreshed and saved to Firestore: ${token.substring(0, 20)}...');
+    } catch (e) {
+      debugPrint('❌ Error refreshing FCM token: $e');
+      rethrow;
     }
   }
 
@@ -511,25 +548,6 @@ class NotificationService {
       debugPrint('❌ Error sending creator notification: $e');
       rethrow;
     }
-  }
-
-  Future<void> refreshToken() async {
-    try {
-      final token = await getToken();
-      if (token == null) throw Exception('Failed to refresh FCM token');
-      debugPrint('✅ FCM Token refreshed');
-    } catch (e) {
-      debugPrint('❌ Error refreshing FCM token: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> showOnSiteNotification({
-    required String title,
-    required String body,
-    String level = 'normal',
-  }) async {
-    await _showLocalNotification(title: title, body: body, level: level);
   }
 }
 

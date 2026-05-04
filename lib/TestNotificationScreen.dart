@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ctp_job_cards/services/notification_service.dart'; // Adjust path if needed
+import 'package:ctp_job_cards/services/notification_service.dart';
 
 class TestNotificationScreen extends StatefulWidget {
   const TestNotificationScreen({super.key});
@@ -21,9 +21,9 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
   Future<void> _initializeService() async {
     try {
       await _notificationService.initialize();
-      setState(() => _status = "NotificationService initialized successfully");
+      setState(() => _status = "✅ NotificationService initialized successfully");
     } catch (e) {
-      setState(() => _status = "Initialization failed: $e");
+      setState(() => _status = "❌ Initialization failed: $e");
     }
   }
 
@@ -160,14 +160,10 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
                   Text("TESTING INSTRUCTIONS", 
                       style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   SizedBox(height: 8),
-                  Text("• Persistent Banner: Should feel normal, not too loud",
-                      style: TextStyle(fontSize: 13)),
-                  Text("• Fullscreen Alarm: Simulates background/locked behavior",
-                      style: TextStyle(fontSize: 13)),
-                  Text("• Lock your phone and test real P5 to see full-screen UI",
-                      style: TextStyle(fontSize: 13)),
-                  Text("• Check notification shade after each test",
-                      style: TextStyle(fontSize: 13)),
+                  Text("• Persistent Banner: Should feel normal, not too loud"),
+                  Text("• Fullscreen Alarm: Simulates background/locked behavior"),
+                  Text("• Lock your phone and test real P5 to see full-screen UI"),
+                  Text("• Check notification shade after each test"),
                 ],
               ),
             ),

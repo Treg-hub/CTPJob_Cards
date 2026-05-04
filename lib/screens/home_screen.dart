@@ -233,10 +233,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Future<void> _saveOverrideOnSite(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('overrideOnSite', value);
-    setState(() => _overrideOnSite = value);
-    setState(() => isOnSite = value); // Update UI immediately
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('overrideOnSite', value);
+
+  setState(() {
+    _overrideOnSite = value;
+    isOnSite = value;
+  });
+
+    // Update Firestore so it stays in sync across devices
+    if (currentEmployee != null) {
+      try {
+        await _firestoreService.updateEmployee(
+          currentEmployee!.copyWith(isOnSite: value),
+        );
+        debugPrint('✅ Onsite status updated in Firestore: $value');
+      } catch (e) {
+        debugPrint('❌ Failed to update onsite status in Firestore: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save onsite status: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
 
@@ -1319,7 +1342,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ),
         ],
 
-        // Developer Section
+       // Developer Section
         if (!kIsWeb) ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1337,29 +1360,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             child: ListTile(
               leading: const Icon(Icons.refresh, color: Colors.blueGrey),
               title: const Text('Refresh FCM Token'),
-            onTap: () async {
-              if (!mounted) return;
-              try {
-                await _notificationService.refreshToken();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ FCM Token refreshed successfully!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+              subtitle: const Text('Update your notification token'),
+              onTap: () async {
+                if (!mounted) return;
+
+                // Show loading indicator
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Refreshing FCM token...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+
+                try {
+                  await _notificationService.refreshToken();
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ FCM Token refreshed successfully!'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Error: $e'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
                 }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('❌ Error refreshing token: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
+              },
             ),
           ),
         ],
