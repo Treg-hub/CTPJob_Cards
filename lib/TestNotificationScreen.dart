@@ -137,10 +137,12 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
               ),
               onPressed: () => _runTest(
                 "Medium-High",
-                () => _notificationService.showOnSiteNotification(
+                () => _notificationService.showLocalNotification(
                   title: "Medium Priority Job",
                   body: "This requires attention soon (simulated medium-high)",
                   level: 'medium-high',
+                  jobCardNumber: "999",
+                  priority: "4",
                 ),
               ),
             ),

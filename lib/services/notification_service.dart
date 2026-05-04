@@ -16,7 +16,6 @@ class NotificationService {
 
   bool _isAppInForeground = true;
 
-  // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
     try {
       final settings = await _messaging.requestPermission(alert: true, badge: true, sound: true);
@@ -45,7 +44,6 @@ class NotificationService {
     if (!status.isGranted) await openAppSettings();
   }
 
-  // ==================== CHANNELS ====================
   Future<void> _createNotificationChannels() async {
     if (!Platform.isAndroid) return;
 
@@ -95,7 +93,6 @@ class NotificationService {
     debugPrint('All notification channels created successfully');
   }
 
-  // ==================== HANDLE NOTIFICATION ACTION BUTTONS ====================
   Future<void> _handleNotificationAction(NotificationResponse response) async {
     final String? actionId = response.actionId;
     final String? payload = response.payload;
@@ -180,7 +177,6 @@ class NotificationService {
     }
   }
 
-  // ==================== SHOW LOCAL NOTIFICATION ====================
   Future<void> showLocalNotification({
     required String title,
     required String body,
@@ -283,7 +279,6 @@ class NotificationService {
     }
   }
 
-  // ==================== PUBLIC INIT METHOD ====================
   Future<void> initialize() async {
     await _requestPermissions();
     await _createNotificationChannels();
@@ -312,7 +307,6 @@ class NotificationService {
     debugPrint('✅ NotificationService initialized successfully');
   }
 
-  // ==================== EXISTING METHODS ====================
   Future<String?> getToken() async {
     return await _messaging.getToken();
   }
@@ -322,20 +316,66 @@ class NotificationService {
     await _messaging.getToken();
   }
 
-  // Made flexible to accept Map or nothing
-  Future<void> sendCreatorNotification([Map<String, dynamic>? data]) async {
-    if (data == null) return;
+  // ==================== FIXED: Accepts named parameters like your screens use ====================
+  Future<void> sendCreatorNotification({
+    required String recipientToken,
+    required String jobCardId,
+    required int? jobCardNumber,
+    required String operator,
+    required String creator,
+    required String department,
+    required String area,
+    required String machine,
+    required String part,
+    required String description,
+    required String notificationType,
+    required String assigneeName,
+  }) async {
     try {
-      await FirebaseFunctions.instance.httpsCallable('sendCreatorNotification').call(data);
+      await FirebaseFunctions.instance.httpsCallable('sendCreatorNotification').call({
+        'recipientToken': recipientToken,
+        'jobCardId': jobCardId,
+        'jobCardNumber': jobCardNumber,
+        'operator': operator,
+        'creator': creator,
+        'department': department,
+        'area': area,
+        'machine': machine,
+        'part': part,
+        'description': description,
+        'notificationType': notificationType,
+        'assigneeName': assigneeName,
+      });
     } catch (e) {
       debugPrint('Error sending creator notification: $e');
     }
   }
 
-  Future<void> sendJobAssignmentNotification([Map<String, dynamic>? data]) async {
-    if (data == null) return;
+  Future<void> sendJobAssignmentNotification({
+    required String recipientToken,
+    required String jobCardId,
+    required int? jobCardNumber,
+    required String operator,
+    required String creator,
+    required String department,
+    required String area,
+    required String machine,
+    required String part,
+    required String description,
+  }) async {
     try {
-      await FirebaseFunctions.instance.httpsCallable('sendJobAssignmentNotification').call(data);
+      await FirebaseFunctions.instance.httpsCallable('sendJobAssignmentNotification').call({
+        'recipientToken': recipientToken,
+        'jobCardId': jobCardId,
+        'jobCardNumber': jobCardNumber,
+        'operator': operator,
+        'creator': creator,
+        'department': department,
+        'area': area,
+        'machine': machine,
+        'part': part,
+        'description': description,
+      });
     } catch (e) {
       debugPrint('Error sending job assignment notification: $e');
     }
