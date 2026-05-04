@@ -29,11 +29,12 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     private var vibrator: Vibrator? = null
     private var pulseAnimator: ValueAnimator? = null
 
+    // === ADDED: Employee identity variables ===
+    private var clockNo: String = ""
+    private var employeeName: String = ""
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Always show full-screen when this activity is launched
-        // (AlarmReceiver only calls this when app is not visible)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -111,6 +112,11 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         tvCreatedBy.text = "👤 Created by: $createdBy"
         tvDescription.text = description
 
+        // === Load current employee info (clockNo + name) ===
+        val prefs = getSharedPreferences("employee_prefs", Context.MODE_PRIVATE)
+        clockNo = prefs.getString("clockNo", "") ?: ""
+        employeeName = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
+
         // Buttons
         btnAssignSelf.setOnClickListener {
             stopAlarm()
@@ -127,6 +133,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             btnImBusy.visibility = View.VISIBLE
             btnImBusy.setOnClickListener {
                 stopAlarm()
+                sendBusyNotificationToCreator(clockNo, employeeName)
                 finish()
             }
         } else {
@@ -135,6 +142,18 @@ class FullScreenJobAlertActivity : ComponentActivity() {
 
         btnDismiss.setOnClickListener {
             stopAlarm()
+
+            // Log Dismiss action with correct employee info
+            val db = FirebaseFirestore.getInstance()
+            db.collection("notifications").add(hashMapOf(
+                "jobCardNumber" to jobCardNumber.toIntOrNull(),
+                "triggeredBy" to "dismiss",
+                "initiatedByClockNo" to clockNo,
+                "initiatedByName" to employeeName,
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "level" to level
+            ))
+
             finish()
         }
     }
