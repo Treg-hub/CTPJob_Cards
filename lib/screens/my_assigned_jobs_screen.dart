@@ -443,7 +443,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                         await NotificationService().sendCreatorNotification(
                           recipientToken: creatorEmp!.fcmToken!,
                           jobCardId: job.id!,
-                          jobCardNumber: job.jobCardNumber,
+                          jobCardNumber: job.jobCardNumber ?? 0,
                           operator: currentEmployee?.name ?? 'Unknown',
                           creator: job.operator,
                           department: job.department,

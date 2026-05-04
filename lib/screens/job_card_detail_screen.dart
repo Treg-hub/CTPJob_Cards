@@ -126,7 +126,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             await _notificationService.sendCreatorNotification(
               recipientToken: creatorEmp!.fcmToken!,
               jobCardId: jobCard.id!,
-              jobCardNumber: jobCard.jobCardNumber,
+              jobCardNumber: jobCard.jobCardNumber??0,
               operator: currentEmployee?.name ?? 'Unknown',
               creator: jobCard.operator,
               department: jobCard.department,
@@ -482,8 +482,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                   assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
                                 );
 
-      await _firestoreService.saveJobCardOfflineAware(finalUpdatedJob);
-      await _refreshJobCard();
+                                await _firestoreService.saveJobCardOfflineAware(finalUpdatedJob);
+                                await _refreshJobCard();
 
                                 // Send notifications only for newly added employees
                                 final newEmployees = selectedClockNos.where((clockNo) => !(job.assignedClockNos?.contains(clockNo) ?? false)).toList();
@@ -493,17 +493,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                   if (emp?.fcmToken != null) {
                                      try {
                                        await _notificationService.sendJobAssignmentNotification(
-                                         recipientToken: emp!.fcmToken!,
-                                         jobCardId: job.id!,
-                                         jobCardNumber: job.jobCardNumber,
-                                         operator: currentEmployee?.name ?? 'Unknown',
-                                         creator: job.operator ?? 'Unknown',
-                                         department: emp.department,
-                                         area: job.area,
-                                         machine: job.machine,
-                                         part: job.part,
-                                         description: job.description,
-                                       );
+                                        recipientToken: emp!.fcmToken!,
+                                        jobCardId: job.id!,
+                                        jobCardNumber: job.jobCardNumber ?? 0,
+                                        assignedTo: emp.clockNo,
+                                        assignedName: emp.name,
+                                        area: job.area,
+                                        description: job.description,
+                                        priority: job.priority ?? 1,
+                                      );
                                     } catch (e) {
                                       debugPrint('Notification failed for ${emp?.name ?? 'Unknown'}: $e');
                                     }
@@ -1157,7 +1155,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             await _notificationService.sendCreatorNotification(
               recipientToken: creatorEmp!.fcmToken!,
               jobCardId: jobCard.id!,
-              jobCardNumber: jobCard.jobCardNumber,
+              jobCardNumber: jobCard.jobCardNumber ?? 0,
               operator: currentEmployee?.name ?? 'Unknown',
               creator: jobCard.operator,
               department: jobCard.department,

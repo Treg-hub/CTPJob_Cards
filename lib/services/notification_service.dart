@@ -14,8 +14,9 @@ class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
-  bool _isAppInForeground = true;
+  final bool _isAppInForeground = true;
 
+  // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
     try {
       final settings = await _messaging.requestPermission(alert: true, badge: true, sound: true);
@@ -44,6 +45,7 @@ class NotificationService {
     if (!status.isGranted) await openAppSettings();
   }
 
+  // ==================== CHANNELS ====================
   Future<void> _createNotificationChannels() async {
     if (!Platform.isAndroid) return;
 
@@ -93,6 +95,7 @@ class NotificationService {
     debugPrint('All notification channels created successfully');
   }
 
+  // ==================== HANDLE NOTIFICATION ACTION BUTTONS ====================
   Future<void> _handleNotificationAction(NotificationResponse response) async {
     final String? actionId = response.actionId;
     final String? payload = response.payload;
@@ -177,6 +180,7 @@ class NotificationService {
     }
   }
 
+  // ==================== SHOW LOCAL NOTIFICATION ====================
   Future<void> showLocalNotification({
     required String title,
     required String body,
@@ -279,6 +283,7 @@ class NotificationService {
     }
   }
 
+  // ==================== PUBLIC INIT METHOD ====================
   Future<void> initialize() async {
     await _requestPermissions();
     await _createNotificationChannels();
@@ -307,6 +312,7 @@ class NotificationService {
     debugPrint('✅ NotificationService initialized successfully');
   }
 
+  // ==================== EXISTING METHODS ====================
   Future<String?> getToken() async {
     return await _messaging.getToken();
   }
@@ -316,11 +322,11 @@ class NotificationService {
     await _messaging.getToken();
   }
 
-  // ==================== FIXED: Accepts named parameters like your screens use ====================
+  // Named parameters version (compatible with existing screens)
   Future<void> sendCreatorNotification({
     required String recipientToken,
     required String jobCardId,
-    required int? jobCardNumber,
+    required int jobCardNumber,
     required String operator,
     required String creator,
     required String department,
@@ -354,27 +360,23 @@ class NotificationService {
   Future<void> sendJobAssignmentNotification({
     required String recipientToken,
     required String jobCardId,
-    required int? jobCardNumber,
-    required String operator,
-    required String creator,
-    required String department,
+    required int jobCardNumber,
+    required String assignedTo,
+    required String assignedName,
     required String area,
-    required String machine,
-    required String part,
     required String description,
+    required int priority,
   }) async {
     try {
       await FirebaseFunctions.instance.httpsCallable('sendJobAssignmentNotification').call({
         'recipientToken': recipientToken,
         'jobCardId': jobCardId,
         'jobCardNumber': jobCardNumber,
-        'operator': operator,
-        'creator': creator,
-        'department': department,
+        'assignedTo': assignedTo,
+        'assignedName': assignedName,
         'area': area,
-        'machine': machine,
-        'part': part,
         'description': description,
+        'priority': priority,
       });
     } catch (e) {
       debugPrint('Error sending job assignment notification: $e');
