@@ -63,14 +63,21 @@ class MainActivity : FlutterActivity() {
     private fun handleDeepLink(intent: Intent?) {
         val jobCardNumber = intent?.getStringExtra("jobCardNumber") ?: return
         val action = intent.getStringExtra("action")
-        val operator = intent.getStringExtra("operator") ?: "Unknown"
+        
+        // Read the real values passed from Flutter
+        val operator = intent.getStringExtra("operator") 
+            ?: intent.getStringExtra("createdBy") 
+            ?: "Unknown Operator"
+        
+        val clockNo = intent.getStringExtra("clockNo") ?: "unknown"
+        val userName = intent.getStringExtra("userName") ?: "Unknown User"
 
-        Log.d("MainActivity", "🔗 Deep link received - Job: $jobCardNumber, Action: $action")
+        Log.d("MainActivity", "🔗 Deep link - Job: $jobCardNumber, Action: $action, Operator: $operator, clockNo: $clockNo, userName: $userName")
 
         when (action) {
             "assign_self" -> assignJobToCurrentUser(jobCardNumber)
-            "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator)
-            "dismiss" -> logDismissedAlert(jobCardNumber, operator)
+            "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator, clockNo, userName)
+            "dismiss" -> logDismissedAlert(jobCardNumber, operator, clockNo, userName)
             else -> {}
         }
     }
@@ -87,15 +94,18 @@ class MainActivity : FlutterActivity() {
         val userId = currentUser.uid
         val userName = currentUser.displayName ?: currentUser.email ?: "Unknown User"
 
+        // FIXED: Changed from "jobCards" to "job_cards"
         FirebaseFirestore.getInstance()
-            .collection("jobCards")
+            .collection("job_cards")                    // ← FIXED
             .document(jobCardNumber)
             .update(
                 mapOf(
                     "assignedTo" to userId,
                     "assignedToName" to userName,
                     "status" to "assigned",
-                    "assignedAt" to FieldValue.serverTimestamp()
+                    "assignedAt" to FieldValue.serverTimestamp(),
+                    "lastUpdatedBy" to userId,
+                    "lastUpdatedByName" to userName
                 )
             )
             .addOnSuccessListener {
@@ -107,18 +117,17 @@ class MainActivity : FlutterActivity() {
     }
 
     // ==================== BUSY RESPONSE ====================
-    private fun sendBusyNotificationToOperator(jobCardNumber: String, originalOperator: String) {
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser == null) {
-            Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
-            return
-        }
-
+    private fun sendBusyNotificationToOperator(
+        jobCardNumber: String, 
+        originalOperator: String,
+        clockNo: String,
+        userName: String
+    ) {
         val busyData = hashMapOf(
             "action" to "busy",
             "jobCardNumber" to jobCardNumber,
-            "clockNo" to (currentUser.uid ?: "unknown"),
-            "userName" to (currentUser.displayName ?: currentUser.email ?: "Unknown User"),
+            "clockNo" to clockNo,
+            "userName" to userName,
             "originalOperator" to originalOperator,
             "timestamp" to FieldValue.serverTimestamp()
         )
@@ -135,20 +144,23 @@ class MainActivity : FlutterActivity() {
     }
 
     // ==================== DISMISSED ALERT ====================
-    private fun logDismissedAlert(jobCardNumber: String, operator: String) {
-        val currentUser = FirebaseAuth.getInstance().currentUser
-
+        private fun logDismissedAlert(
+        jobCardNumber: String, 
+        operator: String,
+        clockNo: String,
+        userName: String
+    ) {
         val dismissData = hashMapOf(
             "action" to "dismissed",
             "jobCardNumber" to jobCardNumber,
-            "clockNo" to (currentUser?.uid ?: "unknown"),
-            "userName" to (currentUser?.displayName ?: currentUser?.email ?: "Unknown"),
+            "clockNo" to clockNo,
+            "userName" to userName,
             "originalOperator" to operator,
             "timestamp" to FieldValue.serverTimestamp()
         )
 
         FirebaseFirestore.getInstance()
-            .collection("alertResponses")   // ← Using single collection
+            .collection("alertResponses")
             .add(dismissData)
             .addOnSuccessListener {
                 Toast.makeText(this, "Alert dismissed", Toast.LENGTH_SHORT).show()
