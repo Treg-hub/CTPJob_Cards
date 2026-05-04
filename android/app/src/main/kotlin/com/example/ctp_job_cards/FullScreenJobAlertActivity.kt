@@ -29,7 +29,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     private var vibrator: Vibrator? = null
     private var pulseAnimator: ValueAnimator? = null
 
-    // === ADDED: Employee identity variables ===
+    // === Employee identity variables ===
     private var clockNo: String = ""
     private var employeeName: String = ""
 
@@ -97,6 +97,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         val createdBy = intent.getStringExtra("createdBy") ?: "Unknown"
         val location = intent.getStringExtra("location") ?: "Location not specified"
         val description = intent.getStringExtra("description") ?: "No description"
+        val level = intent.getStringExtra("level") ?: "normal"   // ← Added this line
 
         tvJobNumber.text = "#$jobCardNumber"
         tvPriorityBadge.text = "P$priority"
@@ -133,7 +134,18 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             btnImBusy.visibility = View.VISIBLE
             btnImBusy.setOnClickListener {
                 stopAlarm()
-                sendBusyNotificationToCreator(clockNo, employeeName)
+
+                // Log Busy response with correct user info
+                val db = FirebaseFirestore.getInstance()
+                db.collection("notifications").add(hashMapOf(
+                    "jobCardNumber" to jobCardNumber.toIntOrNull(),
+                    "triggeredBy" to "busy",
+                    "initiatedByClockNo" to clockNo,
+                    "initiatedByName" to employeeName,
+                    "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    "level" to level
+                ))
+
                 finish()
             }
         } else {
