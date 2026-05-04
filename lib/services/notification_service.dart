@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../main.dart' show currentEmployee;
 
 class NotificationService {
@@ -219,7 +222,7 @@ class NotificationService {
       title: title,
       body: body,
       notificationDetails: NotificationDetails(android: androidDetails),
-      payload: '$jobCardNumber|${createdBy ?? "Unknown"}|${currentEmployee?.clockNo ?? "unknown"}|${currentEmployee?.name ?? "Unknown User"}',
+      payload: '$jobCardNumber|${createdBy ?? "Unknown"}',
     );
   }
 
@@ -247,31 +250,33 @@ class NotificationService {
     }
   }
 
+  // ==================== ASSIGN SELF ====================
   Future<void> _assignJobToCurrentUser(String jobCardNumber) async {
     debugPrint('Assign Self tapped for job $jobCardNumber');
 
-    if (currentEmployee == null) {
-      debugPrint('❌ No employee logged in');
+    String? clockNo;
+    String userName = "Unknown User";
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && currentUser.uid.isNotEmpty) {
+      clockNo = currentUser.uid;
+      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      clockNo = prefs.getString('loggedInClockNo');
+    }
+
+    if (clockNo == null || clockNo.isEmpty) {
+      debugPrint('❌ No clock number found');
       return;
     }
 
-    final clockNo = currentEmployee!.clockNo;
-    final userName = currentEmployee!.name;
-
     try {
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+      final querySnapshot = await FirebaseFirestore.instance
           .collection('job_cards')
-          .where('jobCardNumber', isEqualTo: int.tryParse(jobCardNumber))
+          .where('jobCardNumber', isEqualTo: jobCardNumber)
           .limit(1)
           .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        querySnapshot = await FirebaseFirestore.instance
-            .collection('job_cards')
-            .where('jobCardNumber', isEqualTo: jobCardNumber)
-            .limit(1)
-            .get();
-      }
 
       if (querySnapshot.docs.isEmpty) {
         debugPrint('❌ Job not found: $jobCardNumber');
@@ -289,19 +294,27 @@ class NotificationService {
         'lastUpdatedByName': userName,
       });
 
-      debugPrint('✅ Job $jobCardNumber successfully assigned to $userName ($clockNo)');
+      debugPrint('✅ Job $jobCardNumber assigned to $userName ($clockNo)');
     } catch (e) {
       debugPrint('❌ Failed to assign job: $e');
     }
   }
 
+  // ==================== BUSY RESPONSE ====================
   Future<void> _sendBusyNotificationToOperator(String jobCardNumber, String operator) async {
     debugPrint('Busy tapped for job $jobCardNumber');
 
-    if (currentEmployee == null) return;
+    String clockNo = "unknown";
+    String userName = "Unknown User";
 
-    final clockNo = currentEmployee!.clockNo;
-    final userName = currentEmployee!.name;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && currentUser.uid.isNotEmpty) {
+      clockNo = currentUser.uid;
+      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      clockNo = prefs.getString('loggedInClockNo') ?? "unknown";
+    }
 
     try {
       final busyData = {
@@ -313,23 +326,28 @@ class NotificationService {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance
-          .collection('alertResponses')
-          .add(busyData);
-
-      debugPrint('✅ Busy response written to alertResponses by $userName ($clockNo)');
+      await FirebaseFirestore.instance.collection('alertResponses').add(busyData);
+      debugPrint('✅ Busy response written: $userName ($clockNo)');
     } catch (e) {
-      debugPrint('❌ Failed to write busy response: $e');
+      debugPrint('❌ Failed to write busy: $e');
     }
   }
 
+  // ==================== DISMISSED ALERT ====================
   Future<void> _logDismissedAlert(String jobCardNumber, String operator) async {
     debugPrint('Dismiss tapped for job $jobCardNumber');
 
-    if (currentEmployee == null) return;
+    String clockNo = "unknown";
+    String userName = "Unknown User";
 
-    final clockNo = currentEmployee!.clockNo;
-    final userName = currentEmployee!.name;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && currentUser.uid.isNotEmpty) {
+      clockNo = currentUser.uid;
+      userName = currentUser.displayName ?? currentUser.email ?? "Unknown User";
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      clockNo = prefs.getString('loggedInClockNo') ?? "unknown";
+    }
 
     try {
       final dismissData = {
@@ -341,11 +359,8 @@ class NotificationService {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance
-          .collection('alertResponses')
-          .add(dismissData);
-
-      debugPrint('✅ Dismissed alert written to alertResponses by $userName ($clockNo)');
+      await FirebaseFirestore.instance.collection('alertResponses').add(dismissData);
+      debugPrint('✅ Dismissed alert written: $userName ($clockNo)');
     } catch (e) {
       debugPrint('❌ Failed to write dismiss: $e');
     }
@@ -421,7 +436,7 @@ class NotificationService {
     );
   }
 
-  // ==================== showOnSiteNotification (FIXED) ====================
+  // ==================== showOnSiteNotification ====================
   Future<void> showOnSiteNotification({
     required String title,
     required String body,

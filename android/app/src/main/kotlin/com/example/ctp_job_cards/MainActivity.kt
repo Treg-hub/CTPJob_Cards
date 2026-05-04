@@ -84,6 +84,7 @@ class MainActivity : FlutterActivity() {
 
     // ==================== NOTIFICATION ACTION HANDLERS ====================
 
+    // ==================== ASSIGN SELF ====================
     private fun assignJobToCurrentUser(jobCardNumber: String) {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser == null) {
@@ -91,82 +92,119 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val userId = currentUser.uid
-        val userName = currentUser.displayName ?: currentUser.email ?: "Unknown User"
+        val firebaseUid = currentUser.uid
 
-        // FIXED: Changed from "jobCards" to "job_cards"
+        // Get real clockNo and name from employees collection
         FirebaseFirestore.getInstance()
-            .collection("job_cards")                    // ← FIXED
-            .document(jobCardNumber)
-            .update(
-                mapOf(
-                    "assignedTo" to userId,
-                    "assignedToName" to userName,
-                    "status" to "assigned",
-                    "assignedAt" to FieldValue.serverTimestamp(),
-                    "lastUpdatedBy" to userId,
-                    "lastUpdatedByName" to userName
-                )
-            )
-            .addOnSuccessListener {
-                Toast.makeText(this, "✅ Job assigned to you!", Toast.LENGTH_LONG).show()
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to assign job: ${e.message}", Toast.LENGTH_SHORT).show()
+            .collection("employees")
+            .document(firebaseUid)
+            .get()
+            .addOnSuccessListener { employeeDoc ->
+                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
+
+                // Assign the job
+                FirebaseFirestore.getInstance()
+                    .collection("job_cards")
+                    .whereEqualTo("jobCardNumber", jobCardNumber)
+                    .limit(1)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        if (querySnapshot.isEmpty) {
+                            Toast.makeText(this, "Job not found", Toast.LENGTH_SHORT).show()
+                            return@addOnSuccessListener
+                        }
+
+                        val jobDoc = querySnapshot.documents[0]
+                        jobDoc.reference.update(
+                            mapOf(
+                                "assignedTo" to clockNo,
+                                "assignedToName" to userName,
+                                "status" to "assigned",
+                                "assignedAt" to FieldValue.serverTimestamp(),
+                                "lastUpdatedBy" to clockNo,
+                                "lastUpdatedByName" to userName
+                            )
+                        )
+                        .addOnSuccessListener {
+                            Toast.makeText(this, "✅ Job assigned to you!", Toast.LENGTH_LONG).show()
+                        }
+                        .addOnFailureListener { e ->
+                            Toast.makeText(this, "Failed to assign: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
             }
     }
 
     // ==================== BUSY RESPONSE ====================
     private fun sendBusyNotificationToOperator(
-        jobCardNumber: String, 
+        jobCardNumber: String,
         originalOperator: String,
-        clockNo: String,
-        userName: String
+        clockNoFromIntent: String,
+        userNameFromIntent: String
     ) {
-        val busyData = hashMapOf(
-            "action" to "busy",
-            "jobCardNumber" to jobCardNumber,
-            "clockNo" to clockNo,
-            "userName" to userName,
-            "originalOperator" to originalOperator,
-            "timestamp" to FieldValue.serverTimestamp()
-        )
+        val currentUser = FirebaseAuth.getInstance().currentUser ?: return
+        val firebaseUid = currentUser.uid
 
         FirebaseFirestore.getInstance()
-            .collection("alertResponses")
-            .add(busyData)
-            .addOnSuccessListener {
-                Toast.makeText(this, "✅ Busy response sent. Creator will be notified.", Toast.LENGTH_LONG).show()
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to send busy response: ${e.message}", Toast.LENGTH_SHORT).show()
+            .collection("employees")
+            .document(firebaseUid)
+            .get()
+            .addOnSuccessListener { employeeDoc ->
+                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
+
+                val busyData = hashMapOf(
+                    "action" to "busy",
+                    "jobCardNumber" to jobCardNumber,
+                    "clockNo" to clockNo,
+                    "userName" to userName,
+                    "originalOperator" to originalOperator,
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+
+                FirebaseFirestore.getInstance()
+                    .collection("alertResponses")
+                    .add(busyData)
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "✅ Busy response sent", Toast.LENGTH_LONG).show()
+                    }
             }
     }
 
     // ==================== DISMISSED ALERT ====================
-        private fun logDismissedAlert(
-        jobCardNumber: String, 
+    private fun logDismissedAlert(
+        jobCardNumber: String,
         operator: String,
-        clockNo: String,
-        userName: String
+        clockNoFromIntent: String,
+        userNameFromIntent: String
     ) {
-        val dismissData = hashMapOf(
-            "action" to "dismissed",
-            "jobCardNumber" to jobCardNumber,
-            "clockNo" to clockNo,
-            "userName" to userName,
-            "originalOperator" to operator,
-            "timestamp" to FieldValue.serverTimestamp()
-        )
+        val currentUser = FirebaseAuth.getInstance().currentUser ?: return
+        val firebaseUid = currentUser.uid
 
         FirebaseFirestore.getInstance()
-            .collection("alertResponses")
-            .add(dismissData)
-            .addOnSuccessListener {
-                Toast.makeText(this, "Alert dismissed", Toast.LENGTH_SHORT).show()
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to dismiss: ${e.message}", Toast.LENGTH_SHORT).show()
+            .collection("employees")
+            .document(firebaseUid)
+            .get()
+            .addOnSuccessListener { employeeDoc ->
+                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
+
+                val dismissData = hashMapOf(
+                    "action" to "dismissed",
+                    "jobCardNumber" to jobCardNumber,
+                    "clockNo" to clockNo,
+                    "userName" to userName,
+                    "originalOperator" to operator,
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+
+                FirebaseFirestore.getInstance()
+                    .collection("alertResponses")
+                    .add(dismissData)
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "Alert dismissed", Toast.LENGTH_SHORT).show()
+                    }
             }
     }
 
