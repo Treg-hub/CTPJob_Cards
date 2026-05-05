@@ -2,12 +2,9 @@ package com.example.ctp_job_cards
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.app.ActivityManager
 import android.app.KeyguardManager
 import android.content.Context
-import android.content.Intent
 import android.media.MediaPlayer
-import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -22,9 +19,6 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import com.google.android.material.button.MaterialButton
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.android.gms.tasks.Tasks
-import java.util.concurrent.TimeUnit
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.engine.FlutterEngineCache
 
@@ -37,6 +31,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Show on lock screen + turn screen on
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -67,6 +62,7 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         val tvLocation = findViewById<TextView>(R.id.tvLocation)
         val tvCreatedBy = findViewById<TextView>(R.id.tvCreatedBy)
         val tvDescription = findViewById<TextView>(R.id.tvDescription)
+
         val btnAssignSelf = findViewById<MaterialButton>(R.id.btnAssignSelf)
         val btnImBusy = findViewById<MaterialButton>(R.id.btnImBusy)
         val btnDismiss = findViewById<MaterialButton>(R.id.btnDismiss)
@@ -76,7 +72,6 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         val createdBy = intent.getStringExtra("createdBy") ?: "Unknown"
         val location = intent.getStringExtra("location") ?: "Location not specified"
         val description = intent.getStringExtra("description") ?: "No description"
-        val level = intent.getStringExtra("level") ?: "normal"
 
         tvJobNumber.text = "#$jobCardNumber"
         tvPriorityBadge.text = "P$priority"
@@ -86,12 +81,12 @@ class FullScreenJobAlertActivity : ComponentActivity() {
             else -> "MEDIUM PRIORITY"
         }
         tvLevel.setBackgroundColor(if (priority == "5") 0xFFD32F2F.toInt() else 0xFFFF9800.toInt())
+
         tvLocation.text = location
         tvCreatedBy.text = "👤 Created by: $createdBy"
         tvDescription.text = description
 
-        // ==================== BUTTONS (Option B - calls Dart) ====================
-
+        // ==================== BUTTONS - NOW MATCHES DART SIDE ====================
         btnAssignSelf.setOnClickListener {
             stopAlarm()
             callDartAction("assign_self", jobCardNumber)
@@ -116,25 +111,38 @@ class FullScreenJobAlertActivity : ComponentActivity() {
     private fun callDartAction(action: String, jobCardNumber: String) {
         try {
             val engine = FlutterEngineCache.getInstance().get("main_engine")
+            
             if (engine != null) {
-                MethodChannel(engine.dartExecutor.binaryMessenger, "com.example.ctp_job_cards/notification_actions")
-                    .invokeMethod("handleAction", mapOf("action" to action, "jobCardNumber" to jobCardNumber))
+                MethodChannel(engine.dartExecutor.binaryMessenger, "job_alert_channel")
+                    .invokeMethod(
+                        "handleAlertAction",
+                        mapOf(
+                            "actionId" to action,
+                            "payload" to jobCardNumber
+                        )
+                    )
+                Log.d("FullScreenJobAlert", "✅ SUCCESS: Called Dart with $action on job #$jobCardNumber")
+            } else {
+                Log.e("FullScreenJobAlert", "❌ Engine is still null - cannot call Dart")
             }
         } catch (e: Exception) {
-            Log.e("FullScreenJobAlert", "Failed to call Dart: ${e.message}")
+            Log.e("FullScreenJobAlert", "Error calling Dart: ${e.message}")
         }
+        
         finish()
     }
-
     private fun shouldShowImBusyButton(): Boolean {
         val cal = java.util.Calendar.getInstance()
         val day = cal.get(java.util.Calendar.DAY_OF_WEEK)
         val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
         return when (day) {
-            java.util.Calendar.MONDAY, java.util.Calendar.TUESDAY,
-            java.util.Calendar.WEDNESDAY, java.util.Calendar.THURSDAY -> hour >= 18 || hour < 6
+            java.util.Calendar.MONDAY,
+            java.util.Calendar.TUESDAY,
+            java.util.Calendar.WEDNESDAY,
+            java.util.Calendar.THURSDAY -> hour >= 18 || hour < 6
             java.util.Calendar.FRIDAY -> hour >= 17
-            java.util.Calendar.SATURDAY, java.util.Calendar.SUNDAY -> true
+            java.util.Calendar.SATURDAY,
+            java.util.Calendar.SUNDAY -> true
             else -> false
         }
     }
@@ -156,14 +164,17 @@ class FullScreenJobAlertActivity : ComponentActivity() {
                 isLooping = true
                 start()
             }
+
             vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
                 getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
+
             val pattern = longArrayOf(0, 600, 200, 600, 200, 600, 200, 1200)
             val vibrationEffect = VibrationEffect.createWaveform(pattern, 0)
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val audioAttributes = android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_ALARM)
@@ -183,7 +194,10 @@ class FullScreenJobAlertActivity : ComponentActivity() {
 
     private fun stopAlarm() {
         pulseAnimator?.cancel()
-        mediaPlayer?.apply { if (isPlaying) stop(); release() }
+        mediaPlayer?.apply {
+            if (isPlaying) stop()
+            release()
+        }
         mediaPlayer = null
         vibrator?.cancel()
         vibrator = null

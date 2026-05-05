@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb,  FlutterError, PlatformDispatcher;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
@@ -13,110 +12,79 @@ import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'services/firestore_service.dart';
+import 'services/notification_service.dart';
 import 'services/sync_service.dart';
 import 'services/update_service.dart';
 import 'theme/app_theme.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 Employee? currentEmployee;
 
-// ==================== GLOBAL NAVIGATOR KEY ====================
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-// ==================== NOTIFICATION ACTION HANDLER ====================
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-Future<void> _handleNotificationAction(NotificationResponse response) async {
-  final String? payload = response.payload;
-  final String? actionId = response.actionId;
-
-  if (payload == null) return;
-
-  final jobCardNumber = payload;
-
-  navigatorKey.currentState?.pushNamedAndRemoveUntil(
-    '/',
-    (route) => false,
-    arguments: {
-      'jobCardNumber': jobCardNumber,
-      'action': actionId ?? 'view_job',
-    },
-  );
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ==================== HIVE (Aggressive Recovery) ====================
+  // ==================== HIVE ====================
   await Hive.initFlutter();
   Hive.registerAdapter(SyncQueueItemAdapter());
 
   const String syncBoxName = 'sync_queue';
-
   try {
     if (Hive.isBoxOpen(syncBoxName)) {
       await Hive.box<SyncQueueItem>(syncBoxName).close();
     }
     await Hive.openBox<SyncQueueItem>(syncBoxName);
   } catch (e) {
-    debugPrint('Hive box error, forcing delete: $e');
-    try {
-      await Hive.deleteBoxFromDisk(syncBoxName);
-    } catch (_) {}
+    debugPrint('Hive error: $e');
+    try { await Hive.deleteBoxFromDisk(syncBoxName); } catch (_) {}
     await Hive.openBox<SyncQueueItem>(syncBoxName);
   }
 
-  // ==================== FIREBASE (SAFE INITIALIZATION) ====================
+  // ==================== FIREBASE ====================
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      debugPrint('✅ Firebase initialized successfully');
-    } else {
-      debugPrint('ℹ️ Firebase already initialized — using existing [DEFAULT] app');
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
-
-    // Only set up Crashlytics and Firestore if Firebase initialized successfully
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-
-    FirebaseFirestore.instance.settings = Settings(
-      persistenceEnabled: !kIsWeb,
-    );
-
+    FirebaseFirestore.instance.settings = Settings(persistenceEnabled: !kIsWeb);
   } catch (e) {
-    final msg = e.toString().toLowerCase();
-    if (msg.contains('already exists')) {
-      debugPrint('ℹ️ FirebaseApp [DEFAULT] already exists — continuing safely');
-    } else {
-      debugPrint('⚠️ Firebase initialization warning: $e');
-    }
+    debugPrint('Firebase warning: $e');
   }
 
-  // ==================== FIRESTORE SETTINGS ====================
-  FirebaseFirestore.instance.settings = Settings(
-    persistenceEnabled: !kIsWeb,
-  );
+  // ==================== NOTIFICATION SERVICE ====================
+  final notificationService = NotificationService();
+  await notificationService.initialize();
 
-  // ==================== LOCAL NOTIFICATIONS ====================
-  await flutterLocalNotificationsPlugin.initialize(
-    settings: const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: _handleNotificationAction,
-  );
+  // ==================== GLOBAL METHOD CHANNEL FOR FULL-SCREEN ALERTS ====================
+  const MethodChannel globalAlertChannel = MethodChannel('job_alert_channel');
 
+  globalAlertChannel.setMethodCallHandler((MethodCall call) async {
+    if (call.method == 'handleAlertAction') {
+      final String? actionId = call.arguments['actionId'];
+      final String? payload = call.arguments['payload'];
+
+      if (actionId != null && payload != null) {
+        await notificationService.handleNotificationAction(NotificationResponse(
+          actionId: actionId,
+          payload: payload,
+          notificationResponseType: NotificationResponseType.selectedNotificationAction,
+        ));
+      }
+    }
+  });
+
+  // ==================== OTHER SERVICES ====================
   final firestoreService = FirestoreService();
-
-  // Safe initialize with error handling
   try {
     await firestoreService.initializeSettings();
   } catch (e) {
-    debugPrint('Could not load settings (permission or network): $e');
+    debugPrint('Settings warning: $e');
   }
 
   await SyncService().init();
@@ -130,14 +98,13 @@ void main() async {
       try {
         currentEmployee = await firestoreService.getEmployee(clockNo);
       } catch (e) {
-        debugPrint('Auto-login failed (permission): $e');
         currentEmployee = null;
       }
     }
   }
 
   runApp(
-    const ProviderScope(
+    ProviderScope(
       child: CtpJobCardsApp(),
     ),
   );
@@ -155,7 +122,7 @@ class CtpJobCardsApp extends ConsumerWidget {
         try {
           await UpdateService().checkForUpdate(context);
         } catch (e) {
-          debugPrint('Error checking for updates on startup: $e');
+          debugPrint('Update check error: $e');
         }
       });
     }

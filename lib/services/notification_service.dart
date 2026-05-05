@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:torch_light/torch_light.dart';
 
 import '../main.dart' show currentEmployee;
 import 'job_alert_service.dart';
@@ -18,8 +19,6 @@ import 'job_alert_service.dart';
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-
-  static const MethodChannel _jobAlertChannel = MethodChannel('job_alert_channel');
 
   // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
@@ -102,8 +101,8 @@ class NotificationService {
     debugPrint('All notification channels created successfully (no actions)');
   }
 
-  // ==================== ROBUST HANDLE NOTIFICATION ACTION (3 FALLBACKS + DEBUG) ====================
-  Future<void> _handleNotificationAction(NotificationResponse response) async {
+  // ==================== ROBUST HANDLE NOTIFICATION ACTION ====================
+  Future<void> handleNotificationAction(NotificationResponse response) async {
     debugPrint('NotificationService _handleNotificationAction CALLED');
     debugPrint('   actionId: ${response.actionId}');
     debugPrint('   payload: ${response.payload}');
@@ -120,28 +119,24 @@ class NotificationService {
     String clockNo = '';
     String name = 'Unknown User';
 
-    // 1. Try currentEmployee first
     if (currentEmployee != null) {
       clockNo = currentEmployee!.clockNo;
       name = currentEmployee!.name ?? 'Unknown User';
       debugPrint('   User from currentEmployee: $name ($clockNo)');
-    } 
-    // 2. Try SharedPreferences
-    else {
+    } else {
       final prefs = await SharedPreferences.getInstance();
       clockNo = prefs.getString('clockNo') ?? '';
       name = prefs.getString('employeeName') ?? 'Unknown User';
       debugPrint('   currentEmployee was null → loaded from SharedPreferences: $name ($clockNo)');
     }
 
-    // 3. Last resort: Firebase Auth + Firestore (with prefix fix)
     if (clockNo.isEmpty) {
       debugPrint('   Still no clockNo → trying Firebase Auth fallback...');
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser != null) {
         try {
-          final realClockNo = firebaseUser.uid.startsWith('employee_') 
-              ? firebaseUser.uid.substring(9) 
+          final realClockNo = firebaseUser.uid.startsWith('employee_')
+              ? firebaseUser.uid.substring(9)
               : firebaseUser.uid;
 
           final empDoc = await FirebaseFirestore.instance
@@ -241,7 +236,7 @@ class NotificationService {
         debugPrint('   → Handling DISMISS for job #$payload');
         debugPrint('   Dismiss logged for $name on job #$payload');
       } else if (actionId == 'view_job') {
-        debugPrint('   → Handling VIEW JOB for job #$payload (future deep link or navigation)');
+        debugPrint('   → Handling VIEW JOB for job #$payload');
       } else {
         debugPrint('   Unknown actionId: $actionId');
       }
@@ -352,18 +347,22 @@ class NotificationService {
 
     await _localNotifications.initialize(
       settings: initSettings,
-      onDidReceiveNotificationResponse: _handleNotificationAction,
+      onDidReceiveNotificationResponse: handleNotificationAction,
     );
 
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-    _jobAlertChannel.setMethodCallHandler((call) async {
+    // ==================== METHOD CHANNEL (Correct - No static) ====================
+    const MethodChannel jobAlertChannel = MethodChannel('job_alert_channel');
+
+    jobAlertChannel.setMethodCallHandler((MethodCall call) async {
       if (call.method == 'handleAlertAction') {
-        final actionId = call.arguments['actionId'] as String?;
-        final payload = call.arguments['payload'] as String?;
+        final String? actionId = call.arguments['actionId'];
+        final String? payload = call.arguments['payload'];
+
         if (actionId != null && payload != null) {
-          await _handleNotificationAction(NotificationResponse(
+          await handleNotificationAction(NotificationResponse(
             actionId: actionId,
             payload: payload,
             notificationResponseType: NotificationResponseType.selectedNotificationAction,
