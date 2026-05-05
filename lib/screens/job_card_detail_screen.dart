@@ -1163,7 +1163,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               machine: jobCard.machine,
               part: jobCard.part,
               description: jobCard.description,
-              notificationType: 'closed',
+              notificationType: 'self_assign',
               assigneeName: currentEmployee?.name ?? 'Unknown',
             );
           }

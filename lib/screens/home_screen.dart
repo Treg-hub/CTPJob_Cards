@@ -92,6 +92,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadOnSiteStatus();
     _loadShowDeptOnly();
     _loadOverrideOnSite();
+    // === REFRESH FCM TOKEN ON APP START ===
+    if (!kIsWeb) {
+      _notificationService.refreshToken();
+    }
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
         final count = jobs.where((j) => !j.isClosed && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
@@ -1233,46 +1237,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
         // ==================== TEST PERSISTENT BANNER BUTTON ====================
         Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
-            title: const Text(
-              'Test Persistent Banner (P5)',
-              style: TextStyle(fontWeight: FontWeight.bold),
+        elevation: 4,
+        child: ListTile(
+          leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
+          title: const Text('Test Persistent Banner (P5)'),
+          subtitle: const Text('Test red persistent banner with 3 buttons'),
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
-            subtitle: const Text('Test red persistent banner with 3 buttons (Assign Self, Busy, Dismiss)'),
-            trailing: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                try {
-                  await _notificationService.testPersistentBanner();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Persistent P5 banner triggered! Check notification panel'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+            onPressed: () async {
+              try {
+                // Direct call - more reliable
+                await _notificationService.showLocalNotification(
+                  title: "🔥 TEST - Priority 5 Job",
+                  body: "This is a test persistent banner. Tap buttons below.",
+                  level: "full-loud",
+                  jobCardNumber: "999",
+                  priority: "5",
+                );
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Test banner triggered! Check notification panel'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
                 }
-              },
-              child: const Text('TEST'),
-            ),
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('TEST'),
           ),
         ),
+      ),
 
         Card(
           elevation: 4,

@@ -23,6 +23,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.android.gms.tasks.Tasks
+import java.util.concurrent.TimeUnit
 
 class FullScreenJobAlertActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null
@@ -113,39 +115,139 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         tvCreatedBy.text = "👤 Created by: $createdBy"
         tvDescription.text = description
 
-        // === Load current employee info (clockNo + name) ===
+        // === Load current employee info (SYNCHRONOUS) ===
         val prefs = getSharedPreferences("employee_prefs", Context.MODE_PRIVATE)
         clockNo = prefs.getString("clockNo", "") ?: ""
         employeeName = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
 
+        Log.d("FullScreenJobAlert", "=== SharedPrefs Debug ===")
+        Log.d("FullScreenJobAlert", "clockNo from prefs: '$clockNo'")
+        Log.d("FullScreenJobAlert", "employeeName from prefs: '$employeeName'")
+        Log.d("FullScreenJobAlert", "All keys: ${prefs.all.keys}")
+
+        // If still empty, try Firebase synchronously
+        if (clockNo.isEmpty()) {
+            try {
+                val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (currentUser != null) {
+                    val realClockNo = if (currentUser.uid.startsWith("employee_")) currentUser.uid.substring(9) else currentUser.uid
+                    
+                    val task = FirebaseFirestore.getInstance()
+                        .collection("employees")
+                        .document(realClockNo)
+                        .get()
+                    
+                    // Wait up to 3 seconds for the result
+                    val doc = com.google.android.gms.tasks.Tasks.await(task, 3, java.util.concurrent.TimeUnit.SECONDS)
+                    
+                    if (doc.exists()) {
+                        clockNo = doc.getString("clockNo") ?: realClockNo
+                        employeeName = doc.getString("name") ?: "Unknown User"
+                    } else {
+                        clockNo = realClockNo
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("FullScreenJobAlert", "Failed to load employee: ${e.message}")
+            }
+        }
+
         // Buttons
         btnAssignSelf.setOnClickListener {
-            stopAlarm()
-            val i = Intent(this, MainActivity::class.java).apply {
-                putExtra("jobCardNumber", jobCardNumber)
-                putExtra("action", "assign_self")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        stopAlarm()
+
+        // === FORCE LOAD CURRENT USER (SYNCHRONOUS) ===
+        var finalClockNo = clockNo
+        var finalName = employeeName
+
+        if (finalClockNo.isEmpty()) {
+            try {
+                val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (currentUser != null) {
+                    val realClockNo = if (currentUser.uid.startsWith("employee_")) {
+                        currentUser.uid.substring(9)
+                    } else {
+                        currentUser.uid
+                    }
+
+                    val task = FirebaseFirestore.getInstance()
+                        .collection("employees")
+                        .document(realClockNo)
+                        .get()
+
+                    val doc = com.google.android.gms.tasks.Tasks.await(task, 3, java.util.concurrent.TimeUnit.SECONDS)
+
+                    if (doc.exists()) {
+                        finalClockNo = doc.getString("clockNo") ?: realClockNo
+                        finalName = doc.getString("name") ?: "Unknown User"
+                    } else {
+                        finalClockNo = realClockNo
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("FullScreenJobAlert", "Failed to load user: ${e.message}")
             }
-            startActivity(i)
-            finish()
         }
+
+        val i = Intent(this, MainActivity::class.java).apply {
+            putExtra("jobCardNumber", jobCardNumber)
+            putExtra("action", "assign_self")
+            putExtra("operator", finalName)
+            putExtra("clockNo", finalClockNo)
+            putExtra("userName", finalName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        startActivity(i)
+        finish()
+    }
 
         if (shouldShowImBusyButton()) {
             btnImBusy.visibility = View.VISIBLE
             btnImBusy.setOnClickListener {
                 stopAlarm()
 
-                // Log Busy response with correct user info
-                val db = FirebaseFirestore.getInstance()
-                db.collection("notifications").add(hashMapOf(
-                    "jobCardNumber" to jobCardNumber.toIntOrNull(),
-                    "triggeredBy" to "busy",
-                    "initiatedByClockNo" to clockNo,
-                    "initiatedByName" to employeeName,
-                    "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                    "level" to level
-                ))
+                // === FORCE LOAD CURRENT USER (SYNCHRONOUS) ===
+                var finalClockNo = clockNo
+                var finalName = employeeName
 
+                if (finalClockNo.isEmpty()) {
+                    try {
+                        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        if (currentUser != null) {
+                            val realClockNo = if (currentUser.uid.startsWith("employee_")) {
+                                currentUser.uid.substring(9)
+                            } else {
+                                currentUser.uid
+                            }
+
+                            val task = FirebaseFirestore.getInstance()
+                                .collection("employees")
+                                .document(realClockNo)
+                                .get()
+
+                            val doc = com.google.android.gms.tasks.Tasks.await(task, 3, java.util.concurrent.TimeUnit.SECONDS)
+
+                            if (doc.exists()) {
+                                finalClockNo = doc.getString("clockNo") ?: realClockNo
+                                finalName = doc.getString("name") ?: "Unknown User"
+                            } else {
+                                finalClockNo = realClockNo
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("FullScreenJobAlert", "Failed to load user: ${e.message}")
+                    }
+                }
+
+                val i = Intent(this, MainActivity::class.java).apply {
+                    putExtra("jobCardNumber", jobCardNumber)
+                    putExtra("action", "assign_self")
+                    putExtra("operator", finalName)
+                    putExtra("clockNo", finalClockNo)
+                    putExtra("userName", finalName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                startActivity(i)
                 finish()
             }
         } else {
@@ -155,17 +257,48 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         btnDismiss.setOnClickListener {
             stopAlarm()
 
-            // Log Dismiss action with correct employee info
-            val db = FirebaseFirestore.getInstance()
-            db.collection("notifications").add(hashMapOf(
-                "jobCardNumber" to jobCardNumber.toIntOrNull(),
-                "triggeredBy" to "dismiss",
-                "initiatedByClockNo" to clockNo,
-                "initiatedByName" to employeeName,
-                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                "level" to level
-            ))
+            // === FORCE LOAD CURRENT USER (SYNCHRONOUS) ===
+            var finalClockNo = clockNo
+            var finalName = employeeName
 
+            if (finalClockNo.isEmpty()) {
+                try {
+                    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                    if (currentUser != null) {
+                        val realClockNo = if (currentUser.uid.startsWith("employee_")) {
+                            currentUser.uid.substring(9)
+                        } else {
+                            currentUser.uid
+                        }
+
+                        val task = FirebaseFirestore.getInstance()
+                            .collection("employees")
+                            .document(realClockNo)
+                            .get()
+
+                        val doc = com.google.android.gms.tasks.Tasks.await(task, 3, java.util.concurrent.TimeUnit.SECONDS)
+
+                        if (doc.exists()) {
+                            finalClockNo = doc.getString("clockNo") ?: realClockNo
+                            finalName = doc.getString("name") ?: "Unknown User"
+                        } else {
+                            finalClockNo = realClockNo
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("FullScreenJobAlert", "Failed to load user: ${e.message}")
+                }
+            }
+
+            val i = Intent(this, MainActivity::class.java).apply {
+                putExtra("jobCardNumber", jobCardNumber)
+                putExtra("action", "assign_self")
+                putExtra("operator", finalName)
+                putExtra("clockNo", finalClockNo)
+                putExtra("userName", finalName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            startActivity(i)
             finish()
         }
     }

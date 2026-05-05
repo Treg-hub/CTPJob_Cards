@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../main.dart' show currentEmployee;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -102,14 +104,52 @@ class NotificationService {
 
     if (actionId == null || payload == null) return;
 
-    final user = currentEmployee;
-    if (user == null) {
+    String clockNo = '';
+    String name = 'Unknown User';
+
+    // 1. Try currentEmployee first
+    if (currentEmployee != null) {
+      clockNo = currentEmployee!.clockNo;
+      name = currentEmployee!.name ?? 'Unknown User';
+    } 
+    // 2. Try SharedPreferences
+    else {
+      final prefs = await SharedPreferences.getInstance();
+      clockNo = prefs.getString('clockNo') ?? '';
+      name = prefs.getString('employeeName') ?? 'Unknown User';
+    }
+
+    // 3. Last resort: Try to get from Firebase Auth + Firestore
+    if (clockNo.isEmpty) {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        try {
+          // Remove "employee_" prefix (e.g. "employee_23194" → "23194")
+          final realClockNo = firebaseUser.uid.startsWith('employee_') 
+              ? firebaseUser.uid.substring(9) 
+              : firebaseUser.uid;
+
+          final empDoc = await FirebaseFirestore.instance
+              .collection('employees')
+              .doc(realClockNo)
+              .get();
+
+          if (empDoc.exists) {
+            clockNo = empDoc.data()?['clockNo'] ?? realClockNo;
+            name = empDoc.data()?['name'] ?? 'Unknown User';
+          } else {
+            clockNo = realClockNo;
+          }
+        } catch (e) {
+          debugPrint('Failed to load employee from Firestore: $e');
+        }
+      }
+    }
+
+    if (clockNo.isEmpty) {
       debugPrint('No logged in user for notification action');
       return;
     }
-
-    final clockNo = user.clockNo;
-    final name = user.name ?? 'Unknown User';
 
     debugPrint('Action: $actionId for job #$payload by $name ($clockNo)');
 
@@ -139,6 +179,7 @@ class NotificationService {
 
         debugPrint('Job #$payload assigned to $name');
 
+        // Notify creator
         final creatorClockNo = jobData['operatorClockNo'];
         if (creatorClockNo != null) {
           final creatorDoc = await FirebaseFirestore.instance
@@ -318,8 +359,31 @@ class NotificationService {
   }
 
   Future<void> refreshToken() async {
-    await _messaging.deleteToken();
-    await _messaging.getToken();
+    try {
+      // Delete old token
+      await _messaging.deleteToken();
+
+      // Get new token
+      final newToken = await _messaging.getToken();
+
+      if (newToken != null && currentEmployee != null) {
+        // Save new token to Firestore
+        await FirebaseFirestore.instance
+            .collection('employees')
+            .doc(currentEmployee!.clockNo)
+            .update({
+          'fcmToken': newToken,
+          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        });
+
+        debugPrint('✅ FCM Token refreshed and saved');
+      } else {
+        debugPrint('⚠️ No user logged in - cannot save token');
+      }
+    } catch (e) {
+      debugPrint('❌ Error refreshing FCM token: $e');
+      rethrow;
+    }
   }
 
   // Named parameters version (compatible with existing screens)

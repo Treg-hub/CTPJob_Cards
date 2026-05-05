@@ -93,14 +93,15 @@ class MainActivity : FlutterActivity() {
         }
 
         val firebaseUid = currentUser.uid
+        val realClockNo = if (firebaseUid.startsWith("employee_")) firebaseUid.substring(9) else firebaseUid
 
         // Get real clockNo and name from employees collection
         FirebaseFirestore.getInstance()
             .collection("employees")
-            .document(firebaseUid)
+            .document(realClockNo)
             .get()
             .addOnSuccessListener { employeeDoc ->
-                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val clockNo = employeeDoc.getString("clockNo") ?: realClockNo
                 val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
 
                 // Assign the job
@@ -145,13 +146,14 @@ class MainActivity : FlutterActivity() {
     ) {
         val currentUser = FirebaseAuth.getInstance().currentUser ?: return
         val firebaseUid = currentUser.uid
+        val realClockNo = if (firebaseUid.startsWith("employee_")) firebaseUid.substring(9) else firebaseUid
 
         FirebaseFirestore.getInstance()
             .collection("employees")
-            .document(firebaseUid)
+            .document(realClockNo)
             .get()
             .addOnSuccessListener { employeeDoc ->
-                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val clockNo = employeeDoc.getString("clockNo") ?: realClockNo
                 val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
 
                 val busyData = hashMapOf(
@@ -181,13 +183,14 @@ class MainActivity : FlutterActivity() {
     ) {
         val currentUser = FirebaseAuth.getInstance().currentUser ?: return
         val firebaseUid = currentUser.uid
+        val realClockNo = if (firebaseUid.startsWith("employee_")) firebaseUid.substring(9) else firebaseUid
 
         FirebaseFirestore.getInstance()
             .collection("employees")
-            .document(firebaseUid)
+            .document(realClockNo)
             .get()
             .addOnSuccessListener { employeeDoc ->
-                val clockNo = employeeDoc.getString("clockNo") ?: firebaseUid
+                val clockNo = employeeDoc.getString("clockNo") ?: realClockNo
                 val userName = employeeDoc.getString("name") ?: currentUser.displayName ?: currentUser.email ?: "Unknown User"
 
                 val dismissData = hashMapOf(

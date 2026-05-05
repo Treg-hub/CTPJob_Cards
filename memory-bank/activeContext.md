@@ -12,6 +12,10 @@
 - **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications
 
 ## Recent Changes
+- **Fixed Self-Assign Button User Info Bug**: Resolved issue where clicking "Assign Self" in full-screen alerts or notifications didn't retrieve user's clockNo, name, or id, causing assignments to wrong users.
+  - **Root Causes**: 1) FullScreenJobAlertActivity didn't pass user extras to MainActivity Intent, causing "Unknown" logs. 2) MainActivity fetched employees/{firebaseUid} but uid="employee_clockNo" while docs keyed by clockNo, so fetch failed and used uid as clockNo.
+  - **Fixes**: 1) Added putExtra("operator", "clockNo", "userName") in FullScreenJobAlertActivity btnAssignSelf. 2) Strip "employee_" prefix from uid in MainActivity assignJobToCurrentUser, sendBusyNotificationToOperator, logDismissedAlert. 3) notification_service.dart already had strip logic.
+  - **Result**: Self-assign now correctly gets user info from employees/{clockNo}, assigns to right user, logs show real names instead of "Unknown".
 - **Enhanced Related Jobs Filtering in Job Card Detail Screen**: Updated Related tab to show only monitor/closed jobs with exact matches on department, area, machine, part, and type, excluding the current job.
   - **Before**: Client-side OR filter on any location field, included all statuses, inefficient for large datasets
   - **After**: Server-side AND filter on all fields, status whereIn ['monitor','closed'], id != current, orderBy createdAt desc, limit 20
