@@ -16,13 +16,13 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.TextView
-import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import com.google.android.material.button.MaterialButton
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.android.FlutterActivity
 
-class FullScreenJobAlertActivity : ComponentActivity() {
+class FullScreenJobAlertActivity : FlutterActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
@@ -49,10 +49,11 @@ class FullScreenJobAlertActivity : ComponentActivity() {
         setupUI()
         startAlarmSoundAndVibration()
         startHeaderPulseAnimation()
+    }
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {}
-        })
+    // ==================== THIS MUST BE OUTSIDE onCreate() ====================
+    override fun onBackPressed() {
+        // Do nothing - prevent back button from closing the alert
     }
 
     private fun setupUI() {
@@ -110,10 +111,17 @@ class FullScreenJobAlertActivity : ComponentActivity() {
 
     private fun callDartAction(action: String, jobCardNumber: String) {
         try {
-            val engine = FlutterEngineCache.getInstance().get("main_engine")
-            
-            if (engine != null) {
-                MethodChannel(engine.dartExecutor.binaryMessenger, "job_alert_channel")
+            // First try: Use the activity's own flutterEngine
+            var messenger = flutterEngine?.dartExecutor?.binaryMessenger
+
+            // Fallback: Try cached engine if the above is null
+            if (messenger == null) {
+                val cachedEngine = FlutterEngineCache.getInstance().get("main_engine")
+                messenger = cachedEngine?.dartExecutor?.binaryMessenger
+            }
+
+            if (messenger != null) {
+                MethodChannel(messenger, "job_alert_channel")
                     .invokeMethod(
                         "handleAlertAction",
                         mapOf(
@@ -121,14 +129,13 @@ class FullScreenJobAlertActivity : ComponentActivity() {
                             "payload" to jobCardNumber
                         )
                     )
-                Log.d("FullScreenJobAlert", "✅ SUCCESS: Called Dart with $action on job #$jobCardNumber")
+                Log.d("FullScreenJobAlert", "✅ SUCCESS: $action on job #$jobCardNumber")
             } else {
-                Log.e("FullScreenJobAlert", "❌ Engine is still null - cannot call Dart")
+                Log.e("FullScreenJobAlert", "❌ Could not get any Flutter messenger")
             }
         } catch (e: Exception) {
             Log.e("FullScreenJobAlert", "Error calling Dart: ${e.message}")
         }
-        
         finish()
     }
     private fun shouldShowImBusyButton(): Boolean {

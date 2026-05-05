@@ -105,8 +105,8 @@ class JobCard {
       priority: data['priority'] as int? ?? 3,
       operator: data['operator'] as String? ?? '',
       operatorClockNo: data['operatorClockNo'] as String?,
-      assignedClockNos: (data['assignedClockNos'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      assignedNames: (data['assignedNames'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      assignedClockNos: _parseStringList(data['assignedClockNos']),
+      assignedNames: _parseStringList(data['assignedNames']),
       description: data['description'] as String? ?? '',
       notes: data['notes'] as String? ?? '',
       comments: data['comments'] as String? ?? '',
@@ -169,7 +169,7 @@ class JobCard {
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'assignedAt': assignedAt != null ? Timestamp.fromDate(assignedAt!) : null,
       'startedAt': startedAt != null ? Timestamp.fromDate(startedAt!) : null,
-      'lastUpdatedAt': FieldValue.serverTimestamp(), // Always update on save
+      'lastUpdatedAt': FieldValue.serverTimestamp(),
       'notificationReceivedAt': notificationReceivedAt != null ? Timestamp.fromDate(notificationReceivedAt!) : null,
       'notifiedAt2min': notifiedAt2min != null ? Timestamp.fromDate(notifiedAt2min!) : null,
       'notifiedAt7min': notifiedAt7min != null ? Timestamp.fromDate(notifiedAt7min!) : null,
@@ -267,6 +267,18 @@ class JobCard {
       }
       return <String, dynamic>{};
     }).toList();
+  }
+
+  // ==================== NEW HELPER METHOD ====================
+  static List<String>? _parseStringList(dynamic value) {
+    if (value == null) return null;
+    if (value is List) {
+      return value.map((e) => e.toString()).toList();
+    }
+    if (value is String) {
+      return value.isEmpty ? [] : [value];
+    }
+    return null;
   }
 }
 

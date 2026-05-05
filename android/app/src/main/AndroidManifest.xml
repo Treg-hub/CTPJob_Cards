@@ -74,8 +74,6 @@
         <activity
             android:name=".FullScreenJobAlertActivity"
             android:exported="false"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:theme="@style/FullScreenAlertTheme" />
