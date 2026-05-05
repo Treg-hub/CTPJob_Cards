@@ -276,7 +276,7 @@ class NotificationService {
         color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
-        // actions removed - using Option B (Dart-only) for full-screen alert
+        // actions removed - using Option B (Dart-only handling)
       );
     } else if (level == 'medium-high' || level == 'medium') {
       androidDetails = AndroidNotificationDetails(
