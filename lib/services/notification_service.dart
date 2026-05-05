@@ -262,28 +262,21 @@ class NotificationService {
 
     if (isHighPriority) {
       androidDetails = AndroidNotificationDetails(
-        'full_channel', 'Full-Loud Job Notifications',
+        'persistent_banner_channel', 'Persistent Job Alerts',
         icon: '@mipmap/ic_launcher',
         importance: Importance.max,
         priority: Priority.max,
         enableVibration: true,
         playSound: true,
         sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-        vibrationPattern: Int64List.fromList([0, 1500, 500, 1500, 500, 1500, 500, 1500]),
-        category: AndroidNotificationCategory.alarm,
-        fullScreenIntent: true,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
         ongoing: true,
         autoCancel: false,
         visibility: NotificationVisibility.public,
         color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
-        actions: <AndroidNotificationAction>[
-          const AndroidNotificationAction('assign_self', 'Assign Self'),
-          const AndroidNotificationAction('busy', 'Busy'),
-          const AndroidNotificationAction('dismiss', 'Dismiss'),
-        ],
+        // actions removed - using Option B (Dart-only) for full-screen alert
       );
     } else if (level == 'medium-high' || level == 'medium') {
       androidDetails = AndroidNotificationDetails(
@@ -301,11 +294,7 @@ class NotificationService {
         color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
-        actions: <AndroidNotificationAction>[
-          const AndroidNotificationAction('assign_self', 'Assign Self'),
-          const AndroidNotificationAction('busy', 'Busy'),
-          const AndroidNotificationAction('dismiss', 'Dismiss'),
-        ],
+        // actions removed
       );
     } else {
       androidDetails = AndroidNotificationDetails(
@@ -319,11 +308,7 @@ class NotificationService {
         color: _getPriorityColor(priority),
         colorized: true,
         styleInformation: BigTextStyleInformation(body),
-        actions: <AndroidNotificationAction>[
-          const AndroidNotificationAction('assign_self', 'Assign Self'),
-          const AndroidNotificationAction('busy', 'Busy'),
-          const AndroidNotificationAction('dismiss', 'Dismiss'),
-        ],
+        // actions removed
       );
     }
 
