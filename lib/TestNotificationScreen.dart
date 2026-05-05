@@ -77,14 +77,14 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
 
             ElevatedButton.icon(
               icon: const Icon(Icons.notifications_active),
-              label: const Text("Test Persistent Banner (Foreground P5)"),
+              label: const Text("Test Fullscreen / Persistent Banner (P5)"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange.shade800,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: () => _runTest(
-                "Persistent Banner",
-                () => _notificationService.testPersistentBanner(),
+                "P5 Fullscreen Banner",
+                () => _notificationService.testFullscreenNotification(),
               ),
             ),
 
@@ -137,12 +137,9 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
               ),
               onPressed: () => _runTest(
                 "Medium-High",
-                () => _notificationService.showLocalNotification(
+                () => _notificationService.showOnSiteNotification(
                   title: "Medium Priority Job",
-                  body: "This requires attention soon (simulated medium-high)",
-                  level: 'medium-high',
-                  jobCardNumber: "999",
-                  priority: "4",
+                  body: "This requires attention soon (Priority 4 test)",
                 ),
               ),
             ),
@@ -162,7 +159,7 @@ class _TestNotificationScreenState extends State<TestNotificationScreen> {
                   Text("TESTING INSTRUCTIONS", 
                       style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   SizedBox(height: 8),
-                  Text("• Persistent Banner: Should feel normal, not too loud"),
+                  Text("• P5 Fullscreen: Should trigger loud alarm + heads-up"),
                   Text("• Fullscreen Alarm: Simulates background/locked behavior"),
                   Text("• Lock your phone and test real P5 to see full-screen UI"),
                   Text("• Check notification shade after each test"),

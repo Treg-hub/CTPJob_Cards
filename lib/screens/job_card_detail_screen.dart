@@ -491,15 +491,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                   final clockNo = newEmployees[i];
                                   final emp = await _firestoreService.getEmployee(clockNo);
                                   if (emp?.fcmToken != null) {
-                                     try {
-                                       await _notificationService.sendJobAssignmentNotification(
+                                    try {
+                                      await _notificationService.sendJobAssignmentNotification(
                                         recipientToken: emp!.fcmToken!,
                                         jobCardId: job.id!,
                                         jobCardNumber: job.jobCardNumber ?? 0,
-                                        assignedTo: emp.clockNo,
-                                        assignedName: emp.name,
-                                        area: job.area,
-                                        description: job.description,
+                                        operator: currentEmployee?.name ?? 'Unknown',
+                                        creator: job.operator ?? 'Unknown',
+                                        department: emp.department ?? '',
+                                        area: job.area ?? '',
+                                        machine: job.machine ?? '',
+                                        part: job.part ?? '',
+                                        description: job.description ?? '',
                                         priority: job.priority ?? 1,
                                       );
                                     } catch (e) {

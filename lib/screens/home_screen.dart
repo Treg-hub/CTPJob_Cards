@@ -1250,12 +1250,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onPressed: () async {
               try {
                 // Direct call - more reliable
-                await _notificationService.showLocalNotification(
-                  title: "🔥 TEST - Priority 5 Job",
-                  body: "This is a test persistent banner. Tap buttons below.",
-                  level: "full-loud",
-                  jobCardNumber: "999",
-                  priority: "5",
+                await _notificationService.showOnSiteNotification(
+                  title: "Your notification title here",
+                  body: "Your notification body here",
                 );
 
                 if (mounted) {
