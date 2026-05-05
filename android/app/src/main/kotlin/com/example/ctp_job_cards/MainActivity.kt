@@ -19,30 +19,30 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+
     private val GEOFENCE_CHANNEL = "ctp/geofence"
     private val JOB_ALERT_CHANNEL = "job_alert_channel"
     private lateinit var geofencingClient: GeofencingClient
+
     private val geofencePendingIntent: PendingIntent by lazy {
         val intent = Intent(this, GeofenceReceiver::class.java)
-        PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        PendingIntent.getBroadcast(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d("MainActivity", "🚀 MainActivity started")
         super.onCreate(savedInstanceState)
-
         handleDeepLink(intent)
         createUrgentNotificationChannel()
-        
         geofencingClient = LocationServices.getGeofencingClient(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -61,45 +61,45 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        val jobCardNumber = intent?.getStringExtra("jobCardNumber") ?: return
-        val action = intent.getStringExtra("action")
-        
-        // Read the real values passed from Flutter
-        val operator = intent.getStringExtra("operator") 
-            ?: intent.getStringExtra("createdBy") 
-            ?: "Unknown Operator"
-        
-        val clockNo = intent.getStringExtra("clockNo") ?: "MainActivity unknown"
-        val userName = intent.getStringExtra("userName") ?: "MainActivity Unknown User"
+        intent?.let {
+            val jobCardNumber = it.getStringExtra("jobCardNumber") ?: return
+            val action = it.getStringExtra("action")
 
-        Log.d("MainActivity", "🔗 Deep link - Job: $jobCardNumber, Action: $action, Operator: $operator, clockNo: $clockNo, userName: $userName")
+            val operator = it.getStringExtra("operator") ?: "Unknown"
+            val clockNo = it.getStringExtra("clockNo") ?: ""
+            val userName = it.getStringExtra("userName") ?: "Unknown User"
 
-        when (action) {
+            Log.d("MainActivity", "🔗 Deep link - Job: $jobCardNumber, Action: $action, Operator: $operator, clockNo: $clockNo, userName: $userName")
+
             when (action) {
-            "assign_self" -> assignJobToCurrentUser(jobCardNumber, clockNo, userName)
-            "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator, clockNo, userName)
-            "dismiss" -> logDismissedAlert(jobCardNumber, operator, clockNo, userName)
-            else -> {}
+                "assign_self" -> assignJobToCurrentUser(jobCardNumber, clockNo, userName)
+                "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator, clockNo, userName)
+                "dismiss" -> logDismissedAlert(jobCardNumber, operator, clockNo, userName)
+            }
         }
     }
 
-    // ==================== NOTIFICATION ACTION HANDLERS ====================
+    private fun getCurrentUserInfo(): Pair<String, String> {
+        val prefs = getSharedPreferences("employee_prefs", MODE_PRIVATE)
+        val clockNo = prefs.getString("clockNo", "") ?: ""
+        val name = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
+        return Pair(clockNo, name)
+    }
 
-    // ==================== ASSIGN SELF ====================
     private fun assignJobToCurrentUser(jobCardNumber: String, clockNoFromIntent: String, userNameFromIntent: String) {
         var clockNo = clockNoFromIntent
         var userName = userNameFromIntent
 
-        // Fallback if Intent values are empty
         if (clockNo.isEmpty() || clockNo == "unknown") {
-            val prefs = getSharedPreferences("employee_prefs", MODE_PRIVATE)
-            clockNo = prefs.getString("clockNo", "") ?: ""
-            userName = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
+            val (prefsClockNo, prefsName) = getCurrentUserInfo()
+            clockNo = prefsClockNo
+            userName = prefsName
         }
 
         if (clockNo.isEmpty()) {
             Log.e("MainActivity", "Cannot assign - no logged in user")
             Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
+            finish()
             return
         }
 
@@ -112,6 +112,7 @@ class MainActivity : FlutterActivity() {
                 if (documents.isEmpty) {
                     Log.e("MainActivity", "Job not found: $jobCardNumber")
                     Toast.makeText(this, "Job not found", Toast.LENGTH_SHORT).show()
+                    finish()
                     return@addOnSuccessListener
                 }
 
@@ -127,13 +128,14 @@ class MainActivity : FlutterActivity() {
                 ).addOnSuccessListener {
                     Log.d("MainActivity", "✅ Job $jobCardNumber assigned to $userName ($clockNo)")
                     Toast.makeText(this, "✅ Job assigned to you!", Toast.LENGTH_LONG).show()
+                    finish()
                 }.addOnFailureListener { e ->
                     Log.e("MainActivity", "Failed to assign job: ${e.message}")
+                    finish()
                 }
             }
     }
 
-    // ==================== BUSY RESPONSE ====================
     private fun sendBusyNotificationToOperator(
         jobCardNumber: String,
         originalOperator: String,
@@ -144,9 +146,9 @@ class MainActivity : FlutterActivity() {
         var userName = userNameFromIntent
 
         if (clockNo.isEmpty() || clockNo == "unknown") {
-            val prefs = getSharedPreferences("employee_prefs", MODE_PRIVATE)
-            clockNo = prefs.getString("clockNo", "") ?: ""
-            userName = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
+            val (prefsClockNo, prefsName) = getCurrentUserInfo()
+            clockNo = prefsClockNo
+            userName = prefsName
         }
 
         val db = FirebaseFirestore.getInstance()
@@ -162,10 +164,10 @@ class MainActivity : FlutterActivity() {
         ).addOnSuccessListener {
             Log.d("MainActivity", "✅ Busy response logged for job $jobCardNumber by $userName")
             Toast.makeText(this, "✅ Busy response sent", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
-    // ==================== DISMISSED ALERT ====================
     private fun logDismissedAlert(
         jobCardNumber: String,
         operator: String,
@@ -176,9 +178,9 @@ class MainActivity : FlutterActivity() {
         var userName = userNameFromIntent
 
         if (clockNo.isEmpty() || clockNo == "unknown") {
-            val prefs = getSharedPreferences("employee_prefs", MODE_PRIVATE)
-            clockNo = prefs.getString("clockNo", "") ?: ""
-            userName = prefs.getString("employeeName", "Unknown User") ?: "Unknown User"
+            val (prefsClockNo, prefsName) = getCurrentUserInfo()
+            clockNo = prefsClockNo
+            userName = prefsName
         }
 
         val db = FirebaseFirestore.getInstance()
@@ -194,6 +196,7 @@ class MainActivity : FlutterActivity() {
         ).addOnSuccessListener {
             Log.d("MainActivity", "✅ Dismiss logged for job $jobCardNumber by $userName")
             Toast.makeText(this, "Alert dismissed", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 
@@ -244,7 +247,6 @@ class MainActivity : FlutterActivity() {
                     val location = call.argument<String>("location") ?: "Location not specified"
                     val createdBy = call.argument<String>("createdBy") ?: "Unknown"
                     val priority = call.argument<String>("priority") ?: "5"
-
                     if (jobCardNumber != null && description != null) {
                         triggerUrgentAlert(jobCardNumber, description, location, createdBy, priority, result)
                     } else {
@@ -274,29 +276,27 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
-            addOnSuccessListener {
+        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
+            .addOnSuccessListener {
                 Log.d("MainActivity", "Geofence added successfully")
                 result.success("Geofence started")
             }
-            addOnFailureListener { e ->
+            .addOnFailureListener { e ->
                 Log.e("MainActivity", "Geofence add failed: $e")
                 result.error("GEOFENCE_ERROR", "Failed to add geofence: ${e.message}", null)
             }
-        }
     }
 
     private fun stopGeofence(result: MethodChannel.Result) {
-        geofencingClient.removeGeofences(geofencePendingIntent).run {
-            addOnSuccessListener {
+        geofencingClient.removeGeofences(geofencePendingIntent)
+            .addOnSuccessListener {
                 Log.d("MainActivity", "Geofence removed successfully")
                 result.success("Geofence stopped")
             }
-            addOnFailureListener { e ->
+            .addOnFailureListener { e ->
                 Log.e("MainActivity", "Geofence remove failed: $e")
                 result.error("GEOFENCE_ERROR", "Failed to remove geofence: ${e.message}", null)
             }
-        }
     }
 
     private fun triggerUrgentAlert(

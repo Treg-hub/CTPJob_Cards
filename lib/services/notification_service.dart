@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../main.dart' show currentEmployee;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -99,11 +100,19 @@ class NotificationService {
 
   // ==================== HANDLE NOTIFICATION ACTION BUTTONS ====================
   Future<void> _handleNotificationAction(NotificationResponse response) async {
+    debugPrint('🔔🔔🔔 _handleNotificationAction CALLED 🔔🔔🔔');
+    debugPrint('   actionId: ${response.actionId}');
+    debugPrint('   payload: ${response.payload}');
+
     final String? actionId = response.actionId;
     final String? payload = response.payload;
 
-    if (actionId == null || payload == null) return;
+    if (actionId == null || payload == null) {
+      debugPrint('   ❌ actionId or payload is null → returning early');
+      return;
+    }
 
+    // === ROBUST USER LOADING (3 fallbacks) ===
     String clockNo = '';
     String name = 'Unknown User';
 
@@ -111,20 +120,22 @@ class NotificationService {
     if (currentEmployee != null) {
       clockNo = currentEmployee!.clockNo;
       name = currentEmployee!.name ?? 'Unknown User';
+      debugPrint('   ✅ User from currentEmployee: $name ($clockNo)');
     } 
     // 2. Try SharedPreferences
     else {
       final prefs = await SharedPreferences.getInstance();
       clockNo = prefs.getString('clockNo') ?? '';
       name = prefs.getString('employeeName') ?? 'Unknown User';
+      debugPrint('   ⚠️ currentEmployee was null → loaded from SharedPreferences: $name ($clockNo)');
     }
 
-    // 3. Last resort: Try to get from Firebase Auth + Firestore
+    // 3. Last resort: Firebase Auth + Firestore (with prefix fix)
     if (clockNo.isEmpty) {
+      debugPrint('   ⚠️ Still no clockNo → trying Firebase Auth fallback...');
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser != null) {
         try {
-          // Remove "employee_" prefix (e.g. "employee_23194" → "23194")
           final realClockNo = firebaseUser.uid.startsWith('employee_') 
               ? firebaseUser.uid.substring(9) 
               : firebaseUser.uid;
@@ -137,24 +148,30 @@ class NotificationService {
           if (empDoc.exists) {
             clockNo = empDoc.data()?['clockNo'] ?? realClockNo;
             name = empDoc.data()?['name'] ?? 'Unknown User';
+            debugPrint('   ✅ User loaded from Firebase: $name ($clockNo)');
           } else {
             clockNo = realClockNo;
+            debugPrint('   ⚠️ Firebase doc not found → using UID as clockNo: $clockNo');
           }
         } catch (e) {
-          debugPrint('Failed to load employee from Firestore: $e');
+          debugPrint('   ❌ Firebase fallback failed: $e');
         }
+      } else {
+        debugPrint('   ❌ No Firebase user logged in');
       }
     }
 
     if (clockNo.isEmpty) {
-      debugPrint('No logged in user for notification action');
+      debugPrint('   ❌ FINAL RESULT: No logged in user found → returning early');
       return;
     }
 
-    debugPrint('Action: $actionId for job #$payload by $name ($clockNo)');
+    debugPrint('   ✅ FINAL USER: $name ($clockNo) for action: $actionId on job #$payload');
 
     try {
       if (actionId == 'assign_self') {
+        debugPrint('   → Handling ASSIGN SELF for job #$payload');
+
         final query = await FirebaseFirestore.instance
             .collection('job_cards')
             .where('jobCardNumber', isEqualTo: int.tryParse(payload))
@@ -162,7 +179,7 @@ class NotificationService {
             .get();
 
         if (query.docs.isEmpty) {
-          debugPrint('Job not found');
+          debugPrint('   ❌ Job not found in Firestore');
           return;
         }
 
@@ -177,9 +194,9 @@ class NotificationService {
           'lastUpdatedAt': FieldValue.serverTimestamp(),
         });
 
-        debugPrint('Job #$payload assigned to $name');
+        debugPrint('   ✅ Job #$payload successfully assigned to $name');
 
-        // Notify creator
+        // Notify creator (same as before)
         final creatorClockNo = jobData['operatorClockNo'];
         if (creatorClockNo != null) {
           final creatorDoc = await FirebaseFirestore.instance
@@ -202,10 +219,13 @@ class NotificationService {
               'initiatedByClockNo': clockNo,
               'initiatedByName': name,
             });
+            debugPrint('   ✅ Creator notification sent');
           }
         }
       } 
       else if (actionId == 'busy' || actionId == 'dismiss') {
+        debugPrint('   → Handling $actionId for job #$payload');
+
         await FirebaseFirestore.instance.collection('notifications').add({
           'jobCardNumber': int.tryParse(payload),
           'triggeredBy': actionId,
@@ -214,11 +234,14 @@ class NotificationService {
           'timestamp': FieldValue.serverTimestamp(),
           'level': 'normal',
         });
-        debugPrint('Logged $actionId for job #$payload');
+
+        debugPrint('   ✅ $actionId logged successfully for job #$payload');
       }
     } catch (e) {
-      debugPrint('Error in action $actionId: $e');
+      debugPrint('   ❌ ERROR in action $actionId: $e');
     }
+
+    debugPrint('🔔🔔🔔 _handleNotificationAction FINISHED 🔔🔔🔔');
   }
 
   // ==================== SHOW LOCAL NOTIFICATION ====================
@@ -348,6 +371,27 @@ class NotificationService {
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint('Foreground message received: ${message.notification?.title}');
+    });
+
+    // === METHOD CHANNEL FOR FULL-SCREEN ALERT BUTTONS (Option B) ===
+    const platform = MethodChannel('com.example.ctp_job_cards/notification_actions');
+
+    platform.setMethodCallHandler((MethodCall call) async {
+      if (call.method == 'handleAction') {
+        final String action = call.arguments['action'];
+        final String jobCardNumber = call.arguments['jobCardNumber'];
+
+        debugPrint('🔔 MethodChannel received: $action for job #$jobCardNumber');
+
+        // Reuse the same robust handler
+        await _handleNotificationAction(
+          NotificationResponse(
+            notificationResponseType: NotificationResponseType.selectedNotificationAction,
+            actionId: action,
+            payload: jobCardNumber,
+          ),
+        );
+      }
     });
 
     debugPrint('✅ NotificationService initialized successfully');
