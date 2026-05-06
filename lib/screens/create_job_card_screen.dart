@@ -53,6 +53,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
+  @override
+  void initState() {
+    super.initState();
+
+    // Default to logged-in user's department + auto-load areas
+    if (currentEmployee?.department != null && currentEmployee!.department!.isNotEmpty) {
+      selectedDepartment = currentEmployee!.department;
+    }
+  }
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
     switch (num) {
@@ -355,7 +364,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
         return Column(
           children: [
-            Text(path.isEmpty ? 'Select department to see previous jobs' : 'Previous jobs for $path', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              path.isEmpty ? 'Select department to see previous jobs' : 'Previous jobs for $path',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 400,
@@ -376,12 +388,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // First Row - Fixed overflow
                             Row(
                               children: [
-                            Text(
-                              '${job.department} > ${job.machine} > ${job.area}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
+                                Expanded(
+                                  child: Text(
+                                    '${job.department} > ${job.machine} > ${job.area}',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Created by: ${job.operator}',
@@ -390,6 +406,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                               ],
                             ),
                             const SizedBox(height: 4),
+
+                            // Second Row - Fixed overflow
                             Row(
                               children: [
                                 Container(
@@ -415,6 +433,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                               ],
                             ),
                             const SizedBox(height: 4),
+
+                            // Third Row - Fixed overflow
                             Row(
                               children: [
                                 Container(
@@ -423,16 +443,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                     color: _getStatusColor(job.status.name).withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                    child: Text(
-                      job.status.displayName,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-                    ),
+                                  child: Text(
+                                    job.status.displayName,
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                      color: Colors.blueGrey.withValues(alpha: 0.3),
+                                    color: Colors.blueGrey.withValues(alpha: 0.3),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -441,9 +461,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                   job.assignedNames?.join(', ') ?? 'Unassigned',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                Expanded(
+                                  child: Text(
+                                    job.assignedNames?.join(', ') ?? 'Unassigned',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(

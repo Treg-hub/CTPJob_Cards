@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
+import 'package:fl_chart/fl_chart.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -48,6 +49,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _showDeptOnly = true;
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
+
+  // === NEW: Shared filter state for linked department/area charts ===
+  Set<String> _selectedDepartmentsForCharts = {};
+  Set<String> _selectedAreasForCharts = {};
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -92,7 +97,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadOnSiteStatus();
     _loadShowDeptOnly();
     _loadOverrideOnSite();
-    // === REFRESH FCM TOKEN ON APP START ===
     if (!kIsWeb) {
       _notificationService.refreshToken();
     }
@@ -122,29 +126,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Future<void> _setupFirebaseMessaging() async {
-  try {
-    await _notificationService.initialize();
-
-    // NOTE: Removed the duplicate FirebaseMessaging.onMessage.listen() that was showing
-    // a SnackBar for every foreground notification. NotificationService now handles
-    // all foreground display (rich local notifications with proper channels, vibration,
-    // colors, BigText, and fullScreenIntent for priority 5).
-    //
-    // The onMessageOpenedApp listener below is kept for deep linking / navigation
-    // when the user taps a notification.
-
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      if (!mounted) return;
-      if (message.data['notificationType'] == 'assigned') {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
-      } else if (message.data['jobId'] != null) {
-        _handleJobDeepLink(message.data['jobId']);
-      }
-    });
-  } catch (e) {
-    debugPrint('❌ Error setting up Firebase Messaging: $e');
+    try {
+      await _notificationService.initialize();
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        if (!mounted) return;
+        if (message.data['notificationType'] == 'assigned') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
+        } else if (message.data['jobId'] != null) {
+          _handleJobDeepLink(message.data['jobId']);
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ Error setting up Firebase Messaging: $e');
+    }
   }
-}
 
   Future<void> _loadOnSiteStatus() async {
     if (currentEmployee == null) return;
@@ -152,7 +147,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final emp = await _firestoreService.getEmployee(currentEmployee!.clockNo);
       if (emp != null) {
         setState(() => isOnSite = emp.isOnSite);
-        // Check if FCM token is missing and prompt user
         if (emp.fcmToken == null && !kIsWeb && mounted) {
           _promptEnableNotifications();
         }
@@ -187,10 +181,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         title: const Text('Enable Notifications'),
         content: const Text('Notifications are not enabled for your account. Enable them to receive job alerts?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Later'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -202,29 +193,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   );
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Notifications enabled!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to enable notifications. Check permissions.'),
-                        backgroundColor: Colors.red,
-                      ),
+                      const SnackBar(content: Text('Notifications enabled!'), backgroundColor: Colors.green),
                     );
                   }
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error enabling notifications: $e'),
-                      backgroundColor: Colors.red,
-                    ),
+                    SnackBar(content: Text('Error enabling notifications: $e'), backgroundColor: Colors.red),
                   );
                 }
               }
@@ -237,36 +213,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Future<void> _saveOverrideOnSite(bool value) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('overrideOnSite', value);
-
-  setState(() {
-    _overrideOnSite = value;
-    isOnSite = value;
-  });
-
-    // Update Firestore so it stays in sync across devices
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('overrideOnSite', value);
+    setState(() {
+      _overrideOnSite = value;
+      isOnSite = value;
+    });
     if (currentEmployee != null) {
       try {
-        await _firestoreService.updateEmployee(
-          currentEmployee!.copyWith(isOnSite: value),
-        );
-        debugPrint('✅ Onsite status updated in Firestore: $value');
+        await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: value));
       } catch (e) {
-        debugPrint('❌ Failed to update onsite status in Firestore: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to save onsite status: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        debugPrint('❌ Failed to update onsite status: $e');
       }
     }
   }
-
-
 
   void _showPasswordDialog(BuildContext context) {
     final passwordController = TextEditingController();
@@ -285,19 +245,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onPressed: () async {
               final password = passwordController.text.trim();
               if (password.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter password'), backgroundColor: Colors.red),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter password'), backgroundColor: Colors.red));
                 return;
               }
-
               try {
                 final correctPassword = await _firestoreService.getSwitchUserPassword();
                 if (password != correctPassword) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Incorrect password'), backgroundColor: Colors.red),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Incorrect password'), backgroundColor: Colors.red));
                   }
                   return;
                 }
@@ -307,9 +262,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
                 }
               }
             },
@@ -360,11 +313,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                               color: emp.isOnSite ? Colors.green : Colors.red[400]!,
                               size: 20,
                             ),
-                           tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
+                            tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
                             onTap: () async {
                               try {
                                 await _firestoreService.saveLoggedInEmployee(emp.clockNo);
-
                                 if (!kIsWeb) {
                                   try {
                                     final token = await _notificationService.getToken();
@@ -377,9 +329,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                     debugPrint('Error updating FCM token: $e');
                                   }
                                 }
-
                                 setState(() => currentEmployee = emp);
-
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -464,46 +414,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             )).toList(),
           ),
 
-           const SizedBox(height: 24),
+          const SizedBox(height: 24),
 
-           if (isManager || isSuperManager) ...[
-             // Recent Job Cards header with toggle directly next to title, whole block centered
-             Center(
-               child: Row(
-                 mainAxisSize: MainAxisSize.min,
-                 children: [
-                   Text(
-                     'Recent Job Cards',
-                     style: TextStyle(
-                       fontSize: _isDesktop ? 18 : 20,
-                       fontWeight: FontWeight.bold,
-                       color: Theme.of(context).colorScheme.onSurface,
-                     ),
-                   ),
-                   const SizedBox(width: 12),
-                   Row(
-                     mainAxisSize: MainAxisSize.min,
-                     children: [
-                       Text('Show Dept Only', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
-                       Switch(
-                         value: _showDeptOnly,
-                         onChanged: (v) {
-                           setState(() => _showDeptOnly = v);
-                           _saveShowDeptOnly(v);
-                         },
-                         activeThumbColor: const Color(0xFFFF8C42),
-                       ),
-                     ],
-                   ),
-                 ],
-               ),
-             ),
-             const SizedBox(height: 12),
-             _buildRecentJobCards(),
-           ],
+          if (isManager || isSuperManager) ...[
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Recent Job Cards',
+                    style: TextStyle(
+                      fontSize: _isDesktop ? 18 : 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Show Dept Only', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
+                      Switch(
+                        value: _showDeptOnly,
+                        onChanged: (v) {
+                          setState(() => _showDeptOnly = v);
+                          _saveShowDeptOnly(v);
+                        },
+                        activeThumbColor: const Color(0xFFFF8C42),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildRecentJobCards(),
+
+            // === NEW: Linked Department + Area Charts Section ===
+            const SizedBox(height: 24),
+            StreamBuilder<List<JobCard>>(
+              stream: _firestoreService.getAllJobCards(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return LinkedDepartmentAreaSection(
+                  allJobs: snapshot.data!,
+                  selectedDepartments: _selectedDepartmentsForCharts,
+                  selectedAreas: _selectedAreasForCharts,
+                  onDepartmentChanged: (newSet) {
+                    setState(() {
+                      _selectedDepartmentsForCharts = newSet;
+                      final validAreas = _getValidAreas(snapshot.data!, newSet);
+                      _selectedAreasForCharts = _selectedAreasForCharts.intersection(validAreas);
+                    });
+                  },
+                  onAreaChanged: (newSet) {
+                    setState(() => _selectedAreasForCharts = newSet);
+                  },
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Set<String> _getValidAreas(List<JobCard> jobs, Set<String> selectedDepts) {
+    final openJobs = jobs.where((j) => !j.isClosed);
+    final filtered = selectedDepts.isEmpty 
+        ? openJobs 
+        : openJobs.where((j) => selectedDepts.contains(j.department ?? ''));
+    return filtered.map((j) => j.area ?? 'Unknown').toSet();
   }
 
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
@@ -544,10 +527,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             right: 8,
             child: Container(
               padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
               child: Text(
                 _openJobCount.toString(),
                 style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
@@ -566,10 +546,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
-        ),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -609,16 +586,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                               color: Colors.blue.withValues(alpha: 204),
+                        color: Colors.blue.withValues(alpha: 204),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'JC #${job.jobCardNumber}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -662,29 +635,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                             color: _getStatusColor(job.status.name).withValues(alpha: 128),
+                      color: _getStatusColor(job.status.name).withValues(alpha: 128),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                     child: Text(
-                       job.status.displayName,
-                       style: const TextStyle(
-                         color: Colors.white,
-                         fontSize: 12,
-                         fontWeight: FontWeight.w600,
-                       ),
-                     ),
+                    child: Text(
+                      job.status.displayName,
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                             color: Colors.blueGrey.withValues(alpha: 64),
+                      color: Colors.blueGrey.withValues(alpha: 64),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       job.type.displayName,
                       style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),  
+                    ),
                   ),
                   Expanded(
                     child: Column(
@@ -723,7 +692,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-      Widget _buildRecentJobCards() {
+  Widget _buildRecentJobCards() {
     return StreamBuilder<List<JobCard>>(
       stream: _firestoreService.getAllJobCards(),
       builder: (context, snapshot) {
@@ -736,9 +705,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           );
         }
-
         if (!snapshot.hasData) {
-          // Loading skeletons
           return const Card(
             elevation: 4,
             child: Padding(
@@ -771,9 +738,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           );
         }
 
-        var recentJobs = allJobs
-            .where((job) => job.lastUpdatedAt != null)
-            .toList()
+        var recentJobs = allJobs.where((job) => job.lastUpdatedAt != null).toList()
           ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
 
         var topJobs = recentJobs.take(20).toList();
@@ -853,10 +818,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           );
         }
-
         if (!snapshot.hasData) {
-          // Loading skeletons
-          return Card(
+          return const Card(
             elevation: 4,
             child: Padding(
               padding: EdgeInsets.all(24),
@@ -1032,7 +995,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                             (job.assignedClockNos?.contains(currentEmployee!.clockNo) ?? false))
             .toList()
           ..sort((a, b) {
-            // Monitor first, then closed, by lastUpdatedAt desc
             if (a.status == JobStatus.monitor && b.status != JobStatus.monitor) return -1;
             if (a.status != JobStatus.monitor && b.status == JobStatus.monitor) return 1;
             return (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0));
@@ -1100,11 +1062,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
     return const ManagerDashboardScreen();
   }
-    Widget _buildSettingsTab(ThemeMode themeMode) {
+
+  Widget _buildSettingsTab(ThemeMode themeMode) {
     return ListView(
       padding: EdgeInsets.all(_screenPadding),
       children: [
-        // Account Section
         Padding(
           padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
           child: Text(
@@ -1116,8 +1078,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
-
-        // Current User Card - REMOVED fixed height
         Card(
           elevation: 4,
           child: Padding(
@@ -1147,10 +1107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
-        // On-Site Status Card - REMOVED fixed height
         Card(
           elevation: 4,
           child: Padding(
@@ -1177,10 +1134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
-        // Override On-Site Status - Now uses natural height
         Card(
           elevation: 4,
           child: SwitchListTile(
@@ -1191,10 +1145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             activeThumbColor: const Color(0xFFFF8C42),
           ),
         ),
-
         const SizedBox(height: 8),
-
-        // Log Out Card
         Card(
           elevation: 4,
           child: ListTile(
@@ -1203,8 +1154,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onTap: _logout,
           ),
         ),
-
-        // Notifications Section
         Padding(
           padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
           child: Text(
@@ -1216,8 +1165,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
-
-        // DND Bypass Card
         Card(
           elevation: 4,
           child: ListTile(
@@ -1236,52 +1183,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             },
           ),
         ),
-
-        // ==================== TEST PERSISTENT BANNER BUTTON ====================
         Card(
-        elevation: 4,
-        child: ListTile(
-          leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
-          title: const Text('Test Persistent Banner (P5)'),
-          subtitle: const Text('Test red persistent banner with 3 buttons'),
-          trailing: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
+            title: const Text('Test Persistent Banner (P5)'),
+            subtitle: const Text('Test red persistent banner with 3 buttons'),
+            trailing: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  await _notificationService.showOnSiteNotification(
+                    title: "Your notification title here",
+                    body: "Your notification body here",
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Test banner triggered! Check notification panel'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('TEST'),
             ),
-            onPressed: () async {
-              try {
-                // Direct call - more reliable
-                await _notificationService.showOnSiteNotification(
-                  title: "Your notification title here",
-                  body: "Your notification body here",
-                );
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ Test banner triggered! Check notification panel'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 3),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('❌ Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('TEST'),
           ),
         ),
-      ),
-
         Card(
           elevation: 4,
           child: ListTile(
@@ -1300,8 +1242,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ),
-
-        // Notification Permissions
         ListTile(
           leading: const Icon(Icons.security, color: Colors.orange),
           title: const Text("Notification Permissions"),
@@ -1318,16 +1258,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             child: const Text("Grant Now"),
           ),
         ),
-
-        // Notification Diagnostics
         ListTile(
           leading: const Icon(Icons.bug_report, color: Colors.blue),
           title: const Text("Notification Diagnostics"),
           subtitle: const Text("Test fullscreen notifications and check permissions"),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
         ),
-
-        // Admin Section
         if (currentEmployee?.name == 'G Peens') ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1349,8 +1285,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ],
-
-       // Developer Section
         if (!kIsWeb) ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1371,18 +1305,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               subtitle: const Text('Update your notification token'),
               onTap: () async {
                 if (!mounted) return;
-
-                // Show loading indicator
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Refreshing FCM token...'),
                     duration: Duration(seconds: 1),
                   ),
                 );
-
                 try {
                   await _notificationService.refreshToken();
-
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -1466,7 +1396,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     if (confirm == true) {
       try {
-        // Stop geofencing (mobile only)
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
           LocationService().stopNativeMonitoring();
         } else if (kIsWeb) {
@@ -1508,7 +1437,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(ref.watch(themeNotifierProvider)),   // ← fixed
+      _buildSettingsTab(ref.watch(themeNotifierProvider)),
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
@@ -1546,7 +1475,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(themeMode),   // ← fixed
+      _buildSettingsTab(themeMode),
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
@@ -1603,6 +1532,125 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         unselectedItemColor: Colors.grey,
         backgroundColor: const Color(0xFF1A1A1A),
         onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+// === COMPLETE NEW WIDGET: Linked Department + Area Charts ===
+class LinkedDepartmentAreaSection extends StatelessWidget {
+  final List<JobCard> allJobs;
+  final Set<String> selectedDepartments;
+  final Set<String> selectedAreas;
+  final Function(Set<String>) onDepartmentChanged;
+  final Function(Set<String>) onAreaChanged;
+
+  const LinkedDepartmentAreaSection({
+    super.key,
+    required this.allJobs,
+    required this.selectedDepartments,
+    required this.selectedAreas,
+    required this.onDepartmentChanged,
+    required this.onAreaChanged,
+  });
+
+  List<JobCard> get _openJobs => allJobs.where((j) => !j.isClosed).toList();
+
+  Map<String, int> get _openByDept {
+    final map = <String, int>{};
+    for (final j in _openJobs) {
+      final d = j.department ?? 'Unknown';
+      if (selectedDepartments.isEmpty || selectedDepartments.contains(d)) {
+        map[d] = (map[d] ?? 0) + 1;
+      }
+    }
+    return map;
+  }
+
+  Map<String, int> get _openByArea {
+    final map = <String, int>{};
+    for (final j in _openJobs) {
+      final d = j.department ?? '';
+      final a = j.area ?? 'Unknown';
+      if (selectedDepartments.isEmpty || selectedDepartments.contains(d)) {
+        map[a] = (map[a] ?? 0) + 1;
+      }
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Open vs Closed Trend', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 160,
+              child: LineChart(
+                LineChartData(
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [const FlSpot(0, 12), const FlSpot(1, 18), const FlSpot(2, 15), const FlSpot(3, 22)],
+                      isCurved: true,
+                      color: Colors.orange,
+                      barWidth: 3,
+                    ),
+                    LineChartBarData(
+                      spots: [const FlSpot(0, 8), const FlSpot(1, 14), const FlSpot(2, 19), const FlSpot(3, 17)],
+                      isCurved: true,
+                      color: Colors.green,
+                      barWidth: 3,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            const Text('Open Job Cards by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: _openByDept.entries.map((e) => PieChartSectionData(
+                    value: e.value.toDouble(),
+                    title: '${e.key}\n${e.value}',
+                    color: Colors.primaries[_openByDept.keys.toList().indexOf(e.key) % Colors.primaries.length],
+                    radius: 80,
+                  )).toList(),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            const Text('Open Job Cards by Area', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: _openByArea.entries.map((e) => PieChartSectionData(
+                    value: e.value.toDouble(),
+                    title: '${e.key}\n${e.value}',
+                    color: Colors.primaries[(_openByArea.keys.toList().indexOf(e.key) + 5) % Colors.primaries.length],
+                    radius: 80,
+                  )).toList(),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            const Text('Tap departments above to filter areas and all charts', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
       ),
     );
   }
