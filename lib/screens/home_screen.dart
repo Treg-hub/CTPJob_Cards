@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
-import 'package:fl_chart/fl_chart.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -49,10 +48,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _showDeptOnly = true;
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
-
-  // === NEW: Shared filter state for linked department/area charts ===
-  Set<String> _selectedDepartmentsForCharts = {};
-  Set<String> _selectedAreasForCharts = {};
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -292,63 +287,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 300,
-                  child: StreamBuilder<List<Employee>>(
-                    stream: _firestoreService.getEmployeesStream(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const CircularProgressIndicator();
-                      var employees = snapshot.data!;
-                      if (searchQuery.isNotEmpty) {
-                        employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
-                      }
-                      employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
-                      return ListView.builder(
-                        itemCount: employees.length,
-                        itemBuilder: (context, index) {
-                          final emp = employees[index];
-                          return ListTile(
-                            title: Text(emp.displayName),
-                            subtitle: Text('${emp.department ?? ''} - ${emp.position ?? ''}'),
-                            leading: Icon(
-                              emp.isOnSite ? Icons.location_on : Icons.location_off,
-                              color: emp.isOnSite ? Colors.green : Colors.red[400]!,
-                              size: 20,
-                            ),
-                            tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
-                            onTap: () async {
-                              try {
-                                await _firestoreService.saveLoggedInEmployee(emp.clockNo);
-                                if (!kIsWeb) {
-                                  try {
-                                    final token = await _notificationService.getToken();
-                                    if (token != null) {
-                                      await _firestoreService.updateEmployee(
-                                        emp.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    debugPrint('Error updating FCM token: $e');
+                  child: StreamBuilder<List<Employee>>(stream: _firestoreService.getEmployeesStream(), builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const CircularProgressIndicator();
+                    var employees = snapshot.data!;
+                    if (searchQuery.isNotEmpty) {
+                      employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
+                    }
+                    employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
+                    return ListView.builder(
+                      itemCount: employees.length,
+                      itemBuilder: (context, index) {
+                        final emp = employees[index];
+                        return ListTile(
+                          title: Text(emp.displayName),
+                          subtitle: Text('${emp.department ?? ''} - ${emp.position ?? ''}'),
+                          leading: Icon(
+                            emp.isOnSite ? Icons.location_on : Icons.location_off,
+                            color: emp.isOnSite ? Colors.green : Colors.red[400]!,
+                            size: 20,
+                          ),
+                          tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
+                          onTap: () async {
+                            try {
+                              await _firestoreService.saveLoggedInEmployee(emp.clockNo);
+                              if (!kIsWeb) {
+                                try {
+                                  final token = await _notificationService.getToken();
+                                  if (token != null) {
+                                    await _firestoreService.updateEmployee(
+                                      emp.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
+                                    );
                                   }
-                                }
-                                setState(() => currentEmployee = emp);
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Switched to ${emp.name}'), backgroundColor: Colors.green),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error switching user: $e'), backgroundColor: Colors.red),
-                                  );
+                                } catch (e) {
+                                  debugPrint('Error updating FCM token: $e');
                                 }
                               }
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
+                              setState(() => currentEmployee = emp);
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Switched to ${emp.name}'), backgroundColor: Colors.green),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error switching user: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
+                        );
+                      },
+                    );
+                  }),
                 ),
               ],
             ),
@@ -449,44 +441,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
             const SizedBox(height: 12),
             _buildRecentJobCards(),
-
-            // === NEW: Linked Department + Area Charts Section ===
-            const SizedBox(height: 24),
-            StreamBuilder<List<JobCard>>(
-              stream: _firestoreService.getAllJobCards(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return LinkedDepartmentAreaSection(
-                  allJobs: snapshot.data!,
-                  selectedDepartments: _selectedDepartmentsForCharts,
-                  selectedAreas: _selectedAreasForCharts,
-                  onDepartmentChanged: (newSet) {
-                    setState(() {
-                      _selectedDepartmentsForCharts = newSet;
-                      final validAreas = _getValidAreas(snapshot.data!, newSet);
-                      _selectedAreasForCharts = _selectedAreasForCharts.intersection(validAreas);
-                    });
-                  },
-                  onAreaChanged: (newSet) {
-                    setState(() => _selectedAreasForCharts = newSet);
-                  },
-                );
-              },
-            ),
           ],
         ],
       ),
     );
-  }
-
-  Set<String> _getValidAreas(List<JobCard> jobs, Set<String> selectedDepts) {
-    final openJobs = jobs.where((j) => !j.isClosed);
-    final filtered = selectedDepts.isEmpty 
-        ? openJobs 
-        : openJobs.where((j) => selectedDepts.contains(j.department ?? ''));
-    return filtered.map((j) => j.area ?? 'Unknown').toSet();
   }
 
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
@@ -1532,125 +1490,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         unselectedItemColor: Colors.grey,
         backgroundColor: const Color(0xFF1A1A1A),
         onTap: _onItemTapped,
-      ),
-    );
-  }
-}
-
-// === COMPLETE NEW WIDGET: Linked Department + Area Charts ===
-class LinkedDepartmentAreaSection extends StatelessWidget {
-  final List<JobCard> allJobs;
-  final Set<String> selectedDepartments;
-  final Set<String> selectedAreas;
-  final Function(Set<String>) onDepartmentChanged;
-  final Function(Set<String>) onAreaChanged;
-
-  const LinkedDepartmentAreaSection({
-    super.key,
-    required this.allJobs,
-    required this.selectedDepartments,
-    required this.selectedAreas,
-    required this.onDepartmentChanged,
-    required this.onAreaChanged,
-  });
-
-  List<JobCard> get _openJobs => allJobs.where((j) => !j.isClosed).toList();
-
-  Map<String, int> get _openByDept {
-    final map = <String, int>{};
-    for (final j in _openJobs) {
-      final d = j.department ?? 'Unknown';
-      if (selectedDepartments.isEmpty || selectedDepartments.contains(d)) {
-        map[d] = (map[d] ?? 0) + 1;
-      }
-    }
-    return map;
-  }
-
-  Map<String, int> get _openByArea {
-    final map = <String, int>{};
-    for (final j in _openJobs) {
-      final d = j.department ?? '';
-      final a = j.area ?? 'Unknown';
-      if (selectedDepartments.isEmpty || selectedDepartments.contains(d)) {
-        map[a] = (map[a] ?? 0) + 1;
-      }
-    }
-    return map;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Open vs Closed Trend', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 160,
-              child: LineChart(
-                LineChartData(
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: [const FlSpot(0, 12), const FlSpot(1, 18), const FlSpot(2, 15), const FlSpot(3, 22)],
-                      isCurved: true,
-                      color: Colors.orange,
-                      barWidth: 3,
-                    ),
-                    LineChartBarData(
-                      spots: [const FlSpot(0, 8), const FlSpot(1, 14), const FlSpot(2, 19), const FlSpot(3, 17)],
-                      isCurved: true,
-                      color: Colors.green,
-                      barWidth: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            const Text('Open Job Cards by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sections: _openByDept.entries.map((e) => PieChartSectionData(
-                    value: e.value.toDouble(),
-                    title: '${e.key}\n${e.value}',
-                    color: Colors.primaries[_openByDept.keys.toList().indexOf(e.key) % Colors.primaries.length],
-                    radius: 80,
-                  )).toList(),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            const Text('Open Job Cards by Area', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sections: _openByArea.entries.map((e) => PieChartSectionData(
-                    value: e.value.toDouble(),
-                    title: '${e.key}\n${e.value}',
-                    color: Colors.primaries[(_openByArea.keys.toList().indexOf(e.key) + 5) % Colors.primaries.length],
-                    radius: 80,
-                  )).toList(),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            const Text('Tap departments above to filter areas and all charts', style: TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
       ),
     );
   }
