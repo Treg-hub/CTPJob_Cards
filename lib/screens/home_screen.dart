@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -287,65 +288,135 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 300,
-                  child: StreamBuilder<List<Employee>>(stream: _firestoreService.getEmployeesStream(), builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const CircularProgressIndicator();
-                    var employees = snapshot.data!;
-                    if (searchQuery.isNotEmpty) {
-                      employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
-                    }
-                    employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
-                    return ListView.builder(
-                      itemCount: employees.length,
-                      itemBuilder: (context, index) {
-                        final emp = employees[index];
-                        return ListTile(
-                          title: Text(emp.displayName),
-                          subtitle: Text('${emp.department ?? ''} - ${emp.position ?? ''}'),
-                          leading: Icon(
-                            emp.isOnSite ? Icons.location_on : Icons.location_off,
-                            color: emp.isOnSite ? Colors.green : Colors.red[400]!,
-                            size: 20,
-                          ),
-                          tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
-                          onTap: () async {
-                            try {
-                              await _firestoreService.saveLoggedInEmployee(emp.clockNo);
-                              if (!kIsWeb) {
-                                try {
-                                  final token = await _notificationService.getToken();
-                                  if (token != null) {
-                                    await _firestoreService.updateEmployee(
-                                      emp.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
-                                    );
+                  child: StreamBuilder<List<Employee>>(
+                    stream: _firestoreService.getEmployeesStream(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const CircularProgressIndicator();
+                      var employees = snapshot.data!;
+                      if (searchQuery.isNotEmpty) {
+                        employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
+                      }
+                      employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
+                      return ListView.builder(
+                        itemCount: employees.length,
+                        itemBuilder: (context, index) {
+                          final emp = employees[index];
+                          return ListTile(
+                            title: Text(emp.displayName),
+                            subtitle: Text('${emp.department ?? ''} - ${emp.position ?? ''}'),
+                            leading: Icon(
+                              emp.isOnSite ? Icons.location_on : Icons.location_off,
+                              color: emp.isOnSite ? Colors.green : Colors.red[400]!,
+                              size: 20,
+                            ),
+                            tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
+                            onTap: () async {
+                              try {
+                                await _firestoreService.saveLoggedInEmployee(emp.clockNo);
+                                if (!kIsWeb) {
+                                  try {
+                                    final token = await _notificationService.getToken();
+                                    if (token != null) {
+                                      await _firestoreService.updateEmployee(
+                                        emp.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    debugPrint('Error updating FCM token: $e');
                                   }
-                                } catch (e) {
-                                  debugPrint('Error updating FCM token: $e');
+                                }
+                                setState(() => currentEmployee = emp);
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Switched to ${emp.name}'), backgroundColor: Colors.green),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error switching user: $e'), backgroundColor: Colors.red),
+                                  );
                                 }
                               }
-                              setState(() => currentEmployee = emp);
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Switched to ${emp.name}'), backgroundColor: Colors.green),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error switching user: $e'), backgroundColor: Colors.red),
-                                );
-                              }
-                            }
-                          },
-                        );
-                      },
-                    );
-                  }),
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showFeedbackDialog() {
+    final TextEditingController feedbackController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Send Feedback'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('What improvements would you like to see?'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: feedbackController,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                hintText: 'Type your feedback here...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8C42)),
+            onPressed: () async {
+              final feedback = feedbackController.text.trim();
+              if (feedback.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter some feedback')),
+                );
+                return;
+              }
+
+              try {
+                await FirebaseFirestore.instance.collection('feedback').add({
+                  'feedback': feedback,
+                  'userName': currentEmployee?.name ?? 'Unknown',
+                  'clockNo': currentEmployee?.clockNo ?? 'Unknown',
+                  'timestamp': FieldValue.serverTimestamp(),
+                });
+
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Thank you! Your feedback has been submitted.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error submitting feedback: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
       ),
     );
   }
@@ -1490,6 +1561,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         unselectedItemColor: Colors.grey,
         backgroundColor: const Color(0xFF1A1A1A),
         onTap: _onItemTapped,
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showFeedbackDialog,
+        backgroundColor: const Color(0xFFFF8C42),
+        child: const Icon(Icons.feedback, color: Colors.black),
+        tooltip: 'Give Feedback',
       ),
     );
   }

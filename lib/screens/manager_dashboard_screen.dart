@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
@@ -15,22 +16,70 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   
   Set<String> selectedDepartments = {};
-  bool showAllDepartments = false;
-  bool isLoading = false;
+  bool showAllDepartments = true;
+  String dateRange = '30';
+  bool isKPIExpanded = true;
+
+  List<String> allDepartments = [];
 
   @override
   void initState() {
     super.initState();
-    // Default to logged-in user's department
-    if (currentEmployee?.department != null) {
-      selectedDepartments.add(currentEmployee!.department!);
+    _loadDepartmentsFromFirestore();
+  }
+
+  Future<void> _loadDepartmentsFromFirestore() async {
+    try {
+      final jobsSnapshot = await FirebaseFirestore.instance
+          .collection('job_cards')
+          .get();
+
+      final Set<String> departments = {};
+      for (var doc in jobsSnapshot.docs) {
+        final dept = doc.data()['department'] as String?;
+        if (dept != null && dept.trim().isNotEmpty) {
+          departments.add(dept.trim());
+        }
+      }
+
+      final sortedList = departments.toList()..sort();
+      setState(() {
+        allDepartments = sortedList;
+        if (currentEmployee?.department != null && sortedList.contains(currentEmployee!.department)) {
+          selectedDepartments.add(currentEmployee!.department!);
+          showAllDepartments = false;
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading departments: $e');
     }
   }
 
-  Future<void> _refreshData() async {
-    setState(() => isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() => isLoading = false);
+  List<JobCard> _getFilteredJobs(List<JobCard> allJobs) {
+    List<JobCard> filtered = allJobs;
+
+    // Department Filter
+    if (!showAllDepartments && selectedDepartments.isNotEmpty) {
+      filtered = filtered.where((j) => 
+        j.department != null && selectedDepartments.contains(j.department)
+      ).toList();
+    }
+
+    // Date Range Filter
+    final now = DateTime.now();
+    if (dateRange == '7') {
+      filtered = filtered.where((j) {
+        final date = j.createdAt ?? j.lastUpdatedAt ?? now;
+        return now.difference(date).inDays <= 7;
+      }).toList();
+    } else if (dateRange == '30') {
+      filtered = filtered.where((j) {
+        final date = j.createdAt ?? j.lastUpdatedAt ?? now;
+        return now.difference(date).inDays <= 30;
+      }).toList();
+    }
+
+    return filtered;
   }
 
   @override
@@ -39,156 +88,229 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       appBar: AppBar(
         title: const Text('Manager Dashboard'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadDepartmentsFromFirestore),
+        ],
+      ),
+      body: StreamBuilder<List<JobCard>>(
+        stream: _firestoreService.getAllJobCards(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+          final allJobs = snapshot.data!;
+          final filteredJobs = _getFilteredJobs(allJobs);
+          final openJobs = filteredJobs.where((j) => !j.isClosed).toList();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCollapsibleKPIs(openJobs, filteredJobs),
+                const SizedBox(height: 16),
+                _buildDepartmentFilter(),
+                const SizedBox(height: 8),
+                _buildDateRangeFilter(),
+                const SizedBox(height: 24),
+                const Text('Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                _buildTrendlineChart(filteredJobs),
+                const SizedBox(height: 24),
+                _buildSmartDepartmentAreaChart(openJobs),
+                const SizedBox(height: 24),
+                _buildPriorityBreakdown(openJobs),
+                const SizedBox(height: 24),
+                _buildTechnicianLeaderboard(filteredJobs),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ==================== KPI SECTION ====================
+  Widget _buildCollapsibleKPIs(List<JobCard> openJobs, List<JobCard> filteredJobs) {
+    final now = DateTime.now();
+    final openCount = openJobs.length;
+    final highPriority = openJobs.where((j) => j.priority >= 4).length;
+    final closedToday = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt?.day == now.day).length;
+    final total = filteredJobs.length;
+    final completed7d = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt != null && now.difference(j.closedAt!).inDays <= 7).length;
+    final pending = openJobs.where((j) => (j.assignedClockNos?.isEmpty ?? true)).length;
+    final createdMonth = filteredJobs.where((j) => j.createdAt?.month == now.month && j.createdAt?.year == now.year).length;
+    final closedMonth = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt?.month == now.month).length;
+    final completionRate = total > 0 ? ((filteredJobs.where((j) => j.status == JobStatus.closed).length / total) * 100).toStringAsFixed(0) : '0';
+
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: isKPIExpanded,
+        onExpansionChanged: (expanded) => setState(() => isKPIExpanded = expanded),
+        title: const Text('Key Performance Indicators', style: TextStyle(fontWeight: FontWeight.bold)),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth < 600 ? 3 : 6;
+                return GridView.count(
+                  crossAxisCount: crossAxisCount,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.3,
+                  children: [
+                    _buildKPICard('Open Jobs', openCount.toString(), Colors.blue),
+                    _buildKPICard('High Priority', highPriority.toString(), Colors.red),
+                    _buildKPICard('Closed Today', closedToday.toString(), Colors.green),
+                    _buildKPICard('Total Jobs', total.toString(), Colors.purple),
+                    _buildKPICard('Completed 7d', completed7d.toString(), Colors.teal),
+                    _buildKPICard('Pending Assign', pending.toString(), Colors.amber),
+                    _buildKPICard('Created This Month', createdMonth.toString(), Colors.indigo),
+                    _buildKPICard('Closed This Month', closedMonth.toString(), Colors.blueGrey),
+                    _buildKPICard('Completion Rate', '$completionRate%', Colors.green),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // KPI Cards - 2 Rows of 6
-            _buildKPIRow1(),
-            const SizedBox(height: 12),
-            _buildKPIRow2(),
-            
-            const SizedBox(height: 24),
-            
-            // Department Filter (below KPIs)
-            _buildDepartmentFilter(),
-            
-            const SizedBox(height: 24),
-            
-            // Charts Section
-            const Text('Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            
-            // 1. Open vs Closed Trendline
-            _buildTrendlineChart(),
-            
-            const SizedBox(height: 24),
-            
-            // 2. Open Jobs by Department (Pie)
-            _buildOpenByDepartmentPie(),
-            
-            const SizedBox(height: 24),
-            
-            // 3. Outstanding by Area
-            _buildOutstandingByArea(),
-            
-            const SizedBox(height: 24),
-            
-            // 4. Priority Breakdown
-            _buildPriorityBreakdown(),
-            
-            const SizedBox(height: 24),
-            
-            // Technician Leaderboard (Future Section)
-            _buildTechnicianLeaderboard(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildKPIRow1() {
-    return Row(
-      children: [
-        Expanded(child: _buildKPICard('Open Jobs', '124', Colors.blue)),
-        Expanded(child: _buildKPICard('High Priority', '31', Colors.red)),
-        Expanded(child: _buildKPICard('Closed Today', '18', Colors.green)),
-        Expanded(child: _buildKPICard('Avg Resolution', '2.4d', Colors.orange)),
-        Expanded(child: _buildKPICard('Total Jobs', '892', Colors.purple)),
-        Expanded(child: _buildKPICard('Completed 7d', '67', Colors.teal)),
-      ],
-    );
-  }
-
-  Widget _buildKPIRow2() {
-    return Row(
-      children: [
-        Expanded(child: _buildKPICard('Pending Assign', '45', Colors.amber)),
-        Expanded(child: _buildKPICard('Created This Month', '156', Colors.indigo)),
-        Expanded(child: _buildKPICard('Completion Rate', '87%', Colors.green)),
-        Expanded(child: _buildKPICard('Closed This Month', '203', Colors.blueGrey)),
-        Expanded(child: _buildKPICard('Avg Completion', '3.1d', Colors.cyan)),
-        Expanded(child: _buildKPICard('Avg Response', '4.2h', Colors.pink)),
-      ],
     );
   }
 
   Widget _buildKPICard(String title, String value, Color color) {
     return Card(
-      elevation: 3,
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
             const SizedBox(height: 4),
-            Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey), textAlign: TextAlign.center),
+            Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey), textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
 
+  // ==================== DEPARTMENT FILTER ====================
   Widget _buildDepartmentFilter() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Filter by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            FilterChip(
-              label: const Text('All Departments'),
-              selected: showAllDepartments,
-              onSelected: (selected) {
-                setState(() {
-                  showAllDepartments = selected;
-                  if (selected) selectedDepartments.clear();
-                });
-              },
-            ),
-            // Add department chips here dynamically from Firestore later
-          ],
-        ),
+        if (allDepartments.isEmpty)
+          const Text('Loading departments...', style: TextStyle(color: Colors.grey))
+        else
+          Wrap(
+            spacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('All Departments'),
+                selected: showAllDepartments,
+                onSelected: (selected) {
+                  setState(() {
+                    showAllDepartments = selected;
+                    if (selected) selectedDepartments.clear();
+                  });
+                },
+              ),
+              ...allDepartments.map((dept) => FilterChip(
+                label: Text(dept),
+                selected: selectedDepartments.contains(dept),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      selectedDepartments.add(dept);
+                      showAllDepartments = false;
+                    } else {
+                      selectedDepartments.remove(dept);
+                    }
+                  });
+                },
+              )),
+            ],
+          ),
       ],
     );
   }
 
-  Widget _buildTrendlineChart() {
+  // ==================== DATE RANGE ====================
+  Widget _buildDateRangeFilter() {
+    return Row(
+      children: [
+        const Text('Date Range: ', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
+        ChoiceChip(label: const Text('7 Days'), selected: dateRange == '7', onSelected: (_) => setState(() => dateRange = '7')),
+        const SizedBox(width: 8),
+        ChoiceChip(label: const Text('30 Days'), selected: dateRange == '30', onSelected: (_) => setState(() => dateRange = '30')),
+        const SizedBox(width: 8),
+        ChoiceChip(label: const Text('All Time'), selected: dateRange == 'all', onSelected: (_) => setState(() => dateRange = 'all')),
+      ],
+    );
+  }
+
+  // ==================== DYNAMIC TRENDLINE (Per Day) ====================
+  Widget _buildTrendlineChart(List<JobCard> filteredJobs) {
+    // Group by day
+    final Map<String, int> openByDay = {};
+    final Map<String, int> closedByDay = {};
+
+    for (final job in filteredJobs) {
+      final date = job.createdAt ?? job.lastUpdatedAt ?? DateTime.now();
+      final dayKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+      if (!job.isClosed) {
+        openByDay[dayKey] = (openByDay[dayKey] ?? 0) + 1;
+      } else {
+        closedByDay[dayKey] = (closedByDay[dayKey] ?? 0) + 1;
+      }
+    }
+
+    // Create spots for chart
+    final sortedDays = {...openByDay.keys, ...closedByDay.keys}.toList()..sort();
+    
+    List<FlSpot> openSpots = [];
+    List<FlSpot> closedSpots = [];
+
+    for (int i = 0; i < sortedDays.length; i++) {
+      final day = sortedDays[i];
+      openSpots.add(FlSpot(i.toDouble(), (openByDay[day] ?? 0).toDouble()));
+      closedSpots.add(FlSpot(i.toDouble(), (closedByDay[day] ?? 0).toDouble()));
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Open vs Closed Trend (Last 30 Days)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Open vs Closed Trend (${dateRange == "7" ? "Last 7 Days" : dateRange == "30" ? "Last 30 Days" : "All Time"})', 
+                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             SizedBox(
               height: 200,
               child: LineChart(
                 LineChartData(
                   lineBarsData: [
-                    LineChartBarData(
-                      spots: const [FlSpot(0, 45), FlSpot(7, 52), FlSpot(14, 48), FlSpot(21, 61), FlSpot(30, 58)],
-                      isCurved: true,
-                      color: Colors.orange,
-                      barWidth: 3,
-                    ),
-                    LineChartBarData(
-                      spots: const [FlSpot(0, 38), FlSpot(7, 41), FlSpot(14, 55), FlSpot(21, 49), FlSpot(30, 62)],
-                      isCurved: true,
-                      color: Colors.green,
-                      barWidth: 3,
-                    ),
+                    LineChartBarData(spots: openSpots, isCurved: true, color: Colors.orange, barWidth: 3),
+                    LineChartBarData(spots: closedSpots, isCurved: true, color: Colors.green, barWidth: 3),
                   ],
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() < sortedDays.length) {
+                            return Text(sortedDays[value.toInt()].substring(5), style: const TextStyle(fontSize: 10));
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -198,51 +320,111 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  Widget _buildOpenByDepartmentPie() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Open Jobs by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 220,
-              child: PieChart(
-                PieChartData(
-                  sections: [
-                    PieChartSectionData(value: 45, title: 'Mechanical\n45', color: Colors.blue, radius: 90),
-                    PieChartSectionData(value: 32, title: 'Electrical\n32', color: Colors.orange, radius: 90),
-                    PieChartSectionData(value: 28, title: 'General\n28', color: Colors.green, radius: 90),
-                  ],
+  // ==================== SMART MERGED CHART ====================
+  Widget _buildSmartDepartmentAreaChart(List<JobCard> openJobs) {
+    if (showAllDepartments || selectedDepartments.length != 1) {
+      // Show by Department
+      final Map<String, int> deptCount = {};
+      for (final job in openJobs) {
+        final dept = job.department ?? 'Unknown';
+        deptCount[dept] = (deptCount[dept] ?? 0) + 1;
+      }
+
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Open Jobs by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 220,
+                child: PieChart(
+                  PieChartData(
+                    sections: deptCount.entries.map((e) {
+                      final index = deptCount.keys.toList().indexOf(e.key);
+                      return PieChartSectionData(
+                        value: e.value.toDouble(),
+                        title: '${e.key}\n${e.value}',
+                        color: Colors.primaries[index % Colors.primaries.length],
+                        radius: 90,
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // Show by Area for selected department
+      final selectedDept = selectedDepartments.first;
+      final deptJobs = openJobs.where((j) => j.department == selectedDept).toList();
+
+      final Map<String, int> areaCount = {};
+      for (final job in deptJobs) {
+        final area = job.area ?? 'Unknown';
+        areaCount[area] = (areaCount[area] ?? 0) + 1;
+      }
+
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Open Jobs by Area in $selectedDept', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 220,
+                child: PieChart(
+                  PieChartData(
+                    sections: areaCount.entries.map((e) {
+                      final index = areaCount.keys.toList().indexOf(e.key);
+                      return PieChartSectionData(
+                        value: e.value.toDouble(),
+                        title: '${e.key}\n${e.value}',
+                        color: Colors.primaries[index % Colors.primaries.length],
+                        radius: 90,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
-  Widget _buildOutstandingByArea() {
+  // ==================== PRIORITY BREAKDOWN ====================
+  Widget _buildPriorityBreakdown(List<JobCard> openJobs) {
+    final Map<int, int> priorityCount = {};
+    for (final job in openJobs) {
+      priorityCount[job.priority] = (priorityCount[job.priority] ?? 0) + 1;
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Outstanding Jobs by Area', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('Priority Breakdown', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             SizedBox(
               height: 200,
               child: BarChart(
                 BarChartData(
-                  barGroups: [
-                    BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 28, color: Colors.blue)]),
-                    BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 19, color: Colors.orange)]),
-                    BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 34, color: Colors.green)]),
-                  ],
+                  barGroups: priorityCount.entries.map((entry) {
+                    return BarChartGroupData(
+                      x: entry.key,
+                      barRods: [BarChartRodData(toY: entry.value.toDouble(), color: _getPriorityColor(entry.key))],
+                    );
+                  }).toList(),
                 ),
               ),
             ),
@@ -252,49 +434,49 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  Widget _buildPriorityBreakdown() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Priority Breakdown by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  barGroups: [
-                    BarChartGroupData(x: 0, barRods: [
-                      BarChartRodData(toY: 12, color: Colors.green),
-                      BarChartRodData(toY: 8, color: Colors.orange),
-                    ]),
-                    BarChartGroupData(x: 1, barRods: [
-                      BarChartRodData(toY: 19, color: Colors.green),
-                      BarChartRodData(toY: 14, color: Colors.orange),
-                    ]),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Color _getPriorityColor(int priority) {
+    switch (priority) {
+      case 1: return Colors.green;
+      case 2: return Colors.lightGreen;
+      case 3: return Colors.amber;
+      case 4: return Colors.deepOrange;
+      case 5: return Colors.red;
+      default: return Colors.grey;
+    }
   }
 
-  Widget _buildTechnicianLeaderboard() {
+  // ==================== TECHNICIAN LEADERBOARD ====================
+  Widget _buildTechnicianLeaderboard(List<JobCard> filteredJobs) {
+    final Map<String, int> techCount = {};
+    for (final job in filteredJobs) {
+      if (job.status == JobStatus.closed && job.completedBy != null) {
+        techCount[job.completedBy!] = (techCount[job.completedBy!] ?? 0) + 1;
+      }
+    }
+
+    final sorted = techCount.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final top10 = sorted.take(10).toList();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Technician Leaderboard (Top Performers)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('Technician Leaderboard (Top 10)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            const Text('Coming soon - Will show top technicians based on completed jobs', 
-              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+            if (top10.isEmpty)
+              const Text('No completed jobs yet', style: TextStyle(color: Colors.grey))
+            else
+              ...top10.asMap().entries.map((entry) {
+                final index = entry.key;
+                final tech = entry.value;
+                return ListTile(
+                  leading: CircleAvatar(child: Text('${index + 1}')),
+                  title: Text(tech.key),
+                  trailing: Text('${tech.value} jobs', style: const TextStyle(fontWeight: FontWeight.bold)),
+                );
+              }),
           ],
         ),
       ),

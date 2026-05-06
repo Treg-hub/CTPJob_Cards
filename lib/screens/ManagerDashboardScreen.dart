@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/job_card.dart';
@@ -24,43 +25,62 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDepartments();
+    print('🚀 ManagerDashboardScreen INIT STATE CALLED');
+    _loadDepartmentsFromFirestore();
   }
 
-  Future<void> _loadDepartments() async {
+  Future<void> _loadDepartmentsFromFirestore() async {
+    print('🔥 METHOD STARTED - Loading departments...');
+
     try {
-      final jobs = await _firestoreService.getAllJobCards().first;
-      
-      // Extract unique departments from job cards
-      final Set<String> depts = {};
-      for (final job in jobs) {
-        if (job.department != null && job.department!.isNotEmpty) {
-          depts.add(job.department!);
+      print('📡 Querying Firestore job_cards collection...');
+
+      final jobsSnapshot = await FirebaseFirestore.instance
+          .collection('job_cards')
+          .get();
+
+      print('✅ Got ${jobsSnapshot.docs.length} documents from Firestore');
+
+      final Set<String> departments = {};
+
+      for (var doc in jobsSnapshot.docs) {
+        final data = doc.data();
+        final dept = data['department'] as String?;
+        
+        print('📄 Document ID: ${doc.id} → Department: $dept');
+
+        if (dept != null && dept.trim().isNotEmpty) {
+          departments.add(dept.trim());
         }
       }
 
-      final sortedDepts = depts.toList()..sort();
+      final sortedList = departments.toList()..sort();
+      print('📋 FINAL DEPARTMENTS: $sortedList');
 
       setState(() {
-        allDepartments = sortedDepts;
-        
-        // Default to logged-in user's department if it exists
+        allDepartments = sortedList;
+
         if (currentEmployee?.department != null && 
-            sortedDepts.contains(currentEmployee!.department)) {
+            sortedList.contains(currentEmployee!.department)) {
           selectedDepartments.add(currentEmployee!.department!);
           showAllDepartments = false;
         }
       });
-    } catch (e) {
-      debugPrint('Error loading departments: $e');
+
+      print('✅ Departments loaded successfully!');
+
+    } catch (e, stack) {
+      print('❌ ERROR loading departments: $e');
+      print('Stack trace: $stack');
     }
   }
 
-  List<JobCard> _filterJobsByDepartment(List<JobCard> jobs) {
+  // ==================== PROPER FILTERING ====================
+  List<JobCard> _getFilteredJobs(List<JobCard> allJobs) {
     if (showAllDepartments || selectedDepartments.isEmpty) {
-      return jobs;
+      return allJobs;
     }
-    return jobs.where((j) => 
+    return allJobs.where((j) => 
       j.department != null && selectedDepartments.contains(j.department)
     ).toList();
   }
@@ -73,10 +93,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {});
-              _loadDepartments();
-            },
+            onPressed: _loadDepartmentsFromFirestore,
           ),
         ],
       ),
@@ -88,7 +105,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           }
 
           final allJobs = snapshot.data!;
-          final filteredJobs = _filterJobsByDepartment(allJobs);
+          final filteredJobs = _getFilteredJobs(allJobs);
           final openJobs = filteredJobs.where((j) => !j.isClosed).toList();
 
           return SingleChildScrollView(
@@ -96,17 +113,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCollapsibleKPIs(openJobs, allJobs),
+                _buildCollapsibleKPIs(openJobs, filteredJobs),
                 const SizedBox(height: 16),
                 _buildDepartmentFilter(),
                 const SizedBox(height: 8),
                 _buildDateRangeFilter(),
                 const SizedBox(height: 24),
-                
                 const Text('Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                
-                _buildTrendlineChart(allJobs),
+                _buildTrendlineChart(filteredJobs),
                 const SizedBox(height: 24),
                 _buildOpenByDepartmentPie(openJobs),
                 const SizedBox(height: 24),
@@ -114,7 +129,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 const SizedBox(height: 24),
                 _buildPriorityBreakdown(openJobs),
                 const SizedBox(height: 24),
-                _buildTechnicianLeaderboard(allJobs),
+                _buildTechnicianLeaderboard(filteredJobs),
               ],
             ),
           );
@@ -124,25 +139,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   // ==================== KPI SECTION ====================
-  Widget _buildCollapsibleKPIs(List<JobCard> openJobs, List<JobCard> allJobs) {
+  Widget _buildCollapsibleKPIs(List<JobCard> openJobs, List<JobCard> filteredJobs) {
     final now = DateTime.now();
-    
     final openCount = openJobs.length;
     final highPriority = openJobs.where((j) => j.priority >= 4).length;
-    final closedToday = allJobs.where((j) => 
-      j.status == JobStatus.closed && j.closedAt?.day == now.day).length;
-    final total = allJobs.length;
-    final completed7d = allJobs.where((j) => 
-      j.status == JobStatus.closed && j.closedAt != null && 
-      now.difference(j.closedAt!).inDays <= 7).length;
+    final closedToday = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt?.day == now.day).length;
+    final total = filteredJobs.length;
+    final completed7d = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt != null && now.difference(j.closedAt!).inDays <= 7).length;
     final pending = openJobs.where((j) => (j.assignedClockNos?.isEmpty ?? true)).length;
-    final createdMonth = allJobs.where((j) => 
-      j.createdAt?.month == now.month && j.createdAt?.year == now.year).length;
-    final closedMonth = allJobs.where((j) => 
-      j.status == JobStatus.closed && j.closedAt?.month == now.month).length;
-    final completionRate = total > 0 
-        ? ((allJobs.where((j) => j.status == JobStatus.closed).length / total) * 100).toStringAsFixed(0) 
-        : '0';
+    final createdMonth = filteredJobs.where((j) => j.createdAt?.month == now.month && j.createdAt?.year == now.year).length;
+    final closedMonth = filteredJobs.where((j) => j.status == JobStatus.closed && j.closedAt?.month == now.month).length;
+    final completionRate = total > 0 ? ((filteredJobs.where((j) => j.status == JobStatus.closed).length / total) * 100).toStringAsFixed(0) : '0';
 
     return Card(
       child: ExpansionTile(
@@ -197,46 +204,44 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  // ==================== DEPARTMENT FILTER (Now Working) ====================
+  // ==================== DEPARTMENT FILTER ====================
   Widget _buildDepartmentFilter() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Filter by Department', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            FilterChip(
-              label: const Text('All Departments'),
-              selected: showAllDepartments,
-              onSelected: (selected) {
-                setState(() {
-                  showAllDepartments = selected;
-                  if (selected) selectedDepartments.clear();
-                });
-              },
-            ),
-            ...allDepartments.map((dept) => FilterChip(
-              label: Text(dept),
-              selected: selectedDepartments.contains(dept),
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    selectedDepartments.add(dept);
-                    showAllDepartments = false;
-                  } else {
-                    selectedDepartments.remove(dept);
-                  }
-                });
-              },
-            )),
-          ],
-        ),
         if (allDepartments.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Text('No departments found', style: TextStyle(color: Colors.grey)),
+          const Text('Loading departments from Firestore...', style: TextStyle(color: Colors.grey))
+        else
+          Wrap(
+            spacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('All Departments'),
+                selected: showAllDepartments,
+                onSelected: (selected) {
+                  setState(() {
+                    showAllDepartments = selected;
+                    if (selected) selectedDepartments.clear();
+                  });
+                },
+              ),
+              ...allDepartments.map((dept) => FilterChip(
+                label: Text(dept),
+                selected: selectedDepartments.contains(dept),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      selectedDepartments.add(dept);
+                      showAllDepartments = false;
+                    } else {
+                      selectedDepartments.remove(dept);
+                    }
+                  });
+                },
+              )),
+            ],
           ),
       ],
     );
@@ -257,8 +262,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  // ==================== CHARTS ====================
-  Widget _buildTrendlineChart(List<JobCard> allJobs) {
+  // ==================== CHARTS (NOW USING FILTERED DATA) ====================
+  Widget _buildTrendlineChart(List<JobCard> filteredJobs) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -379,9 +384,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  Widget _buildTechnicianLeaderboard(List<JobCard> allJobs) {
+  Widget _buildTechnicianLeaderboard(List<JobCard> filteredJobs) {
     final Map<String, int> techCount = {};
-    for (final job in allJobs) {
+    for (final job in filteredJobs) {
       if (job.status == JobStatus.closed && job.completedBy != null) {
         techCount[job.completedBy!] = (techCount[job.completedBy!] ?? 0) + 1;
       }
@@ -398,15 +403,18 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           children: [
             const Text('Technician Leaderboard (Top 10)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            ...top10.asMap().entries.map((entry) {
-              final index = entry.key;
-              final tech = entry.value;
-              return ListTile(
-                leading: CircleAvatar(child: Text('${index + 1}')),
-                title: Text(tech.key),
-                trailing: Text('${tech.value} jobs', style: const TextStyle(fontWeight: FontWeight.bold)),
-              );
-            }),
+            if (top10.isEmpty)
+              const Text('No completed jobs yet', style: TextStyle(color: Colors.grey))
+            else
+              ...top10.asMap().entries.map((entry) {
+                final index = entry.key;
+                final tech = entry.value;
+                return ListTile(
+                  leading: CircleAvatar(child: Text('${index + 1}')),
+                  title: Text(tech.key),
+                  trailing: Text('${tech.value} jobs', style: const TextStyle(fontWeight: FontWeight.bold)),
+                );
+              }),
           ],
         ),
       ),

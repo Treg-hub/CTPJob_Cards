@@ -13,15 +13,13 @@ class UpdateService {
   UpdateService._internal();
 
   static const String _lastCheckKey = 'last_update_check';
-  static const Duration _checkInterval = Duration(days: 1);
+  static const Duration _checkInterval = Duration(hours: 6);
 
-  /// Check for updates and show dialog if needed
-  /// Call this after successful login, only on mobile platforms
+  /// Normal check (respects 6h cooldown)
   Future<void> checkForUpdate(BuildContext context) async {
-    if (kIsWeb) return; // Skip on web
+    if (kIsWeb) return;
 
     try {
-      // Check if we already checked today
       final prefs = await SharedPreferences.getInstance();
       final lastCheck = prefs.getInt(_lastCheckKey);
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -31,14 +29,39 @@ class UpdateService {
         return;
       }
 
-      // Get current app version
+      await _performUpdateCheck(context, prefs, now);
+    } catch (e) {
+      debugPrint('Error checking for updates: $e');
+    }
+  }
+
+  /// Force immediate update check (ignores cooldown)
+  Future<void> forceCheckForUpdate(BuildContext context) async {
+    if (kIsWeb) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      // Clear last check so it always runs
+      await prefs.remove(_lastCheckKey);
+
+      debugPrint('Forcing immediate update check...');
+      await _performUpdateCheck(context, prefs, now);
+    } catch (e) {
+      debugPrint('Error forcing update check: $e');
+    }
+  }
+
+  /// Internal method that does the actual check
+  Future<void> _performUpdateCheck(BuildContext context, SharedPreferences prefs, int now) async {
+    try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
       final currentBuild = packageInfo.buildNumber;
 
       debugPrint('Current app version: $currentVersion+$currentBuild');
 
-      // Fetch latest version from Remote Config
       await FirebaseRemoteConfig.instance.fetchAndActivate();
 
       final latestVersion = FirebaseRemoteConfig.instance.getString('latest_version');
@@ -52,42 +75,28 @@ class UpdateService {
         return;
       }
 
-      // Compare versions
       if (!_isNewerVersion(currentVersion, latestVersion, currentBuild, latestBuild)) {
         debugPrint('App is up to date');
-        // Still update last check time
         await prefs.setInt(_lastCheckKey, now);
         return;
       }
 
       debugPrint('New version available: $latestVersion+$latestBuild');
-
-      // Update last check time
       await prefs.setInt(_lastCheckKey, now);
 
-      // Show update dialog
       if (context.mounted) {
-        await _showUpdateDialog(
-          context,
-          latestVersion,
-          releaseNotes,
-          downloadUrl,
-          forceUpdate,
-        );
+        await _showUpdateDialog(context, latestVersion, releaseNotes, downloadUrl, forceUpdate);
       }
-
     } catch (e) {
-      debugPrint('Error checking for updates: $e');
+      debugPrint('Error performing update check: $e');
     }
   }
 
-  /// Compare versions using semantic versioning
   bool _isNewerVersion(String currentVersion, String latestVersion, String currentBuild, String? latestBuild) {
     try {
       final currentParts = currentVersion.split('.').map(int.parse).toList();
       final latestParts = latestVersion.split('.').map(int.parse).toList();
 
-      // Compare major.minor.patch
       for (int i = 0; i < 3; i++) {
         final current = currentParts.length > i ? currentParts[i] : 0;
         final latest = latestParts.length > i ? latestParts[i] : 0;
@@ -96,7 +105,6 @@ class UpdateService {
         if (latest < current) return false;
       }
 
-      // If versions are equal, compare build numbers
       if (latestBuild != null) {
         final currentBuildNum = int.tryParse(currentBuild) ?? 0;
         final latestBuildNum = int.tryParse(latestBuild) ?? 0;
@@ -110,7 +118,6 @@ class UpdateService {
     }
   }
 
-  /// Show update dialog
   Future<void> _showUpdateDialog(
     BuildContext context,
     String version,
@@ -129,10 +136,7 @@ class UpdateService {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (releaseNotes != null && releaseNotes.isNotEmpty) ...[
-                const Text(
-                  'What\'s New:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                const Text('What\'s New:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(releaseNotes),
                 const SizedBox(height: 16),
