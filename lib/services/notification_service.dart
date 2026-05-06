@@ -11,10 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:torch_light/torch_light.dart';
 
 import '../main.dart' show currentEmployee;
-import 'job_alert_service.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -51,13 +49,14 @@ class NotificationService {
     if (!status.isGranted) await openAppSettings();
   }
 
-  // ==================== CHANNELS (NO ACTIONS) ====================
+  // ==================== CHANNELS ====================
   Future<void> _createNotificationChannels() async {
     if (!Platform.isAndroid) return;
 
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
+    // Normal channel
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'normal_channel', 'Normal Job Notifications',
       description: 'Standard notifications for job card assignments',
@@ -66,6 +65,7 @@ class NotificationService {
       playSound: true,
     ));
 
+    // Medium channel
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'medium_channel', 'Medium Job Notifications',
       description: 'Notifications for priority 2 & 3 jobs',
@@ -76,6 +76,7 @@ class NotificationService {
       vibrationPattern: Int64List.fromList([0, 600, 200, 600]),
     ));
 
+    // Persistent banner
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'persistent_banner_channel', 'Persistent Job Alerts',
       description: 'Persistent banner for Priority 4 & 5 (when app is open)',
@@ -86,6 +87,7 @@ class NotificationService {
       vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
     ));
 
+    // Full-loud channel (improved for volume + DND)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'full_channel', 'Full-Loud Job Notifications',
       description: 'Maximum priority full-screen alerts for priority 4 & 5',
@@ -98,10 +100,10 @@ class NotificationService {
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ));
 
-    debugPrint('All notification channels created successfully (no actions)');
+    debugPrint('All notification channels created successfully');
   }
 
-  // ==================== ROBUST HANDLE NOTIFICATION ACTION ====================
+  // ==================== HANDLE NOTIFICATION ACTION ====================
   Future<void> handleNotificationAction(NotificationResponse response) async {
     debugPrint('NotificationService _handleNotificationAction CALLED');
     debugPrint('   actionId: ${response.actionId}');
@@ -115,23 +117,20 @@ class NotificationService {
       return;
     }
 
-    // === ROBUST USER LOADING (3 fallbacks) ===
+    // Robust user loading (3 fallbacks)
     String clockNo = '';
     String name = 'Unknown User';
 
     if (currentEmployee != null) {
       clockNo = currentEmployee!.clockNo;
       name = currentEmployee!.name ?? 'Unknown User';
-      debugPrint('   User from currentEmployee: $name ($clockNo)');
     } else {
       final prefs = await SharedPreferences.getInstance();
       clockNo = prefs.getString('clockNo') ?? '';
       name = prefs.getString('employeeName') ?? 'Unknown User';
-      debugPrint('   currentEmployee was null → loaded from SharedPreferences: $name ($clockNo)');
     }
 
     if (clockNo.isEmpty) {
-      debugPrint('   Still no clockNo → trying Firebase Auth fallback...');
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser != null) {
         try {
@@ -147,16 +146,12 @@ class NotificationService {
           if (empDoc.exists) {
             clockNo = empDoc.data()?['clockNo'] ?? realClockNo;
             name = empDoc.data()?['name'] ?? 'Unknown User';
-            debugPrint('   User loaded from Firebase: $name ($clockNo)');
           } else {
             clockNo = realClockNo;
-            debugPrint('   Firebase doc not found → using UID as clockNo: $clockNo');
           }
         } catch (e) {
           debugPrint('   Firebase fallback failed: $e');
         }
-      } else {
-        debugPrint('   No Firebase user logged in');
       }
     }
 
@@ -195,6 +190,7 @@ class NotificationService {
 
         debugPrint('   Job #$payload successfully assigned to $name');
 
+        // Notify creator (optional)
         final creatorClockNo = jobData['operatorClockNo'];
         if (creatorClockNo != null) {
           final creatorDoc = await FirebaseFirestore.instance
@@ -235,17 +231,13 @@ class NotificationService {
       } else if (actionId == 'dismiss') {
         debugPrint('   → Handling DISMISS for job #$payload');
         debugPrint('   Dismiss logged for $name on job #$payload');
-      } else if (actionId == 'view_job') {
-        debugPrint('   → Handling VIEW JOB for job #$payload');
-      } else {
-        debugPrint('   Unknown actionId: $actionId');
       }
     } catch (e) {
       debugPrint('   Error handling action $actionId: $e');
     }
   }
 
-  // ==================== SHOW NOTIFICATION (NO ACTIONS) ====================
+  // ==================== SHOW LOCAL NOTIFICATION ====================
   Future<void> _showLocalNotification({
     required String title,
     required String body,
@@ -259,8 +251,7 @@ class NotificationService {
     switch (level) {
       case 'medium-high':
         androidDetails = AndroidNotificationDetails(
-          'medium_channel',
-          'Medium Job Notifications',
+          'medium_channel', 'Medium Job Notifications',
           icon: '@mipmap/ic_launcher',
           importance: Importance.high,
           priority: Priority.high,
@@ -272,18 +263,12 @@ class NotificationService {
           visibility: NotificationVisibility.public,
           category: AndroidNotificationCategory.message,
           color: const Color(0xFFFF9800),
-          ledColor: const Color(0xFFFF9800),
-          ledOnMs: 500,
-          ledOffMs: 500,
-          onlyAlertOnce: false,
-          styleInformation: BigTextStyleInformation(body),
         );
         break;
 
       case 'full-loud':
         androidDetails = AndroidNotificationDetails(
-          'full_channel',
-          'Full-Loud Job Notifications',
+          'full_channel', 'Full-Loud Job Notifications',
           icon: '@mipmap/ic_launcher',
           importance: Importance.max,
           priority: Priority.max,
@@ -297,31 +282,21 @@ class NotificationService {
           ongoing: true,
           visibility: NotificationVisibility.public,
           color: const Color(0xFFFF0000),
-          ledColor: const Color(0xFFFF0000),
-          ledOnMs: 500,
-          ledOffMs: 500,
-          onlyAlertOnce: false,
-          styleInformation: BigTextStyleInformation(body),
+          channelBypassDnd: true,
         );
         break;
 
       default:
         androidDetails = AndroidNotificationDetails(
-          'normal_channel',
-          'Normal Job Notifications',
+          'normal_channel', 'Normal Job Notifications',
           icon: '@mipmap/ic_launcher',
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
           playSound: true,
-          vibrationPattern: Int64List.fromList([0, 250, 100, 250]),
           visibility: NotificationVisibility.public,
           category: AndroidNotificationCategory.message,
           color: const Color(0xFF0000FF),
-          ledColor: const Color(0xFF0000FF),
-          ledOnMs: 500,
-          ledOffMs: 500,
-          styleInformation: BigTextStyleInformation(body),
         );
     }
 
@@ -353,7 +328,6 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-    // ==================== METHOD CHANNEL (Correct - No static) ====================
     const MethodChannel jobAlertChannel = MethodChannel('job_alert_channel');
 
     jobAlertChannel.setMethodCallHandler((MethodCall call) async {
@@ -371,7 +345,7 @@ class NotificationService {
       }
     });
 
-    debugPrint('NotificationService initialized with robust action handler + MethodChannel');
+    debugPrint('NotificationService initialized successfully');
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
@@ -383,7 +357,7 @@ class NotificationService {
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {
-    debugPrint('App opened from notification: ${message.data}');
+    debugPrint('App opened from notification');
   }
 
   Future<void> testFullscreenNotification() async {
@@ -398,7 +372,7 @@ class NotificationService {
     try {
       final token = await _messaging.getToken();
       if (token != null && token.isNotEmpty) {
-        debugPrint('✅ FCM Token retrieved: ${token.substring(0, 20)}...');
+        debugPrint('✅ FCM Token retrieved');
         return token;
       }
       return null;
@@ -421,16 +395,13 @@ class NotificationService {
     required String description,
     int? priority,
   }) async {
-    if (recipientToken.isEmpty) {
-      debugPrint('⚠️ No FCM token - skipping notification');
-      return;
-    }
+    if (recipientToken.isEmpty) return;
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('sendJobAssignmentNotification');
 
-      final params = {
+      await callable.call({
         'recipientToken': recipientToken,
         'jobCardId': jobCardId,
         'jobCardNumber': jobCardNumber,
@@ -442,13 +413,9 @@ class NotificationService {
         'part': part,
         'description': description,
         'priority': priority ?? 1,
-      };
-
-      await callable.call(params);
-      debugPrint('✅ Notification sent successfully');
+      });
     } catch (e) {
       debugPrint('❌ Error sending notification: $e');
-      throw Exception('Failed to send notification: $e');
     }
   }
 
@@ -467,16 +434,13 @@ class NotificationService {
     required String assigneeName,
     int? priority,
   }) async {
-    if (recipientToken.isEmpty) {
-      debugPrint('⚠️ No FCM token - skipping creator notification');
-      return;
-    }
+    if (recipientToken.isEmpty) return;
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('sendCreatorNotification');
 
-      final params = {
+      await callable.call({
         'recipientToken': recipientToken,
         'jobCardId': jobCardId,
         'jobCardNumber': jobCardNumber,
@@ -490,25 +454,14 @@ class NotificationService {
         'notificationType': notificationType,
         'assigneeName': assigneeName,
         'priority': priority ?? 1,
-      };
-
-      await callable.call(params);
-      debugPrint('✅ Creator notification sent successfully');
+      });
     } catch (e) {
       debugPrint('❌ Error sending creator notification: $e');
-      throw Exception('Failed to send creator notification: $e');
     }
   }
 
   Future<void> refreshToken() async {
-    try {
-      final token = await getToken();
-      if (token == null) throw Exception('Failed to refresh FCM token');
-      debugPrint('✅ FCM Token refreshed successfully');
-    } catch (e) {
-      debugPrint('❌ Error refreshing FCM token: $e');
-      throw Exception('Failed to refresh FCM token: $e');
-    }
+    await getToken();
   }
 
   Future<void> showOnSiteNotification({

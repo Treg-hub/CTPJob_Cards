@@ -2,7 +2,6 @@ package com.example.ctp_job_cards
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.app.KeyguardManager
 import android.content.Context
 import android.media.MediaPlayer
 import android.os.Build
@@ -10,17 +9,14 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.os.PowerManager
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.TextView
-import androidx.activity.OnBackPressedCallback
 import com.google.android.material.button.MaterialButton
-import io.flutter.plugin.common.MethodChannel
-import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.plugin.common.MethodChannel
 
 class FullScreenJobAlertActivity : FlutterActivity() {
 
@@ -51,9 +47,13 @@ class FullScreenJobAlertActivity : FlutterActivity() {
         startHeaderPulseAnimation()
     }
 
-    // ==================== THIS MUST BE OUTSIDE onCreate() ====================
+    override fun onPause() {
+        super.onPause()
+        stopAlarm() // Stop alarm if user leaves the screen
+    }
+
     override fun onBackPressed() {
-        // Do nothing - prevent back button from closing the alert
+        // Prevent back button from closing the alert
     }
 
     private fun setupUI() {
@@ -70,12 +70,13 @@ class FullScreenJobAlertActivity : FlutterActivity() {
 
         val jobCardNumber = intent.getStringExtra("jobCardNumber") ?: "Unknown"
         val priority = intent.getStringExtra("priority") ?: "5"
-        val createdBy = intent.getStringExtra("createdBy") ?: "Unknown"
+        val operator = intent.getStringExtra("operator") ?: "Unknown"
         val location = intent.getStringExtra("location") ?: "Location not specified"
         val description = intent.getStringExtra("description") ?: "No description"
 
         tvJobNumber.text = "#$jobCardNumber"
         tvPriorityBadge.text = "P$priority"
+
         tvLevel.text = when (priority) {
             "5" -> "🔥 CRITICAL - PRIORITY 5"
             "4" -> "⚠️ HIGH - PRIORITY 4"
@@ -84,10 +85,10 @@ class FullScreenJobAlertActivity : FlutterActivity() {
         tvLevel.setBackgroundColor(if (priority == "5") 0xFFD32F2F.toInt() else 0xFFFF9800.toInt())
 
         tvLocation.text = location
-        tvCreatedBy.text = "👤 Created by: $createdBy"
+        tvCreatedBy.text = "👤 Created by: $operator"
         tvDescription.text = description
 
-        // ==================== BUTTONS - NOW MATCHES DART SIDE ====================
+        // Button listeners
         btnAssignSelf.setOnClickListener {
             stopAlarm()
             callDartAction("assign_self", jobCardNumber)
@@ -111,12 +112,12 @@ class FullScreenJobAlertActivity : FlutterActivity() {
 
     private fun callDartAction(action: String, jobCardNumber: String) {
         try {
-            // First try: Use the activity's own flutterEngine
             var messenger = flutterEngine?.dartExecutor?.binaryMessenger
 
-            // Fallback: Try cached engine if the above is null
             if (messenger == null) {
-                val cachedEngine = FlutterEngineCache.getInstance().get("main_engine")
+                val cachedEngine = io.flutter.embedding.engine.FlutterEngineCache
+                    .getInstance()
+                    .get("main_engine")
                 messenger = cachedEngine?.dartExecutor?.binaryMessenger
             }
 
@@ -131,17 +132,19 @@ class FullScreenJobAlertActivity : FlutterActivity() {
                     )
                 Log.d("FullScreenJobAlert", "✅ SUCCESS: $action on job #$jobCardNumber")
             } else {
-                Log.e("FullScreenJobAlert", "❌ Could not get any Flutter messenger")
+                Log.e("FullScreenJobAlert", "❌ Could not get Flutter messenger")
             }
         } catch (e: Exception) {
             Log.e("FullScreenJobAlert", "Error calling Dart: ${e.message}")
         }
         finish()
     }
+
     private fun shouldShowImBusyButton(): Boolean {
         val cal = java.util.Calendar.getInstance()
         val day = cal.get(java.util.Calendar.DAY_OF_WEEK)
         val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+
         return when (day) {
             java.util.Calendar.MONDAY,
             java.util.Calendar.TUESDAY,

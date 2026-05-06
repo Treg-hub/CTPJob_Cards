@@ -221,21 +221,37 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL).setMethodCallHandler { call, result ->
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ctp/geofence")
+        .setMethodCallHandler { call, result ->
             when (call.method) {
-                "startGeofence" -> {
+                "registerGeofence" -> {
                     val clockNo = call.argument<String>("clockNo")
                     val lat = call.argument<Double>("lat")
                     val lng = call.argument<Double>("lng")
-                    val radius = call.argument<Double>("radius")
+                    val radius = call.argument<Double>("radius")?.toFloat()
+
                     if (clockNo != null && lat != null && lng != null && radius != null) {
-                        startGeofence(clockNo, lat, lng, radius, result)
+                        GeofenceHelper.registerGeofence(
+                            context = this,
+                            clockNo = clockNo,
+                            latitude = lat,
+                            longitude = lng,
+                            radius = radius
+                        )
+                        result.success(null)
                     } else {
-                        result.error("INVALID_ARGUMENTS", "Missing arguments", null)
+                        result.error("INVALID_ARGS", "Missing parameters", null)
                     }
                 }
-                "stopGeofence" -> stopGeofence(result)
-                else -> result.notImplemented()
+
+                "stopGeofence" -> {
+                    // Optional: You can add logic here if needed
+                    result.success(null)
+                }
+
+                else -> {
+                    result.notImplemented()
+                }
             }
         }
 

@@ -117,7 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && !_overrideOnSite) {
-      _locationService.checkCurrentLocation(context);
+      _locationService.checkCurrentLocation();
     }
   }
 
@@ -684,14 +684,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     child: Text(
                       job.type.displayName,
                       style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
+                    ),  
                   ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          job.assignedNames?.join(', ') ?? 'Unassigned',
+                          (job.assignedNames is List)
+                              ? (job.assignedNames as List).join(', ')
+                              : (job.assignedNames?.toString() ?? 'Unassigned'),
                           style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                           textAlign: TextAlign.end,
                           maxLines: 1,
