@@ -24,7 +24,8 @@ class LocationService {
   final NotificationService _notificationService = NotificationService();
 
   Timer? _onSiteRecheckTimer;
-
+  DateTime? _lastCheckTime;
+  
   Future<void> startNativeMonitoring(String clockNo) async {
     if (kIsWeb) {
       debugPrint('📍 Geofencing not supported on web');
@@ -168,10 +169,19 @@ class LocationService {
 
   Future<void> checkCurrentLocation() async {
     if (kIsWeb) return;
+    
+    // Prevent duplicate calls within 10 seconds
+    if (_lastCheckTime != null && 
+        DateTime.now().difference(_lastCheckTime!).inSeconds < 10) {
+      debugPrint('📍 [LocationService] Skipping duplicate checkCurrentLocation()');
+      return;
+    }
+    _lastCheckTime = DateTime.now();
+
     debugPrint('📍 [LocationService] checkCurrentLocation() called (app resume)');
 
     try {
-      final permission = await Geolocator.checkPermission();
+      final permission = await Geolocator.checkPermission().timeout(const Duration(seconds: 5));
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         debugPrint('❌ [LocationService] checkCurrentLocation skipped — no location permission');
         return;
@@ -179,18 +189,16 @@ class LocationService {
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
-      );
+        timeLimit: const Duration(seconds: 10), // Reduced from 15
+      ).timeout(const Duration(seconds: 12));
 
       final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
       debugPrint('📍 [LocationService] checkCurrentLocation GPS result → onSite: $onSite');
 
-      // Get clock number (from memory or from SharedPreferences)
       String? clockNo = _clockNo;
       if (clockNo == null) {
         final prefs = await SharedPreferences.getInstance();
         clockNo = prefs.getString('loggedInClockNo');
-        debugPrint('📍 [LocationService] Loaded clockNo from SharedPreferences: $clockNo');
       }
 
       if (clockNo == null) {
@@ -201,10 +209,10 @@ class LocationService {
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && emp.isOnSite != onSite) {
         debugPrint('📍 [LocationService] Status changed — updating Firestore...');
-        _clockNo = clockNo; // Save it for future calls
+        _clockNo = clockNo;
         await _updateFirestore(onSite);
       } else {
-        debugPrint('📍 [LocationService] No status change needed (current: ${emp?.isOnSite}, new: $onSite)');
+        debugPrint('📍 [LocationService] No status change needed');
       }
     } catch (e) {
       debugPrint('❌ [LocationService] checkCurrentLocation FAILED: $e');
