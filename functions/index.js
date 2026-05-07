@@ -91,10 +91,20 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
     department,
     machine,
     part,
+    recipientClockNo,
   } = innerData;
 
   if (!recipientToken) throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
-
+  
+  // ==================== NEW: P5 On-Site Check ====================
+  if (priority >= 5 && recipientClockNo) {
+    const empDoc = await db.collection("employees").doc(recipientClockNo).get();
+    if (empDoc.exists && empDoc.data().isOnSite !== true) {
+      console.log(`🚫 P5 assignment blocked - ${recipientClockNo} is off-site`);
+      return { success: false, reason: "Recipient is off-site" };
+    }
+  }
+  // ===============================================================
   const level = getNotificationLevel(priority);
   const title = `Job Assigned by ${operator} #${jobCardNumber || "N/A"}`;
   const body = `Created by ${creator}\nLocation: ${area}\n${description}`;
@@ -474,10 +484,16 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
     const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
 
-    const mgrs = await getRelevantManagers(job.type);
+    // ==================== UPDATED: Only get ON-SITE people ====================
+    const mgrs = await getOnsiteRelevantManagers(job.type);           // ← Changed
     const foremen = await getOnsiteDeptForemenShiftLeaders(job.department);
 
-    const recipients = [creatorDoc.exists ? creatorDoc.data() : null, ...mgrs, ...foremen].filter(Boolean);
+    const recipients = [
+      creatorDoc.exists ? creatorDoc.data() : null,
+      ...mgrs,
+      ...foremen,
+    ].filter(Boolean);
+    // ========================================================================
 
     for (const emp of recipients) {
       await sendNotification({
@@ -514,10 +530,12 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const level = priority <= 3 ? "normal" : "full-loud";
 
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
-    const mgrs = await getRelevantManagers(job.type);
+
+    // ==================== UPDATED: Only get ON-SITE people ====================
+    const mgrs = await getOnsiteRelevantManagers(job.type);           // ← Changed
     const foremen = await getOnsiteDeptForemenShiftLeaders(job.department);
-    const deptMgrs = await getDeptManagers(job.department);
-    const workshopMgr = await getWorkshopManager();
+    const deptMgrs = await getOnsiteDeptManagers(job.department);     // ← Changed
+    const workshopMgr = await getOnsiteWorkshopManager();             // ← Changed
 
     const recipients = [
       creatorDoc.exists ? creatorDoc.data() : null,
@@ -526,6 +544,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       ...deptMgrs,
       workshopMgr,
     ].filter(Boolean);
+    // ========================================================================
 
     for (const emp of recipients) {
       await sendNotification({
@@ -753,6 +772,55 @@ exports.migrateEmployeeIds = functions.https.onCall(async () => {
   console.log(`Migrated ${migrated.length} employee docs`);
   return { migrated, count: migrated.length };
 });
+
+// ==================== NEW: On-site only manager helpers ====================
+async function getOnsiteRelevantManagers(jobType) {
+  const snaps = await db.collection("employees")
+    .where("position", "==", "Manager")
+    .where("isOnSite", "==", true)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const dept = doc.data().department || "";
+      if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
+        return dept.toLowerCase().includes("mechanical");
+      }
+      if (jobType === "electrical" || jobType === "mechanicalElectrical") {
+        return dept.toLowerCase().includes("electrical");
+      }
+      return false;
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
+async function getOnsiteDeptManagers(dept) {
+  const snaps = await db.collection("employees")
+    .where("department", "==", dept)
+    .where("isOnSite", "==", true)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const pos = (doc.data().position || "").toLowerCase();
+      return /manager/i.test(pos);
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
+async function getOnsiteWorkshopManager() {
+  const snaps = await db.collection("employees")
+    .where("department", "==", "Workshop")
+    .where("isOnSite", "==", true)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const pos = (doc.data().position || "").toLowerCase();
+      return /manager/i.test(pos) && !/mechanical|electrical/i.test(pos);
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }))[0] || null;
+}
 
 exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
   if (!context.auth) {

@@ -413,6 +413,7 @@ class NotificationService {
         'part': part,
         'description': description,
         'priority': priority ?? 1,
+        'recipientClockNo': currentEmployee?.clockNo,
       });
     } catch (e) {
       debugPrint('❌ Error sending notification: $e');

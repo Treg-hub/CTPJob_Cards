@@ -8,6 +8,7 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -1096,6 +1097,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return ListView(
       padding: EdgeInsets.all(_screenPadding),
       children: [
+        // ==================== ACCOUNT ====================
         Padding(
           padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
           child: Text(
@@ -1183,6 +1185,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onTap: _logout,
           ),
         ),
+
+        // ==================== NOTIFICATIONS ====================
         Padding(
           padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
           child: Text(
@@ -1293,6 +1297,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           subtitle: const Text("Test fullscreen notifications and check permissions"),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
         ),
+
+        // ==================== PERMISSIONS ====================
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+          child: Text(
+            'Permissions',
+            style: TextStyle(
+              fontSize: _isDesktop ? 20 : 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        Card(
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.security, color: Colors.blue),
+            title: const Text('Request All Permissions'),
+            subtitle: const Text('Location, Notifications, DND Bypass, Display Over Apps, Battery, Camera'),
+            trailing: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8C42),
+                foregroundColor: Colors.black,
+              ),
+              onPressed: _requestAllPermissions,
+              child: const Text('GRANT'),
+            ),
+          ),
+        ),
+        Card(
+          elevation: 4,
+          child: ListTile(
+            leading: const Icon(Icons.settings, color: Colors.grey),
+            title: const Text('Open App Settings'),
+            subtitle: const Text('Manually manage all permissions'),
+            onTap: () => openAppSettings(),
+          ),
+        ),
+
+        // ==================== ADMIN ====================
         if (currentEmployee?.name == 'G Peens') ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1314,6 +1358,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
         ],
+
+        // ==================== DEVELOPER ====================
         if (!kIsWeb) ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1358,6 +1404,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         content: Text('❌ Error: $e'),
                         backgroundColor: Colors.red,
                         duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+          Card(
+            elevation: 4,
+            child: ListTile(
+              leading: const Icon(Icons.system_update, color: Colors.orange),
+              title: const Text('Force Update Check'),
+              subtitle: const Text('Immediately check for new app version'),
+              onTap: () async {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Checking for updates...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                try {
+                  await UpdateService().forceCheckForUpdate(context);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error checking for updates: $e'),
+                        backgroundColor: Colors.red,
                       ),
                     );
                   }
