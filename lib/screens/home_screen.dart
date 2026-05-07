@@ -391,7 +391,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
-              mainAxisSize: double.maxFinite,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   decoration: const InputDecoration(labelText: 'Search employee...'),
@@ -1574,8 +1574,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               'Developer',
               style: TextStyle(
                 fontSize: _isDesktop ? 20 : 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           Card(
@@ -1639,6 +1640,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       SnackBar(
                         content: Text('Error checking for updates: $e'),
                         backgroundColor: Colors.red,
+                        duration: Duration(seconds: 3),
                       ),
                     );
                   }
@@ -1850,5 +1852,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         tooltip: 'Give Feedback',
       ),
     );
+  }
+  Future<void> _requestAllPermissions() async {
+    await Permission.location.request();
+    await Permission.locationAlways.request();
+    await Permission.notification.request();
+
+    if (Platform.isAndroid) {
+      final intent = android_intent.AndroidIntent(
+        action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+      );
+      await intent.launch();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissions requested. Please grant all when prompted.')),
+      );
+    }
   }
 }
