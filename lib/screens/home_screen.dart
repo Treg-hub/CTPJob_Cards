@@ -16,6 +16,7 @@ import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/location_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
@@ -225,6 +226,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  Future<void> _requestAllPermissions() async {
+    // Location
+    await Permission.location.request();
+    await Permission.locationAlways.request();
+
+    // Notifications
+    await Permission.notification.request();
+
+    // Ignore Battery Optimizations (Android only)
+    if (Platform.isAndroid) {
+      final intent = android_intent.AndroidIntent(
+        action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+      );
+      await intent.launch();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissions requested. Please grant all when prompted.')),
+      );
+    }
+  }
   void _showPasswordDialog(BuildContext context) {
     final passwordController = TextEditingController();
     showDialog(
