@@ -55,6 +55,83 @@ function getNotificationLevel(priority) {
   return "normal";
 }
 
+// ==================== DYNAMIC CONFIG LOADER ====================
+async function getNotificationConfig() {
+  try {
+    const doc = await db.collection("notification_configs").doc("global").get();
+    if (doc.exists) {
+      return doc.data();
+    }
+  } catch (e) {
+    console.error("Failed to load notification config, using defaults:", e);
+  }
+
+  return {
+    enable_offsite_escalation: false,
+    escalation_onsite_short_minutes: 2,
+    escalation_onsite_long_minutes: 7,
+    escalation_offsite_minutes: 30,
+    escalation_recipients: {
+      mechanical: {
+        created: ["onsite_mechanics"],
+        "2min": ["onsite_managers", "foremen"],
+        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
+        "30min": []
+      },
+      electrical: {
+        created: ["onsite_electricians"],
+        "2min": ["onsite_managers", "foremen"],
+        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
+        "30min": []
+      },
+      "mech/elec": {
+        created: ["onsite_mechanics", "onsite_electricians"],
+        "2min": ["onsite_managers", "foremen"],
+        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
+        "30min": []
+      },
+      maintenance: {
+        created: [],
+        "2min": [],
+        "7min": [],
+        "30min": []
+      },
+      default: {
+        created: ["onsite_mechanics", "onsite_electricians"],
+        "2min": ["onsite_managers", "foremen"],
+        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
+        "30min": []
+      }
+    }
+  };
+}
+
+// ==================== NEW HELPER: Resolve recipients from rules ====================
+async function resolveRecipientsFromRules(ruleNames, jobType, department) {
+  const allRecipients = [];
+
+  for (const rule of ruleNames) {
+    if (rule === "onsite_mechanics") {
+      allRecipients.push(...(await getOnsiteMechanics()));
+    } else if (rule === "onsite_electricians") {
+      allRecipients.push(...(await getOnsiteElectricians()));
+    } else if (rule === "onsite_managers") {
+      allRecipients.push(...(await getOnsiteRelevantManagers(jobType)));
+    } else if (rule === "foremen") {
+      allRecipients.push(...(await getOnsiteDeptForemenShiftLeaders(department)));
+    } else if (rule === "onsite_dept_managers") {
+      allRecipients.push(...(await getOnsiteDeptManagers(department)));
+    } else if (rule === "onsite_workshop_manager") {
+      const wm = await getOnsiteWorkshopManager();
+      if (wm) allRecipients.push(wm);
+    }
+  }
+
+  const unique = {};
+  allRecipients.forEach(emp => { unique[emp.clockNo] = emp; });
+  return Object.values(unique);
+}
+
 // ==================== CUSTOM TOKEN AUTH ====================
 exports.createCustomToken = functions.https.onCall(async (data, context) => {
   const clockNo = data.clockNo || (data.data && data.data.clockNo) || data;
@@ -96,15 +173,14 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
 
   if (!recipientToken) throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
   
-  // ==================== NEW: P5 On-Site Check ====================
   if (priority >= 5 && recipientClockNo) {
     const empDoc = await db.collection("employees").doc(recipientClockNo).get();
     if (empDoc.exists && empDoc.data().isOnSite !== true) {
-      console.log(`🚫 P5 assignment blocked - ${recipientClockNo} is off-site`);
+      console.log(`P5 assignment blocked - ${recipientClockNo} is off-site`);
       return { success: false, reason: "Recipient is off-site" };
     }
   }
-  // ===============================================================
+
   const level = getNotificationLevel(priority);
   const title = `Job Assigned by ${operator} #${jobCardNumber || "N/A"}`;
   const body = `Created by ${creator}\nLocation: ${area}\n${description}`;
@@ -458,17 +534,24 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
   }
 });
 
-// ==================== SCHEDULED: ESCALATION ====================
+// ==================== SCHEDULED: ESCALATION (3 Stages + Stops on Assignment) ====================
 exports.escalateNotifications = functions.scheduler.onSchedule({
   schedule: "every 2 minutes",
   region: "europe-west1",
   timeZone: "Africa/Johannesburg",
 }, async () => {
+  const config = await getNotificationConfig();
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
-  const sevenMinAgo = new Date(Date.now() - 7 * 60 * 1000);
 
-  // 2-minute escalation
+  const shortMinutes = config.escalation_onsite_short_minutes || 2;
+  const longMinutes = config.escalation_onsite_long_minutes || 7;
+  const thirtyMin = config.escalation_offsite_minutes || 30;
+
+  const twoMinAgo = new Date(Date.now() - shortMinutes * 60 * 1000);
+  const sevenMinAgo = new Date(Date.now() - longMinutes * 60 * 1000);
+  const thirtyMinAgo = new Date(Date.now() - thirtyMin * 60 * 1000);
+
+  // ========== 2-MINUTE ESCALATION ==========
   const jobs2min = await db.collection("job_cards")
     .where("status", "==", "open")
     .where("assignedClockNos", "==", null)
@@ -478,27 +561,24 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
   for (const doc of jobs2min.docs) {
     const job = doc.data();
+    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "medium-high";
 
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
     const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
 
-    // ==================== UPDATED: Only get ON-SITE people ====================
-    const mgrs = await getOnsiteRelevantManagers(job.type);           // ← Changed
-    const foremen = await getOnsiteDeptForemenShiftLeaders(job.department);
+    const escalationRules = config.escalation_recipients || {};
+    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
+    const recipients2min = jobTypeRules["2min"] || [];
 
-    const recipients = [
-      creatorDoc.exists ? creatorDoc.data() : null,
-      ...mgrs,
-      ...foremen,
-    ].filter(Boolean);
-    // ========================================================================
+    const resolvedRecipients = await resolveRecipientsFromRules(recipients2min, job.type, job.department);
 
-    for (const emp of recipients) {
+    for (const emp of resolvedRecipients) {
       await sendNotification({
         token: emp.token,
-        title: "Escalation: Unassigned Job (2min)",
+        title: `Escalation: No Action Taken (2min) - Job #${job.jobCardNumber || doc.id}`,
         body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
         jobCardNumber: job.jobCardNumber || doc.id,
         level,
@@ -509,14 +589,12 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
         machine: job.machine,
         part: job.part,
         triggeredBy: "2min_escalation",
-        initiatedByClockNo: null,
-        initiatedByName: null,
       });
     }
     await doc.ref.update({ notifiedAt2min: now });
   }
 
-  // 7-minute escalation
+  // ========== 7-MINUTE ESCALATION ==========
   const jobs7min = await db.collection("job_cards")
     .where("status", "==", "open")
     .where("assignedClockNos", "==", null)
@@ -526,30 +604,24 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
   for (const doc of jobs7min.docs) {
     const job = doc.data();
+    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "full-loud";
 
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
+    const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
 
-    // ==================== UPDATED: Only get ON-SITE people ====================
-    const mgrs = await getOnsiteRelevantManagers(job.type);           // ← Changed
-    const foremen = await getOnsiteDeptForemenShiftLeaders(job.department);
-    const deptMgrs = await getOnsiteDeptManagers(job.department);     // ← Changed
-    const workshopMgr = await getOnsiteWorkshopManager();             // ← Changed
+    const escalationRules = config.escalation_recipients || {};
+    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
+    const recipients7min = jobTypeRules["7min"] || [];
 
-    const recipients = [
-      creatorDoc.exists ? creatorDoc.data() : null,
-      ...mgrs,
-      ...foremen,
-      ...deptMgrs,
-      workshopMgr,
-    ].filter(Boolean);
-    // ========================================================================
+    const resolvedRecipients = await resolveRecipientsFromRules(recipients7min, job.type, job.department);
 
-    for (const emp of recipients) {
+    for (const emp of resolvedRecipients) {
       await sendNotification({
         token: emp.token,
-        title: "Urgent Escalation: Unassigned Job (7min)",
+        title: `URGENT Escalation: No Action Taken (7min) - Job #${job.jobCardNumber || doc.id}`,
         body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
         jobCardNumber: job.jobCardNumber || doc.id,
         level,
@@ -560,11 +632,54 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
         machine: job.machine,
         part: job.part,
         triggeredBy: "7min_escalation",
-        initiatedByClockNo: null,
-        initiatedByName: null,
       });
     }
     await doc.ref.update({ notifiedAt7min: now });
+  }
+
+  // ========== 30-MINUTE ESCALATION (Third Stage - Empty for now) ==========
+  const jobs30min = await db.collection("job_cards")
+    .where("status", "==", "open")
+    .where("assignedClockNos", "==", null)
+    .where("createdAt", "<=", thirtyMinAgo)
+    .where("notifiedAt30min", "==", null)
+    .get();
+
+  for (const doc of jobs30min.docs) {
+    const job = doc.data();
+    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
+    const priority = job.priority || 1;
+    const level = priority <= 3 ? "normal" : "medium-high";
+
+    const escalationRules = config.escalation_recipients || {};
+    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
+    const recipients30min = jobTypeRules["30min"] || [];
+
+    if (recipients30min.length === 0) {
+      await doc.ref.update({ notifiedAt30min: now });
+      continue;
+    }
+
+    const resolvedRecipients = await resolveRecipientsFromRules(recipients30min, job.type, job.department);
+
+    for (const emp of resolvedRecipients) {
+      await sendNotification({
+        token: emp.token,
+        title: `30min Escalation - Job #${job.jobCardNumber || doc.id}`,
+        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
+        jobCardNumber: job.jobCardNumber || doc.id,
+        level,
+        priority,
+        createdBy: job.operator || "Unknown",
+        department: job.department,
+        area: job.area,
+        machine: job.machine,
+        part: job.part,
+        triggeredBy: "30min_escalation",
+      });
+    }
+    await doc.ref.update({ notifiedAt30min: now });
   }
 });
 
@@ -655,7 +770,6 @@ exports.onAlertResponseCreated = functions.firestore
       return null;
     }
 
-    // Find the job
     const jobSnap = await db.collection("job_cards")
       .where("jobCardNumber", "==", parseInt(jobCardNumber))
       .limit(1)
@@ -669,7 +783,6 @@ exports.onAlertResponseCreated = functions.firestore
     const job = jobSnap.docs[0].data();
     const creatorClockNo = job.operatorClockNo;
 
-    // ==================== BUSY ====================
     if (response.action === "busy") {
       if (!creatorClockNo) {
         console.error("Job has no operatorClockNo");
@@ -717,15 +830,12 @@ exports.onAlertResponseCreated = functions.firestore
         part: job.part,
       });
 
-      console.log(`✅ Busy notification sent to creator ${creatorClockNo} for Job #${jobCardNumber}`);
+      console.log(`Busy notification sent to creator ${creatorClockNo} for Job #${jobCardNumber}`);
       return null;
     }
 
-    // ==================== DISMISSED ====================
     if (response.action === "dismissed") {
       console.log(`Alert dismissed for Job #${jobCardNumber} by ${userName} (${clockNo})`);
-
-      // Optional: log dismissed actions too
       await logNotification({
         jobCardId: jobSnap.docs[0].id,
         jobCardNumber: parseInt(jobCardNumber),
@@ -742,36 +852,12 @@ exports.onAlertResponseCreated = functions.firestore
         machine: job.machine,
         part: job.part,
       });
-
       return null;
     }
 
     console.log(`Ignoring alertResponse ${responseId} with action: ${response.action}`);
     return null;
   });
-
-// ==================== MIGRATION HELPERS ====================
-exports.migrateEmployeeIds = functions.https.onCall(async () => {
-  const employeesRef = db.collection("employees");
-  const snapshot = await employeesRef.get();
-  const migrated = [];
-  const batch = db.batch();
-
-  for (const doc of snapshot.docs) {
-    const docData = doc.data();
-    const clockNo = docData.clockNo;
-    if (doc.id !== clockNo) {
-      const newRef = employeesRef.doc(clockNo);
-      batch.set(newRef, docData);
-      batch.delete(doc.ref);
-      migrated.push({ oldId: doc.id, newId: clockNo, name: docData.name });
-    }
-  }
-
-  await batch.commit();
-  console.log(`Migrated ${migrated.length} employee docs`);
-  return { migrated, count: migrated.length };
-});
 
 // ==================== NEW: On-site only manager helpers ====================
 async function getOnsiteRelevantManagers(jobType) {
@@ -821,6 +907,29 @@ async function getOnsiteWorkshopManager() {
     })
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }))[0] || null;
 }
+
+// ==================== MIGRATION HELPERS ====================
+exports.migrateEmployeeIds = functions.https.onCall(async () => {
+  const employeesRef = db.collection("employees");
+  const snapshot = await employeesRef.get();
+  const migrated = [];
+  const batch = db.batch();
+
+  for (const doc of snapshot.docs) {
+    const docData = doc.data();
+    const clockNo = docData.clockNo;
+    if (doc.id !== clockNo) {
+      const newRef = employeesRef.doc(clockNo);
+      batch.set(newRef, docData);
+      batch.delete(doc.ref);
+      migrated.push({ oldId: doc.id, newId: clockNo, name: docData.name });
+    }
+  }
+
+  await batch.commit();
+  console.log(`Migrated ${migrated.length} employee docs`);
+  return { migrated, count: migrated.length };
+});
 
 exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
