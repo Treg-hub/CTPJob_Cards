@@ -51,7 +51,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _showDeptOnly = true;
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
-
+  StreamSubscription<Employee>? _employeeSubscription;
   // ==================== TEST MODE ====================
   bool _testMode = false;
   Timer? _testModeTimer;
@@ -97,26 +97,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadOnSiteStatus();
     _loadShowDeptOnly();
     _loadOverrideOnSite();
     _loadTestMode();
+
+    // ==================== REAL-TIME ON-SITE STATUS LISTENER ====================
+    if (currentEmployee != null) {
+      _employeeSubscription = _firestoreService
+          .getEmployeeStream(currentEmployee!.clockNo)
+          .listen((emp) {
+        if (emp != null && mounted) {
+          setState(() => isOnSite = emp.isOnSite);
+        }
+      });
+    }
+
     if (!kIsWeb) {
       _notificationService.refreshToken();
     }
+
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final count = jobs.where((j) => !j.isClosed && (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
+        final count = jobs.where((j) => !j.isClosed && 
+          (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
         if (mounted) setState(() => _openJobCount = count);
       });
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
     }
+
     if (!kIsWeb) _setupFirebaseMessaging();
   }
 
   @override
   void dispose() {
+    _employeeSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
     _testModeTimer?.cancel();

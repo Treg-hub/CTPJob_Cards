@@ -88,6 +88,20 @@ class FirestoreService {
       }).toList();
     });
   }
+  
+  Stream<Employee> getEmployeeStream(String clockNo) {
+    return _firestore
+        .collection('employees')
+        .doc(clockNo)
+        .snapshots()
+        .map((doc) {
+          final data = doc.data();
+          if (data == null) {
+            throw Exception('Employee not found');
+          }
+          return Employee.fromFirestore(data, doc.id);
+        });
+  }
 
   // Job Card operations
   Future<void> createJobCard(JobCard jobCard) async {
