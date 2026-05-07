@@ -52,6 +52,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
 
+  // ==================== TEST MODE ====================
+  bool _testMode = false;
+  Timer? _testModeTimer;
+  DateTime? _testModeStartedAt;
+
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
 
@@ -95,6 +100,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadOnSiteStatus();
     _loadShowDeptOnly();
     _loadOverrideOnSite();
+    _loadTestMode();
     if (!kIsWeb) {
       _notificationService.refreshToken();
     }
@@ -113,12 +119,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
+    _testModeTimer?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_overrideOnSite) {
+    if (state == AppLifecycleState.resumed && !_overrideOnSite && !_testMode) {
       _locationService.checkCurrentLocation();
     }
   }
@@ -172,7 +179,110 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     setState(() => _overrideOnSite = prefs.getBool('overrideOnSite') ?? false);
   }
 
-  void _promptEnableNotifications() {
+  Future<void> _loadTestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _testMode = prefs.getBool('testMode') ?? false);
+    if (_testMode) {
+      _startTestModeTimer();
+    }
+  }
+
+  Future<void> _saveTestMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('testMode', value);
+  }
+
+  void _startTestModeTimer() {
+    _testModeTimer?.cancel();
+    _testModeStartedAt = DateTime.now();
+
+    _testModeTimer = Timer(const Duration(hours: 2), () async {
+      if (mounted && _testMode) {
+        await _disableTestMode();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Test Mode automatically disabled after 2 hours'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _enableTestMode() async {
+    setState(() => _testMode = true);
+    await _saveTestMode(true);
+    _startTestModeTimer();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test Mode enabled - Real geofence disabled'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
+  Future<void> _disableTestMode() async {
+    setState(() => _testMode = false);
+    await _saveTestMode(false);
+    _testModeTimer?.cancel();
+    _testModeStartedAt = null;
+
+    // Revert to real geolocation
+    await _locationService.checkCurrentLocation();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test Mode disabled - Real geofence active'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _forceOnSite() async {
+    if (!_testMode) return;
+
+    setState(() => isOnSite = true);
+    if (currentEmployee != null) {
+      await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: true));
+    }
+    await _logTestModeEvent('force_on_site');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Forced On Site (Test Mode)'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _forceOffSite() async {
+    if (!_testMode) return;
+
+    setState(() => isOnSite = false);
+    if (currentEmployee != null) {
+      await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: false));
+    }
+    await _logTestModeEvent('force_off_site');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Forced Off Site (Test Mode)'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
+  Future<void> _logTestModeEvent(String action) async {
+    if (currentEmployee == null) return;
+
+    await FirebaseFirestore.instance.collection('geofence_logs').add({
+      'clockNo': currentEmployee!.clockNo,
+      'eventType': 'test_mode_$action',
+      'timestamp': FieldValue.serverTimestamp(),
+      'testModeActive': true,
+    });
+  }
+
+  void _promptEnableNotifications() { 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -226,28 +336,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _requestAllPermissions() async {
-    // Location
-    await Permission.location.request();
-    await Permission.locationAlways.request();
-
-    // Notifications
-    await Permission.notification.request();
-
-    // Ignore Battery Optimizations (Android only)
-    if (Platform.isAndroid) {
-      final intent = android_intent.AndroidIntent(
-        action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
-      );
-      await intent.launch();
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permissions requested. Please grant all when prompted.')),
-      );
-    }
-  }
   void _showPasswordDialog(BuildContext context) {
     final passwordController = TextEditingController();
     showDialog(
@@ -303,7 +391,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: double.maxFinite,
               children: [
                 TextField(
                   decoration: const InputDecoration(labelText: 'Search employee...'),
@@ -1120,6 +1208,102 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return ListView(
       padding: EdgeInsets.all(_screenPadding),
       children: [
+        // ==================== TEST MODE BANNER ====================
+        if (_testMode)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade700,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'TEST MODE ACTIVE — Real geofence disabled for testing',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // ==================== TESTING & DEVELOPMENT ====================
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
+          child: Text(
+            'Testing & Development',
+            style: TextStyle(
+              fontSize: _isDesktop ? 20 : 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        Card(
+          elevation: 4,
+          child: SwitchListTile(
+            title: const Text('Enable Test Mode'),
+            subtitle: const Text('Force On/Off Site for testing (auto-disables after 2 hours)'),
+            value: _testMode,
+            onChanged: (value) => value ? _enableTestMode() : _disableTestMode(),
+            activeThumbColor: Colors.orange,
+          ),
+        ),
+
+        if (_testMode) ...[
+          const SizedBox(height: 8),
+          Card(
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Text(
+                    'Force Location Status',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _forceOnSite,
+                          icon: const Icon(Icons.location_on),
+                          label: const Text('Force On Site'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _forceOffSite,
+                          icon: const Icon(Icons.location_off),
+                          label: const Text('Force Off Site'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 24),
+
         // ==================== ACCOUNT ====================
         Padding(
           padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
@@ -1390,9 +1574,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               'Developer',
               style: TextStyle(
                 fontSize: _isDesktop ? 20 : 22,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           Card(
