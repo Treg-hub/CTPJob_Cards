@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
 
@@ -37,7 +38,6 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
-      // Use the new improved method
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
         'lat': COMPANY_LAT,
@@ -46,6 +46,7 @@ class LocationService {
       });
 
       debugPrint('✅ Geofence registered for $clockNo');
+      await _logGeofenceEvent('registered', clockNo);
     } catch (e) {
       debugPrint('Geofence registration failed: $e');
     }
@@ -84,12 +85,30 @@ class LocationService {
 
       await _updateFirestore(isEntering);
       await _sendNotification(isEntering);
+      await _logGeofenceEvent(isEntering ? 'enter' : 'exit', _clockNo ?? 'unknown');
 
       if (isEntering) {
         _startOnSiteRecheckTimer();
       } else {
         _stopOnSiteRecheckTimer();
       }
+    }
+  }
+
+  // ==================== LOG TO FIRESTORE ====================
+  Future<void> _logGeofenceEvent(String eventType, String clockNo) async {
+    try {
+      await FirebaseFirestore.instance.collection('geofence_logs').add({
+        'clockNo': clockNo,
+        'eventType': eventType,
+        'timestamp': FieldValue.serverTimestamp(),
+        'latitude': COMPANY_LAT,
+        'longitude': COMPANY_LON,
+        'radius': RADIUS_METERS,
+      });
+      debugPrint('📍 Geofence event logged: $eventType for $clockNo');
+    } catch (e) {
+      debugPrint('Failed to log geofence event: $e');
     }
   }
 
@@ -155,6 +174,7 @@ class LocationService {
       if (!onSite) {
         await _updateFirestore(false);
         await _sendNotification(false);
+        await _logGeofenceEvent('exit_forced', clockNo);
         _stopOnSiteRecheckTimer();
       }
     } catch (e) {
@@ -185,6 +205,7 @@ class LocationService {
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && emp.isOnSite != onSite) {
         await _updateFirestore(onSite);
+        await _logGeofenceEvent(onSite ? 'enter_forced' : 'exit_forced', clockNo);
       }
     } catch (e) {
       debugPrint('checkCurrentLocation failed: $e');
