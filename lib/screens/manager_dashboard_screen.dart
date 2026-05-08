@@ -58,14 +58,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   List<JobCard> _getFilteredJobs(List<JobCard> allJobs) {
     List<JobCard> filtered = allJobs;
 
-    // Department Filter
     if (!showAllDepartments && selectedDepartments.isNotEmpty) {
       filtered = filtered.where((j) => 
         j.department != null && selectedDepartments.contains(j.department)
       ).toList();
     }
 
-    // Date Range Filter
     final now = DateTime.now();
     if (dateRange == '7') {
       filtered = filtered.where((j) {
@@ -102,6 +100,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
+            physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -120,6 +119,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 _buildPriorityBreakdown(openJobs),
                 const SizedBox(height: 24),
                 _buildTechnicianLeaderboard(filteredJobs),
+                const SizedBox(height: 40), // Extra space at bottom
               ],
             ),
           );
@@ -128,7 +128,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  // ==================== KPI SECTION ====================
+  // ==================== KPI SECTION (FIXED) ====================
   Widget _buildCollapsibleKPIs(List<JobCard> openJobs, List<JobCard> filteredJobs) {
     final now = DateTime.now();
     final openCount = openJobs.length;
@@ -157,6 +157,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   childAspectRatio: 1.3,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
                   children: [
                     _buildKPICard('Open Jobs', openCount.toString(), Colors.blue),
                     _buildKPICard('High Priority', highPriority.toString(), Colors.red),
@@ -206,6 +208,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         else
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
               FilterChip(
                 label: const Text('All Departments'),
@@ -252,9 +255,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  // ==================== DYNAMIC TRENDLINE (Per Day) ====================
+  // ==================== DYNAMIC TRENDLINE ====================
   Widget _buildTrendlineChart(List<JobCard> filteredJobs) {
-    // Group by day
     final Map<String, int> openByDay = {};
     final Map<String, int> closedByDay = {};
 
@@ -269,7 +271,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       }
     }
 
-    // Create spots for chart
     final sortedDays = {...openByDay.keys, ...closedByDay.keys}.toList()..sort();
     
     List<FlSpot> openSpots = [];
@@ -323,7 +324,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   // ==================== SMART MERGED CHART ====================
   Widget _buildSmartDepartmentAreaChart(List<JobCard> openJobs) {
     if (showAllDepartments || selectedDepartments.length != 1) {
-      // Show by Department
       final Map<String, int> deptCount = {};
       for (final job in openJobs) {
         final dept = job.department ?? 'Unknown';
@@ -359,7 +359,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         ),
       );
     } else {
-      // Show by Area for selected department
       final selectedDept = selectedDepartments.first;
       final deptJobs = openJobs.where((j) => j.department == selectedDept).toList();
 
@@ -445,7 +444,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
   }
 
-  // ==================== TECHNICIAN LEADERBOARD ====================
+  // ==================== TECHNICIAN LEADERBOARD (FIXED) ====================
   Widget _buildTechnicianLeaderboard(List<JobCard> filteredJobs) {
     final Map<String, int> techCount = {};
     for (final job in filteredJobs) {
@@ -468,15 +467,19 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             if (top10.isEmpty)
               const Text('No completed jobs yet', style: TextStyle(color: Colors.grey))
             else
-              ...top10.asMap().entries.map((entry) {
-                final index = entry.key;
-                final tech = entry.value;
-                return ListTile(
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text(tech.key),
-                  trailing: Text('${tech.value} jobs', style: const TextStyle(fontWeight: FontWeight.bold)),
-                );
-              }),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: top10.length,
+                itemBuilder: (context, index) {
+                  final tech = top10[index];
+                  return ListTile(
+                    leading: CircleAvatar(child: Text('${index + 1}')),
+                    title: Text(tech.key),
+                    trailing: Text('${tech.value} jobs', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  );
+                },
+              ),
           ],
         ),
       ),
