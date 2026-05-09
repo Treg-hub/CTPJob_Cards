@@ -110,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         9999,
         'General Notification Test',
         'This is a standard job alert test from Settings.',
-        NotificationDetails(
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             'normal_channel',
             'Normal Job Notifications',
@@ -119,6 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
           ),
+          iOS: DarwinNotificationDetails(),
         ),
       );
       if (mounted) {
