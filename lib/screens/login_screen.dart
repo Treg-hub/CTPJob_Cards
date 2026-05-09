@@ -12,6 +12,7 @@ import 'home_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registration_screen.dart';
+import 'permissions_onboarding_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,16 +30,17 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
 
-    // Auto-login if already logged in
     if (currentEmployee != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+          );
         }
       });
     }
 
-    // Handle notification deep links (keep your existing logic)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -89,7 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final uid = credential.user!.uid;
 
-      // Find employee record
       final query = await FirebaseFirestore.instance
           .collection('employees')
           .where('uid', isEqualTo: uid)
@@ -122,7 +123,6 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInClockNo', employee.clockNo);
       currentEmployee = employee;
 
-      // Start location monitoring
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         try {
           await LocationService().startNativeMonitoring(employee.clockNo);
@@ -132,7 +132,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+        );
       }
 
       if (!kIsWeb) _saveFcmToken(employee.clockNo);
@@ -152,7 +155,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ==================== NEW: Forgot Password ====================
   Future<void> _forgotPassword() async {
     final email = _emailController.text.trim();
 
@@ -181,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
   }
-  
+
   Future<void> _saveFcmToken(String clockNo) async {
     try {
       final messaging = FirebaseMessaging.instance;
@@ -244,7 +246,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _autoAssignAndNavigate(JobCard jobCard) async {
-    // Keep your existing auto-assign logic exactly as it was
     try {
       final currentUser = currentEmployee;
       if (currentUser == null) return;
@@ -328,7 +329,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
 
-              // ==================== Forgot Password Button ====================
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
