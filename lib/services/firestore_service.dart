@@ -293,8 +293,8 @@ class FirestoreService {
   Future<List<String>> getDepartmentsForJobCards(String status) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
-          .where('status', isEqualTo: status)
+          .collection('job_cards
+ .where('status', isEqualTo: status)
           .get();
 
       final departments = <String>{};
@@ -646,6 +646,35 @@ class FirestoreService {
         documentId: transaction.id,
       );
       debugPrint('📤 CopperTransaction queued for later sync (offline)');
+    }
+  }
+
+  // ==================== GEO FENCE EVENT LOGGING (NEW - replanned) ====================
+  Future<void> logGeoFenceEvent({
+    required String clockNo,
+    required String eventType, // 'enter' or 'exit'
+    required String source,    // 'native_geofence', 'fallback', 'background_check', 'resume_check', 'manual_test'
+    double? latitude,
+    double? longitude,
+    double? accuracy,
+    String? notes,
+  }) async {
+    try {
+      await _firestore.collection('geo_fence_logs').add({
+        'timestamp': FieldValue.serverTimestamp(),
+        'clockNo': clockNo,
+        'eventType': eventType,
+        'source': source,
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
+        'radiusUsed': 800.0,
+        'notes': notes ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('📍 [GeoFenceLog] $eventType logged for $clockNo via $source');
+    } catch (e) {
+      debugPrint('❌ Failed to log geo fence event: $e');
     }
   }
 }
