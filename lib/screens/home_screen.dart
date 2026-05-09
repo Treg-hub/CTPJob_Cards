@@ -30,6 +30,7 @@ import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'notification_diagnostics_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -101,7 +102,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadOverrideOnSite();
     _loadTestMode();
 
-    // ==================== REAL-TIME ON-SITE STATUS LISTENER ====================
     if (currentEmployee != null) {
       _employeeSubscription = _firestoreService
           .getEmployeeStream(currentEmployee!.clockNo)
@@ -244,7 +244,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _testModeTimer?.cancel();
     _testModeStartedAt = null;
 
-    // Revert to real geolocation
     await _locationService.checkCurrentLocation();
 
     if (mounted) {
@@ -779,7 +778,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               if (job.notes.isNotEmpty) Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  job.notes.split('\n').last.trim(),
+                  job.notes.split('
+').last.trim(),
                   style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1203,10 +1203,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   String _getLastCommentPreview(String comments) {
-    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+    final parts = comments.split('
+
+').where((c) => c.trim().isNotEmpty).toList();
     if (parts.isEmpty) return '';
     final lastComment = parts.last;
-    final lines = lastComment.split('\n');
+    final lines = lastComment.split('
+');
     return lines.length > 1 ? lines[1].trim() : lastComment.trim();
   }
 
@@ -1217,455 +1220,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       );
     }
     return const ManagerDashboardScreen();
-  }
-
-  Widget _buildSettingsTab(ThemeMode themeMode) {
-    return ListView(
-      padding: EdgeInsets.all(_screenPadding),
-      children: [
-        // ==================== TEST MODE BANNER ====================
-        if (_testMode)
-          Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.red.shade700,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.warning, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'TEST MODE ACTIVE — Real geofence disabled for testing',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        // ==================== TESTING & DEVELOPMENT ====================
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-          child: Text(
-            'Testing & Development',
-            style: TextStyle(
-              fontSize: _isDesktop ? 20 : 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: SwitchListTile(
-            title: const Text('Enable Test Mode'),
-            subtitle: const Text('Force On/Off Site for testing (auto-disables after 2 hours)'),
-            value: _testMode,
-            onChanged: (value) => value ? _enableTestMode() : _disableTestMode(),
-            activeThumbColor: Colors.orange,
-          ),
-        ),
-
-        if (_testMode) ...[
-          const SizedBox(height: 8),
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text(
-                    'Force Location Status',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _forceOnSite,
-                          icon: const Icon(Icons.location_on),
-                          label: const Text('Force On Site'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _forceOffSite,
-                          icon: const Icon(Icons.location_off),
-                          label: const Text('Force Off Site'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-
-        const SizedBox(height: 24),
-
-        // ==================== ACCOUNT ====================
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-          child: Text(
-            'Account',
-            style: TextStyle(
-              fontSize: _isDesktop ? 20 : 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: Padding(
-            padding: EdgeInsets.all(_cardPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Current User: ${currentEmployee?.name ?? 'Unknown'}',
-                  style: TextStyle(
-                    fontSize: _isDesktop ? 14 : 16,
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Clock No: ${currentEmployee?.clockNo ?? 'Unknown'}',
-                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Department: ${currentEmployee?.department ?? 'Unknown'}',
-                  style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 4,
-          child: Padding(
-            padding: EdgeInsets.all(_cardPadding),
-            child: Row(
-              children: [
-                Icon(
-                  isOnSite ? Icons.check_circle : Icons.cancel,
-                  color: isOnSite ? Colors.green : Colors.red,
-                  size: _isDesktop ? 20 : 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                    style: TextStyle(
-                      fontSize: _isDesktop ? 14 : 16,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 4,
-          child: SwitchListTile(
-            title: const Text('Override On-Site Status'),
-            subtitle: const Text('Force show as on-site for UI filtering'),
-            value: _overrideOnSite,
-            onChanged: (value) => _saveOverrideOnSite(value),
-            activeThumbColor: const Color(0xFFFF8C42),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Log Out'),
-            onTap: _logout,
-          ),
-        ),
-
-        // ==================== NOTIFICATIONS ====================
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-          child: Text(
-            'Notifications',
-            style: TextStyle(
-              fontSize: _isDesktop ? 20 : 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: Icon(Icons.notifications_active, color: Colors.orange),
-            title: const Text('Enable DND Bypass'),
-            subtitle: const Text('Grant notification policy access for loud alarms'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              if (Platform.isAndroid) {
-                final intent = android_intent.AndroidIntent(
-                  action: 'android.settings.APP_NOTIFICATION_SETTINGS',
-                  data: 'package:ctp_job_cards',
-                );
-                intent.launch();
-              }
-            },
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.notification_important, color: Colors.red, size: 28),
-            title: const Text('Test Persistent Banner (P5)'),
-            subtitle: const Text('Test red persistent banner with 3 buttons'),
-            trailing: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                try {
-                  await _notificationService.showOnSiteNotification(
-                    title: "Your notification title here",
-                    body: "Your notification body here",
-                  );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Test banner triggered! Check notification panel'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('TEST'),
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.battery_charging_full, color: Colors.orange, size: 28),
-            title: const Text('Exclude from Battery Optimization'),
-            subtitle: const Text('Required for persistent notifications on Samsung'),
-            trailing: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              onPressed: () async {
-                final intent = android_intent.AndroidIntent(
-                  action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
-                );
-                await intent.launch();
-              },
-              child: const Text('OPEN'),
-            ),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.security, color: Colors.orange),
-          title: const Text("Notification Permissions"),
-          subtitle: const Text("Required for urgent job alerts to take over the screen"),
-          trailing: ElevatedButton(
-            onPressed: () async {
-              await NotificationService().requestAllCriticalPermissions();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Permissions requested. Please grant 'Display over other apps' if prompted.")),
-                );
-              }
-            },
-            child: const Text("Grant Now"),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.bug_report, color: Colors.blue),
-          title: const Text("Notification Diagnostics"),
-          subtitle: const Text("Test fullscreen notifications and check permissions"),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
-        ),
-
-        // ==================== PERMISSIONS ====================
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-          child: Text(
-            'Permissions',
-            style: TextStyle(
-              fontSize: _isDesktop ? 20 : 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.security, color: Colors.blue),
-            title: const Text('Request All Permissions'),
-            subtitle: const Text('Location, Notifications, DND Bypass, Display Over Apps, Battery, Camera'),
-            trailing: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF8C42),
-                foregroundColor: Colors.black,
-              ),
-              onPressed: _requestAllPermissions,
-              child: const Text('GRANT'),
-            ),
-          ),
-        ),
-        Card(
-          elevation: 4,
-          child: ListTile(
-            leading: const Icon(Icons.settings, color: Colors.grey),
-            title: const Text('Open App Settings'),
-            subtitle: const Text('Manually manage all permissions'),
-            onTap: () => openAppSettings(),
-          ),
-        ),
-
-        // ==================== ADMIN ====================
-        if (currentEmployee?.name == 'G Peens') ...[
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-            child: Text(
-              'Admin',
-              style: TextStyle(
-                fontSize: _isDesktop ? 20 : 22,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          Card(
-            elevation: 4,
-            child: ListTile(
-              leading: const Icon(Icons.settings, color: Color(0xFF14B8A6)),
-              title: const Text('Manage Collections'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-            ),
-          ),
-        ],
-
-        // ==================== DEVELOPER ====================
-        if (!kIsWeb) ...[
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: _isDesktop ? 16 : 12),
-            child: Text(
-              'Developer',
-              style: TextStyle(
-                fontSize: _isDesktop ? 20 : 22,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          Card(
-            elevation: 4,
-            child: ListTile(
-              leading: const Icon(Icons.refresh, color: Colors.blueGrey),
-              title: const Text('Refresh FCM Token'),
-              subtitle: const Text('Update your notification token'),
-              onTap: () async {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Refreshing FCM token...'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-                try {
-                  await _notificationService.refreshToken();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ FCM Token refreshed successfully!'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Error: $e'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-          ),
-          Card(
-            elevation: 4,
-            child: ListTile(
-              leading: const Icon(Icons.system_update, color: Colors.orange),
-              title: const Text('Force Update Check'),
-              subtitle: const Text('Immediately check for new app version'),
-              onTap: () async {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Checking for updates...'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-                try {
-                  await UpdateService().forceCheckForUpdate(context);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error checking for updates: $e'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-          ),
-        ],
-      ],
-    );
   }
 
   Widget _buildCopperTab() {
@@ -1708,63 +1262,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log Out')),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          LocationService().stopNativeMonitoring();
-        } else if (kIsWeb) {
-          debugPrint('📍 Geofencing stop skipped on web platform');
-        }
-        await _firestoreService.clearLoggedInEmployee();
-        currentEmployee = null;
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error logging out: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _handleJobDeepLink(String jobId) async {
-    try {
-      final job = await _firestoreService.getJobCard(jobId);
-      if (job != null && mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)));
-      }
-    } catch (e) {
-      debugPrint('Error handling job deep link: $e');
-    }
-  }
-
   void _onItemTapped(int index) {
     final List<Widget> children = [
       _buildHomeTab(),
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(ref.watch(themeNotifierProvider)),
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
@@ -1792,7 +1295,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Work'),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-      const BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
       if (_isCopperAuthorized)
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
     ];
@@ -1802,7 +1304,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
-      _buildSettingsTab(themeMode),
       if (_isCopperAuthorized)
         _buildCopperTab(),
     ];
@@ -1836,6 +1337,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               ),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.black),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
+          ),
         ],
       ),
       body: Column(
@@ -1868,6 +1375,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ),
     );
   }
+
+  Future<void> _handleJobDeepLink(String jobId) async {
+    try {
+      final job = await _firestoreService.getJobCard(jobId);
+      if (job != null && mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)));
+      }
+    } catch (e) {
+      debugPrint('Error handling job deep link: $e');
+    }
+  }
+
   Future<void> _requestAllPermissions() async {
     await Permission.location.request();
     await Permission.locationAlways.request();
