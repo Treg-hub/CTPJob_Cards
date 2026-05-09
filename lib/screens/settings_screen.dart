@@ -43,7 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    await _localNotifications.initialize(initializationSettings);
+    await _localNotifications.initialize(settings: initializationSettings);
   }
 
   Future<void> _loadOnSiteStatus() async {
@@ -105,40 +105,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testGeneralNotification() async {
-    try {
-      await _localNotifications.show(
-        9999,
-        'General Notification Test',
-        'This is a standard job alert test from Settings.',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'normal_channel',
-            'Normal Job Notifications',
-            channelDescription: 'Standard notifications for job card assignments',
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
-          ),
-          iOS: DarwinNotificationDetails(),
+  try {
+    await _localNotifications.show(
+      id: 9999,
+      title: 'General Notification Test',
+      body: 'This is a standard job alert test from Settings.',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'normal_channel',
+          'Normal Job Notifications',
+          channelDescription: 'Standard notifications for job card assignments',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ General notification triggered! Check your notification shade.'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 3),
         ),
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ General notification triggered! Check your notification shade.'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+      );
     }
   }
+}
 
   Widget _buildPermissionTile(String title, bool isGranted, String permKey) {
     return Card(

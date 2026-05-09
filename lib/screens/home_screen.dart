@@ -404,7 +404,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
-              mainAxisSize: MainAxisSize.Min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   decoration: const InputDecoration(labelText: 'Search employee...'),
@@ -777,8 +777,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               if (job.notes.isNotEmpty) Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  job.notes.split('
-').last.trim(),
+                  job.notes.split('\n').last.trim(),
                   style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1202,13 +1201,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   String _getLastCommentPreview(String comments) {
-    final parts = comments.split('
-
-').where((c) => c.trim().isNotEmpty).toList();
+    final parts = comments.split('\n').where((c) => c.trim().isNotEmpty).toList();
     if (parts.isEmpty) return '';
     final lastComment = parts.last;
-    final lines = lastComment.split('
-');
+    final lines = lastComment.split('');
     return lines.length > 1 ? lines[1].trim() : lastComment.trim();
   }
 
