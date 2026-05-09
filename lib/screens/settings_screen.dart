@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../main.dart' show currentEmployee;
 import '../services/firestore_service.dart';
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   bool isOnSite = true;
 
@@ -33,6 +35,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadOnSiteStatus();
+    _initializeLocalNotifications();
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await _localNotifications.initialize(initializationSettings);
   }
 
   Future<void> _loadOnSiteStatus() async {
@@ -95,21 +106,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _testGeneralNotification() async {
     try {
-      final token = await _notificationService.getToken();
-      if (token != null) {
-        await FirebaseMessaging.instance.sendMessage(
-          to: token,
-          data: {
-            'notificationType': 'general_test',
-            'title': 'General Notification Test',
-            'body': 'This is a standard job assignment / alert test from Settings.',
-          },
-        );
-      }
+      await _localNotifications.show(
+        9999,
+        'General Notification Test',
+        'This is a standard job alert test from Settings.',
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'normal_channel',
+            'Normal Job Notifications',
+            channelDescription: 'Standard notifications for job card assignments',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ General notification sent! Check your notification shade.'),
+            content: Text('✅ General notification triggered! Check your notification shade.'),
             backgroundColor: Colors.blue,
             duration: Duration(seconds: 3),
           ),
@@ -220,7 +235,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ==================== USER DETAILS ====================
           Card(
             elevation: 4,
             child: Padding(
@@ -249,10 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // ==================== UPDATE + FCM BUTTONS ====================
           Row(
             children: [
               Expanded(
@@ -313,10 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
-          // ==================== PERMISSIONS ====================
           const Text('App Permissions Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           FutureBuilder<Map<String, bool>>(
@@ -337,10 +345,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
-
           const SizedBox(height: 24),
-
-          // ==================== NOTIFICATION TESTS ====================
           const Text('Notification Tests', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Card(
@@ -381,10 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
-          // ==================== ADMIN (CLOCK 22 ONLY) ====================
           if (isAdmin) ...[
             const Text('Admin (Clock 22)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -406,10 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-
           const SizedBox(height: 32),
-
-          // ==================== LOG OUT (ONLY IN SETTINGS) ====================
           Card(
             child: ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),

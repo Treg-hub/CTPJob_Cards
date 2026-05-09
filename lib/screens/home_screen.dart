@@ -53,7 +53,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int _openJobCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
   StreamSubscription<Employee>? _employeeSubscription;
-  // ==================== TEST MODE ====================
   bool _testMode = false;
   Timer? _testModeTimer;
   DateTime? _testModeStartedAt;
@@ -405,7 +404,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.Min,
               children: [
                 TextField(
                   decoration: const InputDecoration(labelText: 'Search employee...'),
