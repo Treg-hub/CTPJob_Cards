@@ -293,8 +293,8 @@ class FirestoreService {
   Future<List<String>> getDepartmentsForJobCards(String status) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards
- .where('status', isEqualTo: status)
+          .collection('job_cards')
+          .where('status', isEqualTo: status)
           .get();
 
       final departments = <String>{};

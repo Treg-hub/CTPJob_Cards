@@ -1,8 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -58,14 +56,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _testFullScreenAlert() async {
     try {
-      await _notificationService.showOnSiteNotification(
-        title: "🚨 FULL SCREEN ALERT TEST",
-        body: "Priority 5 full-screen takeover test — this should bypass DND and take over the screen.",
-      );
+      await _notificationService.testFullLoudNotification();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Full-screen alert triggered! (Check lock screen / DND bypass)'),
+            content: Text('✅ FULL SCREEN (Priority 4-5) triggered! Should bypass DND + take over screen'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
           ),
@@ -82,14 +77,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _testPersistentNotification() async {
     try {
-      await _notificationService.showOnSiteNotification(
-        title: "PERSISTENT NOTIFICATION TEST",
-        body: "This is a persistent banner test (P4/P5 style with action buttons).",
-      );
+      await _notificationService.testMediumHighNotification();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Persistent banner triggered! Pull down notification shade.'),
+            content: Text('✅ Persistent / Medium-High triggered! (custom sound + vibration)'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -105,40 +97,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testGeneralNotification() async {
-  try {
-    await _localNotifications.show(
-      id: 9999,
-      title: 'General Notification Test',
-      body: 'This is a standard job alert test from Settings.',
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'normal_channel',
-          'Normal Job Notifications',
-          channelDescription: 'Standard notifications for job card assignments',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ General notification triggered! Check your notification shade.'),
-          backgroundColor: Colors.blue,
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-      );
+    try {
+      await _notificationService.testNormalNotification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ General (Normal) notification triggered!'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
-}
 
   Widget _buildPermissionTile(String title, bool isGranted, String permKey) {
     return Card(

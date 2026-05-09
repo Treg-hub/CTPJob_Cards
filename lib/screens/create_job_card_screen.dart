@@ -58,7 +58,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     super.initState();
 
     // Default to logged-in user's department + auto-load areas
-    if (currentEmployee?.department != null && currentEmployee!.department!.isNotEmpty) {
+    if (currentEmployee?.department != null && currentEmployee!.department.isNotEmpty) {
       selectedDepartment = currentEmployee!.department;
     }
   }

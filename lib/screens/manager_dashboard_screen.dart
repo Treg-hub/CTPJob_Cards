@@ -46,7 +46,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       setState(() {
         allDepartments = sortedList;
         if (currentEmployee?.department != null && sortedList.contains(currentEmployee!.department)) {
-          selectedDepartments.add(currentEmployee!.department!);
+          selectedDepartments.add(currentEmployee!.department);
           showAllDepartments = false;
         }
       });
@@ -60,7 +60,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
     if (!showAllDepartments && selectedDepartments.isNotEmpty) {
       filtered = filtered.where((j) => 
-        j.department != null && selectedDepartments.contains(j.department)
+        selectedDepartments.contains(j.department)
       ).toList();
     }
 
@@ -242,14 +242,14 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   // ==================== DATE RANGE ====================
   Widget _buildDateRangeFilter() {
-    return Row(
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         const Text('Date Range: ', style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(width: 8),
         ChoiceChip(label: const Text('7 Days'), selected: dateRange == '7', onSelected: (_) => setState(() => dateRange = '7')),
-        const SizedBox(width: 8),
         ChoiceChip(label: const Text('30 Days'), selected: dateRange == '30', onSelected: (_) => setState(() => dateRange = '30')),
-        const SizedBox(width: 8),
         ChoiceChip(label: const Text('All Time'), selected: dateRange == 'all', onSelected: (_) => setState(() => dateRange = 'all')),
       ],
     );
@@ -272,9 +272,31 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
 
     final sortedDays = {...openByDay.keys, ...closedByDay.keys}.toList()..sort();
-    
-    List<FlSpot> openSpots = [];
-    List<FlSpot> closedSpots = [];
+
+    if (sortedDays.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Open vs Closed Trend', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 16),
+              Text('No data available for the selected filters.', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final maxValue = [
+      ...openByDay.values,
+      ...closedByDay.values,
+      1,
+    ].reduce((a, b) => a > b ? a : b);
+
+    final openSpots = <FlSpot>[];
+    final closedSpots = <FlSpot>[];
 
     for (int i = 0; i < sortedDays.length; i++) {
       final day = sortedDays[i];
@@ -288,13 +310,16 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Open vs Closed Trend (${dateRange == "7" ? "Last 7 Days" : dateRange == "30" ? "Last 30 Days" : "All Time"})', 
-                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Open vs Closed Trend (${dateRange == "7" ? "Last 7 Days" : dateRange == "30" ? "Last 30 Days" : "All Time"})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             SizedBox(
               height: 200,
               child: LineChart(
                 LineChartData(
+                  minX: 0,
+                  maxX: (sortedDays.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: (maxValue + 1).toDouble(),
                   lineBarsData: [
                     LineChartBarData(spots: openSpots, isCurved: true, color: Colors.orange, barWidth: 3),
                     LineChartBarData(spots: closedSpots, isCurved: true, color: Colors.green, barWidth: 3),
@@ -303,15 +328,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() < sortedDays.length) {
-                            return Text(sortedDays[value.toInt()].substring(5), style: const TextStyle(fontSize: 10));
-                          }
-                          return const Text('');
+                          final index = value.toInt().clamp(0, sortedDays.length - 1);
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(sortedDays[index].substring(5), style: const TextStyle(fontSize: 10)),
+                          );
                         },
                       ),
                     ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: true, interval: 1),
+                    ),
                   ),
+                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                  borderData: FlBorderData(show: true),
                 ),
               ),
             ),
@@ -320,13 +352,27 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       ),
     );
   }
-
-  // ==================== SMART MERGED CHART ====================
   Widget _buildSmartDepartmentAreaChart(List<JobCard> openJobs) {
+    if (openJobs.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Department Analytics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 16),
+              Text('No open jobs available for the selected filters.', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (showAllDepartments || selectedDepartments.length != 1) {
       final Map<String, int> deptCount = {};
       for (final job in openJobs) {
-        final dept = job.department ?? 'Unknown';
+        final dept = job.department;
         deptCount[dept] = (deptCount[dept] ?? 0) + 1;
       }
 
@@ -342,13 +388,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 height: 220,
                 child: PieChart(
                   PieChartData(
-                    sections: deptCount.entries.map((e) {
-                      final index = deptCount.keys.toList().indexOf(e.key);
+                    sections: deptCount.entries.toList().asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final deptEntry = entry.value;
                       return PieChartSectionData(
-                        value: e.value.toDouble(),
-                        title: '${e.key}\n${e.value}',
+                        value: deptEntry.value.toDouble(),
+                        title: '${deptEntry.key}\n${deptEntry.value}',
                         color: Colors.primaries[index % Colors.primaries.length],
                         radius: 90,
+                        showTitle: true,
                       );
                     }).toList(),
                   ),
@@ -362,9 +410,25 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       final selectedDept = selectedDepartments.first;
       final deptJobs = openJobs.where((j) => j.department == selectedDept).toList();
 
+      if (deptJobs.isEmpty) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Open Jobs by Area in $selectedDept', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                const Text('No open jobs found for this department.', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        );
+      }
+
       final Map<String, int> areaCount = {};
       for (final job in deptJobs) {
-        final area = job.area ?? 'Unknown';
+        final area = job.area;
         areaCount[area] = (areaCount[area] ?? 0) + 1;
       }
 
@@ -380,13 +444,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 height: 220,
                 child: PieChart(
                   PieChartData(
-                    sections: areaCount.entries.map((e) {
-                      final index = areaCount.keys.toList().indexOf(e.key);
+                    sections: areaCount.entries.toList().asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final areaEntry = entry.value;
                       return PieChartSectionData(
-                        value: e.value.toDouble(),
-                        title: '${e.key}\n${e.value}',
+                        value: areaEntry.value.toDouble(),
+                        title: '${areaEntry.key}\n${areaEntry.value}',
                         color: Colors.primaries[index % Colors.primaries.length],
                         radius: 90,
+                        showTitle: true,
                       );
                     }).toList(),
                   ),
@@ -398,12 +464,26 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       );
     }
   }
-
-  // ==================== PRIORITY BREAKDOWN ====================
   Widget _buildPriorityBreakdown(List<JobCard> openJobs) {
     final Map<int, int> priorityCount = {};
     for (final job in openJobs) {
       priorityCount[job.priority] = (priorityCount[job.priority] ?? 0) + 1;
+    }
+
+    if (priorityCount.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Priority Breakdown', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 16),
+              Text('No open jobs currently to display.', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
     }
 
     return Card(
@@ -418,12 +498,20 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               height: 200,
               child: BarChart(
                 BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: priorityCount.values.reduce((a, b) => a > b ? a : b).toDouble() + 1,
                   barGroups: priorityCount.entries.map((entry) {
                     return BarChartGroupData(
                       x: entry.key,
                       barRods: [BarChartRodData(toY: entry.value.toDouble(), color: _getPriorityColor(entry.key))],
                     );
                   }).toList(),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (value, meta) {
+                      return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
+                    })),
+                    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 1)),
+                  ),
                 ),
               ),
             ),

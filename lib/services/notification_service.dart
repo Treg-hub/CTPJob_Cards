@@ -6,7 +6,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
-import 'package:flutter/material.dart' show Color;
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -470,5 +469,33 @@ class NotificationService {
     required String body,
   }) async {
     await _showLocalNotification(title: title, body: body, level: 'normal');
+  }
+    // ==================== PUBLIC TEST METHODS ====================
+
+  /// Normal priority notification (standard job assignment)
+  Future<void> testNormalNotification() async {
+    await _showLocalNotification(
+      title: "TEST - Normal Job Notification",
+      body: "This is how normal priority job alerts appear",
+      level: 'normal',
+    );
+  }
+
+  /// Medium-High priority notification (priority 2-3 jobs)
+  Future<void> testMediumHighNotification() async {
+    await _showLocalNotification(
+      title: "TEST - Medium/High Priority",
+      body: "This is how priority 2 & 3 job alerts appear (persistent style)",
+      level: 'medium-high',
+    );
+  }
+
+  /// Full-loud / Full-screen notification (priority 4-5)
+  Future<void> testFullLoudNotification() async {
+    await _showLocalNotification(
+      title: "TEST - URGENT FULL SCREEN",
+      body: "This is how priority 4 & 5 full-screen alerts appear (bypasses DND)",
+      level: 'full-loud',
+    );
   }
 }

@@ -62,7 +62,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
         if (currentEmployee?.department != null && 
             sortedList.contains(currentEmployee!.department)) {
-          selectedDepartments.add(currentEmployee!.department!);
+          selectedDepartments.add(currentEmployee!.department);
           showAllDepartments = false;
         }
       });
@@ -81,7 +81,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       return allJobs;
     }
     return allJobs.where((j) => 
-      j.department != null && selectedDepartments.contains(j.department)
+      selectedDepartments.contains(j.department)
     ).toList();
   }
 

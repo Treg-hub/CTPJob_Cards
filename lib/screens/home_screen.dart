@@ -105,7 +105,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _employeeSubscription = _firestoreService
           .getEmployeeStream(currentEmployee!.clockNo)
           .listen((emp) {
-        if (emp != null && mounted) {
+        if (mounted) {
           setState(() => isOnSite = emp.isOnSite);
         }
       });
@@ -1365,8 +1365,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       floatingActionButton: FloatingActionButton(
         onPressed: _showFeedbackDialog,
         backgroundColor: const Color(0xFFFF8C42),
-        child: const Icon(Icons.feedback, color: Colors.black),
         tooltip: 'Give Feedback',
+        child: const Icon(Icons.feedback, color: Colors.black),
       ),
     );
   }
