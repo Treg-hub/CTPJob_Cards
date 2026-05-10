@@ -13,6 +13,7 @@ import '../services/location_service.dart';
 import 'admin_screen.dart';
 import 'notification_diagnostics_screen.dart';
 import 'login_screen.dart';
+import '../widgets/reset_permissions_button.dart';   // ← NEW IMPORT
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -213,6 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Current User Card
           Card(
             elevation: 4,
             child: Padding(
@@ -241,7 +243,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+
           const SizedBox(height: 16),
+
+          // ← RESET BUTTON ADDED HERE (under User Details)
+          const ResetPermissionsButton(),
+          const SizedBox(height: 16),
+
+          // Update & FCM buttons
           Row(
             children: [
               Expanded(
@@ -302,6 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+
           const SizedBox(height: 24),
           const Text('App Permissions Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
@@ -323,6 +333,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
+
           const SizedBox(height: 24),
           const Text('Notification Tests', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
@@ -364,6 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+
           const SizedBox(height: 24),
           if (isAdmin) ...[
             const Text('Admin (Clock 22)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -386,6 +398,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
+
           const SizedBox(height: 32),
           Card(
             child: ListTile(

@@ -13,6 +13,7 @@ class PermissionsOnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboardingScreen> {
+  bool _isLoading = true;
   bool _isProcessing = false;
 
   @override
@@ -22,19 +23,19 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
   }
 
   Future<void> _checkAndAutoAdvance() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-
     final prefs = await SharedPreferences.getInstance();
     final completed = prefs.getBool('permissionsCompleted') ?? false;
 
-    if (completed) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
+    if (completed && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -54,6 +55,25 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFFF8C42)),
+              SizedBox(height: 24),
+              Text(
+                'Checking permissions...',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final permissionsAsync = ref.watch(permissionsProvider);
     final requiredItems = ref.watch(requiredPermissionsProvider);
 
