@@ -8,7 +8,6 @@ import '../models/employee.dart';
 import '../models/job_card.dart';
 import '../main.dart' show currentEmployee;
 import '../services/location_service.dart';
-import 'home_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registration_screen.dart';

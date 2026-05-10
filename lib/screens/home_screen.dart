@@ -16,7 +16,6 @@ import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/location_service.dart';
-import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import '../widgets/skeleton_loader.dart';
@@ -24,12 +23,9 @@ import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'my_assigned_jobs_screen.dart';
-import 'admin_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
-import 'login_screen.dart';
-import 'notification_diagnostics_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
