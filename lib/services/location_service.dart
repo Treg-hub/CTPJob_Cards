@@ -42,6 +42,8 @@ class LocationService {
         logLevel: bg.Config.LOG_LEVEL_ERROR,
         geofenceProximityRadius: 800,
         geofenceInitialTriggerEntry: true,
+        notifyOnEntry: true,
+        notifyOnExit: true,
       ));
 
       await bg.BackgroundGeolocation.addGeofence(bg.Geofence(
@@ -74,7 +76,7 @@ class LocationService {
 
   // ==================== EVENT HANDLERS ====================
   void _handleGeofenceEvent(bg.GeofenceEvent event) async {
-    final isEntering = event.action == 'ENTER';           // ← FIXED
+    final isEntering = event.action == 'ENTER';
     final eventType = isEntering ? 'enter' : 'exit';
 
     await _logGeoFenceEvent(
