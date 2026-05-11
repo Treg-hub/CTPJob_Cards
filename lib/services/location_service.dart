@@ -25,7 +25,7 @@ class LocationService {
 
   Timer? _onSiteRecheckTimer;
 
-  // ==================== START / STOP (preserved from current structure) ====================
+  // ==================== START / STOP ====================
   Future<void> startNativeMonitoring(String clockNo) async {
     if (kIsWeb) return;
     _clockNo = clockNo;
@@ -52,7 +52,7 @@ class LocationService {
     _stopOnSiteRecheckTimer();
   }
 
-  // ==================== EVENT HANDLING (adapted) ====================
+  // ==================== EVENT HANDLING ====================
   Future<void> _handleMethodCall(MethodCall call) async {
     if (call.method == 'onGeofenceEvent') {
       final isEntering = call.arguments['entering'] as bool;
@@ -73,7 +73,7 @@ class LocationService {
     }
   }
 
-  // ==================== FALLBACK + BACKGROUND + LOGGING ====================
+  // ==================== FALLBACK + BACKGROUND ====================
   Future<void> _checkFallback() async {
     try {
       final pos = await Geolocator.getLastKnownPosition();
@@ -97,7 +97,10 @@ class LocationService {
       final clockNo = prefs.getString('loggedInClockNo');
       if (clockNo == null) return;
 
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 12),
+      );
       final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
 
       if (!onSite) {
@@ -113,7 +116,48 @@ class LocationService {
     } catch (e) {}
   }
 
-  // ==================== LOGGING HELPER (NEW) ====================
+  // ==================== APP OPEN CHECK (NEW - LOW COST) ====================
+  /// Called when app opens. Always checks current location vs geofence.
+  /// This catches missed entries reliably with minimal battery impact.
+  Future<void> checkLocationOnAppOpen() async {
+    if (kIsWeb) return;
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        debugPrint('📍 Location permission denied - skipping app open check');
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 12),
+      );
+
+      final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
+
+      final prefs = await SharedPreferences.getInstance();
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo == null) return;
+
+      final emp = await _firestoreService.getEmployee(clockNo);
+      if (emp != null) {
+        await _logGeoFenceEvent(
+          eventType: onSite ? 'enter' : 'exit',
+          source: 'app_open_check',
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          notes: 'Checked on app open (cost: low)',
+        );
+        await _updateFirestore(onSite);
+        debugPrint('📍 App open location check: ${onSite ? "ONSITE" : "OFFSITE"} (accuracy: ${pos.accuracy.toStringAsFixed(1)}m)');
+      }
+    } catch (e) {
+      debugPrint('checkLocationOnAppOpen failed: $e');
+    }
+  }
+
+  // ==================== LOGGING & HELPERS ====================
   Future<void> _logGeoFenceEvent({
     required String eventType,
     required String source,
@@ -139,7 +183,6 @@ class LocationService {
     );
   }
 
-  // ==================== MANUAL TEST METHOD ====================
   Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
     final prefs = await SharedPreferences.getInstance();
     final clockNo = prefs.getString('loggedInClockNo') ?? 'UNKNOWN';
@@ -153,7 +196,6 @@ class LocationService {
     await _sendNotification(isEntering);
   }
 
-  // ... (rest of methods like _updateFirestore, _sendNotification, _requestPermissions, timers, checkCurrentLocation, etc. preserved from current structure)
   Future<void> _updateFirestore(bool onSite) async {
     if (_clockNo == null) return;
     final emp = await _firestoreService.getEmployee(_clockNo!);
@@ -193,38 +235,8 @@ class LocationService {
     await ph.Permission.locationAlways.request();
   }
 
+  // Legacy method kept for compatibility
   Future<void> checkCurrentLocation() async {
-    if (kIsWeb) return;
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
-      );
-
-      final onSite = Geolocator.distanceBetween(COMPANY_LAT, COMPANY_LON, pos.latitude, pos.longitude) <= RADIUS_METERS;
-
-      final prefs = await SharedPreferences.getInstance();
-      final clockNo = prefs.getString('loggedInClockNo');
-      if (clockNo == null) return;
-
-      final emp = await _firestoreService.getEmployee(clockNo);
-      if (emp != null && emp.isOnSite != onSite) {
-        await _logGeoFenceEvent(
-          eventType: onSite ? 'enter' : 'exit',
-          source: 'resume_check',
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          accuracy: pos.accuracy,
-        );
-        await _updateFirestore(onSite);
-      }
-    } catch (e) {
-      debugPrint('checkCurrentLocation failed: $e');
-    }
+    await checkLocationOnAppOpen();
   }
 }

@@ -403,10 +403,18 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    job.assignedNames?.join(', ') ?? 'Unassigned',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+
+                  // FIXED: Prevents horizontal overflow when many people are assigned
+                  Expanded(
+                    child: Text(
+                      job.assignedNames?.join(', ') ?? 'Unassigned',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      textAlign: TextAlign.end,
+                    ),
                   ),
+
                   const SizedBox(width: 12),
                   Text(
                     job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',

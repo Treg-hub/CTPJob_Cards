@@ -148,7 +148,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         title: const Text('Key Performance Indicators', style: TextStyle(fontWeight: FontWeight.bold)),
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16), // ← Added bottom padding
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount = constraints.maxWidth < 600 ? 3 : 6;
@@ -156,7 +156,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   crossAxisCount: crossAxisCount,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.3,
+                  childAspectRatio: 1.25,                    // ← Changed from 1.3 to 1.25
                   mainAxisSpacing: 8,
                   crossAxisSpacing: 8,
                   children: [
