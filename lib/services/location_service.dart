@@ -30,7 +30,7 @@ class LocationService {
     try {
       await _startBackgroundService();
       _isInitialized = true;
-      debugPrint('✅ Location monitoring started (Background Service)');
+      debugPrint('✅ Location monitoring started (30 min interval when onsite)');
     } catch (e) {
       debugPrint('Location monitoring failed: $e');
     }
@@ -38,7 +38,7 @@ class LocationService {
 
   Future<void> stopNativeMonitoring() async {
     if (kIsWeb) return;
-    FlutterBackgroundService().invoke("stopService");   // ← FIXED: removed await
+    FlutterBackgroundService().invoke("stopService");
     _isInitialized = false;
     debugPrint('🛑 Location monitoring stopped');
   }
@@ -54,7 +54,7 @@ class LocationService {
         isForegroundMode: true,
         notificationChannelId: 'location_channel',
         initialNotificationTitle: 'CTP Job Cards',
-        initialNotificationContent: 'Monitoring your location...',
+        initialNotificationContent: 'Monitoring location (every 30 min when onsite)',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
@@ -68,8 +68,8 @@ class LocationService {
   }
 
   @pragma('vm:entry-point')
-  static Future<bool> _onBackgroundServiceStart(ServiceInstance service) async {   // ← FIXED return type
-    Timer.periodic(const Duration(minutes: 10), (timer) async {
+  static Future<bool> _onBackgroundServiceStart(ServiceInstance service) async {
+    Timer.periodic(const Duration(minutes: 30), (timer) async {
       try {
         final prefs = await SharedPreferences.getInstance();
         final clockNo = prefs.getString('loggedInClockNo');
@@ -91,72 +91,26 @@ class LocationService {
         final emp = await firestore.getEmployee(clockNo);
         if (emp != null && emp.isOnSite != onSite) {
           await firestore.updateEmployee(emp.copyWith(isOnSite: onSite));
-          debugPrint('📍 Background check: ${onSite ? "ONSITE" : "OFFSITE"}');
+
+          await firestore.logGeoFenceEvent(
+            clockNo: clockNo,
+            eventType: onSite ? 'enter' : 'exit',
+            source: 'background_check_30min',
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            accuracy: pos.accuracy,
+          );
+
+          debugPrint('📍 30-min check: Status changed to ${onSite ? "ONSITE" : "OFFSITE"}');
         }
       } catch (e) {
-        debugPrint('Background location check error: $e');
+        debugPrint('30-min background check error: $e');
       }
     });
     return true;
   }
 
-  // ==================== HELPERS ====================
-  Future<void> _logGeoFenceEvent({
-    required String eventType,
-    required String source,
-    double? latitude,
-    double? longitude,
-    double? accuracy,
-    String? notes,
-  }) async {
-    if (_clockNo == null) {
-      final prefs = await SharedPreferences.getInstance();
-      _clockNo = prefs.getString('loggedInClockNo');
-    }
-    if (_clockNo == null) return;
-
-    await _firestoreService.logGeoFenceEvent(
-      clockNo: _clockNo!,
-      eventType: eventType,
-      source: source,
-      latitude: latitude,
-      longitude: longitude,
-      accuracy: accuracy,
-      notes: notes,
-    );
-  }
-
-  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clockNo = prefs.getString('loggedInClockNo') ?? 'UNKNOWN';
-
-    await _logGeoFenceEvent(
-      eventType: isEntering ? 'enter' : 'exit',
-      source: 'manual_test',
-      notes: notes ?? 'Manual test from Diagnostics screen',
-    );
-    await _updateFirestore(isEntering);
-    await _sendNotification(isEntering);
-  }
-
-  Future<void> _updateFirestore(bool onSite) async {
-    if (_clockNo == null) return;
-    final emp = await _firestoreService.getEmployee(_clockNo!);
-    if (emp != null) {
-      await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
-    }
-  }
-
-  Future<void> _sendNotification(bool onSite) async {
-    final title = onSite ? '✅ On-Site Detected' : '📍 Left Site Area';
-    final body = onSite ? 'You are within the company radius.' : 'You have left the site area.';
-    await _notificationService.showOnSiteNotification(title: title, body: body);
-  }
-
-  Future<void> _requestPermissions() async {
-    await ph.Permission.locationAlways.request();
-  }
-
+  // ==================== MANUAL CHECK ====================
   Future<void> checkCurrentLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -171,13 +125,32 @@ class LocationService {
         pos.longitude,
       ) <= 800;
 
-      await _logGeoFenceEvent(
-        eventType: onSite ? 'enter' : 'exit',
-        source: 'manual_check',
-      );
-      await _updateFirestore(onSite);
+      final prefs = await SharedPreferences.getInstance();
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo == null) return;
+
+      final emp = await _firestoreService.getEmployee(clockNo);
+      if (emp != null && emp.isOnSite != onSite) {
+        await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
+
+        await _firestoreService.logGeoFenceEvent(
+          clockNo: clockNo,
+          eventType: onSite ? 'enter' : 'exit',
+          source: 'manual_check',
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+        );
+
+        debugPrint('📍 Manual check: Status changed to ${onSite ? "ONSITE" : "OFFSITE"}');
+      }
     } catch (e) {
       debugPrint('Manual location check failed: $e');
     }
+  }
+
+  // ==================== PERMISSIONS ====================
+  Future<void> _requestPermissions() async {
+    await ph.Permission.locationAlways.request();
   }
 }
