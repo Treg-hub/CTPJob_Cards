@@ -1,49 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../providers/permissions_provider.dart';
+import '../services/location_service.dart';
+import '../services/notification_service.dart';
 import 'home_screen.dart';
 
-class PermissionsOnboardingScreen extends ConsumerStatefulWidget {
+class PermissionsOnboardingScreen extends StatefulWidget {
   const PermissionsOnboardingScreen({super.key});
 
   @override
-  ConsumerState<PermissionsOnboardingScreen> createState() => _PermissionsOnboardingScreenState();
+  State<PermissionsOnboardingScreen> createState() => _PermissionsOnboardingScreenState();
 }
 
-class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboardingScreen> {
-  bool _isLoading = true;
-  bool _isProcessing = false;
+class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScreen> {
+  int _currentPage = 0;
+  bool _isLoading = false;
+  final PageController _pageController = PageController();
 
-  @override
-  void initState() {
-    super.initState();
-    _checkAndAutoAdvance();
-  }
-
-  Future<void> _checkAndAutoAdvance() async {
-    final prefs = await SharedPreferences.getInstance();
-    final completed = prefs.getBool('permissionsCompleted') ?? false;
-
-    if (completed && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-      return;
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
+  final List<Widget> _pages = [
+    const _WelcomePage(),
+    const _HowItWorksPage(),
+    const _PermissionsPage(),
+  ];
 
   Future<void> _completeOnboarding() async {
-    setState(() => _isProcessing = true);
+    setState(() => _isLoading = true);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('permissionsCompleted', true);
+
+    await LocationService().checkCurrentLocation();
 
     if (mounted) {
       Navigator.pushReplacement(
@@ -55,164 +40,255 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF121212),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Color(0xFFFF8C42)),
-              SizedBox(height: 24),
-              Text(
-                'Checking permissions...',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final permissionsAsync = ref.watch(permissionsProvider);
-    final requiredItems = ref.watch(requiredPermissionsProvider);
-
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
-        elevation: 0,
-        title: const Text('Welcome to CTP Job Cards', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-      ),
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 16),
-            const Icon(Icons.security, size: 64, color: Color(0xFFFF8C42)),
-            const SizedBox(height: 16),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'Just a few quick permissions to unlock the full power of Job Cards',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, color: Colors.white70),
-              ),
+            LinearProgressIndicator(
+              value: (_currentPage + 1) / _pages.length,
+              backgroundColor: Colors.grey[200],
+              color: const Color(0xFFFF8C42),
             ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'We only ask for what we truly need. You can change these anytime in your device settings.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.white54),
-              ),
-            ),
-            const SizedBox(height: 24),
             Expanded(
-              child: permissionsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C42))),
-                error: (err, _) => Center(child: Text('Error loading permissions: $err', style: const TextStyle(color: Colors.red))),
-                data: (statusMap) {
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: requiredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = requiredItems[index];
-                      final currentStatus = statusMap[item.permission] ?? PermissionStatus.denied;
-                      final isGranted = currentStatus.isGranted;
-
-                      return Card(
-                        color: const Color(0xFF1E1E1E),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(item.icon, color: const Color(0xFFFF8C42), size: 28),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      item.title,
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                    ),
-                                  ),
-                                  if (isGranted)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Text('✓ Granted', style: TextStyle(color: Colors.green, fontSize: 12)),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(item.description, style: const TextStyle(color: Colors.white70, fontSize: 15)),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Why we need this: ${item.whyNeeded}',
-                                style: const TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: isGranted || _isProcessing
-                                      ? null
-                                      : () async {
-                                          await ref.read(permissionsProvider.notifier).requestPermission(item.permission);
-                                        },
-                                  icon: Icon(isGranted ? Icons.check : Icons.lock_open),
-                                  label: Text(isGranted ? 'Access Granted' : 'Grant Access'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isGranted ? Colors.green : const Color(0xFFFF8C42),
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) => setState(() => _currentPage = index),
+                children: _pages,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+              padding: const EdgeInsets.all(20),
+              child: Row(
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isProcessing ? null : _completeOnboarding,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8C42),
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  if (_currentPage > 0)
+                    TextButton(
+                      onPressed: () => _pageController.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
                       ),
-                      child: _isProcessing
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                          : const Text('Continue to Dashboard', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                      child: const Text("Back"),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _completeOnboarding,
-                    child: const Text('Skip for now (some features limited)', style: TextStyle(color: Colors.white54)),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            if (_currentPage < _pages.length - 1) {
+                              _pageController.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            } else {
+                              _completeOnboarding();
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF8C42),
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            _currentPage == _pages.length - 1 
+                                ? "Let's Get Started" 
+                                : "Next",
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// PAGE 1
+class _WelcomePage extends StatelessWidget {
+  const _WelcomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.work, size: 80, color: Color(0xFFFF8C42)),
+          const SizedBox(height: 30),
+          const Text("Welcome to\nCTP Job Cards", textAlign: TextAlign.center, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          const Text("We built this app to make your day easier and help you never miss an important job again.", textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
+// PAGE 2 - Visual Flow
+class _HowItWorksPage extends StatelessWidget {
+  const _HowItWorksPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text("How It Works", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 40),
+          _buildFlowStep("1", "You arrive at site", Icons.location_on, Colors.green),
+          const SizedBox(height: 12),
+          const Icon(Icons.arrow_downward, color: Colors.grey),
+          const SizedBox(height: 12),
+          _buildFlowStep("2", "We detect you're onsite (within 800m)", Icons.gps_fixed, Colors.blue),
+          const SizedBox(height: 12),
+          const Icon(Icons.arrow_downward, color: Colors.grey),
+          const SizedBox(height: 12),
+          _buildFlowStep("3", "You get instant loud alerts (even on silent)", Icons.notifications_active, Colors.orange),
+          const SizedBox(height: 12),
+          const Icon(Icons.arrow_downward, color: Colors.grey),
+          const SizedBox(height: 12),
+          _buildFlowStep("4", "When you leave, you're marked offsite", Icons.logout, Colors.red),
+          const SizedBox(height: 30),
+          const Text("This means you never miss urgent jobs again.", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlowStep(String number, String text, IconData icon, Color color) {
+    return Row(
+      children: [
+        CircleAvatar(radius: 20, backgroundColor: color, child: Text(number, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+        const SizedBox(width: 16),
+        Icon(icon, color: color, size: 26),
+        const SizedBox(width: 12),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 16))),
+      ],
+    );
+  }
+}
+
+// PAGE 3 - Permissions + All 3 Notification Tests + Warning
+class _PermissionsPage extends StatelessWidget {
+  const _PermissionsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("Let's Set This Up", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            const Text("We need these permissions so the app can work properly for you:", textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 24),
+
+            _buildPermissionItem("Notifications (Priority 5)", "Get loud, full-screen alerts even when your phone is on silent"),
+            _buildPermissionItem("Location (Always)", "Know when you're onsite so you get the right jobs"),
+            _buildPermissionItem("Display over other apps", "Urgent jobs can take over your screen"),
+            _buildPermissionItem("Camera", "Quickly upload photos of completed work"),
+
+            const SizedBox(height: 20),
+
+            // WARNING
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange),
+              ),
+              child: const Text(
+                "⚠️ If you don't grant these permissions, the app will NOT work to its full ability. You may miss urgent jobs.",
+                style: TextStyle(color: Colors.orange, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            const Text("Test the Different Notification Levels", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            // TEST BUTTONS - All 3 Levels
+            _buildTestButton(
+              context,
+              "Test Normal Notification",
+              Colors.blue,
+              () => NotificationService().testNormalNotification(),
+              "Standard job assignment alert",
+            ),
+            const SizedBox(height: 10),
+
+            _buildTestButton(
+              context,
+              "Test Persistent Banner",
+              Colors.orange,
+              () => NotificationService().testMediumHighNotification(),
+              "Priority 2-3 style (stays on screen)",
+            ),
+            const SizedBox(height: 10),
+
+            _buildTestButton(
+              context,
+              "Test P5 Full Screen Alert",
+              Colors.red,
+              () => NotificationService().testFullLoudNotification(),
+              "Highest priority - bypasses DND + full screen",
+            ),
+
+            const SizedBox(height: 16),
+            const Text("Try all three to see the difference", style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPermissionItem(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                Text(subtitle, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTestButton(BuildContext context, String label, Color color, VoidCallback onPressed, String description) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+        child: Column(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(description, style: const TextStyle(fontSize: 11)),
           ],
         ),
       ),
