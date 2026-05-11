@@ -39,7 +39,15 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    
+    // Explicitly add correct tslocationmanager version to override plugin's buggy v21 variant
+    implementation("com.transistorsoft:tslocationmanager:4.1.6")
+    
+    // Exclude the buggy tslocationmanager-v21 from flutter_background_geolocation
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22") {
+        exclude(group = "com.transistorsoft", module = "tslocationmanager-v21")
+    }
 
     // Firebase - Specific stable versions (no BOM)
     implementation("com.google.firebase:firebase-auth:22.3.1")
