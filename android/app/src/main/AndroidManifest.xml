@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:label="CTP Job Cards"
@@ -63,6 +64,12 @@
 
         <!-- ==================== SERVICES ==================== -->
         <service android:name=".AlertForegroundService" android:foregroundServiceType="specialUse" android:exported="false" />
+
+        <!-- NEW: flutter_background_geolocation service -->
+        <service
+            android:name="com.transistorsoft.flutterbackgroundgeolocation.BackgroundGeolocationService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
 
         <service android:name=".FirebaseMessagingService" android:exported="false">
             <intent-filter>
