@@ -101,7 +101,7 @@ void main() async {
           
           // NEW: Run low-cost location check on app start
           if (currentEmployee != null) {
-            LocationService().checkLocationOnAppOpen();
+            LocationService().checkCurrentLocation();
           }
         } catch (e) {
           currentEmployee = null;

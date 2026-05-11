@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
@@ -26,6 +28,8 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
+      await bg.BackgroundGeolocation.removeGeofences();
+
       await bg.BackgroundGeolocation.ready(bg.Config(
         desiredAccuracy: bg.Config.DESIRED_ACCURACY_LOW,
         distanceFilter: 200,
@@ -38,8 +42,6 @@ class LocationService {
         logLevel: bg.Config.LOG_LEVEL_ERROR,
         geofenceProximityRadius: 800,
         geofenceInitialTriggerEntry: true,
-        notifyOnEntry: true,
-        notifyOnExit: true,
       ));
 
       await bg.BackgroundGeolocation.addGeofence(bg.Geofence(
@@ -72,7 +74,7 @@ class LocationService {
 
   // ==================== EVENT HANDLERS ====================
   void _handleGeofenceEvent(bg.GeofenceEvent event) async {
-    final isEntering = event.action == bg.GeofenceEvent.ENTER;
+    final isEntering = event.action == 'ENTER';           // ← FIXED
     final eventType = isEntering ? 'enter' : 'exit';
 
     await _logGeoFenceEvent(
@@ -87,7 +89,7 @@ class LocationService {
     debugPrint('📍 Location update received');
   }
 
-  // ==================== LOGGING & HELPERS (Kept from your current code) ====================
+  // ==================== LOGGING & HELPERS ====================
   Future<void> _logGeoFenceEvent({
     required String eventType,
     required String source,
@@ -141,11 +143,28 @@ class LocationService {
   }
 
   Future<void> _requestPermissions() async {
-    // Permissions are mostly handled by the package + your existing code
+    await ph.Permission.locationAlways.request();
   }
 
-  // Keep this for backward compatibility
+  // Manual check
   Future<void> checkCurrentLocation() async {
-    // You can leave this empty or implement a manual check if needed
+    try {
+      final pos = await bg.BackgroundGeolocation.getCurrentPosition();
+
+      final onSite = Geolocator.distanceBetween(
+        -29.994938052011612,
+        30.939421740548614,
+        pos.coords.latitude,
+        pos.coords.longitude,
+      ) <= 800;
+
+      await _logGeoFenceEvent(
+        eventType: onSite ? 'enter' : 'exit',
+        source: 'manual_check',
+      );
+      await _updateFirestore(onSite);
+    } catch (e) {
+      debugPrint('Manual location check failed: $e');
+    }
   }
 }
