@@ -149,7 +149,36 @@ class LocationService {
     }
   }
 
-  // ==================== PERMISSIONS ====================
+  // ==================== TEST METHOD (Added Back) ====================
+  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final clockNo = prefs.getString('loggedInClockNo') ?? 'UNKNOWN';
+
+    await _firestoreService.logGeoFenceEvent(
+      clockNo: clockNo,
+      eventType: isEntering ? 'enter' : 'exit',
+      source: 'manual_test',
+      notes: notes ?? 'Manual test from Diagnostics screen',
+    );
+    await _updateFirestore(isEntering);
+    await _sendNotification(isEntering);
+  }
+
+  // ==================== HELPERS ====================
+  Future<void> _updateFirestore(bool onSite) async {
+    if (_clockNo == null) return;
+    final emp = await _firestoreService.getEmployee(_clockNo!);
+    if (emp != null) {
+      await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
+    }
+  }
+
+  Future<void> _sendNotification(bool onSite) async {
+    final title = onSite ? '✅ On-Site Detected' : '📍 Left Site Area';
+    final body = onSite ? 'You are within the company radius.' : 'You have left the site area.';
+    await _notificationService.showOnSiteNotification(title: title, body: body);
+  }
+
   Future<void> _requestPermissions() async {
     await ph.Permission.locationAlways.request();
   }
