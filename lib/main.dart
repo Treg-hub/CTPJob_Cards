@@ -18,6 +18,7 @@ import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/location_service.dart';
 
 Employee? currentEmployee;
 
@@ -89,19 +90,24 @@ void main() async {
 
   await SyncService().init();
 
-  // ==================== AUTO LOGIN ====================
-  final prefs = await SharedPreferences.getInstance();
-  final hasLogin = prefs.containsKey('loggedInClockNo');
-  if (hasLogin) {
-    final clockNo = prefs.getString('loggedInClockNo');
-    if (clockNo != null) {
-      try {
-        currentEmployee = await firestoreService.getEmployee(clockNo);
-      } catch (e) {
-        currentEmployee = null;
+    // ==================== AUTO LOGIN ====================
+    final prefs = await SharedPreferences.getInstance();
+    final hasLogin = prefs.containsKey('loggedInClockNo');
+    if (hasLogin) {
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo != null) {
+        try {
+          currentEmployee = await firestoreService.getEmployee(clockNo);
+          
+          // NEW: Run low-cost location check on app start
+          if (currentEmployee != null) {
+            LocationService().checkLocationOnAppOpen();
+          }
+        } catch (e) {
+          currentEmployee = null;
+        }
       }
     }
-  }
 
   runApp(
     ProviderScope(

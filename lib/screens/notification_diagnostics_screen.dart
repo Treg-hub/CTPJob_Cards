@@ -12,6 +12,7 @@ class NotificationDiagnosticsScreen extends StatefulWidget {
 class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsScreen> {
   Map<String, bool> _permissions = {};
   bool _isLoading = false;
+  final List<String> _locationLogs = [];
 
   @override
   void initState() {
@@ -54,70 +55,109 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
     );
   }
 
+  void _addLocationLog(String message) {
+    setState(() {
+      _locationLogs.insert(0, "${DateTime.now().toLocal().toString().substring(11, 19)} - $message");
+      if (_locationLogs.length > 10) _locationLogs.removeLast();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Notification Diagnostics")),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text("Permission Status", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            if (_isLoading)
-              const CircularProgressIndicator()
-            else
-              ..._permissions.entries.map((entry) => ListTile(
-                    title: Text(entry.key),
-                    trailing: Icon(
-                      entry.value ? Icons.check_circle : Icons.cancel,
-                      color: entry.value ? Colors.green : Colors.red,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const Text("Permission Status", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              if (_isLoading)
+                const CircularProgressIndicator()
+              else
+                ..._permissions.entries.map((entry) => ListTile(
+                      title: Text(entry.key),
+                      trailing: Icon(
+                        entry.value ? Icons.check_circle : Icons.cancel,
+                        color: entry.value ? Colors.green : Colors.red,
+                      ),
+                    )),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: _testFullscreen,
+                icon: const Icon(Icons.notifications_active),
+                label: const Text("Test Fullscreen Notification (Priority 5)"),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _checkPermissions,
+                child: const Text("Refresh Permission Status"),
+              ),
+              const SizedBox(height: 40),
+              const Divider(),
+              const Text("GeoFence Logging Test", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _testGeoFenceLog(true),
+                      icon: const Icon(Icons.login),
+                      label: const Text("Test ENTER (Onsite)"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                     ),
-                  )),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _testFullscreen,
-              icon: const Icon(Icons.notifications_active),
-              label: const Text("Test Fullscreen Notification (Priority 5)"),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _checkPermissions,
-              child: const Text("Refresh Permission Status"),
-            ),
-            const SizedBox(height: 40),
-            const Divider(),
-            const Text("GeoFence Logging Test", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _testGeoFenceLog(true),
-                    icon: const Icon(Icons.login),
-                    label: const Text("Test ENTER (Onsite)"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _testGeoFenceLog(false),
-                    icon: const Icon(Icons.logout),
-                    label: const Text("Test EXIT (Offsite)"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _testGeoFenceLog(false),
+                      icon: const Icon(Icons.logout),
+                      label: const Text("Test EXIT (Offsite)"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Writes to geo_fence_logs collection + updates isOnSite flag",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              const Divider(),
+              const Text("Live Location Check Log", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text(
+                "Shows the last 10 location checks (including app open checks)",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Writes to geo_fence_logs collection + updates isOnSite flag",
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ],
+                child: _locationLogs.isEmpty
+                    ? const Center(child: Text("No location checks yet"))
+                    : ListView.builder(
+                        itemCount: _locationLogs.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: Text(
+                              _locationLogs[index],
+                              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
