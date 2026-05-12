@@ -85,7 +85,7 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
 
 // PAGE 1 - Welcome
 class _WelcomePage extends StatelessWidget {
-  const _WelcomePage({super.key});
+  const _WelcomePage();
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -106,7 +106,7 @@ class _WelcomePage extends StatelessWidget {
 
 // PAGE 2 - How It Works
 class _HowItWorksPage extends StatelessWidget {
-  const _HowItWorksPage({super.key});
+  const _HowItWorksPage();
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -151,7 +151,7 @@ class _HowItWorksPage extends StatelessWidget {
 
 // PAGE 3 - Creating & Completing a Job Card (Corrected)
 class _JobCardFlowPage extends StatelessWidget {
-  const _JobCardFlowPage({super.key});
+  const _JobCardFlowPage();
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -198,7 +198,7 @@ class _JobCardFlowPage extends StatelessWidget {
 
 // PAGE 4 - Notification Priority Levels (Corrected with Priority 4)
 class _PriorityLevelsPage extends StatelessWidget {
-  const _PriorityLevelsPage({super.key});
+  const _PriorityLevelsPage();
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -243,7 +243,7 @@ class _PriorityLevelsPage extends StatelessWidget {
 
 // PAGE 5 - Permissions + Test Buttons
 class _PermissionsPage extends StatelessWidget {
-  const _PermissionsPage({super.key});
+  const _PermissionsPage();
   @override
   Widget build(BuildContext context) {
     return Padding(
