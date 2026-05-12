@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'firestore_service.dart';
 import 'notification_service.dart';
 
 const String locationTaskName = "ctp_location_check_task";
+const MethodChannel _channel = MethodChannel('ctp/geofence');
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -83,32 +84,14 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
-      await bg.BackgroundGeolocation.removeGeofences();
+      await _channel.invokeMethod('registerGeofence', {
+        'clockNo': clockNo,
+        'lat': -29.994938052011612,
+        'lng': 30.939421740548614,
+        'radius': 800.0,
+      });
 
-      await bg.BackgroundGeolocation.ready(bg.Config(
-        desiredAccuracy: bg.Config.DESIRED_ACCURACY_LOW,
-        distanceFilter: 200,
-        stationaryRadius: 150,
-        stopTimeout: 30,
-        heartbeatInterval: 30,
-        stopOnTerminate: false,
-        startOnBoot: true,
-        debug: false,
-        logLevel: bg.Config.LOG_LEVEL_ERROR,
-        geofenceProximityRadius: 800,
-        geofenceInitialTriggerEntry: true,
-      ));
-
-      await bg.BackgroundGeolocation.addGeofence(bg.Geofence(
-        identifier: "company_site",
-        latitude: -29.994938052011612,
-        longitude: 30.939421740548614,
-        radius: 800,
-      ));
-
-      bg.BackgroundGeolocation.onGeofence(_handleGeofenceEvent);
-      bg.BackgroundGeolocation.onLocation(_handleLocationUpdate);
-      await bg.BackgroundGeolocation.start();
+      _channel.setMethodCallHandler(_handleMethodCall);
 
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 
@@ -123,31 +106,29 @@ class LocationService {
       );
 
       _isInitialized = true;
-      debugPrint('✅ Hybrid started: Native Geofence + WorkManager');
+      debugPrint('✅ True Hybrid started: Native Geofence + WorkManager');
     } catch (e) {
-      debugPrint('Hybrid monitoring failed: $e');
+      debugPrint('Hybrid start failed: $e');
     }
   }
 
   Future<void> stopNativeMonitoring() async {
     if (kIsWeb) return;
-    await bg.BackgroundGeolocation.stop();
+    await _channel.invokeMethod('stopGeofence');
     await Workmanager().cancelByUniqueName(locationTaskName);
     _isInitialized = false;
     debugPrint('🛑 Hybrid monitoring stopped');
   }
 
-  void _handleGeofenceEvent(bg.GeofenceEvent event) async {
-    final isEntering = event.action == 'ENTER';
-    final eventType = isEntering ? 'enter' : 'exit';
+  Future<void> _handleMethodCall(MethodCall call) async {
+    if (call.method == 'onGeofenceEvent') {
+      final isEntering = call.arguments['entering'] as bool;
+      final eventType = isEntering ? 'enter' : 'exit';
 
-    await _logGeoFenceEvent(eventType: eventType, source: 'native_geofence');
-    await _updateFirestore(isEntering);
-    await _sendNotification(isEntering);
-  }
-
-  void _handleLocationUpdate(bg.Location location) {
-    debugPrint('📍 Location update received');
+      await _logGeoFenceEvent(eventType: eventType, source: 'native_geofence');
+      await _updateFirestore(isEntering);
+      await _sendNotification(isEntering);
+    }
   }
 
   Future<void> checkCurrentLocation() async {
