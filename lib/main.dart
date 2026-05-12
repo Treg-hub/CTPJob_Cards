@@ -101,7 +101,7 @@ void main() async {
         if (currentEmployee != null) {
           final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
-          if (!permissionsCompleted) {
+          if (!permissionsCompleted && !kIsWeb) {
             initialScreen = const PermissionsOnboardingScreen();
           } else {
             initialScreen = const HomeScreen();
