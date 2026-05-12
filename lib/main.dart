@@ -11,6 +11,8 @@ import 'models/employee.dart';
 import 'models/sync_queue_item.dart';
 import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/permissions_onboarding_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
 import 'services/sync_service.dart';
@@ -90,34 +92,54 @@ void main() async {
 
   await SyncService().init();
 
-    // ==================== AUTO LOGIN ====================
-    final prefs = await SharedPreferences.getInstance();
-    final hasLogin = prefs.containsKey('loggedInClockNo');
-    if (hasLogin) {
-      final clockNo = prefs.getString('loggedInClockNo');
-      if (clockNo != null) {
-        try {
-          currentEmployee = await firestoreService.getEmployee(clockNo);
-          
-          // NEW: Run low-cost location check on app start
-          if (currentEmployee != null) {
-            LocationService().checkCurrentLocation();
+  // ==================== DETERMINE INITIAL SCREEN ====================
+  Widget initialScreen;
+  final prefs = await SharedPreferences.getInstance();
+  final hasLogin = prefs.containsKey('loggedInClockNo');
+
+  if (hasLogin) {
+    final clockNo = prefs.getString('loggedInClockNo');
+    if (clockNo != null) {
+      try {
+        currentEmployee = await firestoreService.getEmployee(clockNo);
+
+        if (currentEmployee != null) {
+          // Check if onboarding is completed
+          final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
+
+          if (!permissionsCompleted) {
+            initialScreen = const PermissionsOnboardingScreen();
+          } else {
+            initialScreen = const HomeScreen();
           }
-        } catch (e) {
-          currentEmployee = null;
+
+          // Run location check on startup
+          LocationService().checkCurrentLocation();
+        } else {
+          initialScreen = const LoginScreen();
         }
+      } catch (e) {
+        currentEmployee = null;
+        initialScreen = const LoginScreen();
       }
+    } else {
+      initialScreen = const LoginScreen();
     }
+  } else {
+    initialScreen = const LoginScreen();
+  }
 
   runApp(
     ProviderScope(
-      child: CtpJobCardsApp(),
+      child: CtpJobCardsApp(initialScreen: initialScreen),
     ),
   );
 }
 
 class CtpJobCardsApp extends ConsumerWidget {
-  const CtpJobCardsApp({super.key});
+  final Widget initialScreen;
+
+  const CtpJobCardsApp({super.key, required this.initialScreen});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -195,7 +217,7 @@ class CtpJobCardsApp extends ConsumerWidget {
           ),
         ],
       ),
-      home: const LoginScreen(),
+      home: initialScreen,
       debugShowCheckedModeBanner: false,
     );
   }
