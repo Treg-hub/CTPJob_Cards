@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
+import 'geofence_editor_screen.dart';
 
 class JobCardsDataTableSource extends DataTableSource {
   final List<JobCard> jobCards;
@@ -712,6 +713,15 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 );
               }
             },
+          ),
+          ListTile(
+            leading: const Icon(Icons.map, color: Color(0xFFFF8C42)),
+            title: const Text('Edit Geofence Location'),
+            subtitle: const Text('Change site location and radius on map'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GeofenceEditorScreen()),
+            ),
           ),
         ],
       ),
