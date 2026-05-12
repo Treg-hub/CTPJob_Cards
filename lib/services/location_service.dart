@@ -78,26 +78,46 @@ class LocationService {
 
   bool _isInitialized = false;
 
-  Future<void> startNativeMonitoring(String clockNo) async {
+  Future startNativeMonitoring(String clockNo) async {
     if (kIsWeb) return;
     if (_isInitialized) return;
 
     _clockNo = clockNo;
+
+    // === NEW: Fetch latest geofence settings from Firebase ===
+    double lat = -29.994938052011612;
+    double lng = 30.939421740548614;
+    double radius = 800.0;
+
+    try {
+      final settingsDoc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('geofence')
+          .get();
+
+      if (settingsDoc.exists) {
+        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
+        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
+        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
+      }
+    } catch (e) {
+      debugPrint('Failed to load geofence settings: $e');
+    }
+
     await _requestPermissions();
     await _notificationService.initialize();
 
     try {
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
-        'lat': -29.994938052011612,
-        'lng': 30.939421740548614,
-        'radius': 800.0,
+        'lat': lat,           // ← Now dynamic from Firebase
+        'lng': lng,           // ← Now dynamic from Firebase
+        'radius': radius,     // ← Now dynamic from Firebase
       });
 
       _channel.setMethodCallHandler(_handleMethodCall);
 
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-
       await Workmanager().registerPeriodicTask(
         locationTaskName,
         locationTaskName,
@@ -109,7 +129,7 @@ class LocationService {
       );
 
       _isInitialized = true;
-      debugPrint('✅ True Hybrid started: Native Geofence + WorkManager');
+      debugPrint('✅ True Hybrid started with Firebase location: lat=$lat, lng=$lng, radius=$radius');
     } catch (e) {
       debugPrint('Hybrid start failed: $e');
     }
