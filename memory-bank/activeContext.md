@@ -285,4 +285,4 @@
 6. **Security** (later): Granular Firestore rules (operators read all/add comments).
 7. **Polish**: i18n, PDF filters, GA4 events.
 
-**Next**: Implement med-pri (quality/perf) in ACT.
+- **Geofence Reliability Improvements (Android)**: Hardened LocationService with better error handling, optimized Workmanager for battery efficiency, added battery optimization exemption request, replaced stub with thin wrapper, and updated AndroidManifest.xml with required background geofencing permissions. This makes automatic onsite detection significantly more reliable for job card notifications while keeping battery impact low. Single company geofence focus (Android only for now).

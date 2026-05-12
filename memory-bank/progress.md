@@ -1,6 +1,7 @@
 # Progress
 
 ## What Works ✅
+- **Improved Automatic On-Site Detection**: Native geofence registration now robust with fallback, Workmanager optimized for reliability and battery, proper Android permissions added. Employees near company site now reliably get job card notifications.
 
 ### Core Features
 - **Job Card Creation**: Full job card creation with all fields (priority, description, location, type)

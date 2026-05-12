@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GeofenceEditorScreen extends StatefulWidget {
   const GeofenceEditorScreen({super.key});
@@ -10,14 +10,13 @@ class GeofenceEditorScreen extends StatefulWidget {
 }
 
 class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
-  GoogleMapController? _mapController;
-  LatLng _center = const LatLng(-29.929164495077, 31.011167505895127);
-  double _radius = 100.0;
-  bool _isLoading = true;
-  bool _isSaving = false;
+  final _formKey = GlobalKey<FormState>();
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+  final _radiusController = TextEditingController();
 
-  Set<Marker> _markers = {};
-  Set<Circle> _circles = {};
+  bool _isLoading = false;
+  String? _clockNo;
 
   @override
   void initState() {
@@ -26,206 +25,148 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
   }
 
   Future<void> _loadCurrentGeofence() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('geofence')
-          .get();
+    setState(() => _isLoading = true);
 
-      if (doc.exists) {
-        final data = doc.data()!;
-        setState(() {
-          _center = LatLng(
-            data['latitude']?.toDouble() ?? _center.latitude,
-            data['longitude']?.toDouble() ?? _center.longitude,
-          );
-          _radius = data['radius']?.toDouble() ?? 100.0;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading geofence: $e');
-    } finally {
-      _updateMapElements();
-      setState(() => _isLoading = false);
+    final prefs = await SharedPreferences.getInstance();
+    _clockNo = prefs.getString('loggedInClockNo');
+
+    final doc = await FirebaseFirestore.instance
+        .collection('settings')
+        .doc('geofence')
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data()!;
+      _latController.text = (data['latitude'] ?? -29.923493321252604).toString();
+      _lngController.text = (data['longitude'] ?? 31.003267644258845).toString();
+      _radiusController.text = (data['radius'] ?? 500).toString();
+    } else {
+      // Default values
+      _latController.text = '-29.923493321252604';
+      _lngController.text = '31.003267644258845';
+      _radiusController.text = '500';
     }
-  }
 
-  void _updateMapElements() {
-    setState(() {
-      _markers = {
-        Marker(
-          markerId: const MarkerId('geofence_center'),
-          position: _center,
-          draggable: true,
-          onDragEnd: (newPosition) {
-            setState(() {
-              _center = newPosition;
-            });
-            _updateMapElements();
-          },
-        ),
-      };
-
-      _circles = {
-        Circle(
-          circleId: const CircleId('geofence_radius'),
-          center: _center,
-          radius: _radius,
-          fillColor: Colors.blue.withOpacity(0.2),
-          strokeColor: Colors.blue,
-          strokeWidth: 2,
-        ),
-      };
-    });
+    setState(() => _isLoading = false);
   }
 
   Future<void> _saveGeofence() async {
-    setState(() => _isSaving = true);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
+      final lat = double.parse(_latController.text);
+      final lng = double.parse(_lngController.text);
+      final radius = double.parse(_radiusController.text);
+
       await FirebaseFirestore.instance
           .collection('settings')
           .doc('geofence')
           .set({
-        'latitude': _center.latitude,
-        'longitude': _center.longitude,
-        'radius': _radius,
+        'latitude': lat,
+        'longitude': lng,
+        'radius': radius,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': _clockNo,
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Geofence updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('✅ Geofence updated successfully')),
         );
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving geofence: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Geofence'),
-        backgroundColor: const Color(0xFFFF8C42),
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          // Map
-          Expanded(
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: _center,
-                zoom: 16,
-              ),
-              markers: _markers,
-              circles: _circles,
-              onMapCreated: (controller) {
-                _mapController = controller;
-              },
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-            ),
-          ),
-
-          // Controls
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Coordinates
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      appBar: AppBar(title: const Text('Edit Geofence')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
                   children: [
-                    Text(
-                      'Lat: ${_center.latitude.toStringAsFixed(6)}',
-                      style: const TextStyle(fontSize: 12),
+                    TextFormField(
+                      controller: _latController,
+                      decoration: const InputDecoration(
+                        labelText: 'Latitude',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (double.tryParse(value) == null) return 'Invalid number';
+                        return null;
+                      },
                     ),
-                    Text(
-                      'Lng: ${_center.longitude.toStringAsFixed(6)}',
-                      style: const TextStyle(fontSize: 12),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _lngController,
+                      decoration: const InputDecoration(
+                        labelText: 'Longitude',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (double.tryParse(value) == null) return 'Invalid number';
+                        return null;
+                      },
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Radius Slider
-                Row(
-                  children: [
-                    const Text('Radius: '),
-                    Expanded(
-                      child: Slider(
-                        value: _radius,
-                        min: 10,
-                        max: 1000,
-                        divisions: 99,
-                        label: '${_radius.round()} m',
-                        onChanged: (value) {
-                          setState(() {
-                            _radius = value;
-                          });
-                          _updateMapElements();
-                        },
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _radiusController,
+                      decoration: const InputDecoration(
+                        labelText: 'Radius (meters)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        final radius = double.tryParse(value);
+                        if (radius == null || radius <= 0) return 'Must be greater than 0';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    ElevatedButton.icon(
+                      onPressed: _saveGeofence,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Geofence'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
                       ),
                     ),
-                    Text('${_radius.round()} m'),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'This location will be used for all employee geofence checks.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-
-                // Save Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveGeofence,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8C42),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: _isSaving
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Save Geofence Changes',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
     );
+  }
+
+  @override
+  void dispose() {
+    _latController.dispose();
+    _lngController.dispose();
+    _radiusController.dispose();
+    super.dispose();
   }
 }

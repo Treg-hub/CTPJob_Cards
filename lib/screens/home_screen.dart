@@ -1358,12 +1358,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         backgroundColor: const Color(0xFF1A1A1A),
         onTap: _onItemTapped,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showFeedbackDialog,
-        backgroundColor: const Color(0xFFFF8C42),
-        tooltip: 'Give Feedback',
-        child: const Icon(Icons.feedback, color: Colors.black),
-      ),
+      floatingActionButton: Column(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    // TEST LOCATION BUTTON (Blue)
+    FloatingActionButton(
+      onPressed: () async {
+        await _locationService.checkCurrentLocation();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📍 Location check triggered'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      },
+      backgroundColor: Colors.blue,
+      tooltip: 'Test Location Check',
+      child: const Icon(Icons.location_on, color: Colors.white),
+    ),
+    const SizedBox(height: 16),
+
+    // Feedback button (original)
+    FloatingActionButton(
+      onPressed: _showFeedbackDialog,
+      backgroundColor: const Color(0xFFFF8C42),
+      tooltip: 'Give Feedback',
+      child: const Icon(Icons.feedback, color: Colors.black),
+    ),
+  ],
+),
     );
   }
 

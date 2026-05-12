@@ -14,7 +14,6 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
@@ -221,40 +220,40 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ctp/geofence")
-        .setMethodCallHandler { call, result ->
-            when (call.method) {
-                "registerGeofence" -> {
-                    val clockNo = call.argument<String>("clockNo")
-                    val lat = call.argument<Double>("lat")
-                    val lng = call.argument<Double>("lng")
-                    val radius = call.argument<Double>("radius")?.toFloat()
+        // ==================== GEOFENCE CHANNEL ====================
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "registerGeofence" -> {
+                        val clockNo = call.argument<String>("clockNo")
+                        val lat = call.argument<Double>("lat")
+                        val lng = call.argument<Double>("lng")
+                        val radius = call.argument<Double>("radius")?.toFloat()
 
-                    if (clockNo != null && lat != null && lng != null && radius != null) {
-                        GeofenceHelper.registerGeofence(
-                            context = this,
-                            clockNo = clockNo,
-                            latitude = lat,
-                            longitude = lng,
-                            radius = radius
-                        )
-                        result.success(null)
-                    } else {
-                        result.error("INVALID_ARGS", "Missing parameters", null)
+                        if (clockNo != null && lat != null && lng != null && radius != null) {
+                            GeofenceHelper.registerGeofence(
+                                context = this,
+                                clockNo = clockNo,
+                                latitude = lat,
+                                longitude = lng,
+                                radius = radius
+                            )
+                            result.success(null)
+                        } else {
+                            result.error("INVALID_ARGS", "Missing parameters", null)
+                        }
                     }
-                }
 
-                "stopGeofence" -> {
-                    // Optional: You can add logic here if needed
-                    result.success(null)
-                }
+                    "stopGeofence" -> {
+                        GeofenceHelper.stopGeofence(this)
+                        result.success(null)
+                    }
 
-                else -> {
-                    result.notImplemented()
+                    else -> result.notImplemented()
                 }
             }
-        }
 
+        // ==================== JOB ALERT CHANNEL ====================
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JOB_ALERT_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "triggerUrgentAlert" -> {
@@ -272,47 +271,6 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
-    }
-
-    private fun startGeofence(clockNo: String, lat: Double, lng: Double, radius: Double, result: MethodChannel.Result) {
-        val geofence = Geofence.Builder()
-            .setRequestId("company_geofence_$clockNo")
-            .setCircularRegion(lat, lng, radius.toFloat())
-            .setExpirationDuration(Geofence.NEVER_EXPIRE)
-            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
-            .build()
-
-        val geofencingRequest = GeofencingRequest.Builder()
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-            .addGeofence(geofence)
-            .build()
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            result.error("PERMISSION_DENIED", "Location permission not granted", null)
-            return
-        }
-
-        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
-            .addOnSuccessListener {
-                Log.d("MainActivity", "Geofence added successfully")
-                result.success("Geofence started")
-            }
-            .addOnFailureListener { e ->
-                Log.e("MainActivity", "Geofence add failed: $e")
-                result.error("GEOFENCE_ERROR", "Failed to add geofence: ${e.message}", null)
-            }
-    }
-
-    private fun stopGeofence(result: MethodChannel.Result) {
-        geofencingClient.removeGeofences(geofencePendingIntent)
-            .addOnSuccessListener {
-                Log.d("MainActivity", "Geofence removed successfully")
-                result.success("Geofence stopped")
-            }
-            .addOnFailureListener { e ->
-                Log.e("MainActivity", "Geofence remove failed: $e")
-                result.error("GEOFENCE_ERROR", "Failed to remove geofence: ${e.message}", null)
-            }
     }
 
     private fun triggerUrgentAlert(
