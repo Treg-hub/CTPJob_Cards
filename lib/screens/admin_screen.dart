@@ -10,6 +10,7 @@ import '../models/employee.dart';
 import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
+import '../services/location_service.dart';
 
 class JobCardsDataTableSource extends DataTableSource {
   final List<JobCard> jobCards;
@@ -721,6 +722,69 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const GeofenceEditorScreen()),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                await LocationService().checkCurrentLocation();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Location check completed'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.location_on),
+            label: const Text('Force Location Check Now'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF8C42),
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                // This simulates what the 30-minute WorkManager task does
+                await LocationService().checkCurrentLocation();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Simulated 30-min WorkManager check completed'),
+                      backgroundColor: Colors.blue,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.timer),
+            label: const Text('Simulate 30-min WorkManager Check'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueGrey,
+              foregroundColor: Colors.white,
             ),
           ),
         ],
