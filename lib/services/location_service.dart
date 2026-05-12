@@ -177,6 +177,25 @@ class LocationService {
     }
   }
 
+  // ← PASTE THE NEW METHOD HERE
+  Future<void> logTestGeoFenceEvent({
+    required bool isEntering,
+    required String notes,
+  }) async {
+    final eventType = isEntering ? 'enter' : 'exit';
+
+    await _logGeoFenceEvent(
+      eventType: eventType,
+      source: 'manual_test_diagnostics',
+      notes: notes,
+    );
+
+    await _updateFirestore(isEntering);
+    await _sendNotification(isEntering);
+
+    debugPrint('🧪 [TEST] Geofence event triggered → $eventType | notes: $notes');
+  }
+
   Future<void> _logGeoFenceEvent({
     required String eventType,
     required String source,
