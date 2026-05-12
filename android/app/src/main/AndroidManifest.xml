@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -55,8 +56,10 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="urgent_alert_channel" />
 
-        <!-- ==================== EXISTING RECEIVER ==================== -->
-        <receiver android:name=".GeofenceReceiver" android:exported="true">
+        <!-- ==================== GEOFENCE RECEIVER (Must match MainActivity.kt) ==================== -->
+        <receiver
+            android:name=".GeofenceBroadcastReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.location.ACTION_GEOFENCE_TRIGGERED" />
             </intent-filter>
@@ -64,12 +67,6 @@
 
         <!-- ==================== SERVICES ==================== -->
         <service android:name=".AlertForegroundService" android:foregroundServiceType="specialUse" android:exported="false" />
-
-        <!-- NEW: flutter_background_geolocation service -->
-        <service
-            android:name="com.transistorsoft.flutterbackgroundgeolocation.BackgroundGeolocationService"
-            android:foregroundServiceType="location"
-            android:exported="false" />
 
         <service android:name=".FirebaseMessagingService" android:exported="false">
             <intent-filter>

@@ -17,8 +17,6 @@ const MethodChannel _channel = MethodChannel('ctp/geofence');
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
-
-      // Initialize Firebase in background isolate
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
@@ -37,14 +35,14 @@ void callbackDispatcher() {
       double radius = 800;
 
       if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude'] ?? lat;
-        lng = settingsDoc.data()?['longitude'] ?? lng;
+        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
+        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
+        desiredAccuracy: LocationAccuracy.low, // Battery optimization
+        timeLimit: const Duration(seconds: 10),
       );
 
       final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
@@ -64,7 +62,7 @@ void callbackDispatcher() {
           accuracy: pos.accuracy,
         );
 
-        debugPrint('📍 WorkManager 30-min check: Status changed');
+        debugPrint('📍 WorkManager 30-min check: Status changed to $onSite');
       }
     } catch (e) {
       debugPrint('WorkManager error: $e');
@@ -93,7 +91,6 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
-      // === READ FROM FIREBASE FIRST ===
       debugPrint('📍 Loading geofence from Firebase...');
 
       final settingsDoc = await FirebaseFirestore.instance
@@ -114,7 +111,7 @@ class LocationService {
         debugPrint('📍 Using default geofence values');
       }
 
-      // === REGISTER WITH FIREBASE VALUES ===
+      // Register native geofence (Android)
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
         'lat': lat,
@@ -122,7 +119,7 @@ class LocationService {
         'radius': radius,
       });
 
-      debugPrint('✅ Native geofence registered with Firebase values');
+      debugPrint('✅ Native geofence registered successfully');
 
       _channel.setMethodCallHandler(_handleMethodCall);
 
@@ -134,20 +131,29 @@ class LocationService {
         frequency: const Duration(minutes: 30),
         constraints: Constraints(
           networkType: NetworkType.connected,
-          requiresBatteryNotLow: true,
+          requiresBatteryNotLow: false, // More reliable
         ),
       );
 
       _isInitialized = true;
-      debugPrint('✅ True Hybrid started successfully');
+      debugPrint('✅ Hybrid geofence monitoring started successfully');
     } catch (e) {
-      debugPrint('❌ Hybrid start failed: $e');
+      debugPrint('❌ Native registration failed, falling back to Workmanager only: $e');
+      // Still start Workmanager as fallback
+      await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+      await Workmanager().registerPeriodicTask(
+        locationTaskName,
+        locationTaskName,
+        frequency: const Duration(minutes: 30),
+      );
     }
   }
 
   Future<void> stopNativeMonitoring() async {
     if (kIsWeb) return;
-    await _channel.invokeMethod('stopGeofence');
+    try {
+      await _channel.invokeMethod('stopGeofence');
+    } catch (_) {}
     await Workmanager().cancelByUniqueName(locationTaskName);
     _isInitialized = false;
     debugPrint('🛑 Hybrid monitoring stopped');
@@ -155,9 +161,9 @@ class LocationService {
 
   Future<void> _handleMethodCall(MethodCall call) async {
     debugPrint('📍 _handleMethodCall received: ${call.method}');
-    
+
     if (call.method == 'onGeofenceEvent') {
-      debugPrint('✅ onGeofenceEvent received!');
+      debugPrint('✅ Native onGeofenceEvent received!');
       final isEntering = call.arguments['entering'] as bool;
       final eventType = isEntering ? 'enter' : 'exit';
 
@@ -169,7 +175,7 @@ class LocationService {
 
   Future<void> checkCurrentLocation() async {
     try {
-      debugPrint('📍 checkCurrentLocation() called');
+      debugPrint('📍 Manual location check called');
 
       final settingsDoc = await FirebaseFirestore.instance
           .collection('settings')
@@ -181,17 +187,14 @@ class LocationService {
       double radius = 800;
 
       if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude'] ?? lat;
-        lng = settingsDoc.data()?['longitude'] ?? lng;
+        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
+        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-        debugPrint('📍 Using Firebase geofence → Lat: $lat, Lng: $lng, Radius: $radius');
-      } else {
-        debugPrint('📍 Using default geofence values');
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 10),
       );
 
       final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
@@ -213,8 +216,6 @@ class LocationService {
           longitude: pos.longitude,
           accuracy: pos.accuracy,
         );
-
-        debugPrint('📍 Status changed → $onSite');
       }
     } catch (e) {
       debugPrint('❌ Manual check failed: $e');
@@ -262,8 +263,12 @@ class LocationService {
 
   Future<void> _requestPermissions() async {
     await ph.Permission.locationAlways.request();
+    // Request battery optimization exemption (important for reliability)
+    if (await ph.Permission.ignoreBatteryOptimizations.isDenied) {
+      await ph.Permission.ignoreBatteryOptimizations.request();
+    }
   }
-  
+
   Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
     await _logGeoFenceEvent(
       eventType: isEntering ? 'enter' : 'exit',

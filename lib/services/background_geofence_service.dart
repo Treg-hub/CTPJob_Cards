@@ -1,27 +1,24 @@
 // background_geofence_service.dart
-// Stub file to prevent build errors. Real geofence logic is in location_service.dart + native code.
+// Thin wrapper – real logic lives in LocationService
 
-import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'location_service.dart';
 
 class BackgroundGeofenceService {
   static final BackgroundGeofenceService _instance = BackgroundGeofenceService._internal();
   factory BackgroundGeofenceService() => _instance;
   BackgroundGeofenceService._internal();
 
+  final LocationService _locationService = LocationService();
+
   Future<void> initialize() async {
-    if (kIsWeb) {
-      debugPrint('📍 Background geofence not supported on web');
-      return;
-    }
-    debugPrint('📍 BackgroundGeofenceService initialized (stub)');
+    // No-op – initialization happens in LocationService
   }
 
   Future<void> startMonitoring(String clockNo) async {
-    debugPrint('📍 Background monitoring started for $clockNo (stub)');
+    await _locationService.startNativeMonitoring(clockNo);
   }
 
   Future<void> stopMonitoring() async {
-    debugPrint('📍 Background monitoring stopped (stub)');
+    await _locationService.stopNativeMonitoring();
   }
 }
