@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
 
@@ -16,6 +18,11 @@ const MethodChannel _channel = MethodChannel('ctp/geofence');
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
+      // Initialize Firebase in background isolate
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
       if (clockNo == null) return Future.value(true);
@@ -78,46 +85,26 @@ class LocationService {
 
   bool _isInitialized = false;
 
-  Future startNativeMonitoring(String clockNo) async {
+  Future<void> startNativeMonitoring(String clockNo) async {
     if (kIsWeb) return;
     if (_isInitialized) return;
 
     _clockNo = clockNo;
-
-    // === NEW: Fetch latest geofence settings from Firebase ===
-    double lat = -29.994938052011612;
-    double lng = 30.939421740548614;
-    double radius = 800.0;
-
-    try {
-      final settingsDoc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('geofence')
-          .get();
-
-      if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
-        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
-        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-      }
-    } catch (e) {
-      debugPrint('Failed to load geofence settings: $e');
-    }
-
     await _requestPermissions();
     await _notificationService.initialize();
 
     try {
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
-        'lat': lat,           // ← Now dynamic from Firebase
-        'lng': lng,           // ← Now dynamic from Firebase
-        'radius': radius,     // ← Now dynamic from Firebase
+        'lat': -29.994938052011612,
+        'lng': 30.939421740548614,
+        'radius': 800.0,
       });
 
       _channel.setMethodCallHandler(_handleMethodCall);
 
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+
       await Workmanager().registerPeriodicTask(
         locationTaskName,
         locationTaskName,
@@ -129,7 +116,7 @@ class LocationService {
       );
 
       _isInitialized = true;
-      debugPrint('✅ True Hybrid started with Firebase location: lat=$lat, lng=$lng, radius=$radius');
+      debugPrint('✅ True Hybrid started: Native Geofence + WorkManager');
     } catch (e) {
       debugPrint('Hybrid start failed: $e');
     }
@@ -206,20 +193,6 @@ class LocationService {
     } catch (e) {
       debugPrint('❌ Manual check failed: $e');
     }
-  }
-
-  // ==================== TEST METHOD (Added Back) ====================
-  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clockNo = prefs.getString('loggedInClockNo') ?? 'UNKNOWN';
-
-    await _logGeoFenceEvent(
-      eventType: isEntering ? 'enter' : 'exit',
-      source: 'manual_test',
-      notes: notes ?? 'Manual test from Diagnostics screen',
-    );
-    await _updateFirestore(isEntering);
-    await _sendNotification(isEntering);
   }
 
   Future<void> _logGeoFenceEvent({
