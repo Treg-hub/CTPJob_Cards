@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,44 +29,17 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
 
-    if (currentEmployee != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
-          );
-        }
-      });
-    }
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args == null) return;
 
-      final jobCardNumberStr = args['jobCardNumber'] as String?;
-      final action = args['action'] as String?;
-      if (jobCardNumberStr == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
-      try {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('job_cards')
-            .where('jobCardNumber', isEqualTo: int.tryParse(jobCardNumberStr) ?? 0)
-            .limit(1)
-            .get();
-
-        if (querySnapshot.docs.isEmpty || !mounted) return;
-
-        final jobCard = JobCard.fromFirestore(querySnapshot.docs.first);
-
-        if (action == 'assign_self') {
-          await _autoAssignAndNavigate(jobCard);
-        } else {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobCard)));
-        }
-      } catch (e) {
-        debugPrint('Notification handling error: $e');
+      if (currentEmployee != null && !permissionsCompleted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+        );
       }
     });
   }
@@ -99,10 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (query.docs.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No employee profile found. Please register first.'),
-              backgroundColor: Colors.orange,
-            ),
+            const SnackBar(content: Text('No employee profile found. Please register first.'), backgroundColor: Colors.orange),
           );
         }
         setState(() => _isLoading = false);
@@ -124,9 +94,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         try {
+          debugPrint('🚀 Starting Native Monitoring for ${employee.clockNo}');
           await LocationService().startNativeMonitoring(employee.clockNo);
+          debugPrint('✅ Native Monitoring started successfully');
         } catch (e) {
-          debugPrint('Location monitoring error: $e');
+          debugPrint('❌ Location monitoring error: $e');
         }
       }
 
@@ -237,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text('Error setting up notifications: $e'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+            duration: Duration(seconds: 5),
           ),
         );
       }
