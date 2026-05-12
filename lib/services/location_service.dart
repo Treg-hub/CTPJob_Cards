@@ -33,6 +33,7 @@ void callbackDispatcher() {
         lat = settingsDoc.data()?['latitude'] ?? lat;
         lng = settingsDoc.data()?['longitude'] ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
+        debugPrint('📍 WorkManager using Firebase geofence → Lat: $lat, Lng: $lng, Radius: $radius');
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -56,6 +57,8 @@ void callbackDispatcher() {
           longitude: pos.longitude,
           accuracy: pos.accuracy,
         );
+
+        debugPrint('📍 WorkManager 30-min check: Status changed to ${onSite ? "ONSITE" : "OFFSITE"}');
       }
     } catch (e) {
       debugPrint('WorkManager error: $e');
@@ -133,6 +136,8 @@ class LocationService {
 
   Future<void> checkCurrentLocation() async {
     try {
+      debugPrint('📍 checkCurrentLocation() called');
+
       final settingsDoc = await FirebaseFirestore.instance
           .collection('settings')
           .doc('geofence')
@@ -146,6 +151,9 @@ class LocationService {
         lat = settingsDoc.data()?['latitude'] ?? lat;
         lng = settingsDoc.data()?['longitude'] ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
+        debugPrint('📍 Using Firebase geofence → Lat: $lat, Lng: $lng, Radius: $radius');
+      } else {
+        debugPrint('📍 Using default geofence values');
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -154,6 +162,7 @@ class LocationService {
       );
 
       final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
+      debugPrint('📍 Current location check → OnSite: $onSite');
 
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
@@ -171,29 +180,12 @@ class LocationService {
           longitude: pos.longitude,
           accuracy: pos.accuracy,
         );
+
+        debugPrint('📍 Status changed → $onSite');
       }
     } catch (e) {
-      debugPrint('Manual check failed: $e');
+      debugPrint('❌ Manual check failed: $e');
     }
-  }
-
-  // ← PASTE THE NEW METHOD HERE
-  Future<void> logTestGeoFenceEvent({
-    required bool isEntering,
-    required String notes,
-  }) async {
-    final eventType = isEntering ? 'enter' : 'exit';
-
-    await _logGeoFenceEvent(
-      eventType: eventType,
-      source: 'manual_test_diagnostics',
-      notes: notes,
-    );
-
-    await _updateFirestore(isEntering);
-    await _sendNotification(isEntering);
-
-    debugPrint('🧪 [TEST] Geofence event triggered → $eventType | notes: $notes');
   }
 
   Future<void> _logGeoFenceEvent({
