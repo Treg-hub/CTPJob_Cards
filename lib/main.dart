@@ -29,7 +29,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ==================== HIVE ====================
   await Hive.initFlutter();
   Hive.registerAdapter(SyncQueueItemAdapter());
 
@@ -45,7 +44,6 @@ void main() async {
     await Hive.openBox<SyncQueueItem>(syncBoxName);
   }
 
-  // ==================== FIREBASE ====================
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -60,11 +58,9 @@ void main() async {
     debugPrint('Firebase warning: $e');
   }
 
-  // ==================== NOTIFICATION SERVICE ====================
   final notificationService = NotificationService();
   await notificationService.initialize();
 
-  // ==================== GLOBAL METHOD CHANNEL FOR FULL-SCREEN ALERTS ====================
   const MethodChannel globalAlertChannel = MethodChannel('job_alert_channel');
 
   globalAlertChannel.setMethodCallHandler((MethodCall call) async {
@@ -82,7 +78,6 @@ void main() async {
     }
   });
 
-  // ==================== OTHER SERVICES ====================
   final firestoreService = FirestoreService();
   try {
     await firestoreService.initializeSettings();
@@ -92,7 +87,7 @@ void main() async {
 
   await SyncService().init();
 
-  // ==================== DETERMINE INITIAL SCREEN ====================
+  // ==================== DETERMINE INITIAL SCREEN + START LOCATION ====================
   Widget initialScreen;
   final prefs = await SharedPreferences.getInstance();
   final hasLogin = prefs.containsKey('loggedInClockNo');
@@ -104,7 +99,6 @@ void main() async {
         currentEmployee = await firestoreService.getEmployee(clockNo);
 
         if (currentEmployee != null) {
-          // Check if onboarding is completed
           final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
           if (!permissionsCompleted) {
@@ -113,7 +107,16 @@ void main() async {
             initialScreen = const HomeScreen();
           }
 
-          // Run location check on startup
+          // === START NATIVE MONITORING ON AUTO-LOGIN ===
+          if (!kIsWeb) {
+            try {
+              await LocationService().startNativeMonitoring(clockNo);
+              debugPrint('✅ Native monitoring started on auto-login');
+            } catch (e) {
+              debugPrint('Location monitoring error on auto-login: $e');
+            }
+          }
+
           LocationService().checkCurrentLocation();
         } else {
           initialScreen = const LoginScreen();

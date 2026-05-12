@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
 
@@ -18,9 +17,10 @@ const MethodChannel _channel = MethodChannel('ctp/geofence');
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
+
       // Initialize Firebase in background isolate
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        await Firebase.initializeApp();
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -40,7 +40,6 @@ void callbackDispatcher() {
         lat = settingsDoc.data()?['latitude'] ?? lat;
         lng = settingsDoc.data()?['longitude'] ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-        debugPrint('📍 WorkManager using Firebase geofence → Lat: $lat, Lng: $lng, Radius: $radius');
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -65,7 +64,7 @@ void callbackDispatcher() {
           accuracy: pos.accuracy,
         );
 
-        debugPrint('📍 WorkManager 30-min check: Status changed to ${onSite ? "ONSITE" : "OFFSITE"}');
+        debugPrint('📍 WorkManager 30-min check: Status changed');
       }
     } catch (e) {
       debugPrint('WorkManager error: $e');
@@ -94,12 +93,36 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
+      // === READ FROM FIREBASE FIRST ===
+      debugPrint('📍 Loading geofence from Firebase...');
+
+      final settingsDoc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('geofence')
+          .get();
+
+      double lat = -29.994938052011612;
+      double lng = 30.939421740548614;
+      double radius = 800.0;
+
+      if (settingsDoc.exists) {
+        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
+        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
+        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
+        debugPrint('📍 Using Firebase geofence: lat=$lat, lng=$lng, radius=$radius');
+      } else {
+        debugPrint('📍 Using default geofence values');
+      }
+
+      // === REGISTER WITH FIREBASE VALUES ===
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
-        'lat': -29.994938052011612,
-        'lng': 30.939421740548614,
-        'radius': 800.0,
+        'lat': lat,
+        'lng': lng,
+        'radius': radius,
       });
+
+      debugPrint('✅ Native geofence registered with Firebase values');
 
       _channel.setMethodCallHandler(_handleMethodCall);
 
@@ -116,9 +139,9 @@ class LocationService {
       );
 
       _isInitialized = true;
-      debugPrint('✅ True Hybrid started: Native Geofence + WorkManager');
+      debugPrint('✅ True Hybrid started successfully');
     } catch (e) {
-      debugPrint('Hybrid start failed: $e');
+      debugPrint('❌ Hybrid start failed: $e');
     }
   }
 
@@ -131,7 +154,10 @@ class LocationService {
   }
 
   Future<void> _handleMethodCall(MethodCall call) async {
+    debugPrint('📍 _handleMethodCall received: ${call.method}');
+    
     if (call.method == 'onGeofenceEvent') {
+      debugPrint('✅ onGeofenceEvent received!');
       final isEntering = call.arguments['entering'] as bool;
       final eventType = isEntering ? 'enter' : 'exit';
 
@@ -236,5 +262,15 @@ class LocationService {
 
   Future<void> _requestPermissions() async {
     await ph.Permission.locationAlways.request();
+  }
+  
+  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
+    await _logGeoFenceEvent(
+      eventType: isEntering ? 'enter' : 'exit',
+      source: 'manual_test',
+      notes: notes ?? 'Manual test from Diagnostics screen',
+    );
+    await _updateFirestore(isEntering);
+    await _sendNotification(isEntering);
   }
 }
