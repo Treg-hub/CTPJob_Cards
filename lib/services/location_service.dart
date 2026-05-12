@@ -188,6 +188,20 @@ class LocationService {
     }
   }
 
+  // ==================== TEST METHOD (Added Back) ====================
+  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final clockNo = prefs.getString('loggedInClockNo') ?? 'UNKNOWN';
+
+    await _logGeoFenceEvent(
+      eventType: isEntering ? 'enter' : 'exit',
+      source: 'manual_test',
+      notes: notes ?? 'Manual test from Diagnostics screen',
+    );
+    await _updateFirestore(isEntering);
+    await _sendNotification(isEntering);
+  }
+
   Future<void> _logGeoFenceEvent({
     required String eventType,
     required String source,
