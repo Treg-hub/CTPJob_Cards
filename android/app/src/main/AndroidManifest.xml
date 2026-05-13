@@ -55,7 +55,11 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="urgent_alert_channel" />
-
+        <!-- Fix for GoogleApiManager error on some devices -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+            
         <!-- ==================== GEOFENCE RECEIVER (Must match MainActivity.kt) ==================== -->
         <receiver
             android:name=".GeofenceBroadcastReceiver"

@@ -225,6 +225,16 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "registerGeofence" -> {
+                        // Safety check for Google Play Services
+                        if (!isGooglePlayServicesAvailable()) {
+                            result.error(
+                                "PLAY_SERVICES_UNAVAILABLE", 
+                                "Google Play Services not available on this device", 
+                                null
+                            )
+                            return@setMethodCallHandler
+                        }
+
                         val clockNo = call.argument<String>("clockNo")
                         val lat = call.argument<Double>("lat")
                         val lng = call.argument<Double>("lng")
@@ -297,6 +307,17 @@ class MainActivity : FlutterActivity() {
             result.success("Urgent alert triggered")
         } catch (e: Exception) {
             result.error("ALERT_ERROR", e.message, null)
+        }
+    }
+
+    private fun isGooglePlayServicesAvailable(): Boolean {
+        return try {
+            val googleApiAvailability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this)
+            resultCode == com.google.android.gms.common.ConnectionResult.SUCCESS
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error checking Google Play Services: ${e.message}")
+            false
         }
     }
 }

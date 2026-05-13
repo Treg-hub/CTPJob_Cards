@@ -169,7 +169,7 @@ class LocationService {
 
       double lat = -29.994938052011612;
       double lng = 30.939421740548614;
-      double radius = 800;
+      double radius = 500;
 
       if (settingsDoc.exists) {
         lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
@@ -182,7 +182,7 @@ class LocationService {
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
+        timeLimit: const Duration(seconds: 30),
       );
 
       final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
