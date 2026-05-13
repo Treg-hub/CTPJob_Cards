@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Required for BootReceiver to re-register geofences after reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="CTP Job Cards"
@@ -42,10 +44,33 @@
             </intent-filter>
         </activity>
 
-        <!-- ==================== ALARM RECEIVER (NEW - v2) ==================== -->
+        <!-- ==================== ALARM RECEIVER ==================== -->
         <receiver
             android:name=".AlarmReceiver"
             android:exported="false" />
+
+        <!--
+            GEOFENCE RECEIVER
+            Must be exported=true so GMS (com.google.android.gms) can deliver
+            geofence transition broadcasts. No intent-filter needed because the
+            PendingIntent is explicit (targets this class directly).
+            Absence of this entry — or wrong class name — causes:
+            SecurityException: Unknown calling package name 'com.google.android.gms'
+        -->
+        <receiver
+            android:name=".GeofenceReceiver"
+            android:exported="true" />
+
+        <!-- ==================== BOOT RECEIVER ==================== -->
+        <!-- Re-registers the geofence after device reboot or app update -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- ==================== META DATA ==================== -->
         <meta-data
@@ -55,19 +80,9 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="urgent_alert_channel" />
-        <!-- Fix for GoogleApiManager error on some devices -->
         <meta-data
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
-            
-        <!-- ==================== GEOFENCE RECEIVER (Must match MainActivity.kt) ==================== -->
-        <receiver
-            android:name=".GeofenceBroadcastReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.google.android.gms.location.ACTION_GEOFENCE_TRIGGERED" />
-            </intent-filter>
-        </receiver>
 
         <!-- ==================== SERVICES ==================== -->
         <service android:name=".AlertForegroundService" android:foregroundServiceType="specialUse" android:exported="false" />
