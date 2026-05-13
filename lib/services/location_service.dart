@@ -45,14 +45,15 @@ void callbackDispatcher() {
         timeLimit: const Duration(seconds: 15),
       );
 
-      final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
+      final onSite =
+          Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <=
+              radius;
 
       final firestore = FirestoreService();
       final emp = await firestore.getEmployee(clockNo);
 
       if (emp != null && emp.isOnSite != onSite) {
         await firestore.updateEmployee(emp.copyWith(isOnSite: onSite));
-
         await firestore.logGeoFenceEvent(
           clockNo: clockNo,
           eventType: onSite ? 'enter' : 'exit',
@@ -61,8 +62,7 @@ void callbackDispatcher() {
           longitude: pos.longitude,
           accuracy: pos.accuracy,
         );
-
-        debugPrint('📍 WorkManager 30-min check: Status changed');
+        debugPrint('📍 WorkManager 30-min check: isOnSite changed to $onSite');
       }
     } catch (e) {
       debugPrint('WorkManager error: $e');
@@ -113,12 +113,12 @@ class LocationService {
         'radius': radius,
       });
 
-      debugPrint('✅ Native geofence registered successfully');
+      debugPrint('✅ Native geofence registered');
 
-      _channel.setMethodCallHandler(_handleMethodCall);
+      // Handle callbacks from the native GeofenceReceiver when the app is foregrounded.
+      _channel.setMethodCallHandler(_handleNativeGeofenceEvent);
 
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-
       await Workmanager().registerPeriodicTask(
         locationTaskName,
         locationTaskName,
@@ -130,7 +130,7 @@ class LocationService {
       );
 
       _isInitialized = true;
-      debugPrint('✅ Hybrid geofence monitoring started successfully');
+      debugPrint('✅ Hybrid geofence monitoring started (native + WorkManager 30-min)');
     } catch (e) {
       debugPrint('❌ Hybrid start failed: $e');
     }
@@ -138,24 +138,28 @@ class LocationService {
 
   Future<void> stopNativeMonitoring() async {
     if (kIsWeb) return;
-    await _channel.invokeMethod('stopGeofence');
+    try {
+      await _channel.invokeMethod('stopGeofence');
+    } catch (e) {
+      debugPrint('stopGeofence error (non-fatal): $e');
+    }
     await Workmanager().cancelByUniqueName(locationTaskName);
     _isInitialized = false;
     debugPrint('🛑 Hybrid monitoring stopped');
   }
 
-  Future<void> _handleMethodCall(MethodCall call) async {
-    debugPrint('📍 _handleMethodCall received: ${call.method}');
-    
-    if (call.method == 'onGeofenceEvent') {
-      debugPrint('✅ onGeofenceEvent received!');
-      final isEntering = call.arguments['entering'] as bool;
-      final eventType = isEntering ? 'enter' : 'exit';
+  // Called by the native GeofenceReceiver via MethodChannel when the Flutter engine
+  // is running (i.e., app is in foreground). Firestore is already updated on the
+  // native side — this handler only drives the local notification and any UI refresh.
+  Future<void> _handleNativeGeofenceEvent(MethodCall call) async {
+    if (call.method != 'onGeofenceEvent') return;
 
-      await _logGeoFenceEvent(eventType: eventType, source: 'native_geofence');
-      await _updateFirestore(isEntering);
-      await _sendNotification(isEntering);
-    }
+    final isEntering = call.arguments['entering'] as bool;
+    debugPrint('📍 Native geofence event received in Dart — entering=$isEntering');
+
+    // Do NOT update Firestore here; GeofenceReceiver.kt already did it reliably.
+    // Only trigger the local notification for user feedback.
+    await _sendNotification(isEntering);
   }
 
   Future<void> checkCurrentLocation() async {
@@ -175,9 +179,7 @@ class LocationService {
         lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
         lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
         radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-        debugPrint('📍 Using Firebase geofence → Lat: $lat, Lng: $lng, Radius: $radius');
-      } else {
-        debugPrint('📍 Using default geofence values');
+        debugPrint('📍 Geofence settings → lat=$lat lng=$lng radius=$radius');
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -185,8 +187,10 @@ class LocationService {
         timeLimit: const Duration(seconds: 30),
       );
 
-      final onSite = Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <= radius;
-      debugPrint('📍 Current location check → OnSite: $onSite');
+      final onSite =
+          Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <=
+              radius;
+      debugPrint('📍 Manual check → onSite=$onSite');
 
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
@@ -195,7 +199,6 @@ class LocationService {
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && emp.isOnSite != onSite) {
         await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
-
         await _firestoreService.logGeoFenceEvent(
           clockNo: clockNo,
           eventType: onSite ? 'enter' : 'exit',
@@ -204,50 +207,18 @@ class LocationService {
           longitude: pos.longitude,
           accuracy: pos.accuracy,
         );
-
-        debugPrint('📍 Status changed → $onSite');
+        debugPrint('📍 Manual check: status changed to $onSite');
       }
     } catch (e) {
       debugPrint('❌ Manual check failed: $e');
     }
   }
 
-  Future<void> _logGeoFenceEvent({
-    required String eventType,
-    required String source,
-    double? latitude,
-    double? longitude,
-    double? accuracy,
-    String? notes,
-  }) async {
-    if (_clockNo == null) {
-      final prefs = await SharedPreferences.getInstance();
-      _clockNo = prefs.getString('loggedInClockNo');
-    }
-    if (_clockNo == null) return;
-
-    await _firestoreService.logGeoFenceEvent(
-      clockNo: _clockNo!,
-      eventType: eventType,
-      source: source,
-      latitude: latitude,
-      longitude: longitude,
-      accuracy: accuracy,
-      notes: notes,
-    );
-  }
-
-  Future<void> _updateFirestore(bool onSite) async {
-    if (_clockNo == null) return;
-    final emp = await _firestoreService.getEmployee(_clockNo!);
-    if (emp != null) {
-      await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
-    }
-  }
-
   Future<void> _sendNotification(bool onSite) async {
     final title = onSite ? '✅ On-Site Detected' : '📍 Left Site Area';
-    final body = onSite ? 'You are within the company radius.' : 'You have left the site area.';
+    final body = onSite
+        ? 'You are within the company radius.'
+        : 'You have left the site area.';
     await _notificationService.showOnSiteNotification(title: title, body: body);
   }
 
@@ -258,14 +229,22 @@ class LocationService {
     }
   }
 
-  // ==================== METHOD YOU WERE MISSING ====================
-  Future<void> logTestGeoFenceEvent({required bool isEntering, String? notes}) async {
-    await _logGeoFenceEvent(
+  Future<void> logTestGeoFenceEvent(
+      {required bool isEntering, String? notes}) async {
+    final prefs = await SharedPreferences.getInstance();
+    _clockNo ??= prefs.getString('loggedInClockNo');
+    if (_clockNo == null) return;
+
+    final emp = await _firestoreService.getEmployee(_clockNo!);
+    if (emp != null) {
+      await _firestoreService.updateEmployee(emp.copyWith(isOnSite: isEntering));
+    }
+    await _firestoreService.logGeoFenceEvent(
+      clockNo: _clockNo!,
       eventType: isEntering ? 'enter' : 'exit',
       source: 'manual_test',
       notes: notes ?? 'Manual test from Diagnostics screen',
     );
-    await _updateFirestore(isEntering);
     await _sendNotification(isEntering);
   }
 }
