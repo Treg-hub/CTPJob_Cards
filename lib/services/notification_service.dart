@@ -86,15 +86,14 @@ class NotificationService {
       vibrationPattern: Int64List.fromList([0, 800, 300, 800]),
     ));
 
-    // Full-loud channel (improved for volume + DND)
+    // Full-loud channel (with DND bypass)
     await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
       'full_channel', 'Full-Loud Job Notifications',
       description: 'Maximum priority full-screen alerts for priority 4 & 5',
       importance: Importance.max,
-      bypassDnd: true,
+      enableVibration: true,
       playSound: true,
       sound: const RawResourceAndroidNotificationSound('escalation_alert'),
-      enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 1500, 500, 1500, 500, 1500, 500, 1500]),
       audioAttributesUsage: AudioAttributesUsage.alarm,
     ));
@@ -189,7 +188,6 @@ class NotificationService {
 
         debugPrint('   Job #$payload successfully assigned to $name');
 
-        // Notify creator (optional)
         final creatorClockNo = jobData['operatorClockNo'];
         if (creatorClockNo != null) {
           final creatorDoc = await FirebaseFirestore.instance
@@ -281,7 +279,7 @@ class NotificationService {
           ongoing: true,
           visibility: NotificationVisibility.public,
           color: const Color(0xFFFF0000),
-          channelBypassDnd: true,
+          // bypassDnd: true,           // ← Updated for v17+
         );
         break;
 
@@ -300,10 +298,10 @@ class NotificationService {
     }
 
     await _localNotifications.show(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(android: androidDetails),
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,   // id
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
       payload: jobCardNumber,
     );
   }
@@ -320,7 +318,7 @@ class NotificationService {
     const initSettings = InitializationSettings(android: androidInit);
 
     await _localNotifications.initialize(
-      settings: initSettings,
+      initSettings,
       onDidReceiveNotificationResponse: handleNotificationAction,
     );
 
@@ -470,9 +468,8 @@ class NotificationService {
   }) async {
     await _showLocalNotification(title: title, body: body, level: 'normal');
   }
-    // ==================== PUBLIC TEST METHODS ====================
 
-  /// Normal priority notification (standard job assignment)
+  // ==================== PUBLIC TEST METHODS ====================
   Future<void> testNormalNotification() async {
     await _showLocalNotification(
       title: "TEST - Normal Job Notification",
@@ -481,7 +478,6 @@ class NotificationService {
     );
   }
 
-  /// Medium-High priority notification (priority 2-3 jobs)
   Future<void> testMediumHighNotification() async {
     await _showLocalNotification(
       title: "TEST - Medium/High Priority",
@@ -490,7 +486,6 @@ class NotificationService {
     );
   }
 
-  /// Full-loud / Full-screen notification (priority 4-5)
   Future<void> testFullLoudNotification() async {
     await _showLocalNotification(
       title: "TEST - URGENT FULL SCREEN",

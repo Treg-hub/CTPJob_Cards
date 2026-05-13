@@ -132,7 +132,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       ]);
     }
 
-    final csvString = const CsvEncoder().convert(csvRows);
+    final csvString = const ListToCsvConverter().convert(csvRows);
     await Clipboard.setData(ClipboardData(text: csvString));
 
     ScaffoldMessenger.of(context).showSnackBar(

@@ -9,16 +9,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ctp_job_cards/main.dart';
+import 'package:ctp_job_cards/screens/login_screen.dart'; // ← Add this import
 
 void main() {
   testWidgets('App launches successfully', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: CtpJobCardsApp(),
+        child: CtpJobCardsApp(
+          initialScreen: LoginScreen(), // ← Fixed: Pass required parameter
+        ),
       ),
     );
 
-    // Check that the app title appears (it exists in both LoginScreen and HomeScreen)
+    // Check that the app title appears
     expect(find.text('CTP Job Cards'), findsOneWidget);
   });
 }

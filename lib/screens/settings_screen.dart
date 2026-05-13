@@ -42,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    await _localNotifications.initialize(settings: initializationSettings);
+    await NotificationService().initialize();
   }
 
   Future<void> _loadOnSiteStatus() async {

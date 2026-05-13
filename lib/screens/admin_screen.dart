@@ -1048,26 +1048,40 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return lower == 'true' || lower == '1' || lower == 'yes' || lower == 'on';
   }
 
+  // ==================== EXPORT TEMPLATE ====================
   void _exportTemplate() {
-    final csvString = const CsvEncoder().convert([
+    final csvData = [
       ['clockNo', 'name', 'position', 'department', 'isOnSite', 'fcmToken'],
-      ['', '', '', '', 'true', '']
-    ]);
+      ['', '', '', '', 'true', ''],
+    ];
+
+    final csvString = const ListToCsvConverter().convert(csvData);
+
     if (kIsWeb) {
       final blob = html.Blob([csvString], 'text/csv');
       final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)..download = 'employees_template.csv'..click();
+      html.AnchorElement(href: url)
+        ..download = 'employees_template.csv'
+        ..click();
       html.Url.revokeObjectUrl(url);
     } else {
       Share.share(csvString, subject: 'Employees Template');
     }
   }
 
+  // ==================== IMPORT CSV ====================
   void _importCsv() async {
-    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
-    if (result != null) {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
       final file = result.files.first;
       String csvString;
+
       if (file.bytes != null) {
         csvString = String.fromCharCodes(file.bytes!);
       } else if (file.path != null) {
@@ -1075,26 +1089,39 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       } else {
         return;
       }
-      final csvTable = const CsvDecoder().convert(csvString);
+
+      final csvTable = const CsvToListConverter().convert(csvString);
+
       if (csvTable.isEmpty || csvTable[0].length < 6) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid CSV format: found ${csvTable.isEmpty ? 0 : csvTable[0].length} columns, expected at least 6')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid CSV format')),
+        );
         return;
       }
+
       final headers = csvTable[0].map((e) => e.toString().trim().toLowerCase()).toList();
-      final expectedHeaders = ['clockno', 'name', 'position', 'department', 'isonsite', 'fcmtoken'];
-      if (!expectedHeaders.every((h) => headers.contains(h))) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid headers: expected clockNo, name, position, department, isOnSite, fcmToken')));
+      final expected = ['clockno', 'name', 'position', 'department', 'isonsite', 'fcmtoken'];
+
+      if (!expected.every((h) => headers.contains(h))) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid headers in CSV')),
+        );
         return;
       }
+
       final rows = csvTable.skip(1).map((row) => {
         'clockNo': row[headers.indexOf('clockno')].toString().trim(),
         'name': row[headers.indexOf('name')].toString().trim(),
         'position': row[headers.indexOf('position')].toString().trim(),
         'department': row[headers.indexOf('department')].toString().trim(),
         'isOnSite': _parseBool(row[headers.indexOf('isonsite')].toString().trim()),
-        'fcmToken': row[headers.indexOf('fcmtoken')].toString().trim().isEmpty ? null : row[headers.indexOf('fcmtoken')].toString().trim(),
+        'fcmToken': row[headers.indexOf('fcmtoken')].toString().trim().isEmpty
+            ? null
+            : row[headers.indexOf('fcmtoken')].toString().trim(),
       }).toList();
+
       bool deleteAll = false;
+
       showDialog(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -1112,30 +1139,38 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   ),
                   Expanded(
                     child: ListView(
-                      children: rows.map((row) => ListTile(
-                        title: Text('${row['clockNo']} - ${row['name']}'),
-                        subtitle: Text('${row['position']} - ${row['department']}'),
-                      )).toList(),
+                      children: rows
+                          .map((row) => ListTile(
+                                title: Text('${row['clockNo']} - ${row['name']}'),
+                                subtitle: Text('${row['position']} - ${row['department']}'),
+                              ))
+                          .toList(),
                     ),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               TextButton(
                 onPressed: () async {
                   Navigator.pop(context);
                   if (deleteAll) {
                     await _firestoreService.deleteAllEmployees();
                   }
+
                   int imported = 0;
                   int skipped = 0;
+
                   for (final row in rows) {
                     if (row['clockNo'].toString().isEmpty) {
                       skipped++;
                       continue;
                     }
+
                     final emp = Employee(
                       clockNo: row['clockNo'] as String,
                       name: row['name'] as String,
@@ -1144,21 +1179,29 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       isOnSite: row['isOnSite'] as bool,
                       fcmToken: row['fcmToken'] as String?,
                     );
+
                     try {
                       await _firestoreService.updateEmployee(emp);
                       imported++;
                     } catch (e) {
                       skipped++;
-                      debugPrint('Error importing ${row['clockNo']}: $e');
                     }
                   }
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imported $imported employees, skipped $skipped')));
+
+                  _loadEmployees();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Imported $imported, skipped $skipped')),
+                  );
                 },
                 child: const Text('Import'),
               ),
             ],
           ),
         ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
       );
     }
   }
@@ -1276,7 +1319,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         jc.createdAt?.toString() ?? '',
       ]),
     ];
-    final csvString = const CsvEncoder().convert(csvData);
+    final csvString = const ListToCsvConverter().convert(csvData);
     if (kIsWeb) {
       final blob = html.Blob([csvString], 'text/csv');
       final url = html.Url.createObjectUrlFromBlob(blob);

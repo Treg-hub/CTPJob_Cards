@@ -10,8 +10,14 @@
 - **Assignment History Tracking**: Implemented detailed assignment history in activity log, showing who assigned whom with timestamps for all assignments and unassignments
 - **Copper Inventory Module**: Complete copper tracking system for managers with dashboard, sorting, transactions, password auth, atomic updates
 - **Automatic On-Site Detection**: Implemented native geofencing for automatic employee onsite status updates and notifications
+- Maintaining and expanding Agentic Development infrastructure for faster, more reliable feature building.
 
 ## Recent Changes
+- **Added Agentic Development Infrastructure (2026-05-13)**:  
+  Created two new mandatory Memory Bank files to significantly improve autonomous building capability while staying fully compliant with all rules:
+  - `memory-bank/dependencies.md` — Complete reference for correct usage, parameters, and platform setup of every dependency in `pubspec.yaml` (prevents any future wrong API calls or deprecated methods).
+  - `memory-bank/agenticDevelopment.md` — Defines the official **Agentic Development Loop v2** (6-step workflow) with future scaling guardrails, Plan/Act mode enforcement, and Genkit readiness.
+  - Both files are now **mandatory reading** at the start of every task.
 - **Fixed Self-Assign Button User Info Bug**: Resolved issue where clicking "Assign Self" in full-screen alerts or notifications didn't retrieve user's clockNo, name, or id, causing assignments to wrong users.
   - **Root Causes**: 1) FullScreenJobAlertActivity didn't pass user extras to MainActivity Intent, causing "Unknown" logs. 2) MainActivity fetched employees/{firebaseUid} but uid="employee_clockNo" while docs keyed by clockNo, so fetch failed and used uid as clockNo.
   - **Fixes**: 1) Added putExtra("operator", "clockNo", "userName") in FullScreenJobAlertActivity btnAssignSelf. 2) Strip "employee_" prefix from uid in MainActivity assignJobToCurrentUser, sendBusyNotificationToOperator, logDismissedAlert. 3) notification_service.dart already had strip logic.
