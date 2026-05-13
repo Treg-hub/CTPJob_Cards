@@ -10,10 +10,8 @@ import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 
 object GeofenceHelper {
-
     private const val TAG = "GeofenceHelper"
     private const val GEOFENCE_REQUEST_ID = "company_geofence_"
-
     private lateinit var geofencingClient: GeofencingClient
     private lateinit var geofencePendingIntent: PendingIntent
 
@@ -57,10 +55,10 @@ object GeofenceHelper {
 
         geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
             .addOnSuccessListener {
-                Log.d(TAG, "Geofence registered successfully for $clockNo")
+                Log.d(TAG, "✅ Geofence registered successfully for $clockNo")
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to register geofence: ${e.message}")
+                Log.e(TAG, "❌ Failed to register geofence: ${e.message}")
             }
     }
 
@@ -69,7 +67,25 @@ object GeofenceHelper {
 
         geofencingClient.removeGeofences(listOf("$GEOFENCE_REQUEST_ID$clockNo"))
             .addOnSuccessListener {
-                Log.d(TAG, "Geofence removed for $clockNo")
+                Log.d(TAG, "✅ Geofence removed for $clockNo")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "❌ Failed to remove geofence: ${e.message}")
+            }
+    }
+
+    // NEW: Stop all geofences (this is what MainActivity.kt is calling)
+    fun stopGeofence(context: Context) {
+        if (!::geofencingClient.isInitialized) {
+            initialize(context)
+        }
+
+        geofencingClient.removeGeofences(geofencePendingIntent)
+            .addOnSuccessListener {
+                Log.d(TAG, "✅ All geofences stopped successfully")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "❌ Failed to stop geofences: ${e.message}")
             }
     }
 }
