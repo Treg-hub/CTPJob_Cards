@@ -200,7 +200,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     if (photos.isEmpty) return [];
     final List<Map<String, dynamic>> uploaded = [];
     final storage = FirebaseStorage.instance;
-    final uuid = const Uuid();
+    const uuid = Uuid();
 
     for (int i = 0; i < photos.length; i++) {
       final photoData = photos[i];
@@ -720,7 +720,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _saveJobCard,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF8C42),
+                      backgroundColor: const Color(0xFFFF8C42),
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       textStyle: const TextStyle(fontSize: 24),
                     ),
@@ -953,7 +953,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _saveJobCard,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFFF8C42),
+                            backgroundColor: const Color(0xFFFF8C42),
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             textStyle: const TextStyle(fontSize: 24),
                           ),

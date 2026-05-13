@@ -88,16 +88,16 @@ class _WelcomePage extends StatelessWidget {
   const _WelcomePage();
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return const Padding(
+      padding: EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.work, size: 80, color: Color(0xFFFF8C42)),
-          const SizedBox(height: 30),
-          const Text("Welcome to\nCTP Job Cards", textAlign: TextAlign.center, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          const Text("We built this app to make your day easier and help you never miss an important job again.", textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: Colors.grey)),
+          Icon(Icons.work, size: 80, color: Color(0xFFFF8C42)),
+          SizedBox(height: 30),
+          Text("Welcome to\nCTP Job Cards", textAlign: TextAlign.center, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+          SizedBox(height: 20),
+          Text("We built this app to make your day easier and help you never miss an important job again.", textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: Colors.grey)),
         ],
       ),
     );

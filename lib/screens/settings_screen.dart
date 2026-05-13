@@ -135,12 +135,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             : ElevatedButton(
                 onPressed: () async {
                   if (permKey == 'notification_policy' && Platform.isAndroid) {
-                    final intent = android_intent.AndroidIntent(
+                    const intent = android_intent.AndroidIntent(
                       action: 'android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS',
                     );
                     await intent.launch();
                   } else if (permKey == 'ignore_battery' && Platform.isAndroid) {
-                    final intent = android_intent.AndroidIntent(
+                    const intent = android_intent.AndroidIntent(
                       action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
                     );
                     await intent.launch();

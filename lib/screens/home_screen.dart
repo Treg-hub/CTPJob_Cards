@@ -1239,7 +1239,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onPressed: () {
               if (['22', '5421', '20'].contains(clockController.text.trim())) {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Access denied. Only authorized clock cards allowed.'), backgroundColor: Colors.red),
@@ -1409,7 +1409,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     await Permission.notification.request();
 
     if (Platform.isAndroid) {
-      final intent = android_intent.AndroidIntent(
+      const intent = android_intent.AndroidIntent(
         action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
       );
       await intent.launch();

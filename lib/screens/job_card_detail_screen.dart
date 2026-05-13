@@ -107,13 +107,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   ),
                 ),
 
-                TabBar(
-                  tabs: const [
+                const TabBar(
+                  tabs: [
                     Tab(text: 'My Department'),
                     Tab(text: 'All Factory'),
                   ],
-                  indicatorColor: const Color(0xFFFF8C42),
-                  labelColor: const Color(0xFFFF8C42),
+                  indicatorColor: Color(0xFFFF8C42),
+                  labelColor: Color(0xFFFF8C42),
                 ),
 
                 Expanded(
@@ -802,15 +802,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeroHeader(jobCard),
-                      SizedBox(height: sectionSpacing),
+                      const SizedBox(height: sectionSpacing),
                       _buildAssignmentButtons(jobCard),
-                      SizedBox(height: sectionSpacing),
+                      const SizedBox(height: sectionSpacing),
                       _buildCombinedCard(jobCard),
-                      SizedBox(height: sectionSpacing),
+                      const SizedBox(height: sectionSpacing),
                       _buildDetailsCard(jobCard),
-                      SizedBox(height: sectionSpacing),
+                      const SizedBox(height: sectionSpacing),
                       _buildActivityLogCard(jobCard),
-                      SizedBox(height: sectionSpacing),
+                      const SizedBox(height: sectionSpacing),
                       _buildAssignmentLogCard(jobCard),
                     ],
                   ),
@@ -2017,10 +2017,10 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
               if (snap.hasError) {
                 final errorMessage = snap.error.toString();
                 if (errorMessage.contains('failed-precondition') && errorMessage.contains('index')) {
-                  return ListTile(
-                    title: const Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
-                    leading: const Icon(Icons.warning, color: Colors.orange),
+                  return const ListTile(
+                    title: Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
+                    leading: Icon(Icons.warning, color: Colors.orange),
                   );
                 }
                 return ListTile(
@@ -2034,7 +2034,7 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
               }
               final jobs = snap.data!;
               if (jobs.isEmpty) {
-                return ListTile(title: Text('No similar jobs found for this criteria', style: const TextStyle(color: Colors.grey)));
+                return const ListTile(title: Text('No similar jobs found for this criteria', style: TextStyle(color: Colors.grey)));
               }
 
               final pageSize = widget.pageSizes[widget.title] ?? 10;

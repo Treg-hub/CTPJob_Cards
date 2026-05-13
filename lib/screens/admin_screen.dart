@@ -72,7 +72,7 @@ class JobCardsDataTableSource extends DataTableSource {
         DataCell(isEditing ? TextField(controller: descriptionController) : Text(jc.description.length > 50 ? '${jc.description.substring(0,50)}...' : jc.description)),
         DataCell(Text(jc.operator)),
         DataCell(Text(jc.assignedClockNos?.length.toString() ?? '0')),
-        DataCell(Row(children: [IconButton(icon: Icon(isEditing ? Icons.save : Icons.edit), onPressed: () => onEditToggle(index)), IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => onDelete(jc))])),
+        DataCell(Row(children: [IconButton(icon: Icon(isEditing ? Icons.save : Icons.edit), onPressed: () => onEditToggle(index)), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => onDelete(jc))])),
       ],
     );
   }
@@ -707,7 +707,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             title: const Text('Copper Storage'),
             onTap: () {
               if (_currentClockNo == '22') {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => CopperDashboardScreen()));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopperDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Access denied. Only clock card 22 allowed.')),

@@ -124,7 +124,7 @@ class _ClosedJobsScreenState extends State<ClosedJobsScreen> {
             onPressed: () async {
               if (commentController.text.trim().isEmpty) return;
               final now = DateTime.now();
-              final user = 'User'; // Since no currentEmployee in this screen
+              const user = 'User'; // Since no currentEmployee in this screen
               final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2,'0')}] $user: ${commentController.text.trim()}';
               final updatedComments = job.comments + newComment;
               try {

@@ -53,7 +53,7 @@ void main() async {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-    FirebaseFirestore.instance.settings = Settings(persistenceEnabled: !kIsWeb);
+    FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: !kIsWeb);
   } catch (e) {
     debugPrint('Firebase warning: $e');
   }

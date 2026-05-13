@@ -56,7 +56,7 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
     // Normal channel
-    await androidPlugin?.createNotificationChannel(AndroidNotificationChannel(
+    await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
       'normal_channel', 'Normal Job Notifications',
       description: 'Standard notifications for job card assignments',
       importance: Importance.high,
@@ -284,7 +284,7 @@ class NotificationService {
         break;
 
       default:
-        androidDetails = AndroidNotificationDetails(
+        androidDetails = const AndroidNotificationDetails(
           'normal_channel', 'Normal Job Notifications',
           icon: '@mipmap/ic_launcher',
           importance: Importance.high,
@@ -293,7 +293,7 @@ class NotificationService {
           playSound: true,
           visibility: NotificationVisibility.public,
           category: AndroidNotificationCategory.message,
-          color: const Color(0xFF0000FF),
+          color: Color(0xFF0000FF),
         );
     }
 
