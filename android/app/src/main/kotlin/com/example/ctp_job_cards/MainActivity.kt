@@ -225,13 +225,9 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "registerGeofence" -> {
-                        // Safety check for Google Play Services
                         if (!isGooglePlayServicesAvailable()) {
-                            result.error(
-                                "PLAY_SERVICES_UNAVAILABLE", 
-                                "Google Play Services not available on this device", 
-                                null
-                            )
+                            Log.w("MainActivity", "⚠️ Google Play Services check failed - skipping geofence")
+                            result.error("PLAY_SERVICES_UNAVAILABLE", "Google Play Services unavailable", null)
                             return@setMethodCallHandler
                         }
 
@@ -241,25 +237,23 @@ class MainActivity : FlutterActivity() {
                         val radius = call.argument<Double>("radius")?.toFloat()
 
                         if (clockNo != null && lat != null && lng != null && radius != null) {
-                            GeofenceHelper.registerGeofence(
-                                context = this,
-                                clockNo = clockNo,
-                                latitude = lat,
-                                longitude = lng,
-                                radius = radius
-                            )
-                            result.success(null)
+                            try {
+                                GeofenceHelper.registerGeofence(
+                                    context = this,
+                                    clockNo = clockNo,
+                                    latitude = lat,
+                                    longitude = lng,
+                                    radius = radius
+                                )
+                                result.success(null)
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "❌ Geofence registration failed: ${e.message}")
+                                result.error("GEOFENCE_ERROR", e.message, null)
+                            }
                         } else {
                             result.error("INVALID_ARGS", "Missing parameters", null)
                         }
                     }
-
-                    "stopGeofence" -> {
-                        GeofenceHelper.stopGeofence(this)
-                        result.success(null)
-                    }
-
-                    else -> result.notImplemented()
                 }
             }
 
@@ -314,9 +308,19 @@ class MainActivity : FlutterActivity() {
         return try {
             val googleApiAvailability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
             val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this)
-            resultCode == com.google.android.gms.common.ConnectionResult.SUCCESS
+            
+            if (resultCode != com.google.android.gms.common.ConnectionResult.SUCCESS) {
+                Log.e("MainActivity", "Google Play Services not available. Error code: $resultCode")
+                
+                // Optional: Show user-friendly message
+                if (googleApiAvailability.isUserResolvableError(resultCode)) {
+                    googleApiAvailability.getErrorDialog(this, resultCode, 9000)?.show()
+                }
+                return false
+            }
+            true
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error checking Google Play Services: ${e.message}")
+            Log.e("MainActivity", "Exception while checking Google Play Services: ${e.message}")
             false
         }
     }

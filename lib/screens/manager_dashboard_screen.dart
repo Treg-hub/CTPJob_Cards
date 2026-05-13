@@ -274,12 +274,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     final sortedDays = {...openByDay.keys, ...closedByDay.keys}.toList()..sort();
 
     if (sortedDays.isEmpty) {
-      return Card(
+      return const Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text('Open vs Closed Trend', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
               Text('No data available for the selected filters.', style: TextStyle(color: Colors.grey)),
@@ -338,11 +338,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         },
                       ),
                     ),
-                    leftTitles: AxisTitles(
+                    leftTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: true, interval: 1),
                     ),
                   ),
-                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                  gridData: const FlGridData(show: true, drawVerticalLine: false),
                   borderData: FlBorderData(show: true),
                 ),
               ),
@@ -354,12 +354,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
   Widget _buildSmartDepartmentAreaChart(List<JobCard> openJobs) {
     if (openJobs.isEmpty) {
-      return Card(
+      return const Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text('Department Analytics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
               Text('No open jobs available for the selected filters.', style: TextStyle(color: Colors.grey)),
@@ -471,12 +471,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
 
     if (priorityCount.isEmpty) {
-      return Card(
+      return const Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text('Priority Breakdown', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
               Text('No open jobs currently to display.', style: TextStyle(color: Colors.grey)),
@@ -510,7 +510,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (value, meta) {
                       return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
                     })),
-                    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 1)),
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 1)),
                   ),
                 ),
               ),
