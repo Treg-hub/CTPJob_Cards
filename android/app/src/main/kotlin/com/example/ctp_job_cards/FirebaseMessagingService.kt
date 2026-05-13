@@ -16,11 +16,11 @@ import com.google.firebase.messaging.RemoteMessage
 class FirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        Log.d("FCM_DEBUG", "═══════════════════════════════════════════════")
-        Log.d("FCM_DEBUG", "📩 FCM MESSAGE RECEIVED IN NATIVE SERVICE")
-        Log.d("FCM_DEBUG", "Level: ${remoteMessage.data["notificationLevel"]}")
-        Log.d("FCM_DEBUG", "Job #: ${remoteMessage.data["jobCardNumber"]}")
-        Log.d("FCM_DEBUG", "═══════════════════════════════════════════════")
+        Log.d(TAG, "═══════════════════════════════════════════════")
+        Log.d(TAG, "📩 FCM MESSAGE RECEIVED")
+        Log.d(TAG, "Level: ${remoteMessage.data["notificationLevel"]}")
+        Log.d(TAG, "Job #: ${remoteMessage.data["jobCardNumber"]}")
+        Log.d(TAG, "═══════════════════════════════════════════════")
 
         val level = remoteMessage.data["notificationLevel"] ?: "normal"
         val jobCardNumber = remoteMessage.data["jobCardNumber"] ?: "Unknown"
@@ -37,18 +37,38 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .joinToString(" > ")
             .ifEmpty { "Not specified" }
 
-        if (level == "full-loud") {
-            Log.d("FCM_DEBUG", "🚨 P5 job #$jobCardNumber - Full-screen only mode")
-            scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
-        } else {
-            val operator = remoteMessage.data["operator"] ?: "Unknown"
-            showNotificationWithButtons(level, "Job #$jobCardNumber", jobCardNumber, description, operator)
-
-            if (level == "medium-high") {
-                Log.d("FCM_DEBUG", "🚨 P4 job #$jobCardNumber - Trying full-screen alarm")
-                scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
+        when (level) {
+            "full-loud" -> {
+                // P5: full-screen alarm is primary. If exact alarms are unavailable
+                // (permission not granted), fall back to a persistent banner so the
+                // technician still sees something.
+                if (canScheduleExactAlarms()) {
+                    Log.d(TAG, "🚨 P5 — scheduling full-screen alarm for job #$jobCardNumber")
+                    scheduleFullScreenAlarm(jobCardNumber, description, level, priority, operator, location)
+                } else {
+                    Log.w(TAG, "⚠️ P5 — exact alarms unavailable, falling back to persistent banner")
+                    showPersistentBanner(level, "🚨 Urgent Job #$jobCardNumber", jobCardNumber, description, operator)
+                }
+            }
+            "medium-high" -> {
+                // P4: persistent banner only — no full-screen alarm.
+                Log.d(TAG, "🔔 P4 — showing persistent banner for job #$jobCardNumber")
+                showPersistentBanner(level, "Job #$jobCardNumber", jobCardNumber, description, operator)
+            }
+            else -> {
+                // P1–P3: standard banner.
+                Log.d(TAG, "🔔 Normal — showing banner for job #$jobCardNumber")
+                showPersistentBanner(level, "Job #$jobCardNumber", jobCardNumber, description, operator)
             }
         }
+    }
+
+    private fun canScheduleExactAlarms(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            return alarmManager.canScheduleExactAlarms()
+        }
+        return true // Always allowed below Android 12
     }
 
     private fun scheduleFullScreenAlarm(
@@ -59,13 +79,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         createdBy: String = "Unknown",
         location: String = "Not specified"
     ) {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            Log.e("FCM_DEBUG", "❌ Cannot schedule exact alarms - permission missing")
-            return
-        }
+        val triggerTime = System.currentTimeMillis() + 3_000
 
-        val triggerTime = System.currentTimeMillis() + 3000
         val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
@@ -82,6 +97,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         try {
             val showIntent = PendingIntent.getBroadcast(
                 this,
@@ -89,15 +105,17 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 alarmIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val alarmInfo = AlarmManager.AlarmClockInfo(triggerTime, showIntent)
-            alarmManager.setAlarmClock(alarmInfo, pendingIntent)
-            Log.d("FCM_DEBUG", "✅ Full-screen alarm scheduled for job #$jobCardNumber")
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(triggerTime, showIntent),
+                pendingIntent
+            )
+            Log.d(TAG, "✅ Full-screen alarm scheduled for job #$jobCardNumber")
         } catch (e: Exception) {
-            Log.e("FCM_DEBUG", "❌ Failed to schedule alarm: ${e.message}")
+            Log.e(TAG, "❌ Failed to schedule alarm: ${e.message}")
         }
     }
 
-    private fun showNotificationWithButtons(
+    private fun showPersistentBanner(
         level: String,
         title: String,
         jobCardNumber: String,
@@ -162,7 +180,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(this, channelId)
+        val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
             .setContentText(description)
@@ -175,7 +193,13 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             .addAction(0, "Assign Self", assignPendingIntent)
             .addAction(0, "Busy", busyPendingIntent)
             .addAction(0, "Dismiss", dismissPendingIntent)
+            .build()
 
-        notificationManager.notify(jobCardNumber.toIntOrNull() ?: 9999, builder.build())
+        notificationManager.notify(jobCardNumber.toIntOrNull() ?: 9999, notification)
+        Log.d(TAG, "✅ Persistent banner shown for job #$jobCardNumber")
+    }
+
+    companion object {
+        private const val TAG = "FCM_DEBUG"
     }
 }

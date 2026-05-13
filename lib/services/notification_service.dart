@@ -124,7 +124,7 @@ class NotificationService {
       name = currentEmployee!.name ?? 'Unknown User';
     } else {
       final prefs = await SharedPreferences.getInstance();
-      clockNo = prefs.getString('clockNo') ?? '';
+      clockNo = prefs.getString('loggedInClockNo') ?? '';
       name = prefs.getString('employeeName') ?? 'Unknown User';
     }
 
@@ -162,6 +162,7 @@ class NotificationService {
 
     try {
       if (actionId == 'assign_self') {
+
         debugPrint('   → Handling ASSIGN SELF for job #$payload');
 
         final query = await FirebaseFirestore.instance
@@ -212,22 +213,28 @@ class NotificationService {
           }
         }
       } else if (actionId == 'busy') {
-        debugPrint('   → Handling BUSY for job #$payload');
-        final query = await FirebaseFirestore.instance
-            .collection('job_cards')
-            .where('jobCardNumber', isEqualTo: int.tryParse(payload))
-            .limit(1)
-            .get();
-        if (query.docs.isNotEmpty) {
-          await query.docs.first.reference.update({
-            'status': 'busy',
-            'lastUpdatedAt': FieldValue.serverTimestamp(),
-          });
-          debugPrint('   Job #$payload marked busy by $name');
-        }
+        // Write to alertResponses so the Cloud Function onAlertResponseCreated:
+        //   1. Notifies the job creator that this technician is busy
+        //   2. Sets escalationStopped: true on the job card to halt escalation
+        debugPrint('   → Handling BUSY for job #$payload by $name ($clockNo)');
+        await FirebaseFirestore.instance.collection('alertResponses').add({
+          'jobCardNumber': payload,
+          'action': 'busy',
+          'clockNo': clockNo,
+          'userName': name,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        debugPrint('   Busy response written to alertResponses for job #$payload');
       } else if (actionId == 'dismiss') {
-        debugPrint('   → Handling DISMISS for job #$payload');
-        debugPrint('   Dismiss logged for $name on job #$payload');
+        debugPrint('   → Handling DISMISS for job #$payload by $name ($clockNo)');
+        await FirebaseFirestore.instance.collection('alertResponses').add({
+          'jobCardNumber': payload,
+          'action': 'dismissed',
+          'clockNo': clockNo,
+          'userName': name,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        debugPrint('   Dismiss written to alertResponses for job #$payload');
       }
     } catch (e) {
       debugPrint('   Error handling action $actionId: $e');
@@ -298,7 +305,7 @@ class NotificationService {
     }
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,   // id
+      DateTime.now().millisecondsSinceEpoch % 2147483647, // unique id; modulo keeps within int32
       title,
       body,
       NotificationDetails(android: androidDetails),
@@ -350,7 +357,7 @@ class NotificationService {
     final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
     final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
 
-    _showLocalNotification(title: title, body: body, level: level);
+    await _showLocalNotification(title: title, body: body, level: level);
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {

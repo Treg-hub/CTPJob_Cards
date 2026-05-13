@@ -122,17 +122,21 @@ class AlertForegroundService : Service() {
         return builder.build()
     }
 
-    /**
-     * Schedule full-screen alarm using AlarmReceiver
-     */
     private fun scheduleFullScreenAlarm(jobCardNumber: String, description: String) {
         Log.d("AlertForegroundService", "🚀 Scheduling full-screen alarm for job #$jobCardNumber")
 
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
+        // Pass all job details so FullScreenJobAlertActivity can display them correctly.
         val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("jobCardNumber", jobCardNumber)
             putExtra("description", description)
+            // These extras were previously missing, causing the full-screen alert to always
+            // show priority "5", createdBy "Unknown", and location "Not specified".
+            putExtra("level", intent?.getStringExtra("level") ?: "full-loud")
+            putExtra("priority", intent?.getStringExtra("priority") ?: "5")
+            putExtra("createdBy", intent?.getStringExtra("createdBy") ?: "Unknown")
+            putExtra("location", intent?.getStringExtra("location") ?: "Not specified")
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
