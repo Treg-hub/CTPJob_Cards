@@ -116,3 +116,8 @@ Located in `/functions/index.js` (Node.js v24, region: `africa-south1`). Key res
 ## Testing
 
 Coverage is minimal — one smoke test in `test/widget_test.dart` that verifies `LoginScreen` renders. There is no mock layer; service calls hit real Firebase in tests.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
