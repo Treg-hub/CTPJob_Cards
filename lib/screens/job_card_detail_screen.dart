@@ -80,7 +80,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       context: context,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.92,
+        height: MediaQuery.of(context).size.height * 0.92 - MediaQuery.of(context).viewInsets.bottom,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -172,8 +172,65 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                               ? null
                               : () async {
                                   setDialogState(() => isSaving = true);
-                                  // TODO: Add full assignment logic here
-                                  Navigator.pop(context);
+                                  final current = currentEmployee;
+                                  if (current == null) {
+                                    Navigator.pop(context);
+                                    return;
+                                  }
+                                  final event = AssignmentEvent(
+                                    assignedByName: current.name,
+                                    assignedByClockNo: current.clockNo,
+                                    assigneeClockNos: List<String>.from(selectedClockNos),
+                                    assigneeNames: List<String>.from(selectedNames),
+                                    timestamp: DateTime.now(),
+                                  );
+                                  final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory)..add(event);
+                                  final finalUpdated = _currentJobCard.copyWith(
+                                    assignedClockNos: List<String>.from(selectedClockNos),
+                                    assignedNames: List<String>.from(selectedNames),
+                                    assignedAt: _currentJobCard.assignedAt ?? DateTime.now(),
+                                    assignmentHistory: newHistory,
+                                  );
+                                  try {
+                                    await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+                                    await _refreshJobCard();
+                                    if (_currentJobCard.operatorClockNo != null) {
+                                      try {
+                                        final creatorEmp = await _firestoreService.getEmployee(_currentJobCard.operatorClockNo!);
+                                        if (creatorEmp?.fcmToken != null) {
+                                          await _notificationService.sendCreatorNotification(
+                                            recipientToken: creatorEmp!.fcmToken!,
+                                            jobCardId: _currentJobCard.id!,
+                                            jobCardNumber: _currentJobCard.jobCardNumber ?? 0,
+                                            operator: current.name,
+                                            creator: _currentJobCard.operator,
+                                            department: _currentJobCard.department,
+                                            area: _currentJobCard.area,
+                                            machine: _currentJobCard.machine,
+                                            part: _currentJobCard.part,
+                                            description: _currentJobCard.description,
+                                            notificationType: 'manager_assign',
+                                            assigneeName: selectedNames.join(', '),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        debugPrint('Error sending creator notification: $e');
+                                      }
+                                    }
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Employees assigned!')),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() => isSaving = false);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error assigning: $e'), backgroundColor: Colors.red),
+                                      );
+                                    }
+                                  }
                                 },
                           child: isSaving
                               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
@@ -334,68 +391,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     }
   }
 
-  Future<void> _selfAssign(JobCard jobCard) async {
-    final current = currentEmployee;
-    if (current == null) return;
-    final updated = jobCard.copyWith(
-      assignedClockNos: [...(jobCard.assignedClockNos ?? []), current.clockNo],
-      assignedNames: [...(jobCard.assignedNames ?? []), current.name],
-      assignedAt: DateTime.now(),
-      notes: jobCard.notes,
-    );
-    final event = AssignmentEvent(
-      assignedByName: current.name,
-      assignedByClockNo: current.clockNo,
-      assigneeClockNos: updated.assignedClockNos ?? [],
-      assigneeNames: updated.assignedNames ?? [],
-      timestamp: DateTime.now(),
-    );
-    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory);
-    newHistory.add(event);
-    final finalUpdated = updated.copyWith(
-      assignmentHistory: newHistory,
-      assignedAt: newHistory.isNotEmpty ? newHistory.first.timestamp : DateTime.now(),
-    );
-    try {
-      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
-      await _refreshJobCard();
-
-      if (jobCard.operatorClockNo != null) {
-        try {
-          final creatorEmp = await _firestoreService.getEmployee(jobCard.operatorClockNo!);
-          if (creatorEmp?.fcmToken != null) {
-            await _notificationService.sendCreatorNotification(
-              recipientToken: creatorEmp!.fcmToken!,
-              jobCardId: jobCard.id!,
-              jobCardNumber: jobCard.jobCardNumber ?? 0,
-              operator: currentEmployee?.name ?? 'Unknown',
-              creator: jobCard.operator,
-              department: jobCard.department,
-              area: jobCard.area,
-              machine: jobCard.machine,
-              part: jobCard.part,
-              description: jobCard.description,
-              notificationType: 'self_assign',
-              assigneeName: currentEmployee?.name ?? 'Unknown',
-            );
-          }
-        } catch (e) {
-          debugPrint('Error sending creator notification: $e');
-        }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assigned to you')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error assigning: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   Future<void> _selfUnassign(JobCard jobCard) async {
     final current = currentEmployee;
     if (current == null) return;
@@ -532,70 +527,80 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
           child: StatefulBuilder(
-            builder: (context, setDialogState) => SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 16, right: 16, top: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              child: Column(
+            builder: (context, setDialogState) {
+              final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+              return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 30),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 80)),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 30),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 80)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('What to include in your comment:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                Text('• Clear fault — what happened and what was observed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                                Text('• Any error codes or alarms displayed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                                Text('• When the fault occurred and how often', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                                Text('• Any conditions before the fault (production speed, load, etc.)', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: const Color(0xFFFF8C42), onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
+                              Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface))),
+                              IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _commentController,
+                            decoration: InputDecoration(
+                              labelText: 'Comment / Work Done',
+                              hintText: 'e.g. Machine tripped at 06:30, error E04 on display. Fault occurred 3 times this shift...',
+                              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                              border: const OutlineInputBorder(),
+                              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
+                            maxLines: 5,
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text('What to include in your comment:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        Text('• Clear fault — what happened and what was observed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                        Text('• Any error codes or alarms displayed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                        Text('• When the fault occurred and how often', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                        Text('• Any conditions before the fault (production speed, load, etc.)', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+                        const SizedBox(width: 12),
+                        ElevatedButton(onPressed: () { Navigator.pop(context); _appendComment(); }, child: const Text('Save Comment')),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: const Color(0xFFFF8C42), onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface))),
-                      IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      labelText: 'Comment / Work Done',
-                      hintText: 'e.g. Machine tripped at 06:30, error E04 on display. Fault occurred 3 times this shift...',
-                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
-                      border: const OutlineInputBorder(),
-                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                    maxLines: 5,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
-                      const SizedBox(width: 12),
-                      ElevatedButton(onPressed: () { Navigator.pop(context); _appendComment(); }, child: const Text('Save Comment')),
-                    ],
-                  ),
                 ],
-              ),
-            ),
+              );
+            },
           ),
         );
       },
@@ -609,58 +614,66 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.80),
           decoration: BoxDecoration(
             color: Theme.of(context).appColors.cardSurface,
             borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              left: 16, right: 16, top: 16,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Add Technical Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 25),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 80)),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Every closure note must include:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
-                      const SizedBox(height: 6),
-                      Text('• What was done — actions taken to fix the fault', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                      Text('• Parts used — part numbers and quantities', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                      Text('• Root cause — why the fault occurred', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
-                      Text('• Follow-up recommendations — any further action required', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('Add Technical Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 25),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.orange.withValues(alpha: 80)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Every closure note must include:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(height: 6),
+                            Text('• What was done — actions taken to fix the fault', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                            Text('• Parts used — part numbers and quantities', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                            Text('• Root cause — why the fault occurred', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                            Text('• Follow-up recommendations — any further action required', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: noteController,
+                        decoration: InputDecoration(
+                          labelText: 'Technical Note',
+                          hintText: 'e.g. Replaced bearing 6205-2RS (x2). Root cause: lubrication failure due to blocked grease nipple. Recommend weekly greasing schedule.',
+                          hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                          border: const OutlineInputBorder(),
+                          labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          alignLabelWithHint: true,
+                        ),
+                        maxLines: 6,
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: noteController,
-                  decoration: InputDecoration(
-                    labelText: 'Technical Note',
-                    hintText: 'e.g. Replaced bearing 6205-2RS (x2). Root cause: lubrication failure due to blocked grease nipple. Recommend weekly greasing schedule.',
-                    hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
-                    border: const OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    alignLabelWithHint: true,
-                  ),
-                  maxLines: 6,
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                ),
-                const SizedBox(height: 16),
-                Row(
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 16),
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
@@ -668,8 +681,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     ElevatedButton(onPressed: () { Navigator.pop(context); _appendNote(noteController.text.trim()); }, child: const Text('Save Note')),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -914,7 +927,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
-    if (!isAssigned && !isManager) return const SizedBox.shrink();
+    // For in-progress / monitor states, only assigned users and managers see action buttons.
+    // For open state, everyone can tap Start (which also auto-assigns).
+    if (jobCard.status != JobStatus.open && !isAssigned && !isManager) return const SizedBox.shrink();
 
     final buttons = <Widget>[];
 
@@ -989,36 +1004,62 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     if (buttons.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).appColors.cardSurface,
-        border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),
-      ),
-      child: Row(
-        children: buttons.map((btn) => [btn, const SizedBox(width: 8)]).expand((x) => x).toList()..removeLast(),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).appColors.cardSurface,
+          border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),
+        ),
+        child: Row(
+          children: buttons.map((btn) => [btn, const SizedBox(width: 8)]).expand((x) => x).toList()..removeLast(),
+        ),
       ),
     );
   }
 
   Future<void> _startJob(JobCard jobCard) async {
     final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'User';
+    final current = currentEmployee;
+    final user = current?.name ?? 'User';
+
+    final isAlreadyAssigned = jobCard.assignedClockNos?.contains(current?.clockNo ?? '') ?? false;
+    final updatedClockNos = isAlreadyAssigned
+        ? (jobCard.assignedClockNos ?? [])
+        : [...(jobCard.assignedClockNos ?? []), current?.clockNo ?? ''];
+    final updatedNames = isAlreadyAssigned
+        ? (jobCard.assignedNames ?? [])
+        : [...(jobCard.assignedNames ?? []), user];
+
     final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Started by $user';
     final updated = jobCard.copyWith(
       status: JobStatus.inProgress,
       startedAt: now,
       notes: jobCard.notes + note,
+      assignedClockNos: updatedClockNos,
+      assignedNames: updatedNames,
+      assignedAt: isAlreadyAssigned ? jobCard.assignedAt : now,
     );
-    final event = AssignmentEvent(
+
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
+    if (!isAlreadyAssigned && current != null) {
+      newHistory.add(AssignmentEvent(
+        assignedByName: current.name,
+        assignedByClockNo: current.clockNo,
+        assigneeClockNos: [current.clockNo],
+        assigneeNames: [current.name],
+        timestamp: now,
+      ));
+    }
+    newHistory.add(AssignmentEvent(
       assignedByName: 'Started by $user',
-      assignedByClockNo: currentEmployee?.clockNo ?? '',
+      assignedByClockNo: current?.clockNo ?? '',
       assigneeClockNos: [],
       assigneeNames: [],
       timestamp: now,
-    );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
-    newHistory.add(event);
+    ));
+
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
@@ -1167,10 +1208,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Adjustment Made'),
-        content: TextField(
-          controller: noteController,
-          decoration: const InputDecoration(labelText: 'Description of Adjustment'),
-          maxLines: 4,
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: noteController,
+            decoration: const InputDecoration(labelText: 'Description of Adjustment'),
+            maxLines: 4,
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -1231,7 +1274,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               machine: jobCard.machine,
               part: jobCard.part,
               description: jobCard.description,
-              notificationType: 'self_assign',
+              notificationType: withMonitoring ? 'monitor' : 'completed',
               assigneeName: currentEmployee?.name ?? 'Unknown',
             );
           }
@@ -1354,36 +1397,35 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
 
+    // Unassigned non-managers see nothing here — Start button handles self-assign
+    if (!isAssigned && !isManager) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: isAssigned ? () => _selfUnassign(jobCard) : () => _selfAssign(jobCard),
-              icon: Icon(isAssigned ? Icons.remove_circle : Icons.person_add, size: 24),
-              label: Text(
-                isAssigned ? 'Unassign' : 'Assign',
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAssigned ? Colors.orange : const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 56),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          if (isAssigned) ...[
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _selfUnassign(jobCard),
+                icon: const Icon(Icons.remove_circle, size: 24),
+                label: const Text('Unassign', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
+            if (isManager) const SizedBox(width: 12),
+          ],
           if (isManager)
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () => _showAssignCompleteDialog(context, jobCard),
                 icon: const Icon(Icons.group_add, size: 24),
-                label: const Text(
-                  'Manage',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                ),
+                label: const Text('Manage', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF8C42),
                   foregroundColor: Colors.white,
