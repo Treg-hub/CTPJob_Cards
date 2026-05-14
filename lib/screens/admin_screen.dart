@@ -50,9 +50,9 @@ class JobCardsDataTableSource extends DataTableSource {
   static Color _getStatusColor(JobStatus s) {
     switch (s) {
       case JobStatus.open: return Colors.blue;
+      case JobStatus.inProgress: return Colors.purple;
       case JobStatus.monitor: return Colors.orange;
       case JobStatus.closed: return Colors.green;
-
     }
   }
 
@@ -132,6 +132,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     'onsite_workshop_manager',
     'onsite_mechanics',
     'onsite_electricians',
+    'offsite_managers',
+    'offsite_dept_managers',
+    'offsite_workshop_manager',
   ];
   static const _ruleLabels = {
     'onsite_managers': 'On-site Mech/Elec Manager (by job type)',
@@ -140,6 +143,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     'onsite_workshop_manager': 'On-site Workshop Manager',
     'onsite_mechanics': 'On-site Mechanics',
     'onsite_electricians': 'On-site Electricians',
+    'offsite_managers': 'Off-site Mech/Elec Manager (by job type)',
+    'offsite_dept_managers': 'Off-site Department Manager',
+    'offsite_workshop_manager': 'Off-site Workshop Manager',
   };
   Set<String> _stage1Recipients = {'onsite_managers', 'foremen'};
   Set<String> _stage2Recipients = {'onsite_dept_managers', 'onsite_workshop_manager'};

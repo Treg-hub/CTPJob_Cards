@@ -96,6 +96,13 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department) {
     } else if (rule === "onsite_workshop_manager") {
       const wm = await getOnsiteWorkshopManager();
       if (wm) allRecipients.push(wm);
+    } else if (rule === "offsite_managers") {
+      allRecipients.push(...(await getOffsiteRelevantManagers(jobType)));
+    } else if (rule === "offsite_dept_managers") {
+      allRecipients.push(...(await getOffsiteDeptManagers(department)));
+    } else if (rule === "offsite_workshop_manager") {
+      const wm = await getOffsiteWorkshopManager();
+      if (wm) allRecipients.push(wm);
     }
   }
 
@@ -960,6 +967,55 @@ async function getOnsiteWorkshopManager() {
   const snaps = await db.collection("employees")
     .where("department", "==", "Workshop")
     .where("isOnSite", "==", true)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const pos = (doc.data().position || "").toLowerCase();
+      return /manager/i.test(pos) && !/mechanical|electrical/i.test(pos);
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }))[0] || null;
+}
+
+// ==================== Off-site manager helpers ====================
+async function getOffsiteRelevantManagers(jobType) {
+  const snaps = await db.collection("employees")
+    .where("position", "==", "Manager")
+    .where("isOnSite", "==", false)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const dept = doc.data().department || "";
+      if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
+        return dept.toLowerCase().includes("mechanical");
+      }
+      if (jobType === "electrical" || jobType === "mechanicalElectrical") {
+        return dept.toLowerCase().includes("electrical");
+      }
+      return false;
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
+async function getOffsiteDeptManagers(dept) {
+  const snaps = await db.collection("employees")
+    .where("department", "==", dept)
+    .where("isOnSite", "==", false)
+    .get();
+
+  return snaps.docs
+    .filter((doc) => {
+      const pos = (doc.data().position || "").toLowerCase();
+      return /manager/i.test(pos);
+    })
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
+async function getOffsiteWorkshopManager() {
+  const snaps = await db.collection("employees")
+    .where("department", "==", "Workshop")
+    .where("isOnSite", "==", false)
     .get();
 
   return snaps.docs
