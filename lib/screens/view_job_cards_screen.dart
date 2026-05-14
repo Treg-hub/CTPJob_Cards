@@ -45,11 +45,11 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       setState(() {
-        selectedStatus = ['open', 'monitor', 'closed'][_tabController.index];
+        selectedStatus = ['open', 'inProgress', 'monitor', 'closed'][_tabController.index];
       });
     });
 
@@ -95,6 +95,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'open': return Colors.blue;
+      case 'inprogress': return Colors.purple;
       case 'monitor': return Colors.orange;
       case 'closed': return Colors.green;
       case 'cancelled': return Colors.red;
@@ -485,16 +486,19 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
 
           // Compute counts
           final openCount = jobs.where((j) => j.status.name == 'open').length;
+          final inProgressCount = jobs.where((j) => j.status.name == 'inProgress').length;
           final monitorCount = jobs.where((j) => j.status.name == 'monitor').length;
           final closedCount = jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').length;
 
-          return _isWide ? _buildWideLayout(openCount, monitorCount, closedCount) : _buildNarrowLayout(openCount, monitorCount, closedCount);
+          return _isWide
+              ? _buildWideLayout(openCount, inProgressCount, monitorCount, closedCount)
+              : _buildNarrowLayout(openCount, inProgressCount, monitorCount, closedCount);
         },
       ),
     );
   }
 
-  Widget _buildNarrowLayout(int openCount, int monitorCount, int closedCount) {
+  Widget _buildNarrowLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
     return Column(
       children: [
         // Status Tabs
@@ -502,9 +506,12 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           color: Colors.black,
           child: TabBar(
             controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: 'Open ($openCount)'),
-              Tab(text: 'Monitor ($monitorCount)'),
+              Tab(text: 'In Progress ($inProgressCount)'),
+              Tab(text: 'Monitoring ($monitorCount)'),
               Tab(text: 'Closed ($closedCount)'),
             ],
             labelColor: const Color(0xFFFF8C42),
@@ -522,6 +529,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             controller: _tabController,
             children: [
               _buildJobListForStatus('open'),
+              _buildJobListForStatus('inProgress'),
               _buildJobListForStatus('monitor'),
               _buildJobListForStatus('closed'),
             ],
@@ -531,7 +539,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     );
   }
 
-  Widget _buildWideLayout(int openCount, int monitorCount, int closedCount) {
+  Widget _buildWideLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
     return Column(
       children: [
         // Status Tabs
@@ -541,7 +549,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             controller: _tabController,
             tabs: [
               Tab(text: 'Open ($openCount)'),
-              Tab(text: 'Monitor ($monitorCount)'),
+              Tab(text: 'In Progress ($inProgressCount)'),
+              Tab(text: 'Monitoring ($monitorCount)'),
               Tab(text: 'Closed ($closedCount)'),
             ],
             labelColor: const Color(0xFFFF8C42),
@@ -559,6 +568,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             controller: _tabController,
             children: [
               _buildJobListForStatus('open'),
+              _buildJobListForStatus('inProgress'),
               _buildJobListForStatus('monitor'),
               _buildJobListForStatus('closed'),
             ],
@@ -593,13 +603,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         if (selectedPart != null) jobs = jobs.where((j) => j.part == selectedPart).toList();
 
         // Filter by status
-        final filteredJobs = status == 'open'
-            ? jobs.where((j) => j.status.name == 'open').toList()
-            : status == 'monitor'
-                ? jobs.where((j) => j.status.name == 'monitor').toList()
-                : status == 'closed'
-                    ? jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').toList()
-                    : jobs.where((j) => j.status.name == status).toList();
+        final filteredJobs = status == 'closed'
+            ? jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').toList()
+            : jobs.where((j) => j.status.name == status).toList();
 
         return _buildJobList(filteredJobs, '');
       },

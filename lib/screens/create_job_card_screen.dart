@@ -749,10 +749,32 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 20),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 70)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+                      SizedBox(height: 5),
+                      Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
+                      Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
+                      Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
+                    ],
+                  ),
+                ),
                 TextFormField(
                   decoration: const InputDecoration(
                     labelText: 'Job Description',
+                    hintText: 'e.g. Motor tripping on overload — error E07 on HMI. Fault started at 07:00, occurs every 20 min under full load.',
+                    hintStyle: TextStyle(fontSize: 12.5),
                     border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
                   ),
                   maxLines: 4,
                   validator: (v) => v!.isEmpty ? 'Required' : null,
@@ -982,10 +1004,32 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                         ),
                       const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 20),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.withValues(alpha: 70)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+                            SizedBox(height: 5),
+                            Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
+                            Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
+                            Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
                       TextFormField(
                         decoration: const InputDecoration(
                           labelText: 'Job Description',
+                          hintText: 'e.g. Motor tripping on overload — error E07 on HMI. Fault started at 07:00, occurs every 20 min under full load.',
+                          hintStyle: TextStyle(fontSize: 12.5),
                           border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
                         ),
                         maxLines: 4,
                         validator: (v) => v!.isEmpty ? 'Required' : null,
