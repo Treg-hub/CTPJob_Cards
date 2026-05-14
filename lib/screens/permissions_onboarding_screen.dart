@@ -20,6 +20,7 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
     const _WelcomePage(),
     const _HowItWorksPage(),
     const _JobCardFlowPage(),
+    const _JobStatusPage(),
     const _PriorityLevelsPage(),
     const _PermissionsPage(),
   ];
@@ -169,11 +170,11 @@ class _JobCardFlowPage extends StatelessWidget {
           const SizedBox(height: 8),
           const Icon(Icons.arrow_downward, color: Colors.grey),
           const SizedBox(height: 8),
-          _buildStep("3", "Tap 'Assign to Me' or 'Busy'"),
+          _buildStep("3", "Tap 'Assign to Me' (job moves to In-Progress) or 'Busy'"),
           const SizedBox(height: 8),
           const Icon(Icons.arrow_downward, color: Colors.grey),
           const SizedBox(height: 8),
-          _buildStep("4", "Complete the job + upload photos"),
+          _buildStep("4", "Complete the job, upload photos, set to Monitor or Closed"),
           const SizedBox(height: 8),
           const Icon(Icons.arrow_downward, color: Colors.grey),
           const SizedBox(height: 8),
@@ -196,7 +197,67 @@ class _JobCardFlowPage extends StatelessWidget {
   }
 }
 
-// PAGE 4 - Notification Priority Levels (Corrected with Priority 4)
+// PAGE 4 - Job Card Status Flow
+class _JobStatusPage extends StatelessWidget {
+  const _JobStatusPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("Job Card Status", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text("Every job moves through four stages from creation to completion.", textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic)),
+            const SizedBox(height: 28),
+            _buildStatusCard("Open", Colors.blue, "Job created — awaiting a technician to accept it. Escalation timers are running."),
+            const SizedBox(height: 10),
+            const Icon(Icons.arrow_downward, color: Colors.grey),
+            const SizedBox(height: 10),
+            _buildStatusCard("In-Progress", Colors.orange, "You tapped 'Assign Self' — the job is now yours. Escalation stops immediately."),
+            const SizedBox(height: 10),
+            const Icon(Icons.arrow_downward, color: Colors.grey),
+            const SizedBox(height: 10),
+            _buildStatusCard("Monitor", Colors.amber, "Fault resolved but the machine is being watched for recurrence before final closure."),
+            const SizedBox(height: 10),
+            const Icon(Icons.arrow_downward, color: Colors.grey),
+            const SizedBox(height: 10),
+            _buildStatusCard("Closed", Colors.green, "Fault confirmed resolved. Closure note recorded. Operator is notified."),
+            const SizedBox(height: 20),
+            const Text("Tip: The status moves from Open to In-Progress automatically when you accept the job. You only need to set Monitor or Closed yourself.", textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(String label, Color color, String description) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 26),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(100)),
+            child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(description, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+}
+
+// PAGE 5 - Notification Priority Levels (Corrected with Priority 4)
 class _PriorityLevelsPage extends StatelessWidget {
   const _PriorityLevelsPage();
   @override

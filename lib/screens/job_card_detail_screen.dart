@@ -14,6 +14,7 @@ import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -431,9 +432,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   Widget _buildPhotosSection() {
     if (_currentJobCard.photos.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('No photos attached to this job card', style: TextStyle(color: Colors.grey)),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('No photos attached to this job card', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
 
@@ -479,13 +480,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                               placeholder: (context, url) => Container(
                                 width: 180,
                                 height: 180,
-                                color: Colors.grey[300],
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 child: const Center(child: CircularProgressIndicator()),
                               ),
                               errorWidget: (context, url, error) => Container(
                                 width: 180,
                                 height: 180,
-                                color: Colors.grey[200],
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 child: const Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -527,9 +528,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       builder: (context) {
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1F1F1F),
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).appColors.cardSurface,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
           child: StatefulBuilder(
             builder: (context, setDialogState) => SingleChildScrollView(
@@ -541,7 +542,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -552,13 +553,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('What to include in your comment:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
-                        SizedBox(height: 6),
-                        Text('• Clear fault — what happened and what was observed', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                        Text('• Any error codes or alarms displayed', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                        Text('• When the fault occurred and how often', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                        Text('• Any conditions before the fault (production speed, load, etc.)', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+                      children: [
+                        const Text('What to include in your comment:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        Text('• Clear fault — what happened and what was observed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• Any error codes or alarms displayed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• When the fault occurred and how often', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• Any conditions before the fault (production speed, load, etc.)', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
                       ],
                     ),
                   ),
@@ -567,28 +568,28 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: const Color(0xFFFF8C42), onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface))),
                       IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
                     ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _commentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Comment',
+                    decoration: InputDecoration(
+                      labelText: 'Comment / Work Done',
                       hintText: 'e.g. Machine tripped at 06:30, error E04 on display. Fault occurred 3 times this shift...',
-                      hintStyle: TextStyle(color: Colors.white30, fontSize: 12.5),
-                      border: OutlineInputBorder(),
-                      labelStyle: TextStyle(color: Colors.white70),
+                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                      border: const OutlineInputBorder(),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     maxLines: 5,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+                      TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
                       const SizedBox(width: 12),
                       ElevatedButton(onPressed: () { Navigator.pop(context); _appendComment(); }, child: const Text('Save Comment')),
                     ],
@@ -611,9 +612,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       builder: (context) {
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.80),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1F1F1F),
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).appColors.cardSurface,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
           child: SingleChildScrollView(
             padding: EdgeInsets.only(
@@ -624,7 +625,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Add Technical Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Add Technical Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -635,35 +636,35 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Every closure note must include:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
-                      SizedBox(height: 6),
-                      Text('• What was done — actions taken to fix the fault', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                      Text('• Parts used — part numbers and quantities', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                      Text('• Root cause — why the fault occurred', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                      Text('• Follow-up recommendations — any further action required', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+                    children: [
+                      const Text('Every closure note must include:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('• What was done — actions taken to fix the fault', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Parts used — part numbers and quantities', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Root cause — why the fault occurred', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Follow-up recommendations — any further action required', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: noteController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Technical Note',
                     hintText: 'e.g. Replaced bearing 6205-2RS (x2). Root cause: lubrication failure due to blocked grease nipple. Recommend weekly greasing schedule.',
-                    hintStyle: TextStyle(color: Colors.white30, fontSize: 12.5),
-                    border: OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Colors.white70),
+                    hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     alignLabelWithHint: true,
                   ),
                   maxLines: 6,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                 ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+                    TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
                     const SizedBox(width: 12),
                     ElevatedButton(onPressed: () { Navigator.pop(context); _appendNote(noteController.text.trim()); }, child: const Text('Save Note')),
                   ],
@@ -787,7 +788,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       context,
       MaterialPageRoute(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Photo Viewer'), backgroundColor: Colors.black),
+          appBar: AppBar(title: const Text('Photo Viewer')),
           body: Column(
             children: [
               Expanded(
@@ -804,17 +805,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               ),
               Container(
                 padding: const EdgeInsets.all(16),
-                color: Colors.black,
+                color: Theme.of(context).colorScheme.surface,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Section: ${photo['section'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
-                    Text('Department: ${photo['department'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
-                    Text('Machine: ${photo['machine'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
-                    Text('Location: ${photo['location'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
-                    Text('Part: ${photo['part'] ?? 'N/A'}', style: const TextStyle(color: Colors.white)),
-                    Text('Added by: ${photo['addedBy'] ?? 'Unknown'}', style: const TextStyle(color: Colors.white)),
-                    Text('Timestamp: ${DateTime.parse(photo['timestamp'] ?? '').toLocal().toString().substring(0,16)}', style: const TextStyle(color: Colors.white)),
+                    Text('Section: ${photo['section'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Department: ${photo['department'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Machine: ${photo['machine'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Location: ${photo['location'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Part: ${photo['part'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Added by: ${photo['addedBy'] ?? 'Unknown'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Timestamp: ${DateTime.parse(photo['timestamp'] ?? '').toLocal().toString().substring(0,16)}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                   ],
                 ),
               ),
@@ -835,19 +836,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         backgroundColor: const Color(0xFFFF8C42),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48.0),
-          child: Container(
-            color: Colors.black,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: const Color(0xFFFF8C42),
-              unselectedLabelColor: const Color(0xFFFF8C42),
-              indicatorColor: const Color(0xFFFF8C42),
-              tabs: const [
-                Tab(text: 'Related'),
-                Tab(text: 'Details'),
-                Tab(text: 'Photos'),
-              ],
-            ),
+          child: TabBar(
+            controller: _tabController,
+            labelColor: const Color(0xFFFF8C42),
+            unselectedLabelColor: const Color(0xFFFF8C42),
+            indicatorColor: const Color(0xFFFF8C42),
+            tabs: const [
+              Tab(text: 'Related'),
+              Tab(text: 'Details'),
+              Tab(text: 'Photos'),
+            ],
           ),
         ),
       ),
@@ -890,7 +888,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Photos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Text('Photos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                         TextButton.icon(
                           onPressed: () => _addPhoto('Description'),
                           icon: const Icon(Icons.camera_alt, size: 20),
@@ -992,9 +990,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1F1F1F),
-        border: Border(top: BorderSide(color: Colors.white24)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).appColors.cardSurface,
+        border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),
       ),
       child: Row(
         children: buttons.map((btn) => [btn, const SizedBox(width: 8)]).expand((x) => x).toList()..removeLast(),
@@ -1410,7 +1408,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 GestureDetector(
                   onTap: isManager ? () => _showStatusChangeDialog(jobCard) : null,
                   child: Container(
@@ -1441,7 +1439,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   const Spacer(),
                   Text(
                     _formatDateTime(jobCard.createdAt!),
-                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                    style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -1449,7 +1447,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             const SizedBox(height: 8),
             Text(
               'Count - $_reoccurrenceCount',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
             RichText(
@@ -1465,7 +1463,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   ),
                   TextSpan(
                     text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
-                    style: const TextStyle(fontSize: 15.5, color: Colors.white),
+                    style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface),
                   ),
                 ],
               ),
@@ -1486,16 +1484,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Description', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text('Description', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 6),
-            Text(jobCard.description, style: const TextStyle(fontSize: 15.5, color: Colors.white)),
+            Text(jobCard.description, style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 16),
 
             // ==================== COMMENTS SECTION ====================
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 if (_canAddComments)
                   Row(
                     children: [
@@ -1517,11 +1515,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             ),
             const SizedBox(height: 8),
             if (parsedComments.isEmpty)
-              const Text('No comments yet', style: TextStyle(color: Colors.white70)),
+              Text('No comments yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             if (parsedComments.isNotEmpty)
               ...parsedComments.map((comment) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(comment, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                    child: Text(comment, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
                   )),
 
             const SizedBox(height: 16),
@@ -1530,7 +1528,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 if (_canAddNotes)
                   Row(
                     children: [
@@ -1553,10 +1551,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             const SizedBox(height: 6),
             if (jobCard.notes.isNotEmpty) ..._parseNotes(jobCard.notes).map((note) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(note, style: const TextStyle(fontSize: 15, color: Colors.white)),
+                  child: Text(note, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
                 )),
             if (jobCard.notes.isEmpty)
-              const Text('No notes', style: TextStyle(color: Colors.white70)),
+              Text('No notes', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
@@ -1572,7 +1570,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text('Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 8),
             _buildDetailRow('Created By', jobCard.operator),
             if (jobCard.completedBy != null) _buildDetailRow('Completed By', jobCard.completedBy!),
@@ -1581,7 +1579,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(width: 120, child: Text('Assigned To:', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
+                  SizedBox(width: 120, child: Text('Assigned To:', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant))),
                   Expanded(
                     child: Wrap(
                       spacing: 6,
@@ -1589,9 +1587,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       children: jobCard.assignedNames!.map((name) {
                         return Chip(
                           avatar: const Icon(Icons.person, size: 16, color: Colors.green),
-                          label: Text(name, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                          backgroundColor: Colors.white12,
-                          side: const BorderSide(color: Colors.white24),
+                          label: Text(name, style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13)),
+                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          side: BorderSide(color: Theme.of(context).colorScheme.outline),
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                         );
                       }).toList(),
@@ -1612,7 +1610,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
-        title: const Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
@@ -1639,19 +1637,19 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
-        title: const Text('Assignment Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Assignment Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: parsedHistory.isEmpty
-                  ? [const Text('No assignment history', style: TextStyle(color: Colors.white70))]
+                  ? [Text('No assignment history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))]
                   : parsedHistory.map((entry) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: Text(entry, style: const TextStyle(fontSize: 15, color: Colors.white), textAlign: TextAlign.left),
+                          child: Text(entry, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface), textAlign: TextAlign.left),
                         ),
                       )).toList(),
             ),
@@ -1667,8 +1665,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 200, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 15.5, color: Colors.white))),
+          SizedBox(width: 200, child: Text('$label:', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface))),
         ],
       ),
     );
@@ -1679,8 +1677,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white70))),
-          SizedBox(width: 220, child: Text(_formatDateTime(dateTime), textAlign: TextAlign.right, style: const TextStyle(fontSize: 15.5, color: Colors.white))),
+          Expanded(child: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant))),
+          SizedBox(width: 220, child: Text(_formatDateTime(dateTime), textAlign: TextAlign.right, style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface))),
         ],
       ),
     );
@@ -1700,22 +1698,26 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Color _getPriorityColor(String priority) {
-    final num = int.tryParse(priority.substring(1)) ?? 0;
+    final num = int.tryParse(priority.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     switch (num) {
-      case 1: return Colors.green[600]!;
-      case 2: return Colors.lightGreen[500]!;
-      case 3: return Colors.amber[600]!;
-      case 4: return Colors.deepOrange[600]!;
-      case 5: return const Color(0xFFFF3D00);
+      case 1: return Theme.of(context).appColors.priority1;
+      case 2: return Theme.of(context).appColors.priority2;
+      case 3: return Theme.of(context).appColors.priority3;
+      case 4: return Theme.of(context).appColors.priority4;
+      case 5: return Theme.of(context).appColors.priority5;
       default: return Colors.grey;
     }
   }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'open': return Colors.blue;
-      case 'monitor': return Colors.orange;
-      case 'closed': return Colors.green;
+      case 'open': return Theme.of(context).appColors.statusOpen;
+      case 'in_progress':
+      case 'in progress': return Theme.of(context).appColors.statusInProgress;
+      case 'completed':
+      case 'monitor': return Theme.of(context).appColors.statusCompleted;
+      case 'closed':
+      case 'cancelled': return Theme.of(context).appColors.statusCancelled;
       default: return Colors.grey;
     }
   }
@@ -1923,10 +1925,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 Expanded(
                   child: Text(
                     'Created by: ${job.operator.isEmpty ? 'Unknown' : job.operator}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -1951,9 +1953,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
             Text(
               '${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: Colors.white70,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1961,21 +1963,21 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
             Text(
               job.description,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onSurface,
                 height: 1.4,
               ),
             ),
             const SizedBox(height: 12),
 
             if (parsedComments.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Comments:',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
@@ -1983,9 +1985,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   comment,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.white70,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.3,
                   ),
                 ),
@@ -1994,12 +1996,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             ],
 
             if (parsedNotes.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Notes:',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
@@ -2007,9 +2009,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   note,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.white70,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.3,
                   ),
                 ),
@@ -2021,10 +2023,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               children: [
                 Text(
                   'Type: ${job.type.displayName}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white70,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const Spacer(),
@@ -2149,15 +2151,15 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
               if (snap.hasError) {
                 final errorMessage = snap.error.toString();
                 if (errorMessage.contains('failed-precondition') && errorMessage.contains('index')) {
-                  return const ListTile(
-                    title: Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                    subtitle: Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Colors.white70)),
-                    leading: Icon(Icons.warning, color: Colors.orange),
+                  return ListTile(
+                    title: const Text('Index Error', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Database indexes are being updated. Related jobs will be available shortly.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    leading: const Icon(Icons.warning, color: Colors.orange),
                   );
                 }
                 return ListTile(
                   title: const Text('Error Loading Related Jobs', style: TextStyle(color: Colors.red)),
-                  subtitle: Text('Please try again later. ${snap.error}', style: const TextStyle(color: Colors.white70)),
+                  subtitle: Text('Please try again later. ${snap.error}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   leading: const Icon(Icons.error, color: Colors.red),
                 );
               }
@@ -2166,7 +2168,7 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
               }
               final jobs = snap.data!;
               if (jobs.isEmpty) {
-                return const ListTile(title: Text('No similar jobs found for this criteria', style: TextStyle(color: Colors.grey)));
+                return ListTile(title: Text('No similar jobs found for this criteria', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)));
               }
 
               final pageSize = widget.pageSizes[widget.title] ?? 10;

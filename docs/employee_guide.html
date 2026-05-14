@@ -380,7 +380,8 @@
     <li><a href="#section1">Onboarding &amp; App Permissions</a></li>
     <li><a href="#section2">Flow of Job Cards</a></li>
     <li><a href="#section3">Notifications — Types &amp; What They Mean</a></li>
-    <li><a href="#section4">The Future: AI-Assisted Maintenance</a></li>
+    <li><a href="#section4">App Appearance — Light &amp; Dark Mode</a></li>
+    <li><a href="#section5">The Future: AI-Assisted Maintenance</a></li>
   </ol>
 </div>
 
@@ -515,16 +516,22 @@
   </div>
 
   <h3>Job Card Status</h3>
+  <p>A job card moves through four statuses during its life:</p>
   <table>
     <thead>
       <tr><th>Status</th><th>Meaning</th></tr>
     </thead>
     <tbody>
-      <tr><td><strong>Open</strong></td><td>Job is live — awaiting or being worked by a technician</td></tr>
-      <tr><td><strong>Monitor</strong></td><td>Fault resolved but machine is being watched for recurrence</td></tr>
-      <tr><td><strong>Closed</strong></td><td>Job complete and confirmed resolved</td></tr>
+      <tr><td><strong>Open</strong></td><td>Job has been created and is awaiting a technician — no one has accepted it yet</td></tr>
+      <tr><td><strong>In-Progress</strong></td><td>A technician has self-assigned and is actively working the job — escalation has stopped</td></tr>
+      <tr><td><strong>Monitor</strong></td><td>Fault has been resolved but the machine is being watched for recurrence</td></tr>
+      <tr><td><strong>Closed</strong></td><td>Job is complete — fault resolved and confirmed</td></tr>
     </tbody>
   </table>
+  <div class="callout tip">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body"><p>The moment you tap <strong>Assign Self</strong> on a notification (or open a job from the alert), the job card automatically moves from <strong>Open</strong> to <strong>In-Progress</strong>. You do not need to change it manually.</p></div>
+  </div>
 
   <hr>
 
@@ -581,7 +588,12 @@
   </div>
 
   <h4>Step 2 — Work the Job</h4>
-  <p>Once accepted, navigate to <strong>My Assigned Jobs</strong> in the app to view full details. Update the status as you progress. When the fault is resolved but you want to monitor the machine, set it to <strong>Monitor</strong>. When the job is fully complete, set it to <strong>Closed</strong>.</p>
+  <p>Once accepted, navigate to <strong>My Assigned Jobs</strong> in the app to view full details. Update the status as you progress:</p>
+  <ul>
+    <li>When you self-assign the job: the status changes automatically from <strong>Open</strong> to <strong>In-Progress</strong></li>
+    <li>When you have resolved the fault but want to watch the machine: change to <strong>Monitor</strong></li>
+    <li>When the job is fully complete: change to <strong>Closed</strong></li>
+  </ul>
 
   <h4>Step 3 — Close the Job</h4>
   <p>When closing a job you must add a note. A closed job with no note is an incomplete record. Include:</p>
@@ -596,17 +608,19 @@
   <hr>
 
   <h3>Automatic Escalation: What Happens If Nobody Responds?</h3>
+  <p>The system has automatic escalation across <strong>four configurable stages</strong>. Each stage has its own timer and recipient list, configured by Admin under <strong>Settings → Escalation Rules</strong>. The defaults are:</p>
   <table>
     <thead>
-      <tr><th>Time After Job Creation</th><th>What Happens</th></tr>
+      <tr><th>Stage</th><th>Default Time After Creation</th><th>Default Recipients</th></tr>
     </thead>
     <tbody>
-      <tr><td><strong>2 minutes</strong></td><td>Foremen and on-site managers for the relevant department are notified</td></tr>
-      <tr><td><strong>7 minutes</strong></td><td>Department managers and the workshop manager receive an urgent alert</td></tr>
-      <tr><td><strong>30 minutes</strong></td><td>Further escalation as configured</td></tr>
+      <tr><td><strong>Stage 1</strong></td><td>2 minutes</td><td>Foremen and on-site managers for the relevant department</td></tr>
+      <tr><td><strong>Stage 2</strong></td><td>7 minutes</td><td>Department managers and the workshop manager (urgent alert)</td></tr>
+      <tr><td><strong>Stage 3</strong></td><td>30 minutes</td><td>Senior management</td></tr>
+      <tr><td><strong>Stage 4</strong></td><td>60 minutes</td><td>Final escalation tier</td></tr>
     </tbody>
   </table>
-  <p>Escalation stops the moment any technician assigns themselves or responds "I'm Busy."</p>
+  <p>Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule.</p>
 </div>
 
 <!-- ══════════════ SECTION 3 ══════════════ -->
@@ -670,8 +684,21 @@
   <p>This is fully automatic — no action required from you.</p>
 </div>
 
-<!-- ══════════════ SECTION 4 — FUTURE ══════════════ -->
-<div class="future-block" id="section4">
+<!-- ══════════════ SECTION 4 — APP APPEARANCE ══════════════ -->
+<div class="section-block" id="section4">
+  <h2>Section 4 · App Appearance — Light &amp; Dark Mode</h2>
+  <p>The app supports both a <strong>dark theme</strong> (the default — easier on the eyes in low-light environments such as workshops and night shifts) and a <strong>light theme</strong> (better visibility in bright outdoor sunlight).</p>
+  <p>To switch:</p>
+  <ol>
+    <li>Open the app and tap the <strong>gear icon</strong> (Settings) at the top right</li>
+    <li>Find the <strong>Dark Mode</strong> toggle near the top of the Settings screen</li>
+    <li>Tap the switch to flip between themes — the change is instant</li>
+  </ol>
+  <p>Your choice is remembered and applies every time you open the app. The orange CTP branding remains consistent across both themes.</p>
+</div>
+
+<!-- ══════════════ SECTION 5 — FUTURE ══════════════ -->
+<div class="future-block" id="section5">
   <h2>The Future: AI-Assisted Maintenance</h2>
 
   <h3>Predictive Maintenance</h3>

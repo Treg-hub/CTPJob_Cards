@@ -1,11 +1,13 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../main.dart' show currentEmployee;
+import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
@@ -13,16 +15,16 @@ import '../services/location_service.dart';
 import 'admin_screen.dart';
 import 'notification_diagnostics_screen.dart';
 import 'login_screen.dart';
-import '../widgets/reset_permissions_button.dart';   // ← NEW IMPORT
+import '../widgets/reset_permissions_button.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
@@ -197,6 +199,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isAdmin = currentEmployee?.clockNo == '22';
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDark = themeMode == ThemeMode.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -222,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Current User', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  Text('Current User', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
                   Text(
                     currentEmployee?.name ?? 'Unknown',
@@ -246,8 +250,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 16),
 
-          // ← RESET BUTTON ADDED HERE (under User Details)
           const ResetPermissionsButton(),
+          const SizedBox(height: 16),
+
+          // Theme toggle
+          Card(
+            elevation: 2,
+            child: SwitchListTile(
+              secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFFF8C42)),
+              title: const Text('Dark Mode'),
+              subtitle: Text(isDark ? 'Switch to light theme' : 'Switch to dark theme'),
+              value: isDark,
+              activeColor: const Color(0xFFFF8C42),
+              onChanged: (_) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Update & FCM buttons

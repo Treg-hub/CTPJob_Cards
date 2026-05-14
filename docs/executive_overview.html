@@ -222,9 +222,10 @@
     border-radius: var(--radius);
   }
   .status-arrow { color: var(--grey-400); font-size: 20px; padding: 0 8px; }
-  .s-open    { background: #dbeafe; color: #1d4ed8; }
-  .s-monitor { background: #fef9c3; color: #854d0e; }
-  .s-closed  { background: #dcfce7; color: #15803d; }
+  .s-open     { background: #dbeafe; color: #1d4ed8; }
+  .s-progress { background: #ffedd5; color: #c2410c; }
+  .s-monitor  { background: #fef9c3; color: #854d0e; }
+  .s-closed   { background: #dcfce7; color: #15803d; }
 
   /* ── Escalation Timeline ── */
   .escalation-track {
@@ -447,14 +448,14 @@
       <div class="step-num">4</div>
       <div class="step-body">
         <strong>Automatic Escalation if No Response</strong>
-        <p>If no technician responds, the system escalates automatically — first to foremen and on-site managers, then to department managers and the workshop manager. No critical fault can be silently ignored.</p>
+        <p>Escalation runs across <strong>four configurable stages</strong>, with timers and recipients managed by Admin. By default, foremen and on-site managers are notified at 2 minutes, department managers and the workshop manager at 7 minutes, and senior management at 30 and 60 minutes. No critical fault can be silently ignored, and the timing can be tuned to match site conditions.</p>
       </div>
     </div>
     <div class="how-step">
       <div class="step-num">5</div>
       <div class="step-body">
         <strong>Job Tracked to Closure</strong>
-        <p>The technician updates the job status and closes it with a completion note. The operator is notified. The full record — fault to fix — is stored permanently and is searchable.</p>
+        <p>The technician self-assigns from the alert (status moves automatically from <strong>Open</strong> to <strong>In-Progress</strong>), works the job, and updates its status as it progresses (Open → In-Progress → Monitor → Closed). When complete, they record what was done and the operator is notified. The full record — fault to fix — is stored permanently and is searchable.</p>
       </div>
     </div>
     <div class="how-step">
@@ -489,22 +490,27 @@
   </table>
 
   <h3>Automatic Escalation Timeline</h3>
+  <p style="font-size:13px; color:var(--grey-600); margin-bottom: 12px;">Escalation runs across <strong>four configurable stages</strong>. Admin can adjust the timer and recipient list for each stage under Settings → Escalation Rules. The defaults are shown below.</p>
   <div class="escalation-track">
     <div class="esc-step e1">
       <div class="esc-time">0 min</div>
       <div class="esc-who">Job created — on-site technicians notified</div>
     </div>
     <div class="esc-step e2">
-      <div class="esc-time">2 min</div>
+      <div class="esc-time">Stage 1 · 2 min</div>
       <div class="esc-who">Foremen &amp; on-site managers alerted</div>
     </div>
     <div class="esc-step e3">
-      <div class="esc-time">7 min</div>
+      <div class="esc-time">Stage 2 · 7 min</div>
       <div class="esc-who">Department managers &amp; workshop manager — urgent alert</div>
     </div>
     <div class="esc-step" style="background:#fdf4ff;">
-      <div class="esc-time">30 min</div>
-      <div class="esc-who">Further configured escalation</div>
+      <div class="esc-time">Stage 3 · 30 min</div>
+      <div class="esc-who">Senior management</div>
+    </div>
+    <div class="esc-step" style="background:#fce7f3;">
+      <div class="esc-time">Stage 4 · 60 min</div>
+      <div class="esc-who">Final escalation tier</div>
     </div>
   </div>
   <p style="font-size:13px; color:var(--grey-600);">Escalation stops immediately when any technician assigns themselves or acknowledges the job.</p>
@@ -513,6 +519,8 @@
   <div class="status-flow">
     <span class="status-pill s-open">Open</span>
     <span class="status-arrow">→</span>
+    <span class="status-pill s-progress">In-Progress</span>
+    <span class="status-arrow">→</span>
     <span class="status-pill s-monitor">Monitor</span>
     <span class="status-arrow">→</span>
     <span class="status-pill s-closed">Closed</span>
@@ -520,7 +528,8 @@
   <table>
     <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td><strong>Open</strong></td><td>Job is active — awaiting or being worked by a technician</td></tr>
+      <tr><td><strong>Open</strong></td><td>Job created — awaiting technician acceptance</td></tr>
+      <tr><td><strong>In-Progress</strong></td><td>Technician has self-assigned and is actively working the job</td></tr>
       <tr><td><strong>Monitor</strong></td><td>Fault resolved but machine is under observation. Auto-closes after 7 days with no update.</td></tr>
       <tr><td><strong>Closed</strong></td><td>Job complete and confirmed resolved — full record stored permanently</td></tr>
     </tbody>
@@ -598,7 +607,8 @@
       <tr><td>Real-time job card creation and tracking</td><td><span class="badge-live">Live</span></td></tr>
       <tr><td>Push notifications scaled by priority (P1–P5)</td><td><span class="badge-live">Live</span></td></tr>
       <tr><td>Full-screen critical alarms for P5 faults</td><td><span class="badge-live">Live</span></td></tr>
-      <tr><td>Automatic escalation (2-min, 7-min, 30-min)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Automatic escalation (4 configurable stages)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Light and dark theme support</td><td><span class="badge-live">Live</span></td></tr>
       <tr><td>Real-time geofencing and on-site status tracking</td><td><span class="badge-live">Live</span></td></tr>
       <tr><td>Permanent audit trail for every action</td><td><span class="badge-live">Live</span></td></tr>
       <tr><td>Manager dashboard with live department visibility</td><td><span class="badge-live">Live</span></td></tr>

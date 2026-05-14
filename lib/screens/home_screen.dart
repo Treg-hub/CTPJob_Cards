@@ -774,7 +774,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   job.notes.split('\n').last.trim(),
-                  style: const TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -813,7 +813,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                           (job.assignedNames is List)
                               ? (job.assignedNames as List).join(', ')
                               : (job.assignedNames?.toString() ?? 'Unassigned'),
-                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5),
                           textAlign: TextAlign.end,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1064,9 +1064,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 Tab(text: 'Assigned'),
                 Tab(text: 'History'),
               ],
-              labelColor: const Color(0xFFFF8C42),
-              unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-              indicatorColor: const Color(0xFFFF8C42),
             ),
             Expanded(
               child: TabBarView(
@@ -1084,8 +1081,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Widget _buildAssignedJobs() {
     if (currentEmployee == null) {
-      return const Center(
-        child: Text('Please log in to view assigned jobs', style: TextStyle(color: Colors.white70)),
+      return Center(
+        child: Text('Please log in to view assigned jobs', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
 
@@ -1094,7 +1091,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+            child: Text('Error: ${snapshot.error}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
           );
         }
 
@@ -1105,8 +1102,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         final assignedJobs = snapshot.data!;
 
         if (assignedJobs.isEmpty) {
-          return const Center(
-            child: Text('No jobs assigned to you', style: TextStyle(color: Colors.white70)),
+          return Center(
+            child: Text('No jobs assigned to you', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           );
         }
 
@@ -1121,8 +1118,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Widget _buildWorkHistory() {
     if (currentEmployee == null) {
-      return const Center(
-        child: Text('Please log in to view work history', style: TextStyle(color: Colors.white70)),
+      return Center(
+        child: Text('Please log in to view work history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
 
@@ -1131,7 +1128,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)),
+            child: Text('Error: ${snapshot.error}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
           );
         }
 
@@ -1151,8 +1148,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           });
 
         if (assignedJobs.isEmpty) {
-          return const Center(
-            child: Text('No work history', style: TextStyle(color: Colors.white70)),
+          return Center(
+            child: Text('No work history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           );
         }
 
@@ -1206,8 +1203,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Widget _buildDashboardTab() {
     if (currentEmployee == null || !currentEmployee!.position.toLowerCase().contains('manager')) {
-      return const Center(
-        child: Text('Access denied. Manager role required.', style: TextStyle(color: Colors.white70)),
+      return Center(
+        child: Text('Access denied. Manager role required.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
     return const ManagerDashboardScreen();
@@ -1353,9 +1350,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         showUnselectedLabels: true,
         items: items,
         currentIndex: _selectedIndex,
-        selectedItemColor: const Color(0xFFFF8C42),
-        unselectedItemColor: Colors.grey,
-        backgroundColor: const Color(0xFF1A1A1A),
         onTap: _onItemTapped,
       ),
       floatingActionButton: Column(
