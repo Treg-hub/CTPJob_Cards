@@ -3,6 +3,7 @@ import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 
 class MyAssignedJobsScreen extends StatefulWidget {
   const MyAssignedJobsScreen({super.key});
@@ -132,7 +133,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                     selected: selectedDepartment == dept,
                     onSelected: (_) => _updateAreas(dept),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                    labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
                 if (selectedDepartment != null) ...[
@@ -145,7 +146,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       selected: selectedArea == area,
                       onSelected: (_) => _updateMachines(area),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                      labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     )).toList(),
                   ),
                 ],
@@ -159,7 +160,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                       selected: selectedMachine == machine,
                       onSelected: (_) => setState(() => selectedMachine = machine),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                      labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     )).toList(),
                   ),
                 ],
@@ -213,7 +214,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                     children: [
                                       TextSpan(
                                         text: 'Job #${job.jobCardNumber ?? job.id ?? 'N/A'}',
-                                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                                        style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                                       ),
                                       const TextSpan(text: ' | '),
                                       TextSpan(
@@ -226,8 +227,8 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                       ),
                                        TextSpan(
                                          text: ' | ${job.type.displayName}',
-                                         style: const TextStyle(
-                                           color: Colors.white,
+                                         style: TextStyle(
+                                           color: Theme.of(context).colorScheme.onSurface,
                                            fontSize: 12,
                                          ),
                                        ),
@@ -238,7 +239,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
                                 // Location
                                 Text(
                                   '${job.department} > ${job.machine} > ${job.area}',
-                                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ),
                                 const SizedBox(height: 2),
                                 // Description
@@ -557,19 +558,14 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
+    final appColors = Theme.of(context).appColors;
     switch (num) {
-      case 1:
-        return Colors.red;
-      case 2:
-        return Colors.orange;
-      case 3:
-        return Colors.yellow;
-      case 4:
-        return Colors.blue;
-      case 5:
-        return Colors.green;
-      default:
-        return Colors.grey;
+      case 1: return appColors.priority1;
+      case 2: return appColors.priority2;
+      case 3: return appColors.priority3;
+      case 4: return appColors.priority4;
+      case 5: return appColors.priority5;
+      default: return Colors.grey;
     }
   }
 
@@ -580,9 +576,9 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '📝 Comments:',
-          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 2),
         ...entries.map((entry) {
@@ -591,7 +587,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
             padding: const EdgeInsets.only(bottom: 2),
             child: Text(
               truncated,
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           );
         }),
@@ -606,9 +602,9 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '📋 Notes:',
-          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 2),
         ...entries.map((entry) {
@@ -617,7 +613,7 @@ class _MyAssignedJobsScreenState extends State<MyAssignedJobsScreen> {
             padding: const EdgeInsets.only(bottom: 2),
             child: Text(
               truncated,
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           );
         }),

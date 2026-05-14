@@ -11,6 +11,7 @@ import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
 import '../services/location_service.dart';
+import '../theme/app_theme.dart';
 
 class JobCardsDataTableSource extends DataTableSource {
   final List<JobCard> jobCards;
@@ -372,8 +373,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         title: const Text('Admin - Manage Collections'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.black,
           tabs: const [
             Tab(text: 'Employees'),
             Tab(text: 'Structures'),
@@ -600,7 +599,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                             selected: selectedDeptForArea == dept,
                             onSelected: (_) => setState(() => selectedDeptForArea = dept),
                             padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
-                            labelStyle: selectedDeptForArea == dept ? const TextStyle(color: Colors.black) : const TextStyle(color: Colors.white),
+                            labelStyle: selectedDeptForArea == dept ? TextStyle(color: Theme.of(context).colorScheme.onPrimary) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                           )).toList(),
                         ),
                         const SizedBox(height: 8),
@@ -659,7 +658,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                               selectedAreaForMachine = null;
                             }),
                             padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
-                            labelStyle: selectedDeptForMachine == dept ? const TextStyle(color: Colors.black) : const TextStyle(color: Colors.white),
+                            labelStyle: selectedDeptForMachine == dept ? TextStyle(color: Theme.of(context).colorScheme.onPrimary) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                           )).toList(),
                         ),
                         if (selectedDeptForMachine != null) ...[
@@ -674,7 +673,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                               selected: selectedAreaForMachine == area,
                               onSelected: (_) => setState(() => selectedAreaForMachine = area),
                               padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
-                              labelStyle: selectedAreaForMachine == area ? const TextStyle(color: Colors.black) : const TextStyle(color: Colors.white),
+                              labelStyle: selectedAreaForMachine == area ? TextStyle(color: Theme.of(context).colorScheme.onPrimary) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                             )).toList(),
                           ),
                         ],
@@ -898,9 +897,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Controls when unassigned jobs escalate and who gets notified at each stage.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const Divider(height: 24),
 
@@ -1032,7 +1031,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(subtitle, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 4),
         Wrap(
           spacing: 0,

@@ -10,6 +10,7 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
+import '../theme/app_theme.dart';
 
 class CreateJobCardScreen extends StatefulWidget {
   const CreateJobCardScreen({super.key});
@@ -64,20 +65,27 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   }
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
+    final appColors = Theme.of(context).appColors;
     switch (num) {
-      case 1: return Colors.green[500]!;
-      case 2: return Colors.lightGreen[500]!;
-      case 3: return Colors.amber[500]!;
-      case 4: return Colors.deepOrange[500]!;
-      case 5: return Colors.red[700]!;
+      case 1: return appColors.priority1;
+      case 2: return appColors.priority2;
+      case 3: return appColors.priority3;
+      case 4: return appColors.priority4;
+      case 5: return appColors.priority5;
       default: return Colors.grey;
     }
   }
 
   Color _getStatusColor(String status) {
+    final appColors = Theme.of(context).appColors;
     switch (status.toLowerCase()) {
-      case 'open': return Colors.blue;
-      case 'completed': return Colors.green;
+      case 'open': return appColors.statusOpen;
+      case 'in_progress':
+      case 'in progress': return appColors.statusInProgress;
+      case 'completed':
+      case 'monitor': return appColors.statusCompleted;
+      case 'closed':
+      case 'cancelled': return appColors.statusCancelled;
       default: return Colors.grey;
     }
   }
@@ -355,7 +363,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
               child: Center(
                 child: Text(
                   path.isEmpty ? 'Select department to see previous jobs' : 'No matching jobs for current selection',
-                  style: const TextStyle(color: Colors.white70),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ),
             ),
@@ -394,14 +402,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Expanded(
                                   child: Text(
                                     '${job.department} > ${job.machine} > ${job.area}',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Created by: ${job.operator}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -427,7 +435,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                     job.description,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w500, fontSize: 14),
                                   ),
                                 ),
                               ],
@@ -464,7 +472,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Expanded(
                                   child: Text(
                                     job.assignedNames?.join(', ') ?? 'Unassigned',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -532,7 +540,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 36, 36, 36),
+                      color: Theme.of(context).appColors.cardSurface,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -568,7 +576,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                            part = '';
                          }),
                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                         labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                         labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                        )).toList(),
                    ),
                  ],
@@ -588,7 +596,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          part = '';
                        }),
                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                       labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                       labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                      )).toList(),
                    ),
                  ],
@@ -607,7 +615,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                          part = '';
                        }),
                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                       labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                       labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                      )).toList(),
                    ),
                  ],
@@ -655,7 +663,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     selected: jobType == type,
                     onSelected: (_) => setState(() => jobType = jobType == type ? null : type),
                     padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                    labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                    labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
                 const SizedBox(height: 8),
@@ -709,7 +717,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? priorityColors[num].withValues(alpha: 0.15)
-                                : (i.isEven ? const Color(0xFFF8FAFC) : Colors.white),
+                                : (i.isEven ? Theme.of(context).colorScheme.surfaceContainerHighest : Theme.of(context).colorScheme.surface),
                           ),
                           children: [
                             Padding(
@@ -823,7 +831,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color.fromARGB(255, 36, 36, 36),
+                            color: Theme.of(context).appColors.cardSurface,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(

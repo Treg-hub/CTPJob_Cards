@@ -3,6 +3,7 @@ import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
+import '../theme/app_theme.dart';
 
 class ViewJobCardsScreen extends StatefulWidget {
   const ViewJobCardsScreen({
@@ -82,22 +83,27 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
+    final appColors = Theme.of(context).appColors;
     switch (num) {
-      case 1: return Colors.green[600]!;
-      case 2: return Colors.lightGreen[500]!;
-      case 3: return Colors.amber[600]!;
-      case 4: return Colors.deepOrange[600]!;
-      case 5: return const Color(0xFFFF3D00);
+      case 1: return appColors.priority1;
+      case 2: return appColors.priority2;
+      case 3: return appColors.priority3;
+      case 4: return appColors.priority4;
+      case 5: return appColors.priority5;
       default: return Colors.grey;
     }
   }
 
   Color _getStatusColor(String status) {
+    final appColors = Theme.of(context).appColors;
     switch (status.toLowerCase()) {
-      case 'open': return Colors.blue;
-      case 'monitor': return Colors.orange;
-      case 'closed': return Colors.green;
-      case 'cancelled': return Colors.red;
+      case 'open': return appColors.statusOpen;
+      case 'in_progress':
+      case 'in progress': return appColors.statusInProgress;
+      case 'monitor':
+      case 'completed': return appColors.statusCompleted;
+      case 'closed':
+      case 'cancelled': return appColors.statusCancelled;
       default: return Colors.grey;
     }
   }
@@ -152,7 +158,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             builder: (context, snapshot) {
               final previousParts = snapshot.data ?? [];
               if (previousParts.isEmpty) {
-                return const Text('No previous parts found', style: TextStyle(color: Colors.white70));
+                return Text('No previous parts found', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant));
               }
               return Center(
                 child: Wrap(
@@ -162,7 +168,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     label: Text(part),
                     onPressed: () => setState(() => selectedPart = part),
                     backgroundColor: selectedPart == part ? const Color(0xFFFF8C42).withValues(alpha: 51) : null,
-                    labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Colors.white),
+                    labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
               );
@@ -182,7 +188,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   selectedPart = null;
                 }),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
               )).toList(),
             ),
           );
@@ -201,7 +207,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   selectedPart = null;
                 }),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
               )).toList(),
             ),
           );
@@ -222,7 +228,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     selectedPart = null;
                   }),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                  labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                 ),
                 ...data.keys.map((dept) => ChoiceChip(
                   label: Text(dept),
@@ -234,7 +240,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     selectedPart = null;
                   }),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : const TextStyle(color: Colors.white),
+                  labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                 )),
               ],
             ),
@@ -308,8 +314,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     ),
                     TextSpan(
                       text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 11.5,
                         height: 1.2,
                       ),
@@ -344,8 +350,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                       job.description,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
                         height: 1.3,
@@ -367,7 +373,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   job.notes.split('\n').first.trim(),
-                  style: const TextStyle(fontSize: 13, color: Colors.white70, fontStyle: FontStyle.italic),
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -408,7 +414,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   Expanded(
                     child: Text(
                       job.assignedNames?.join(', ') ?? 'Unassigned',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                       textAlign: TextAlign.end,
@@ -508,7 +514,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               Tab(text: 'Closed ($closedCount)'),
             ],
             labelColor: const Color(0xFFFF8C42),
-            unselectedLabelColor: Colors.white70,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: const Color(0xFFFF8C42),
           ),
         ),
@@ -545,7 +551,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               Tab(text: 'Closed ($closedCount)'),
             ],
             labelColor: const Color(0xFFFF8C42),
-            unselectedLabelColor: Colors.white70,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: const Color(0xFFFF8C42),
           ),
         ),
@@ -612,11 +618,11 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         if (title.isNotEmpty)
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
           ),
         Expanded(
           child: jobs.isEmpty
-              ? const Center(child: Text('No jobs available', style: TextStyle(color: Colors.white70)))
+              ? Center(child: Text('No jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)))
               : ListView.builder(
                   padding: const EdgeInsets.all(8),
                   itemCount: jobs.length,

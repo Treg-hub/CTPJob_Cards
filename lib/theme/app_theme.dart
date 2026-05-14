@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+const kBrandOrange = Color(0xFFFF8C42);
+
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.priority1,
@@ -11,6 +13,11 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.statusInProgress,
     required this.statusCompleted,
     required this.statusCancelled,
+    required this.navBarBackground,
+    required this.inputFill,
+    required this.chipUnselectedLabel,
+    required this.cardSurface,
+    required this.textMuted,
   });
 
   final Color priority1;
@@ -22,6 +29,11 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color statusInProgress;
   final Color statusCompleted;
   final Color statusCancelled;
+  final Color navBarBackground;
+  final Color inputFill;
+  final Color chipUnselectedLabel;
+  final Color cardSurface;
+  final Color textMuted;
 
   @override
   ThemeExtension<AppColors> copyWith({
@@ -34,6 +46,11 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? statusInProgress,
     Color? statusCompleted,
     Color? statusCancelled,
+    Color? navBarBackground,
+    Color? inputFill,
+    Color? chipUnselectedLabel,
+    Color? cardSurface,
+    Color? textMuted,
   }) {
     return AppColors(
       priority1: priority1 ?? this.priority1,
@@ -45,14 +62,17 @@ class AppColors extends ThemeExtension<AppColors> {
       statusInProgress: statusInProgress ?? this.statusInProgress,
       statusCompleted: statusCompleted ?? this.statusCompleted,
       statusCancelled: statusCancelled ?? this.statusCancelled,
+      navBarBackground: navBarBackground ?? this.navBarBackground,
+      inputFill: inputFill ?? this.inputFill,
+      chipUnselectedLabel: chipUnselectedLabel ?? this.chipUnselectedLabel,
+      cardSurface: cardSurface ?? this.cardSurface,
+      textMuted: textMuted ?? this.textMuted,
     );
   }
 
   @override
   ThemeExtension<AppColors> lerp(ThemeExtension<AppColors>? other, double t) {
-    if (other is! AppColors) {
-      return this;
-    }
+    if (other is! AppColors) return this;
     return AppColors(
       priority1: Color.lerp(priority1, other.priority1, t)!,
       priority2: Color.lerp(priority2, other.priority2, t)!,
@@ -63,9 +83,50 @@ class AppColors extends ThemeExtension<AppColors> {
       statusInProgress: Color.lerp(statusInProgress, other.statusInProgress, t)!,
       statusCompleted: Color.lerp(statusCompleted, other.statusCompleted, t)!,
       statusCancelled: Color.lerp(statusCancelled, other.statusCancelled, t)!,
+      navBarBackground: Color.lerp(navBarBackground, other.navBarBackground, t)!,
+      inputFill: Color.lerp(inputFill, other.inputFill, t)!,
+      chipUnselectedLabel: Color.lerp(chipUnselectedLabel, other.chipUnselectedLabel, t)!,
+      cardSurface: Color.lerp(cardSurface, other.cardSurface, t)!,
+      textMuted: Color.lerp(textMuted, other.textMuted, t)!,
     );
   }
 }
+
+const _priorityColors = AppColors(
+  priority1: Color(0xFF4CAF50),
+  priority2: Color(0xFF8BC34A),
+  priority3: Color(0xFFFFC107),
+  priority4: Color(0xFFFF9800),
+  priority5: Color(0xFFFF3D00),
+  statusOpen: Colors.blue,
+  statusInProgress: Colors.orange,
+  statusCompleted: Colors.green,
+  statusCancelled: Colors.red,
+  navBarBackground: Colors.white,
+  inputFill: Color(0xFFF0F0F0),
+  chipUnselectedLabel: Colors.black87,
+  cardSurface: Colors.white,
+  textMuted: Colors.black54,
+);
+
+const AppColors lightAppColors = _priorityColors;
+
+const AppColors darkAppColors = AppColors(
+  priority1: Color(0xFF4CAF50),
+  priority2: Color(0xFF8BC34A),
+  priority3: Color(0xFFFFC107),
+  priority4: Color(0xFFFF9800),
+  priority5: Color(0xFFFF3D00),
+  statusOpen: Colors.blue,
+  statusInProgress: Colors.orange,
+  statusCompleted: Colors.green,
+  statusCancelled: Colors.red,
+  navBarBackground: Color(0xFF1A1A1A),
+  inputFill: Color(0xFF1A1A1A),
+  chipUnselectedLabel: Colors.white,
+  cardSurface: Color(0xFF1A1A1A),
+  textMuted: Colors.white70,
+);
 
 extension AppThemeExtension on ThemeData {
   AppColors get appColors => extension<AppColors>()!;

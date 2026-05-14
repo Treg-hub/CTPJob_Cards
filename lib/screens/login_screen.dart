@@ -254,8 +254,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -267,36 +268,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
               ),
               const SizedBox(height: 24),
-              const Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
               const SizedBox(height: 8),
-              const Text('Welcome back', style: TextStyle(fontSize: 18, color: Colors.white70)),
+              Text('Welcome back', style: TextStyle(fontSize: 18, color: colorScheme.onSurfaceVariant)),
               const SizedBox(height: 48),
 
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Email',
-                  labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1A1A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 16),
 
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Password',
-                  labelStyle: const TextStyle(color: Color(0xFFFF8C42)),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1A1A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 8),
 
