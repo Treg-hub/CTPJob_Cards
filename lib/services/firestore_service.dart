@@ -676,6 +676,27 @@ class FirestoreService {
     }
   }
 
+  // ==================== DAILY REVIEW ====================
+  Future<void> markJobCardsReviewed(List<String> jobCardIds, String managerClockNo) async {
+    if (jobCardIds.isEmpty) return;
+    try {
+      const batchSize = 500;
+      for (var i = 0; i < jobCardIds.length; i += batchSize) {
+        final batch = _firestore.batch();
+        final end = (i + batchSize < jobCardIds.length) ? i + batchSize : jobCardIds.length;
+        for (var j = i; j < end; j++) {
+          batch.update(
+            _firestore.collection('job_cards').doc(jobCardIds[j]),
+            {'reviewedBy.$managerClockNo': FieldValue.serverTimestamp()},
+          );
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('Failed to mark job cards as reviewed: $e');
+    }
+  }
+
   // ==================== GEO FENCE EVENT LOGGING (NEW - replanned) ====================
   Future<void> logGeoFenceEvent({
     required String clockNo,

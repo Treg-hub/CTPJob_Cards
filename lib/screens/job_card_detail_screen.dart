@@ -1026,11 +1026,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     final isAlreadyAssigned = jobCard.assignedClockNos?.contains(current?.clockNo ?? '') ?? false;
     final updatedClockNos = isAlreadyAssigned
-        ? (jobCard.assignedClockNos ?? [])
-        : [...(jobCard.assignedClockNos ?? []), current?.clockNo ?? ''];
+        ? List<String>.from(jobCard.assignedClockNos ?? [])
+        : <String>[...(jobCard.assignedClockNos ?? []), current?.clockNo ?? ''];
     final updatedNames = isAlreadyAssigned
-        ? (jobCard.assignedNames ?? [])
-        : [...(jobCard.assignedNames ?? []), user];
+        ? List<String>.from(jobCard.assignedNames ?? [])
+        : <String>[...(jobCard.assignedNames ?? []), user];
 
     final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Started by $user';
     final updated = jobCard.copyWith(

@@ -25,6 +25,7 @@ import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'settings_screen.dart';
+import 'daily_review_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -49,6 +50,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
   Timer? _testModeTimer;
+  int _pendingReviewCount = 0;
+  StreamSubscription<List<JobCard>>? _reviewCountSubscription;
 
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
@@ -119,6 +122,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       debugPrint('Error setting up job count subscription: $e');
     }
 
+    if (kIsWeb && isManager) {
+      _reviewCountSubscription = _firestoreService.getAllJobCards().listen((jobs) {
+        if (!mounted) return;
+        final manager = currentEmployee;
+        if (manager == null) return;
+        final clockNo = manager.clockNo;
+        final pos = manager.position.toLowerCase();
+        final isElec = pos.contains('electrical') && pos.contains('manager');
+        final isMech = pos.contains('mechanical') && pos.contains('manager');
+        final count = jobs.where((c) {
+          final inScope = isElec
+              ? (c.type == JobType.electrical || c.type == JobType.mechanicalElectrical)
+              : isMech
+                  ? (c.type == JobType.mechanical || c.type == JobType.mechanicalElectrical)
+                  : c.department == manager.department;
+          return inScope && !c.reviewedBy.containsKey(clockNo);
+        }).length;
+        setState(() => _pendingReviewCount = count);
+      });
+    }
+
     if (!kIsWeb) _setupFirebaseMessaging();
   }
 
@@ -127,6 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _employeeSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
+    _reviewCountSubscription?.cancel();
     _testModeTimer?.cancel();
     super.dispose();
   }
@@ -464,12 +489,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             alignment: WrapAlignment.center,
             spacing: _gridSpacing,
             runSpacing: _gridSpacing,
-            children: _quickActions.map((action) => _buildQuickActionCard(
-              action['title'] as String,
-              action['icon'] as IconData,
-              action['color'] as Color,
-              action['onTap'] as VoidCallback,
-            )).toList(),
+            children: [
+              ..._quickActions.map((action) => _buildQuickActionCard(
+                action['title'] as String,
+                action['icon'] as IconData,
+                action['color'] as Color,
+                action['onTap'] as VoidCallback,
+              )),
+              if (kIsWeb && isManager)
+                _DailyReviewTile(
+                  pendingCount: _pendingReviewCount,
+                  iconSize: _iconSize,
+                  padding: _cardPaddingInsets,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const DailyReviewScreen()),
+                  ),
+                ),
+            ],
           ),
 
           const SizedBox(height: 24),
@@ -1269,4 +1307,153 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+}
+
+// ---------------------------------------------------------------------------
+// Daily Review tile with pulse animation when pending count exceeds 5
+// ---------------------------------------------------------------------------
+
+class _DailyReviewTile extends StatefulWidget {
+  final int pendingCount;
+  final VoidCallback onTap;
+  final double iconSize;
+  final EdgeInsets padding;
+
+  const _DailyReviewTile({
+    required this.pendingCount,
+    required this.onTap,
+    required this.iconSize,
+    required this.padding,
+  });
+
+  @override
+  State<_DailyReviewTile> createState() => _DailyReviewTileState();
+}
+
+class _DailyReviewTileState extends State<_DailyReviewTile>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _glowAnim;
+
+  static const _threshold = 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.035).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _glowAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    if (widget.pendingCount > _threshold) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_DailyReviewTile old) {
+    super.didUpdateWidget(old);
+    if (widget.pendingCount > _threshold && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (widget.pendingCount <= _threshold && _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 0.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPulsing = widget.pendingCount > _threshold;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final glowColor = isPulsing
+            ? Color.lerp(Colors.orange, Colors.red, _glowAnim.value)!
+            : Colors.transparent;
+
+        return Transform.scale(
+          scale: isPulsing ? _scaleAnim.value : 1.0,
+          child: Stack(
+            children: [
+              Card(
+                elevation: isPulsing ? 6 + _glowAnim.value * 6 : 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isPulsing
+                      ? BorderSide(
+                          color: glowColor.withValues(
+                              alpha: 0.4 + _glowAnim.value * 0.6),
+                          width: 2.0,
+                        )
+                      : BorderSide.none,
+                ),
+                child: InkWell(
+                  onTap: widget.onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: widget.padding,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.assignment_late_outlined,
+                          size: widget.iconSize,
+                          color: isPulsing ? glowColor : const Color(0xFF5C6BC0),
+                        ),
+                        SizedBox(height: widget.iconSize <= 80 ? 12 : 8),
+                        Text(
+                          'Daily Review',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.pendingCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: widget.pendingCount > _threshold
+                          ? Colors.red
+                          : Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      widget.pendingCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
