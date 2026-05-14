@@ -538,7 +538,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
               children: [
                 if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.only(left: 16, right: 4, top: 4, bottom: 4),
                     decoration: BoxDecoration(
                       color: Theme.of(context).appColors.cardSurface,
                       borderRadius: BorderRadius.circular(8),
@@ -552,8 +552,11 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(Icons.close, size: 18),
                           onPressed: _clearSelections,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          visualDensity: VisualDensity.compact,
                         ),
                       ],
                     ),
@@ -688,7 +691,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                 // Priority reference — shows only the selected level
                 if (priority > 0)
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                     decoration: BoxDecoration(
                       color: priorityColors[priority].withValues(alpha: 30),
                       borderRadius: BorderRadius.circular(8),
@@ -714,10 +717,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       ],
                     ),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.only(bottom: 6),
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 20),
                     borderRadius: BorderRadius.circular(8),
@@ -726,8 +729,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
-                      SizedBox(height: 5),
+                      Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                      SizedBox(height: 3),
                       Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
                       Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
                       Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
@@ -746,16 +749,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
-                 const SizedBox(height: 24),
-                 const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                 const SizedBox(height: 8),
-                 ElevatedButton.icon(
-                   onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
-                   icon: const Icon(Icons.add_a_photo),
-                   label: const Text('Add Photo (Camera/Gallery)'),
-                 ),
-                 const SizedBox(height: 12),
-                _buildPhotosPreview(),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
@@ -771,6 +764,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
                   ),
                 ),
+                const SizedBox(height: 24),
+                 const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                 const SizedBox(height: 8),
+                 ElevatedButton.icon(
+                   onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                   icon: const Icon(Icons.add_a_photo),
+                   label: const Text('Add Photo (Camera/Gallery)'),
+                 ),
+                 const SizedBox(height: 12),
+                _buildPhotosPreview(),
                 const SizedBox(height: 12),
                 _buildSimilarJobCards(),
               ],
@@ -809,7 +812,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     children: [
                       if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.only(left: 16, right: 4, top: 4, bottom: 4),
                           decoration: BoxDecoration(
                             color: Theme.of(context).appColors.cardSurface,
                             borderRadius: BorderRadius.circular(8),
@@ -823,8 +826,11 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.close),
+                                icon: const Icon(Icons.close, size: 18),
                                 onPressed: _clearSelections,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                visualDensity: VisualDensity.compact,
                               ),
                             ],
                           ),
@@ -954,7 +960,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       const SizedBox(height: 8),
                       if (priority > 0)
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
                             color: priorityColors[priority].withValues(alpha: 30),
                             borderRadius: BorderRadius.circular(8),
@@ -980,10 +986,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                             ],
                           ),
                         ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.only(bottom: 6),
                         decoration: BoxDecoration(
                           color: Colors.blue.withValues(alpha: 20),
                           borderRadius: BorderRadius.circular(8),
@@ -992,8 +998,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         child: const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
-                            SizedBox(height: 5),
+                            Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                            SizedBox(height: 3),
                             Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
                             Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
                             Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
@@ -1013,16 +1019,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                         onChanged: (v) => description = v,
                       ),
                       const SizedBox(height: 24),
-                      const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
-                        icon: const Icon(Icons.add_a_photo),
-                        label: const Text('Add Photo (Camera/Gallery)'),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildPhotosPreview(),
-                      const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -1037,6 +1033,16 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                               : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text('Add Photo (Camera/Gallery)'),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPhotosPreview(),
                       const SizedBox(height: 12),
                     ],
                   ),

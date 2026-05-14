@@ -15,6 +15,7 @@ import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.TextView
 import com.google.android.material.button.MaterialButton
+import com.ctp.jobcards.R
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 
