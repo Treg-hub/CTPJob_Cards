@@ -318,12 +318,12 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
             return Column(
               children: [
                 Container(
-                  color: Colors.black,
+                  color: Theme.of(context).colorScheme.surface,
                   child: TabBar(
                     controller: _tabController,
                     indicatorColor: Colors.amber,
-                    labelColor: Colors.amber,
-                    unselectedLabelColor: Colors.white70,
+                    labelColor: Colors.amber.shade700,
+                    unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
                     tabs: const [
                       Tab(icon: Icon(Icons.swap_horiz), text: 'Make Transaction'),
                       Tab(icon: Icon(Icons.history), text: 'History'),

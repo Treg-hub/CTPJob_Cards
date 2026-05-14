@@ -510,7 +510,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
       children: [
         // Status Tabs
         Container(
-          color: Colors.black,
+          color: const Color(0xFFFF8C42),
           child: TabBar(
             controller: _tabController,
             isScrollable: true,
@@ -521,9 +521,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               Tab(text: 'Monitoring ($monitorCount)'),
               Tab(text: 'Closed ($closedCount)'),
             ],
-            labelColor: const Color(0xFFFF8C42),
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-            indicatorColor: const Color(0xFFFF8C42),
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: Colors.black,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
 
@@ -551,7 +552,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
       children: [
         // Status Tabs
         Container(
-          color: Colors.black,
+          color: const Color(0xFFFF8C42),
           child: TabBar(
             controller: _tabController,
             tabs: [
@@ -560,9 +561,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               Tab(text: 'Monitoring ($monitorCount)'),
               Tab(text: 'Closed ($closedCount)'),
             ],
-            labelColor: const Color(0xFFFF8C42),
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-            indicatorColor: const Color(0xFFFF8C42),
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: Colors.black,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
 
