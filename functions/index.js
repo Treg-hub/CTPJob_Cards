@@ -67,42 +67,14 @@ async function getNotificationConfig() {
   }
 
   return {
-    enable_offsite_escalation: false,
     escalation_onsite_short_minutes: 2,
     escalation_onsite_long_minutes: 7,
     escalation_offsite_minutes: 30,
-    escalation_recipients: {
-      mechanical: {
-        created: ["onsite_mechanics"],
-        "2min": ["onsite_managers", "foremen"],
-        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
-        "30min": []
-      },
-      electrical: {
-        created: ["onsite_electricians"],
-        "2min": ["onsite_managers", "foremen"],
-        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
-        "30min": []
-      },
-      "mech/elec": {
-        created: ["onsite_mechanics", "onsite_electricians"],
-        "2min": ["onsite_managers", "foremen"],
-        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
-        "30min": []
-      },
-      maintenance: {
-        created: [],
-        "2min": [],
-        "7min": [],
-        "30min": []
-      },
-      default: {
-        created: ["onsite_mechanics", "onsite_electricians"],
-        "2min": ["onsite_managers", "foremen"],
-        "7min": ["onsite_dept_managers", "onsite_workshop_manager"],
-        "30min": []
-      }
-    }
+    escalation_stage4_minutes: 60,
+    stage1_recipients: ["onsite_managers", "foremen"],
+    stage2_recipients: ["onsite_dept_managers", "onsite_workshop_manager"],
+    stage3_recipients: [],
+    stage4_recipients: [],
   };
 }
 
@@ -551,10 +523,12 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
   const shortMinutes = config.escalation_onsite_short_minutes || 2;
   const longMinutes = config.escalation_onsite_long_minutes || 7;
   const thirtyMin = config.escalation_offsite_minutes || 30;
+  const stage4Min = config.escalation_stage4_minutes || 60;
 
   const twoMinAgo = new Date(Date.now() - shortMinutes * 60 * 1000);
   const sevenMinAgo = new Date(Date.now() - longMinutes * 60 * 1000);
   const thirtyMinAgo = new Date(Date.now() - thirtyMin * 60 * 1000);
+  const stage4Ago = new Date(Date.now() - stage4Min * 60 * 1000);
 
   // ========== 2-MINUTE ESCALATION ==========
   const jobs2min = await db.collection("job_cards")
@@ -573,6 +547,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
         notifiedAt2min: job.notifiedAt2min || now,
         notifiedAt7min: job.notifiedAt7min || now,
         notifiedAt30min: job.notifiedAt30min || now,
+        notifiedAt4th: job.notifiedAt4th || now,
       });
       continue;
     }
@@ -583,11 +558,11 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
     const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
 
-    const escalationRules = config.escalation_recipients || {};
-    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
-    const recipients2min = jobTypeRules["2min"] || [];
-
-    const resolvedRecipients = await resolveRecipientsFromRules(recipients2min, job.type, job.department);
+    const resolvedRecipients = await resolveRecipientsFromRules(
+      config.stage1_recipients || [],
+      job.type,
+      job.department,
+    );
 
     for (const emp of resolvedRecipients) {
       await sendNotification({
@@ -635,11 +610,11 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
     const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
 
-    const escalationRules = config.escalation_recipients || {};
-    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
-    const recipients7min = jobTypeRules["7min"] || [];
-
-    const resolvedRecipients = await resolveRecipientsFromRules(recipients7min, job.type, job.department);
+    const resolvedRecipients = await resolveRecipientsFromRules(
+      config.stage2_recipients || [],
+      job.type,
+      job.department,
+    );
 
     for (const emp of resolvedRecipients) {
       await sendNotification({
@@ -681,16 +656,18 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "medium-high";
 
-    const escalationRules = config.escalation_recipients || {};
-    const jobTypeRules = escalationRules[job.type] || escalationRules["default"] || {};
-    const recipients30min = jobTypeRules["30min"] || [];
+    const stage3Rules = config.stage3_recipients || [];
 
-    if (recipients30min.length === 0) {
+    if (stage3Rules.length === 0) {
       await doc.ref.update({ notifiedAt30min: now });
       continue;
     }
 
-    const resolvedRecipients = await resolveRecipientsFromRules(recipients30min, job.type, job.department);
+    const resolvedRecipients = await resolveRecipientsFromRules(
+      stage3Rules,
+      job.type,
+      job.department,
+    );
 
     for (const emp of resolvedRecipients) {
       await sendNotification({
@@ -710,6 +687,58 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       });
     }
     await doc.ref.update({ notifiedAt30min: now });
+  }
+
+  // ========== STAGE 4 ESCALATION ==========
+  const jobsStage4 = await db.collection("job_cards")
+    .where("status", "==", "open")
+    .where("assignedClockNos", "==", null)
+    .where("createdAt", "<=", stage4Ago)
+    .where("notifiedAt4th", "==", null)
+    .get();
+
+  for (const doc of jobsStage4.docs) {
+    const job = doc.data();
+
+    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
+      await doc.ref.update({ notifiedAt4th: job.notifiedAt4th || now });
+      continue;
+    }
+
+    const stage4Rules = config.stage4_recipients || [];
+
+    if (stage4Rules.length === 0) {
+      await doc.ref.update({ notifiedAt4th: now });
+      continue;
+    }
+
+    const priority = job.priority || 1;
+    const level = priority <= 3 ? "normal" : "full-loud";
+
+    const resolvedRecipients = await resolveRecipientsFromRules(
+      stage4Rules,
+      job.type,
+      job.department,
+    );
+
+    for (const emp of resolvedRecipients) {
+      await sendNotification({
+        token: emp.token,
+        recipientClockNo: emp.clockNo,
+        title: `Stage 4 Escalation - Job #${job.jobCardNumber || doc.id}`,
+        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
+        jobCardNumber: job.jobCardNumber || doc.id,
+        level,
+        priority,
+        createdBy: job.operator || "Unknown",
+        department: job.department,
+        area: job.area,
+        machine: job.machine,
+        part: job.part,
+        triggeredBy: "stage4_escalation",
+      });
+    }
+    await doc.ref.update({ notifiedAt4th: now });
   }
 });
 

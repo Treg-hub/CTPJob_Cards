@@ -420,6 +420,33 @@ class FirestoreService {
     }
   }
 
+  Future<Map<String, dynamic>> getNotificationConfig() async {
+    try {
+      final doc = await _firestore.collection('notification_configs').doc('global').get();
+      if (doc.exists) return doc.data()!;
+    } catch (e) {
+      throw Exception('Failed to get notification config: $e');
+    }
+    return {
+      'escalation_onsite_short_minutes': 2,
+      'escalation_onsite_long_minutes': 7,
+      'escalation_offsite_minutes': 30,
+      'escalation_stage4_minutes': 60,
+      'stage1_recipients': ['onsite_managers', 'foremen'],
+      'stage2_recipients': ['onsite_dept_managers', 'onsite_workshop_manager'],
+      'stage3_recipients': <String>[],
+      'stage4_recipients': <String>[],
+    };
+  }
+
+  Future<void> saveNotificationConfig(Map<String, dynamic> config) async {
+    try {
+      await _firestore.collection('notification_configs').doc('global').set(config);
+    } catch (e) {
+      throw Exception('Failed to save notification config: $e');
+    }
+  }
+
   Future<String?> getCopperPassword() async {
     try {
       final doc = await _firestore.collection('settings').doc('app').get();
