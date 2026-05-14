@@ -736,12 +736,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 204),
+                        color: Colors.blue,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'JC #${job.jobCardNumber}',
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: onColor(Colors.blue), fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -785,19 +785,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name).withValues(alpha: 128),
+                      color: _getStatusColor(job.status.name),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       job.status.displayName,
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: onColor(_getStatusColor(job.status.name)), fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.blueGrey.withValues(alpha: 64),
+                      color: Colors.blueGrey,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(

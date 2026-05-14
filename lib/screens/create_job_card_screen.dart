@@ -426,7 +426,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                   ),
                                   child: Text(
                                     'P${job.priority}',
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: onColor(_getPriorityColor('P${job.priority}')), fontSize: 10, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -448,24 +448,24 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: _getStatusColor(job.status.name).withValues(alpha: 0.2),
+                                    color: _getStatusColor(job.status.name),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     job.status.displayName,
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                    style: TextStyle(color: onColor(_getStatusColor(job.status.name)), fontSize: 11, fontWeight: FontWeight.w500),
                                   ),
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueGrey.withValues(alpha: 0.3),
+                                    color: Colors.blueGrey,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     job.type.displayName,
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                    style: const TextStyle(color: Colors.white, fontSize: 11),
                                   ),
                                 ),
                                 const SizedBox(width: 8),

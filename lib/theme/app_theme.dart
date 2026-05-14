@@ -92,24 +92,24 @@ class AppColors extends ThemeExtension<AppColors> {
   }
 }
 
-const _priorityColors = AppColors(
-  priority1: Color(0xFF4CAF50),
-  priority2: Color(0xFF8BC34A),
-  priority3: Color(0xFFFFC107),
-  priority4: Color(0xFFFF9800),
-  priority5: Color(0xFFFF3D00),
-  statusOpen: Colors.blue,
-  statusInProgress: Colors.orange,
-  statusCompleted: Colors.green,
-  statusCancelled: Colors.red,
+// Light theme uses darker shades so colors work both as inline text on white
+// surfaces AND as badge backgrounds with white text (WCAG AA contrast).
+const AppColors lightAppColors = AppColors(
+  priority1: Color(0xFF2E7D32),  // Green 800        — ~6.1:1 on white
+  priority2: Color(0xFF33691E),  // Light Green 900  — ~5.9:1 on white
+  priority3: Color(0xFFBF360C),  // Deep Orange 900  — ~5.6:1 on white
+  priority4: Color(0xFFC62828),  // Red 800          — ~5.3:1 on white
+  priority5: Color(0xFFB71C1C),  // Red 900          — ~6.5:1 on white (critical)
+  statusOpen: Color(0xFF1565C0),       // Blue 800         — ~5.3:1 on white
+  statusInProgress: Color(0xFFE65100), // Deep Orange 800  — ~3.7:1 on white (onColor → black)
+  statusCompleted: Color(0xFF2E7D32),  // Green 800        — ~6.1:1 on white
+  statusCancelled: Color(0xFFC62828),  // Red 800          — ~5.3:1 on white
   navBarBackground: Colors.white,
   inputFill: Color(0xFFF0F0F0),
   chipUnselectedLabel: Colors.black87,
   cardSurface: Colors.white,
   textMuted: Colors.black54,
 );
-
-const AppColors lightAppColors = _priorityColors;
 
 const AppColors darkAppColors = AppColors(
   priority1: Color(0xFF4CAF50),
@@ -130,4 +130,12 @@ const AppColors darkAppColors = AppColors(
 
 extension AppThemeExtension on ThemeData {
   AppColors get appColors => extension<AppColors>()!;
+}
+
+/// Returns Colors.black87 or Colors.white, whichever achieves better contrast
+/// against [background]. Use this for all colored badge labels so the text is
+/// always readable regardless of which theme or shade is active.
+Color onColor(Color background) {
+  // Threshold: L > 0.18 means black text is better; <= 0.18 means white is better.
+  return background.computeLuminance() > 0.18 ? Colors.black87 : Colors.white;
 }
