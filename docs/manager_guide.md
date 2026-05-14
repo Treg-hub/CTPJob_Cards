@@ -29,10 +29,10 @@ A job card with vague information is almost useless for analysis, reporting, or 
 
 Your **Manager Dashboard** gives you a live view of:
 
-- All open, monitoring, and recently closed job cards in your department
+- All open, in-progress, monitoring, and recently closed job cards in your department
 - Which technicians are currently on site and which are off site
 - Jobs that have escalated and why
-- Jobs that have been open for too long without progress
+- Jobs that have been open for too long without a technician assigned
 
 ### Notification History
 
@@ -94,25 +94,36 @@ If you see closed jobs with no notes or inadequate notes, raise it with the tech
 
 ### 4. Understand Job Card Status
 
-Job cards move through three statuses:
+Job cards move through four statuses:
 
 | Status | Meaning | What You Should Watch |
 |--------|---------|----------------------|
-| **Open** | Job is live — technician assigned or pending | How long has it been open? Who is on it? |
+| **Open** | Job is live but no technician has accepted it yet | How long has it been open? Is it about to escalate? |
+| **In-Progress** | A technician has self-assigned and is actively working the job | Who is on it? How long since they assigned themselves? |
 | **Monitor** | Fault resolved but machine under observation | Who is monitoring and for how long? |
 | **Closed** | Job complete and confirmed resolved | Does it have an adequate closure note? |
 
-Jobs should not remain Open indefinitely without progress. Monitor jobs older than 3 days should be reviewed to confirm they are still being actively watched.
+Jobs should not remain **Open** for more than a few minutes — if they do, escalation should already be firing. Jobs in **In-Progress** for an extended period should be reviewed to confirm the technician is still active on them. **Monitor** jobs older than 3 days should be reviewed to confirm they are still being actively watched.
 
 ---
 
 ### 5. Monitor Escalation Patterns
 
-If jobs in your department regularly escalate past 2 or 7 minutes, something is wrong:
+Escalation runs across **four configurable stages**, set by Admin under **Settings → Escalation Rules**. Each stage has its own timer and recipient list. The defaults are:
+
+| Stage | Default Time | Default Recipients |
+|-------|-------------|-------------------|
+| Stage 1 | 2 minutes | Department foremen and on-site managers |
+| Stage 2 | 7 minutes | Department managers + workshop manager (urgent) |
+| Stage 3 | 30 minutes | Senior management |
+| Stage 4 | 60 minutes | Final escalation tier |
+
+If jobs in your department regularly hit Stage 2 or beyond, something is wrong:
 
 - Technicians may not have their notifications set up correctly
 - There may not be enough on-site technicians for the volume of work
 - Technicians may be marking themselves on-site but not actually available
+- The escalation timers may be too aggressive for your team's response capacity — speak to Admin if the defaults need adjustment
 
 Review your escalation logs weekly. If the same technician repeatedly has jobs escalate without a response, investigate and address it.
 

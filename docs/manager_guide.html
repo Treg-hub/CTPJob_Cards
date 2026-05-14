@@ -206,9 +206,10 @@
   }
 
   /* ── Status Pills ── */
-  .status-open    { background: #dbeafe; color: #1d4ed8; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
-  .status-monitor { background: #fef9c3; color: #854d0e; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
-  .status-closed  { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
+  .status-open     { background: #dbeafe; color: #1d4ed8; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
+  .status-progress { background: #ffedd5; color: #c2410c; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
+  .status-monitor  { background: #fef9c3; color: #854d0e; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
+  .status-closed   { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
 
   /* ── Role summary ── */
   .role-summary {
@@ -345,10 +346,10 @@
   <h3>Real-Time Dashboard</h3>
   <p>Your Manager Dashboard gives you a live view of:</p>
   <ul>
-    <li>All open, monitoring, and recently closed job cards in your department</li>
+    <li>All open, in-progress, monitoring, and recently closed job cards in your department</li>
     <li>Which technicians are currently on site and which are off site</li>
     <li>Jobs that have escalated — and why</li>
-    <li>Jobs that have been open for too long without progress</li>
+    <li>Jobs that have been open for too long without a technician assigned</li>
   </ul>
 
   <h3>Notification History</h3>
@@ -399,7 +400,19 @@
       <div class="req-num">4</div>
       <div class="req-content">
         <h4>Monitor Escalation Patterns</h4>
-        <p>If jobs regularly escalate past 2 or 7 minutes, investigate why. Repeated non-response by a technician is visible in the log and must be addressed.</p>
+        <p>Escalation runs across <strong>four configurable stages</strong>, set by Admin under <strong>Settings → Escalation Rules</strong>. Each stage has its own timer and recipient list. The defaults are:</p>
+        <table style="margin: 10px 0 14px 0;">
+          <thead>
+            <tr><th>Stage</th><th>Default Time</th><th>Default Recipients</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Stage 1</strong></td><td>2 minutes</td><td>Department foremen and on-site managers</td></tr>
+            <tr><td><strong>Stage 2</strong></td><td>7 minutes</td><td>Department managers + workshop manager (urgent)</td></tr>
+            <tr><td><strong>Stage 3</strong></td><td>30 minutes</td><td>Senior management</td></tr>
+            <tr><td><strong>Stage 4</strong></td><td>60 minutes</td><td>Final escalation tier</td></tr>
+          </tbody>
+        </table>
+        <p>If jobs regularly hit Stage 2 or beyond, investigate why. Repeated non-response by a technician is visible in the log and must be addressed. If the timers are too aggressive for your team's response capacity, speak to Admin about adjusting them.</p>
       </div>
     </div>
 
@@ -472,6 +485,7 @@
   <hr>
 
   <h3>Job Card Status</h3>
+  <p>Job cards move through four statuses:</p>
   <table>
     <thead>
       <tr><th>Status</th><th>Meaning</th><th>What to Watch</th></tr>
@@ -479,8 +493,13 @@
     <tbody>
       <tr>
         <td><span class="status-open">Open</span></td>
-        <td>Job is live — pending or being worked</td>
-        <td>How long has it been open? Who is on it?</td>
+        <td>Job is live but no technician has accepted it yet</td>
+        <td>How long has it been open? Is it about to escalate?</td>
+      </tr>
+      <tr>
+        <td><span class="status-progress">In-Progress</span></td>
+        <td>A technician has self-assigned and is actively working the job</td>
+        <td>Who is on it? How long since they assigned themselves?</td>
       </tr>
       <tr>
         <td><span class="status-monitor">Monitor</span></td>
@@ -494,6 +513,7 @@
       </tr>
     </tbody>
   </table>
+  <p>Jobs should not remain <strong>Open</strong> for more than a few minutes — if they do, escalation should already be firing. Jobs in <strong>In-Progress</strong> for an extended period should be reviewed to confirm the technician is still active on them.</p>
 </div>
 
 <!-- ══════════════ CHECKLISTS ══════════════ -->

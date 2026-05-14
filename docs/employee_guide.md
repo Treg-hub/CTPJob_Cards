@@ -148,13 +148,16 @@ A job card is a formal digital record of a fault, breakdown, or maintenance task
 
 ### Job Card Status
 
-A job card moves through three statuses during its life:
+A job card moves through four statuses during its life:
 
 | Status | Meaning |
 |--------|---------|
-| **Open** | Job has been created and is awaiting or in progress with a technician |
+| **Open** | Job has been created and is awaiting a technician — no one has accepted it yet |
+| **In-Progress** | A technician has self-assigned and is actively working the job — escalation has stopped |
 | **Monitor** | Fault has been resolved but the machine is being watched for recurrence |
 | **Closed** | Job is complete — fault resolved and confirmed |
+
+> The moment you tap **Assign Self** on a notification (or open a job from the alert), the job card automatically moves from **Open** to **In-Progress**. You do not need to change it manually.
 
 ---
 
@@ -208,8 +211,8 @@ You have three options directly from the notification:
 Once you have accepted a job, navigate to **My Assigned Jobs** in the app to see the full details.
 
 Update the job status as you progress:
-- When you begin working: the job remains **Open**
-- When you have resolved the fault but want to monitor: change to **Monitor**
+- When you self-assign the job: the status changes automatically from **Open** to **In-Progress**
+- When you have resolved the fault but want to watch the machine: change to **Monitor**
 - When the job is fully complete: change to **Closed**
 
 ---
@@ -232,15 +235,16 @@ When you close the job, the operator who created it is automatically notified.
 
 ### What Happens If Nobody Responds?
 
-The system has automatic escalation. If a job sits open without a technician accepting it:
+The system has automatic escalation across **four configurable stages**. Each stage has its own timer and recipient list, configured by Admin under **Settings → Escalation Rules**. The defaults are:
 
-| Time After Creation | What Happens |
-|--------------------|-------------|
-| **2 minutes** | Foremen and on-site managers for the relevant department are notified |
-| **7 minutes** | Department managers and the workshop manager are notified with an urgent alert |
-| **30 minutes** | Further escalation as configured |
+| Stage | Default Time After Creation | Default Recipients |
+|-------|----------------------------|-------------------|
+| **Stage 1** | 2 minutes | Foremen and on-site managers for the relevant department |
+| **Stage 2** | 7 minutes | Department managers and the workshop manager (urgent alert) |
+| **Stage 3** | 30 minutes | Senior management |
+| **Stage 4** | 60 minutes | Final escalation tier |
 
-Escalation stops the moment any technician assigns themselves or responds "I'm Busy."
+Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule.
 
 ---
 
@@ -298,6 +302,20 @@ When you cross the company boundary, you automatically receive:
 - **"Left Site Area"** — your status is updated and job notifications pause until you return
 
 No action is required — this is fully automatic.
+
+---
+
+## Section 4: App Appearance — Light and Dark Mode
+
+The app supports both a **dark theme** (the default — easier on the eyes in low-light environments such as workshops and night shifts) and a **light theme** (better visibility in bright outdoor sunlight).
+
+To switch:
+
+1. Open the app and tap the **gear icon** (Settings) at the top right
+2. Find the **Dark Mode** toggle near the top of the Settings screen
+3. Tap the switch to flip between themes — the change is instant
+
+Your choice is remembered and applies every time you open the app. The orange CTP branding remains consistent across both themes.
 
 ---
 
