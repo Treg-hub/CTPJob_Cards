@@ -20,7 +20,8 @@ enum JobType {
 
 enum JobStatus {
   open('Open'),
-  monitor('Monitor'),
+  inProgress('In Progress'),
+  monitor('Monitoring'),
   closed('Closed');
 
   const JobStatus(this.displayName);
@@ -284,6 +285,7 @@ class JobCard {
 
 extension JobStatusExtension on JobStatus {
   static JobStatus fromString(String value) {
+    // Legacy Firestore docs stored 'monitor' before the enum was renamed to 'inProgress'+'monitor'
     return JobStatus.values.firstWhere(
       (status) => status.name == value,
       orElse: () => JobStatus.open,

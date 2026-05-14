@@ -527,18 +527,42 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72),
           decoration: BoxDecoration(
             color: Theme.of(context).appColors.cardSurface,
             borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
           child: StatefulBuilder(
-            builder: (context, setDialogState) => Padding(
-              padding: const EdgeInsets.all(16),
+            builder: (context, setDialogState) => SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 16, right: 16, top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Add Comment & Update Reoccurrence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 30),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 80)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('What to include in your comment:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        Text('• Clear fault — what happened and what was observed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• Any error codes or alarms displayed', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• When the fault occurred and how often', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                        Text('• Any conditions before the fault (production speed, load, etc.)', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -548,9 +572,20 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  TextField(controller: _commentController, decoration: InputDecoration(labelText: 'Comment / Work Done', border: const OutlineInputBorder(), labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)), maxLines: 4, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _commentController,
+                    decoration: InputDecoration(
+                      labelText: 'Comment / Work Done',
+                      hintText: 'e.g. Machine tripped at 06:30, error E04 on display. Fault occurred 3 times this shift...',
+                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                      border: const OutlineInputBorder(),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    maxLines: 5,
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -576,25 +611,56 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.80),
           decoration: BoxDecoration(
             color: Theme.of(context).appColors.cardSurface,
             borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 16, right: 16, top: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Add Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                const SizedBox(height: 20),
+                Text('Add Technical Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 25),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 80)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Every closure note must include:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('• What was done — actions taken to fix the fault', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Parts used — part numbers and quantities', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Root cause — why the fault occurred', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                      Text('• Follow-up recommendations — any further action required', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: noteController,
-                  decoration: InputDecoration(labelText: 'Note / Work Progress', border: const OutlineInputBorder(), labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'Technical Note',
+                    hintText: 'e.g. Replaced bearing 6205-2RS (x2). Root cause: lubrication failure due to blocked grease nipple. Recommend weekly greasing schedule.',
+                    hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 128), fontSize: 12.5),
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 6,
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -852,24 +918,23 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     final buttons = <Widget>[];
 
     if (jobCard.status == JobStatus.open) {
-      if (jobCard.startedAt == null) {
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _startJob(jobCard),
-              icon: const Icon(Icons.play_arrow, size: 20),
-              label: const Text('Start', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _startJob(jobCard),
+            icon: const Icon(Icons.play_arrow, size: 20),
+            label: const Text('Start', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
-        );
-      }
+        ),
+      );
+    } else if (jobCard.status == JobStatus.inProgress) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
@@ -940,6 +1005,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     final user = currentEmployee?.name ?? 'User';
     final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Started by $user';
     final updated = jobCard.copyWith(
+      status: JobStatus.inProgress,
       startedAt: now,
       notes: jobCard.notes + note,
     );
@@ -974,10 +1040,43 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Complete Job'),
-        content: TextField(
-          controller: noteController,
-          decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
-          maxLines: 4,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 20),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 80)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Closure requires:', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    SizedBox(height: 4),
+                    Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
+                    Text('• Root cause of the fault', style: TextStyle(fontSize: 12)),
+                    Text('• Any follow-up recommendations', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Corrective Action Taken',
+                  hintText: 'e.g. Replaced motor capacitor (35µF). Root cause: aged capacitor. No further action required.',
+                  hintStyle: TextStyle(fontSize: 12),
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 5,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -1004,10 +1103,43 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Start Monitoring'),
-        content: TextField(
-          controller: noteController,
-          decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
-          maxLines: 4,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 20),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 80)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Describe the intervention:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    SizedBox(height: 4),
+                    Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
+                    Text('• Root cause (if identified)', style: TextStyle(fontSize: 12)),
+                    Text('• Why monitoring is still required', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Corrective Action Taken',
+                  hintText: 'e.g. Tightened belt and realigned pulleys. Monitoring for vibration — root cause unconfirmed.',
+                  hintStyle: TextStyle(fontSize: 12),
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 5,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
