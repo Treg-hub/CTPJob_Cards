@@ -765,9 +765,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.blue.withValues(alpha: 70)),
                   ),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
                       SizedBox(height: 5),
                       Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
@@ -1020,9 +1020,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.blue.withValues(alpha: 70)),
                         ),
-                        child: Column(
+                        child: const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text('Describe the fault clearly:', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700, fontSize: 13)),
                             SizedBox(height: 5),
                             Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),

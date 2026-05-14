@@ -1059,8 +1059,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         length: 2,
         child: Column(
           children: [
-            TabBar(
-              tabs: const [
+            const TabBar(
+              tabs: [
                 Tab(text: 'Assigned'),
                 Tab(text: 'History'),
               ],
