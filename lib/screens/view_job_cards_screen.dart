@@ -386,13 +386,13 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name).withValues(alpha: 128),
+                      color: _getStatusColor(job.status.name),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       job.status.displayName,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: onColor(_getStatusColor(job.status.name)),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -402,7 +402,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                             color: Colors.blueGrey.withValues(alpha: 64),
+                      color: Colors.blueGrey,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
