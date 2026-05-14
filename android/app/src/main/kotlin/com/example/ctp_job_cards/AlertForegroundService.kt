@@ -41,7 +41,7 @@ class AlertForegroundService : Service() {
         }
 
         // Schedule the real full-screen alarm via AlarmReceiver (more reliable)
-        scheduleFullScreenAlarm(jobCardNumber, description)
+        scheduleFullScreenAlarm(jobCardNumber, description, intent)
 
         return START_NOT_STICKY
     }
@@ -122,7 +122,7 @@ class AlertForegroundService : Service() {
         return builder.build()
     }
 
-    private fun scheduleFullScreenAlarm(jobCardNumber: String, description: String) {
+    private fun scheduleFullScreenAlarm(jobCardNumber: String, description: String, sourceIntent: Intent?) {
         Log.d("AlertForegroundService", "🚀 Scheduling full-screen alarm for job #$jobCardNumber")
 
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
@@ -133,10 +133,10 @@ class AlertForegroundService : Service() {
             putExtra("description", description)
             // These extras were previously missing, causing the full-screen alert to always
             // show priority "5", createdBy "Unknown", and location "Not specified".
-            putExtra("level", intent?.getStringExtra("level") ?: "full-loud")
-            putExtra("priority", intent?.getStringExtra("priority") ?: "5")
-            putExtra("createdBy", intent?.getStringExtra("createdBy") ?: "Unknown")
-            putExtra("location", intent?.getStringExtra("location") ?: "Not specified")
+            putExtra("level", sourceIntent?.getStringExtra("level") ?: "full-loud")
+            putExtra("priority", sourceIntent?.getStringExtra("priority") ?: "5")
+            putExtra("createdBy", sourceIntent?.getStringExtra("createdBy") ?: "Unknown")
+            putExtra("location", sourceIntent?.getStringExtra("location") ?: "Not specified")
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
