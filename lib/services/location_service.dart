@@ -51,8 +51,10 @@ void callbackDispatcher() {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 15),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 15),
+        ),
       );
 
       final onSite =
@@ -148,7 +150,7 @@ class LocationService {
       _channel.setMethodCallHandler(_handleNativeGeofenceEvent);
 
       // Pre-initialize WorkManager so schedule/cancel calls work immediately.
-      await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+      await Workmanager().initialize(callbackDispatcher);
 
       _isInitialized = true;
       debugPrint('✅ Native geofence monitoring started');
@@ -218,8 +220,10 @@ class LocationService {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 30),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 30),
+        ),
       );
 
       final onSite =
@@ -265,7 +269,7 @@ class LocationService {
 
   Future<void> _startWorkManagerCheck() async {
     try {
-      await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+      await Workmanager().initialize(callbackDispatcher);
       await Workmanager().registerPeriodicTask(
         locationTaskName,
         locationTaskName,
@@ -285,7 +289,7 @@ class LocationService {
 
   Future<void> _stopWorkManagerCheck() async {
     try {
-      await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+      await Workmanager().initialize(callbackDispatcher);
       await Workmanager().cancelByUniqueName(locationTaskName);
       debugPrint('🛑 WorkManager 30-min check stopped');
     } catch (e) {

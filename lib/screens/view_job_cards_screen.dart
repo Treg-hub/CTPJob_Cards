@@ -315,7 +315,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                       ),
                     ),
                     TextSpan(
-                      text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
+                      text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part} | ${job.operator}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 11.5,

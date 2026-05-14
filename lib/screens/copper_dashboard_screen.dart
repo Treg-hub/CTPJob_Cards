@@ -72,6 +72,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
     }
 
     setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final notifier = ref.read(copperNotifierProvider.notifier);
@@ -102,9 +103,9 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       _commentsController.clear();
       _reuseAmount = 0;
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction successful ✅')));
+      messenger.showSnackBar(const SnackBar(content: Text('Transaction successful ✅')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      messenger.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -132,10 +133,11 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       ]);
     }
 
-    final csvString = const ListToCsvConverter().convert(csvRows);
+    final csvString = Csv().encode(csvRows);
+    final messenger = ScaffoldMessenger.of(context);
     await Clipboard.setData(ClipboardData(text: csvString));
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text('✅ CSV copied to clipboard – paste into Excel!')),
     );
   }

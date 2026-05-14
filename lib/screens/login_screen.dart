@@ -5,10 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
-import '../models/job_card.dart';
 import '../main.dart' show currentEmployee;
 import '../services/location_service.dart';
-import 'job_card_detail_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
@@ -35,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
+      if (!mounted) return;
       if (currentEmployee != null && !permissionsCompleted) {
         Navigator.pushReplacement(
           context,
@@ -213,40 +212,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    }
-  }
-
-  Future<void> _autoAssignAndNavigate(JobCard jobCard) async {
-    try {
-      final currentUser = currentEmployee;
-      if (currentUser == null) return;
-
-      final assignedClockNos = List<String>.from(jobCard.assignedClockNos ?? []);
-      final assignedNames = List<String>.from(jobCard.assignedNames ?? []);
-
-      if (assignedClockNos.contains(currentUser.clockNo)) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobCard)));
-        return;
-      }
-
-      assignedClockNos.add(currentUser.clockNo);
-      assignedNames.add(currentUser.name);
-
-      await FirebaseFirestore.instance.collection('job_cards').doc(jobCard.id).update({
-        'assignedClockNos': assignedClockNos,
-        'assignedNames': assignedNames,
-        'assignedAt': FieldValue.serverTimestamp(),
-        'status': 'in_progress',
-      });
-
-      if (mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobCard)));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Assigned to Job #${jobCard.jobCardNumber}'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      debugPrint('Auto-assign error: $e');
     }
   }
 

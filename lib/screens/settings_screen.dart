@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 
 import '../main.dart' show currentEmployee;
 import '../providers/theme_provider.dart';
@@ -28,8 +28,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-
   bool isOnSite = true;
 
   @override
@@ -40,10 +38,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _initializeLocalNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
     await NotificationService().initialize();
   }
 
@@ -273,17 +267,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Checking for updates...'), duration: Duration(seconds: 1)),
                     );
                     try {
                       await UpdateService().forceCheckForUpdate(context);
                     } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                        );
-                      }
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                      );
                     }
                   },
                   icon: const Icon(Icons.system_update),
@@ -299,22 +293,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Refreshing FCM token...'), duration: Duration(seconds: 1)),
                     );
                     try {
                       await _notificationService.refreshToken();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('✅ FCM Token refreshed!'), backgroundColor: Colors.green),
-                        );
-                      }
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('✅ FCM Token refreshed!'), backgroundColor: Colors.green),
+                      );
                     } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-                        );
-                      }
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+                      );
                     }
                   },
                   icon: const Icon(Icons.refresh),

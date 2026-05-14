@@ -1,18 +1,16 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 
 import '../models/employee.dart';
 import '../models/job_card.dart';
-import '../providers/theme_provider.dart';
+
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/location_service.dart';
@@ -51,7 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
   Timer? _testModeTimer;
-  DateTime? _testModeStartedAt;
+
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -156,21 +154,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _loadOnSiteStatus() async {
-    if (currentEmployee == null) return;
-    try {
-      final emp = await _firestoreService.getEmployee(currentEmployee!.clockNo);
-      if (emp != null) {
-        setState(() => isOnSite = emp.isOnSite);
-        if (emp.fcmToken == null && !kIsWeb && mounted) {
-          _promptEnableNotifications();
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading on-site status: $e');
-    }
-  }
-
   Future<void> _loadShowDeptOnly() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() => _showDeptOnly = prefs.getBool('showDeptOnly') ?? true);
@@ -204,7 +187,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   void _startTestModeTimer() {
     _testModeTimer?.cancel();
-    _testModeStartedAt = DateTime.now();
 
     _testModeTimer = Timer(const Duration(hours: 2), () async {
       if (mounted && _testMode) {
@@ -221,23 +203,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
   }
 
-  Future<void> _enableTestMode() async {
-    setState(() => _testMode = true);
-    await _saveTestMode(true);
-    _startTestModeTimer();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Test Mode enabled - Real geofence disabled'), backgroundColor: Colors.orange),
-      );
-    }
-  }
-
   Future<void> _disableTestMode() async {
     setState(() => _testMode = false);
     await _saveTestMode(false);
     _testModeTimer?.cancel();
-    _testModeStartedAt = null;
 
     await _locationService.checkCurrentLocation();
 
@@ -245,103 +214,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Test Mode disabled - Real geofence active'), backgroundColor: Colors.green),
       );
-    }
-  }
-
-  Future<void> _forceOnSite() async {
-    if (!_testMode) return;
-
-    setState(() => isOnSite = true);
-    if (currentEmployee != null) {
-      await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: true));
-    }
-    await _logTestModeEvent('force_on_site');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Forced On Site (Test Mode)'), backgroundColor: Colors.green),
-      );
-    }
-  }
-
-  Future<void> _forceOffSite() async {
-    if (!_testMode) return;
-
-    setState(() => isOnSite = false);
-    if (currentEmployee != null) {
-      await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: false));
-    }
-    await _logTestModeEvent('force_off_site');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Forced Off Site (Test Mode)'), backgroundColor: Colors.orange),
-      );
-    }
-  }
-
-  Future<void> _logTestModeEvent(String action) async {
-    if (currentEmployee == null) return;
-
-    await FirebaseFirestore.instance.collection('geofence_logs').add({
-      'clockNo': currentEmployee!.clockNo,
-      'eventType': 'test_mode_$action',
-      'timestamp': FieldValue.serverTimestamp(),
-      'testModeActive': true,
-    });
-  }
-
-  void _promptEnableNotifications() { 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enable Notifications'),
-        content: const Text('Notifications are not enabled for your account. Enable them to receive job alerts?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                final token = await _notificationService.getToken();
-                if (token != null && currentEmployee != null) {
-                  await _firestoreService.updateEmployee(
-                    currentEmployee!.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
-                  );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notifications enabled!'), backgroundColor: Colors.green),
-                    );
-                  }
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error enabling notifications: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _saveOverrideOnSite(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('overrideOnSite', value);
-    setState(() {
-      _overrideOnSite = value;
-      isOnSite = value;
-    });
-    if (currentEmployee != null) {
-      try {
-        await _firestoreService.updateEmployee(currentEmployee!.copyWith(isOnSite: value));
-      } catch (e) {
-        debugPrint('❌ Failed to update onsite status: $e');
-      }
     }
   }
 
@@ -424,7 +296,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                           final emp = employees[index];
                           return ListTile(
                             title: Text(emp.displayName),
-                            subtitle: Text('${emp.department ?? ''} - ${emp.position ?? ''}'),
+                            subtitle: Text('${emp.department} - ${emp.position}'),
                             leading: Icon(
                               emp.isOnSite ? Icons.location_on : Icons.location_off,
                               color: emp.isOnSite ? Colors.green : Colors.red[400]!,
@@ -513,6 +385,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 return;
               }
 
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
               try {
                 await FirebaseFirestore.instance.collection('feedback').add({
                   'feedback': feedback,
@@ -521,16 +395,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   'timestamp': FieldValue.serverTimestamp(),
                 });
 
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+                navigator.pop();
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Thank you! Your feedback has been submitted.'),
                     backgroundColor: Colors.green,
                   ),
                 );
               } catch (e) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+                navigator.pop();
+                messenger.showSnackBar(
                   SnackBar(content: Text('Error submitting feedback: $e'), backgroundColor: Colors.red),
                 );
               }
@@ -716,7 +590,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       ),
                     ),
                     TextSpan(
-                      text: ' | ${job.department ?? 'N/A'} > ${job.area ?? 'N/A'} > ${job.machine ?? 'N/A'} > ${job.part ?? 'N/A'} | ${job.operator ?? 'Unknown'}',
+                      text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part} | ${job.operator}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 11.5,
@@ -1269,8 +1143,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeNotifierProvider);
-
     if (_pendingJobId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleJobDeepLink(_pendingJobId!);
@@ -1358,15 +1230,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // TEST LOCATION BUTTON (Blue)
     FloatingActionButton(
       onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
         await _locationService.checkCurrentLocation();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('📍 Location check triggered'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('📍 Location check triggered'),
+            backgroundColor: Colors.blue,
+          ),
+        );
       },
       backgroundColor: Colors.blue,
       tooltip: 'Test Location Check',
@@ -1397,22 +1269,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _requestAllPermissions() async {
-    await Permission.location.request();
-    await Permission.locationAlways.request();
-    await Permission.notification.request();
-
-    if (Platform.isAndroid) {
-      const intent = android_intent.AndroidIntent(
-        action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
-      );
-      await intent.launch();
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permissions requested. Please grant all when prompted.')),
-      );
-    }
-  }
 }

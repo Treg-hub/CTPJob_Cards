@@ -317,25 +317,6 @@ async function getInitialRecipients(jobType) {
   return [...(await getOnsiteMechanics()), ...(await getOnsiteElectricians())];
 }
 
-async function getRelevantManagers(jobType) {
-  const snaps = await db.collection("employees")
-    .where("position", "==", "Manager")
-    .get();
-
-  return snaps.docs
-    .filter((doc) => {
-      const dept = doc.data().department || "";
-      if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("mechanical");
-      }
-      if (jobType === "electrical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("electrical");
-      }
-      return false;
-    })
-    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
-}
-
 async function getOnsiteDeptForemenShiftLeaders(dept) {
   const snaps = await db.collection("employees")
     .where("department", "==", dept)
@@ -348,32 +329,6 @@ async function getOnsiteDeptForemenShiftLeaders(dept) {
       return /foreman|shift leader/i.test(pos);
     })
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
-}
-
-async function getDeptManagers(dept) {
-  const snaps = await db.collection("employees")
-    .where("department", "==", dept)
-    .get();
-
-  return snaps.docs
-    .filter((doc) => {
-      const pos = (doc.data().position || "").toLowerCase();
-      return /manager/i.test(pos);
-    })
-    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
-}
-
-async function getWorkshopManager() {
-  const snaps = await db.collection("employees")
-    .where("department", "==", "Workshop")
-    .get();
-
-  return snaps.docs
-    .filter((doc) => {
-      const pos = (doc.data().position || "").toLowerCase();
-      return /manager/i.test(pos) && !/mechanical|electrical/i.test(pos);
-    })
-    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }))[0] || null;
 }
 
 // ==================== CORE SEND NOTIFICATION ====================

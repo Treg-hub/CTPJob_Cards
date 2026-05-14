@@ -34,7 +34,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   late TabController _tabController;
 
   final Map<String, int> _sectionPageSizes = {};
-  final Map<String, bool> _sectionHasMore = {};
 
   @override
   void initState() {
@@ -351,7 +350,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       assigneeNames: updated.assignedNames ?? [],
       timestamp: DateTime.now(),
     );
-    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory ?? []);
+    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory);
     newHistory.add(event);
     final finalUpdated = updated.copyWith(
       assignmentHistory: newHistory,
@@ -412,7 +411,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       timestamp: DateTime.now(),
       isUnassign: true,
     );
-    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory ?? []);
+    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory);
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
@@ -770,6 +769,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete photos when job is closed or monitoring'), backgroundColor: Colors.red));
       return;
     }
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await FirebaseFirestore.instance.collection('job_cards').doc(widget.jobCard.id).update({
         'photos': FieldValue.arrayRemove([photo]),
@@ -777,9 +777,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       setState(() {
         _currentJobCard = _currentJobCard.copyWith(photos: _currentJobCard.photos.where((p) => p != photo).toList());
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo deleted')));
+      messenger.showSnackBar(const SnackBar(content: Text('Photo deleted')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting photo: $e'), backgroundColor: Colors.red));
+      messenger.showSnackBar(SnackBar(content: Text('Error deleting photo: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -1017,7 +1017,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       assigneeNames: [],
       timestamp: now,
     );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
@@ -1209,7 +1209,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       assigneeNames: [],
       timestamp: now,
     );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
@@ -1269,7 +1269,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       assigneeNames: [],
       timestamp: now,
     );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory ?? []);
+    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
     newHistory.add(event);
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
@@ -1677,7 +1677,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Widget _buildAssignmentLogCard(JobCard jobCard) {
-    final parsedHistory = _parseAssignmentHistory(jobCard.assignmentHistory ?? []);
+    final parsedHistory = _parseAssignmentHistory(jobCard.assignmentHistory);
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1756,94 +1756,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
-  Widget _buildRelatedCardItem(JobCard job) {
-    return Card(
-      elevation: 6,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'P${job.priority}',
-                    style: TextStyle(
-                      color: _getPriorityColor('P${job.priority}'),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' | ${job.department.isEmpty ? 'N/A' : job.department} > ${job.area.isEmpty ? 'N/A' : job.area} > ${job.machine.isEmpty ? 'N/A' : job.machine} > ${job.part.isEmpty ? 'N/A' : job.part} | ${job.operator.isEmpty ? 'Unknown' : job.operator}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11.5,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (job.jobCardNumber != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'JC #${job.jobCardNumber}',
-                      style: TextStyle(
-                        color: onColor(Colors.blue),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Text(
-                    job.description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontWeight: FontWeight.normal,
-                      fontSize: 15,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Spacer(),
-                Text(
-                  job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
-                  style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildRelatedTab() {
