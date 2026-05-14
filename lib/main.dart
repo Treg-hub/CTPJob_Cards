@@ -167,7 +167,7 @@ class CtpJobCardsApp extends ConsumerWidget {
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
           primary: kBrandOrange,
-          onPrimary: Colors.white,
+          onPrimary: Colors.black,
           secondary: Color(0xFFF0F0F0),
           onSecondary: Colors.black87,
           surface: Colors.white,
@@ -181,9 +181,10 @@ class CtpJobCardsApp extends ConsumerWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F5F5),
         appBarTheme: const AppBarTheme(
           backgroundColor: kBrandOrange,
-          foregroundColor: Colors.white,
+          foregroundColor: Colors.black,
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.white),
+          iconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w500),
         ),
         cardTheme: const CardThemeData(
           color: Colors.white,
@@ -215,9 +216,10 @@ class CtpJobCardsApp extends ConsumerWidget {
           ),
         ),
         tabBarTheme: const TabBarThemeData(
-          labelColor: kBrandOrange,
+          labelColor: Colors.black,
           unselectedLabelColor: Colors.black54,
-          indicatorColor: kBrandOrange,
+          indicatorColor: Colors.black,
+          labelStyle: TextStyle(fontWeight: FontWeight.bold),
         ),
         switchTheme: const SwitchThemeData(
           thumbColor: WidgetStatePropertyAll(kBrandOrange),
