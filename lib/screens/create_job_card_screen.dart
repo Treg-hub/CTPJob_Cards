@@ -42,11 +42,11 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
   final List<String> priorityDescriptions = [
     '',
-    "External issue: No runnability impact",
-    "Minimal interference: Can run",
-    "Reduced speed: No waste impact",
-    "Reduced speed: Causes additional waste",
-    "Cannot run: Requires urgent attention",
+    'No effect on production — routine or planned work',
+    'Minor impact — production continuing',
+    'Moderate impact — degraded operation',
+    'Significant impact — output reduced',
+    'Production is standing — stopped',
   ];
 
   final FirestoreService _firestoreService = FirestoreService();
@@ -676,24 +676,78 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     );
                   }),
                 ),
-                const SizedBox(height: 8),
-                if (priority > 0)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: priorityColors[priority].withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      priorityDescriptions[priority],
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                const SizedBox(height: 10),
+                // Priority reference table — highlights the selected level
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Table(
+                    border: TableBorder.all(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
+                    columnWidths: const {
+                      0: FixedColumnWidth(44),
+                      1: FlexColumnWidth(),
+                    },
+                    children: [
+                      // Header
+                      const TableRow(
+                        decoration: BoxDecoration(color: Color(0xFF1a3a5c)),
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            child: Text('P', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            child: Text('Production Impact', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
-                    ),
+                      // P1 – P5 rows
+                      ...List.generate(5, (i) {
+                        final num = i + 1;
+                        final isSelected = priority == num;
+                        return TableRow(
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? priorityColors[num].withValues(alpha: 0.15)
+                                : (i.isEven ? const Color(0xFFF8FAFC) : Colors.white),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              child: Center(
+                                child: Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    color: priorityColors[num],
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '$num',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Text(
+                                priorityDescriptions[num],
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                                  color: isSelected ? Colors.black87 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
                   ),
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   decoration: const InputDecoration(

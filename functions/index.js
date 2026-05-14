@@ -197,7 +197,7 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
       notificationLevel: level,
       title,
       body,
-      chanelId: isFullLoud ? "full_loud_channel" : "normal_channel",
+      channelId: isFullLoud ? "full_channel" : "normal_channel",
     },
     android: { priority: "high" },
   };
@@ -400,6 +400,7 @@ async function getWorkshopManager() {
 // ==================== CORE SEND NOTIFICATION ====================
 async function sendNotification({
   token,
+  recipientClockNo = null,  // clockNo of who receives this notification (for audit log)
   title,
   body,
   jobCardNumber,
@@ -447,7 +448,7 @@ async function sendNotification({
     await logNotification({
       jobCardNumber,
       triggeredBy,
-      sentTo: [token],
+      sentTo: [recipientClockNo || "unknown"],
       level,
       priority,
       title,
@@ -486,6 +487,7 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
   for (const emp of recipients) {
     await sendNotification({
       token: emp.token,
+      recipientClockNo: emp.clockNo,
       title,
       body,
       jobCardNumber: job.jobCardNumber || jobId,
@@ -516,6 +518,7 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
     if (assigneeDoc.exists) {
       await sendNotification({
         token: assigneeDoc.data().fcmToken,
+        recipientClockNo: after.assignedTo,
         title: "New Job Assigned",
         body: `${after.department} - ${after.machine}\n${after.area} - ${after.part}\n${after.description}`,
         jobCardNumber: after.jobCardNumber || event.params.jobId,
@@ -530,6 +533,8 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
         initiatedByClockNo: after.lastUpdatedBy || null,
         initiatedByName: after.lastUpdatedByName || null,
       });
+      // Stop all future escalation for this job now that it's been assigned.
+      await event.data.after.ref.update({ escalationStopped: true });
     }
   }
 });
@@ -561,7 +566,16 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
   for (const doc of jobs2min.docs) {
     const job = doc.data();
-    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
+    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
+    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
+      await doc.ref.update({
+        notifiedAt2min: job.notifiedAt2min || now,
+        notifiedAt7min: job.notifiedAt7min || now,
+        notifiedAt30min: job.notifiedAt30min || now,
+      });
+      continue;
+    }
 
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "medium-high";
@@ -578,6 +592,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     for (const emp of resolvedRecipients) {
       await sendNotification({
         token: emp.token,
+        recipientClockNo: emp.clockNo,
         title: `Escalation: No Action Taken (2min) - Job #${job.jobCardNumber || doc.id}`,
         body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
         jobCardNumber: job.jobCardNumber || doc.id,
@@ -604,7 +619,15 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
   for (const doc of jobs7min.docs) {
     const job = doc.data();
-    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
+    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
+    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
+      await doc.ref.update({
+        notifiedAt7min: job.notifiedAt7min || now,
+        notifiedAt30min: job.notifiedAt30min || now,
+      });
+      continue;
+    }
 
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "full-loud";
@@ -621,12 +644,13 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     for (const emp of resolvedRecipients) {
       await sendNotification({
         token: emp.token,
+        recipientClockNo: emp.clockNo,
         title: `URGENT Escalation: No Action Taken (7min) - Job #${job.jobCardNumber || doc.id}`,
         body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
         jobCardNumber: job.jobCardNumber || doc.id,
         level,
         priority,
-        createdBy: creatorDoc.exists ? creatorDoc.data().name : "Unknown",
+        createdBy,
         department: job.department,
         area: job.area,
         machine: job.machine,
@@ -647,7 +671,12 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
   for (const doc of jobs30min.docs) {
     const job = doc.data();
-    if (job.assignedClockNos && job.assignedClockNos.length > 0) continue;
+
+    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
+    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
+      await doc.ref.update({ notifiedAt30min: job.notifiedAt30min || now });
+      continue;
+    }
 
     const priority = job.priority || 1;
     const level = priority <= 3 ? "normal" : "medium-high";
@@ -666,6 +695,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
     for (const emp of resolvedRecipients) {
       await sendNotification({
         token: emp.token,
+        recipientClockNo: emp.clockNo,
         title: `30min Escalation - Job #${job.jobCardNumber || doc.id}`,
         body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
         jobCardNumber: job.jobCardNumber || doc.id,
@@ -829,6 +859,9 @@ exports.onAlertResponseCreated = functions.firestore
         machine: job.machine,
         part: job.part,
       });
+
+      // Stop all future escalation — a technician has acknowledged the job.
+      await jobSnap.docs[0].ref.update({ escalationStopped: true });
 
       console.log(`Busy notification sent to creator ${creatorClockNo} for Job #${jobCardNumber}`);
       return null;

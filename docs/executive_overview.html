@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CTP Job Cards — Executive Overview</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:        #0d1f35;
+    --blue:        #1a3a5c;
+    --blue-mid:    #2563a0;
+    --blue-light:  #dbeafe;
+    --accent:      #f59e0b;
+    --accent-dark: #d97706;
+    --green:       #16a34a;
+    --green-light: #dcfce7;
+    --red:         #dc2626;
+    --red-light:   #fee2e2;
+    --grey-50:     #f8fafc;
+    --grey-100:    #f1f5f9;
+    --grey-200:    #e2e8f0;
+    --grey-400:    #94a3b8;
+    --grey-600:    #475569;
+    --grey-700:    #334155;
+    --grey-900:    #0f172a;
+    --text:        #1e293b;
+    --radius:      6px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text);
+    background: #fff;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 0 80px;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(160deg, var(--navy) 0%, #0d2d52 55%, #1a4a7a 100%);
+    color: #fff;
+    padding: 60px 56px 52px;
+    margin-bottom: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.025);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; left: 40%;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(245,158,11,0.06);
+  }
+  .cover .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .cover h1 {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1.15;
+    margin-bottom: 14px;
+    max-width: 600px;
+  }
+  .cover .subtitle {
+    font-size: 16px;
+    opacity: 0.75;
+    max-width: 520px;
+    margin-bottom: 36px;
+    line-height: 1.6;
+  }
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    font-size: 12px;
+    opacity: 0.5;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding-top: 20px;
+  }
+  .cover-meta span { font-weight: 600; }
+
+  /* ── Stat Bar ── */
+  .stat-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--accent);
+  }
+  .stat-item {
+    padding: 20px 24px;
+    border-right: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-label { font-size: 11px; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Body Padding ── */
+  .body-content { padding: 48px 56px; }
+
+  /* ── Section ── */
+  .section-block { margin-bottom: 56px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--grey-200);
+  }
+  .section-header .line { flex: 1; height: 2px; background: var(--grey-200); }
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent-dark);
+    white-space: nowrap;
+  }
+  .section-header h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--navy);
+    margin-bottom: 0;
+  }
+
+  h3 { font-size: 16px; font-weight: 700; color: var(--grey-900); margin: 28px 0 10px; }
+  h4 { font-size: 12px; font-weight: 700; color: var(--blue-mid); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+  p { margin-bottom: 14px; }
+  ul, ol { padding-left: 22px; margin-bottom: 14px; }
+  li { margin-bottom: 6px; }
+
+  /* ── How It Works Steps ── */
+  .how-steps { display: flex; flex-direction: column; gap: 0; margin: 24px 0; position: relative; }
+  .how-steps::before {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 32px;
+    bottom: 32px;
+    width: 2px;
+    background: var(--grey-200);
+  }
+  .how-step {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 16px 0;
+  }
+  .step-num {
+    width: 40px;
+    height: 40px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .step-body { padding-top: 8px; flex: 1; }
+  .step-body strong { display: block; font-size: 14px; margin-bottom: 4px; color: var(--navy); }
+  .step-body p { margin: 0; font-size: 13.5px; color: var(--grey-700); }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13.5px; }
+  th { background: var(--navy); color: #fff; font-weight: 700; padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--grey-200); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--grey-50); }
+  tr:last-child td { border-bottom: none; }
+
+  /* ── Live / Coming badges ── */
+  .badge-live { background: var(--green); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.5px; }
+  .badge-soon { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.5px; }
+
+  /* ── Callouts ── */
+  .callout { display: flex; gap: 14px; padding: 16px 18px; border-radius: var(--radius); margin: 18px 0; border-left: 4px solid; }
+  .callout-icon { font-size: 18px; flex-shrink: 0; }
+  .callout-body { flex: 1; }
+  .callout-body p:last-child { margin-bottom: 0; }
+  .callout.tip { background: var(--blue-light); border-color: var(--blue-mid); }
+  .callout.success { background: var(--green-light); border-color: var(--green); }
+
+  /* ── Status Flow ── */
+  .status-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 16px 0 24px;
+    flex-wrap: wrap;
+  }
+  .status-pill {
+    padding: 8px 20px;
+    font-weight: 700;
+    font-size: 13px;
+    border-radius: var(--radius);
+  }
+  .status-arrow { color: var(--grey-400); font-size: 20px; padding: 0 8px; }
+  .s-open    { background: #dbeafe; color: #1d4ed8; }
+  .s-monitor { background: #fef9c3; color: #854d0e; }
+  .s-closed  { background: #dcfce7; color: #15803d; }
+
+  /* ── Escalation Timeline ── */
+  .escalation-track {
+    display: flex;
+    gap: 0;
+    margin: 20px 0 28px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--grey-200);
+  }
+  .esc-step { flex: 1; padding: 14px 16px; border-right: 1px solid var(--grey-200); }
+  .esc-step:last-child { border-right: none; }
+  .esc-time { font-size: 20px; font-weight: 900; color: var(--navy); margin-bottom: 4px; }
+  .esc-who  { font-size: 12px; color: var(--grey-600); }
+  .esc-step.e1 { background: #f0f9ff; }
+  .esc-step.e2 { background: var(--orange-light, #ffedd5); }
+  .esc-step.e3 { background: var(--red-light); }
+
+  /* ── AI Section ── */
+  .ai-section {
+    background: linear-gradient(160deg, var(--navy) 0%, #1a3a5c 100%);
+    border-radius: var(--radius);
+    padding: 40px 44px;
+    color: #e2e8f0;
+    margin-top: 16px;
+  }
+  .ai-section .ai-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .ai-section h2 {
+    font-size: 24px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .ai-section .ai-sub {
+    color: #94a3b8;
+    margin-bottom: 32px;
+    font-size: 14px;
+  }
+  .ai-phases {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .ai-phase {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .ai-phase .phase-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .ai-phase h3 { font-size: 15px; color: #fff; margin: 0 0 10px; }
+  .ai-phase p  { font-size: 13px; color: #94a3b8; margin: 0; }
+  .ai-chat-example {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 16px 0;
+  }
+  .ai-chat-example .q {
+    font-size: 13px;
+    font-style: italic;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+  }
+  .ai-chat-example .q::before { content: '"'; }
+  .ai-chat-example .q::after  { content: '"'; }
+  .ai-section table { margin-top: 8px; }
+  .ai-section th { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+  .ai-section td { border-color: rgba(255,255,255,0.08); color: #cbd5e1; }
+  .ai-section tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+  .ai-highlight {
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-top: 24px;
+    color: #fef3c7;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Summary Cards ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .summary-card {
+    border: 1px solid var(--grey-200);
+    border-radius: var(--radius);
+    padding: 20px;
+    border-top: 3px solid var(--blue-mid);
+  }
+  .summary-card .s-icon { font-size: 24px; margin-bottom: 10px; }
+  .summary-card h4 { margin: 0 0 8px; color: var(--navy); font-size: 13px; text-transform: none; letter-spacing: 0; }
+  .summary-card p  { margin: 0; font-size: 12.5px; color: var(--grey-600); }
+
+  hr { border: none; border-top: 1px solid var(--grey-200); margin: 36px 0; }
+
+  @media print {
+    body { max-width: 100%; padding: 0; font-size: 12px; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .stat-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .step-num { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .ai-section { -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-before: always; }
+    .section-block { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+    .body-content { padding: 32px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ COVER ══════════════ -->
+<div class="cover">
+  <div class="eyebrow">CTP Job Cards Platform</div>
+  <h1>Executive Overview</h1>
+  <div class="subtitle">A real-time digital maintenance management system — transforming fault response, accountability, and asset intelligence across the plant.</div>
+  <div class="cover-meta">
+    <div><span>Audience:</span> Senior Management</div>
+    <div><span>Version:</span> 1.0</div>
+    <div><span>Year:</span> 2026</div>
+  </div>
+</div>
+
+<!-- ══════════════ STAT BAR ══════════════ -->
+<div class="stat-bar">
+  <div class="stat-item">
+    <div class="stat-num">5</div>
+    <div class="stat-label">Priority Levels</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">2min</div>
+    <div class="stat-label">First Escalation</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">4</div>
+    <div class="stat-label">User Roles</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">100%</div>
+    <div class="stat-label">Cloud-Native</div>
+  </div>
+</div>
+
+<div class="body-content">
+
+<!-- ══════════════ PROBLEM ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">Context</div>
+    <div class="line"></div>
+  </div>
+  <h2>The Problem It Solves</h2>
+  <p>In a traditional plant environment, fault reporting and maintenance response suffer from well-known, costly problems:</p>
+  <table>
+    <thead>
+      <tr><th>Problem</th><th>Business Impact</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>No formal fault record</strong> — verbal and paper reports are lost or incomplete</td><td>No history, no accountability, no basis for analysis</td></tr>
+      <tr><td><strong>No accountability</strong> — unknown when faults were reported, attended to, or resolved</td><td>Disputes, delays, inability to measure performance</td></tr>
+      <tr><td><strong>No real-time visibility</strong> — management is the last to know about active faults</td><td>Late escalation, production losses compounded</td></tr>
+      <tr><td><strong>No pattern recognition</strong> — no structured data to identify recurring failures</td><td>Repeat breakdowns, reactive-only maintenance culture</td></tr>
+      <tr><td><strong>Slow emergency response</strong> — finding a technician requires physical search or radio</td><td>Extended downtime on critical faults</td></tr>
+    </tbody>
+  </table>
+  <p>The CTP Job Cards platform addresses all of these by digitising the entire process — from fault report to closure — with automated notifications, escalation, and a permanent audit trail.</p>
+</div>
+
+<!-- ══════════════ HOW IT WORKS ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">How It Works</div>
+    <div class="line"></div>
+  </div>
+  <h2>The Process — End to End</h2>
+
+  <div class="how-steps">
+    <div class="how-step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Fault Reported by Operator</strong>
+        <p>An operator discovers a fault and creates a job card on their phone — recording the machine, area, component, fault description, and priority. The job is live in the system the moment it is submitted.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Relevant Technicians Notified Instantly</strong>
+        <p>The system identifies which technicians are on site (via real-time geofencing) and their trade (mechanical, electrical, or both). They receive a push notification on their phone within seconds — no dispatcher, no radio call.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Technician Accepts the Job</strong>
+        <p>The technician assigns themselves directly from the notification. The operator is notified immediately. Every response — or non-response — is logged with a timestamp.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Automatic Escalation if No Response</strong>
+        <p>If no technician responds, the system escalates automatically — first to foremen and on-site managers, then to department managers and the workshop manager. No critical fault can be silently ignored.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Job Tracked to Closure</strong>
+        <p>The technician updates the job status and closes it with a completion note. The operator is notified. The full record — fault to fix — is stored permanently and is searchable.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <strong>Management Oversight</strong>
+        <p>Managers have a live dashboard of all department jobs, technician on-site status, escalation logs, and notification history. They are responsible for enforcing data quality standards.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PRIORITY ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">Priority System</div>
+    <div class="line"></div>
+  </div>
+  <h2>Priority &amp; Escalation</h2>
+
+  <table>
+    <thead>
+      <tr><th>Priority</th><th>Production Impact</th><th>Notification Type</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>P1</strong></td><td>No effect — routine or planned work</td><td>Standard notification banner</td></tr>
+      <tr><td><strong>P2</strong></td><td>Minor — production continuing</td><td>Standard notification banner</td></tr>
+      <tr><td><strong>P3</strong></td><td>Moderate — degraded operation</td><td>Standard notification banner</td></tr>
+      <tr><td><strong>P4</strong></td><td>Significant — output reduced</td><td>Persistent banner (stays until acted upon)</td></tr>
+      <tr><td><strong>P5</strong></td><td><strong>Production standing — stopped</strong></td><td>Full-screen alarm (overrides lock screen &amp; DND)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Automatic Escalation Timeline</h3>
+  <div class="escalation-track">
+    <div class="esc-step e1">
+      <div class="esc-time">0 min</div>
+      <div class="esc-who">Job created — on-site technicians notified</div>
+    </div>
+    <div class="esc-step e2">
+      <div class="esc-time">2 min</div>
+      <div class="esc-who">Foremen &amp; on-site managers alerted</div>
+    </div>
+    <div class="esc-step e3">
+      <div class="esc-time">7 min</div>
+      <div class="esc-who">Department managers &amp; workshop manager — urgent alert</div>
+    </div>
+    <div class="esc-step" style="background:#fdf4ff;">
+      <div class="esc-time">30 min</div>
+      <div class="esc-who">Further configured escalation</div>
+    </div>
+  </div>
+  <p style="font-size:13px; color:var(--grey-600);">Escalation stops immediately when any technician assigns themselves or acknowledges the job.</p>
+
+  <h3>Job Card Status</h3>
+  <div class="status-flow">
+    <span class="status-pill s-open">Open</span>
+    <span class="status-arrow">→</span>
+    <span class="status-pill s-monitor">Monitor</span>
+    <span class="status-arrow">→</span>
+    <span class="status-pill s-closed">Closed</span>
+  </div>
+  <table>
+    <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Open</strong></td><td>Job is active — awaiting or being worked by a technician</td></tr>
+      <tr><td><strong>Monitor</strong></td><td>Fault resolved but machine is under observation. Auto-closes after 7 days with no update.</td></tr>
+      <tr><td><strong>Closed</strong></td><td>Job complete and confirmed resolved — full record stored permanently</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════ WHAT IT CAPTURES ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">Data &amp; Records</div>
+    <div class="line"></div>
+  </div>
+  <h2>What the System Captures</h2>
+  <table>
+    <thead><tr><th>Data Point</th><th>Business Value</th></tr></thead>
+    <tbody>
+      <tr><td>Machine, area, component</td><td>Precise asset identification for tracking and history</td></tr>
+      <tr><td>Fault description</td><td>What happened and what was observed</td></tr>
+      <tr><td>Priority at time of report</td><td>Production impact and urgency classification</td></tr>
+      <tr><td>Who created it, when</td><td>Operator accountability and fault timestamp</td></tr>
+      <tr><td>Who responded, when</td><td>Technician accountability and response time (MTTR)</td></tr>
+      <tr><td>What was done, parts used</td><td>Repair record, parts consumption, cost basis</td></tr>
+      <tr><td>Root cause</td><td>Feeds predictive analysis and repeat-failure identification</td></tr>
+      <tr><td>Full notification log</td><td>Complete audit trail — who knew what and when</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════ INFRA ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">Infrastructure</div>
+    <div class="line"></div>
+  </div>
+  <h2>Security, Access &amp; Infrastructure</h2>
+
+  <h3>User Access Control</h3>
+  <p>Authentication is via Gmail and password (Firebase Auth), linked to each employee's clock number. Four access levels enforce data boundaries:</p>
+  <table>
+    <thead><tr><th>Role</th><th>Access Scope</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Operator / Technician</strong></td><td>Own jobs and relevant department notifications</td></tr>
+      <tr><td><strong>Manager</strong></td><td>Full department visibility, escalation logs, notification history</td></tr>
+      <tr><td><strong>Admin</strong></td><td>Full system — all data, employee management, geofence configuration</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Technology Stack</h3>
+  <table>
+    <thead><tr><th>Component</th><th>Provider</th><th>Key Properties</th></tr></thead>
+    <tbody>
+      <tr><td>Database</td><td>Google Firebase Firestore</td><td>Real-time, offline-capable, serverless, auto-scaling</td></tr>
+      <tr><td>Push Notifications</td><td>Firebase Cloud Messaging</td><td>Enterprise-grade delivery, high-volume capable</td></tr>
+      <tr><td>Cloud Functions</td><td>Google Cloud Functions</td><td>Serverless escalation logic — no server to maintain</td></tr>
+      <tr><td>Authentication</td><td>Firebase Auth</td><td>Email + password, linked to clock numbers</td></tr>
+      <tr><td>Mobile App</td><td>Flutter (Android primary)</td><td>iOS and web capable; works offline</td></tr>
+    </tbody>
+  </table>
+  <div class="callout success">
+    <div class="callout-icon">✅</div>
+    <div class="callout-body"><p><strong>No on-premises infrastructure required.</strong> No server to maintain, no single point of hardware failure. The system scales automatically and is backed by Google's 99.99% availability SLA. All data is encrypted at rest and in transit.</p></div>
+  </div>
+</div>
+
+<!-- ══════════════ CAPABILITY STATUS ══════════════ -->
+<div class="section-block">
+  <div class="section-header">
+    <div class="section-label">Capability Status</div>
+    <div class="line"></div>
+  </div>
+  <h2>What Is Live Today</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Real-time job card creation and tracking</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Push notifications scaled by priority (P1–P5)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Full-screen critical alarms for P5 faults</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Automatic escalation (2-min, 7-min, 30-min)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Real-time geofencing and on-site status tracking</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Permanent audit trail for every action</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Manager dashboard with live department visibility</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Offline support with automatic cloud sync</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Role-based access control (4 levels)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Notification action buttons (Assign / Busy / Dismiss)</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Copper inventory and transaction tracking</td><td><span class="badge-live">Live</span></td></tr>
+      <tr><td>Predictive maintenance analytics</td><td><span class="badge-soon">Planned</span></td></tr>
+      <tr><td>AI fault-finding and manual assistant</td><td><span class="badge-soon">Planned</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════ AI SECTION ══════════════ -->
+<div class="ai-section">
+  <div class="ai-eyebrow">Road Ahead</div>
+  <h2>AI &amp; Predictive Maintenance</h2>
+  <div class="ai-sub">The current platform is a foundation. Its long-term value lies in what the structured data it collects makes possible.</div>
+
+  <div class="ai-phases">
+    <div class="ai-phase">
+      <div class="phase-label">Phase 1</div>
+      <h3>Predictive Maintenance Analytics</h3>
+      <p>Machine learning applied to job card history identifies failure patterns, predicts which assets are likely to fail, and triggers proactive maintenance before breakdowns occur. Shifts the operation from reactive to predictive.</p>
+    </div>
+    <div class="ai-phase">
+      <div class="phase-label">Phase 2</div>
+      <h3>AI Assistant — Manuals &amp; Fault Finding</h3>
+      <p>A conversational assistant integrated into the app gives technicians instant access to operator manuals, historical repair records, wiring diagrams, and parts specifications — in plain language, on their phone.</p>
+    </div>
+  </div>
+
+  <h3 style="color:#fff; margin-top:8px;">Example AI Assistant Queries</h3>
+  <div class="ai-chat-example"><div class="q">What are the most common causes of overload faults on Conveyor 3?</div></div>
+  <div class="ai-chat-example"><div class="q">What was done the last three times Machine 7 had a similar fault?</div></div>
+  <div class="ai-chat-example"><div class="q">What is the correct bearing specification for the FX400 gearbox drive shaft?</div></div>
+
+  <h3 style="color:#fff; margin-top:24px;">Business Case</h3>
+  <table>
+    <thead><tr><th>Benefit</th><th>Mechanism</th></tr></thead>
+    <tbody>
+      <tr><td>Reduced unplanned downtime</td><td>Predictive alerts trigger maintenance before failure — not after</td></tr>
+      <tr><td>Faster fault resolution</td><td>AI-assisted diagnosis reduces time to identify and fix root cause</td></tr>
+      <tr><td>Knowledge retention</td><td>Institutional expertise captured in the system — not lost when experienced staff leave</td></tr>
+      <tr><td>Lower parts inventory cost</td><td>Predictive maintenance enables targeted stock — not blanket over-stocking</td></tr>
+      <tr><td>Reduced repeat failures</td><td>Root cause identified, addressed, and recorded — not just symptoms patched</td></tr>
+      <tr><td>Technician upskilling</td><td>Access to manuals and history on-device reduces dependency on senior staff for routine questions</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ai-highlight">
+    <strong>The quality of AI insight depends entirely on the quality of data entered today.</strong> Every job card completed with accurate machine identification, clear fault descriptions, and detailed closure notes becomes a data point that improves predictive accuracy. This is why enforcing data standards at the management level is not an administrative task — it is a direct investment in the long-term intelligence of the maintenance operation.
+  </div>
+</div>
+
+<!-- ══════════════ SUMMARY ══════════════ -->
+<div class="section-block" style="margin-top: 48px;">
+  <div class="section-header">
+    <div class="section-label">Summary</div>
+    <div class="line"></div>
+  </div>
+  <h2>What the Business Gets</h2>
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="s-icon">⚡</div>
+      <h4>Speed</h4>
+      <p>Critical faults reach the right technician in seconds. Automatic escalation ensures nothing is silently ignored.</p>
+    </div>
+    <div class="summary-card">
+      <div class="s-icon">🔒</div>
+      <h4>Accountability</h4>
+      <p>Every fault, response, and action is timestamped and logged. Nothing is anonymous or deniable.</p>
+    </div>
+    <div class="summary-card">
+      <div class="s-icon">📊</div>
+      <h4>Visibility</h4>
+      <p>Management sees everything in real time. No chasing, no guessing, no surprises.</p>
+    </div>
+    <div class="summary-card">
+      <div class="s-icon">📁</div>
+      <h4>Compliance</h4>
+      <p>A complete, permanent audit trail for every maintenance event — accessible at any time.</p>
+    </div>
+    <div class="summary-card">
+      <div class="s-icon">🧠</div>
+      <h4>Intelligence</h4>
+      <p>A growing data asset powering predictive maintenance and AI-assisted operations as the system matures.</p>
+    </div>
+    <div class="summary-card">
+      <div class="s-icon">☁️</div>
+      <h4>Zero Infra</h4>
+      <p>No on-site servers. Cloud-native, auto-scaling, always available. Backed by Google infrastructure.</p>
+    </div>
+  </div>
+  <div class="callout tip" style="margin-top: 8px;">
+    <div class="callout-icon">📈</div>
+    <div class="callout-body"><p>The return on investment is measured in <strong>reduced unplanned downtime</strong>, <strong>lower mean-time-to-repair</strong>, and the progressive shift from emergency maintenance to planned, predictive maintenance — all translating directly to production output and cost efficiency.</p></div>
+  </div>
+</div>
+
+</div><!-- /body-content -->
+</body>
+</html>
