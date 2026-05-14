@@ -1398,24 +1398,35 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Widget _buildHeroHeader(JobCard jobCard) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Row 1: Job # + Status pill
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                Text(
+                  'Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                ),
                 GestureDetector(
                   onTap: isManager ? () => _showStatusChangeDialog(jobCard) : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: jobCard.status == JobStatus.closed ? Colors.green : jobCard.status == JobStatus.monitor ? Colors.orange : Colors.blue,
+                      color: jobCard.status == JobStatus.closed
+                          ? Colors.green
+                          : jobCard.status == JobStatus.monitor
+                              ? Colors.orange
+                              : jobCard.status == JobStatus.inProgress
+                                  ? Colors.purple
+                                  : Colors.blue,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -1423,51 +1434,51 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       children: [
                         Text(
                           jobCard.status.displayName.toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         if (isManager) const SizedBox(width: 4),
-                        if (isManager) const Icon(Icons.edit, color: Colors.white, size: 14),
+                        if (isManager) const Icon(Icons.edit, color: Colors.white, size: 13),
                       ],
                     ),
                   ),
                 ),
               ],
             ),
-            if (jobCard.createdAt != null) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Spacer(),
-                  Text(
-                    _formatDateTime(jobCard.createdAt!),
-                    style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              'Count - $_reoccurrenceCount',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-            ),
-            const SizedBox(height: 8),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'P${jobCard.priority}',
-                    style: TextStyle(
-                      color: _getPriorityColor('P${jobCard.priority}'),
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.bold,
+            const SizedBox(height: 6),
+            // Row 2: Priority + breadcrumb (left) | Count + date (right)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'P${jobCard.priority}',
+                          style: TextStyle(
+                            color: _getPriorityColor('P${jobCard.priority}'),
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
+                          style: TextStyle(fontSize: 14.5, color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                      ],
                     ),
                   ),
-                  TextSpan(
-                    text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
-                    style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Count: $_reoccurrenceCount', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+                    if (jobCard.createdAt != null)
+                      Text(_formatDateTime(jobCard.createdAt!), style: TextStyle(fontSize: 11.5, color: muted)),
+                  ],
+                ),
+              ],
             ),
           ],
         ),
@@ -1477,85 +1488,95 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   Widget _buildCombinedCard(JobCard jobCard) {
     final parsedComments = _parseComments(jobCard.comments);
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Description', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-            const SizedBox(height: 6),
-            Text(jobCard.description, style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface)),
-            const SizedBox(height: 16),
+            Text('Description', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
+            const SizedBox(height: 4),
+            Text(jobCard.description, style: TextStyle(fontSize: 15, color: onSurface)),
+            const SizedBox(height: 12),
 
             // ==================== COMMENTS SECTION ====================
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Comments', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+                Text('Comments', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
                 if (_canAddComments)
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.add_comment, size: 22),
+                        icon: const Icon(Icons.add_comment, size: 20),
                         color: const Color(0xFFFF8C42),
                         tooltip: 'Add Comment',
                         onPressed: _showAddCommentDialog,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.camera_alt, size: 22),
+                        icon: const Icon(Icons.camera_alt, size: 20),
                         color: const Color(0xFFFF8C42),
                         tooltip: 'Add Photo to Comments',
                         onPressed: () => _addPhoto('Comments'),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (parsedComments.isEmpty)
-              Text('No comments yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            if (parsedComments.isNotEmpty)
-              ...parsedComments.map((comment) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(comment, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
-                  )),
-
-            const SizedBox(height: 16),
-
-            // ==================== NOTES SECTION ====================
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                if (_canAddNotes)
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.note_add, size: 22),
-                        color: const Color(0xFFFF8C42),
-                        tooltip: 'Add Note',
-                        onPressed: _showAddNoteDialog,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.camera_alt, size: 22),
-                        color: const Color(0xFFFF8C42),
-                        tooltip: 'Add Photo to Notes',
-                        onPressed: () => _addPhoto('Notes'),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                       ),
                     ],
                   ),
               ],
             ),
             const SizedBox(height: 6),
+            if (parsedComments.isEmpty)
+              Text('No comments yet', style: TextStyle(color: muted)),
+            if (parsedComments.isNotEmpty)
+              ...parsedComments.map((comment) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(comment, style: TextStyle(fontSize: 14.5, color: onSurface)),
+                  )),
+
+            const SizedBox(height: 12),
+
+            // ==================== NOTES SECTION ====================
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
+                if (_canAddNotes)
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.note_add, size: 20),
+                        color: const Color(0xFFFF8C42),
+                        tooltip: 'Add Note',
+                        onPressed: _showAddNoteDialog,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt, size: 20),
+                        color: const Color(0xFFFF8C42),
+                        tooltip: 'Add Photo to Notes',
+                        onPressed: () => _addPhoto('Notes'),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
             if (jobCard.notes.isNotEmpty) ..._parseNotes(jobCard.notes).map((note) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(note, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(note, style: TextStyle(fontSize: 14.5, color: onSurface)),
                 )),
             if (jobCard.notes.isEmpty)
-              Text('No notes', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('No notes', style: TextStyle(color: muted)),
           ],
         ),
       ),
@@ -1563,35 +1584,48 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Widget _buildDetailsCard(JobCard jobCard) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-            const SizedBox(height: 8),
-            _buildDetailRow('Created By', jobCard.operator),
-            if (jobCard.completedBy != null) _buildDetailRow('Completed By', jobCard.completedBy!),
+            Text('Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
+            const SizedBox(height: 6),
+            // Two-column row for Created By + Completed By
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildCompactDetail('Created By', jobCard.operator)),
+                if (jobCard.completedBy != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildCompactDetail('Completed By', jobCard.completedBy!)),
+                ],
+              ],
+            ),
             if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 120, child: Text('Assigned To:', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant))),
+                  SizedBox(width: 90, child: Text('Assigned To', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: muted))),
                   Expanded(
                     child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 4,
+                      runSpacing: 4,
                       children: jobCard.assignedNames!.map((name) {
                         return Chip(
-                          avatar: const Icon(Icons.person, size: 16, color: Colors.green),
-                          label: Text(name, style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13)),
+                          avatar: const Icon(Icons.person, size: 14, color: Colors.green),
+                          label: Text(name, style: TextStyle(color: onSurface, fontSize: 12)),
                           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                           side: BorderSide(color: Theme.of(context).colorScheme.outline),
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
                         );
                       }).toList(),
                     ),
@@ -1599,22 +1633,32 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ],
               ),
             ],
-            const SizedBox(height: 12),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildCompactDetail(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 13.5, color: Theme.of(context).colorScheme.onSurface)),
+      ],
+    );
+  }
+
   Widget _buildActivityLogCard(JobCard jobCard) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
-        title: Text('Activity Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+        title: Text('Activity Log', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1635,13 +1679,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   Widget _buildAssignmentLogCard(JobCard jobCard) {
     final parsedHistory = _parseAssignmentHistory(jobCard.assignmentHistory ?? []);
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
-        title: Text('Assignment Log', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+        title: Text('Assignment Log', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: parsedHistory.isEmpty
@@ -1655,19 +1699,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       )).toList(),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 200, child: Text('$label:', style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant))),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 15.5, color: Theme.of(context).colorScheme.onSurface))),
         ],
       ),
     );
