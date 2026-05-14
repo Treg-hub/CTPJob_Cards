@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -132,12 +131,11 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
   }
 
   Offset _latLngToOffset(MapCamera camera, LatLng latLng) {
-    final p = camera.latLngToScreenPoint(latLng);
-    return Offset(p.x, p.y);
+    return camera.latLngToScreenOffset(latLng);
   }
 
   LatLng _offsetToLatLng(MapCamera camera, Offset offset) {
-    return camera.pointToLatLng(math.Point<double>(offset.dx, offset.dy));
+    return camera.screenOffsetToLatLng(offset);
   }
 
   void _onCentreDrag(DragUpdateDetails details, Size mapSize) {

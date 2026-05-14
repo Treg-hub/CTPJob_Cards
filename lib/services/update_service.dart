@@ -29,6 +29,7 @@ class UpdateService {
         return;
       }
 
+      if (!context.mounted) return;
       await _performUpdateCheck(context, prefs, now);
     } catch (e) {
       debugPrint('Error checking for updates: $e');
@@ -47,6 +48,7 @@ class UpdateService {
       await prefs.remove(_lastCheckKey);
 
       debugPrint('Forcing immediate update check...');
+      if (!context.mounted) return;
       await _performUpdateCheck(context, prefs, now);
     } catch (e) {
       debugPrint('Error forcing update check: $e');

@@ -121,7 +121,7 @@ class NotificationService {
 
     if (currentEmployee != null) {
       clockNo = currentEmployee!.clockNo;
-      name = currentEmployee!.name ?? 'Unknown User';
+      name = currentEmployee!.name;
     } else {
       final prefs = await SharedPreferences.getInstance();
       clockNo = prefs.getString('loggedInClockNo') ?? '';
@@ -305,10 +305,10 @@ class NotificationService {
     }
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch % 2147483647, // unique id; modulo keeps within int32
-      title,
-      body,
-      NotificationDetails(android: androidDetails),
+      id: DateTime.now().millisecondsSinceEpoch % 2147483647,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(android: androidDetails),
       payload: jobCardNumber,
     );
   }
@@ -325,7 +325,7 @@ class NotificationService {
     const initSettings = InitializationSettings(android: androidInit);
 
     await _localNotifications.initialize(
-      initSettings,
+      settings: initSettings,
       onDidReceiveNotificationResponse: handleNotificationAction,
     );
 

@@ -89,12 +89,14 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
                   ),
                   ElevatedButton(
                     onPressed: () async {
+                      final navigator = Navigator.of(context);
+                      final messenger = ScaffoldMessenger.of(context);
                       try {
                         await _copperService.updateTransactionComments(tx.id, _editCommentsController.text);
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comments updated')));
+                        navigator.pop();
+                        messenger.showSnackBar(const SnackBar(content: Text('Comments updated')));
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                        messenger.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
                       }
                     },
                     child: const Text('Save'),

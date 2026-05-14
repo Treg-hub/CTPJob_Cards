@@ -47,11 +47,14 @@ class _SortCopperScreenState extends State<SortCopperScreen> {
   Future<void> _performSort() async {
     if (!_isValid || _currentClockNo == null) return;
 
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await _copperService.performSort(_reuseKg, _sellKg, _commentsController.text, _currentClockNo!);
       _reuseKgController.clear();
       _sellKgController.clear();
       _commentsController.clear();
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -64,9 +67,9 @@ class _SortCopperScreenState extends State<SortCopperScreen> {
             ),
           ],
         ),
-      ).then((_) => Navigator.of(context).pop());
+      ).then((_) => navigator.pop());
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      messenger.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 

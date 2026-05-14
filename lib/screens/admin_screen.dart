@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
+
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
@@ -616,23 +617,20 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                         ElevatedButton(
                           onPressed: () async {
                             if (selectedDeptForArea == null || areaController.text.isEmpty) return;
+                            final messenger = ScaffoldMessenger.of(context);
                             try {
                               final structure = await _firestoreService.getFactoryStructure();
                               (structure[selectedDeptForArea] as Map<String, dynamic>)[areaController.text] = [];
                               await _firestoreService.updateFactoryStructure(structure);
                               areaController.clear();
                               _loadStructure();
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Area added')),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Area added')),
+                              );
                             } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error adding area: $e'), backgroundColor: Colors.red),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Error adding area: $e'), backgroundColor: Colors.red),
+                              );
                             }
                           },
                           child: const Text('Add Area'),
@@ -691,23 +689,20 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                         ElevatedButton(
                           onPressed: () async {
                             if (selectedDeptForMachine == null || selectedAreaForMachine == null || machineController.text.isEmpty) return;
+                            final messenger = ScaffoldMessenger.of(context);
                             try {
                               final structure = await _firestoreService.getFactoryStructure();
                               (structure[selectedDeptForMachine]![selectedAreaForMachine] as List<dynamic>).add(machineController.text);
                               await _firestoreService.updateFactoryStructure(structure);
                               machineController.clear();
                               _loadStructure();
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Machine added')),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Machine added')),
+                              );
                             } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error adding machine: $e'), backgroundColor: Colors.red),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Error adding machine: $e'), backgroundColor: Colors.red),
+                              );
                             }
                           },
                           child: const Text('Add Machine / Part'),
@@ -1126,6 +1121,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 );
                 return;
               }
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
               try {
                 final emp = Employee(
                   clockNo: clockNoController.text,
@@ -1141,19 +1138,15 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 } else {
                   await _firestoreService.createEmployee(emp);
                 }
-                Navigator.pop(context);
+                navigator.pop();
                 _loadEmployees();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Employee ${isEdit ? 'updated' : 'added'}')),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Employee ${isEdit ? 'updated' : 'added'}')),
+                );
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                );
               }
             },
             child: Text(isEdit ? 'Update' : 'Add'),
@@ -1320,7 +1313,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       ['', '', '', '', 'true', ''],
     ];
 
-    final csvString = const ListToCsvConverter().convert(csvData);
+    final csvString = Csv().encode(csvData);
 
     if (kIsWeb) {
       final blob = html.Blob([csvString], 'text/csv');
@@ -1330,14 +1323,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ..click();
       html.Url.revokeObjectUrl(url);
     } else {
-      Share.share(csvString, subject: 'Employees Template');
+      SharePlus.instance.share(ShareParams(text: csvString, subject: 'Employees Template'));
     }
   }
 
   // ==================== IMPORT CSV ====================
   void _importCsv() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
       );
@@ -1355,9 +1348,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         return;
       }
 
-      final csvTable = const CsvToListConverter().convert(csvString);
+      final csvTable = Csv().decode(csvString);
 
       if (csvTable.isEmpty || csvTable[0].length < 6) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid CSV format')),
         );
@@ -1368,6 +1362,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       final expected = ['clockno', 'name', 'position', 'department', 'isonsite', 'fcmtoken'];
 
       if (!expected.every((h) => headers.contains(h))) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid headers in CSV')),
         );
@@ -1387,6 +1382,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
       bool deleteAll = false;
 
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -1422,7 +1418,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               ),
               TextButton(
                 onPressed: () async {
-                  Navigator.pop(context);
+                  final navigator = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  navigator.pop();
                   if (deleteAll) {
                     await _firestoreService.deleteAllEmployees();
                   }
@@ -1454,7 +1452,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   }
 
                   _loadEmployees();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(content: Text('Imported $imported, skipped $skipped')),
                   );
                 },
@@ -1465,6 +1463,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Import failed: $e')),
       );
@@ -1511,7 +1510,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       final jc = _filteredJobCards[index];
       final updatedJc = jc.copyWith(
         priority: int.tryParse(_jobCardPriorityController.text) ?? jc.priority,
-        status: JobStatusExtension.fromString(_jobCardStatusController.text) ?? jc.status,
+        status: JobStatusExtension.fromString(_jobCardStatusController.text),
         description: _jobCardDescriptionController.text,
       );
       _firestoreService.updateJobCard(jc.id!, updatedJc);
@@ -1584,14 +1583,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         jc.createdAt?.toString() ?? '',
       ]),
     ];
-    final csvString = const ListToCsvConverter().convert(csvData);
+    final csvString = Csv().encode(csvData);
     if (kIsWeb) {
       final blob = html.Blob([csvString], 'text/csv');
       final url = html.Url.createObjectUrlFromBlob(blob);
       html.AnchorElement(href: url)..download = 'job_cards.csv'..click();
       html.Url.revokeObjectUrl(url);
     } else {
-      Share.share(csvString, subject: 'Job Cards Export');
+      SharePlus.instance.share(ShareParams(text: csvString, subject: 'Job Cards Export'));
     }
   }
 

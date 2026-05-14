@@ -31,35 +31,30 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
   }
 
   Future<void> _testFullscreen() async {
+    final messenger = ScaffoldMessenger.of(context);
     await NotificationService().testFullscreenNotification();
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text("Test full-screen notification sent!")),
     );
   }
 
   Future<void> _testGeoFenceLog(bool isEntering) async {
     final locationService = LocationService();
+    final messenger = ScaffoldMessenger.of(context);
     await locationService.logTestGeoFenceEvent(
       isEntering: isEntering,
       notes: 'Manual test from Diagnostics screen',
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text(
-          isEntering 
-            ? '✅ Test ENTER logged to geo_fence_logs + isOnSite updated' 
+          isEntering
+            ? '✅ Test ENTER logged to geo_fence_logs + isOnSite updated'
             : '📍 Test EXIT logged to geo_fence_logs + isOnSite updated'
         ),
       ),
     );
-  }
-
-  void _addLocationLog(String message) {
-    setState(() {
-      _locationLogs.insert(0, "${DateTime.now().toLocal().toString().substring(11, 19)} - $message");
-      if (_locationLogs.length > 10) _locationLogs.removeLast();
-    });
   }
 
   @override
