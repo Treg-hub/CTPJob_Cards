@@ -26,6 +26,7 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
   double _radius = _defaultRadius;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _mapReady = false;
   String? _clockNo;
   bool _showAdvanced = false;
 
@@ -37,6 +38,10 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
   void initState() {
     super.initState();
     _loadCurrentGeofence();
+  }
+
+  void _onMapReady() {
+    setState(() => _mapReady = true);
     _mapEventSub = _mapController.mapEventStream.listen((_) {
       if (mounted) setState(() {});
     });
@@ -249,6 +254,7 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
+                onMapReady: _onMapReady,
               ),
               children: [
                 TileLayer(
@@ -270,10 +276,9 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
                 ),
               ],
             ),
-            // Draggable centre marker (always at the centre of the circle)
-            _buildDraggableCentre(size),
-            // Draggable radius edge handle (east of centre)
-            _buildDraggableEdge(size),
+            // Draggable overlays require the map camera to be ready
+            if (_mapReady) _buildDraggableCentre(size),
+            if (_mapReady) _buildDraggableEdge(size),
             // Helper banner
             Positioned(
               top: 12,
