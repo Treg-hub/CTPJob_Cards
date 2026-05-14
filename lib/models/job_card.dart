@@ -59,6 +59,7 @@ class JobCard {
   final DateTime? closedAt;
   final List<AssignmentEvent> assignmentHistory;
   final List<Map<String, dynamic>> photos;
+  final Map<String, DateTime> reviewedBy;
 
   const JobCard({
     this.id,
@@ -91,6 +92,7 @@ class JobCard {
     this.closedAt,
     this.assignmentHistory = const [],
     this.photos = const [],
+    this.reviewedBy = const {},
   });
 
   factory JobCard.fromFirestore(DocumentSnapshot doc) {
@@ -146,6 +148,7 @@ class JobCard {
           : null,
       assignmentHistory: (data['assignmentHistory'] as List?)?.map((m) => AssignmentEvent.fromFirestore(m)).toList() ?? [],
       photos: _parsePhotos(data['photos']),
+      reviewedBy: _parseReviewedBy(data['reviewedBy']),
     );
   }
 
@@ -214,6 +217,7 @@ class JobCard {
     DateTime? closedAt,
     List<AssignmentEvent>? assignmentHistory,
     List<Map<String, dynamic>>? photos,
+    Map<String, DateTime>? reviewedBy,
   }) {
     return JobCard(
       id: id ?? this.id,
@@ -246,6 +250,7 @@ class JobCard {
       closedAt: closedAt ?? this.closedAt,
       assignmentHistory: assignmentHistory ?? this.assignmentHistory,
       photos: photos ?? this.photos,
+      reviewedBy: reviewedBy ?? this.reviewedBy,
     );
   }
 
@@ -268,6 +273,23 @@ class JobCard {
       }
       return <String, dynamic>{};
     }).toList();
+  }
+
+  static Map<String, DateTime> _parseReviewedBy(dynamic data) {
+    if (data == null || data is! Map) return const {};
+    final result = <String, DateTime>{};
+    final map = data as Map<Object?, Object?>;
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final val = entry.value;
+      if (val is Timestamp) {
+        result[key] = val.toDate();
+      } else if (val is String) {
+        final dt = DateTime.tryParse(val);
+        if (dt != null) result[key] = dt;
+      }
+    }
+    return result;
   }
 
   // ==================== NEW HELPER METHOD ====================
