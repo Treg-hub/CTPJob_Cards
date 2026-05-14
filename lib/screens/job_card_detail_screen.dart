@@ -1053,9 +1053,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.green.withValues(alpha: 80)),
                 ),
-                child: Column(
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text('Closure requires:', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 12.5)),
                     SizedBox(height: 4),
                     Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
@@ -1116,9 +1116,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.orange.withValues(alpha: 80)),
                 ),
-                child: Column(
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text('Describe the intervention:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 12.5)),
                     SizedBox(height: 4),
                     Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
