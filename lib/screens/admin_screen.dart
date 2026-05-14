@@ -50,6 +50,7 @@ class JobCardsDataTableSource extends DataTableSource {
   static Color _getStatusColor(JobStatus s) {
     switch (s) {
       case JobStatus.open: return Colors.blue;
+      case JobStatus.inProgress: return Colors.purple;      
       case JobStatus.monitor: return Colors.orange;
       case JobStatus.closed: return Colors.green;
 

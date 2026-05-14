@@ -271,7 +271,7 @@ class LocationService {
         locationTaskName,
         frequency: const Duration(minutes: 30),
         // KEEP: if already scheduled, leave it alone — don't reset the 30-min timer.
-        existingWorkPolicy: ExistingWorkPolicy.keep,
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
         constraints: Constraints(
           networkType: NetworkType.connected,
           requiresBatteryNotLow: false,
