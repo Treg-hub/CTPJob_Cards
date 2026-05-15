@@ -1,3 +1,9 @@
+plugins {
+    // Add the dependency for the Firebase App Distribution Gradle plugin
+    // (Enables easy ./gradlew appDistributionUploadRelease commands + future CI/CD)
+    id("com.google.firebase.appdistribution") version "5.2.1" apply false
+}
+
 allprojects {
     repositories {
         google()
