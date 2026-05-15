@@ -332,6 +332,17 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
+    _messaging.onTokenRefresh.listen((newToken) async {
+      final clockNo = currentEmployee?.clockNo;
+      if (clockNo != null) {
+        await FirebaseFirestore.instance.collection('employees').doc(clockNo).set({
+          'fcmToken': newToken,
+          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('FCM token auto-refreshed for $clockNo');
+      }
+    });
+
     const MethodChannel jobAlertChannel = MethodChannel('job_alert_channel');
 
     jobAlertChannel.setMethodCallHandler((MethodCall call) async {
@@ -467,6 +478,21 @@ class NotificationService {
 
   Future<void> refreshToken() async {
     await getToken();
+  }
+
+  Future<void> refreshAndSaveToken(String clockNo) async {
+    try {
+      final token = await _messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('employees').doc(clockNo).set({
+          'fcmToken': token,
+          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('FCM token refreshed on startup for $clockNo');
+      }
+    } catch (e) {
+      debugPrint('Error refreshing FCM token on startup: $e');
+    }
   }
 
   Future<void> showOnSiteNotification({

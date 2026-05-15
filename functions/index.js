@@ -67,15 +67,69 @@ async function getNotificationConfig() {
   }
 
   return {
-    escalation_onsite_short_minutes: 2,
-    escalation_onsite_long_minutes: 7,
-    escalation_offsite_minutes: 30,
-    escalation_stage4_minutes: 60,
-    stage1_recipients: ["onsite_managers", "foremen"],
-    stage2_recipients: ["onsite_dept_managers", "onsite_workshop_manager"],
-    stage3_recipients: [],
-    stage4_recipients: [],
+    stages: {
+      stage1: {
+        enabled: true,
+        minutes: 5,
+        recipients_by_type: {
+          "mechanical": ["onsite_managers", "foremen"],
+          "electrical": ["onsite_managers", "foremen"],
+          "mech/elec":  ["onsite_managers", "foremen"],
+        },
+      },
+      stage2: {
+        enabled: true,
+        minutes: 10,
+        recipients_by_type: {
+          "mechanical": ["onsite_dept_managers", "onsite_workshop_manager"],
+          "electrical": ["onsite_dept_managers", "onsite_workshop_manager"],
+          "mech/elec":  ["onsite_dept_managers", "onsite_workshop_manager"],
+        },
+      },
+      stage3: {
+        enabled: false,
+        minutes: 30,
+        recipients_by_type: { "mechanical": [], "electrical": [], "mech/elec": [] },
+      },
+      stage4: {
+        enabled: false,
+        minutes: 60,
+        recipients_by_type: { "mechanical": [], "electrical": [], "mech/elec": [] },
+      },
+    },
+    creation_recipients_by_type: {
+      "mechanical": ["onsite_mechanics"],
+      "electrical": ["onsite_electricians"],
+      "mech/elec":  ["onsite_mechanics", "onsite_electricians"],
+    },
+    excluded_job_types: ["maintenance"],
   };
+}
+
+// Maps Dart enum job type to the key used in recipients_by_type
+function jobTypeKey(jobType) {
+  if (jobType === "mechanicalElectrical") return "mech/elec";
+  return jobType;
+}
+
+function getStage(config, stageNum) {
+  return config.stages && config.stages[`stage${stageNum}`];
+}
+
+function getStageRecipients(config, stageNum, jobType) {
+  const stage = getStage(config, stageNum);
+  if (!stage || !stage.recipients_by_type) return [];
+  return stage.recipients_by_type[jobTypeKey(jobType)] || [];
+}
+
+function isJobTypeExcluded(config, jobType) {
+  return (config.excluded_job_types || []).includes(jobType);
+}
+
+function getCreationRecipientRules(config, jobType) {
+  const map = config.creation_recipients_by_type;
+  if (!map) return [];
+  return map[jobTypeKey(jobType)] || [];
 }
 
 // ==================== NEW HELPER: Resolve recipients from rules ====================
@@ -311,12 +365,6 @@ async function getOnsiteElectricians() {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getInitialRecipients(jobType) {
-  if (jobType === "mechanical") return getOnsiteMechanics();
-  if (jobType === "electrical") return getOnsiteElectricians();
-  return [...(await getOnsiteMechanics()), ...(await getOnsiteElectricians())];
-}
-
 async function getOnsiteDeptForemenShiftLeaders(dept) {
   const snaps = await db.collection("employees")
     .where("department", "==", dept)
@@ -395,6 +443,18 @@ async function sendNotification({
       part,
     });
   } catch (e) {
+    const staleTokenCodes = [
+      "messaging/registration-token-not-registered",
+      "messaging/invalid-registration-token",
+    ];
+    if (staleTokenCodes.includes(e.errorInfo?.code) && recipientClockNo && recipientClockNo !== "unknown") {
+      try {
+        await db.collection("employees").doc(recipientClockNo).update({ fcmToken: null });
+        console.log(`Cleared stale FCM token for employee ${recipientClockNo}`);
+      } catch (clearErr) {
+        console.error(`Failed to clear stale token for ${recipientClockNo}:`, clearErr);
+      }
+    }
     console.error("FCM send error:", e);
   }
 }
@@ -406,11 +466,18 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
   const priority = job.priority || 1;
   const level = getNotificationLevel(priority);
 
-  const recipients = await getInitialRecipients(job.type);
+  const config = await getNotificationConfig();
+  if (isJobTypeExcluded(config, job.type)) {
+    console.log(`onJobCardCreated: job #${job.jobCardNumber || jobId} type ${job.type} is excluded`);
+    return;
+  }
+
+  const creationRules = getCreationRecipientRules(config, job.type);
+  const recipients = await resolveRecipientsFromRules(creationRules, job.type, job.department);
 
   if (priority >= 5 && job.operatorClockNo) {
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
-    if (creatorDoc.exists) recipients.push(creatorDoc.data());
+    if (creatorDoc.exists) recipients.push({ token: creatorDoc.data().fcmToken, clockNo: job.operatorClockNo, ...creatorDoc.data() });
   }
 
   const createdBy = job.operator || "Unknown";
@@ -473,234 +540,85 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
   }
 });
 
-// ==================== SCHEDULED: ESCALATION (3 Stages + Stops on Assignment) ====================
+// ==================== SCHEDULED: ESCALATION (4 stages, config-driven) ====================
 exports.escalateNotifications = functions.scheduler.onSchedule({
   schedule: "every 2 minutes",
   region: "europe-west1",
   timeZone: "Africa/Johannesburg",
 }, async () => {
+  console.log("escalateNotifications: started");
   const config = await getNotificationConfig();
   const now = admin.firestore.FieldValue.serverTimestamp();
 
-  const shortMinutes = config.escalation_onsite_short_minutes || 2;
-  const longMinutes = config.escalation_onsite_long_minutes || 7;
-  const thirtyMin = config.escalation_offsite_minutes || 30;
-  const stage4Min = config.escalation_stage4_minutes || 60;
-
-  const twoMinAgo = new Date(Date.now() - shortMinutes * 60 * 1000);
-  const sevenMinAgo = new Date(Date.now() - longMinutes * 60 * 1000);
-  const thirtyMinAgo = new Date(Date.now() - thirtyMin * 60 * 1000);
-  const stage4Ago = new Date(Date.now() - stage4Min * 60 * 1000);
-
-  // ========== 2-MINUTE ESCALATION ==========
-  const jobs2min = await db.collection("job_cards")
-    .where("status", "==", "open")
-    .where("assignedClockNos", "==", null)
-    .where("createdAt", "<=", twoMinAgo)
-    .where("notifiedAt2min", "==", null)
-    .get();
-
-  for (const doc of jobs2min.docs) {
-    const job = doc.data();
-
-    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
-    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
-      await doc.ref.update({
-        notifiedAt2min: job.notifiedAt2min || now,
-        notifiedAt7min: job.notifiedAt7min || now,
-        notifiedAt30min: job.notifiedAt30min || now,
-        notifiedAt4th: job.notifiedAt4th || now,
-      });
+  for (let stageNum = 1; stageNum <= 4; stageNum++) {
+    const stage = getStage(config, stageNum);
+    if (!stage) {
+      console.log(`Stage ${stageNum}: missing from config, skipping`);
+      continue;
+    }
+    if (stage.enabled !== true) {
+      console.log(`Stage ${stageNum}: disabled, skipping`);
+      continue;
+    }
+    const minutes = stage.minutes;
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      console.log(`Stage ${stageNum}: invalid minutes (${minutes}), skipping`);
       continue;
     }
 
-    const priority = job.priority || 1;
-    const level = priority <= 3 ? "normal" : "medium-high";
+    const stageField = `notifiedAtStage${stageNum}`;
+    const cutoff = new Date(Date.now() - minutes * 60 * 1000);
 
-    const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
-    const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
+    const jobs = await db.collection("job_cards")
+      .where("status", "==", "open")
+      .where("createdAt", "<=", cutoff)
+      .get();
 
-    const resolvedRecipients = await resolveRecipientsFromRules(
-      config.stage1_recipients || [],
-      job.type,
-      job.department,
-    );
+    console.log(`Stage ${stageNum} (${minutes}min): found ${jobs.size} open jobs older than ${minutes}min`);
 
-    for (const emp of resolvedRecipients) {
-      await sendNotification({
-        token: emp.token,
-        recipientClockNo: emp.clockNo,
-        title: `Escalation: No Action Taken (2min) - Job #${job.jobCardNumber || doc.id}`,
-        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
-        jobCardNumber: job.jobCardNumber || doc.id,
-        level,
-        priority,
-        createdBy,
-        department: job.department,
-        area: job.area,
-        machine: job.machine,
-        part: job.part,
-        triggeredBy: "2min_escalation",
-      });
+    for (const doc of jobs.docs) {
+      const job = doc.data();
+
+      if (isJobTypeExcluded(config, job.type)) continue;
+      if (job[stageField]) continue;
+      if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
+        await doc.ref.update({ [stageField]: job[stageField] || now });
+        continue;
+      }
+
+      const rules = getStageRecipients(config, stageNum, job.type);
+      if (rules.length === 0) continue;
+
+      const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department);
+      console.log(`Stage ${stageNum} job #${job.jobCardNumber || doc.id}: type=${job.type}, dept=${job.department}, recipients=${resolvedRecipients.length}`);
+
+      if (resolvedRecipients.length === 0) continue;
+
+      const priority = job.priority || 1;
+      const level = priority <= 3 ? "normal" : (stageNum >= 2 ? "full-loud" : "medium-high");
+
+      const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
+      const createdBy = creatorDoc.exists ? creatorDoc.data().name : (job.operator || "Unknown");
+
+      for (const emp of resolvedRecipients) {
+        await sendNotification({
+          token: emp.token,
+          recipientClockNo: emp.clockNo,
+          title: `Stage ${stageNum} Escalation (${minutes}min) - Job #${job.jobCardNumber || doc.id}`,
+          body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
+          jobCardNumber: job.jobCardNumber || doc.id,
+          level,
+          priority,
+          createdBy,
+          department: job.department,
+          area: job.area,
+          machine: job.machine,
+          part: job.part,
+          triggeredBy: `stage${stageNum}_escalation`,
+        });
+      }
+      await doc.ref.update({ [stageField]: now });
     }
-    await doc.ref.update({ notifiedAt2min: now });
-  }
-
-  // ========== 7-MINUTE ESCALATION ==========
-  const jobs7min = await db.collection("job_cards")
-    .where("status", "==", "open")
-    .where("assignedClockNos", "==", null)
-    .where("createdAt", "<=", sevenMinAgo)
-    .where("notifiedAt7min", "==", null)
-    .get();
-
-  for (const doc of jobs7min.docs) {
-    const job = doc.data();
-
-    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
-    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
-      await doc.ref.update({
-        notifiedAt7min: job.notifiedAt7min || now,
-        notifiedAt30min: job.notifiedAt30min || now,
-      });
-      continue;
-    }
-
-    const priority = job.priority || 1;
-    const level = priority <= 3 ? "normal" : "full-loud";
-
-    const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
-    const createdBy = creatorDoc.exists ? creatorDoc.data().name : "Unknown";
-
-    const resolvedRecipients = await resolveRecipientsFromRules(
-      config.stage2_recipients || [],
-      job.type,
-      job.department,
-    );
-
-    for (const emp of resolvedRecipients) {
-      await sendNotification({
-        token: emp.token,
-        recipientClockNo: emp.clockNo,
-        title: `URGENT Escalation: No Action Taken (7min) - Job #${job.jobCardNumber || doc.id}`,
-        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
-        jobCardNumber: job.jobCardNumber || doc.id,
-        level,
-        priority,
-        createdBy,
-        department: job.department,
-        area: job.area,
-        machine: job.machine,
-        part: job.part,
-        triggeredBy: "7min_escalation",
-      });
-    }
-    await doc.ref.update({ notifiedAt7min: now });
-  }
-
-  // ========== 30-MINUTE ESCALATION (Third Stage - Empty for now) ==========
-  const jobs30min = await db.collection("job_cards")
-    .where("status", "==", "open")
-    .where("assignedClockNos", "==", null)
-    .where("createdAt", "<=", thirtyMinAgo)
-    .where("notifiedAt30min", "==", null)
-    .get();
-
-  for (const doc of jobs30min.docs) {
-    const job = doc.data();
-
-    // Stop escalation if action has been taken (assignment, busy response, or explicit stop).
-    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
-      await doc.ref.update({ notifiedAt30min: job.notifiedAt30min || now });
-      continue;
-    }
-
-    const priority = job.priority || 1;
-    const level = priority <= 3 ? "normal" : "medium-high";
-
-    const stage3Rules = config.stage3_recipients || [];
-
-    if (stage3Rules.length === 0) {
-      await doc.ref.update({ notifiedAt30min: now });
-      continue;
-    }
-
-    const resolvedRecipients = await resolveRecipientsFromRules(
-      stage3Rules,
-      job.type,
-      job.department,
-    );
-
-    for (const emp of resolvedRecipients) {
-      await sendNotification({
-        token: emp.token,
-        recipientClockNo: emp.clockNo,
-        title: `30min Escalation - Job #${job.jobCardNumber || doc.id}`,
-        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
-        jobCardNumber: job.jobCardNumber || doc.id,
-        level,
-        priority,
-        createdBy: job.operator || "Unknown",
-        department: job.department,
-        area: job.area,
-        machine: job.machine,
-        part: job.part,
-        triggeredBy: "30min_escalation",
-      });
-    }
-    await doc.ref.update({ notifiedAt30min: now });
-  }
-
-  // ========== STAGE 4 ESCALATION ==========
-  const jobsStage4 = await db.collection("job_cards")
-    .where("status", "==", "open")
-    .where("assignedClockNos", "==", null)
-    .where("createdAt", "<=", stage4Ago)
-    .where("notifiedAt4th", "==", null)
-    .get();
-
-  for (const doc of jobsStage4.docs) {
-    const job = doc.data();
-
-    if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
-      await doc.ref.update({ notifiedAt4th: job.notifiedAt4th || now });
-      continue;
-    }
-
-    const stage4Rules = config.stage4_recipients || [];
-
-    if (stage4Rules.length === 0) {
-      await doc.ref.update({ notifiedAt4th: now });
-      continue;
-    }
-
-    const priority = job.priority || 1;
-    const level = priority <= 3 ? "normal" : "full-loud";
-
-    const resolvedRecipients = await resolveRecipientsFromRules(
-      stage4Rules,
-      job.type,
-      job.department,
-    );
-
-    for (const emp of resolvedRecipients) {
-      await sendNotification({
-        token: emp.token,
-        recipientClockNo: emp.clockNo,
-        title: `Stage 4 Escalation - Job #${job.jobCardNumber || doc.id}`,
-        body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
-        jobCardNumber: job.jobCardNumber || doc.id,
-        level,
-        priority,
-        createdBy: job.operator || "Unknown",
-        department: job.department,
-        area: job.area,
-        machine: job.machine,
-        part: job.part,
-        triggeredBy: "stage4_escalation",
-      });
-    }
-    await doc.ref.update({ notifiedAt4th: now });
   }
 });
 
@@ -886,18 +804,20 @@ exports.onAlertResponseCreated = functions.firestore
 // ==================== NEW: On-site only manager helpers ====================
 async function getOnsiteRelevantManagers(jobType) {
   const snaps = await db.collection("employees")
-    .where("position", "==", "Manager")
     .where("isOnSite", "==", true)
     .get();
 
   return snaps.docs
     .filter((doc) => {
-      const dept = doc.data().department || "";
+      const pos = (doc.data().position || "").toLowerCase();
+      if (!/manager/i.test(pos)) return false;
+
+      const dept = (doc.data().department || "").toLowerCase();
       if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("mechanical");
+        return dept.includes("mechanical") || dept.includes("workshop");
       }
       if (jobType === "electrical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("electrical");
+        return dept.includes("electrical") || dept.includes("workshop");
       }
       return false;
     })
@@ -935,18 +855,20 @@ async function getOnsiteWorkshopManager() {
 // ==================== Off-site manager helpers ====================
 async function getOffsiteRelevantManagers(jobType) {
   const snaps = await db.collection("employees")
-    .where("position", "==", "Manager")
     .where("isOnSite", "==", false)
     .get();
 
   return snaps.docs
     .filter((doc) => {
-      const dept = doc.data().department || "";
+      const pos = (doc.data().position || "").toLowerCase();
+      if (!/manager/i.test(pos)) return false;
+
+      const dept = (doc.data().department || "").toLowerCase();
       if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("mechanical");
+        return dept.includes("mechanical") || dept.includes("workshop");
       }
       if (jobType === "electrical" || jobType === "mechanicalElectrical") {
-        return dept.toLowerCase().includes("electrical");
+        return dept.includes("electrical") || dept.includes("workshop");
       }
       return false;
     })
@@ -1035,4 +957,33 @@ exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
   } else {
     return { message: "No job cards needed status updates.", updated: 0 };
   }
+});
+
+// ==================== CLEAR STALE ESCALATION STAMPS (one-time reset) ====================
+exports.clearEscalationStamps = functions.https.onCall(async () => {
+  const config = await getNotificationConfig();
+  const snapshot = await db.collection("job_cards")
+    .where("status", "==", "open")
+    .get();
+
+  const batch = db.batch();
+  let count = 0;
+
+  for (const doc of snapshot.docs) {
+    const job = doc.data();
+    if (isJobTypeExcluded(config, job.type)) continue;
+    if (job.notifiedAtStage1 || job.notifiedAtStage2 || job.notifiedAtStage3 || job.notifiedAtStage4) {
+      batch.update(doc.ref, {
+        notifiedAtStage1: null,
+        notifiedAtStage2: null,
+        notifiedAtStage3: null,
+        notifiedAtStage4: null,
+      });
+      count++;
+    }
+  }
+
+  if (count > 0) await batch.commit();
+  console.log(`Cleared escalation stamps from ${count} open job cards`);
+  return { cleared: count };
 });

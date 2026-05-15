@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, FlutterError, PlatformDispatcher;
@@ -91,47 +92,65 @@ void main() async {
   // ==================== DETERMINE INITIAL SCREEN + START LOCATION ====================
   Widget initialScreen;
   final prefs = await SharedPreferences.getInstance();
-  final hasLogin = prefs.containsKey('loggedInClockNo');
 
-  if (hasLogin) {
-    final clockNo = prefs.getString('loggedInClockNo');
-    if (clockNo != null) {
-      try {
-        currentEmployee = await firestoreService.getEmployee(clockNo);
+  String? clockNo = prefs.getString('loggedInClockNo');
 
-        if (currentEmployee != null) {
-          if (!kIsWeb) {
-            NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+  // Fallback: SharedPreferences was cleared (e.g. reinstall) but Firebase Auth session survived
+  if (clockNo == null && !kIsWeb) {
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        final query = await FirebaseFirestore.instance
+            .collection('employees')
+            .where('uid', isEqualTo: firebaseUser.uid)
+            .limit(1)
+            .get();
+        if (query.docs.isNotEmpty) {
+          clockNo = query.docs.first.data()['clockNo'] as String?;
+          if (clockNo != null) {
+            await prefs.setString('loggedInClockNo', clockNo);
+            debugPrint('✅ Session restored from Firebase Auth for $clockNo');
           }
-
-          final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
-
-          final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
-          if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
-            initialScreen = const PermissionsOnboardingScreen();
-          } else {
-            initialScreen = const HomeScreen();
-          }
-
-          // === START NATIVE MONITORING ON AUTO-LOGIN ===
-          if (!kIsWeb) {
-            try {
-              await LocationService().startNativeMonitoring(clockNo);
-              debugPrint('✅ Native monitoring started on auto-login');
-            } catch (e) {
-              debugPrint('Location monitoring error on auto-login: $e');
-            }
-          }
-
-          LocationService().checkCurrentLocation();
-        } else {
-          initialScreen = const LoginScreen();
         }
-      } catch (e) {
-        currentEmployee = null;
+      }
+    } catch (e) {
+      debugPrint('Firebase Auth session restore failed: $e');
+    }
+  }
+
+  if (clockNo != null) {
+    try {
+      currentEmployee = await firestoreService.getEmployee(clockNo);
+
+      if (currentEmployee != null) {
+        if (!kIsWeb) {
+          NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+        }
+
+        final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
+
+        final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
+        if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
+          initialScreen = const PermissionsOnboardingScreen();
+        } else {
+          initialScreen = const HomeScreen();
+        }
+
+        if (!kIsWeb) {
+          try {
+            await LocationService().startNativeMonitoring(clockNo);
+            debugPrint('✅ Native monitoring started on auto-login');
+          } catch (e) {
+            debugPrint('Location monitoring error on auto-login: $e');
+          }
+        }
+
+        LocationService().checkCurrentLocation();
+      } else {
         initialScreen = const LoginScreen();
       }
-    } else {
+    } catch (e) {
+      currentEmployee = null;
       initialScreen = const LoginScreen();
     }
   } else {

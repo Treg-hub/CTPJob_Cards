@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
+import 'package:cloud_functions/cloud_functions.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -122,10 +123,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   String? _currentClockNo;
 
   // Notification escalation config
-  final TextEditingController _shortMinController = TextEditingController(text: '2');
-  final TextEditingController _longMinController = TextEditingController(text: '7');
-  final TextEditingController _offsiteMinController = TextEditingController(text: '30');
+  final TextEditingController _stage1MinController = TextEditingController(text: '5');
+  final TextEditingController _stage2MinController = TextEditingController(text: '10');
+  final TextEditingController _stage3MinController = TextEditingController(text: '30');
   final TextEditingController _stage4MinController = TextEditingController(text: '60');
+  bool _stage1Enabled = true;
+  bool _stage2Enabled = true;
+  bool _stage3Enabled = false;
+  bool _stage4Enabled = false;
   static const _allRules = [
     'onsite_managers',
     'foremen',
@@ -198,9 +203,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     machineController.dispose();
     structureSearchController.dispose();
     _passwordController.dispose();
-    _shortMinController.dispose();
-    _longMinController.dispose();
-    _offsiteMinController.dispose();
+    _stage1MinController.dispose();
+    _stage2MinController.dispose();
+    _stage3MinController.dispose();
     _stage4MinController.dispose();
     _clockNoController.dispose();
     _nameController.dispose();
@@ -307,18 +312,48 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
+  Map<String, dynamic> _readStageBlock(Map<String, dynamic> config, String key, {required bool defaultEnabled, required int defaultMinutes}) {
+    final stages = config['stages'] as Map<String, dynamic>?;
+    final stage = stages?[key] as Map<String, dynamic>?;
+    return {
+      'enabled': stage?['enabled'] as bool? ?? defaultEnabled,
+      'minutes': (stage?['minutes'] as num?)?.toInt() ?? defaultMinutes,
+      'recipients_by_type': (stage?['recipients_by_type'] as Map<String, dynamic>?) ?? const {},
+    };
+  }
+
+  Set<String> _stageRecipientsForUi(Map<String, dynamic> stageBlock, Set<String> fallback) {
+    final byType = stageBlock['recipients_by_type'] as Map<String, dynamic>;
+    // Admin UI shows one shared list; pull from "mechanical" key as the source of truth.
+    final mech = byType['mechanical'] as List?;
+    if (mech == null) return fallback;
+    return Set<String>.from(mech.map((e) => e.toString()));
+  }
+
   Future<void> _loadNotificationConfig() async {
     try {
       final config = await _firestoreService.getNotificationConfig();
+
+      final s1 = _readStageBlock(config, 'stage1', defaultEnabled: true, defaultMinutes: 5);
+      final s2 = _readStageBlock(config, 'stage2', defaultEnabled: true, defaultMinutes: 10);
+      final s3 = _readStageBlock(config, 'stage3', defaultEnabled: false, defaultMinutes: 30);
+      final s4 = _readStageBlock(config, 'stage4', defaultEnabled: false, defaultMinutes: 60);
+
       setState(() {
-        _shortMinController.text = (config['escalation_onsite_short_minutes'] ?? 2).toString();
-        _longMinController.text = (config['escalation_onsite_long_minutes'] ?? 7).toString();
-        _offsiteMinController.text = (config['escalation_offsite_minutes'] ?? 30).toString();
-        _stage4MinController.text = (config['escalation_stage4_minutes'] ?? 60).toString();
-        _stage1Recipients = Set<String>.from((config['stage1_recipients'] as List? ?? ['onsite_managers', 'foremen']));
-        _stage2Recipients = Set<String>.from((config['stage2_recipients'] as List? ?? ['onsite_dept_managers', 'onsite_workshop_manager']));
-        _stage3Recipients = Set<String>.from((config['stage3_recipients'] as List? ?? []));
-        _stage4Recipients = Set<String>.from((config['stage4_recipients'] as List? ?? []));
+        _stage1Enabled = s1['enabled'] as bool;
+        _stage2Enabled = s2['enabled'] as bool;
+        _stage3Enabled = s3['enabled'] as bool;
+        _stage4Enabled = s4['enabled'] as bool;
+
+        _stage1MinController.text = (s1['minutes'] as int).toString();
+        _stage2MinController.text = (s2['minutes'] as int).toString();
+        _stage3MinController.text = (s3['minutes'] as int).toString();
+        _stage4MinController.text = (s4['minutes'] as int).toString();
+
+        _stage1Recipients = _stageRecipientsForUi(s1, {'onsite_managers', 'foremen'});
+        _stage2Recipients = _stageRecipientsForUi(s2, {'onsite_dept_managers', 'onsite_workshop_manager'});
+        _stage3Recipients = _stageRecipientsForUi(s3, {});
+        _stage4Recipients = _stageRecipientsForUi(s4, {});
       });
     } catch (e) {
       if (mounted) {
@@ -329,13 +364,26 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
-  Future<void> _saveNotificationConfig() async {
-    final short = int.tryParse(_shortMinController.text) ?? 2;
-    final long = int.tryParse(_longMinController.text) ?? 7;
-    final offsite = int.tryParse(_offsiteMinController.text) ?? 30;
-    final stage4 = int.tryParse(_stage4MinController.text) ?? 60;
+  Map<String, dynamic> _buildStageDoc(bool enabled, int minutes, Set<String> recipients) {
+    final list = recipients.toList();
+    return {
+      'enabled': enabled,
+      'minutes': minutes,
+      'recipients_by_type': {
+        'mechanical': list,
+        'electrical': list,
+        'mech/elec': list,
+      },
+    };
+  }
 
-    if (short >= long) {
+  Future<void> _saveNotificationConfig() async {
+    final s1Min = int.tryParse(_stage1MinController.text) ?? 5;
+    final s2Min = int.tryParse(_stage2MinController.text) ?? 10;
+    final s3Min = int.tryParse(_stage3MinController.text) ?? 30;
+    final s4Min = int.tryParse(_stage4MinController.text) ?? 60;
+
+    if (_stage1Enabled && _stage2Enabled && s1Min >= s2Min) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Stage 1 minutes must be less than Stage 2 minutes'), backgroundColor: Colors.red),
       );
@@ -344,14 +392,20 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
     try {
       await _firestoreService.saveNotificationConfig({
-        'escalation_onsite_short_minutes': short,
-        'escalation_onsite_long_minutes': long,
-        'escalation_offsite_minutes': offsite,
-        'escalation_stage4_minutes': stage4,
-        'stage1_recipients': _stage1Recipients.toList(),
-        'stage2_recipients': _stage2Recipients.toList(),
-        'stage3_recipients': _stage3Recipients.toList(),
-        'stage4_recipients': _stage4Recipients.toList(),
+        'stages': {
+          'stage1': _buildStageDoc(_stage1Enabled, s1Min, _stage1Recipients),
+          'stage2': _buildStageDoc(_stage2Enabled, s2Min, _stage2Recipients),
+          'stage3': _buildStageDoc(_stage3Enabled, s3Min, _stage3Recipients),
+          'stage4': _buildStageDoc(_stage4Enabled, s4Min, _stage4Recipients),
+        },
+        'creation_recipients_by_type': {
+          'mechanical': ['onsite_mechanics'],
+          'electrical': ['onsite_electricians'],
+          'mech/elec': ['onsite_mechanics', 'onsite_electricians'],
+        },
+        'excluded_job_types': ['maintenance'],
+        'last_updated': DateTime.now().toUtc().toIso8601String(),
+        'updated_by_clock_no': _currentClockNo ?? '',
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -362,6 +416,42 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving config: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearEscalationStamps() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Escalation Stamps'),
+        content: const Text('This will clear all Stage 1–4 escalation stamps from open job cards, allowing the escalation to re-process them. Continue?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('clearEscalationStamps')
+          .call();
+      final cleared = result.data['cleared'] ?? 0;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cleared escalation stamps from $cleared job cards'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -904,101 +994,50 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             ),
             const Divider(height: 24),
 
-            // Timing
-            const Text('Escalation Timing (minutes)', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _shortMinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Stage 1',
-                      helperText: 'e.g. 2 min',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _longMinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Stage 2',
-                      helperText: 'e.g. 7 min',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _offsiteMinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Stage 3',
-                      helperText: 'e.g. 30 min',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _stage4MinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Stage 4',
-                      helperText: 'e.g. 60 min',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-            _buildStageRecipients(
-              label: 'Stage 1 Recipients',
-              subtitle: 'Notified when job has had no action',
+            _buildStageCard(
+              stage: 1,
+              subtitle: 'First escalation — notified when job has had no action',
+              enabled: _stage1Enabled,
+              onEnabledChanged: (v) => setState(() => _stage1Enabled = v),
+              minutesController: _stage1MinController,
               selected: _stage1Recipients,
-              onChanged: (rule, checked) => setState(() {
+              onRecipientChanged: (rule, checked) => setState(() {
                 checked ? _stage1Recipients.add(rule) : _stage1Recipients.remove(rule);
               }),
             ),
-
-            const SizedBox(height: 16),
-            _buildStageRecipients(
-              label: 'Stage 2 Recipients',
-              subtitle: 'Notified when job still unassigned after Stage 1',
+            const SizedBox(height: 12),
+            _buildStageCard(
+              stage: 2,
+              subtitle: 'Second escalation — job still unassigned after Stage 1',
+              enabled: _stage2Enabled,
+              onEnabledChanged: (v) => setState(() => _stage2Enabled = v),
+              minutesController: _stage2MinController,
               selected: _stage2Recipients,
-              onChanged: (rule, checked) => setState(() {
+              onRecipientChanged: (rule, checked) => setState(() {
                 checked ? _stage2Recipients.add(rule) : _stage2Recipients.remove(rule);
               }),
             ),
-
-            const SizedBox(height: 16),
-            _buildStageRecipients(
-              label: 'Stage 3 Recipients',
-              subtitle: 'Reserved for future use (e.g. off-site managers)',
+            const SizedBox(height: 12),
+            _buildStageCard(
+              stage: 3,
+              subtitle: 'Third escalation — reserved (e.g. off-site managers)',
+              enabled: _stage3Enabled,
+              onEnabledChanged: (v) => setState(() => _stage3Enabled = v),
+              minutesController: _stage3MinController,
               selected: _stage3Recipients,
-              onChanged: (rule, checked) => setState(() {
+              onRecipientChanged: (rule, checked) => setState(() {
                 checked ? _stage3Recipients.add(rule) : _stage3Recipients.remove(rule);
               }),
             ),
-
-            const SizedBox(height: 16),
-            _buildStageRecipients(
-              label: 'Stage 4 Recipients',
+            const SizedBox(height: 12),
+            _buildStageCard(
+              stage: 4,
               subtitle: 'Final escalation stage',
+              enabled: _stage4Enabled,
+              onEnabledChanged: (v) => setState(() => _stage4Enabled = v),
+              minutesController: _stage4MinController,
               selected: _stage4Recipients,
-              onChanged: (rule, checked) => setState(() {
+              onRecipientChanged: (rule, checked) => setState(() {
                 checked ? _stage4Recipients.add(rule) : _stage4Recipients.remove(rule);
               }),
             ),
@@ -1016,39 +1055,88 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _clearEscalationStamps,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reset Escalation Stamps'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[700],
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStageRecipients({
-    required String label,
+  Widget _buildStageCard({
+    required int stage,
     required String subtitle,
+    required bool enabled,
+    required ValueChanged<bool> onEnabledChanged,
+    required TextEditingController minutesController,
     required Set<String> selected,
-    required void Function(String rule, bool checked) onChanged,
+    required void Function(String rule, bool checked) onRecipientChanged,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        Text(subtitle, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 0,
-          runSpacing: 0,
-          children: _allRules.map((rule) {
-            return CheckboxListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(_ruleLabels[rule] ?? rule, style: const TextStyle(fontSize: 13)),
-              value: selected.contains(rule),
-              onChanged: (v) => onChanged(rule, v ?? false),
-            );
-          }).toList(),
+    final disabled = !enabled;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Stage $stage', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      Text(subtitle, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                Switch(value: enabled, onChanged: onEnabledChanged),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 160,
+              child: TextField(
+                controller: minutesController,
+                enabled: enabled,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Trigger after (minutes)',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Recipients (applies to mechanical, electrical, mech/elec)',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: disabled ? Theme.of(context).disabledColor : null),
+            ),
+            ..._allRules.map((rule) {
+              return CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(_ruleLabels[rule] ?? rule, style: const TextStyle(fontSize: 13)),
+                value: selected.contains(rule),
+                onChanged: disabled ? null : (v) => onRecipientChanged(rule, v ?? false),
+              );
+            }),
+          ],
         ),
-      ],
+      ),
     );
   }
 

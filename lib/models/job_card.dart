@@ -51,8 +51,10 @@ class JobCard {
   final DateTime? startedAt;
   final DateTime? lastUpdatedAt;
   final DateTime? notificationReceivedAt;
-  final DateTime? notifiedAt2min;
-  final DateTime? notifiedAt7min;
+  final DateTime? notifiedAtStage1;
+  final DateTime? notifiedAtStage2;
+  final DateTime? notifiedAtStage3;
+  final DateTime? notifiedAtStage4;
   final String? completedBy;
   final DateTime? completedAt;
   final DateTime? monitoringStartedAt;
@@ -84,8 +86,10 @@ class JobCard {
     this.startedAt,
     this.lastUpdatedAt,
     this.notificationReceivedAt,
-    this.notifiedAt2min,
-    this.notifiedAt7min,
+    this.notifiedAtStage1,
+    this.notifiedAtStage2,
+    this.notifiedAtStage3,
+    this.notifiedAtStage4,
     this.completedBy,
     this.completedAt,
     this.monitoringStartedAt,
@@ -130,11 +134,17 @@ class JobCard {
       notificationReceivedAt: data['notificationReceivedAt'] != null
           ? (data['notificationReceivedAt'] as Timestamp).toDate()
           : null,
-      notifiedAt2min: data['notifiedAt2min'] != null
-          ? (data['notifiedAt2min'] as Timestamp).toDate()
+      notifiedAtStage1: data['notifiedAtStage1'] != null
+          ? (data['notifiedAtStage1'] as Timestamp).toDate()
           : null,
-      notifiedAt7min: data['notifiedAt7min'] != null
-          ? (data['notifiedAt7min'] as Timestamp).toDate()
+      notifiedAtStage2: data['notifiedAtStage2'] != null
+          ? (data['notifiedAtStage2'] as Timestamp).toDate()
+          : null,
+      notifiedAtStage3: data['notifiedAtStage3'] != null
+          ? (data['notifiedAtStage3'] as Timestamp).toDate()
+          : null,
+      notifiedAtStage4: data['notifiedAtStage4'] != null
+          ? (data['notifiedAtStage4'] as Timestamp).toDate()
           : null,
       completedBy: data['completedBy'] as String?,
       completedAt: data['completedAt'] != null
@@ -175,8 +185,10 @@ class JobCard {
       'startedAt': startedAt != null ? Timestamp.fromDate(startedAt!) : null,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
       'notificationReceivedAt': notificationReceivedAt != null ? Timestamp.fromDate(notificationReceivedAt!) : null,
-      'notifiedAt2min': notifiedAt2min != null ? Timestamp.fromDate(notifiedAt2min!) : null,
-      'notifiedAt7min': notifiedAt7min != null ? Timestamp.fromDate(notifiedAt7min!) : null,
+      'notifiedAtStage1': notifiedAtStage1 != null ? Timestamp.fromDate(notifiedAtStage1!) : null,
+      'notifiedAtStage2': notifiedAtStage2 != null ? Timestamp.fromDate(notifiedAtStage2!) : null,
+      'notifiedAtStage3': notifiedAtStage3 != null ? Timestamp.fromDate(notifiedAtStage3!) : null,
+      'notifiedAtStage4': notifiedAtStage4 != null ? Timestamp.fromDate(notifiedAtStage4!) : null,
       'completedBy': completedBy,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
@@ -209,8 +221,10 @@ class JobCard {
     DateTime? startedAt,
     DateTime? lastUpdatedAt,
     DateTime? notificationReceivedAt,
-    DateTime? notifiedAt2min,
-    DateTime? notifiedAt7min,
+    DateTime? notifiedAtStage1,
+    DateTime? notifiedAtStage2,
+    DateTime? notifiedAtStage3,
+    DateTime? notifiedAtStage4,
     String? completedBy,
     DateTime? completedAt,
     DateTime? monitoringStartedAt,
@@ -242,8 +256,10 @@ class JobCard {
       startedAt: startedAt ?? this.startedAt,
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
       notificationReceivedAt: notificationReceivedAt ?? this.notificationReceivedAt,
-      notifiedAt2min: notifiedAt2min ?? this.notifiedAt2min,
-      notifiedAt7min: notifiedAt7min ?? this.notifiedAt7min,
+      notifiedAtStage1: notifiedAtStage1 ?? this.notifiedAtStage1,
+      notifiedAtStage2: notifiedAtStage2 ?? this.notifiedAtStage2,
+      notifiedAtStage3: notifiedAtStage3 ?? this.notifiedAtStage3,
+      notifiedAtStage4: notifiedAtStage4 ?? this.notifiedAtStage4,
       completedBy: completedBy ?? this.completedBy,
       completedAt: completedAt ?? this.completedAt,
       monitoringStartedAt: monitoringStartedAt ?? this.monitoringStartedAt,
