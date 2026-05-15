@@ -100,6 +100,10 @@ void main() async {
         currentEmployee = await firestoreService.getEmployee(clockNo);
 
         if (currentEmployee != null) {
+          if (!kIsWeb) {
+            NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+          }
+
           final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
           final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
