@@ -1,4 +1,4 @@
-package com.example.ctp_job_cards
+package com.ctp.jobcards
 
 import android.app.PendingIntent
 import android.content.Context

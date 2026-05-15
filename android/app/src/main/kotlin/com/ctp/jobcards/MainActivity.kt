@@ -1,4 +1,4 @@
-package com.example.ctp_job_cards
+package com.ctp.jobcards
 
 import android.Manifest
 import android.app.NotificationChannel
