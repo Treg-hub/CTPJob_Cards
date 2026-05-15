@@ -80,12 +80,6 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Explicitly pin tslocationmanager to avoid buggy v21 variant
-    implementation("com.transistorsoft:tslocationmanager:4.1.6")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22") {
-        exclude(group = "com.transistorsoft", module = "tslocationmanager-v21")
-    }
-
     // Firebase via BOM — versions managed centrally
     implementation(platform("com.google.firebase:firebase-bom:33.15.0"))
     implementation("com.google.firebase:firebase-auth")
