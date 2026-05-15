@@ -69,7 +69,6 @@ lib/
 - **Min/Target SDK**: Driven by `flutter.minSdkVersion` / `flutter.targetSdkVersion` in `android/app/build.gradle.kts`
 - **Java/Kotlin target**: Java 11 (desugaring enabled), Kotlin 1.9.22 (Gradle plugin 2.2.20)
 - **NDK ABI filter**: `arm64-v8a` only
-- **TSLocationManager** is pinned to `4.1.6` via a resolution strategy in `android/build.gradle.kts` to avoid a buggy v21 variant
 - **JVM heap**: `-Xmx8G -XX:MaxMetaspaceSize=4G` in `gradle.properties` — don't lower these without testing
 
 ## Role-Based Access
