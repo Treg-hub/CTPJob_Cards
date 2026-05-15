@@ -310,7 +310,18 @@ class LocationService {
   }
 
   Future<void> _requestPermissions() async {
-    await ph.Permission.locationAlways.request();
+    // Android 10+ requires locationWhenInUse to be granted before locationAlways
+    // can be requested. Skipping this step causes the system dialog to be
+    // suppressed silently on many devices.
+    final whenInUse = await ph.Permission.locationWhenInUse.status;
+    if (!whenInUse.isGranted) {
+      await ph.Permission.locationWhenInUse.request();
+    }
+    // Only request "always" after the foreground permission is in place.
+    final always = await ph.Permission.locationAlways.status;
+    if (!always.isGranted) {
+      await ph.Permission.locationAlways.request();
+    }
     if (await ph.Permission.ignoreBatteryOptimizations.isDenied) {
       await ph.Permission.ignoreBatteryOptimizations.request();
     }
