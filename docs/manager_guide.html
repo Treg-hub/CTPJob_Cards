@@ -5,283 +5,420 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CTP Job Cards — Manager Guide</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Reset & Tokens ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --blue:        #1a3a5c;
-    --blue-mid:    #2563a0;
-    --blue-light:  #dbeafe;
-    --accent:      #f59e0b;
-    --green:       #16a34a;
-    --green-light: #dcfce7;
-    --red:         #dc2626;
-    --red-light:   #fee2e2;
-    --orange:      #ea580c;
-    --orange-light:#ffedd5;
-    --teal:        #0d9488;
-    --teal-light:  #ccfbf1;
-    --grey-100:    #f1f5f9;
-    --grey-200:    #e2e8f0;
-    --grey-400:    #94a3b8;
-    --grey-700:    #334155;
-    --grey-900:    #0f172a;
-    --text:        #1e293b;
-    --radius:      6px;
-  }
+:root {
+  --navy:         #0d1f35;
+  --blue:         #1a3a5c;
+  --blue-mid:     #2563a0;
+  --blue-light:   #dbeafe;
+  --blue-pale:    #f0f6ff;
+  --accent:       #f59e0b;
+  --accent-dark:  #d97706;
+  --green:        #16a34a;
+  --green-light:  #dcfce7;
+  --red:          #dc2626;
+  --red-light:    #fee2e2;
+  --orange:       #ea580c;
+  --orange-light: #ffedd5;
+  --teal:         #0d9488;
+  --teal-light:   #ccfbf1;
+  --teal-pale:    #f0fdfa;
+  --grey-50:      #f8fafc;
+  --grey-100:     #f1f5f9;
+  --grey-200:     #e2e8f0;
+  --grey-300:     #cbd5e1;
+  --grey-400:     #94a3b8;
+  --grey-600:     #475569;
+  --grey-700:     #334155;
+  --grey-900:     #0f172a;
+  --text:         #1e293b;
+  --radius:       7px;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:    0 4px 12px rgba(0,0,0,.09), 0 2px 4px rgba(0,0,0,.05);
+}
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.7;
-    color: var(--text);
-    background: #fff;
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 40px 32px 80px;
-  }
+html { scroll-behavior: smooth; }
 
-  /* ── Header ── */
-  .doc-header {
-    background: linear-gradient(135deg, #0d2137 0%, #1a3a5c 60%, #1e5799 100%);
-    color: #fff;
-    padding: 40px 40px 32px;
-    border-radius: var(--radius);
-    margin-bottom: 40px;
-    position: relative;
-    overflow: hidden;
-  }
-  .doc-header::after {
-    content: 'M';
-    position: absolute;
-    right: 32px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 120px;
-    font-weight: 900;
-    opacity: 0.06;
-    color: #fff;
-    line-height: 1;
-  }
-  .doc-header .label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    opacity: 0.7;
-    margin-bottom: 8px;
-  }
-  .doc-header h1 { font-size: 28px; font-weight: 800; line-height: 1.2; margin-bottom: 10px; }
-  .doc-header .subtitle { opacity: 0.85; font-size: 15px; }
-  .doc-header .meta {
-    margin-top: 20px;
-    font-size: 12px;
-    opacity: 0.55;
-    border-top: 1px solid rgba(255,255,255,0.15);
-    padding-top: 14px;
-  }
-  .doc-header .audience-tag {
-    display: inline-block;
-    background: var(--accent);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 4px 12px;
-    border-radius: 100px;
-    margin-bottom: 14px;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--text);
+  background: #fff;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 36px 96px;
+}
 
-  /* ── TOC ── */
-  .toc {
-    background: var(--grey-100);
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 24px 28px;
-    margin-bottom: 48px;
-  }
-  .toc h2 { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--grey-400); margin-bottom: 14px; }
-  .toc ol { padding-left: 20px; }
-  .toc li { margin-bottom: 6px; font-size: 14px; }
-  .toc a { color: var(--blue-mid); text-decoration: none; font-weight: 500; }
-  .toc a:hover { text-decoration: underline; }
+/* ── Header ── */
+.doc-header {
+  background: linear-gradient(140deg, #081828 0%, #0d2a47 45%, #124170 100%);
+  color: #fff;
+  padding: 44px 44px 36px;
+  border-radius: 10px;
+  margin-bottom: 44px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(8,24,40,.4);
+}
+.doc-header::before {
+  content: '';
+  position: absolute;
+  top: -70px; right: -70px;
+  width: 280px; height: 280px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.025);
+}
+.doc-header::after {
+  content: 'M';
+  position: absolute;
+  right: 36px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 140px;
+  font-weight: 900;
+  opacity: .04;
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+}
+.doc-header .audience-tag {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 100px;
+  margin-bottom: 14px;
+}
+.doc-header .eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.5);
+  margin-bottom: 10px;
+  position: relative;
+}
+.doc-header h1 {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.15;
+  margin-bottom: 10px;
+  position: relative;
+}
+.doc-header .subtitle { opacity: .8; font-size: 15px; position: relative; }
+.doc-header .meta {
+  margin-top: 24px;
+  font-size: 12px;
+  opacity: .5;
+  border-top: 1px solid rgba(255,255,255,.1);
+  padding-top: 16px;
+  position: relative;
+}
 
-  /* ── Sections ── */
-  .section-block { margin-bottom: 56px; }
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 24px;
-    padding-bottom: 12px;
-    border-bottom: 3px solid var(--teal);
-  }
-  .section-dot {
-    width: 14px;
-    height: 14px;
-    background: var(--teal);
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .section-header h2 { font-size: 21px; font-weight: 800; color: var(--grey-900); }
+/* ── TOC ── */
+.toc {
+  background: var(--teal-pale);
+  border: 1px solid var(--teal-light);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  margin-bottom: 52px;
+}
+.toc-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 14px;
+}
+.toc ol { padding-left: 20px; }
+.toc li { margin-bottom: 7px; font-size: 14px; }
+.toc a { color: var(--teal); text-decoration: none; font-weight: 500; transition: color .15s; }
+.toc a:hover { color: var(--navy); text-decoration: underline; }
 
-  h3 { font-size: 16px; font-weight: 700; color: var(--grey-900); margin: 28px 0 10px; }
-  h4 { font-size: 13px; font-weight: 700; color: var(--teal); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-  p { margin-bottom: 14px; }
-  ul, ol { padding-left: 22px; margin-bottom: 14px; }
-  li { margin-bottom: 5px; }
+/* ── Section Blocks ── */
+.section-block { margin-bottom: 64px; }
 
-  /* ── Tables ── */
-  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13.5px; }
-  th { background: var(--blue); color: #fff; font-weight: 700; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-  td { padding: 10px 14px; border-bottom: 1px solid var(--grey-200); vertical-align: top; }
-  tr:nth-child(even) td { background: var(--grey-100); }
-  tr:last-child td { border-bottom: none; }
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--teal);
+}
+.section-icon {
+  width: 40px; height: 40px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 18px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.section-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
 
-  /* ── Quality Table ── */
-  .quality-table .good { color: var(--green); font-size: 12px; }
-  .quality-table .bad  { color: var(--red); font-size: 12px; }
+/* ── Typography ── */
+h3 { font-size: 17px; font-weight: 700; color: var(--grey-900); margin: 32px 0 12px; }
+h4 { font-size: 12px; font-weight: 700; color: var(--teal); margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .8px; }
+p { margin-bottom: 14px; }
+ul, ol { padding-left: 22px; margin-bottom: 14px; }
+li { margin-bottom: 5px; color: var(--grey-700); }
+strong { color: var(--grey-900); }
+hr { border: none; border-top: 1px solid var(--grey-200); margin: 36px 0; }
 
-  /* ── Callouts ── */
-  .callout { display: flex; gap: 14px; padding: 16px 18px; border-radius: var(--radius); margin: 18px 0; border-left: 4px solid; }
-  .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .callout-body { flex: 1; }
-  .callout-body p:last-child { margin-bottom: 0; }
-  .callout.tip     { background: var(--blue-light); border-color: var(--blue-mid); }
-  .callout.warning { background: var(--orange-light); border-color: var(--orange); }
-  .callout.danger  { background: var(--red-light); border-color: var(--red); }
-  .callout.success { background: var(--green-light); border-color: var(--green); }
-  .callout.teal    { background: var(--teal-light); border-color: var(--teal); }
+/* ── Tables ── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 16px 0 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  box-shadow: var(--shadow-sm);
+}
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--grey-200);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: var(--grey-100); }
+tr:last-child td { border-bottom: none; }
 
-  /* ── Requirement Cards ── */
-  .req-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 24px; }
-  .req-item {
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  .req-num {
-    background: var(--teal);
-    color: #fff;
-    font-weight: 800;
-    font-size: 13px;
-    min-width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-  .req-content h4 { margin: 0 0 6px; color: var(--grey-900); font-size: 14px; }
-  .req-content p  { margin: 0; font-size: 13.5px; color: var(--grey-700); }
+/* Quality indicators */
+.good { color: var(--green); font-size: 13px; }
+.bad  { color: var(--red);   font-size: 13px; }
 
-  /* ── Checklist ── */
-  .checklist {
-    list-style: none;
-    padding: 0;
-    margin: 14px 0;
-  }
-  .checklist li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 8px 12px;
-    border-radius: var(--radius);
-    margin-bottom: 4px;
-    font-size: 13.5px;
-  }
-  .checklist li:nth-child(odd) { background: var(--grey-100); }
-  .checklist .check-box {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--grey-400);
-    border-radius: 3px;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
+/* ── Callouts ── */
+.callout {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  margin: 18px 0;
+  border-left: 4px solid;
+  font-size: 13.5px;
+}
+.callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.callout-body { flex: 1; }
+.callout-body p:last-child { margin-bottom: 0; }
+.callout.tip     { background: var(--blue-pale); border-color: var(--blue-mid); }
+.callout.warning { background: var(--orange-light); border-color: var(--orange); }
+.callout.danger  { background: var(--red-light); border-color: var(--red); }
+.callout.success { background: var(--green-light); border-color: var(--green); }
+.callout.teal    { background: var(--teal-pale); border-color: var(--teal); }
 
-  /* ── Status Pills ── */
-  .status-open     { background: #dbeafe; color: #1d4ed8; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
-  .status-progress { background: #ffedd5; color: #c2410c; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
-  .status-monitor  { background: #fef9c3; color: #854d0e; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
-  .status-closed   { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 10px; border-radius: 100px; font-size: 12px; }
+/* ── Role Summary Grid ── */
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.role-card {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.role-card:hover { border-color: var(--teal); box-shadow: var(--shadow-sm); }
+.role-card .role-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--teal);
+  margin-bottom: 8px;
+}
+.role-card p { margin: 0; font-size: 13px; color: var(--grey-600); }
 
-  /* ── Role summary ── */
-  .role-summary {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin: 16px 0 24px;
-  }
-  .role-card {
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-  }
-  .role-card .role-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--teal);
-    margin-bottom: 6px;
-  }
-  .role-card p { margin: 0; font-size: 13px; color: var(--grey-700); }
+/* ── Requirement Cards ── */
+.req-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 28px; }
+.req-item {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .2s;
+}
+.req-item:hover { border-color: var(--teal); }
+.req-num {
+  background: var(--teal);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.req-content h4 { margin: 0 0 6px; color: var(--grey-900); font-size: 14px; text-transform: none; letter-spacing: 0; }
+.req-content p  { margin: 0; font-size: 13.5px; color: var(--grey-600); }
 
-  /* ── Closing CTA ── */
-  .closing-block {
-    background: linear-gradient(135deg, var(--grey-900) 0%, #1e3a5f 100%);
-    color: #e2e8f0;
-    border-radius: var(--radius);
-    padding: 32px;
-    margin-top: 48px;
-  }
-  .closing-block h2 { color: var(--accent); font-size: 18px; margin-bottom: 14px; }
-  .closing-block p  { color: #cbd5e1; margin-bottom: 12px; }
-  .closing-block p:last-child { margin: 0; }
-  .closing-highlight {
-    background: rgba(245,158,11,0.12);
-    border-left: 3px solid var(--accent);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    padding: 14px 16px;
-    margin-top: 16px;
-    color: #fef3c7;
-    font-weight: 500;
-  }
+/* ── Status Pills ── */
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.s-open     { background: #dbeafe; color: #1d4ed8; }
+.s-progress { background: #ffedd5; color: #c2410c; }
+.s-monitor  { background: #fef9c3; color: #854d0e; }
+.s-closed   { background: #dcfce7; color: #15803d; }
 
-  hr { border: none; border-top: 1px solid var(--grey-200); margin: 32px 0; }
+/* ── Escalation Timeline ── */
+.esc-timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 16px 0 20px;
+}
+.esc-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px; top: 12px; bottom: 12px;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--blue-light), var(--red-light));
+}
+.esc-step {
+  position: relative;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+}
+.esc-step::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--blue-mid);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--blue-mid);
+}
+.esc-step.e1::before { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
+.esc-step.e2::before { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+.esc-step.e3::before { background: #9333ea; box-shadow: 0 0 0 2px #9333ea; }
+.esc-step.e4::before { background: var(--grey-900); box-shadow: 0 0 0 2px var(--grey-900); }
+.esc-step .time  { font-size: 10.5px; font-weight: 700; color: var(--grey-400); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+.esc-step .who   { font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.esc-step .detail { font-size: 12.5px; color: var(--grey-600); margin-top: 2px; }
 
-  @media print {
-    body { max-width: 100%; padding: 0; font-size: 12px; }
-    .doc-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; border-radius: 0; }
-    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .req-num { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .toc { display: none; }
-    .section-block { page-break-inside: avoid; }
-    .closing-block { -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-before: always; }
-    a { color: inherit; text-decoration: none; }
-  }
+/* ── Checklist ── */
+.checklist {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 24px;
+}
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  font-size: 13.5px;
+  color: var(--grey-700);
+}
+.checklist li:nth-child(odd) { background: var(--grey-100); }
+.check-box {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  border: 2px solid var(--grey-300);
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+/* ── Closing Block ── */
+.closing-block {
+  background: linear-gradient(140deg, var(--grey-900) 0%, #1a3a5c 100%);
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 36px 40px;
+  margin-top: 52px;
+  box-shadow: 0 8px 32px rgba(13,31,53,.3);
+}
+.closing-block h2 { color: var(--accent); font-size: 20px; margin-bottom: 16px; }
+.closing-block p  { color: #94a3b8; margin-bottom: 14px; }
+.closing-block p:last-child { margin: 0; }
+.closing-highlight {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 16px 18px;
+  margin-top: 20px;
+  color: #fef3c7;
+  font-size: 13.5px;
+  line-height: 1.65;
+  font-weight: 500;
+}
+
+/* ── Print ── */
+@media print {
+  body { max-width: 100%; padding: 0; font-size: 12px; }
+  .doc-header { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section-block { page-break-inside: avoid; }
+  .closing-block { page-break-before: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .req-num { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section-icon { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .table-wrap, .req-item, .esc-step { box-shadow: none; }
+  .toc { display: none; }
+  a { color: inherit; text-decoration: none; }
+}
 </style>
 </head>
 <body>
 
-<!-- ══════════════ HEADER ══════════════ -->
+<!-- ══════ HEADER ══════ -->
 <div class="doc-header">
   <div class="audience-tag">Management</div>
-  <div class="label">CTP Job Cards System</div>
+  <div class="eyebrow">CTP Job Cards System</div>
   <h1>Manager Guide</h1>
   <div class="subtitle">Responsibilities, Quality Standards &amp; Oversight</div>
-  <div class="meta">For: Managers &nbsp;|&nbsp; Version 1.0 &nbsp;|&nbsp; 2026</div>
+  <div class="meta">For: Managers &nbsp;|&nbsp; Version 1.1 &nbsp;|&nbsp; 2026</div>
 </div>
 
-<!-- ══════════════ TOC ══════════════ -->
+<!-- ══════ TOC ══════ -->
 <div class="toc">
-  <h2>Contents</h2>
+  <div class="toc-label">Contents</div>
   <ol>
     <li><a href="#overview">Your Role in the System</a></li>
     <li><a href="#usertypes">Understanding the Four User Types</a></li>
@@ -292,10 +429,10 @@
   </ol>
 </div>
 
-<!-- ══════════════ OVERVIEW ══════════════ -->
+<!-- ══════ OVERVIEW ══════ -->
 <div class="section-block" id="overview">
   <div class="section-header">
-    <div class="section-dot"></div>
+    <div class="section-icon">📋</div>
     <h2>Your Role in the System</h2>
   </div>
   <p>As a manager, you are the <strong>quality gate</strong> for the job card system in your department. The system works well when the data going into it is accurate and complete. Your job is not just to review what is happening on the floor — it is to ensure that every job card created in your department meets the standard required to build a useful maintenance record over time.</p>
@@ -306,27 +443,27 @@
   </div>
 </div>
 
-<!-- ══════════════ USER TYPES ══════════════ -->
+<!-- ══════ USER TYPES ══════ -->
 <div class="section-block" id="usertypes">
   <div class="section-header">
-    <div class="section-dot"></div>
+    <div class="section-icon">👥</div>
     <h2>Understanding the Four User Types</h2>
   </div>
-  <div class="role-summary">
+  <div class="role-grid">
     <div class="role-card">
-      <div class="role-label">Operator</div>
+      <div class="role-label">🏭 Operator</div>
       <p>Discovers a fault and creates the job card. Responsible for accurate, complete information at the point of entry.</p>
     </div>
     <div class="role-card">
-      <div class="role-label">Technician</div>
+      <div class="role-label">🔧 Technician</div>
       <p>Receives the job card, attends to the fault, and closes it with a completion note describing what was done.</p>
     </div>
     <div class="role-card">
-      <div class="role-label">Manager</div>
+      <div class="role-label">📊 Manager</div>
       <p>Oversees all job cards in their department. Responsible for quality, escalation response, and pattern identification.</p>
     </div>
     <div class="role-card">
-      <div class="role-label">Admin</div>
+      <div class="role-label">⚙️ Admin</div>
       <p>Manages system configuration, employee accounts, and geofence settings.</p>
     </div>
   </div>
@@ -336,10 +473,10 @@
   </div>
 </div>
 
-<!-- ══════════════ VISIBILITY ══════════════ -->
+<!-- ══════ VISIBILITY ══════ -->
 <div class="section-block" id="visibility">
   <div class="section-header">
-    <div class="section-dot"></div>
+    <div class="section-icon">📊</div>
     <h2>What the System Gives You</h2>
   </div>
 
@@ -348,26 +485,26 @@
   <ul>
     <li>All open, in-progress, monitoring, and recently closed job cards in your department</li>
     <li>Which technicians are currently on site and which are off site</li>
-    <li>Jobs that have escalated — and why</li>
+    <li>Jobs that have escalated — and at which stage</li>
     <li>Jobs that have been open for too long without a technician assigned</li>
   </ul>
 
   <h3>Notification History</h3>
-  <p>Every notification sent by the system is logged. You can see who was notified, when, at what level, and what action they took — or did not take.</p>
+  <p>Every notification sent by the system is logged. You can see who was notified, when, at what level, and what action they took — or did not take. This is your accountability trail.</p>
 
   <h3>Escalation Notifications</h3>
-  <p>When a P4 or P5 job has not been accepted within the escalation window, <strong>you will receive a notification.</strong> When this happens:</p>
+  <p>When a job has not been accepted within the escalation window, <strong>you will receive a notification.</strong> When this happens:</p>
   <ul>
     <li>A fault has been on the system for several minutes with no technician response</li>
     <li>You need to act — find a technician, investigate the gap, or attend yourself</li>
-    <li>This should be the exception, not the norm</li>
+    <li>This should be the exception, not the norm. Repeated escalations signal a coverage or compliance problem.</li>
   </ul>
 </div>
 
-<!-- ══════════════ REQUIREMENTS ══════════════ -->
+<!-- ══════ REQUIREMENTS ══════ -->
 <div class="section-block" id="requirements">
   <div class="section-header">
-    <div class="section-dot"></div>
+    <div class="section-icon">✅</div>
     <h2>What Is Required From You</h2>
   </div>
 
@@ -379,56 +516,58 @@
         <p>Review all job cards from your department from the previous day. Check whether all reported faults were captured, jobs were responded to promptly, and whether recurring faults on the same machine are emerging.</p>
       </div>
     </div>
-
     <div class="req-item">
       <div class="req-num">2</div>
       <div class="req-content">
         <h4>Enforce Job Card Quality — Operators</h4>
-        <p>Operators are responsible for the quality of the job card at the point of creation. You must enforce the standard. Incomplete or vague entries must be sent back for correction.</p>
+        <p>Operators are responsible for the quality of the job card at the point of creation. You must enforce the standard. Incomplete or vague entries must be corrected. An entry that says "machine broken" is not a maintenance record.</p>
       </div>
     </div>
-
     <div class="req-item">
       <div class="req-num">3</div>
       <div class="req-content">
         <h4>Enforce Closure Note Quality — Technicians</h4>
-        <p>A job closed without a note is an incomplete record. Every closure must describe what was done, parts used, root cause, and any follow-up recommendations.</p>
+        <p>A job closed without a note is an incomplete record. Every closure must describe what was done, parts used, root cause, and any follow-up recommendations. Hold your technicians to this standard.</p>
       </div>
     </div>
-
     <div class="req-item">
       <div class="req-num">4</div>
       <div class="req-content">
         <h4>Monitor Escalation Patterns</h4>
-        <p>Escalation runs across <strong>four configurable stages</strong>, set by Admin under <strong>Settings → Escalation Rules</strong>. Each stage has its own timer and recipient list. The defaults are:</p>
-        <table style="margin: 10px 0 14px 0;">
-          <thead>
-            <tr><th>Stage</th><th>Default Time</th><th>Default Recipients</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><strong>Stage 1</strong></td><td>2 minutes</td><td>Department foremen and on-site managers</td></tr>
-            <tr><td><strong>Stage 2</strong></td><td>7 minutes</td><td>Department managers + workshop manager (urgent)</td></tr>
-            <tr><td><strong>Stage 3</strong></td><td>30 minutes</td><td>Senior management</td></tr>
-            <tr><td><strong>Stage 4</strong></td><td>60 minutes</td><td>Final escalation tier</td></tr>
-          </tbody>
-        </table>
-        <p>If jobs regularly hit Stage 2 or beyond, investigate why. Repeated non-response by a technician is visible in the log and must be addressed. If the timers are too aggressive for your team's response capacity, speak to Admin about adjusting them.</p>
+        <p>Escalation runs across <strong>four configurable stages</strong>, set by Admin under <strong>Settings → Escalation Rules</strong>:</p>
+        <div class="esc-timeline" style="margin-top:12px;">
+          <div class="esc-step e0">
+            <div class="time">Stage 1 · 2 min (default)</div>
+            <div class="who">Department foremen and on-site managers</div>
+          </div>
+          <div class="esc-step e1">
+            <div class="time">Stage 2 · 7 min (default)</div>
+            <div class="who">Department managers + workshop manager (urgent)</div>
+          </div>
+          <div class="esc-step e2">
+            <div class="time">Stage 3 · 30 min (default)</div>
+            <div class="who">Senior management</div>
+          </div>
+          <div class="esc-step e3">
+            <div class="time">Stage 4 · 60 min (default)</div>
+            <div class="who">Final escalation tier</div>
+          </div>
+        </div>
+        <p style="margin-top:8px;">If jobs regularly hit Stage 2 or beyond, investigate why. Repeated non-response by a technician is visible in the log and must be addressed. If the timers are too aggressive for your team's capacity, speak to Admin about adjusting them.</p>
       </div>
     </div>
-
     <div class="req-item">
       <div class="req-num">5</div>
       <div class="req-content">
         <h4>Identify Repeat Failures</h4>
-        <p>If the same machine appears in job cards more than twice in 30 days for similar faults, investigate. Review what was done each time and whether the root cause was truly resolved.</p>
+        <p>If the same machine appears in job cards more than twice in 30 days for similar faults, investigate. Review what was done each time and whether the root cause was truly resolved — or just patched.</p>
       </div>
     </div>
-
     <div class="req-item">
       <div class="req-num">6</div>
       <div class="req-content">
         <h4>Verify On-Site Status Is Accurate</h4>
-        <p>After new hires or phone upgrades, confirm your team's permissions are correctly set and their on-site status in the app reflects their actual location. Incorrect status means missed notifications.</p>
+        <p>After new hires, phone upgrades, or permission changes, confirm your team's on-site status in the app reflects their actual location. Incorrect status means missed notifications — silently, with no error message.</p>
       </div>
     </div>
   </div>
@@ -437,89 +576,94 @@
 
   <h3>Job Card Quality Standard — Operators</h3>
   <p>Every job card created in your department must meet this standard:</p>
-  <table class="quality-table">
-    <thead>
-      <tr><th>Field</th><th>What "Good" Looks Like</th><th>What to Reject</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong>Department</strong></td>
-        <td class="good">Correct, specific department</td>
-        <td class="bad">Blank, "Other", or wrong department</td>
-      </tr>
-      <tr>
-        <td><strong>Area</strong></td>
-        <td class="good">Named area within the plant</td>
-        <td class="bad">Blank or vague ("production area")</td>
-      </tr>
-      <tr>
-        <td><strong>Machine</strong></td>
-        <td class="good">Named machine or asset ID</td>
-        <td class="bad">"The conveyor", "a pump" — no identification</td>
-      </tr>
-      <tr>
-        <td><strong>Part</strong></td>
-        <td class="good">Specific component affected</td>
-        <td class="bad">Blank, "unknown", or "various"</td>
-      </tr>
-      <tr>
-        <td><strong>Description</strong></td>
-        <td class="good">Clear fault — what happened, what was observed, error codes</td>
-        <td class="bad">"Broken", "not working", "fault" with no detail</td>
-      </tr>
-      <tr>
-        <td><strong>Priority</strong></td>
-        <td class="good">Accurate reflection of production impact at time of fault</td>
-        <td class="bad">Blanket P1 to avoid pressure, or blanket P5 to jump the queue</td>
-      </tr>
-    </tbody>
-  </table>
-
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Field</th><th>What "Good" Looks Like</th><th>What to Reject</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Department</strong></td>
+          <td class="good">Correct, specific department</td>
+          <td class="bad">Blank, "Other", or wrong department</td>
+        </tr>
+        <tr>
+          <td><strong>Area</strong></td>
+          <td class="good">Named area within the plant</td>
+          <td class="bad">Blank or vague ("production area")</td>
+        </tr>
+        <tr>
+          <td><strong>Machine</strong></td>
+          <td class="good">Named machine or asset ID</td>
+          <td class="bad">"The conveyor", "a pump" — no identification</td>
+        </tr>
+        <tr>
+          <td><strong>Part</strong></td>
+          <td class="good">Specific component affected</td>
+          <td class="bad">Blank, "unknown", or "various"</td>
+        </tr>
+        <tr>
+          <td><strong>Description</strong></td>
+          <td class="good">Clear fault — what happened, what was observed, error codes</td>
+          <td class="bad">"Broken", "not working", "fault" with no detail</td>
+        </tr>
+        <tr>
+          <td><strong>Priority</strong></td>
+          <td class="good">Accurate reflection of production impact at time of fault</td>
+          <td class="bad">Blanket P1 to avoid pressure, or blanket P5 to jump the queue</td>
+        </tr>
+        <tr>
+          <td><strong>Type</strong></td>
+          <td class="good">Mechanical / Electrical / Mech-Elec correctly identified</td>
+          <td class="bad">Wrong type — routes to incorrect technician trade</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
   <div class="callout warning">
     <div class="callout-icon">⚠️</div>
-    <div class="callout-body">
-      <p><strong>Priority accuracy matters.</strong> A P5 means production is standing. If operators routinely mark jobs P5 when production is running, the escalation system loses credibility. If everything is P1, genuine issues get buried. Hold your team to the correct standard.</p>
-    </div>
+    <div class="callout-body"><p><strong>Priority accuracy matters.</strong> A P5 means production is standing. If operators routinely mark jobs P5 when production is running, the escalation system loses credibility. If everything is P1, genuine issues get buried. Hold your team to the correct standard.</p></div>
   </div>
 
   <hr>
 
-  <h3>Job Card Status</h3>
-  <p>Job cards move through four statuses:</p>
-  <table>
-    <thead>
-      <tr><th>Status</th><th>Meaning</th><th>What to Watch</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><span class="status-open">Open</span></td>
-        <td>Job is live but no technician has accepted it yet</td>
-        <td>How long has it been open? Is it about to escalate?</td>
-      </tr>
-      <tr>
-        <td><span class="status-progress">In-Progress</span></td>
-        <td>A technician has self-assigned and is actively working the job</td>
-        <td>Who is on it? How long since they assigned themselves?</td>
-      </tr>
-      <tr>
-        <td><span class="status-monitor">Monitor</span></td>
-        <td>Fault resolved, machine under observation</td>
-        <td>Who is monitoring and for how long? Review any older than 3 days.</td>
-      </tr>
-      <tr>
-        <td><span class="status-closed">Closed</span></td>
-        <td>Job complete and confirmed resolved</td>
-        <td>Does it have an adequate closure note?</td>
-      </tr>
-    </tbody>
-  </table>
+  <h3>Job Card Status — What Managers Should Watch</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Meaning</th><th>What to Watch</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="status-pill s-open">Open</span></td>
+          <td>Job is live but no technician has accepted it yet</td>
+          <td>How long has it been open? Is it about to escalate?</td>
+        </tr>
+        <tr>
+          <td><span class="status-pill s-progress">In-Progress</span></td>
+          <td>A technician has self-assigned and is actively working the job</td>
+          <td>Who is on it? How long since they assigned themselves?</td>
+        </tr>
+        <tr>
+          <td><span class="status-pill s-monitor">Monitor</span></td>
+          <td>Fault resolved, machine under observation</td>
+          <td>Who is monitoring and for how long? Review any older than 3 days.</td>
+        </tr>
+        <tr>
+          <td><span class="status-pill s-closed">Closed</span></td>
+          <td>Job complete and confirmed resolved</td>
+          <td>Does it have an adequate closure note?</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
   <p>Jobs should not remain <strong>Open</strong> for more than a few minutes — if they do, escalation should already be firing. Jobs in <strong>In-Progress</strong> for an extended period should be reviewed to confirm the technician is still active on them.</p>
 </div>
 
-<!-- ══════════════ CHECKLISTS ══════════════ -->
+<!-- ══════ CHECKLISTS ══════ -->
 <div class="section-block" id="checklists">
   <div class="section-header">
-    <div class="section-dot"></div>
+    <div class="section-icon">☑️</div>
     <h2>Checklists</h2>
   </div>
 
@@ -539,8 +683,9 @@
     <li><span class="check-box"></span>Department is correct</li>
     <li><span class="check-box"></span>Area is specific and identifiable</li>
     <li><span class="check-box"></span>Machine is named (not described generically)</li>
-    <li><span class="check-box"></span>Part is identified</li>
+    <li><span class="check-box"></span>Component / part is identified</li>
     <li><span class="check-box"></span>Description explains the fault clearly — observed symptoms, error codes</li>
+    <li><span class="check-box"></span>Type (Mechanical / Electrical / Mech-Elec) is correct</li>
     <li><span class="check-box"></span>Priority accurately reflected production impact at time of fault</li>
     <li><span class="check-box"></span>Closure note describes what was done and parts used</li>
     <li><span class="check-box"></span>Root cause is noted</li>
@@ -548,7 +693,7 @@
   </ul>
 </div>
 
-<!-- ══════════════ BIG PICTURE ══════════════ -->
+<!-- ══════ BIG PICTURE ══════ -->
 <div class="closing-block" id="bigpicture">
   <h2>The Bigger Picture: Why Your Role Matters</h2>
   <p>The quality of this system is entirely dependent on the quality of the data entered into it. The system can only tell you what it has been told.</p>

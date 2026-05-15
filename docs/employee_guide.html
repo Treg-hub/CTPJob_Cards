@@ -5,377 +5,484 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CTP Job Cards — Employee Guide</title>
 <style>
-  /* ── Reset & Base ── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Reset & Tokens ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --blue:       #1a3a5c;
-    --blue-mid:   #2563a0;
-    --blue-light: #dbeafe;
-    --accent:     #f59e0b;
-    --green:      #16a34a;
-    --green-light:#dcfce7;
-    --red:        #dc2626;
-    --red-light:  #fee2e2;
-    --orange:     #ea580c;
-    --orange-light:#ffedd5;
-    --grey-100:   #f1f5f9;
-    --grey-200:   #e2e8f0;
-    --grey-400:   #94a3b8;
-    --grey-700:   #334155;
-    --grey-900:   #0f172a;
-    --text:       #1e293b;
-    --radius:     6px;
-  }
+:root {
+  --navy:         #0d1f35;
+  --blue:         #1a3a5c;
+  --blue-mid:     #2563a0;
+  --blue-light:   #dbeafe;
+  --blue-pale:    #f0f6ff;
+  --accent:       #f59e0b;
+  --accent-dark:  #d97706;
+  --green:        #16a34a;
+  --green-light:  #dcfce7;
+  --red:          #dc2626;
+  --red-light:    #fee2e2;
+  --orange:       #ea580c;
+  --orange-light: #ffedd5;
+  --grey-100:     #f1f5f9;
+  --grey-200:     #e2e8f0;
+  --grey-300:     #cbd5e1;
+  --grey-400:     #94a3b8;
+  --grey-600:     #475569;
+  --grey-700:     #334155;
+  --grey-900:     #0f172a;
+  --text:         #1e293b;
+  --radius:       7px;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+}
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.7;
-    color: var(--text);
-    background: #fff;
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 40px 32px 80px;
-  }
+html { scroll-behavior: smooth; }
 
-  /* ── Header ── */
-  .doc-header {
-    background: linear-gradient(135deg, var(--blue) 0%, var(--blue-mid) 100%);
-    color: #fff;
-    padding: 40px 40px 32px;
-    border-radius: var(--radius);
-    margin-bottom: 40px;
-  }
-  .doc-header .label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    opacity: 0.75;
-    margin-bottom: 8px;
-  }
-  .doc-header h1 {
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: 12px;
-  }
-  .doc-header .subtitle {
-    opacity: 0.85;
-    font-size: 15px;
-  }
-  .doc-header .meta {
-    margin-top: 20px;
-    font-size: 12px;
-    opacity: 0.6;
-    border-top: 1px solid rgba(255,255,255,0.2);
-    padding-top: 16px;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--text);
+  background: #fff;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 36px 96px;
+}
 
-  /* ── TOC ── */
-  .toc {
-    background: var(--grey-100);
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 24px 28px;
-    margin-bottom: 48px;
-  }
-  .toc h2 {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--grey-400);
-    margin-bottom: 14px;
-  }
-  .toc ol {
-    padding-left: 20px;
-  }
-  .toc li {
-    margin-bottom: 6px;
-    font-size: 14px;
-  }
-  .toc a {
-    color: var(--blue-mid);
-    text-decoration: none;
-    font-weight: 500;
-  }
-  .toc a:hover { text-decoration: underline; }
+/* ── Header ── */
+.doc-header {
+  background: linear-gradient(140deg, var(--navy) 0%, #0f2d50 50%, #1a4a7a 100%);
+  color: #fff;
+  padding: 44px 44px 36px;
+  border-radius: 10px;
+  margin-bottom: 44px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(13,31,53,.35);
+}
+.doc-header::before {
+  content: '';
+  position: absolute;
+  top: -70px; right: -70px;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.03);
+}
+.doc-header::after {
+  content: '';
+  position: absolute;
+  bottom: -50px; left: 35%;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  background: rgba(245,158,11,.05);
+}
+.doc-header .eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+  position: relative;
+}
+.doc-header h1 {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.15;
+  margin-bottom: 10px;
+  position: relative;
+}
+.doc-header .subtitle {
+  opacity: .8;
+  font-size: 15px;
+  position: relative;
+}
+.doc-header .meta {
+  margin-top: 24px;
+  font-size: 12px;
+  opacity: .5;
+  border-top: 1px solid rgba(255,255,255,.12);
+  padding-top: 16px;
+  position: relative;
+}
 
-  /* ── Sections ── */
-  .section-block {
-    margin-bottom: 60px;
-  }
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 28px;
-    padding-bottom: 14px;
-    border-bottom: 3px solid var(--blue);
-  }
-  .section-number {
-    background: var(--blue);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 800;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .section-header h2 {
-    font-size: 22px;
-    font-weight: 800;
-    color: var(--blue);
-  }
+/* ── TOC ── */
+.toc {
+  background: var(--blue-pale);
+  border: 1px solid var(--blue-light);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  margin-bottom: 52px;
+}
+.toc-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--blue-mid);
+  margin-bottom: 14px;
+}
+.toc ol { padding-left: 20px; }
+.toc li { margin-bottom: 7px; font-size: 14px; }
+.toc a { color: var(--blue-mid); text-decoration: none; font-weight: 500; transition: color .15s; }
+.toc a:hover { color: var(--navy); text-decoration: underline; }
 
-  /* ── Typography ── */
-  h3 {
-    font-size: 17px;
-    font-weight: 700;
-    color: var(--grey-900);
-    margin: 32px 0 12px;
-  }
-  h4 {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--blue-mid);
-    margin: 24px 0 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  p { margin-bottom: 14px; }
-  ul, ol {
-    padding-left: 22px;
-    margin-bottom: 14px;
-  }
-  li { margin-bottom: 5px; }
+/* ── Section Blocks ── */
+.section-block { margin-bottom: 64px; }
 
-  /* ── Tables ── */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 16px 0 24px;
-    font-size: 13.5px;
-  }
-  th {
-    background: var(--blue);
-    color: #fff;
-    font-weight: 700;
-    padding: 10px 14px;
-    text-align: left;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  td {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--grey-200);
-    vertical-align: top;
-  }
-  tr:nth-child(even) td { background: var(--grey-100); }
-  tr:last-child td { border-bottom: none; }
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 30px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--grey-200);
+}
+.section-icon {
+  width: 40px; height: 40px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 18px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.section-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
 
-  /* ── Callout Boxes ── */
-  .callout {
-    display: flex;
-    gap: 14px;
-    padding: 16px 18px;
-    border-radius: var(--radius);
-    margin: 18px 0;
-    border-left: 4px solid;
-  }
-  .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .callout-body { flex: 1; }
-  .callout-body p:last-child { margin-bottom: 0; }
-  .callout.tip { background: var(--blue-light); border-color: var(--blue-mid); }
-  .callout.warning { background: var(--orange-light); border-color: var(--orange); }
-  .callout.danger { background: var(--red-light); border-color: var(--red); }
-  .callout.success { background: var(--green-light); border-color: var(--green); }
+/* ── Typography ── */
+h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--grey-900);
+  margin: 34px 0 12px;
+}
+h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue-mid);
+  margin: 24px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+}
+p { margin-bottom: 14px; }
+ul, ol { padding-left: 22px; margin-bottom: 14px; }
+li { margin-bottom: 5px; color: var(--grey-700); }
+strong { color: var(--grey-900); }
+hr { border: none; border-top: 1px solid var(--grey-200); margin: 36px 0; }
 
-  /* ── Permission Cards ── */
-  .permission-card {
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 20px 22px;
-    margin: 18px 0;
-  }
-  .permission-card .perm-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-  .perm-num {
-    background: var(--accent);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 800;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .perm-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--grey-900);
-    line-height: 1.3;
-  }
-  .perm-request {
-    font-size: 12.5px;
-    font-style: italic;
-    color: var(--grey-400);
-    margin-bottom: 10px;
-  }
-  .perm-action {
-    background: var(--green-light);
-    border: 1px solid #86efac;
-    border-radius: var(--radius);
-    padding: 8px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--green);
-    margin-top: 10px;
-  }
+/* ── Tables ── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 16px 0 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  box-shadow: var(--shadow-sm);
+}
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--grey-200);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: var(--grey-100); }
+tr:last-child td { border-bottom: none; }
 
-  /* ── Priority Badges ── */
-  .priority-table .p1 { background: #e0f2fe; color: #0369a1; font-weight: 700; }
-  .priority-table .p2 { background: #dcfce7; color: #15803d; font-weight: 700; }
-  .priority-table .p3 { background: #fef9c3; color: #854d0e; font-weight: 700; }
-  .priority-table .p4 { background: #ffedd5; color: #c2410c; font-weight: 700; }
-  .priority-table .p5 { background: #fee2e2; color: #b91c1c; font-weight: 700; }
-  .priority-table td:first-child { text-align: center; padding: 8px; }
+/* Priority colours */
+.td-p1 { font-weight: 700; color: #1d4ed8; }
+.td-p2 { font-weight: 700; color: #15803d; }
+.td-p3 { font-weight: 700; color: #b45309; }
+.td-p4 { font-weight: 700; color: #c2410c; }
+.td-p5 { font-weight: 700; color: #b91c1c; }
 
-  /* ── Notification Level Cards ── */
-  .notif-card {
-    border-radius: var(--radius);
-    padding: 20px 22px;
-    margin: 16px 0;
-    border: 1px solid;
-  }
-  .notif-normal { background: #f0f9ff; border-color: #7dd3fc; }
-  .notif-medium { background: var(--orange-light); border-color: #fb923c; }
-  .notif-critical { background: var(--red-light); border-color: #f87171; }
-  .notif-card h4 { margin-top: 0; }
-  .notif-badge {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 3px 10px;
-    border-radius: 100px;
-    margin-bottom: 10px;
-  }
-  .badge-normal { background: #0369a1; color: #fff; }
-  .badge-medium { background: var(--orange); color: #fff; }
-  .badge-critical { background: var(--red); color: #fff; }
+/* ── Callouts ── */
+.callout {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  margin: 18px 0;
+  border-left: 4px solid;
+  font-size: 13.5px;
+}
+.callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.callout-body { flex: 1; }
+.callout-body p:last-child { margin-bottom: 0; }
+.callout.tip     { background: var(--blue-pale); border-color: var(--blue-mid); }
+.callout.warning { background: var(--orange-light); border-color: var(--orange); }
+.callout.danger  { background: var(--red-light); border-color: var(--red); }
+.callout.success { background: var(--green-light); border-color: var(--green); }
 
-  /* ── Action Buttons ── */
-  .action-demo {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin: 12px 0;
-  }
-  .action-btn {
-    padding: 6px 14px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    border: none;
-    cursor: default;
-  }
-  .btn-assign { background: #16a34a; color: #fff; }
-  .btn-busy   { background: #d97706; color: #fff; }
-  .btn-dismiss{ background: #64748b; color: #fff; }
+/* ── Role Grid ── */
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.role-card {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.role-card:hover { border-color: var(--blue-mid); box-shadow: var(--shadow-sm); }
+.role-card .role-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--blue-mid);
+  margin-bottom: 8px;
+}
+.role-card p { margin: 0; font-size: 13px; color: var(--grey-600); }
 
-  /* ── Future Section ── */
-  .future-block {
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-    color: #e2e8f0;
-    border-radius: var(--radius);
-    padding: 32px;
-    margin-top: 48px;
-  }
-  .future-block h2 {
-    color: var(--accent);
-    font-size: 20px;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-  }
-  .future-block h3 { color: #fff; margin-top: 24px; }
-  .future-block p { color: #cbd5e1; }
-  .future-block blockquote {
-    border-left: 3px solid var(--accent);
-    padding: 8px 16px;
-    margin: 12px 0;
-    background: rgba(255,255,255,0.05);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    font-style: italic;
-    color: #e2e8f0;
-  }
+/* ── Permission Cards ── */
+.permission-card {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin: 14px 0;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .2s;
+}
+.permission-card:hover { border-color: var(--accent); }
+.permission-card .perm-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.perm-num {
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.perm-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--grey-900);
+  line-height: 1.3;
+}
+.perm-request {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--grey-400);
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: var(--grey-100);
+  border-radius: 4px;
+}
+.perm-action {
+  background: var(--green-light);
+  border: 1px solid #86efac;
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  margin-top: 10px;
+}
 
-  /* ── Role Cards ── */
-  .role-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin: 16px 0 24px;
-  }
-  .role-card {
-    border: 1px solid var(--grey-200);
-    border-radius: var(--radius);
-    padding: 16px;
-  }
-  .role-card .role-tag {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--blue-mid);
-    margin-bottom: 6px;
-  }
-  .role-card p { margin: 0; font-size: 13px; color: var(--grey-700); }
+/* ── Status Pills ── */
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.s-open     { background: #dbeafe; color: #1d4ed8; }
+.s-progress { background: #ffedd5; color: #c2410c; }
+.s-monitor  { background: #fef9c3; color: #854d0e; }
+.s-closed   { background: #dcfce7; color: #15803d; }
 
-  /* ── Divider ── */
-  hr { border: none; border-top: 1px solid var(--grey-200); margin: 36px 0; }
+/* ── Status Flow ── */
+.status-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 16px 0 24px;
+}
+.status-flow .arrow { color: var(--grey-300); font-size: 18px; }
 
-  /* ── Print ── */
-  @media print {
-    body { max-width: 100%; padding: 0; font-size: 12px; }
-    .doc-header { border-radius: 0; background: var(--blue) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .section-block { page-break-inside: avoid; }
-    .future-block { page-break-before: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    a { color: inherit; text-decoration: none; }
-    .toc { display: none; }
-  }
+/* ── Notification Cards ── */
+.notif-card {
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin: 14px 0;
+  border: 1px solid;
+  box-shadow: var(--shadow-sm);
+}
+.notif-normal   { background: #f0f9ff; border-color: #7dd3fc; }
+.notif-medium   { background: var(--orange-light); border-color: #fb923c; }
+.notif-critical { background: var(--red-light); border-color: #f87171; }
+.notif-card h4  { margin-top: 0; }
+.notif-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 100px;
+  margin-bottom: 12px;
+}
+.badge-normal   { background: #0369a1; color: #fff; }
+.badge-medium   { background: var(--orange); color: #fff; }
+.badge-critical { background: var(--red); color: #fff; }
+
+/* ── Action Buttons ── */
+.action-demo {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.action-btn {
+  padding: 7px 16px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: none;
+  cursor: default;
+  letter-spacing: .2px;
+}
+.btn-assign { background: var(--green); color: #fff; }
+.btn-busy   { background: var(--accent-dark); color: #fff; }
+.btn-dismiss{ background: var(--grey-400); color: #fff; }
+
+/* ── Escalation Timeline ── */
+.esc-timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 16px 0 24px;
+}
+.esc-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px; top: 12px; bottom: 12px;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--blue-light), var(--red-light));
+}
+.esc-step {
+  position: relative;
+  padding: 13px 16px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+}
+.esc-step::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--blue-mid);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--blue-mid);
+}
+.esc-step.e1::before { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
+.esc-step.e2::before { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+.esc-step.e3::before { background: #9333ea; box-shadow: 0 0 0 2px #9333ea; }
+.esc-step.e4::before { background: var(--grey-900); box-shadow: 0 0 0 2px var(--grey-900); }
+.esc-step .time  { font-size: 10.5px; font-weight: 700; color: var(--grey-400); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+.esc-step .who   { font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.esc-step .detail { font-size: 12.5px; color: var(--grey-600); margin-top: 2px; }
+
+/* ── Future Block ── */
+.future-block {
+  background: linear-gradient(140deg, var(--navy) 0%, #1a3a5c 100%);
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 36px 40px;
+  margin-top: 52px;
+  box-shadow: 0 8px 32px rgba(13,31,53,.3);
+}
+.future-block h2 {
+  color: var(--accent);
+  font-size: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+.future-block h3 { color: #fff; margin-top: 24px; }
+.future-block p  { color: #94a3b8; }
+.future-block ul { color: #94a3b8; }
+.future-block li { color: #94a3b8; margin-bottom: 6px; }
+.future-block blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 10px 16px;
+  margin: 12px 0;
+  background: rgba(255,255,255,.04);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-style: italic;
+  color: #e2e8f0;
+}
+.future-highlight {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.25);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-top: 20px;
+  color: #fef3c7;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+/* ── Print ── */
+@media print {
+  body { max-width: 100%; padding: 0; font-size: 12px; }
+  .doc-header { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section-block { page-break-inside: avoid; }
+  .future-block  { page-break-before: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .table-wrap, .permission-card, .notif-card, .esc-step { box-shadow: none; }
+  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .toc { display: none; }
+  a { color: inherit; text-decoration: none; }
+}
 </style>
 </head>
 <body>
 
-<!-- ══════════════ HEADER ══════════════ -->
+<!-- ══════ HEADER ══════ -->
 <div class="doc-header">
-  <div class="label">CTP Job Cards System</div>
+  <div class="eyebrow">CTP Job Cards System</div>
   <h1>Employee Guide</h1>
   <div class="subtitle">Onboarding, Job Card Workflow &amp; Notifications</div>
-  <div class="meta">For: Operators · Technicians &nbsp;|&nbsp; Version 1.0 &nbsp;|&nbsp; 2026</div>
+  <div class="meta">For: Operators · Technicians &nbsp;|&nbsp; Version 1.1 &nbsp;|&nbsp; 2026</div>
 </div>
 
-<!-- ══════════════ TOC ══════════════ -->
+<!-- ══════ TOC ══════ -->
 <div class="toc">
-  <h2>Contents</h2>
+  <div class="toc-label">Contents</div>
   <ol>
     <li><a href="#section1">Onboarding &amp; App Permissions</a></li>
     <li><a href="#section2">Flow of Job Cards</a></li>
@@ -385,10 +492,10 @@
   </ol>
 </div>
 
-<!-- ══════════════ SECTION 1 ══════════════ -->
+<!-- ══════ SECTION 1 ══════ -->
 <div class="section-block" id="section1">
   <div class="section-header">
-    <div class="section-number">1</div>
+    <div class="section-icon">👤</div>
     <h2>Onboarding &amp; App Permissions</h2>
   </div>
 
@@ -396,33 +503,33 @@
   <p>There are four types of users in the CTP Job Cards system:</p>
   <div class="role-grid">
     <div class="role-card">
-      <div class="role-tag">Operator</div>
+      <div class="role-tag">🏭 Operator</div>
       <p>Reports faults and creates job cards when a machine or process has an issue.</p>
     </div>
     <div class="role-card">
-      <div class="role-tag">Technician</div>
+      <div class="role-tag">🔧 Technician</div>
       <p>Receives job notifications, attends to faults, and closes jobs when resolved.</p>
     </div>
     <div class="role-card">
-      <div class="role-tag">Manager</div>
+      <div class="role-tag">📊 Manager</div>
       <p>Oversees job cards in their department and ensures quality of records.</p>
     </div>
     <div class="role-card">
-      <div class="role-tag">Admin</div>
-      <p>Manages system, employee accounts, and configuration.</p>
+      <div class="role-tag">⚙️ Admin</div>
+      <p>Manages the system, employee accounts, and configuration.</p>
     </div>
   </div>
   <div class="callout tip">
     <div class="callout-icon">ℹ️</div>
-    <div class="callout-body"><p><strong>Operators and Technicians are separate roles.</strong> An operator is the person who discovers and reports the fault. A technician is the person who goes to fix it.</p></div>
+    <div class="callout-body"><p><strong>Operators and Technicians are separate roles.</strong> An operator is the person who discovers and reports the fault. A technician is the person who attends to fix it.</p></div>
   </div>
 
   <h3>Logging In</h3>
-  <p>You log in using your <strong>Google email address</strong> and <strong>password</strong>. Your account is linked to your clock number, which determines your role, your department, and what you see in the app.</p>
-  <p>If you have forgotten your password, tap <em>"Forgot Password"</em> on the login screen and a reset link will be sent to your email.</p>
+  <p>You log in using your <strong>Gmail address</strong> and <strong>password</strong>. Your account is linked to your clock number, which determines your role, your department, and what you see in the app.</p>
+  <p>If you have forgotten your password, tap <em>"Forgot Password"</em> on the login screen — a reset link will be sent to your email.</p>
 
   <h3>First-Time Setup: App Permissions</h3>
-  <p>When you open the app for the first time, it will ask for several permissions. Each one is required for the app to work correctly. <strong>Do not skip or deny these.</strong></p>
+  <p>When you open the app for the first time, it will ask for six permissions. Each one is required for the app to work correctly. <strong>Do not skip or deny these.</strong></p>
 
   <div class="permission-card">
     <div class="perm-header">
@@ -486,51 +593,63 @@
   </div>
 </div>
 
-<!-- ══════════════ SECTION 2 ══════════════ -->
+<!-- ══════ SECTION 2 ══════ -->
 <div class="section-block" id="section2">
   <div class="section-header">
-    <div class="section-number">2</div>
+    <div class="section-icon">📋</div>
     <h2>Flow of Job Cards</h2>
   </div>
 
-  <h3>What is a Job Card?</h3>
+  <h3>What Is a Job Card?</h3>
   <p>A job card is a formal digital record of a fault, breakdown, or maintenance task. It captures the department, area, machine, component, fault description, priority, and type (Mechanical / Electrical / Mech-Elec). It is the system's source of truth for every fault on site.</p>
 
   <h3>Priority Levels</h3>
   <p>Priority reflects the real production impact at the time the fault is reported:</p>
-  <table class="priority-table">
-    <thead>
-      <tr><th>Priority</th><th>Production Impact</th><th>Expected Response</th></tr>
-    </thead>
-    <tbody>
-      <tr><td class="p1">P1</td><td>No effect on production — routine or planned work</td><td>Attend when available</td></tr>
-      <tr><td class="p2">P2</td><td>Minor impact — production continuing</td><td>Attend soon</td></tr>
-      <tr><td class="p3">P3</td><td>Moderate impact — degraded operation</td><td>Attend within the shift</td></tr>
-      <tr><td class="p4">P4</td><td>Significant impact — output reduced</td><td>Attend as soon as possible</td></tr>
-      <tr><td class="p5">P5</td><td><strong>Production is standing — stopped</strong></td><td><strong>Immediate response</strong></td></tr>
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Priority</th><th>Production Impact</th><th>Expected Response</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="td-p1">P1</td><td>No effect on production — routine or planned work</td><td>Attend when available</td></tr>
+        <tr><td class="td-p2">P2</td><td>Minor impact — production continuing</td><td>Attend soon</td></tr>
+        <tr><td class="td-p3">P3</td><td>Moderate impact — degraded operation</td><td>Attend within the shift</td></tr>
+        <tr><td class="td-p4">P4</td><td>Significant impact — output reduced</td><td>Attend as soon as possible</td></tr>
+        <tr><td class="td-p5">P5</td><td><strong>Production is standing — stopped</strong></td><td><strong>Immediate response</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
   <div class="callout warning">
     <div class="callout-icon">⚠️</div>
     <div class="callout-body"><p><strong>Priority must be honest.</strong> A P5 means production has stopped. Using P5 routinely when production is running erodes the system's ability to distinguish genuine emergencies. Managers monitor priority accuracy.</p></div>
   </div>
 
   <h3>Job Card Status</h3>
-  <p>A job card moves through four statuses during its life:</p>
-  <table>
-    <thead>
-      <tr><th>Status</th><th>Meaning</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>Open</strong></td><td>Job has been created and is awaiting a technician — no one has accepted it yet</td></tr>
-      <tr><td><strong>In-Progress</strong></td><td>A technician has self-assigned and is actively working the job — escalation has stopped</td></tr>
-      <tr><td><strong>Monitor</strong></td><td>Fault has been resolved but the machine is being watched for recurrence</td></tr>
-      <tr><td><strong>Closed</strong></td><td>Job is complete — fault resolved and confirmed</td></tr>
-    </tbody>
-  </table>
+  <div class="status-flow">
+    <span class="status-pill s-open">Open</span>
+    <span class="arrow">→</span>
+    <span class="status-pill s-progress">In-Progress</span>
+    <span class="arrow">→</span>
+    <span class="status-pill s-monitor">Monitor</span>
+    <span class="arrow">→</span>
+    <span class="status-pill s-closed">Closed</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="status-pill s-open">Open</span></td><td>Job has been created and is awaiting a technician — no one has accepted it yet</td></tr>
+        <tr><td><span class="status-pill s-progress">In-Progress</span></td><td>A technician has self-assigned and is actively working the job — escalation has stopped</td></tr>
+        <tr><td><span class="status-pill s-monitor">Monitor</span></td><td>Fault has been resolved but the machine is being watched for recurrence</td></tr>
+        <tr><td><span class="status-pill s-closed">Closed</span></td><td>Job is complete — fault resolved and confirmed</td></tr>
+      </tbody>
+    </table>
+  </div>
   <div class="callout tip">
     <div class="callout-icon">ℹ️</div>
-    <div class="callout-body"><p>The moment you tap <strong>Assign Self</strong> on a notification (or open a job from the alert), the job card automatically moves from <strong>Open</strong> to <strong>In-Progress</strong>. You do not need to change it manually.</p></div>
+    <div class="callout-body"><p>The moment you tap <strong>Assign Self</strong> on a notification, the job card automatically moves from <strong>Open</strong> to <strong>In-Progress</strong>. You do not need to change it manually.</p></div>
   </div>
 
   <hr>
@@ -540,22 +659,23 @@
   <ol>
     <li>Open the CTP Job Cards app</li>
     <li>Tap <strong>Create Job Card</strong></li>
-    <li>Fill in <em>all</em> fields — department, area, machine, part, description, and priority</li>
+    <li>Fill in <em>all</em> fields — department, area, machine, part, description, priority, and type</li>
     <li>Submit — the relevant technicians are notified instantly</li>
   </ol>
 
   <h4>What Good Looks Like</h4>
-  <table>
-    <thead>
-      <tr><th>Instead of...</th><th>Write...</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>"Machine broken"</td><td>"Conveyor 3 drive motor tripping on overload — production line stopped"</td></tr>
-      <tr><td>"Pump issue"</td><td>"Cooling water pump P-02 not priming — no flow to chiller circuit"</td></tr>
-      <tr><td>"Fault on line"</td><td>"PLC fault code E-14 on Line 2 pressing machine — cycle will not complete"</td></tr>
-    </tbody>
-  </table>
-
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Instead of…</th><th>Write…</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>"Machine broken"</td><td>"Conveyor 3 drive motor tripping on overload — production line stopped"</td></tr>
+        <tr><td>"Pump issue"</td><td>"Cooling water pump P-02 not priming — no flow to chiller circuit"</td></tr>
+        <tr><td>"Fault on line"</td><td>"PLC fault code E-14 on Line 2 pressing machine — cycle will not complete"</td></tr>
+      </tbody>
+    </table>
+  </div>
   <p>Once submitted, you can track the job's status in the app. You will receive a notification when a technician accepts the job and again when it is closed.</p>
 
   <hr>
@@ -564,24 +684,23 @@
 
   <h4>Step 1 — Receive the Notification</h4>
   <p>When a job matching your trade is created and you are on site, you receive a push notification showing the job number, priority, machine, area, and description. You have three options directly from the notification:</p>
-
-  <table>
-    <thead>
-      <tr><th>Action</th><th>What it does</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>Assign Self</strong></td><td>You take ownership of the job. The operator is notified. Escalation stops immediately.</td></tr>
-      <tr><td><strong>I'm Busy</strong></td><td>You acknowledge the job but cannot attend right now. The operator is notified. Escalation stops. The system continues looking for another technician.</td></tr>
-      <tr><td><strong>Dismiss</strong></td><td>You dismiss the alert. This is logged. Escalation continues until someone accepts.</td></tr>
-    </tbody>
-  </table>
-
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Action</th><th>What It Does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Assign Self</strong></td><td>You take ownership of the job. The operator is notified. Escalation stops immediately.</td></tr>
+        <tr><td><strong>I'm Busy</strong></td><td>You acknowledge the job but cannot attend right now. The operator is notified. Escalation stops. The system continues looking for another technician.</td></tr>
+        <tr><td><strong>Dismiss</strong></td><td>You dismiss the alert. This is logged. Escalation continues until someone accepts.</td></tr>
+      </tbody>
+    </table>
+  </div>
   <div class="action-demo">
     <span class="action-btn btn-assign">Assign Self</span>
     <span class="action-btn btn-busy">I'm Busy</span>
     <span class="action-btn btn-dismiss">Dismiss</span>
   </div>
-
   <div class="callout danger">
     <div class="callout-icon">🔴</div>
     <div class="callout-body"><p><strong>Always respond to notifications.</strong> If you do not respond, the system escalates the job to your foreman and then your manager. All responses are visible in the notification log.</p></div>
@@ -590,8 +709,8 @@
   <h4>Step 2 — Work the Job</h4>
   <p>Once accepted, navigate to <strong>My Assigned Jobs</strong> in the app to view full details. Update the status as you progress:</p>
   <ul>
-    <li>When you self-assign the job: the status changes automatically from <strong>Open</strong> to <strong>In-Progress</strong></li>
-    <li>When you have resolved the fault but want to watch the machine: change to <strong>Monitor</strong></li>
+    <li>When you self-assign: status changes automatically from <strong>Open</strong> to <strong>In-Progress</strong></li>
+    <li>When the fault is resolved but you want to monitor: change to <strong>Monitor</strong></li>
     <li>When the job is fully complete: change to <strong>Closed</strong></li>
   </ul>
 
@@ -609,84 +728,109 @@
 
   <h3>Automatic Escalation: What Happens If Nobody Responds?</h3>
   <p>The system has automatic escalation across <strong>four configurable stages</strong>. Each stage has its own timer and recipient list, configured by Admin under <strong>Settings → Escalation Rules</strong>. The defaults are:</p>
-  <table>
-    <thead>
-      <tr><th>Stage</th><th>Default Time After Creation</th><th>Default Recipients</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>Stage 1</strong></td><td>2 minutes</td><td>Foremen and on-site managers for the relevant department</td></tr>
-      <tr><td><strong>Stage 2</strong></td><td>7 minutes</td><td>Department managers and the workshop manager (urgent alert)</td></tr>
-      <tr><td><strong>Stage 3</strong></td><td>30 minutes</td><td>Senior management</td></tr>
-      <tr><td><strong>Stage 4</strong></td><td>60 minutes</td><td>Final escalation tier</td></tr>
-    </tbody>
-  </table>
+
+  <div class="esc-timeline">
+    <div class="esc-step e0">
+      <div class="time">T = 0 min</div>
+      <div class="who">Job created — on-site technicians notified instantly</div>
+    </div>
+    <div class="esc-step e1">
+      <div class="time">Stage 1 · 2 minutes (default)</div>
+      <div class="who">Foremen and on-site managers alerted</div>
+    </div>
+    <div class="esc-step e2">
+      <div class="time">Stage 2 · 7 minutes (default)</div>
+      <div class="who">Department managers and workshop manager — urgent alert</div>
+    </div>
+    <div class="esc-step e3">
+      <div class="time">Stage 3 · 30 minutes (default)</div>
+      <div class="who">Senior management</div>
+    </div>
+    <div class="esc-step e4">
+      <div class="time">Stage 4 · 60 minutes (default)</div>
+      <div class="who">Final escalation tier</div>
+    </div>
+  </div>
+
   <p>Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule.</p>
 </div>
 
-<!-- ══════════════ SECTION 3 ══════════════ -->
+<!-- ══════ SECTION 3 ══════ -->
 <div class="section-block" id="section3">
   <div class="section-header">
-    <div class="section-number">3</div>
+    <div class="section-icon">🔔</div>
     <h2>Notifications — Types &amp; What They Mean</h2>
   </div>
 
   <div class="notif-card notif-normal">
     <span class="notif-badge badge-normal">Priority 1 · 2 · 3</span>
     <h4 style="color:#0369a1; margin-bottom:10px;">Normal Banner</h4>
-    <table style="margin:0;">
-      <tr><td style="width:100px; font-weight:600; padding-left:0;">Appearance</td><td>Standard Android notification banner at the top of the screen</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Sound</td><td>Default notification tone</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Behaviour</td><td>Appears and disappears. Tap to open the job.</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Used for</td><td>Jobs that need attention but are not stopping production</td></tr>
-    </table>
+    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
+      <table style="border:none;">
+        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Standard Android notification banner at the top of the screen</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Default notification tone</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Appears and disappears. Tap to open the job.</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;">Jobs that need attention but are not stopping production</td></tr>
+      </table>
+    </div>
   </div>
 
   <div class="notif-card notif-medium">
     <span class="notif-badge badge-medium">Priority 4</span>
     <h4 style="color:#c2410c; margin-bottom:10px;">Persistent Banner</h4>
-    <table style="margin:0;">
-      <tr><td style="width:100px; font-weight:600; padding-left:0;">Appearance</td><td>Notification that stays in your panel until acted upon. Cannot be swiped away.</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Sound</td><td>Escalation alert tone with strong vibration pattern</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Behaviour</td><td>Remains visible until you tap an action button: Assign Self, Busy, or Dismiss</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Used for</td><td>Significant production impact — prompt response required</td></tr>
-    </table>
+    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
+      <table style="border:none;">
+        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Notification that stays in your panel until acted upon — cannot be swiped away</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Escalation alert tone with strong vibration pattern</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Remains visible until you tap an action button: Assign Self, Busy, or Dismiss</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;">Significant production impact — prompt response required</td></tr>
+      </table>
+    </div>
   </div>
 
   <div class="notif-card notif-critical">
     <span class="notif-badge badge-critical">Priority 5 — CRITICAL</span>
     <h4 style="color:#b91c1c; margin-bottom:10px;">Full-Screen Alarm</h4>
-    <table style="margin:0;">
-      <tr><td style="width:100px; font-weight:600; padding-left:0;">Appearance</td><td>Full-screen alert that takes over the entire phone, even from the lock screen</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Sound</td><td>Loud, repeating alarm — bypasses Do Not Disturb</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Behaviour</td><td>Cannot be passively ignored. Tapping any action button dismisses the alarm and logs your response.</td></tr>
-      <tr><td style="font-weight:600; padding-left:0;">Used for</td><td><strong>Production is standing. Immediate response required.</strong></td></tr>
-    </table>
+    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
+      <table style="border:none;">
+        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Full-screen alert that takes over the entire phone, even from the lock screen</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Loud, repeating alarm — bypasses Do Not Disturb</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Cannot be passively ignored. Tapping any action button dismisses the alarm and logs your response.</td></tr>
+        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;"><strong>Production is standing. Immediate response required.</strong></td></tr>
+      </table>
+    </div>
   </div>
 
   <h3>Notification Action Buttons</h3>
-  <table>
-    <thead>
-      <tr><th>Button</th><th>Effect</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>Assign Self</strong></td><td>Assigns the job to you, notifies the operator, stops escalation</td></tr>
-      <tr><td><strong>I'm Busy</strong></td><td>Logs your response, notifies the operator, stops escalation — system continues looking for another technician</td></tr>
-      <tr><td><strong>Dismiss</strong></td><td>Logs a dismissed response. Escalation continues until someone accepts.</td></tr>
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Button</th><th>Effect</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Assign Self</strong></td><td>Assigns the job to you, notifies the operator, stops escalation immediately</td></tr>
+        <tr><td><strong>I'm Busy</strong></td><td>Logs your response, notifies the operator, stops escalation — system continues looking for another technician</td></tr>
+        <tr><td><strong>Dismiss</strong></td><td>Logs a dismissed response. Escalation continues until someone accepts.</td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <h3>On-Site Arrival &amp; Departure Notifications</h3>
   <p>When you cross the company boundary you automatically receive:</p>
   <ul>
-    <li><strong>"Arrived On-Site"</strong> — your status updates and job notifications begin</li>
+    <li><strong>"Arrived On-Site"</strong> — your status updates and job notifications begin routing to you</li>
     <li><strong>"Left Site Area"</strong> — your status updates and job notifications pause until you return</li>
   </ul>
   <p>This is fully automatic — no action required from you.</p>
 </div>
 
-<!-- ══════════════ SECTION 4 — APP APPEARANCE ══════════════ -->
+<!-- ══════ SECTION 4 ══════ -->
 <div class="section-block" id="section4">
-  <h2>Section 4 · App Appearance — Light &amp; Dark Mode</h2>
+  <div class="section-header">
+    <div class="section-icon">🎨</div>
+    <h2>App Appearance — Light &amp; Dark Mode</h2>
+  </div>
+
   <p>The app supports both a <strong>dark theme</strong> (the default — easier on the eyes in low-light environments such as workshops and night shifts) and a <strong>light theme</strong> (better visibility in bright outdoor sunlight).</p>
   <p>To switch:</p>
   <ol>
@@ -697,13 +841,13 @@
   <p>Your choice is remembered and applies every time you open the app. The orange CTP branding remains consistent across both themes.</p>
 </div>
 
-<!-- ══════════════ SECTION 5 — FUTURE ══════════════ -->
+<!-- ══════ SECTION 5 ══════ -->
 <div class="future-block" id="section5">
-  <h2>The Future: AI-Assisted Maintenance</h2>
+  <h2>🧠 The Future: AI-Assisted Maintenance</h2>
 
   <h3>Predictive Maintenance</h3>
   <p>By analysing the history of job cards — which machines fail most often, at what intervals, under what conditions — the system will generate predictive alerts:</p>
-  <ul style="color:#cbd5e1; padding-left:22px; margin-bottom:14px;">
+  <ul>
     <li>"Machine X has had 4 bearing failures in 6 months. Inspection recommended within 3 weeks."</li>
     <li>"Fault frequency on Line 3 increases in summer. Pre-emptive service advised."</li>
   </ul>
@@ -715,7 +859,10 @@
   <blockquote>"What is the torque spec for the main shaft bearing on the FX400 gearbox?"</blockquote>
   <blockquote>"What was done the last time this fault appeared on Machine 7?"</blockquote>
   <p>The assistant responds instantly with answers drawn from official documentation and real maintenance history.</p>
-  <p style="margin-top:20px; padding:14px; background:rgba(245,158,11,0.15); border-radius:6px; border-left:3px solid #f59e0b; color:#fef3c7;"><strong>Your job card entries today become the data that makes these AI tools accurate.</strong> Complete descriptions and clear closure notes are an investment in the system's future intelligence.</p>
+
+  <div class="future-highlight">
+    <strong>Your job card entries today become the data that makes these AI tools accurate.</strong> Complete descriptions and clear closure notes are an investment in the system's future intelligence.
+  </div>
 </div>
 
 </body>

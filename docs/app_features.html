@@ -1,0 +1,2131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CTP Job Cards — Interactive Feature Guide</title>
+<style>
+/* ═══════════════════════════════════════════════════════
+   RESET & TOKENS
+═══════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:         #0d1f35;
+  --blue:         #1a3a5c;
+  --blue-mid:     #2563a0;
+  --blue-light:   #dbeafe;
+  --blue-pale:    #f0f6ff;
+  --accent:       #f59e0b;
+  --accent-dark:  #d97706;
+  --accent-pale:  #fffbeb;
+  --green:        #16a34a;
+  --green-light:  #dcfce7;
+  --red:          #dc2626;
+  --red-light:    #fee2e2;
+  --orange:       #ea580c;
+  --orange-light: #ffedd5;
+  --teal:         #0d9488;
+  --teal-light:   #ccfbf1;
+  --purple:       #7c3aed;
+  --purple-light: #ede9fe;
+  --grey-50:      #f8fafc;
+  --grey-100:     #f1f5f9;
+  --grey-200:     #e2e8f0;
+  --grey-300:     #cbd5e1;
+  --grey-400:     #94a3b8;
+  --grey-500:     #64748b;
+  --grey-600:     #475569;
+  --grey-700:     #334155;
+  --grey-900:     #0f172a;
+  --text:         #1e293b;
+  --radius:       8px;
+  --radius-sm:    5px;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:    0 4px 12px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.06);
+  --shadow-lg:    0 10px 30px rgba(0,0,0,.12), 0 4px 10px rgba(0,0,0,.06);
+  --sidebar-w:    260px;
+  --header-h:     60px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--grey-50);
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════════════════ */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -.2px;
+}
+.topbar-logo .logo-dot {
+  width: 10px; height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.topbar-badge {
+  margin-left: 14px;
+  background: rgba(245,158,11,.18);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid rgba(245,158,11,.3);
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.topbar-search {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px 6px 32px;
+  color: #fff;
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+  transition: all .2s;
+  position: relative;
+}
+.topbar-search::placeholder { color: rgba(255,255,255,.35); }
+.topbar-search:focus { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); width: 240px; }
+.search-wrap { position: relative; }
+.search-wrap svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); opacity: .4; pointer-events: none; }
+.theme-toggle {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.7);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all .2s;
+}
+.theme-toggle:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════ */
+.sidebar {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  background: #fff;
+  border-right: 1px solid var(--grey-200);
+  overflow-y: auto;
+  z-index: 90;
+  padding-bottom: 32px;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--grey-200); border-radius: 2px; }
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--grey-400);
+  padding: 20px 20px 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  color: var(--grey-600);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.nav-item:hover { background: var(--grey-50); color: var(--text); }
+.nav-item.active {
+  background: var(--blue-pale);
+  color: var(--blue-mid);
+  border-left-color: var(--blue-mid);
+  font-weight: 600;
+}
+.nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+.nav-count {
+  margin-left: auto;
+  background: var(--grey-100);
+  color: var(--grey-500);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 100px;
+}
+.nav-item.active .nav-count { background: var(--blue-light); color: var(--blue-mid); }
+
+/* ═══════════════════════════════════════════════════════
+   MAIN CONTENT
+═══════════════════════════════════════════════════════ */
+.main {
+  margin-left: var(--sidebar-w);
+  margin-top: var(--header-h);
+  padding: 40px 48px 80px;
+  max-width: 940px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════════════════ */
+.hero {
+  background: linear-gradient(160deg, var(--navy) 0%, #0d2d52 55%, #1a4a7a 100%);
+  border-radius: 12px;
+  padding: 52px 48px;
+  color: #fff;
+  margin-bottom: 48px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.025);
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: 30%;
+  width: 220px; height: 220px;
+  border-radius: 50%;
+  background: rgba(245,158,11,.05);
+}
+.hero-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.hero h1 {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1.12;
+  margin-bottom: 16px;
+  position: relative;
+}
+.hero .hero-sub {
+  font-size: 15px;
+  opacity: .75;
+  max-width: 540px;
+  line-height: 1.65;
+  margin-bottom: 32px;
+  position: relative;
+}
+.hero-stats {
+  display: flex;
+  gap: 32px;
+  position: relative;
+}
+.hero-stat .num {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--accent);
+}
+.hero-stat .lbl {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .6;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FEATURE SECTIONS
+═══════════════════════════════════════════════════════ */
+.feature-section {
+  margin-bottom: 64px;
+  scroll-margin-top: 80px;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--grey-200);
+}
+.section-icon {
+  width: 42px; height: 42px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.section-heading h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.section-heading .section-sub {
+  font-size: 13px;
+  color: var(--grey-500);
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CARDS & GRIDS
+═══════════════════════════════════════════════════════ */
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  margin-bottom: 16px;
+  transition: box-shadow .2s;
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+
+/* ═══════════════════════════════════════════════════════
+   ROLE CARDS
+═══════════════════════════════════════════════════════ */
+.role-card {
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  padding: 20px;
+  transition: all .2s;
+  cursor: default;
+}
+.role-card:hover { border-color: var(--blue-mid); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.role-card .role-icon { font-size: 28px; margin-bottom: 12px; }
+.role-card .role-name {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.role-card p { font-size: 13px; color: var(--grey-600); margin: 0; line-height: 1.55; }
+.role-card .role-screens { margin-top: 12px; }
+.role-card .role-screens .label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--grey-400); margin-bottom: 6px; }
+.role-chip {
+  display: inline-block;
+  background: var(--grey-100);
+  color: var(--grey-600);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin: 2px 2px 2px 0;
+}
+.role-tech .role-name { color: var(--blue-mid); }
+.role-mgr  .role-name { color: var(--teal); }
+.role-admin .role-name { color: var(--purple); }
+.role-op   .role-name { color: var(--green); }
+
+/* ═══════════════════════════════════════════════════════
+   PHONE MOCKUP
+═══════════════════════════════════════════════════════ */
+.mockup-wrap {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+.phone-mockup {
+  width: 180px;
+  background: #1a1a2e;
+  border-radius: 28px;
+  padding: 14px 10px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.3), inset 0 0 0 1px rgba(255,255,255,.08);
+  flex-shrink: 0;
+  position: relative;
+}
+.phone-mockup::before {
+  content: '';
+  display: block;
+  width: 60px;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  margin: 0 auto 10px;
+}
+.phone-screen {
+  background: var(--navy);
+  border-radius: 18px;
+  overflow: hidden;
+  min-height: 300px;
+}
+.phone-screen.light-bg { background: var(--grey-50); }
+.phone-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(0,0,0,.2);
+  font-size: 8px;
+  color: rgba(255,255,255,.8);
+  font-weight: 600;
+}
+.phone-screen.light-bg .phone-status-bar { background: var(--grey-200); color: var(--grey-600); }
+.phone-appbar {
+  background: var(--navy);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.phone-screen.light-bg .phone-appbar { background: var(--blue); }
+.phone-appbar-title { color: #fff; font-size: 11px; font-weight: 700; flex: 1; }
+.phone-body { padding: 10px; }
+
+/* Phone UI Elements */
+.phone-card {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.phone-screen.light-bg .phone-card { background: #fff; border-color: var(--grey-200); }
+.phone-card-title { color: #fff; font-size: 9px; font-weight: 700; margin-bottom: 3px; }
+.phone-screen.light-bg .phone-card-title { color: var(--navy); }
+.phone-card-sub { color: rgba(255,255,255,.5); font-size: 8px; }
+.phone-screen.light-bg .phone-card-sub { color: var(--grey-500); }
+.phone-priority-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.pb-p5 { background: #dc2626; color: #fff; }
+.pb-p4 { background: #ea580c; color: #fff; }
+.pb-p3 { background: #d97706; color: #fff; }
+.pb-p2 { background: #16a34a; color: #fff; }
+.pb-p1 { background: #2563a0; color: #fff; }
+.phone-btn-row { display: flex; gap: 4px; margin-top: 6px; }
+.phone-btn {
+  flex: 1;
+  padding: 4px 0;
+  border-radius: 4px;
+  font-size: 7px;
+  font-weight: 700;
+  text-align: center;
+}
+.phone-btn-green { background: #16a34a; color: #fff; }
+.phone-btn-orange { background: #d97706; color: #fff; }
+.phone-btn-grey  { background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); }
+.phone-screen.light-bg .phone-btn-grey { background: var(--grey-200); color: var(--grey-600); }
+.phone-fullscreen-alert {
+  position: absolute;
+  inset: 10px;
+  background: linear-gradient(160deg, #7f1d1d, #dc2626);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  padding: 20px;
+}
+.phone-fullscreen-alert .alert-icon { font-size: 32px; margin-bottom: 8px; }
+.phone-fullscreen-alert .alert-title { font-size: 11px; font-weight: 800; margin-bottom: 4px; }
+.phone-fullscreen-alert .alert-sub { font-size: 8px; opacity: .8; margin-bottom: 14px; }
+.phone-fullscreen-alert .alert-btn {
+  background: #fff;
+  color: #dc2626;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 6px 16px;
+  border-radius: 100px;
+  width: 100%;
+}
+.mockup-desc {
+  flex: 1;
+  min-width: 200px;
+}
+.mockup-desc h3 { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+.mockup-desc p { font-size: 13px; color: var(--grey-600); line-height: 1.6; margin-bottom: 12px; }
+
+/* ═══════════════════════════════════════════════════════
+   STATUS FLOW
+═══════════════════════════════════════════════════════ */
+.status-flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+.status-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.status-pill {
+  padding: 8px 18px;
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.status-sub { font-size: 10px; color: var(--grey-400); }
+.status-arrow { color: var(--grey-300); font-size: 22px; padding: 0 6px; margin-bottom: 16px; }
+.s-open     { background: #dbeafe; color: #1d4ed8; }
+.s-progress { background: #ffedd5; color: #c2410c; }
+.s-monitor  { background: #fef9c3; color: #854d0e; }
+.s-closed   { background: #dcfce7; color: #15803d; }
+
+/* ═══════════════════════════════════════════════════════
+   ESCALATION TIMELINE
+═══════════════════════════════════════════════════════ */
+.escalation-timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 20px 0;
+}
+.escalation-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--blue-light), var(--red-light));
+}
+.esc-event {
+  position: relative;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  transition: all .2s;
+}
+.esc-event:hover { box-shadow: var(--shadow-sm); }
+.esc-event::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--grey-300);
+}
+.esc-event.e0::before { background: var(--blue-mid); box-shadow: 0 0 0 2px var(--blue-mid); }
+.esc-event.e1::before { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
+.esc-event.e2::before { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+.esc-event.e3::before { background: #9333ea; box-shadow: 0 0 0 2px #9333ea; }
+.esc-event.e4::before { background: var(--grey-900); box-shadow: 0 0 0 2px var(--grey-900); }
+.esc-event .esc-time {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--grey-400);
+  margin-bottom: 4px;
+}
+.esc-event .esc-who { font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.esc-event .esc-detail { font-size: 12.5px; color: var(--grey-500); margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════════════
+   NOTIFICATION CARDS
+═══════════════════════════════════════════════════════ */
+.notif-demo {
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  overflow: hidden;
+  margin: 12px 0;
+}
+.notif-demo-header {
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.nd-normal .notif-demo-header { background: #f0f9ff; color: #0369a1; }
+.nd-medium .notif-demo-header { background: var(--orange-light); color: var(--orange); }
+.nd-critical .notif-demo-header { background: var(--red-light); color: var(--red); }
+.notif-demo-body { padding: 14px 16px; background: #fff; }
+.notif-demo-banner {
+  background: var(--grey-900);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.notif-demo-banner .nd-icon { font-size: 20px; }
+.notif-demo-banner .nd-content .nd-title { color: #fff; font-size: 12px; font-weight: 700; }
+.notif-demo-banner .nd-content .nd-msg { color: rgba(255,255,255,.65); font-size: 11px; margin-top: 1px; }
+.notif-actions { display: flex; gap: 6px; margin-top: 8px; }
+.notif-btn {
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+}
+.notif-btn-assign { background: var(--green); color: #fff; }
+.notif-btn-busy   { background: var(--accent-dark); color: #fff; }
+.notif-btn-dismiss{ background: var(--grey-200); color: var(--grey-600); }
+.notif-demo-desc { font-size: 12.5px; color: var(--grey-600); line-height: 1.55; }
+
+/* ═══════════════════════════════════════════════════════
+   PERMISSION CARDS
+═══════════════════════════════════════════════════════ */
+.permission-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.perm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  transition: all .2s;
+}
+.perm-item:hover { border-color: var(--blue-mid); box-shadow: var(--shadow-sm); }
+.perm-num {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.perm-info .perm-title { font-size: 13.5px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
+.perm-info .perm-why { font-size: 12.5px; color: var(--grey-600); }
+.perm-info .perm-tip { margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--green); }
+
+/* ═══════════════════════════════════════════════════════
+   FEATURE CHIPS
+═══════════════════════════════════════════════════════ */
+.feature-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.feature-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: 100px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--grey-700);
+  transition: all .15s;
+}
+.feature-chip:hover { border-color: var(--blue-mid); color: var(--blue-mid); background: var(--blue-pale); }
+.feature-chip .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.chip-live { background: var(--green); }
+.chip-soon { background: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════
+   CALLOUTS
+═══════════════════════════════════════════════════════ */
+.callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  margin: 16px 0;
+  border-left: 4px solid;
+  font-size: 13.5px;
+}
+.callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.callout-body p:last-child { margin-bottom: 0; }
+.callout.tip     { background: var(--blue-pale); border-color: var(--blue-mid); }
+.callout.warning { background: var(--orange-light); border-color: var(--orange); }
+.callout.danger  { background: var(--red-light); border-color: var(--red); }
+.callout.success { background: var(--green-light); border-color: var(--green); }
+
+/* ═══════════════════════════════════════════════════════
+   TABLES
+═══════════════════════════════════════════════════════ */
+.table-wrap { overflow-x: auto; margin: 16px 0; border-radius: var(--radius); border: 1px solid var(--grey-200); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+td { padding: 10px 14px; border-bottom: 1px solid var(--grey-200); vertical-align: top; }
+tr:nth-child(even) td { background: var(--grey-50); }
+tr:last-child td { border-bottom: none; }
+
+/* Priority colors in table */
+.td-p1 { font-weight: 700; color: #1d4ed8; }
+.td-p2 { font-weight: 700; color: #16a34a; }
+.td-p3 { font-weight: 700; color: #b45309; }
+.td-p4 { font-weight: 700; color: #c2410c; }
+.td-p5 { font-weight: 700; color: #b91c1c; }
+
+/* ═══════════════════════════════════════════════════════
+   GEOFENCE VISUAL
+═══════════════════════════════════════════════════════ */
+.geo-visual {
+  background: #e8f4e8;
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  margin: 16px 0;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.geo-map-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0px, transparent 1px, transparent 40px, rgba(0,0,0,.04) 41px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.04) 0px, transparent 1px, transparent 40px, rgba(0,0,0,.04) 41px);
+}
+.geo-fence {
+  width: 220px;
+  height: 160px;
+  border: 3px dashed #16a34a;
+  border-radius: 50%;
+  background: rgba(22,163,74,.08);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.geo-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #15803d;
+  text-align: center;
+  background: rgba(22,163,74,.15);
+  padding: 4px 10px;
+  border-radius: 100px;
+}
+.geo-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: var(--shadow-md);
+}
+.geo-dot-inside { background: #16a34a; top: 40%; left: 30%; }
+.geo-dot-outside { background: #dc2626; top: 20%; right: -10%; }
+.geo-pulse {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(22,163,74,.3);
+  animation: pulse 2s infinite;
+}
+.geo-pulse { top: 40%; left: 30%; transform: translate(-50%,-50%); }
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   COPPER INVENTORY
+═══════════════════════════════════════════════════════ */
+.copper-visual {
+  background: linear-gradient(135deg, #451a03, #78350f);
+  border-radius: var(--radius);
+  padding: 20px;
+  color: #fff;
+  margin: 12px 0;
+}
+.copper-stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.copper-stat { flex: 1; min-width: 100px; }
+.copper-stat .c-num { font-size: 24px; font-weight: 900; color: #fcd34d; }
+.copper-stat .c-lbl { font-size: 10px; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .5px; }
+.copper-txn {
+  background: rgba(255,255,255,.07);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.copper-txn .txn-label { color: rgba(255,255,255,.8); }
+.copper-txn .txn-val { font-weight: 700; color: #fcd34d; }
+
+/* ═══════════════════════════════════════════════════════
+   OFFLINE SYNC
+═══════════════════════════════════════════════════════ */
+.sync-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.sync-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+}
+.sync-icon { font-size: 28px; }
+.sync-label { font-size: 11px; font-weight: 600; color: var(--grey-600); }
+.sync-arrow { color: var(--grey-300); font-size: 18px; flex-shrink: 0; }
+.sync-status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  display: inline-block;
+  margin-right: 4px;
+}
+.sync-status-dot.offline { background: var(--red); }
+
+/* ═══════════════════════════════════════════════════════
+   AI SECTION
+═══════════════════════════════════════════════════════ */
+.ai-block {
+  background: linear-gradient(160deg, var(--navy) 0%, #1a3a5c 100%);
+  border-radius: var(--radius);
+  padding: 36px 40px;
+  color: #e2e8f0;
+  margin-top: 12px;
+}
+.ai-block h3 { color: #fff; font-size: 18px; margin-bottom: 6px; }
+.ai-block p { color: #94a3b8; font-size: 13.5px; line-height: 1.65; margin-bottom: 14px; }
+.ai-chat {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 8px 0;
+  font-size: 13px;
+  font-style: italic;
+  color: #cbd5e1;
+}
+.ai-chat::before { content: '💬 '; }
+.ai-phase-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.ai-phase {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.ai-phase .phase-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.ai-phase h4 { color: #fff; font-size: 14px; margin-bottom: 8px; }
+.ai-phase p { margin: 0; font-size: 12.5px; }
+.ai-highlight {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.25);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-top: 20px;
+  color: #fef3c7;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUDIT / DATA SECTION
+═══════════════════════════════════════════════════════ */
+.audit-entry {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--grey-200);
+  background: #fff;
+  margin-bottom: 8px;
+  font-size: 13px;
+  align-items: center;
+}
+.audit-time {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--grey-400);
+  white-space: nowrap;
+  min-width: 50px;
+}
+.audit-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.audit-msg { flex: 1; color: var(--grey-700); }
+.audit-actor { font-size: 11px; color: var(--grey-400); white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════
+   TYPOGRAPHY
+═══════════════════════════════════════════════════════ */
+h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin: 28px 0 10px; }
+h4 { font-size: 13px; font-weight: 700; color: var(--blue-mid); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: .5px; }
+p { margin-bottom: 12px; }
+ul, ol { padding-left: 20px; margin-bottom: 12px; }
+li { margin-bottom: 4px; color: var(--grey-700); font-size: 13.5px; }
+strong { color: var(--navy); }
+
+/* Badge live/soon */
+.badge-live { background: var(--green); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+.badge-soon { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+
+/* ═══════════════════════════════════════════════════════
+   SEARCH HIGHLIGHT
+═══════════════════════════════════════════════════════ */
+mark { background: #fef08a; color: var(--navy); border-radius: 2px; }
+
+/* ═══════════════════════════════════════════════════════
+   SCROLL TO TOP
+═══════════════════════════════════════════════════════ */
+.scroll-top {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 40px; height: 40px;
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all .25s;
+  z-index: 80;
+}
+.scroll-top.visible { opacity: 1; transform: translateY(0); }
+.scroll-top:hover { background: var(--blue-mid); }
+
+/* ═══════════════════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════════════════ */
+.reading-progress {
+  position: fixed;
+  top: var(--header-h);
+  left: var(--sidebar-w);
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--blue-mid));
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform .1s;
+  z-index: 89;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DARK MODE
+═══════════════════════════════════════════════════════ */
+body.dark {
+  --grey-50:   #0f172a;
+  --grey-100:  #1e293b;
+  --grey-200:  #334155;
+  --grey-300:  #475569;
+  --grey-400:  #64748b;
+  --grey-500:  #94a3b8;
+  --grey-600:  #cbd5e1;
+  --grey-700:  #e2e8f0;
+  --grey-900:  #f8fafc;
+  --text:      #e2e8f0;
+  --blue-pale: #1e293b;
+  background: #0f172a;
+}
+body.dark .sidebar { background: #1e293b; border-color: var(--grey-200); }
+body.dark .card { background: #1e293b; border-color: var(--grey-200); }
+body.dark .role-card { background: #1e293b; border-color: var(--grey-200); }
+body.dark .phone-screen.light-bg { background: #1e293b; }
+body.dark .phone-screen.light-bg .phone-appbar { background: var(--navy); }
+body.dark .phone-screen.light-bg .phone-status-bar { background: var(--navy); color: rgba(255,255,255,.6); }
+body.dark .phone-screen.light-bg .phone-card { background: #2d3748; border-color: #4a5568; }
+body.dark .phone-screen.light-bg .phone-card-title { color: #e2e8f0; }
+body.dark .perm-item { background: #1e293b; }
+body.dark .esc-event { background: #1e293b; }
+body.dark .sync-flow { background: #1e293b; }
+body.dark .audit-entry { background: #1e293b; }
+body.dark .notif-demo-body { background: #1e293b; }
+body.dark .notif-demo-banner { background: #0f172a; }
+body.dark .feature-chip { background: #1e293b; }
+body.dark .table-wrap { border-color: var(--grey-200); }
+body.dark td { border-color: var(--grey-200); }
+body.dark tr:nth-child(even) td { background: #1a2540; }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE / PRINT
+═══════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { transform: translateX(-260px); width: 260px; }
+  .main { margin-left: 0; padding: 24px 20px 60px; }
+}
+
+@media print {
+  .topbar, .sidebar, .scroll-top, .reading-progress, .theme-toggle, .search-wrap { display: none !important; }
+  .main { margin: 0; padding: 32px; max-width: 100%; }
+  body { background: #fff !important; }
+  .ai-block, .hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .feature-section { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ TOPBAR ══════════════ -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-dot"></div>
+    CTP Job Cards
+  </div>
+  <span class="topbar-badge">Interactive Feature Guide</span>
+  <div class="topbar-right">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="topbar-search" type="text" id="searchInput" placeholder="Search features…" autocomplete="off">
+    </div>
+    <button class="theme-toggle" id="themeToggle">🌙 Dark</button>
+  </div>
+</div>
+
+<!-- ══════════════ READING PROGRESS ══════════════ -->
+<div class="reading-progress" id="readingProgress"></div>
+
+<!-- ══════════════ SIDEBAR ══════════════ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-section-label">Overview</div>
+  <a class="nav-item active" href="#overview" data-section="overview">
+    <span class="nav-icon">🏠</span> App Overview
+  </a>
+  <a class="nav-item" href="#roles" data-section="roles">
+    <span class="nav-icon">👥</span> User Roles
+    <span class="nav-count">4</span>
+  </a>
+
+  <div class="sidebar-section-label">Core Features</div>
+  <a class="nav-item" href="#jobcards" data-section="jobcards">
+    <span class="nav-icon">📋</span> Job Cards
+  </a>
+  <a class="nav-item" href="#notifications" data-section="notifications">
+    <span class="nav-icon">🔔</span> Notifications
+    <span class="nav-count">3</span>
+  </a>
+  <a class="nav-item" href="#escalation" data-section="escalation">
+    <span class="nav-icon">📈</span> Escalation
+    <span class="nav-count">4</span>
+  </a>
+  <a class="nav-item" href="#geofencing" data-section="geofencing">
+    <span class="nav-icon">📍</span> Geofencing
+  </a>
+
+  <div class="sidebar-section-label">Additional Modules</div>
+  <a class="nav-item" href="#copper" data-section="copper">
+    <span class="nav-icon">🔶</span> Copper Inventory
+  </a>
+  <a class="nav-item" href="#offline" data-section="offline">
+    <span class="nav-icon">📡</span> Offline &amp; Sync
+  </a>
+  <a class="nav-item" href="#permissions" data-section="permissions">
+    <span class="nav-icon">🔐</span> App Permissions
+  </a>
+
+  <div class="sidebar-section-label">Management & Data</div>
+  <a class="nav-item" href="#dashboard" data-section="dashboard">
+    <span class="nav-icon">📊</span> Manager Dashboard
+  </a>
+  <a class="nav-item" href="#audit" data-section="audit">
+    <span class="nav-icon">🗂️</span> Audit Trail
+  </a>
+  <a class="nav-item" href="#admin" data-section="admin">
+    <span class="nav-icon">⚙️</span> Admin Tools
+  </a>
+
+  <div class="sidebar-section-label">Future</div>
+  <a class="nav-item" href="#ai" data-section="ai">
+    <span class="nav-icon">🧠</span> AI Roadmap
+  </a>
+
+  <div style="margin-top: 20px; padding: 16px 20px; border-top: 1px solid var(--grey-200);">
+    <div style="font-size: 11px; color: var(--grey-400); line-height: 1.5;">
+      <strong style="color: var(--grey-500);">Live Status</strong><br>
+      <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#16a34a; margin-right:4px;"></span>All systems operational
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<main class="main" id="main">
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-eyebrow">CTP Job Cards Platform</div>
+  <h1>Complete Feature Reference</h1>
+  <div class="hero-sub">A real-time digital maintenance management system. Explore every feature — from fault reporting to AI-assisted operations.</div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="num">5</div><div class="lbl">Priority Levels</div></div>
+    <div class="hero-stat"><div class="num">4</div><div class="lbl">Escalation Stages</div></div>
+    <div class="hero-stat"><div class="num">4</div><div class="lbl">User Roles</div></div>
+    <div class="hero-stat"><div class="num">2 min</div><div class="lbl">First Escalation</div></div>
+  </div>
+</div>
+
+<!-- ══════════════ OVERVIEW ══════════════ -->
+<section class="feature-section" id="overview">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#dbeafe;">🏠</div>
+    <div>
+      <h2>App Overview</h2>
+      <div class="section-sub">What CTP Job Cards does and how it fits into daily operations</div>
+    </div>
+  </div>
+
+  <p>CTP Job Cards is a <strong>Flutter + Firebase</strong> mobile application for field technician job card tracking. It targets Android (primary) with iOS and web as secondary platforms. The app operates offline-first — all data syncs automatically when connectivity is restored.</p>
+
+  <div class="grid-3">
+    <div class="card" style="border-top: 3px solid var(--blue-mid);">
+      <div style="font-size:28px; margin-bottom:10px;">⚡</div>
+      <h4 style="margin-top:0;">Real-Time Response</h4>
+      <p style="margin:0; font-size:13px; color:var(--grey-600);">Fault reports reach the right technician in seconds. No dispatcher, no radio, no delay.</p>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--green);">
+      <div style="font-size:28px; margin-bottom:10px;">🔒</div>
+      <h4 style="margin-top:0;">Full Accountability</h4>
+      <p style="margin:0; font-size:13px; color:var(--grey-600);">Every action is timestamped and logged. Who created it, who responded, when, what was done.</p>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--accent);">
+      <div style="font-size:28px; margin-bottom:10px;">🧠</div>
+      <h4 style="margin-top:0;">Intelligence Platform</h4>
+      <p style="margin:0; font-size:13px; color:var(--grey-600);">Structured data today powers predictive maintenance and AI fault-finding tomorrow.</p>
+    </div>
+  </div>
+
+  <h3>End-to-End Process</h3>
+  <div class="card">
+    <div class="escalation-timeline">
+      <div class="esc-event e0">
+        <div class="esc-time">Step 1</div>
+        <div class="esc-who">Operator creates a job card</div>
+        <div class="esc-detail">Department, area, machine, component, fault description, priority, and type (Mechanical / Electrical / Mech-Elec) are captured and submitted.</div>
+      </div>
+      <div class="esc-event e0">
+        <div class="esc-time">Step 2</div>
+        <div class="esc-who">System identifies on-site technicians</div>
+        <div class="esc-detail">Real-time geofencing determines which technicians of the correct trade are currently on site. Notifications are dispatched instantly — no human dispatcher required.</div>
+      </div>
+      <div class="esc-event e1">
+        <div class="esc-time">Step 3</div>
+        <div class="esc-who">Technician accepts or responds</div>
+        <div class="esc-detail">From the notification: Assign Self (takes ownership, stops escalation), I'm Busy (acknowledges, system keeps looking), or Dismiss (logged — escalation continues).</div>
+      </div>
+      <div class="esc-event e2">
+        <div class="esc-time">If no response → Auto-Escalation</div>
+        <div class="esc-who">Four configurable escalation stages fire</div>
+        <div class="esc-detail">Stage 1 (2 min): Foremen and on-site managers. Stage 2 (7 min): Department managers. Stage 3 (30 min): Senior management. Stage 4 (60 min): Final tier.</div>
+      </div>
+      <div class="esc-event e0">
+        <div class="esc-time">Step 4</div>
+        <div class="esc-who">Job tracked through to closure</div>
+        <div class="esc-detail">Status moves: Open → In-Progress → Monitor → Closed. Technician records what was done, parts used, root cause, and recommendations. Operator is notified on closure.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>What's Live Today</h3>
+  <div class="feature-chips">
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Job card creation &amp; tracking</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Push notifications (P1–P5)</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Full-screen P5 alarms</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>4-stage auto-escalation</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Real-time geofencing</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Offline sync</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Permanent audit trail</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Manager dashboard</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Role-based access</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Copper inventory tracking</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Light &amp; dark theme</span>
+    <span class="feature-chip"><span class="chip-dot chip-live"></span>Notification action buttons</span>
+    <span class="feature-chip"><span class="chip-dot chip-soon"></span>Predictive maintenance AI</span>
+    <span class="feature-chip"><span class="chip-dot chip-soon"></span>AI chatbot &amp; manuals</span>
+  </div>
+  <p style="font-size:12px; color:var(--grey-400); margin-top:4px;">
+    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:4px;"></span>Live &nbsp;
+    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:4px; margin-left:8px;"></span>Planned
+  </p>
+</section>
+
+<!-- ══════════════ ROLES ══════════════ -->
+<section class="feature-section" id="roles">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#ede9fe;">👥</div>
+    <div>
+      <h2>User Roles</h2>
+      <div class="section-sub">Four roles with distinct access scopes and responsibilities</div>
+    </div>
+  </div>
+
+  <p>Every employee account in the system has a <strong>role</strong> field that controls what they can see and do. Roles are set by an Admin and are tied to each employee's clock number.</p>
+
+  <div class="grid-2">
+    <div class="role-card role-op">
+      <div class="role-icon">🏭</div>
+      <div class="role-name">Operator</div>
+      <p>Discovers a fault and creates the job card. Responsible for capturing all details accurately at the point of report. Receives notifications when a technician accepts their job and when it is closed.</p>
+      <div class="role-screens">
+        <div class="label">Key Screens</div>
+        <span class="role-chip">Create Job Card</span>
+        <span class="role-chip">Home</span>
+        <span class="role-chip">Job Card Detail</span>
+      </div>
+    </div>
+    <div class="role-card role-tech">
+      <div class="role-icon">🔧</div>
+      <div class="role-name">Technician</div>
+      <p>Receives job card notifications (when on site), attends to faults, self-assigns from the notification, and closes the job with a detailed completion note. Can be Mechanical, Electrical, or both.</p>
+      <div class="role-screens">
+        <div class="label">Key Screens</div>
+        <span class="role-chip">Home</span>
+        <span class="role-chip">My Assigned Jobs</span>
+        <span class="role-chip">Job Card Detail</span>
+        <span class="role-chip">Create Job Card</span>
+      </div>
+    </div>
+    <div class="role-card role-mgr">
+      <div class="role-icon">📊</div>
+      <div class="role-name">Manager</div>
+      <p>Oversees all job cards in their department. Enforces data quality for operators and technicians. Receives escalation notifications. Has full department visibility on the Manager Dashboard.</p>
+      <div class="role-screens">
+        <div class="label">Key Screens</div>
+        <span class="role-chip">Manager Dashboard</span>
+        <span class="role-chip">View Job Cards</span>
+        <span class="role-chip">Copper Dashboard</span>
+        <span class="role-chip">Notification History</span>
+      </div>
+    </div>
+    <div class="role-card role-admin">
+      <div class="role-icon">⚙️</div>
+      <div class="role-name">Admin</div>
+      <p>Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, and has access to all data across all departments.</p>
+      <div class="role-screens">
+        <div class="label">Key Screens</div>
+        <span class="role-chip">Admin Screen</span>
+        <span class="role-chip">Geofence Editor</span>
+        <span class="role-chip">Employee Management</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Authentication</h3>
+  <p>All users sign in with their <strong>Gmail address and password</strong> (Firebase Auth). The system issues a custom token linked to each employee's clock number, which determines their role and department routing. Password resets are handled via email.</p>
+
+  <div class="callout tip">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body"><p><strong>Operators and Technicians are distinct roles.</strong> A technician can also create job cards when they discover a fault, but operators are typically the frontline personnel who report issues. A technician receiving a job card they created would self-assign it automatically.</p></div>
+  </div>
+</section>
+
+<!-- ══════════════ JOB CARDS ══════════════ -->
+<section class="feature-section" id="jobcards">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#dcfce7;">📋</div>
+    <div>
+      <h2>Job Cards</h2>
+      <div class="section-sub">The core record unit — from fault report to closure</div>
+    </div>
+  </div>
+
+  <p>A job card is the formal digital record for every fault, breakdown, or maintenance task on site. It is the system's single source of truth — every subsequent action (notification, escalation, response, closure) is linked to a job card.</p>
+
+  <h3>Job Card Fields</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Description</th><th>Why It Matters</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Department</strong></td><td>The plant department where the fault occurred</td><td>Routes notifications to the correct technicians</td></tr>
+        <tr><td><strong>Area</strong></td><td>Specific area within the department</td><td>Helps technicians locate the fault quickly</td></tr>
+        <tr><td><strong>Machine</strong></td><td>Named machine or asset ID</td><td>Enables asset-specific fault history and pattern analysis</td></tr>
+        <tr><td><strong>Part / Component</strong></td><td>The specific component affected</td><td>Precise identification for ordering parts and recording repairs</td></tr>
+        <tr><td><strong>Description</strong></td><td>What happened — symptoms, error codes, observations</td><td>Gives the technician context before arrival; feeds AI analysis</td></tr>
+        <tr><td><strong>Priority</strong></td><td>P1–P5 reflecting production impact</td><td>Determines notification type and escalation urgency</td></tr>
+        <tr><td><strong>Type</strong></td><td>Mechanical / Electrical / Mech-Elec</td><td>Routes to the correct trade of technician</td></tr>
+        <tr><td><strong>Closure Note</strong></td><td>What was done, parts used, root cause, follow-up</td><td>Creates a permanent repair record; feeds future AI insight</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Priority Levels</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Priority</th><th>Production Impact</th><th>Expected Response</th><th>Notification Type</th></tr></thead>
+      <tbody>
+        <tr><td class="td-p1">P1</td><td>No production effect — routine or planned</td><td>Attend when available</td><td>Standard banner</td></tr>
+        <tr><td class="td-p2">P2</td><td>Minor — production continuing</td><td>Attend soon</td><td>Standard banner</td></tr>
+        <tr><td class="td-p3">P3</td><td>Moderate — degraded operation</td><td>Within the shift</td><td>Standard banner</td></tr>
+        <tr><td class="td-p4">P4</td><td>Significant — output reduced</td><td>As soon as possible</td><td>Persistent banner</td></tr>
+        <tr><td class="td-p5">P5</td><td><strong>Production standing — stopped</strong></td><td><strong>Immediate</strong></td><td>Full-screen alarm + DND override</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warning">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body"><p><strong>Priority must be honest.</strong> P5 means production has stopped. Misuse erodes the system's ability to distinguish genuine emergencies. Managers monitor priority accuracy — deliberate misuse must be corrected.</p></div>
+  </div>
+
+  <h3>Job Card Status Flow</h3>
+  <div class="status-flow">
+    <div class="status-node"><span class="status-pill s-open">Open</span><span class="status-sub">Created, no technician</span></div>
+    <span class="status-arrow">→</span>
+    <div class="status-node"><span class="status-pill s-progress">In-Progress</span><span class="status-sub">Technician self-assigned</span></div>
+    <span class="status-arrow">→</span>
+    <div class="status-node"><span class="status-pill s-monitor">Monitor</span><span class="status-sub">Fault resolved, watching</span></div>
+    <span class="status-arrow">→</span>
+    <div class="status-node"><span class="status-pill s-closed">Closed</span><span class="status-sub">Complete &amp; confirmed</span></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th><th>Trigger</th></tr></thead>
+      <tbody>
+        <tr><td><span class="status-pill s-open" style="font-size:12px; padding:4px 12px;">Open</span></td><td>Job is live, awaiting technician acceptance. Escalation is actively firing.</td><td>Automatic on creation</td></tr>
+        <tr><td><span class="status-pill s-progress" style="font-size:12px; padding:4px 12px;">In-Progress</span></td><td>A technician has self-assigned and is actively working. Escalation stops immediately.</td><td>Technician taps "Assign Self"</td></tr>
+        <tr><td><span class="status-pill s-monitor" style="font-size:12px; padding:4px 12px;">Monitor</span></td><td>Fault resolved but machine is under observation for recurrence.</td><td>Technician updates status manually</td></tr>
+        <tr><td><span class="status-pill s-closed" style="font-size:12px; padding:4px 12px;">Closed</span></td><td>Job fully complete. Closure note required. Operator notified. Record stored permanently.</td><td>Technician closes with note</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="phone-mockup">
+      <div class="phone-screen light-bg">
+        <div class="phone-status-bar"><span>9:41</span><span>●●● 100%</span></div>
+        <div class="phone-appbar"><span class="phone-appbar-title">My Assigned Jobs</span></div>
+        <div class="phone-body">
+          <div class="phone-card">
+            <div class="phone-priority-badge pb-p5">P5 · CRITICAL</div>
+            <div class="phone-card-title">Conveyor 3 Drive Motor</div>
+            <div class="phone-card-sub">Mechanical · Line 2 · Open 4 min</div>
+          </div>
+          <div class="phone-card">
+            <div class="phone-priority-badge pb-p3">P3 · Moderate</div>
+            <div class="phone-card-title">Cooling Pump P-02</div>
+            <div class="phone-card-sub">Electrical · Pump House · In-Progress</div>
+          </div>
+          <div class="phone-card">
+            <div class="phone-priority-badge pb-p1">P1 · Routine</div>
+            <div class="phone-card-title">Conveyor Belt Inspection</div>
+            <div class="phone-card-sub">Mechanical · Workshop · Monitor</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mockup-desc">
+      <h3>My Assigned Jobs Screen</h3>
+      <p>Technicians see all jobs they have accepted, sorted by priority. Tapping any job opens the full detail view with all fields, the fault description, and controls to update the status or add a closure note.</p>
+      <p>The priority badge colour-codes urgency at a glance — red for P5, orange for P4, amber for P3, green for P2, blue for P1.</p>
+      <ul>
+        <li>Pull-to-refresh updates the list in real time</li>
+        <li>Jobs automatically reorder as priorities are updated</li>
+        <li>Closed jobs are archived, not deleted</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ NOTIFICATIONS ══════════════ -->
+<section class="feature-section" id="notifications">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#ffedd5;">🔔</div>
+    <div>
+      <h2>Notifications</h2>
+      <div class="section-sub">Three distinct notification types scaled to fault priority</div>
+    </div>
+  </div>
+
+  <p>The notification system uses <strong>Firebase Cloud Messaging (FCM)</strong> with a native Kotlin implementation on Android. Each priority level triggers a different notification type — from a standard banner for routine jobs to a full-screen alarm that bypasses the lock screen for P5 critical faults.</p>
+
+  <!-- NORMAL -->
+  <div class="notif-demo nd-normal">
+    <div class="notif-demo-header">Priority 1 · 2 · 3 — Normal Banner</div>
+    <div class="notif-demo-body">
+      <div class="notif-demo-banner">
+        <span class="nd-icon">🔔</span>
+        <div class="nd-content">
+          <div class="nd-title">New Job Card · P2 · Pump House</div>
+          <div class="nd-msg">Cooling pump P-02 not priming — Line 3</div>
+        </div>
+      </div>
+      <div class="notif-actions">
+        <button class="notif-btn notif-btn-assign">Assign Self</button>
+        <button class="notif-btn notif-btn-busy">I'm Busy</button>
+        <button class="notif-btn notif-btn-dismiss">Dismiss</button>
+      </div>
+      <div class="notif-demo-desc" style="margin-top:10px;">
+        <strong>Standard Android notification banner</strong> — appears at the top of the screen and can be swiped away. Uses the default notification tone. Tapping opens the job card directly.
+      </div>
+    </div>
+  </div>
+
+  <!-- PERSISTENT -->
+  <div class="notif-demo nd-medium">
+    <div class="notif-demo-header">Priority 4 — Persistent Banner</div>
+    <div class="notif-demo-body">
+      <div class="notif-demo-banner" style="border: 1px solid rgba(234,88,12,.3);">
+        <span class="nd-icon">⚠️</span>
+        <div class="nd-content">
+          <div class="nd-title">⚠️ P4 Alert · Significant Impact</div>
+          <div class="nd-msg">Line 2 press machine — reduced output · Workshop</div>
+        </div>
+      </div>
+      <div class="notif-actions">
+        <button class="notif-btn notif-btn-assign">Assign Self</button>
+        <button class="notif-btn notif-btn-busy">I'm Busy</button>
+        <button class="notif-btn notif-btn-dismiss">Dismiss</button>
+      </div>
+      <div class="notif-demo-desc" style="margin-top:10px;">
+        <strong>Persistent banner</strong> — cannot be swiped away. Stays in the notification panel until an action button is tapped. Escalation alert tone with strong vibration. Prompt response required.
+      </div>
+    </div>
+  </div>
+
+  <!-- FULLSCREEN -->
+  <div class="notif-demo nd-critical">
+    <div class="notif-demo-header">Priority 5 — Full-Screen Critical Alarm</div>
+    <div class="notif-demo-body">
+      <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+        <div class="phone-mockup" style="width:160px;">
+          <div class="phone-screen" style="min-height:260px; position:relative;">
+            <div class="phone-status-bar" style="background:rgba(0,0,0,.3);"><span>9:41</span><span>●●● 100%</span></div>
+            <div class="phone-fullscreen-alert">
+              <div class="alert-icon">🚨</div>
+              <div class="alert-title">PRODUCTION STOPPED</div>
+              <div class="alert-sub">Conveyor 3 Drive Motor — Line 2<br>P5 · Immediate Response Required</div>
+              <div class="alert-btn">ASSIGN SELF</div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <div class="notif-demo-desc">
+            <strong>Full-screen alarm</strong> — takes over the entire phone display, even from the lock screen. Implemented via native Android <code>FullScreenJobAlertActivity.kt</code> + <code>AlarmReceiver</code>. Powered by scheduled exact alarms so it fires even in deep sleep mode.
+          </div>
+          <ul style="margin-top:10px;">
+            <li>Loud, repeating alarm tone</li>
+            <li>Bypasses Do Not Disturb</li>
+            <li>Appears over lock screen and other apps</li>
+            <li>Cannot be passively ignored — requires a tap to dismiss</li>
+            <li>Every response (or non-response) is logged with a timestamp</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Notification Action Buttons</h3>
+  <p>Every notification includes three action buttons that can be tapped without opening the app:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Action</th><th>Effect on Job Card</th><th>Effect on Escalation</th><th>Who Is Notified</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Assign Self</strong></td><td>Status → In-Progress. Technician assigned.</td><td><strong>Stops immediately</strong></td><td>Operator receives "Technician on the way"</td></tr>
+        <tr><td><strong>I'm Busy</strong></td><td>No change to status</td><td>Stops for this technician — system continues looking for another</td><td>Operator receives "Technician unavailable"</td></tr>
+        <tr><td><strong>Dismiss</strong></td><td>No change</td><td>Escalation continues — next stage fires on schedule</td><td>Logged in notification history</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>On-Site Entry &amp; Departure Notifications</h3>
+  <p>The geofencing system also generates automatic notifications when technicians cross the site boundary — no user action required:</p>
+  <ul>
+    <li><strong>"Arrived On-Site"</strong> — your on-site status updates and job card notifications begin routing to you</li>
+    <li><strong>"Left Site Area"</strong> — your status updates and notifications pause until you return</li>
+  </ul>
+</section>
+
+<!-- ══════════════ ESCALATION ══════════════ -->
+<section class="feature-section" id="escalation">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#fee2e2;">📈</div>
+    <div>
+      <h2>Automatic Escalation</h2>
+      <div class="section-sub">Four configurable stages — no fault can be silently ignored</div>
+    </div>
+  </div>
+
+  <p>If a job card is not accepted by a technician, the escalation system automatically notifies progressively more senior recipients at timed intervals. Escalation is driven by <strong>Cloud Functions</strong> deployed to Google Cloud (<code>africa-south1</code>), running independently of any device or person.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✅</div>
+    <div class="callout-body"><p>Escalation stops <strong>immediately</strong> the moment any technician taps "Assign Self" or "I'm Busy" on any notification. If a job is escalated but then accepted, all further escalation stages are cancelled.</p></div>
+  </div>
+
+  <h3>Default Escalation Timeline</h3>
+  <div class="card">
+    <div class="escalation-timeline">
+      <div class="esc-event e0">
+        <div class="esc-time">T = 0 minutes</div>
+        <div class="esc-who">Job created — on-site technicians notified</div>
+        <div class="esc-detail">All on-site technicians of the correct trade type receive a push notification immediately.</div>
+      </div>
+      <div class="esc-event e1">
+        <div class="esc-time">Stage 1 · T = 2 minutes (default)</div>
+        <div class="esc-who">Foremen and on-site managers alerted</div>
+        <div class="esc-detail">If no technician has responded within 2 minutes, foremen and on-site managers for the relevant department are notified with an escalation alert.</div>
+      </div>
+      <div class="esc-event e2">
+        <div class="esc-time">Stage 2 · T = 7 minutes (default)</div>
+        <div class="esc-who">Department managers and workshop manager — urgent alert</div>
+        <div class="esc-detail">Escalated to management level. Managers receive a high-priority notification indicating the job has been open without response for 7 minutes.</div>
+      </div>
+      <div class="esc-event e3">
+        <div class="esc-time">Stage 3 · T = 30 minutes (default)</div>
+        <div class="esc-who">Senior management</div>
+        <div class="esc-detail">Extended non-response escalates to senior management. At this point the gap represents a significant failure in response coverage.</div>
+      </div>
+      <div class="esc-event e4">
+        <div class="esc-time">Stage 4 · T = 60 minutes (default)</div>
+        <div class="esc-who">Final escalation tier</div>
+        <div class="esc-detail">The final configured escalation stage. All timers and recipient lists for every stage are configurable by Admin under Settings → Escalation Rules.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body"><p>The times above are <strong>defaults</strong>, not fixed rules. An Admin can change the timer and recipient list for any stage at any time without a software update. If your site's response capacity means 2 minutes is too aggressive, adjust Stage 1 to match your reality.</p></div>
+  </div>
+
+  <h3>Role-Based Routing by Trade</h3>
+  <p>The Cloud Functions route notifications based on the job type:</p>
+  <ul>
+    <li><strong>Mechanical</strong> jobs → Mechanics and mechanical foremen</li>
+    <li><strong>Electrical</strong> jobs → Electricians and electrical foremen</li>
+    <li><strong>Mech-Elec</strong> jobs → Both trades are notified simultaneously</li>
+  </ul>
+  <p>Escalation recipients at Stage 1+ are department-specific — managers only see escalations from their own department, unless they are at senior management level.</p>
+</section>
+
+<!-- ══════════════ GEOFENCING ══════════════ -->
+<section class="feature-section" id="geofencing">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#dcfce7;">📍</div>
+    <div>
+      <h2>Real-Time Geofencing</h2>
+      <div class="section-sub">On-site status tracking — automatic, continuous, background</div>
+    </div>
+  </div>
+
+  <p>The geofencing system continuously monitors whether each technician is inside or outside the company boundary. Only <strong>on-site technicians</strong> receive job card notifications — off-site staff are excluded automatically. No one ever has to manually mark themselves as present or absent.</p>
+
+  <div class="geo-visual">
+    <div class="geo-map-bg"></div>
+    <div class="geo-fence">
+      <div class="geo-label">Site Boundary<br><small style="font-size:10px; opacity:.7;">Geofence Active</small></div>
+      <div class="geo-dot geo-dot-inside" title="On site"></div>
+      <div class="geo-pulse"></div>
+    </div>
+    <div class="geo-dot geo-dot-outside" style="top:30%; right:15%;"></div>
+    <div style="position:absolute; top:16px; left:16px; font-size:11px; color:var(--grey-600); background:#fff; padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--grey-200);">
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:4px;"></span>On site — receives notifications<br>
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#dc2626; margin-right:4px; margin-top:4px;"></span>Off site — notifications paused
+    </div>
+  </div>
+
+  <h3>How It Works</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h4 style="margin-top:0;">Background Tracking</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">The <code>BackgroundGeofenceService</code> runs continuously using Android WorkManager, even when the app is closed. It uses <code>geolocator</code> to monitor position relative to the configured site boundary polygon.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;">Battery Permission Required</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Android's battery optimiser can kill background services. Users must set the app to <strong>Unrestricted</strong> battery usage to ensure geofencing works overnight and during extended off-screen periods.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;">Entry &amp; Exit Events</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">The <code>GeofenceReceiver</code> fires on entry and exit. Each event updates the employee's Firestore document, sends an automatic on-site/off-site notification, and adjusts notification routing instantly.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;">Configurable Boundary</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Admins use the <strong>Geofence Editor Screen</strong> to define and adjust the site boundary polygon on a map. Changes take effect immediately for all users without a software update.</p>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-icon">📍</div>
+    <div class="callout-body"><p><strong>Location is not used for surveillance.</strong> The system records only whether an employee is inside or outside the configured site boundary — not their precise location or movement within the site.</p></div>
+  </div>
+
+  <h3>Required Permission</h3>
+  <p>Users must grant <strong>"Allow All the Time"</strong> location access (not "Only While Using the App"). Without background location access, geofencing cannot run when the screen is off, and notifications will fail to route correctly.</p>
+</section>
+
+<!-- ══════════════ COPPER INVENTORY ══════════════ -->
+<section class="feature-section" id="copper">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#fef3c7;">🔶</div>
+    <div>
+      <h2>Copper Inventory Module</h2>
+      <div class="section-sub">Real-time copper stock tracking and transaction logging</div>
+    </div>
+  </div>
+
+  <p>The copper inventory module provides a dedicated screen for tracking copper stock levels and recording transactions. It uses two Firestore collections — <code>copper_inventory</code> for current stock and <code>copper_transactions</code> for the transaction log.</p>
+
+  <div class="copper-visual">
+    <div class="copper-stat-row">
+      <div class="copper-stat">
+        <div class="c-num">847 kg</div>
+        <div class="c-lbl">Current Stock</div>
+      </div>
+      <div class="copper-stat">
+        <div class="c-num">+120 kg</div>
+        <div class="c-lbl">This Week In</div>
+      </div>
+      <div class="copper-stat">
+        <div class="c-num">−65 kg</div>
+        <div class="c-lbl">This Week Out</div>
+      </div>
+    </div>
+    <div class="copper-txn">
+      <span class="txn-label">Stock received — Supplier A</span>
+      <span class="txn-val">+120 kg · Today 08:14</span>
+    </div>
+    <div class="copper-txn">
+      <span class="txn-label">Issued to Workshop B</span>
+      <span class="txn-val">−65 kg · Yesterday 14:30</span>
+    </div>
+  </div>
+
+  <h3>Access</h3>
+  <ul>
+    <li>The <strong>Copper Dashboard</strong> is accessible to Managers and Admins</li>
+    <li>Inventory levels and transaction history are visible in real time</li>
+    <li>All transactions are logged with timestamps, quantities, and responsible user</li>
+  </ul>
+</section>
+
+<!-- ══════════════ OFFLINE & SYNC ══════════════ -->
+<section class="feature-section" id="offline">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#f0fdf4;">📡</div>
+    <div>
+      <h2>Offline Mode &amp; Sync</h2>
+      <div class="section-sub">Works without connectivity — syncs automatically when back online</div>
+    </div>
+  </div>
+
+  <p>CTP Job Cards is <strong>offline-first</strong>. If connectivity is lost, the app continues to function. All writes that cannot reach Firestore are queued locally in a Hive database and replayed automatically when the connection is restored.</p>
+
+  <div class="sync-flow">
+    <div class="sync-node">
+      <div class="sync-icon">📱</div>
+      <div class="sync-label">App Action<br><span style="font-size:10px; color:var(--grey-400);">User creates/updates job</span></div>
+    </div>
+    <span class="sync-arrow">→</span>
+    <div class="sync-node">
+      <div class="sync-icon">📶</div>
+      <div class="sync-label">Check Connectivity<br><span style="font-size:10px; color:var(--grey-400);">connectivity_plus</span></div>
+    </div>
+    <span class="sync-arrow">→</span>
+    <div class="sync-node">
+      <div class="sync-icon">🗃️</div>
+      <div class="sync-label">Queue Locally<br><span style="font-size:10px; color:var(--grey-400);">Hive sync_queue</span></div>
+    </div>
+    <span class="sync-arrow">→</span>
+    <div class="sync-node">
+      <div class="sync-icon">☁️</div>
+      <div class="sync-label">Sync to Firestore<br><span style="font-size:10px; color:var(--grey-400);">On reconnect</span></div>
+    </div>
+  </div>
+
+  <h3>How It Works</h3>
+  <ul>
+    <li><strong>SyncService</strong> initialises at app startup and listens to the <code>connectivity_plus</code> stream</li>
+    <li>Failed writes (Firestore offline) are stored as <code>SyncQueueItem</code> objects in a Hive box named <code>sync_queue</code></li>
+    <li>When connectivity is restored, <code>SyncService</code> replays all queued items in order</li>
+    <li>Firestore's built-in offline persistence also caches recent reads, so the UI remains usable even when offline</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body"><p>The sync queue uses <strong>Hive</strong> (a fast key-value store) for local persistence. <code>SyncQueueItem</code> is a <code>@HiveType</code>-annotated model — if you modify it, run <code>flutter pub run build_runner build</code> to regenerate the Hive adapters.</p></div>
+  </div>
+
+  <h3>Local Storage Summary</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Storage</th><th>Contents</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Hive — sync_queue</strong></td><td><code>SyncQueueItem</code> objects</td><td>Offline write queue — replayed on reconnect</td></tr>
+        <tr><td><strong>SharedPreferences</strong></td><td><code>loggedInClockNo</code></td><td>Persists the logged-in employee session</td></tr>
+        <tr><td><strong>SharedPreferences</strong></td><td><code>permissionsCompleted</code></td><td>Tracks whether onboarding permission flow has been completed</td></tr>
+        <tr><td><strong>Firestore offline cache</strong></td><td>Recent document snapshots</td><td>Read cache — UI works without network for cached data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════ PERMISSIONS ══════════════ -->
+<section class="feature-section" id="permissions">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#ede9fe;">🔐</div>
+    <div>
+      <h2>App Permissions</h2>
+      <div class="section-sub">Six permissions required for full functionality on Android</div>
+    </div>
+  </div>
+
+  <p>On first launch, the app guides users through a permission setup flow. All six permissions are required — each one enables a specific critical feature. The app will not function correctly if any are denied.</p>
+
+  <div class="permission-list">
+    <div class="perm-item">
+      <div class="perm-num">1</div>
+      <div class="perm-info">
+        <div class="perm-title">Location — "Allow All the Time"</div>
+        <div class="perm-why">Enables background geofencing so the system knows which technicians are on site. Without "All the Time" access, geofencing stops when the screen turns off — technicians miss notifications.</div>
+        <div class="perm-tip">✓ Must select "Allow All the Time" — not "Only While Using"</div>
+      </div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-num">2</div>
+      <div class="perm-info">
+        <div class="perm-title">Notifications — "Allow"</div>
+        <div class="perm-why">All job card alerts reach the user through push notifications. Without this, no notifications are received and the system escalates as if no one is responding.</div>
+        <div class="perm-tip">✓ Always select "Allow"</div>
+      </div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-num">3</div>
+      <div class="perm-info">
+        <div class="perm-title">Battery Optimisation — "Unrestricted"</div>
+        <div class="perm-why">Android's battery saver can kill the background geofencing service after a few minutes. Setting the app to Unrestricted prevents this — especially important overnight.</div>
+        <div class="perm-tip">✓ Settings → Apps → CTP Job Cards → Battery → Unrestricted</div>
+      </div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-num">4</div>
+      <div class="perm-info">
+        <div class="perm-title">Display Over Other Apps</div>
+        <div class="perm-why">P5 full-screen alarms appear over the lock screen and above any other open app. Without this permission, P5 alerts fall back to a standard banner — easily missed.</div>
+        <div class="perm-tip">✓ Grant this permission for full P5 coverage</div>
+      </div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-num">5</div>
+      <div class="perm-info">
+        <div class="perm-title">Do Not Disturb Access</div>
+        <div class="perm-why">Allows P5 critical alarms to bypass DND mode. If a technician has DND enabled overnight, P5 alarms must still sound for production-stopping faults.</div>
+        <div class="perm-tip">✓ Grant for full P5 alarm coverage</div>
+      </div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-num">6</div>
+      <div class="perm-info">
+        <div class="perm-title">Schedule Exact Alarms</div>
+        <div class="perm-why">The P5 alarm uses the Android alarm system to guarantee exact-time firing, even in deep sleep mode. Without this, the alarm may arrive late or not fire at all.</div>
+        <div class="perm-tip">✓ Settings → Apps → Special App Access → Alarms &amp; Reminders</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ MANAGER DASHBOARD ══════════════ -->
+<section class="feature-section" id="dashboard">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#ccfbf1;">📊</div>
+    <div>
+      <h2>Manager Dashboard</h2>
+      <div class="section-sub">Live department visibility — job status, technician presence, escalation history</div>
+    </div>
+  </div>
+
+  <p>The Manager Dashboard gives department managers a real-time view of everything happening in their area. It is the primary tool for oversight, quality control, and escalation response.</p>
+
+  <h3>Dashboard Panels</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h4 style="margin-top:0; color:var(--teal);">Live Job Overview</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">All Open, In-Progress, Monitor, and recently Closed job cards for the manager's department, visible in real time as technicians update them.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0; color:var(--teal);">Technician On-Site Status</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Which technicians are currently on site (and receiving notifications) versus off site, updated automatically by the geofencing system.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0; color:var(--teal);">Escalation Log</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Jobs that have escalated — when, to whom, and what stage they reached. Recurring escalation patterns indicate coverage or response problems.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0; color:var(--teal);">Notification History</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Full log of every notification sent — who received it, when, and what action they took. Provides accountability for non-response patterns.</p>
+    </div>
+  </div>
+
+  <h3>Manager Responsibilities in the System</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Responsibility</th><th>Why It Matters</th></tr></thead>
+      <tbody>
+        <tr><td>Daily review of previous day's job cards</td><td>Catches missing records, slow responses, and emerging repeat failures</td></tr>
+        <tr><td>Enforce operator job card quality</td><td>Vague entries are worthless for analysis and future AI tools</td></tr>
+        <tr><td>Enforce technician closure note quality</td><td>A closure with no note is an incomplete maintenance record</td></tr>
+        <tr><td>Monitor escalation patterns</td><td>Repeated Stage 2+ escalations indicate a coverage or staffing problem</td></tr>
+        <tr><td>Identify machines with repeat faults</td><td>Same machine twice in 30 days warrants root cause investigation</td></tr>
+        <tr><td>Verify team on-site status accuracy</td><td>New phones or permission changes can break geofencing silently</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════ AUDIT TRAIL ══════════════ -->
+<section class="feature-section" id="audit">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#f1f5f9;">🗂️</div>
+    <div>
+      <h2>Audit Trail</h2>
+      <div class="section-sub">Permanent, append-only log of every action — searchable at any time</div>
+    </div>
+  </div>
+
+  <p>Every action taken on a job card — creation, status change, assignment, notification, escalation, closure — is written to the <code>job_card_audit</code> Firestore collection by <strong>FirestoreService</strong>. This is append-only: records are never modified or deleted.</p>
+
+  <h3>Example Audit Entries</h3>
+  <div class="audit-entry">
+    <div class="audit-time">08:14:23</div>
+    <div class="audit-dot" style="background:#2563a0;"></div>
+    <div class="audit-msg">Job card created — P5 · Conveyor 3 Drive Motor · Line 2</div>
+    <div class="audit-actor">J. Pretorius</div>
+  </div>
+  <div class="audit-entry">
+    <div class="audit-time">08:14:25</div>
+    <div class="audit-dot" style="background:#16a34a;"></div>
+    <div class="audit-msg">Notifications dispatched — 4 on-site technicians (Mechanical)</div>
+    <div class="audit-actor">System</div>
+  </div>
+  <div class="audit-entry">
+    <div class="audit-time">08:15:10</div>
+    <div class="audit-dot" style="background:#ea580c;"></div>
+    <div class="audit-msg">Notification dismissed — escalation continues</div>
+    <div class="audit-actor">K. Botha</div>
+  </div>
+  <div class="audit-entry">
+    <div class="audit-time">08:16:25</div>
+    <div class="audit-dot" style="background:#dc2626;"></div>
+    <div class="audit-msg">Stage 1 escalation fired — foremen and on-site managers notified</div>
+    <div class="audit-actor">System</div>
+  </div>
+  <div class="audit-entry">
+    <div class="audit-time">08:17:02</div>
+    <div class="audit-dot" style="background:#16a34a;"></div>
+    <div class="audit-msg">Job assigned — status changed Open → In-Progress. Escalation cancelled.</div>
+    <div class="audit-actor">D. van Wyk</div>
+  </div>
+  <div class="audit-entry">
+    <div class="audit-time">09:03:47</div>
+    <div class="audit-dot" style="background:#16a34a;"></div>
+    <div class="audit-msg">Job closed — bearing replaced, motor restarted. Parts: SKF 6208-2RS. Root cause: age/fatigue.</div>
+    <div class="audit-actor">D. van Wyk</div>
+  </div>
+
+  <h3>What Is Captured</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Data Point</th><th>Business Value</th></tr></thead>
+      <tbody>
+        <tr><td>Machine, area, component</td><td>Precise asset identification for history tracking</td></tr>
+        <tr><td>Fault description</td><td>What happened and what was observed at the time</td></tr>
+        <tr><td>Priority at time of report</td><td>Production impact classification — searchable by priority level</td></tr>
+        <tr><td>Who created it, when</td><td>Operator accountability and fault timestamp</td></tr>
+        <tr><td>Who responded, when</td><td>Technician accountability and response time measurement (MTTR)</td></tr>
+        <tr><td>What was done, parts used</td><td>Repair record, parts consumption, cost basis</td></tr>
+        <tr><td>Root cause</td><td>Feeds predictive analysis and repeat-failure identification</td></tr>
+        <tr><td>Full notification log</td><td>Complete chain of who knew what and when — unalterable</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════ ADMIN TOOLS ══════════════ -->
+<section class="feature-section" id="admin">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#ede9fe;">⚙️</div>
+    <div>
+      <h2>Admin Tools</h2>
+      <div class="section-sub">Full system control — accounts, geofences, escalation rules</div>
+    </div>
+  </div>
+
+  <p>Admins have access to all data across all departments plus system configuration tools not available to any other role.</p>
+
+  <div class="grid-3">
+    <div class="card">
+      <div style="font-size:24px; margin-bottom:8px;">👤</div>
+      <h4 style="margin-top:0;">Employee Management</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:24px; margin-bottom:8px;">🗺️</div>
+      <h4 style="margin-top:0;">Geofence Editor</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Draw and adjust the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.</p>
+    </div>
+    <div class="card">
+      <div style="font-size:24px; margin-bottom:8px;">📈</div>
+      <h4 style="margin-top:0;">Escalation Rules</h4>
+      <p style="font-size:13px; color:var(--grey-600); margin:0;">Configure the timer and recipient list for each of the four escalation stages. Tune to match your site's staffing and response capacity.</p>
+    </div>
+  </div>
+
+  <h3>Technology Stack</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Component</th><th>Provider</th><th>Properties</th></tr></thead>
+      <tbody>
+        <tr><td>Database</td><td>Google Firebase Firestore</td><td>Real-time, offline-capable, serverless, auto-scaling</td></tr>
+        <tr><td>Push Notifications</td><td>Firebase Cloud Messaging (FCM)</td><td>Enterprise-grade delivery, high-volume capable</td></tr>
+        <tr><td>Cloud Functions</td><td>Google Cloud Functions (africa-south1)</td><td>Serverless escalation logic — no server to maintain</td></tr>
+        <tr><td>Authentication</td><td>Firebase Auth</td><td>Email + password with custom tokens linked to clock numbers</td></tr>
+        <tr><td>Mobile App</td><td>Flutter (Dart)</td><td>Android primary; iOS and web capable; offline-first</td></tr>
+        <tr><td>Local Storage</td><td>Hive + SharedPreferences</td><td>Offline queue, session persistence</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">☁️</div>
+    <div class="callout-body"><p><strong>No on-premises infrastructure required.</strong> No server to maintain, no single point of hardware failure. All data is encrypted at rest and in transit. Backed by Google's 99.99% availability SLA with automatic scaling.</p></div>
+  </div>
+</section>
+
+<!-- ══════════════ AI ROADMAP ══════════════ -->
+<section class="feature-section" id="ai">
+  <div class="section-heading">
+    <div class="section-icon" style="background:#fef3c7;">🧠</div>
+    <div>
+      <h2>AI &amp; Predictive Maintenance Roadmap</h2>
+      <div class="section-sub">The current platform is a data foundation. The long-term value lies in what that data makes possible.</div>
+    </div>
+  </div>
+
+  <div class="ai-block">
+    <div class="ai-phase-grid">
+      <div class="ai-phase">
+        <div class="phase-label">Phase 1</div>
+        <h4>Predictive Maintenance Analytics</h4>
+        <p>Machine learning applied to job card history identifies failure patterns and predicts which assets are likely to fail — triggering proactive maintenance before breakdowns occur. Shifts the operation from reactive to predictive.</p>
+      </div>
+      <div class="ai-phase">
+        <div class="phase-label">Phase 2</div>
+        <h4>AI Assistant — Manuals &amp; Fault Finding</h4>
+        <p>A conversational assistant integrated into the app gives technicians instant access to operator manuals, historical repair records, wiring diagrams, and parts specifications — in plain language, on their phone, on the floor.</p>
+      </div>
+    </div>
+
+    <h3 style="color:#fff; margin-bottom:12px;">Example AI Assistant Queries</h3>
+    <div class="ai-chat">What are the most common causes of overload faults on Conveyor 3?</div>
+    <div class="ai-chat">What was done the last three times Machine 7 had a bearing failure?</div>
+    <div class="ai-chat">What is the correct torque spec for the FX400 gearbox drive shaft bearing?</div>
+    <div class="ai-chat">Which machines on Line 2 are statistically likely to fail in the next 30 days?</div>
+
+    <div style="margin-top: 24px;">
+      <h3 style="color:#fff; margin-bottom:12px;">Business Case for AI</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Benefit</th><th>Mechanism</th></tr></thead>
+          <tbody>
+            <tr><td>Reduced unplanned downtime</td><td>Predictive alerts trigger maintenance before failure — not after</td></tr>
+            <tr><td>Faster fault resolution</td><td>AI-assisted diagnosis reduces time to identify and fix root cause</td></tr>
+            <tr><td>Knowledge retention</td><td>Institutional expertise captured in the system — not lost when experienced staff leave</td></tr>
+            <tr><td>Lower parts inventory cost</td><td>Predictive maintenance enables targeted stock — not blanket over-stocking</td></tr>
+            <tr><td>Reduced repeat failures</td><td>Root cause identified, addressed, and recorded — not just symptoms patched</td></tr>
+            <tr><td>Technician upskilling</td><td>Access to manuals and history on-device reduces dependency on senior staff for routine questions</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ai-highlight">
+      <strong>The quality of AI insight is entirely dependent on the quality of data entered today.</strong> Every job card completed with accurate machine identification, clear fault descriptions, and detailed closure notes is a data point that improves predictive accuracy. Enforcing data standards at the management level is a direct investment in the long-term intelligence of the maintenance operation.
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Scroll to top -->
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ── Search ──────────────────────────────────────────────
+const searchInput = document.getElementById('searchInput');
+const main = document.getElementById('main');
+let originalContent = null;
+
+searchInput.addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  if (!originalContent) originalContent = main.innerHTML;
+
+  if (!q) {
+    if (originalContent) { main.innerHTML = originalContent; originalContent = null; }
+    return;
+  }
+
+  // Restore first, then highlight
+  if (originalContent) main.innerHTML = originalContent;
+  originalContent = main.innerHTML;
+
+  const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let node;
+  while (node = walker.nextNode()) nodes.push(node);
+
+  nodes.forEach(n => {
+    if (!n.nodeValue.toLowerCase().includes(q)) return;
+    const parent = n.parentNode;
+    if (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE') return;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const frag = document.createDocumentFragment();
+    n.nodeValue.split(regex).forEach(part => {
+      if (regex.test(part)) {
+        const mark = document.createElement('mark');
+        mark.textContent = part;
+        frag.appendChild(mark);
+      } else {
+        frag.appendChild(document.createTextNode(part));
+      }
+      regex.lastIndex = 0;
+    });
+    parent.replaceChild(frag, n);
+  });
+
+  // Scroll to first match
+  const first = main.querySelector('mark');
+  if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+// ── Dark Mode ────────────────────────────────────────────
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  themeToggle.textContent = document.body.classList.contains('dark') ? '☀️ Light' : '🌙 Dark';
+});
+
+// ── Reading Progress ────────────────────────────────────
+const progress = document.getElementById('readingProgress');
+const scrollTop = document.getElementById('scrollTop');
+
+window.addEventListener('scroll', () => {
+  const scrolled = window.scrollY;
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  progress.style.transform = `scaleX(${scrolled / total})`;
+  scrollTop.classList.toggle('visible', scrolled > 300);
+  updateActiveNav();
+});
+
+// ── Active Nav ──────────────────────────────────────────
+const navItems = document.querySelectorAll('.nav-item[data-section]');
+const sections = document.querySelectorAll('.feature-section');
+
+function updateActiveNav() {
+  let current = '';
+  sections.forEach(section => {
+    const top = section.getBoundingClientRect().top;
+    if (top <= 120) current = section.id;
+  });
+  navItems.forEach(item => {
+    item.classList.toggle('active', item.dataset.section === current);
+  });
+}
+
+// Smooth scroll on nav click
+navItems.forEach(item => {
+  item.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById(item.dataset.section);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+// ── Animated counters in hero ───────────────────────────
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.animation = 'none';
+      entry.target.offsetHeight; // reflow
+      entry.target.style.animation = '';
+    }
+  });
+});
+document.querySelectorAll('.hero-stat .num').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

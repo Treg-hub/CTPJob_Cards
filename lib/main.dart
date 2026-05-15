@@ -21,6 +21,7 @@ import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/location_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 Employee? currentEmployee;
 
@@ -101,7 +102,8 @@ void main() async {
         if (currentEmployee != null) {
           final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
-          if (!permissionsCompleted && !kIsWeb) {
+          final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
+          if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
             initialScreen = const PermissionsOnboardingScreen();
           } else {
             initialScreen = const HomeScreen();

@@ -214,37 +214,23 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             ),
           );
         } else {
-          // Show dept chips
+          // Show dept chips (no "All Departments" chip — use Clear All Filters to deselect)
           currentStep = Center(
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: [
-                ChoiceChip(
-                  label: const Text('All Departments'),
-                  selected: selectedDepartment == null,
-                  onSelected: (_) => setState(() {
-                    selectedDepartment = null;
-                    selectedArea = null;
-                    selectedMachine = null;
-                    selectedPart = null;
-                  }),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  labelStyle: selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-                ),
-                ...data.keys.map((dept) => ChoiceChip(
-                  label: Text(dept),
-                  selected: selectedDepartment == dept,
-                  onSelected: (_) => setState(() {
-                    selectedDepartment = dept;
-                    selectedArea = null;
-                    selectedMachine = null;
-                    selectedPart = null;
-                  }),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-                )),
-              ],
+              children: data.keys.map((dept) => ChoiceChip(
+                label: Text(dept),
+                selected: selectedDepartment == dept,
+                onSelected: (_) => setState(() {
+                  selectedDepartment = dept;
+                  selectedArea = null;
+                  selectedMachine = null;
+                  selectedPart = null;
+                }),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
+              )).toList(),
             ),
           );
         }

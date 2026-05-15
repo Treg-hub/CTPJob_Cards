@@ -318,7 +318,11 @@ class _PermissionsPageState extends State<_PermissionsPage> {
   @override
   void initState() {
     super.initState();
-    _refreshStatuses();
+    _refreshStatuses().then((_) {
+      if (!_locationStatus.isGranted || !_notificationStatus.isGranted) {
+        _grantPermissions();
+      }
+    });
   }
 
   Future<void> _refreshStatuses() async {
