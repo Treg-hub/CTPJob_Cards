@@ -62,7 +62,7 @@ lib/
 
 **Push notifications**: FCM via `firebase_messaging`. Cloud Functions (`/functions/index.js`, deployed to `africa-south1`) drive escalation: 2-min → 7-min → 30-min timers based on job type and priority. `FirebaseMessagingService.kt` handles native FCM receipt; `FullScreenJobAlertActivity.kt` renders the full-screen overlay.
 
-**Geofencing**: `LocationService` + `BackgroundGeofenceService` use `geolocator` + `workmanager`. Native Kotlin code in `android/app/src/main/kotlin/` handles `GeofenceBroadcastReceiver`, `AlertForegroundService`, and `AlarmReceiver`. The `GeofenceEditorScreen` allows on-device geofence configuration.
+**Geofencing**: `LocationService` + `BackgroundGeofenceService` use `geolocator` + `workmanager`. Native Kotlin code in `android/app/src/main/kotlin/com/ctp/jobcards/` handles `GeofenceReceiver`, `GeofenceHelper`, `AlertForegroundService`, and `AlarmReceiver`. The `GeofenceEditorScreen` allows on-device geofence configuration.
 
 ## Key Android Details
 
