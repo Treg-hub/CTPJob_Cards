@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
@@ -302,11 +303,51 @@ class _PriorityLevelsPage extends StatelessWidget {
   }
 }
 
-// PAGE 5 - Permissions + Test Buttons
-class _PermissionsPage extends StatelessWidget {
+// PAGE 6 - Permissions + Test Buttons
+class _PermissionsPage extends StatefulWidget {
   const _PermissionsPage();
   @override
+  State<_PermissionsPage> createState() => _PermissionsPageState();
+}
+
+class _PermissionsPageState extends State<_PermissionsPage> {
+  PermissionStatus _locationStatus = PermissionStatus.denied;
+  PermissionStatus _notificationStatus = PermissionStatus.denied;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatuses();
+  }
+
+  Future<void> _refreshStatuses() async {
+    final loc = await Permission.locationAlways.status;
+    final notif = await Permission.notification.status;
+    if (mounted) setState(() { _locationStatus = loc; _notificationStatus = notif; });
+  }
+
+  Future<void> _grantPermissions() async {
+    setState(() => _checking = true);
+    // Step 1: foreground location
+    if (!_locationStatus.isGranted) {
+      final whenInUse = await Permission.locationWhenInUse.status;
+      if (!whenInUse.isGranted) await Permission.locationWhenInUse.request();
+      // Step 2: background location (always)
+      await Permission.locationAlways.request();
+    }
+    // Notifications
+    if (!_notificationStatus.isGranted) await Permission.notification.request();
+    await _refreshStatuses();
+    setState(() => _checking = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final locationGranted = _locationStatus.isGranted;
+    final notifGranted = _notificationStatus.isGranted;
+    final allGranted = locationGranted && notifGranted;
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: SingleChildScrollView(
@@ -316,16 +357,40 @@ class _PermissionsPage extends StatelessWidget {
             const SizedBox(height: 16),
             const Text("We need these permissions so the app can work properly for you:", textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
             const SizedBox(height: 20),
-            _buildPermissionItem("Notifications (Priority 5)", "Get loud, full-screen alerts even when your phone is on silent"),
-            _buildPermissionItem("Location (Always)", "Know when you're onsite so you get the right jobs"),
-            _buildPermissionItem("Display over other apps", "Urgent jobs can take over your screen"),
-            _buildPermissionItem("Camera", "Quickly upload photos of completed work"),
+            _buildPermissionRow("Location (Always)", "Know when you're onsite so you get the right jobs", locationGranted),
+            _buildPermissionRow("Notifications", "Get loud, full-screen alerts even when your phone is on silent", notifGranted),
+            _buildPermissionRow("Display over other apps", "Urgent jobs can take over your screen", true),
+            _buildPermissionRow("Camera", "Quickly upload photos of completed work", true),
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange)),
-              child: const Text("⚠️ If you don't grant these permissions, the app will NOT work to its full ability. You may miss urgent jobs.", style: TextStyle(color: Colors.orange, fontSize: 14), textAlign: TextAlign.center),
-            ),
+            if (!allGranted) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange)),
+                child: const Text("⚠️ If you don't grant these permissions, the app will NOT work to its full ability. You may miss urgent jobs.", style: TextStyle(color: Colors.orange, fontSize: 14), textAlign: TextAlign.center),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _checking ? null : _grantPermissions,
+                  icon: _checking ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.lock_open),
+                  label: const Text("Grant Permissions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8C42), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                ),
+              ),
+            ] else
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green)),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text("All permissions granted!", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
             const Text("Test the Different Notification Levels", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
@@ -342,13 +407,13 @@ class _PermissionsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildPermissionItem(String title, String subtitle) {
+  Widget _buildPermissionRow(String title, String subtitle, bool granted) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 22),
+          Icon(granted ? Icons.check_circle : Icons.radio_button_unchecked, color: granted ? Colors.green : Colors.grey, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
