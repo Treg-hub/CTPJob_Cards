@@ -4,6 +4,11 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase Google Services plugin (processes google-services.json)
+    id("com.google.gms.google-services")
+
+    // Firebase App Distribution plugin
+    id("com.google.firebase.appdistribution")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -58,6 +63,17 @@ android {
             }
         }
     }
+}
+
+firebaseAppDistribution {
+    // Using APK for now (you can change to "AAB" later if needed)
+    artifactType = "APK"
+
+    // Optional: You can hardcode testers or release notes here,
+    // or pass them via command line / environment variables (recommended for CI)
+    // Example:
+    // releaseNotes = "Test build - $(date)"
+    // testers = "your-email@company.com, group:qa"
 }
 
 dependencies {
