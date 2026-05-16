@@ -119,39 +119,63 @@ void main() async {
   }
 
   if (clockNo != null) {
+    bool employeeNotFound = false;
+
+    // Try Firestore offline cache first — fast and survives app updates without network
     try {
-      currentEmployee = await firestoreService.getEmployee(clockNo);
-
-      if (currentEmployee != null) {
-        if (!kIsWeb) {
-          NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
-        }
-
-        final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
-
-        final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
-        if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
-          initialScreen = const PermissionsOnboardingScreen();
-        } else {
-          initialScreen = const HomeScreen();
-        }
-
-        if (!kIsWeb) {
-          try {
-            await LocationService().startNativeMonitoring(clockNo);
-            debugPrint('✅ Native monitoring started on auto-login');
-          } catch (e) {
-            debugPrint('Location monitoring error on auto-login: $e');
-          }
-        }
-
-        LocationService().checkCurrentLocation();
-      } else {
-        initialScreen = const LoginScreen();
+      final cachedDoc = await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(clockNo)
+          .get(const GetOptions(source: Source.cache));
+      if (cachedDoc.exists && cachedDoc.data() != null) {
+        currentEmployee = Employee.fromFirestore(cachedDoc.data()!, clockNo);
+        debugPrint('✅ Employee loaded from cache for $clockNo');
       }
-    } catch (e) {
-      currentEmployee = null;
+    } catch (_) {
+      // Cache miss — fall through to network
+    }
+
+    // Cache miss: try network
+    if (currentEmployee == null) {
+      try {
+        currentEmployee = await firestoreService.getEmployee(clockNo);
+        if (currentEmployee == null) {
+          employeeNotFound = true; // doc confirmed absent in Firestore
+        }
+      } catch (e) {
+        // Network/transient failure — don't force logout, trust the saved session
+        debugPrint('Employee fetch failed at startup (network?): $e');
+      }
+    }
+
+    if (employeeNotFound) {
+      // Account was explicitly confirmed missing — clear session
+      await prefs.remove('loggedInClockNo');
       initialScreen = const LoginScreen();
+    } else {
+      // Employee loaded (or fetch failed transiently) — keep user logged in
+      if (currentEmployee != null && !kIsWeb) {
+        NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+      }
+
+      final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
+      final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
+      if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
+        initialScreen = const PermissionsOnboardingScreen();
+      } else {
+        initialScreen = const HomeScreen();
+      }
+
+      if (!kIsWeb) {
+        try {
+          await LocationService().startNativeMonitoring(clockNo);
+          debugPrint('✅ Native monitoring started on auto-login');
+        } catch (e) {
+          debugPrint('Location monitoring error on auto-login: $e');
+        }
+      }
+
+      LocationService().checkCurrentLocation();
     }
   } else {
     initialScreen = const LoginScreen();

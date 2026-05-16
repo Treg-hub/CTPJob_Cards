@@ -537,23 +537,23 @@ tr:last-child td { border-bottom: none; }
         <p>Escalation runs across <strong>four configurable stages</strong>, set by Admin under <strong>Settings → Escalation Rules</strong>:</p>
         <div class="esc-timeline" style="margin-top:12px;">
           <div class="esc-step e0">
-            <div class="time">Stage 1 · 2 min (default)</div>
-            <div class="who">Department foremen and on-site managers</div>
+            <div class="time">Stage 1 · 5 min (default)</div>
+            <div class="who">Department foremen and on-site managers (operator can also be notified)</div>
           </div>
           <div class="esc-step e1">
-            <div class="time">Stage 2 · 7 min (default)</div>
+            <div class="time">Stage 2 · 10 min (default)</div>
             <div class="who">Department managers + workshop manager (urgent)</div>
           </div>
           <div class="esc-step e2">
-            <div class="time">Stage 3 · 30 min (default)</div>
-            <div class="who">Senior management</div>
+            <div class="time">Stage 3 · 30 min (default, disabled until configured)</div>
+            <div class="who">Reserved — typically off-site / senior management</div>
           </div>
           <div class="esc-step e3">
-            <div class="time">Stage 4 · 60 min (default)</div>
+            <div class="time">Stage 4 · 60 min (default, disabled until configured)</div>
             <div class="who">Final escalation tier</div>
           </div>
         </div>
-        <p style="margin-top:8px;">If jobs regularly hit Stage 2 or beyond, investigate why. Repeated non-response by a technician is visible in the log and must be addressed. If the timers are too aggressive for your team's capacity, speak to Admin about adjusting them.</p>
+        <p style="margin-top:8px;">Each stage can be independently enabled / disabled and the minutes can be tuned. If jobs regularly hit Stage 2 or beyond, investigate why. Repeated non-response by a technician is visible in the log and must be addressed. If the timers are too aggressive for your team's capacity, speak to Admin about adjusting them.</p>
       </div>
     </div>
     <div class="req-item">

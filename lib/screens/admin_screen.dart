@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
@@ -131,7 +132,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   bool _stage2Enabled = true;
   bool _stage3Enabled = false;
   bool _stage4Enabled = false;
+  // The enabled state and enabled_at at the moment the doc was last loaded,
+  // used to detect a disabled→enabled transition on save (in which case we set
+  // a fresh enabled_at so old open jobs don't trigger the newly-enabled stage).
+  bool _stage1LoadedEnabled = true;
+  bool _stage2LoadedEnabled = true;
+  bool _stage3LoadedEnabled = false;
+  bool _stage4LoadedEnabled = false;
+  DateTime? _stage1LoadedEnabledAt;
+  DateTime? _stage2LoadedEnabledAt;
+  DateTime? _stage3LoadedEnabledAt;
+  DateTime? _stage4LoadedEnabledAt;
   static const _allRules = [
+    'operator',
     'onsite_managers',
     'foremen',
     'onsite_dept_managers',
@@ -143,6 +156,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     'offsite_workshop_manager',
   ];
   static const _ruleLabels = {
+    'operator': 'Job Creator (Operator) — receives a tailored "follow up directly" alert',
     'onsite_managers': 'On-site Mech/Elec Manager (by job type)',
     'foremen': 'On-site Foreman / Shift Leader',
     'onsite_dept_managers': 'On-site Department Manager',
@@ -317,9 +331,17 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final stage = stages?[key] as Map<String, dynamic>?;
     return {
       'enabled': stage?['enabled'] as bool? ?? defaultEnabled,
+      'enabled_at': _parseEnabledAt(stage?['enabled_at']),
       'minutes': (stage?['minutes'] as num?)?.toInt() ?? defaultMinutes,
       'recipients_by_type': (stage?['recipients_by_type'] as Map<String, dynamic>?) ?? const {},
     };
+  }
+
+  DateTime? _parseEnabledAt(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Set<String> _stageRecipientsForUi(Map<String, dynamic> stageBlock, Set<String> fallback) {
@@ -345,6 +367,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         _stage3Enabled = s3['enabled'] as bool;
         _stage4Enabled = s4['enabled'] as bool;
 
+        _stage1LoadedEnabled = _stage1Enabled;
+        _stage2LoadedEnabled = _stage2Enabled;
+        _stage3LoadedEnabled = _stage3Enabled;
+        _stage4LoadedEnabled = _stage4Enabled;
+
+        _stage1LoadedEnabledAt = s1['enabled_at'] as DateTime?;
+        _stage2LoadedEnabledAt = s2['enabled_at'] as DateTime?;
+        _stage3LoadedEnabledAt = s3['enabled_at'] as DateTime?;
+        _stage4LoadedEnabledAt = s4['enabled_at'] as DateTime?;
+
         _stage1MinController.text = (s1['minutes'] as int).toString();
         _stage2MinController.text = (s2['minutes'] as int).toString();
         _stage3MinController.text = (s3['minutes'] as int).toString();
@@ -364,10 +396,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
-  Map<String, dynamic> _buildStageDoc(bool enabled, int minutes, Set<String> recipients) {
+  Map<String, dynamic> _buildStageDoc(bool enabled, DateTime? enabledAt, int minutes, Set<String> recipients) {
     final list = recipients.toList();
     return {
       'enabled': enabled,
+      'enabled_at': enabledAt?.toUtc().toIso8601String(),
       'minutes': minutes,
       'recipients_by_type': {
         'mechanical': list,
@@ -375,6 +408,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         'mech/elec': list,
       },
     };
+  }
+
+  // Returns the enabled_at to write: fresh `now` if we are transitioning
+  // disabled→enabled, otherwise preserves the previously-loaded value.
+  DateTime? _resolveEnabledAt({
+    required bool currentlyEnabled,
+    required bool wasEnabled,
+    required DateTime? previousEnabledAt,
+    required DateTime now,
+  }) {
+    if (currentlyEnabled && !wasEnabled) return now;
+    return previousEnabledAt;
   }
 
   Future<void> _saveNotificationConfig() async {
@@ -390,13 +435,42 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       return;
     }
 
+    final now = DateTime.now().toUtc();
+
+    final s1EnabledAt = _resolveEnabledAt(currentlyEnabled: _stage1Enabled, wasEnabled: _stage1LoadedEnabled, previousEnabledAt: _stage1LoadedEnabledAt, now: now);
+    final s2EnabledAt = _resolveEnabledAt(currentlyEnabled: _stage2Enabled, wasEnabled: _stage2LoadedEnabled, previousEnabledAt: _stage2LoadedEnabledAt, now: now);
+    final s3EnabledAt = _resolveEnabledAt(currentlyEnabled: _stage3Enabled, wasEnabled: _stage3LoadedEnabled, previousEnabledAt: _stage3LoadedEnabledAt, now: now);
+    final s4EnabledAt = _resolveEnabledAt(currentlyEnabled: _stage4Enabled, wasEnabled: _stage4LoadedEnabled, previousEnabledAt: _stage4LoadedEnabledAt, now: now);
+
+    final newlyEnabledStages = <int>[
+      if (_stage1Enabled && !_stage1LoadedEnabled) 1,
+      if (_stage2Enabled && !_stage2LoadedEnabled) 2,
+      if (_stage3Enabled && !_stage3LoadedEnabled) 3,
+      if (_stage4Enabled && !_stage4LoadedEnabled) 4,
+    ];
+
+    if (newlyEnabledStages.isNotEmpty) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Enable Stage${newlyEnabledStages.length > 1 ? "s" : ""} ${newlyEnabledStages.join(", ")}?'),
+          content: Text('Recipients for the newly-enabled stage${newlyEnabledStages.length > 1 ? "s" : ""} will only be notified for jobs created from now on — existing open jobs will not trigger this stage.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
     try {
       await _firestoreService.saveNotificationConfig({
         'stages': {
-          'stage1': _buildStageDoc(_stage1Enabled, s1Min, _stage1Recipients),
-          'stage2': _buildStageDoc(_stage2Enabled, s2Min, _stage2Recipients),
-          'stage3': _buildStageDoc(_stage3Enabled, s3Min, _stage3Recipients),
-          'stage4': _buildStageDoc(_stage4Enabled, s4Min, _stage4Recipients),
+          'stage1': _buildStageDoc(_stage1Enabled, s1EnabledAt, s1Min, _stage1Recipients),
+          'stage2': _buildStageDoc(_stage2Enabled, s2EnabledAt, s2Min, _stage2Recipients),
+          'stage3': _buildStageDoc(_stage3Enabled, s3EnabledAt, s3Min, _stage3Recipients),
+          'stage4': _buildStageDoc(_stage4Enabled, s4EnabledAt, s4Min, _stage4Recipients),
         },
         'creation_recipients_by_type': {
           'mechanical': ['onsite_mechanics'],
@@ -404,9 +478,20 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           'mech/elec': ['onsite_mechanics', 'onsite_electricians'],
         },
         'excluded_job_types': ['maintenance'],
-        'last_updated': DateTime.now().toUtc().toIso8601String(),
+        'last_updated': now.toIso8601String(),
         'updated_by_clock_no': _currentClockNo ?? '',
       });
+
+      // Update loaded baseline so a subsequent save in the same session doesn't re-stamp enabled_at
+      _stage1LoadedEnabled = _stage1Enabled;
+      _stage2LoadedEnabled = _stage2Enabled;
+      _stage3LoadedEnabled = _stage3Enabled;
+      _stage4LoadedEnabled = _stage4Enabled;
+      _stage1LoadedEnabledAt = s1EnabledAt;
+      _stage2LoadedEnabledAt = s2EnabledAt;
+      _stage3LoadedEnabledAt = s3EnabledAt;
+      _stage4LoadedEnabledAt = s4EnabledAt;
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Escalation config saved'), backgroundColor: Colors.green),

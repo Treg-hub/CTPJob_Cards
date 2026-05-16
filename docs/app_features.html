@@ -1135,7 +1135,7 @@ body.dark tr:nth-child(even) td { background: #1a2540; }
     <div class="hero-stat"><div class="num">5</div><div class="lbl">Priority Levels</div></div>
     <div class="hero-stat"><div class="num">4</div><div class="lbl">Escalation Stages</div></div>
     <div class="hero-stat"><div class="num">4</div><div class="lbl">User Roles</div></div>
-    <div class="hero-stat"><div class="num">2 min</div><div class="lbl">First Escalation</div></div>
+    <div class="hero-stat"><div class="num">5 min</div><div class="lbl">First Escalation</div></div>
   </div>
 </div>
 
@@ -1190,7 +1190,7 @@ body.dark tr:nth-child(even) td { background: #1a2540; }
       <div class="esc-event e2">
         <div class="esc-time">If no response → Auto-Escalation</div>
         <div class="esc-who">Four configurable escalation stages fire</div>
-        <div class="esc-detail">Stage 1 (2 min): Foremen and on-site managers. Stage 2 (7 min): Department managers. Stage 3 (30 min): Senior management. Stage 4 (60 min): Final tier.</div>
+        <div class="esc-detail">Stage 1 (5 min): Foremen and on-site managers. Stage 2 (10 min): Department managers. Stages 3 and 4 reserved for off-site management — disabled by default. Each stage is independently enable / disable-able by Admin.</div>
       </div>
       <div class="esc-event e0">
         <div class="esc-time">Step 4</div>
@@ -1535,31 +1535,31 @@ body.dark tr:nth-child(even) td { background: #1a2540; }
         <div class="esc-detail">All on-site technicians of the correct trade type receive a push notification immediately.</div>
       </div>
       <div class="esc-event e1">
-        <div class="esc-time">Stage 1 · T = 2 minutes (default)</div>
-        <div class="esc-who">Foremen and on-site managers alerted</div>
-        <div class="esc-detail">If no technician has responded within 2 minutes, foremen and on-site managers for the relevant department are notified with an escalation alert.</div>
+        <div class="esc-time">Stage 1 · T = 5 minutes (default)</div>
+        <div class="esc-who">Foremen and on-site managers alerted — operator can also be opted in</div>
+        <div class="esc-detail">If no technician has responded within 5 minutes, foremen and on-site managers for the relevant department are notified with an escalation alert. The operator who raised the job can optionally be included — they receive a tailored "No response yet — please follow up directly" notification that tells them how many people have been notified so far.</div>
       </div>
       <div class="esc-event e2">
-        <div class="esc-time">Stage 2 · T = 7 minutes (default)</div>
+        <div class="esc-time">Stage 2 · T = 10 minutes (default)</div>
         <div class="esc-who">Department managers and workshop manager — urgent alert</div>
-        <div class="esc-detail">Escalated to management level. Managers receive a high-priority notification indicating the job has been open without response for 7 minutes.</div>
+        <div class="esc-detail">Escalated to management level. Managers receive a high-priority notification indicating the job has been open without response for 10 minutes.</div>
       </div>
       <div class="esc-event e3">
-        <div class="esc-time">Stage 3 · T = 30 minutes (default)</div>
-        <div class="esc-who">Senior management</div>
-        <div class="esc-detail">Extended non-response escalates to senior management. At this point the gap represents a significant failure in response coverage.</div>
+        <div class="esc-time">Stage 3 · T = 30 minutes (default — currently disabled)</div>
+        <div class="esc-who">Reserved for senior / off-site management</div>
+        <div class="esc-detail">Available but disabled by default. Once enabled by Admin, only jobs created from the enable moment onwards will trigger this stage — existing open jobs are protected from a notification flood.</div>
       </div>
       <div class="esc-event e4">
-        <div class="esc-time">Stage 4 · T = 60 minutes (default)</div>
+        <div class="esc-time">Stage 4 · T = 60 minutes (default — currently disabled)</div>
         <div class="esc-who">Final escalation tier</div>
-        <div class="esc-detail">The final configured escalation stage. All timers and recipient lists for every stage are configurable by Admin under Settings → Escalation Rules.</div>
+        <div class="esc-detail">The final configured escalation stage. All timers, recipient lists, and enable / disable toggles are configurable per stage by Admin under Settings → Escalation Config.</div>
       </div>
     </div>
   </div>
 
   <div class="callout tip">
     <div class="callout-icon">ℹ️</div>
-    <div class="callout-body"><p>The times above are <strong>defaults</strong>, not fixed rules. An Admin can change the timer and recipient list for any stage at any time without a software update. If your site's response capacity means 2 minutes is too aggressive, adjust Stage 1 to match your reality.</p></div>
+    <div class="callout-body"><p>The times above are <strong>defaults</strong>, not fixed rules. An Admin can change the timer and recipient list for any stage at any time without a software update. Each stage can be enabled or disabled independently, and re-enabling a stage applies only to new jobs from that point forward (existing open jobs are not flooded).</p></div>
   </div>
 
   <h3>Role-Based Routing by Trade</h3>

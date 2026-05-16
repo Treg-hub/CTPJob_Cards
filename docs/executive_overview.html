@@ -436,7 +436,7 @@ tr:last-child td { border-bottom: none; }
     <div class="stat-label">Priority Levels</div>
   </div>
   <div class="stat-item">
-    <div class="stat-num">2 min</div>
+    <div class="stat-num">5 min</div>
     <div class="stat-label">First Escalation</div>
   </div>
   <div class="stat-item">
@@ -508,7 +508,7 @@ tr:last-child td { border-bottom: none; }
       <div class="step-num">4</div>
       <div class="step-body">
         <strong>Automatic Escalation if No Response</strong>
-        <p>Escalation runs across <strong>four configurable stages</strong>, with timers and recipients managed by Admin. By default: foremen and on-site managers at 2 minutes, department managers and the workshop manager at 7 minutes, and senior management at 30 and 60 minutes. No critical fault can be silently ignored.</p>
+        <p>Escalation runs across <strong>four independently configurable stages</strong>, with timers and recipients managed by Admin. Each stage has its own enable / disable toggle. By default: foremen and on-site managers at 5 minutes, department managers and the workshop manager at 10 minutes, with Stages 3 and 4 reserved for off-site managers when needed. No critical fault can be silently ignored.</p>
       </div>
     </div>
     <div class="how-step">
@@ -559,23 +559,23 @@ tr:last-child td { border-bottom: none; }
       <div class="esc-who">Job created — on-site technicians notified</div>
     </div>
     <div class="esc-step e1">
-      <div class="esc-time">Stage 1 · 2 min</div>
-      <div class="esc-who">Foremen &amp; on-site managers alerted</div>
+      <div class="esc-time">Stage 1 · 5 min</div>
+      <div class="esc-who">Foremen &amp; on-site managers alerted. Operator may also be notified with a "follow up directly" prompt</div>
     </div>
     <div class="esc-step e2">
-      <div class="esc-time">Stage 2 · 7 min</div>
+      <div class="esc-time">Stage 2 · 10 min</div>
       <div class="esc-who">Department managers &amp; workshop manager — urgent</div>
     </div>
     <div class="esc-step e3">
-      <div class="esc-time">Stage 3 · 30 min</div>
-      <div class="esc-who">Senior management</div>
+      <div class="esc-time">Stage 3 · 30 min (reserved)</div>
+      <div class="esc-who">Currently disabled — earmarked for off-site management when needed</div>
     </div>
     <div class="esc-step e4">
-      <div class="esc-time">Stage 4 · 60 min</div>
-      <div class="esc-who">Final escalation tier</div>
+      <div class="esc-time">Stage 4 · 60 min (reserved)</div>
+      <div class="esc-who">Currently disabled — final escalation tier</div>
     </div>
   </div>
-  <p style="font-size:13px; color:var(--grey-500);">Escalation stops immediately when any technician assigns themselves or acknowledges the job.</p>
+  <p style="font-size:13px; color:var(--grey-500);">Escalation stops immediately when any technician assigns themselves or acknowledges the job. Each stage can be enabled / disabled independently by Admin.</p>
 
   <h3>Job Card Status</h3>
   <div class="status-flow">

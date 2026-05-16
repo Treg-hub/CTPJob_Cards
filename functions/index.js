@@ -56,20 +56,12 @@ function getNotificationLevel(priority) {
 }
 
 // ==================== DYNAMIC CONFIG LOADER ====================
-async function getNotificationConfig() {
-  try {
-    const doc = await db.collection("notification_configs").doc("global").get();
-    if (doc.exists) {
-      return doc.data();
-    }
-  } catch (e) {
-    console.error("Failed to load notification config, using defaults:", e);
-  }
-
+function defaultNotificationConfig() {
   return {
     stages: {
       stage1: {
         enabled: true,
+        enabled_at: null,
         minutes: 5,
         recipients_by_type: {
           "mechanical": ["onsite_managers", "foremen"],
@@ -79,6 +71,7 @@ async function getNotificationConfig() {
       },
       stage2: {
         enabled: true,
+        enabled_at: null,
         minutes: 10,
         recipients_by_type: {
           "mechanical": ["onsite_dept_managers", "onsite_workshop_manager"],
@@ -88,11 +81,13 @@ async function getNotificationConfig() {
       },
       stage3: {
         enabled: false,
+        enabled_at: null,
         minutes: 30,
         recipients_by_type: { "mechanical": [], "electrical": [], "mech/elec": [] },
       },
       stage4: {
         enabled: false,
+        enabled_at: null,
         minutes: 60,
         recipients_by_type: { "mechanical": [], "electrical": [], "mech/elec": [] },
       },
@@ -106,6 +101,35 @@ async function getNotificationConfig() {
   };
 }
 
+async function getNotificationConfig() {
+  const defaults = defaultNotificationConfig();
+
+  let data = null;
+  try {
+    const doc = await db.collection("notification_configs").doc("global").get();
+    if (doc.exists) data = doc.data();
+  } catch (e) {
+    console.error("Failed to load notification config, using defaults:", e);
+  }
+
+  if (!data) return defaults;
+
+  // Merge with defaults so partially-migrated docs (missing top-level keys) still work.
+  // The doc's values win when present; missing top-level fields fall back to defaults.
+  const merged = {
+    ...data,
+    stages: data.stages || defaults.stages,
+    creation_recipients_by_type: data.creation_recipients_by_type || defaults.creation_recipients_by_type,
+    excluded_job_types: data.excluded_job_types || defaults.excluded_job_types,
+  };
+
+  if (!data.stages) {
+    console.warn("notification_configs/global has no 'stages' field — using default stage config. Update the doc to silence this.");
+  }
+
+  return merged;
+}
+
 // Maps Dart enum job type to the key used in recipients_by_type
 function jobTypeKey(jobType) {
   if (jobType === "mechanicalElectrical") return "mech/elec";
@@ -114,6 +138,18 @@ function jobTypeKey(jobType) {
 
 function getStage(config, stageNum) {
   return config.stages && config.stages[`stage${stageNum}`];
+}
+
+// Accepts a Firestore Timestamp, ISO string, or null and returns a Date (or null)
+function parseEnabledAt(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
 function getStageRecipients(config, stageNum, jobType) {
@@ -133,7 +169,7 @@ function getCreationRecipientRules(config, jobType) {
 }
 
 // ==================== NEW HELPER: Resolve recipients from rules ====================
-async function resolveRecipientsFromRules(ruleNames, jobType, department) {
+async function resolveRecipientsFromRules(ruleNames, jobType, department, operatorClockNo = null) {
   const allRecipients = [];
 
   for (const rule of ruleNames) {
@@ -157,6 +193,19 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department) {
     } else if (rule === "offsite_workshop_manager") {
       const wm = await getOffsiteWorkshopManager();
       if (wm) allRecipients.push(wm);
+    } else if (rule === "operator") {
+      // Special rule: the job's creator. Ignores isOnSite — operator should be
+      // notified regardless of location since they raised the job.
+      if (operatorClockNo) {
+        const opDoc = await db.collection("employees").doc(operatorClockNo).get();
+        if (opDoc.exists) {
+          allRecipients.push({ token: opDoc.data().fcmToken, clockNo: opDoc.id, isOperator: true, ...opDoc.data() });
+        } else {
+          console.log(`operator rule: employee ${operatorClockNo} not found, skipping`);
+        }
+      } else {
+        console.log("operator rule: no operatorClockNo on job, skipping");
+      }
     }
   }
 
@@ -568,28 +617,52 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
     const stageField = `notifiedAtStage${stageNum}`;
     const cutoff = new Date(Date.now() - minutes * 60 * 1000);
+    const enabledAt = parseEnabledAt(stage.enabled_at);
 
+    // Filter at the Firestore level — only fetch jobs that haven't been stamped
+    // for this stage yet. Massive read savings when many long-open jobs exist.
     const jobs = await db.collection("job_cards")
       .where("status", "==", "open")
+      .where(stageField, "==", null)
       .where("createdAt", "<=", cutoff)
       .get();
 
-    console.log(`Stage ${stageNum} (${minutes}min): found ${jobs.size} open jobs older than ${minutes}min`);
+    console.log(`Stage ${stageNum} (${minutes}min): found ${jobs.size} unstamped open jobs older than ${minutes}min, enabled_at=${enabledAt ? enabledAt.toISOString() : "none"}`);
 
+    let skippedPreEnable = 0;
     for (const doc of jobs.docs) {
       const job = doc.data();
 
       if (isJobTypeExcluded(config, job.type)) continue;
-      if (job[stageField]) continue;
+      if (job[stageField]) continue; // defensive — shouldn't happen given the query filter
+
+      // Skip jobs that existed before this stage was enabled — protects against
+      // bombarding new recipients with notifications for old open jobs.
+      if (enabledAt && job.createdAt) {
+        const createdAtMs = typeof job.createdAt.toMillis === "function"
+          ? job.createdAt.toMillis()
+          : new Date(job.createdAt).getTime();
+        if (createdAtMs <= enabledAt.getTime()) { skippedPreEnable++; continue; }
+      }
       if (job.escalationStopped === true || (job.assignedClockNos && job.assignedClockNos.length > 0)) {
-        await doc.ref.update({ [stageField]: job[stageField] || now });
+        // Job is assigned or stopped — stamp ALL remaining stages at once so it
+        // disappears from every escalation query in one go (not stage-by-stage
+        // over the next hour).
+        const stampAll = {};
+        for (let s = 1; s <= 4; s++) {
+          const f = `notifiedAtStage${s}`;
+          if (!job[f]) stampAll[f] = now;
+        }
+        if (Object.keys(stampAll).length > 0) {
+          await doc.ref.update(stampAll);
+        }
         continue;
       }
 
       const rules = getStageRecipients(config, stageNum, job.type);
       if (rules.length === 0) continue;
 
-      const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department);
+      const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department, job.operatorClockNo);
       console.log(`Stage ${stageNum} job #${job.jobCardNumber || doc.id}: type=${job.type}, dept=${job.department}, recipients=${resolvedRecipients.length}`);
 
       if (resolvedRecipients.length === 0) continue;
@@ -600,13 +673,27 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
       const createdBy = creatorDoc.exists ? creatorDoc.data().name : (job.operator || "Unknown");
 
+      const jobNumber = job.jobCardNumber || doc.id;
+      // Count of non-operator recipients (people we've notified other than the operator themselves)
+      const otherCount = resolvedRecipients.filter(e => e.clockNo !== job.operatorClockNo).length;
+
       for (const emp of resolvedRecipients) {
+        const isOperator = emp.clockNo === job.operatorClockNo;
+
+        const title = isOperator
+          ? `No response yet — Job #${jobNumber}`
+          : `Stage ${stageNum} Escalation (${minutes}min) - Job #${jobNumber}`;
+
+        const body = isOperator
+          ? `${minutes} minutes passed with no assignment. We've notified ${otherCount} ${otherCount === 1 ? "person" : "people"}. Follow up directly.`
+          : `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`;
+
         await sendNotification({
           token: emp.token,
           recipientClockNo: emp.clockNo,
-          title: `Stage ${stageNum} Escalation (${minutes}min) - Job #${job.jobCardNumber || doc.id}`,
-          body: `${job.department} - ${job.machine}\n${job.area} - ${job.part}\n${job.description}`,
-          jobCardNumber: job.jobCardNumber || doc.id,
+          title,
+          body,
+          jobCardNumber: jobNumber,
           level,
           priority,
           createdBy,
@@ -614,10 +701,13 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
           area: job.area,
           machine: job.machine,
           part: job.part,
-          triggeredBy: `stage${stageNum}_escalation`,
+          triggeredBy: isOperator ? `stage${stageNum}_operator_followup` : `stage${stageNum}_escalation`,
         });
       }
       await doc.ref.update({ [stageField]: now });
+    }
+    if (skippedPreEnable > 0) {
+      console.log(`Stage ${stageNum}: skipped ${skippedPreEnable} jobs created before enabled_at`);
     }
   }
 });

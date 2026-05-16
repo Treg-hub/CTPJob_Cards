@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CTP Job Cards — Screens Reference</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:         #0d1f35;
+  --blue:         #1a3a5c;
+  --blue-mid:     #2563a0;
+  --blue-light:   #dbeafe;
+  --blue-pale:    #f0f6ff;
+  --accent:       #f59e0b;
+  --accent-dark:  #d97706;
+  --accent-pale:  #fffbeb;
+  --green:        #16a34a;
+  --green-light:  #dcfce7;
+  --red:          #dc2626;
+  --red-light:    #fee2e2;
+  --orange:       #ea580c;
+  --orange-light: #ffedd5;
+  --purple:       #7c3aed;
+  --purple-light: #ede9fe;
+  --teal:         #0d9488;
+  --teal-light:   #ccfbf1;
+  --grey-50:      #f8fafc;
+  --grey-100:     #f1f5f9;
+  --grey-200:     #e2e8f0;
+  --grey-300:     #cbd5e1;
+  --grey-500:     #64748b;
+  --grey-600:     #475569;
+  --grey-700:     #334155;
+  --grey-900:     #0f172a;
+  --text:         #1e293b;
+  --radius:       8px;
+  --radius-sm:    5px;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:    0 4px 12px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.06);
+  --sidebar-w:    280px;
+  --header-h:     64px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--grey-50);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+code, pre, .mono {
+  font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+/* ═══ Header ═══ */
+header.top {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+
+header.top h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+header.top h1 .accent { color: var(--accent); }
+
+header.top .tag {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 10px;
+  background: rgba(245,158,11,0.2);
+  color: var(--accent);
+  border: 1px solid rgba(245,158,11,0.4);
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+/* ═══ Layout ═══ */
+.layout {
+  display: flex;
+  margin-top: var(--header-h);
+  min-height: calc(100vh - var(--header-h));
+}
+
+/* ═══ Sidebar ═══ */
+nav.side {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  width: var(--sidebar-w);
+  height: calc(100vh - var(--header-h));
+  background: #fff;
+  border-right: 1px solid var(--grey-200);
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+
+nav.side h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--grey-500);
+  font-weight: 700;
+  margin: 14px 8px 6px;
+}
+
+nav.side h3:first-child { margin-top: 0; }
+
+nav.side ul {
+  list-style: none;
+}
+
+nav.side ul li a {
+  display: block;
+  padding: 6px 12px;
+  color: var(--grey-700);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 1px;
+  transition: background 0.15s;
+}
+
+nav.side ul li a:hover {
+  background: var(--blue-pale);
+  color: var(--blue-mid);
+}
+
+/* ═══ Main content ═══ */
+main {
+  margin-left: var(--sidebar-w);
+  padding: 36px 48px;
+  max-width: 1100px;
+  width: 100%;
+}
+
+main > section {
+  margin-bottom: 48px;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+section.group h2 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--grey-200);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+section.group h2 .group-emoji {
+  font-size: 24px;
+}
+
+section.group > p {
+  color: var(--grey-600);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+/* ═══ Screen cards ═══ */
+.screen {
+  background: #fff;
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.screen-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-mid));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.screen-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.screen-header .path {
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  background: rgba(255,255,255,0.15);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: #e0f2fe;
+}
+
+.screen-body {
+  padding: 18px 20px 20px;
+}
+
+.screen-body p {
+  margin-bottom: 10px;
+}
+
+.screen-body strong { color: var(--navy); font-weight: 600; }
+
+.screen-body ul {
+  margin: 8px 0 12px 20px;
+}
+
+.screen-body ul li { margin-bottom: 3px; }
+
+/* ═══ Roles pill row ═══ */
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.role-pill.all { background: rgba(34,197,94,0.3); border-color: rgba(34,197,94,0.5); }
+.role-pill.tech { background: rgba(59,130,246,0.3); border-color: rgba(59,130,246,0.5); }
+.role-pill.mgr { background: rgba(245,158,11,0.3); border-color: rgba(245,158,11,0.5); }
+.role-pill.admin { background: rgba(220,38,38,0.3); border-color: rgba(220,38,38,0.5); }
+
+/* ═══ Sub-headings inside screen body ═══ */
+.screen-body h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 14px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ═══ Tag chips ═══ */
+.chip {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--grey-100);
+  color: var(--grey-700);
+  margin: 0 4px 4px 0;
+  border: 1px solid var(--grey-200);
+}
+
+.chip.tab { background: var(--blue-pale); color: var(--blue-mid); border-color: var(--blue-light); }
+.chip.action { background: var(--green-light); color: #14532d; border-color: #86efac; }
+.chip.warn { background: var(--red-light); color: #7f1d1d; border-color: #fecaca; }
+
+/* ═══ Code ═══ */
+code {
+  background: var(--grey-100);
+  color: var(--blue);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+  border: 1px solid var(--grey-200);
+}
+
+/* ═══ Callouts ═══ */
+.callout {
+  padding: 12px 14px;
+  border-left: 4px solid;
+  border-radius: var(--radius-sm);
+  margin: 10px 0 4px;
+  font-size: 13.5px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.callout .icon { font-size: 16px; line-height: 1.4; flex-shrink: 0; }
+.callout .body { flex: 1; }
+.callout.warn  { background: var(--red-light);    border-color: var(--red);    color: #7f1d1d; }
+.callout.info  { background: var(--blue-pale);    border-color: var(--blue-mid); color: var(--blue); }
+.callout.tip   { background: var(--green-light);  border-color: var(--green);  color: #14532d; }
+.callout.note  { background: var(--accent-pale);  border-color: var(--accent); color: #78350f; }
+.callout strong { color: inherit; }
+
+/* ═══ Footer ═══ */
+footer {
+  margin-top: 60px;
+  padding-top: 24px;
+  border-top: 1px solid var(--grey-200);
+  color: var(--grey-500);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ═══ Mobile ═══ */
+@media (max-width: 900px) {
+  nav.side {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--grey-200);
+  }
+  main { margin-left: 0; padding: 24px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>CTP Job Cards <span class="accent">·</span> Screens Reference</h1>
+  <span class="tag">Engineering Reference</span>
+</header>
+
+<div class="layout">
+
+<nav class="side">
+  <h3>Onboarding</h3>
+  <ul>
+    <li><a href="#login">Login</a></li>
+    <li><a href="#registration">Registration</a></li>
+    <li><a href="#permissions-onboarding">Permissions Onboarding</a></li>
+  </ul>
+
+  <h3>Core Job Flow</h3>
+  <ul>
+    <li><a href="#home">Home</a></li>
+    <li><a href="#create-job-card">Create Job Card</a></li>
+    <li><a href="#my-assigned-jobs">My Assigned Jobs</a></li>
+    <li><a href="#job-card-detail">Job Card Detail</a></li>
+    <li><a href="#view-job-cards">View Job Cards</a></li>
+    <li><a href="#closed-jobs">Closed Jobs</a></li>
+    <li><a href="#daily-review">Daily Review</a></li>
+  </ul>
+
+  <h3>Manager &amp; Admin</h3>
+  <ul>
+    <li><a href="#manager-dashboard">Manager Dashboard</a></li>
+    <li><a href="#monitoring-dashboard">Monitoring Dashboard</a></li>
+    <li><a href="#admin">Admin</a></li>
+    <li><a href="#geofence-editor">Geofence Editor</a></li>
+  </ul>
+
+  <h3>Copper Management</h3>
+  <ul>
+    <li><a href="#copper-dashboard">Copper Dashboard</a></li>
+    <li><a href="#copper-transactions">Copper Transactions</a></li>
+    <li><a href="#sort-copper">Sort Copper</a></li>
+  </ul>
+
+  <h3>Utilities</h3>
+  <ul>
+    <li><a href="#settings">Settings</a></li>
+    <li><a href="#notification-diagnostics">Notification Diagnostics</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ════════════ ONBOARDING ════════════ -->
+<section class="group" id="onboarding">
+  <h2><span class="group-emoji">🚪</span>Onboarding &amp; Authentication</h2>
+  <p>Screens shown when no user is logged in or during first-launch permission setup.</p>
+
+  <!-- Login -->
+  <div class="screen" id="login">
+    <div class="screen-header">
+      <h3>Login</h3>
+      <span class="path">lib/screens/login_screen.dart</span>
+      <div class="roles">
+        <span class="role-pill all">All</span>
+      </div>
+    </div>
+    <div class="screen-body">
+      <p>Email + password authentication via <code>FirebaseAuth.signInWithEmailAndPassword</code>. On successful sign-in, looks up the matching <code>employees</code> document by Firebase UID, saves <code>loggedInClockNo</code> to <code>SharedPreferences</code>, refreshes the FCM token, and routes to either <strong>Permissions Onboarding</strong> (first run) or <strong>Home</strong>.</p>
+
+      <h4>Key Actions</h4>
+      <ul>
+        <li><span class="chip action">Login</span> Sign in with email + password</li>
+        <li><span class="chip action">Forgot password</span> Sends a Firebase Auth reset email</li>
+        <li><span class="chip action">Register</span> Navigates to the Registration screen</li>
+      </ul>
+
+      <div class="callout info">
+        <span class="icon">💡</span>
+        <div class="body">Auto-login: <code>main.dart</code> bypasses this screen entirely if <code>SharedPreferences</code> has a saved <code>loggedInClockNo</code>, OR if <code>FirebaseAuth.currentUser</code> is still valid after a reinstall.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Registration -->
+  <div class="screen" id="registration">
+    <div class="screen-header">
+      <h3>Registration</h3>
+      <span class="path">lib/screens/registration_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>New employee sign-up. Creates a Firebase Auth account from email + password, then writes a corresponding <code>employees</code> document containing the clock number, name, position, and department.</p>
+
+      <h4>Required Fields</h4>
+      <ul>
+        <li>Email, password</li>
+        <li>Clock number (must match the employee record in HR)</li>
+        <li>Name, position, department</li>
+      </ul>
+
+      <div class="callout warn">
+        <span class="icon">⚠️</span>
+        <div class="body">Admins should pre-populate the <code>employees</code> collection. Self-registration only links an Auth account to an existing record; it does not grant any role.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Permissions Onboarding -->
+  <div class="screen" id="permissions-onboarding">
+    <div class="screen-header">
+      <h3>Permissions Onboarding</h3>
+      <span class="path">lib/screens/permissions_onboarding_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All (first launch)</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Three-page swipeable walkthrough shown after first login. Explains the app, asks for critical Android permissions, then routes to Home.</p>
+
+      <h4>Pages</h4>
+      <ul>
+        <li><strong>Welcome</strong> — app intro</li>
+        <li><strong>How It Works</strong> — explains job alerts, on-site/off-site behaviour, escalation</li>
+        <li><strong>Grant Permissions</strong> — Notifications, System Alert Window (full-screen alerts), Notification Policy (DND bypass), Battery Optimisation, Background Location</li>
+      </ul>
+
+      <div class="callout note">
+        <span class="icon">📌</span>
+        <div class="body">Sets <code>permissionsCompleted: true</code> in <code>SharedPreferences</code> on completion. <code>main.dart</code> checks this flag plus <code>locationAlways</code> permission — if either is missing, this screen reappears on next launch.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ CORE JOB FLOW ════════════ -->
+<section class="group" id="core-job-flow">
+  <h2><span class="group-emoji">📋</span>Core Job Card Flow</h2>
+  <p>The screens every technician and most managers use day-to-day.</p>
+
+  <!-- Home -->
+  <div class="screen" id="home">
+    <div class="screen-header">
+      <h3>Home</h3>
+      <span class="path">lib/screens/home_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All logged-in users</span></div>
+    </div>
+    <div class="screen-body">
+      <p>The main hub after login. Shows the logged-in employee, a live <strong>On-Site / Off-Site</strong> indicator, an employee directory, and a grid of tiles to navigate everywhere else.</p>
+
+      <h4>Standard Tiles</h4>
+      <ul>
+        <li><span class="chip">Create Job Card</span></li>
+        <li><span class="chip">My Assigned Jobs</span></li>
+        <li><span class="chip">View Job Cards</span></li>
+        <li><span class="chip">Closed Jobs</span></li>
+        <li><span class="chip">Copper Dashboard</span></li>
+        <li><span class="chip">Settings</span></li>
+      </ul>
+
+      <h4>Manager-Only Tiles</h4>
+      <ul>
+        <li><span class="chip mgr">Manager Dashboard</span> — shown when <code>position</code> contains "manager"</li>
+        <li><span class="chip mgr">Monitoring Dashboard</span></li>
+        <li><span class="chip mgr">Daily Review</span> with pulse animation when pending count &gt; 5</li>
+      </ul>
+
+      <h4>Admin-Only Tiles</h4>
+      <ul>
+        <li><span class="chip admin">Admin</span> — shown when the logged-in employee is in the admin list (clock no 22)</li>
+      </ul>
+
+      <div class="callout info">
+        <span class="icon">📍</span>
+        <div class="body">The On-Site indicator reflects the live value of <code>employees/{clockNo}.isOnSite</code>, which is driven by background geofencing in <code>location_service.dart</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Job Card -->
+  <div class="screen" id="create-job-card">
+    <div class="screen-header">
+      <h3>Create Job Card</h3>
+      <span class="path">lib/screens/create_job_card_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Form for raising a new job card. The factory structure (department → area → machine → part) is loaded from Firestore, and previously-used parts for the selected machine are suggested.</p>
+
+      <h4>Required Fields</h4>
+      <ul>
+        <li>Department, Area, Machine, Part</li>
+        <li>Job Type — <code>Mechanical</code>, <code>Electrical</code>, <code>Mech/Elec ?</code>, <code>Maintenance</code></li>
+        <li>Priority (1–5)</li>
+        <li>Operator name + clock number</li>
+        <li>Description</li>
+        <li>Optional photos (per section)</li>
+      </ul>
+
+      <h4>What Happens On Save</h4>
+      <ul>
+        <li>Calls <code>FirestoreService.saveJobCardOfflineAware</code> → if online, runs a transaction that increments the global <code>counters/jobCards.nextJobCardNumber</code> and writes the doc</li>
+        <li>If offline, queues the write to Hive via <code>SyncService</code></li>
+        <li>The <code>onJobCardCreated</code> Cloud Function trigger fires and dispatches initial notifications based on <code>creation_recipients_by_type</code></li>
+      </ul>
+
+      <h4>Sidebar Widget</h4>
+      <ul>
+        <li><strong>Similar Job Cards</strong> — wide-layout sidebar streams matching open cards as the form is filled, helping prevent duplicates</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- My Assigned Jobs -->
+  <div class="screen" id="my-assigned-jobs">
+    <div class="screen-header">
+      <h3>My Assigned Jobs</h3>
+      <span class="path">lib/screens/my_assigned_jobs_screen.dart</span>
+      <div class="roles"><span class="role-pill tech">Technicians (primary)</span></div>
+    </div>
+    <div class="screen-body">
+      <p>The technician's personal queue. Two tabs:</p>
+
+      <h4>Tabs</h4>
+      <ul>
+        <li><span class="chip tab">Assigned</span> Active cards where the technician's clock number is in <code>assignedClockNos</code></li>
+        <li><span class="chip tab">History</span> Jobs the technician has worked on or completed</li>
+      </ul>
+
+      <h4>Per-Card Actions</h4>
+      <ul>
+        <li>Tap to open <strong>Job Card Detail</strong></li>
+        <li>Quick "Self-Assign" if a job is unassigned and the technician's skill matches</li>
+        <li>Mark as "Busy" — fires a notification back to the creator via the <code>alertResponses</code> collection and sets <code>escalationStopped: true</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Job Card Detail -->
+  <div class="screen" id="job-card-detail">
+    <div class="screen-header">
+      <h3>Job Card Detail</h3>
+      <span class="path">lib/screens/job_card_detail_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Full view of a single job card. The most feature-rich screen in the app.</p>
+
+      <h4>Sections</h4>
+      <ul>
+        <li><strong>Header</strong> — Job #, status, priority, type, department, area, machine, part</li>
+        <li><strong>Description &amp; notes</strong> — editable inline by assignees</li>
+        <li><strong>Photos</strong> — before/during/after sections, tap to open full-screen viewer</li>
+        <li><strong>Assignment</strong> — assign to one or more technicians; selector orders by <code>isOnSite</code> first, then position</li>
+        <li><strong>Status workflow</strong> — Open → In Progress → Monitoring → Closed</li>
+        <li><strong>Assignment history</strong> — timestamped list of who was assigned/unassigned</li>
+        <li><strong>Comments &amp; reviewedBy</strong></li>
+        <li><strong>Related Jobs</strong> tab pair (<span class="chip tab">My Department</span>, <span class="chip tab">All Factory</span>) — surfaces same-machine/area history</li>
+      </ul>
+
+      <h4>Notifications Triggered Here</h4>
+      <ul>
+        <li>Assigning a job → <code>sendJobAssignmentNotification</code> Cloud Function call</li>
+        <li>Closing/updating → <code>sendCreatorNotification</code> to the original creator</li>
+        <li>Both also trigger <code>onJobCardAssigned</code> which sets <code>escalationStopped: true</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- View Job Cards -->
+  <div class="screen" id="view-job-cards">
+    <div class="screen-header">
+      <h3>View Job Cards</h3>
+      <span class="path">lib/screens/view_job_cards_screen.dart</span>
+      <div class="roles">
+        <span class="role-pill mgr">Manager</span>
+        <span class="role-pill admin">Admin</span>
+      </div>
+    </div>
+    <div class="screen-body">
+      <p>Browse every job card in the system. Four status tabs with live counts; filters for department, area, machine, type, priority, date range.</p>
+
+      <h4>Tabs</h4>
+      <ul>
+        <li><span class="chip tab">Open</span></li>
+        <li><span class="chip tab">In Progress</span></li>
+        <li><span class="chip tab">Monitoring</span></li>
+        <li><span class="chip tab">Closed</span></li>
+      </ul>
+
+      <h4>Capabilities</h4>
+      <ul>
+        <li>Tap any card to open <strong>Job Card Detail</strong></li>
+        <li>Filter and search across all factory structure levels</li>
+        <li>Wide-layout view with split master/detail on tablets</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Closed Jobs -->
+  <div class="screen" id="closed-jobs">
+    <div class="screen-header">
+      <h3>Closed Jobs</h3>
+      <span class="path">lib/screens/closed_jobs_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Lighter-weight read-only browser of completed and auto-closed jobs. Useful for technicians who want to look up past work without the full filter UI of <strong>View Job Cards</strong>.</p>
+
+      <h4>Capabilities</h4>
+      <ul>
+        <li>Date-range filter</li>
+        <li>Tap to open the detail view (read-only)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Daily Review -->
+  <div class="screen" id="daily-review">
+    <div class="screen-header">
+      <h3>Daily Review</h3>
+      <span class="path">lib/screens/daily_review_screen.dart</span>
+      <div class="roles"><span class="role-pill mgr">Manager</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Daily sign-off queue for managers. Each closed/monitored job needs a manager review checkmark — this screen surfaces what's still pending.</p>
+
+      <h4>Tabs</h4>
+      <ul>
+        <li><span class="chip tab">Pending Review (N)</span> Cards the logged-in manager hasn't marked yet</li>
+        <li><span class="chip tab">Reviewed</span> Already-marked cards</li>
+      </ul>
+
+      <h4>Filter Logic</h4>
+      <ul>
+        <li>Mechanical Manager: sees cards where job type is Mechanical or Mech/Elec</li>
+        <li>Electrical Manager: sees cards where job type is Electrical or Mech/Elec</li>
+        <li>Other Managers: sees cards in their own <code>department</code></li>
+      </ul>
+
+      <div class="callout info">
+        <span class="icon">⚡</span>
+        <div class="body">The Home tile for Daily Review has a pulsing red animation when the pending count is above 5 — a visual nudge to keep the queue clean.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ MANAGER & ADMIN ════════════ -->
+<section class="group" id="manager-admin">
+  <h2><span class="group-emoji">📊</span>Manager &amp; Admin</h2>
+  <p>Dashboards and tooling for oversight roles.</p>
+
+  <!-- Manager Dashboard -->
+  <div class="screen" id="manager-dashboard">
+    <div class="screen-header">
+      <h3>Manager Dashboard</h3>
+      <span class="path">lib/screens/manager_dashboard_screen.dart</span>
+      <div class="roles"><span class="role-pill mgr">Manager</span></div>
+    </div>
+    <div class="screen-body">
+      <p>KPI rollups for the manager's domain.</p>
+
+      <h4>Tiles</h4>
+      <ul>
+        <li><strong>Open vs. Closed</strong> count this week / month</li>
+        <li><strong>Average time to close</strong></li>
+        <li><strong>Per-technician throughput</strong> — completed jobs by clock no</li>
+        <li><strong>Top recurring machines</strong> — highest <code>reoccurrenceCount</code> jobs</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Monitoring Dashboard -->
+  <div class="screen" id="monitoring-dashboard">
+    <div class="screen-header">
+      <h3>Monitoring Dashboard</h3>
+      <span class="path">lib/screens/monitoring_dashboard_screen.dart</span>
+      <div class="roles"><span class="role-pill mgr">Manager</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Visibility into the "Monitoring" state — jobs that were marked completed but kept open for 7 days to confirm the fix held.</p>
+
+      <h4>Tabs</h4>
+      <ul>
+        <li><span class="chip tab">Active Monitoring</span> Jobs currently in the 7-day monitoring window</li>
+        <li><span class="chip tab">Recently Auto-Closed</span> Jobs the <code>autoCloseMonitoringJobs</code> scheduler closed in the last 7 days</li>
+      </ul>
+
+      <div class="callout note">
+        <span class="icon">⏰</span>
+        <div class="body"><code>autoCloseMonitoringJobs</code> runs daily at 08:00 SAST in <code>europe-west1</code>. It closes any monitoring job that hasn't had updates for 7 days since <code>monitoringStartedAt</code>, appending an auto-close note to <code>notes</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin -->
+  <div class="screen" id="admin">
+    <div class="screen-header">
+      <h3>Admin</h3>
+      <span class="path">lib/screens/admin_screen.dart</span>
+      <div class="roles"><span class="role-pill admin">Admin only</span></div>
+    </div>
+    <div class="screen-body">
+      <p>The control panel. Four tabs.</p>
+
+      <h4>Tab: Employees</h4>
+      <ul>
+        <li>Spreadsheet-style editor for the <code>employees</code> collection</li>
+        <li>Add / edit / bulk-delete employees</li>
+        <li>Per-row toggle for <code>isOnSite</code></li>
+        <li>FCM token visible and editable (for debugging)</li>
+        <li>CSV import / export with template download</li>
+      </ul>
+
+      <h4>Tab: Structures</h4>
+      <ul>
+        <li>Manages the factory hierarchy stored under <code>factoryStructure</code></li>
+        <li>Add/delete Departments, Areas, and Machine/Parts</li>
+        <li>Cascading deletes with confirmation dialogs</li>
+      </ul>
+
+      <h4>Tab: Settings</h4>
+      <ul>
+        <li><strong>Force Location Check Now</strong> — manually runs <code>LocationService.checkCurrentLocation</code></li>
+        <li><strong>Simulate 30-min WorkManager Check</strong> — triggers the background geofence callback for testing</li>
+        <li><strong>Escalation Config</strong> — per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a <em>Job Creator (Operator)</em> option that sends a tailored "follow up directly" alert to the person who raised the job). Writes to <code>notification_configs/global</code>. See <a href="escalation_system.html">Escalation Reference</a></li>
+        <li><strong>Save Escalation Config</strong> — writes the doc; prompts to confirm when re-enabling stages so old jobs aren't bombarded. Writes <code>enabled_at = now</code> on any stage transitioning from disabled → enabled</li>
+        <li><strong>Reset Escalation Stamps</strong> — calls the <code>clearEscalationStamps</code> Cloud Function. Two uses: (a) clears all stage stamps from open jobs so they re-process, (b) backfills <code>notifiedAtStage1..4 = null</code> on legacy docs so they appear in the composite indexes</li>
+      </ul>
+
+      <h4>Tab: Job Cards</h4>
+      <ul>
+        <li>Spreadsheet-style export and delete tooling for the <code>job_cards</code> collection</li>
+        <li>CSV export with full filter applied</li>
+        <li>Bulk delete with confirmation</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Geofence Editor -->
+  <div class="screen" id="geofence-editor">
+    <div class="screen-header">
+      <h3>Geofence Editor</h3>
+      <span class="path">lib/screens/geofence_editor_screen.dart</span>
+      <div class="roles"><span class="role-pill admin">Admin only</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Map-based editor for the factory geofence boundary stored in <code>config/geofence</code>. The native Android <code>GeofenceHelper</code> reads this to decide on-site vs off-site.</p>
+
+      <h4>Capabilities</h4>
+      <ul>
+        <li>Drop a centre point on the map (or enter lat/long)</li>
+        <li>Adjust radius via slider</li>
+        <li>Save writes <code>config/geofence</code> with the new <code>center.lat</code>, <code>center.lng</code>, <code>radius_meters</code></li>
+      </ul>
+
+      <div class="callout warn">
+        <span class="icon">⚠️</span>
+        <div class="body">Changing the geofence affects every employee's <code>isOnSite</code> on their next location check. If you shrink the radius, people currently inside the old boundary may flip to <code>isOnSite: false</code> within minutes.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ COPPER ════════════ -->
+<section class="group" id="copper">
+  <h2><span class="group-emoji">🪙</span>Copper Management</h2>
+  <p>Inventory and transaction tracking for the copper recovery side of operations.</p>
+
+  <!-- Copper Dashboard -->
+  <div class="screen" id="copper-dashboard">
+    <div class="screen-header">
+      <h3>Copper Dashboard</h3>
+      <span class="path">lib/screens/copper_dashboard_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Current copper stock plus quick-entry forms for inbound/outbound transactions.</p>
+
+      <h4>Transaction Types</h4>
+      <ul>
+        <li><strong>In</strong> — copper arriving (raw)</li>
+        <li><strong>Sort</strong> — sorted into nuggets / rods</li>
+        <li><strong>Sell (Nuggets)</strong> and <strong>Sell (Rods)</strong> — outbound sales with R/kg rate</li>
+      </ul>
+
+      <h4>Notable Behaviour</h4>
+      <ul>
+        <li>When cumulative sell total crosses 400 kg, the <code>onCopperTransactionWrite</code> Cloud Function notifies employee clock no 22 ("Copper Sell Ready")</li>
+        <li>Stream-based — live updates from <code>copperTransactions</code> and <code>copperInventory</code> collections</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Copper Transactions -->
+  <div class="screen" id="copper-transactions">
+    <div class="screen-header">
+      <h3>Copper Transactions</h3>
+      <span class="path">lib/screens/copper_transactions_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Full history table of every copper transaction. Sortable by date, type, amount.</p>
+
+      <h4>Capabilities</h4>
+      <ul>
+        <li>Filter by transaction type</li>
+        <li>Date-range filter</li>
+        <li>CSV export</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Sort Copper -->
+  <div class="screen" id="sort-copper">
+    <div class="screen-header">
+      <h3>Sort Copper</h3>
+      <span class="path">lib/screens/sort_copper_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Dedicated entry form for sorting raw copper into nuggets or rods. Pulled out into its own screen so it can be a quick one-tap workflow from Home or Copper Dashboard.</p>
+
+      <h4>Inputs</h4>
+      <ul>
+        <li>Amount sorted (kg)</li>
+        <li>Output type (Nuggets / Rods)</li>
+        <li>Sorter name (auto-filled from <code>currentEmployee</code>)</li>
+        <li>Optional notes</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ UTILITIES ════════════ -->
+<section class="group" id="utilities">
+  <h2><span class="group-emoji">⚙️</span>Configuration &amp; Utilities</h2>
+  <p>Per-user preferences, diagnostics, and developer tools.</p>
+
+  <!-- Settings -->
+  <div class="screen" id="settings">
+    <div class="screen-header">
+      <h3>Settings</h3>
+      <span class="path">lib/screens/settings_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Per-user preferences and self-service tooling.</p>
+
+      <h4>Sections</h4>
+      <ul>
+        <li><strong>Account</strong> — current user info, On-Site indicator, <span class="chip warn">Log Out</span></li>
+        <li><strong>Appearance</strong> — Dark/Light mode toggle (writes to Riverpod theme provider)</li>
+        <li><strong>Permissions Status</strong> — live status for Notifications, System Alert Window, Notification Policy, Battery Optimisation. Tapping any row jumps to the OS settings page</li>
+        <li><strong>Notification Tests</strong>
+          <ul>
+            <li>Full Screen Alert (Priority 5, bypasses DND)</li>
+            <li>Persistent Notification with action buttons</li>
+            <li>Medium-priority notification</li>
+            <li>Standard normal notification</li>
+          </ul>
+        </li>
+        <li><strong>Diagnostics</strong> — link to <a href="#notification-diagnostics">Notification Diagnostics</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Notification Diagnostics -->
+  <div class="screen" id="notification-diagnostics">
+    <div class="screen-header">
+      <h3>Notification Diagnostics</h3>
+      <span class="path">lib/screens/notification_diagnostics_screen.dart</span>
+      <div class="roles"><span class="role-pill all">All (test tool)</span></div>
+    </div>
+    <div class="screen-body">
+      <p>Developer/admin tool for verifying the notification + geofence stack works end-to-end on a device.</p>
+
+      <h4>Tests Available</h4>
+      <ul>
+        <li><strong>Test ENTER</strong> — simulates a geofence enter event. Writes to <code>geo_fence_logs</code> and flips <code>isOnSite: true</code> on the current employee</li>
+        <li><strong>Test EXIT</strong> — simulates an exit event. Flips <code>isOnSite: false</code></li>
+        <li><strong>Force FCM Token Refresh</strong></li>
+        <li><strong>Print current employee state</strong> — dumps clock no, position, isOnSite, fcmToken</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="icon">🧪</span>
+        <div class="body">Use this when you need to test the escalation system but the device isn't physically inside the geofence. Hit Test ENTER and the next escalation cycle will treat the user as on-site.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ Cross-cutting concerns ════════════ -->
+<section class="group" id="cross-cutting">
+  <h2><span class="group-emoji">🔗</span>Cross-Cutting Concerns</h2>
+  <p>Behaviour that affects multiple screens.</p>
+
+  <div class="screen">
+    <div class="screen-header">
+      <h3>Role-Based Visibility</h3>
+      <span class="path">determined in home_screen.dart</span>
+    </div>
+    <div class="screen-body">
+      <p>The Home screen is the single source of truth for who sees which tiles. Roles are inferred from the <code>position</code> field on <code>employees/{clockNo}</code>:</p>
+      <ul>
+        <li><span class="chip mgr">Manager</span> — position contains "manager" (case-insensitive)</li>
+        <li><span class="chip admin">Admin</span> — clock number is in the admin allowlist (currently <code>22</code>)</li>
+        <li><span class="chip tech">Technician</span> — anyone else</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-header">
+      <h3>Offline-First Saves</h3>
+      <span class="path">SyncService + Hive sync_queue</span>
+    </div>
+    <div class="screen-body">
+      <p>Any screen that writes to Firestore (Create Job Card, Job Card Detail, Copper Dashboard, etc.) goes through <code>FirestoreService.saveJobCardOfflineAware</code> or the equivalent. If <code>connectivity_plus</code> reports offline, the write is queued to the Hive <code>sync_queue</code> box. When connectivity returns, <code>SyncService</code> replays the queue.</p>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-header">
+      <h3>Audit Log</h3>
+      <span class="path">job_card_audit collection</span>
+    </div>
+    <div class="screen-body">
+      <p>Every write to <code>job_cards</code> via <code>FirestoreService</code> appends a corresponding entry to <code>job_card_audit</code>. Future read screens could surface this for forensic / compliance use.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  CTP Job Cards · Screens Reference · Engineering documentation
+</footer>
+
+</main>
+</div>
+
+</body>
+</html>
