@@ -60,7 +60,7 @@ lib/
 
 **Offline sync**: `SyncService` queues failed writes in a Hive box (`sync_queue`). It listens to `connectivity_plus` and replays the queue when connectivity is restored. `SyncQueueItem` is `@HiveType` annotated — run `build_runner` after modifying it.
 
-**Push notifications**: FCM via `firebase_messaging`. Cloud Functions (`/functions/index.js`, deployed to `africa-south1`) drive escalation: 2-min → 7-min → 30-min timers based on job type and priority. `FirebaseMessagingService.kt` handles native FCM receipt; `FullScreenJobAlertActivity.kt` renders the full-screen overlay.
+**Push notifications**: FCM via `firebase_messaging`. Cloud Functions live in `/functions/index.js`. HTTP/callable functions deploy to `africa-south1`; **scheduled functions (`escalateNotifications`, `autoCloseMonitoringJobs`) must stay in `europe-west1`** — Firebase scheduled functions require a region that supports App Engine, which `africa-south1` does not. Escalation runs as 4 configurable stages stored in `notification_configs/global` (defaults: 5 / 10 / 30 / 60 min; stages 3 and 4 are disabled by default). `FirebaseMessagingService.kt` handles native FCM receipt; `FullScreenJobAlertActivity.kt` renders the full-screen overlay.
 
 **Geofencing**: `LocationService` + `BackgroundGeofenceService` use `geolocator` + `workmanager`. Native Kotlin code in `android/app/src/main/kotlin/com/ctp/jobcards/` handles `GeofenceReceiver`, `GeofenceHelper`, `AlertForegroundService`, and `AlarmReceiver`. The `GeofenceEditorScreen` allows on-device geofence configuration.
 
@@ -73,13 +73,16 @@ lib/
 
 ## Role-Based Access
 
-Three roles, determined by the `role` field on the `Employee` Firestore document:
+Four roles, **inferred from `Employee.position` and `Employee.department`** — the `Employee` model has no explicit `role` field. The canonical inference lives in `lib/utils/role.dart` (`roleFromEmployee()` returning a `UserRole` enum). Admin is gated by a password prompt in `SettingsScreen`, not by position.
 
-| Role | Key Screens |
-|------|------------|
-| Technician | Home, MyAssignedJobs, JobCardDetail, CreateJobCard |
-| Manager | ManagerDashboard, ViewJobCards, CopperDashboard, NotificationHistory |
-| Admin | AdminScreen, GeofenceEditor, EmployeeManagement |
+| Role | Inference | Key Screens |
+|------|-----------|-------------|
+| Technician | `position` contains `mechanical` or `electrical` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard |
+| Manager | `position` contains `manager` | ManagerDashboard, ViewJobCards, DailyReview (web), NotificationHistory |
+| Operator | neither manager nor technician | Home, CreateJobCard (primary), ViewJobCards |
+| Admin | password gate via Settings (`SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor |
+
+Additional flags: `isSuperManager` (`department == "general"`) sees factory-wide manager views; CopperDashboard is whitelisted to specific clock numbers (`22`, `5421`, `20`).
 
 ## Firestore Collections
 
@@ -107,10 +110,19 @@ Three roles, determined by the `role` field on the `Employee` Firestore document
 
 ## Cloud Functions
 
-Located in `/functions/index.js` (Node.js v24, region: `africa-south1`). Key responsibilities:
+Located in `/functions/index.js` (Node.js v24). Two regions in use:
+
+- **`africa-south1`** (default per `firebase.json`): `createCustomToken`, `onJobCardCreated`, `clearEscalationStamps`, etc.
+- **`europe-west1`** (set per-function): `escalateNotifications` (every 2 min) and `autoCloseMonitoringJobs` (scheduled) — scheduled functions require an App-Engine-supported region.
+
+Key responsibilities:
 - `createCustomToken` — custom auth token issuance
-- Notification dispatch with escalation timers
-- Role-based employee routing (mechanic, electrician, manager, foreman)
+- `onJobCardCreated` — initial notification dispatch to creation recipients
+- `escalateNotifications` — 4-stage escalation driven by `notification_configs/global`
+- `autoCloseMonitoringJobs` — auto-close Monitor jobs after threshold
+- Recipient routing via rules (`onsite_mechanics`, `onsite_electricians`, `onsite_managers`, `foremen`, `onsite_dept_managers`, `onsite_workshop_manager`, `offsite_*`, `operator`)
+
+See `docs/cloud_functions_deployment.md` for the full inventory and deployment steps.
 
 ## Testing
 

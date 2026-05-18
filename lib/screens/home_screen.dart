@@ -16,6 +16,7 @@ import '../services/notification_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
+import '../utils/role.dart' as role_utils;
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
@@ -57,13 +58,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
 
-  bool get isManager => currentEmployee?.position.toLowerCase().contains('manager') ?? false;
-  bool get isTechnician => (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false) ||
-                           (currentEmployee?.position.toLowerCase().contains('electrical') ?? false);
-  bool get isOperator => !(isManager || isTechnician);
-  bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
+  bool get isManager => role_utils.roleFromEmployee(currentEmployee) == role_utils.UserRole.manager;
+  bool get isTechnician => role_utils.roleFromEmployee(currentEmployee) == role_utils.UserRole.technician;
+  bool get isOperator => role_utils.roleFromEmployee(currentEmployee) == role_utils.UserRole.operator;
+  bool get isSuperManager => role_utils.isSuperManager(currentEmployee);
 
-  bool get _isCopperAuthorized => ['22', '5421', '20'].contains(currentEmployee?.clockNo ?? '');
+  bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
 
   List<Map<String, dynamic>> get _quickActions {
     final actions = [

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Cloud Functions Deployment</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Cloud Functions Deployment</h1>
+</header>
+<h1 id="cloud-functions--deployment-guide">Cloud Functions — Deployment
+Guide</h1>
+<blockquote>
+<p>Source: <code>/functions/index.js</code> (Node.js 24, Firebase
+Functions v2). This guide describes the function inventory, the
+two-region layout, deployment commands, and common failure modes.</p>
+</blockquote>
+<hr />
+<h2 id="function-inventory">Function inventory</h2>
+<p>The global default region is <code>africa-south1</code> (set in
+<code>functions.setGlobalOptions</code>). Scheduled functions override
+this and run in <code>europe-west1</code> — see the
+<strong>Regions</strong> section below for why.</p>
+<h3 id="africa-south1"><code>africa-south1</code></h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Type</th>
+<th>Trigger</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>createCustomToken</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>Issues a Firebase custom auth token for clock-number-based
+login.</td>
+</tr>
+<tr>
+<td><code>sendJobAssignmentNotification</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>Pushes an FCM message to a specific recipient token (assignment,
+busy, dismissed responses).</td>
+</tr>
+<tr>
+<td><code>sendCreatorNotification</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>Pushes an FCM message back to the operator who created the job.</td>
+</tr>
+<tr>
+<td><code>onJobCardCreated</code></td>
+<td>Firestore trigger</td>
+<td><code>onDocumentCreated('job_cards/{jobId}')</code></td>
+<td>Routes the initial notification to on-site mechanics/electricians
+per <code>creation_recipients_by_type</code>.</td>
+</tr>
+<tr>
+<td><code>onJobCardAssigned</code></td>
+<td>Firestore trigger</td>
+<td><code>onDocumentUpdated('job_cards/{jobId}')</code></td>
+<td>Fires creator/dismiss notifications when
+<code>assignedClockNos</code> changes.</td>
+</tr>
+<tr>
+<td><code>onCopperTransactionWrite</code></td>
+<td>Firestore trigger</td>
+<td><code>onDocumentWritten('copperTransactions/{docId}')</code></td>
+<td>Notifies copper-authorized users of inventory changes.</td>
+</tr>
+<tr>
+<td><code>onAlertResponseCreated</code></td>
+<td>Firestore trigger</td>
+<td><code>onDocumentCreated('alertResponses/{responseId}')</code></td>
+<td>Handles "I'm Busy" and "Dismissed" responses from notification
+action buttons.</td>
+</tr>
+<tr>
+<td><code>migrateEmployeeIds</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>One-time migration helper.</td>
+</tr>
+<tr>
+<td><code>migrateJobStatuses</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>One-time migration helper.</td>
+</tr>
+<tr>
+<td><code>clearEscalationStamps</code></td>
+<td>Callable</td>
+<td>HTTPS</td>
+<td>Resets <code>notifiedAtStage1..4</code> fields when an admin changes
+recipient rules (so old jobs don't bombard the new audience).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="europe-west1"><code>europe-west1</code></h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Type</th>
+<th>Schedule</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>escalateNotifications</code></td>
+<td>Scheduled</td>
+<td>every 2 minutes</td>
+<td>Reads <code>notification_configs/global</code>, advances jobs
+through stages 1→4, fires notifications to the configured recipient
+rules.</td>
+</tr>
+<tr>
+<td><code>autoCloseMonitoringJobs</code></td>
+<td>Scheduled</td>
+<td><code>0 8 * * *</code> (08:00 daily)</td>
+<td>Auto-closes Monitor-status jobs older than 7 days.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="why-two-regions">Why two regions</h3>
+<p>Firebase scheduled functions require a region that supports Google
+App Engine. <strong><code>africa-south1</code> does not support App
+Engine</strong>, so any function using
+<code>functions.scheduler.onSchedule({...})</code> must declare
+<code>region: "europe-west1"</code> (or another App-Engine-supported
+region). Do not change these to <code>africa-south1</code> — deployment
+will fail.</p>
+<p>This split is captured in the memory note
+<code>feedback_scheduled_functions_region.md</code>.</p>
+<hr />
+<h2 id="deployment">Deployment</h2>
+<p>From the repo root:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install / update dependencies</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> functions</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Deploy everything</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> deploy <span class="at">--only</span> functions</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Deploy a single function</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> deploy <span class="at">--only</span> functions:escalateNotifications</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> deploy <span class="at">--only</span> functions:onJobCardCreated</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Deploy multiple</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> deploy <span class="at">--only</span> functions:onJobCardCreated,functions:onJobCardAssigned</span></code></pre></div>
+<blockquote>
+<p>Per-function deploys are strongly preferred during routine work —
+they're faster and avoid touching the scheduled functions (which take
+longer to roll over).</p>
+</blockquote>
+<p>The npm scripts in <code>functions/package.json</code> shortcut the
+common commands:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> <span class="at">--prefix</span> functions run deploy   <span class="co"># firebase deploy --only functions</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> <span class="at">--prefix</span> functions run logs     <span class="co"># firebase functions:log</span></span></code></pre></div>
+<hr />
+<h2 id="required-firestore-composite-indexes">Required Firestore
+composite indexes</h2>
+<p>The escalation function relies on composite indexes for the staged
+query
+<code>where(status == "open").where(notifiedAtStageN == null).where(createdAt &lt;= cutoff)</code>.
+The indexes are:</p>
+<ul>
+<li><code>status, notifiedAtStage1, createdAt</code></li>
+<li><code>status, notifiedAtStage2, createdAt</code></li>
+<li><code>status, notifiedAtStage3, createdAt</code></li>
+<li><code>status, notifiedAtStage4, createdAt</code></li>
+</ul>
+<p>These live in <code>firestore.indexes.json</code> at the repo root.
+After modifying:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> deploy <span class="at">--only</span> firestore:indexes</span></code></pre></div>
+<blockquote>
+<p><strong>Index quirk</strong>: Firestore composite indexes only
+include documents that actually have the indexed field. Legacy job cards
+created before the four stamp fields existed won't be returned by these
+queries until they're backfilled. Use the
+<code>clearEscalationStamps</code> callable to write <code>null</code>
+stamps onto old documents.</p>
+</blockquote>
+<hr />
+<h2 id="local-emulation">Local emulation</h2>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> functions</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> emulators:start <span class="at">--only</span> functions,firestore</span></code></pre></div>
+<p>Override the region in your client when calling the local
+emulator:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode dart"><code class="sourceCode dart"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>FirebaseFunctions<span class="op">.</span>instanceFor(region<span class="op">:</span> <span class="st">&#39;africa-south1&#39;</span>)<span class="op">.</span>useFunctionsEmulator(<span class="st">&#39;localhost&#39;</span><span class="op">,</span> <span class="dv">5001</span>);</span></code></pre></div>
+<p>Scheduled functions don't fire on a schedule in the emulator — invoke
+them manually:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> http://localhost:5001/ctp-job-cards/europe-west1/escalateNotifications</span></code></pre></div>
+<hr />
+<h2 id="common-failure-modes">Common failure modes</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>escalateNotifications</code> deploy fails with "scheduler not
+supported in region"</td>
+<td>Region was changed to <code>africa-south1</code></td>
+<td>Restore <code>region: "europe-west1"</code> and redeploy</td>
+</tr>
+<tr>
+<td>Escalation isn't firing for any job</td>
+<td><code>notification_configs/global</code> is missing, or stages are
+all disabled</td>
+<td>Check the doc exists, and
+<code>stages.stageN.enabled === true</code> for at least one stage</td>
+</tr>
+<tr>
+<td>Escalation isn't firing for a specific job</td>
+<td><code>createdAt &lt;= enabled_at</code> (stage was enabled after the
+job was created)</td>
+<td>Either backfill <code>enabled_at</code>, or run
+<code>clearEscalationStamps</code> if recipients changed</td>
+</tr>
+<tr>
+<td><code>failed-precondition: query requires an index</code></td>
+<td>Composite index missing</td>
+<td>Open the Firebase Console error link to auto-create, then redeploy
+<code>firestore.indexes.json</code></td>
+</tr>
+<tr>
+<td>Cold-start timeouts on <code>onJobCardCreated</code></td>
+<td>Function instance was idle</td>
+<td>Acceptable — first invocation after idle warms up; subsequent calls
+are fast</td>
+</tr>
+<tr>
+<td>Notifications go to the wrong recipients</td>
+<td><code>recipients_by_type</code> keys don't match (mechanical vs
+mech/elec)</td>
+<td>Check <code>jobTypeKey()</code> in <code>index.js</code> — the Dart
+enum <code>mechanicalElectrical</code> maps to <code>mech/elec</code>
+(with slash)</td>
+</tr>
+<tr>
+<td>Schema drift between admin app and Cloud Function</td>
+<td><code>_buildStageDoc</code> in <code>admin_screen.dart</code> writes
+a field that <code>getNotificationConfig</code> doesn't read (or vice
+versa)</td>
+<td>Keep both in sync — see
+<code>escalation_config_structure.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="logs">Logs</h2>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> functions:log</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">firebase</span> functions:log <span class="at">--only</span> escalateNotifications <span class="at">--lines</span> 200</span></code></pre></div>
+<p>For real-time monitoring, the Firebase Console → Functions → Logs
+view streams live.</p>
+<hr />
+<h2 id="related-docs">Related docs</h2>
+<ul>
+<li><a href="escalation_system.md">Escalation system</a> — the algorithm
+and config schema</li>
+<li><a href="troubleshooting.md">Troubleshooting</a> — user-facing
+symptoms that often trace back to functions</li>
+<li><a href="firebase_security_rules.md">Firebase security rules</a> —
+Firestore + Storage access control</li>
+</ul>
+</body>
+</html>

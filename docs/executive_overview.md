@@ -58,7 +58,7 @@ The technician receives the alert and can assign themselves to the job, report t
 
 ### 4. Automatic Escalation
 
-Escalation runs across **four configurable stages**, with timers and recipients managed by Admin under Settings → Escalation Rules. By default, if no technician responds within 2 minutes, foremen and operational managers are notified; at 7 minutes department managers and the workshop manager receive an urgent alert; further stages at 30 and 60 minutes reach senior management. No critical fault can be silently ignored, and the timing can be tuned to match site conditions.
+Escalation runs across **four configurable stages**, with timers, recipient lists, and on/off switches managed by Admin under Settings → Escalation Rules. By default, if no technician responds within 5 minutes, on-site managers and foremen are notified; at 10 minutes the on-site department managers and workshop manager receive an urgent alert. Stages 3 (30 min) and 4 (60 min) are available but disabled by default, ready to be switched on if a site requires further escalation tiers. No critical fault can be silently ignored, and the timing can be tuned to match site conditions.
 
 ### 5. Job Tracked to Closure
 
@@ -150,7 +150,7 @@ There is no server to maintain, no on-site hardware to manage, and no single poi
 | Real-time job card creation and tracking | Live |
 | Push notifications scaled by priority (P1–P5) | Live |
 | Full-screen critical alarms (P5) | Live |
-| Automatic escalation (4 configurable stages) | Live |
+| Automatic escalation (4 configurable stages; 2 enabled by default) | Live |
 | Light and dark theme support | Live |
 | Real-time geofencing and on-site status | Live |
 | Background location check (30-min fallback) | Live |

@@ -12,7 +12,9 @@ import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../services/location_service.dart';
+import '../utils/role.dart' show isAdmin;
 import 'admin_screen.dart';
+import 'documentation_screen.dart';
 import 'notification_diagnostics_screen.dart';
 import 'login_screen.dart';
 import '../widgets/reset_permissions_button.dart';
@@ -192,7 +194,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isAdmin = currentEmployee?.clockNo == '22';
+    final bool isAdminUser = isAdmin(currentEmployee);
     final themeMode = ref.watch(themeNotifierProvider);
     final isDark = themeMode == ThemeMode.dark;
 
@@ -242,6 +244,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
 
+          const SizedBox(height: 16),
+
+          // Documentation entry — role-filtered list inside.
+          Card(
+            elevation: 2,
+            child: ListTile(
+              leading: const Icon(Icons.menu_book, color: Color(0xFFFF8C42)),
+              title: const Text('Documentation'),
+              subtitle: const Text('Guides, references, and troubleshooting'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DocumentationScreen()),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
 
           const ResetPermissionsButton(),
@@ -387,7 +405,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const SizedBox(height: 24),
-          if (isAdmin) ...[
+          if (isAdminUser) ...[
             const Text('Admin (Clock 22)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Card(

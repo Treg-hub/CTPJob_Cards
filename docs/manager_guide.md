@@ -34,6 +34,8 @@ Your **Manager Dashboard** gives you a live view of:
 - Jobs that have escalated and why
 - Jobs that have been open for too long without a technician assigned
 
+> **Daily Review (web)** — when you sign in on a desktop browser, an additional **Daily Review** screen is available. It lets you scope the day's jobs by department or job type and add manager notes inline. Use this for your morning review pass.
+
 ### Notification History
 
 Every notification sent by the system is logged. You can see:
@@ -109,14 +111,14 @@ Jobs should not remain **Open** for more than a few minutes — if they do, esca
 
 ### 5. Monitor Escalation Patterns
 
-Escalation runs across **four configurable stages**, set by Admin under **Settings → Escalation Rules**. Each stage has its own timer and recipient list. The defaults are:
+Escalation runs across **four configurable stages**, set by Admin under **Settings → Escalation Rules**. Each stage has its own timer, recipient list, and on/off switch. The defaults are:
 
-| Stage | Default Time | Default Recipients |
-|-------|-------------|-------------------|
-| Stage 1 | 2 minutes | Department foremen and on-site managers |
-| Stage 2 | 7 minutes | Department managers + workshop manager (urgent) |
-| Stage 3 | 30 minutes | Senior management |
-| Stage 4 | 60 minutes | Final escalation tier |
+| Stage | Default Time | Default State | Default Recipients |
+|-------|-------------|---------------|-------------------|
+| Stage 1 | 5 minutes | Enabled | On-site managers + department foremen |
+| Stage 2 | 10 minutes | Enabled | On-site department managers + workshop manager (urgent) |
+| Stage 3 | 30 minutes | Disabled | (Admin-configurable — typically senior management) |
+| Stage 4 | 60 minutes | Disabled | (Admin-configurable — final escalation tier) |
 
 If jobs in your department regularly hit Stage 2 or beyond, something is wrong:
 

@@ -1,0 +1,210 @@
+# Recent Changes
+
+Append-only change log of completed work, in reverse-chronological order (newest first).
+
+- **Added Agentic Development Infrastructure (2026-05-13)**:  
+  Created two new mandatory Memory Bank files to significantly improve autonomous building capability while staying fully compliant with all rules:
+  - `memory-bank/dependencies.md` — Complete reference for correct usage, parameters, and platform setup of every dependency in `pubspec.yaml` (prevents any future wrong API calls or deprecated methods).
+  - `memory-bank/agenticDevelopment.md` — Defines the official **Agentic Development Loop v2** (6-step workflow) with future scaling guardrails, Plan/Act mode enforcement, and Genkit readiness.
+  - Both files are now **mandatory reading** at the start of every task.
+- **Fixed Self-Assign Button User Info Bug**: Resolved issue where clicking "Assign Self" in full-screen alerts or notifications didn't retrieve user's clockNo, name, or id, causing assignments to wrong users.
+  - **Root Causes**: 1) FullScreenJobAlertActivity didn't pass user extras to MainActivity Intent, causing "Unknown" logs. 2) MainActivity fetched employees/{firebaseUid} but uid="employee_clockNo" while docs keyed by clockNo, so fetch failed and used uid as clockNo.
+  - **Fixes**: 1) Added putExtra("operator", "clockNo", "userName") in FullScreenJobAlertActivity btnAssignSelf. 2) Strip "employee_" prefix from uid in MainActivity assignJobToCurrentUser, sendBusyNotificationToOperator, logDismissedAlert. 3) notification_service.dart already had strip logic.
+  - **Result**: Self-assign now correctly gets user info from employees/{clockNo}, assigns to right user, logs show real names instead of "Unknown".
+- **Enhanced Related Jobs Filtering in Job Card Detail Screen**: Updated Related tab to show only monitor/closed jobs with exact matches on department, area, machine, part, and type, excluding the current job.
+  - **Before**: Client-side OR filter on any location field, included all statuses, inefficient for large datasets
+  - **After**: Server-side AND filter on all fields, status whereIn ['monitor','closed'], id != current, orderBy createdAt desc, limit 20
+  - **Implementation**: Added `getRelatedJobCardsStream()` in FirestoreService, updated `_getRelatedJobsStream()` in job_card_detail_screen.dart, added composite Firestore index
+  - **Rationale**: Precise filtering for relevant similar jobs, improved performance and accuracy
+- **Hidden Recent Job Cards on Home Screen for Non-Managers**: Recent job cards list now only visible to managers and super-managers (department == 'general'), hiding it completely for operators and technicians.
+  - **Before**: Recent job cards visible to all users on home screen
+  - **After**: Only managers/super-managers see the list with "Show Dept Only" toggle
+  - **Implementation**: Wrapped entire section in `if (isManager || isSuperManager) ...[]` in `_buildHomeTab`
+  - **Rationale**: Aligns with role-based access; managers need oversight, others focus on their tasks
+- **Enhanced My Assigned Jobs Card Layout**: Completely redesigned job card layout in my_assigned_jobs_screen.dart for better information hierarchy and usability.
+  - **New Structure**: Header (Job # | P2 | Type inline) → Location → Description → Comments preview → Notes preview → Action buttons at bottom
+  - **Comments/Notes Previews**: Show ALL entries (not just latest) with parsing logic, truncated to 60 chars, with 📝/📋 icons
+  - **Button Relocation**: Moved Start/Complete/Monitor buttons from trailing to bottom Row with spaceEvenly distribution
+  - **Tapping Behavior**: Entire card tappable opens Notes dialog (not comments) for adding work notes
+  - **Priority Display**: Inline RichText style matching home screen (P1-P5 with colors)
+  - **Padding**: Reduced to 8px for compact design, smaller text sizes throughout
+  - **Job# Styling**: Removed bold, same size as other text (14px)
+- **Monitoring Dashboard Available for All Employees**: Added Monitoring Dashboard quick action button to home screen for all employee types (Operators, Technicians, Managers).
+  - **Before**: Only managers had access to Monitoring Dashboard
+  - **After**: All employees can now access monitoring dashboard from quick actions
+  - **Positioning**: Placed strategically in each role's action list (4th for operators, 3rd for technicians, 3rd for managers)
+- **Removed Redundant "Closed" Filter**: Eliminated "Closed" status filter from View All Job Cards screen since "Completed" already handles this function.
+  - **Before**: Status filters included Open, Monitoring, Completed, Closed
+  - **After**: Status filters now include Open, Monitoring, Completed (Closed removed)
+  - **Reason**: "Closed" was redundant as completed jobs are already shown under "Completed"
+  - **Applied to**: Both mobile and desktop versions of the SegmentedButton
+- **Hidden Action Buttons on Completed Jobs**: Made all action buttons invisible on job card detail screen when job status is completed.
+  - **Before**: Completed jobs showed a "Monitor" button in the bottom banner
+  - **After**: Completed jobs show no buttons at all in the bottom banner
+  - **Implementation**: Added early return `if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();` in `_buildBottomBanner`
+  - **Rationale**: Once a job is completed, no further actions should be available
+- **Added "Add Note" Button for Technical Staff**: Implemented inline "Add Note" button in job card detail screen for electrical, mechanical, and manager roles.
+  - **Location**: Notes section header, similar to existing "Add Comment" button
+  - **Permissions**: Only visible to employees with "electrical", "mechanical", or "manager" in position
+  - **Functionality**: Opens modal bottom sheet with text field for adding work progress notes
+  - **Features**: Automatic timestamping, Firestore integration, success feedback
+  - **Difference from Comments**: No reoccurrence count adjustment, simpler interface
+  - **UI**: Matches existing comment button styling with orange theme
+- **Corrected Comments/Notes Order in Home Screen**: Fixed display order in recent job cards to show comments first, then notes.
+  - **Before**: Notes displayed before comments in job card previews
+  - **After**: Comments now appear first, followed by notes
+- **Updated Smart Loud-Notification Logic**: Refined priority-based notification escalation to keep 2-minute timer for ALL priorities, removed early 60s pri5 escalation, added alarm audio attributes for full-loud.
+  - **Levels**: Normal (pri1-3), Medium-High (pri4, loud sound+vib, no fullScreen), Full-Loud (pri5, bypassDnd, max vol, alarm sound, fullScreenIntent, strong vib)
+  - **Creation**: Pri1-3 normal, pri4 medium-high, pri5 full-loud to techs+creator
+  - **Escalations**: 2min pri1-3 normal pri4-5 medium-high, 7min pri1-3 normal pri4-5 full-loud
+  - **Implementation**: CF removed 1min pri5 block, passes level in FCM data; Dart added audioAttributesUsage: alarm for full-loud
+  - **Android**: Custom escalation_alert sound, fullScreenIntent permission, alarm usage for max priority
+  - **Reason**: Align with "keep 2-minute escalation timer for ALL priorities, do not shorten"
+- **Added Timestamps to Notes**: Implemented timestamp functionality for job card notes similar to comments. Notes now append with timestamps when jobs are completed, and display is updated to parse and show individual notes with timestamps.
+  - **Before**: `'${emp.displayName} (${emp.clockNo}) - ${emp.department ?? ''} ${emp.position ?? ''}'`
+  - **After**: `'${emp.displayName} - ${emp.department ?? ''}'`
+  - **Reason**: `Employee.displayName` already includes name, clockNo, and position
+- **Fixed Null Safety Error**: Added null assertion operator for `mechElecFilter!.toLowerCase()` in employee filtering logic
+- **Fixed Manager Dashboard Lint Errors**: Resolved compile and lint issues in manager_dashboard_screen.dart.
+  - **Const with Runtime Values**: Removed `const` from `SizedBox(height: _sectionSpacing)` where `_sectionSpacing` is runtime getter.
+  - **Deprecated APIs**: Updated `Colors.grey.withOpacity(0.3)` to `Colors.grey.withValues(alpha: 0.3)`, `pw.Table.fromTextArray` to `pw.TableHelper.fromTextArray`.
+  - **Unnecessary Null Checks**: Simplified `j.machine?.trim().isNotEmpty == true ? j.machine! : 'Unknown Machine'` to `j.machine != null && j.machine.trim().isNotEmpty ? j.machine : 'Unknown Machine'`.
+  - **Unnecessary this**: Removed `this.` qualifiers in `_showMonthPicker`.
+  - **Result**: Dashboard now compiles cleanly with only minor false positive dead code warnings.
+- **Fixed Admin Settings Navigation Error**: Resolved TypeError "String is not subtype of List<dynamic>" when navigating to admin settings.
+  - **Root Cause**: Firestore `structures/factory/data` had inconsistent data types (String instead of List for machine arrays).
+  - **Fix**: Added `_normalizeStructure()` method in admin_screen.dart to convert legacy String values to List<String>, ensuring all machine fields are Lists.
+  - **Implementation**: Applied normalization in `_loadStructure()` to sanitize data before UI rendering.
+  - **Result**: AdminScreen Structures tab now loads safely with mixed data types, preventing crashes on navigation.
+- **Enhanced Admin Employees Tab to Spreadsheet View**: Transformed Employees tab into a spreadsheet-like interface with bulk operations.
+  - **New UI**: Replaced ListView with `PaginatedDataTable` for editable rows, search, and pagination.
+  - **Inline Editing**: Click edit icon to toggle row to TextField inputs, save with icon.
+  - **Bulk Operations**: Checkbox select rows for bulk delete; CSV import/export for add/edit.
+  - **CSV Features**: Export template with headers; import with preview dialog; web-optimized download/upload.
+  - **Dependencies**: Added `file_picker: ^8.1.2` and `csv: ^6.0.0` for CSV handling.
+  - **Result**: Efficient bulk employee management, especially for web users.
+- **Redesigned View Job Cards Screen Filters**: Completely restructured filter system to reduce space usage and improve usability.
+  - **New Layout**: Tab-based status selection (Open/Monitoring/Completed) at top, collapsible advanced filters below.
+  - **Active Filter Chips**: Removable chips showing only applied filters (Staff Type, Department, Area, Machine, Part).
+  - **Collapsible Advanced Filters**: Expandable section containing staff type segmented button and cascading location chips.
+  - **Smart Defaults**: Electrical staff default to 'Electrical' filter, Mechanical to 'Mechanical', Super-managers to 'All'.
+  - **Space Savings**: Reduced filter height from ~40-50% screen space to ~15% when collapsed, ~25% when expanded.
+  - **Mobile/Desktop Responsive**: Collapsed by default on mobile, expanded on desktop (width >= 1200px).
+  - **UX Improvements**: Clear visual hierarchy, easy filter removal, logical cascading filter flow.
+  - **Result**: Dramatically improved screen space utilization while maintaining full filtering power.
+- **Enhanced Job Card Details Screen**: Improved manager assignment button and employee selection with advanced search, department grouping, onsite filtering, and bulk operations.
+  - **Search & Filtering**: Real-time search by employee name, onsite status filtering, department-based grouping with expansion tiles.
+  - **Bulk Selection**: Multi-select employees with chips display, clear all functionality, offsite employee warnings.
+  - **UI Improvements**: Streamlined dialog with grouped employee lists, visual onsite indicators, and efficient selection management.
+  - **Result**: Faster, more intuitive job assignments with comprehensive employee visibility.
+- **Updated Notification Format**: Enhanced push notifications with creator information and improved message structure.
+  - **Title Format**: "Job Assigned by [assigner] Job#[number]" – immediately shows who assigned it.
+  - **Body Format**: "Created by [creator]\nLocation: [area]\nDescription: [description]" – key details at a glance.
+  - **Implementation**: Updated notification_service.dart and cloud functions to pass creator parameter and format messages.
+  - **Result**: More informative notifications with clear assignment context and job details.
+- **Hidden Assignment Buttons on Completed Jobs**: Self-assign/unassign buttons now hidden when job status is completed.
+  - **Implementation**: Added status check `if (jobCard.status == JobStatus.completed) return const SizedBox.shrink();` in assignment buttons.
+  - **Result**: Clean UI that prevents unnecessary actions on completed jobs.
+- **Activity and Assignment Logs Redesign**: Logs now display in notes-style format with timestamps and left alignment.
+  - **Activity Log**: Status timeline (Created, Started, Completed, etc.) with timestamps.
+  - **Assignment Log**: Detailed events (assignments, adjustments, completions) formatted as "[timestamp] details".
+  - **UI**: Left-aligned text with consistent styling, crossAxisAlignment for proper layout.
+  - **Result**: Chronological, readable history separated by activity type vs detailed actions.
+- **Photo Upload Feature**: Added ability to take/upload photos to job cards with compression.
+  - **Dependencies**: Added `image_picker: ^1.1.2`, `flutter_image_compress: ^2.3.0`, `firebase_storage: ^13.2.0`.
+  - **JobCard Model**: Added `List<String> photos` field with Firestore serialization.
+  - **UI**: "📷 Add Photo" button in Notes section, camera/gallery selection dialog.
+  - **Upload Flow**: Compress to 800px max, 85% quality, upload to `job_cards/{jobId}/photos/{timestamp}.jpg`.
+  - **Display**: GridView of photos in "Photos" section, tap to enlarge.
+  - **Result**: Job-specific photo documentation with optimized storage and easy viewing.
+- **Copper Inventory Tracking Module**: Implemented complete copper inventory system for managers only.
+  - **Features**: Real-time dashboard with charts/cards, password authentication, atomic transactions, sorting screen, transaction history with edit/search/filter.
+  - **Models**: CopperInventory (single doc), CopperTransaction (collection) with proper Firestore serialization.
+  - **Services**: CopperService with runTransaction for consistency, streams for real-time updates.
+  - **Screens**: CopperStorageScreen (main dashboard), SortCopperScreen (validation), CopperTransactionsScreen (list/edit).
+  - **UI**: Copper-themed colors (amber/orange), Material 3 design, responsive layout.
+  - **Integration**: Added to manager dashboard app bar and home screen (authorized users), separate from job card functionality.
+  - **Consolidation**: Removed duplicate copper_dashboard_screen.dart, updated all nav to use CopperStorageScreen as entry point.
+- **Result**: Production-ready copper tracking with data integrity and professional UX.
+- **Riverpod State Management Refactor**: Migrated from Provider to Riverpod for better scalability, testability, and modern state management patterns.
+  - **Before**: Provider pattern with ChangeNotifier
+  - **After**: Riverpod providers with Notifier classes
+  - **Benefits**: Improved dependency injection, easier testing, better performance
+- **Enhanced Firebase Integration**: Added comprehensive Firebase services (Auth, Storage, Crashlytics, Cloud Functions).
+  - **Auth**: User authentication framework
+  - **Storage**: Photo upload and file management
+  - **Crashlytics**: Crash reporting and analytics
+  - **Functions**: Server-side notification sending and business logic
+- **Offline Support Implementation**: Added Hive local storage with connectivity monitoring for offline functionality.
+  - **Dependencies**: hive ^2.2.3, hive_flutter ^1.1.0, connectivity_plus ^6.0.5
+  - **Features**: Local data caching, sync on reconnect
+- **Dashboard Analytics Enhancement**: Integrated interactive charts and PDF export for manager dashboards.
+  - **Charts**: fl_chart ^0.70.0, charts_flutter ^0.12.0 for data visualization
+  - **Export**: pdf ^3.11.1, share_plus ^10.0.2 for report generation and sharing
+- **Local Notifications**: Added foreground message handling with flutter_local_notifications ^17.2.3.
+  - **Platform Support**: Android channels, iOS permissions
+  - **Integration**: Works alongside FCM for complete notification experience
+- **Advanced Admin Operations**: Enhanced bulk CSV import/export with file_picker ^8.1.2 and csv ^6.0.0.
+  - **Features**: Drag-and-drop file selection, preview dialogs, error handling
+- **Image Management System**: Improved photo upload with compression and Firebase Storage.
+  - **Compression**: flutter_image_compress ^2.3.0 for optimized storage
+  - **Storage**: firebase_storage ^12.3.3 for cloud file management
+  - **UI**: Enhanced gallery/camera selection with preview
+- **Job Status Standardization**: Updated job status system from (Open, Monitoring, Completed, Closed) to (Open, Monitor, Closed).
+  - **Enum Changes**: Renamed JobStatus.monitoring to JobStatus.monitor, JobStatus.completed to JobStatus.closed, removed JobStatus.cancelled
+  - **UI Updates**: Updated all screens, filters, colors, and buttons to use new status names
+  - **Data Migration**: Created migrate_status.js script to update existing Firestore data (completed→closed, monitoring→monitor)
+  - **Screen Renames**: Renamed completed_jobs_screen.dart to closed_jobs_screen.dart
+  - **Filter Updates**: Updated all status filters and queries to match new status values
+  - **Color Coding**: Open(blue), Monitor(orange), Closed(green)
+  - **Result**: Consistent, clear status system with proper lifecycle (Open → Monitor → Closed)
+- **Home Screen Quick Actions Simplified**: Streamlined quick actions to focus on core functionality.
+  - **Removed**: 'Closed Jobs' and 'Monitoring Dashboard' actions from all roles
+  - **Renamed**: 'View Open Jobs' → 'View Jobs' for all roles, 'View All Jobs' → 'View Jobs' for managers
+  - **Role Actions**:
+    - **Operator/Other**: Create → View Jobs → My Assigned
+    - **Technician**: My Assigned → View Jobs → Create
+    - **Manager**: Create → View Jobs
+  - **Result**: Cleaner, more focused home screen with essential actions only
+- **Enhanced Manager Dashboard Analytics**: Added comprehensive job card analytics with created vs closed trends and department breakdowns.
+  - **Trend Chart**: Line chart showing daily created (blue) vs closed (green) job cards over last 30 days with weekly date labels.
+  - **Department Chart**: Line graph displaying outstanding job cards by department (Pre Press green, Pressroom blue, Post Press brown) over last 30 days.
+  - **Data Computation**: Added daily outstanding counts by dept, computed from jobs created before each day and not completed by that day.
+  - **Metrics**: Added "Created (Month)" and "Closed (Month)" cards for monthly totals.
+  - **Layout**: Charts stacked vertically (trend on top, dept below) for all screen sizes, responsive design.
+  - **Filters**: Dept/month filters apply to all data, real-time updates from Firestore.
+  - **Result**: Professional analytics dashboard providing insights into job creation, completion, and department workload trends.
+- **Copper Dashboard App Bar Color Update**: Made the copper dashboard app bar yellow (amber) to match the selected tab text color, with separate black tab bar background.
+  - **App Bar**: Changed background from black to amber (yellow), title text from white to black for contrast
+  - **Tab Bar**: Moved out of AppBar and placed in separate black Container below app bar for visual separation
+  - **Result**: Consistent yellow theme for app bar matching tab selection color, with distinct black tab bar background
+- **Fixed Firebase Storage auth & upload issues**: Deployed storage.rules (auth writes to job_cards/**), added anonymous auth check, removed compression to fix freeze, added debug logs in job_card_detail_screen.dart _addPhoto().
+  - **Auth**: Anonymous sign-in before upload if no user
+  - **Upload**: Original image (no compression hang)
+  - **Debug**: Prints for auth/upload/save steps
+  - **Result**: Photo uploads work without auth errors or freezes
+- **Photo Upload and Display for Web Safety**: Updated photo upload method in create_job_card_screen.dart to use unique UUID for storage paths and improved error handling. Added _buildPhotosSection method in job_card_detail_screen.dart for horizontal scrolling photo display with CachedNetworkImage and CORS fix. Replaced old photo display code with new section call. Published changes to git.
+  - **Upload**: Unique UUID paths prevent conflicts, better error handling with snackbars
+  - **Display**: Horizontal ListView with CachedNetworkImage, error widget with CORS note
+  - **Web Compatibility**: Fixed CORS issues for web photo loading
+  - **Result**: Photos now safe and display properly on web platform
+- **Photo Upload Maximum Compression in Detail Screen**: Updated _addPhoto method in job_card_detail_screen.dart to use 1024px min dimension and 70% quality compression, UUID paths for web safety, removed web-specific handling, updated all calls to parameterless method. Photos now heavily compressed for storage efficiency.
+  - **Compression**: Maximum practical compression (1024px min, 70% quality) for 70-85% smaller files
+  - **Upload**: UUID paths prevent conflicts, no web special handling needed
+  - **Calls**: Updated all _addPhoto calls to parameterless for consistency
+  - **Result**: Photos heavily compressed while maintaining quality, optimized storage usage
+- **Custom Token Authentication for Employee Login**: Implemented secure authentication using Firebase Auth custom tokens generated by Cloud Function 'createCustomToken'.
+  - **Login Flow**: Employee enters name/clockNo, validates against Firestore, calls CF to generate custom token with uid 'employee_${clockNo}' and claims, signs in with Firebase Auth
+  - **Cloud Function**: Validates employee existence, creates token with employee data claims, handles errors gracefully
+  - **Security**: Tokens tied to employee clock numbers, secure authentication without passwords
+  - **TypeScript Fix**: Added explicit 'any' typing to CF data parameter to resolve TypeScript error
+  - **Result**: Employees now authenticated via Firebase Auth, enabling secure access control and user-specific features
+- **Update Checking Migration**: Migrated app update checking from Firestore `app_config/latest_version` to Firebase Remote Config for easier management. Now fetches `latest_version`, `latest_build`, `download_url`, `force_update`, `release_notes` from Remote Config, compatible with Firebase App Distribution APK URLs.
+- **Full-Screen Critical Job Alerts**: Implemented native Android FullScreenJobAlertActivity for P5 priority jobs - shows on lock screen, turns screen on, loops alarm sound with strong vibration, provides action buttons (Assign Self, View Job, I'm Busy, Dismiss).
+- **Enhanced Notification Permissions**: Added critical Android permissions (systemAlertWindow, accessNotificationPolicy, ignoreBatteryOptimizations) with auto-request on startup.
+- **Advanced Local Notification Channels**: Created 3 channels (normal, medium-high with loud sound, full-loud with bypassDND, alarm audio, fullScreenIntent) for priority-based escalation.
+- **Notification Action Handling**: Implemented global navigatorKey and local notification actions for deep-linking (Assign Self/View Job) directly from notifications.
+- **Native Background Notification Handling**: Migrated background message processing to native FirebaseMessagingService to avoid isolate issues.
+- **Torch Light Integration**: Added torch_light dependency for planned flashlight alerts (currently disabled due plugin API issues).
+- **Uncommitted WIP**: Current working changes include UI adjustments in home/login/admin screens for alert system accommodation.
+- **Geofence Reliability Improvements (Android)**: Hardened LocationService with better error handling, optimized Workmanager for battery efficiency, added battery optimization exemption request, replaced stub with thin wrapper, and updated AndroidManifest.xml with required background geofencing permissions. This makes automatic onsite detection significantly more reliable for job card notifications while keeping battery impact low. Single company geofence focus (Android only for now).

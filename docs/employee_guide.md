@@ -235,16 +235,16 @@ When you close the job, the operator who created it is automatically notified.
 
 ### What Happens If Nobody Responds?
 
-The system has automatic escalation across **four configurable stages**. Each stage has its own timer and recipient list, configured by Admin under **Settings → Escalation Rules**. The defaults are:
+The system has automatic escalation across **four configurable stages**. Each stage has its own timer, recipient list, and on/off switch, configured by Admin under **Settings → Escalation Rules**. The defaults are:
 
-| Stage | Default Time After Creation | Default Recipients |
-|-------|----------------------------|-------------------|
-| **Stage 1** | 2 minutes | Foremen and on-site managers for the relevant department |
-| **Stage 2** | 7 minutes | Department managers and the workshop manager (urgent alert) |
-| **Stage 3** | 30 minutes | Senior management |
-| **Stage 4** | 60 minutes | Final escalation tier |
+| Stage | Default Time After Creation | Default State | Default Recipients |
+|-------|----------------------------|---------------|-------------------|
+| **Stage 1** | 5 minutes | **Enabled** | On-site managers and foremen for the relevant department |
+| **Stage 2** | 10 minutes | **Enabled** | On-site department managers and the workshop manager (urgent alert) |
+| **Stage 3** | 30 minutes | Disabled | (Admin-configurable — typically senior management) |
+| **Stage 4** | 60 minutes | Disabled | (Admin-configurable — final escalation tier) |
 
-Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule.
+Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings or wants to switch on stages 3 and 4, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule.
 
 ---
 

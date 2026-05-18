@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CTP Job Cards — Documentation</title>
+  <link rel="stylesheet" href="docs.css" />
+  <style>
+    body { max-width: none; padding: 28px 28px 64px; }
+  </style>
+</head>
+<body>
+  <div class="hub-shell">
+    <aside class="hub-nav">
+      <span class="hub-brand">CTP Job Cards</span>
+      <h2>For everyone</h2>
+      <ul>
+        <li><a href="#quick-start">Quick start</a></li>
+        <li><a href="#priorities">P1–P5 priorities</a></li>
+        <li><a href="#escalation">Escalation</a></li>
+      </ul>
+
+      <h2>By role</h2>
+      <ul>
+        <li><a href="#by-role">Employee guide</a></li>
+        <li><a href="#by-role">Manager guide</a></li>
+        <li><a href="#by-role">Executive overview</a></li>
+      </ul>
+
+      <h2>References</h2>
+      <ul>
+        <li><a href="#references">App features</a></li>
+        <li><a href="#references">Escalation system</a></li>
+        <li><a href="#references">Screens reference</a></li>
+        <li><a href="#references">Troubleshooting</a></li>
+      </ul>
+
+      <h2>For developers</h2>
+      <ul>
+        <li><a href="#developer">Cloud Functions</a></li>
+        <li><a href="#developer">Security rules</a></li>
+        <li><a href="#developer">CLAUDE.md</a></li>
+      </ul>
+
+      <h2>Releases</h2>
+      <ul>
+        <li><a href="CHANGELOG.html">Changelog</a></li>
+      </ul>
+    </aside>
+
+    <main>
+      <h1>Documentation</h1>
+      <p class="tagline">Real-time digital maintenance management for the plant. Pick the guide that matches your role.</p>
+
+      <section id="quick-start">
+        <span class="section-badge">Start here</span>
+        <h2>If this is your first time</h2>
+        <p>
+          Sign in with your company email. The app walks you through a 7-page
+          onboarding that explains priorities, escalation, and the permissions
+          it needs. After that, the screens you see depend on your role.
+        </p>
+        <ul>
+          <li><strong>Operator</strong> — you create job cards when something breaks.</li>
+          <li><strong>Technician</strong> — you receive alerts and fix faults.</li>
+          <li><strong>Manager</strong> — you oversee jobs and respond to escalations.</li>
+          <li><strong>Admin</strong> — you configure the system (employees, geofences, escalation rules).</li>
+        </ul>
+      </section>
+
+      <section id="by-role">
+        <h2>By role</h2>
+        <div class="card-grid">
+          <div class="card"><a href="employee_guide.html">
+            <h3>Employee guide</h3>
+            <p>Operators and technicians: onboarding, permissions, job card workflow, notification levels.</p>
+          </a></div>
+          <div class="card"><a href="manager_guide.html">
+            <h3>Manager guide</h3>
+            <p>Dashboards, Daily Review, escalation patterns, quality enforcement, weekly checklist.</p>
+          </a></div>
+          <div class="card"><a href="executive_overview.html">
+            <h3>Executive overview</h3>
+            <p>The system at a glance — what it solves, how it works, what it captures, the AI roadmap.</p>
+          </a></div>
+        </div>
+      </section>
+
+      <section id="priorities">
+        <h2>Priorities P1–P5</h2>
+        <table>
+          <thead>
+            <tr><th>Priority</th><th>Impact</th><th>Notification</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>P1</td><td>No production impact</td><td>Standard banner</td></tr>
+            <tr><td>P2</td><td>Minor — attend soon</td><td>Standard banner</td></tr>
+            <tr><td>P3</td><td>Moderate — attend within the shift</td><td>Banner with action buttons</td></tr>
+            <tr><td>P4</td><td>Significant — attend ASAP</td><td>Persistent banner, DND bypass</td></tr>
+            <tr><td>P5</td><td>Production standing — immediate</td><td>Full-screen alarm, loud, lock-screen takeover</td></tr>
+          </tbody>
+        </table>
+        <p>Operators pick the priority at creation. Use it honestly — a P5 escalates loudly and reaches managers fast.</p>
+      </section>
+
+      <section id="escalation">
+        <h2>Escalation</h2>
+        <p>
+          If no technician responds, the system escalates automatically across
+          <strong>four configurable stages</strong>. Defaults:
+        </p>
+        <table>
+          <thead>
+            <tr><th>Stage</th><th>Default time</th><th>Default state</th><th>Reaches</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Stage 1</td><td>5 min</td><td>Enabled</td><td>On-site managers + foremen</td></tr>
+            <tr><td>Stage 2</td><td>10 min</td><td>Enabled</td><td>On-site dept managers + workshop manager (urgent)</td></tr>
+            <tr><td>Stage 3</td><td>30 min</td><td>Disabled by default</td><td>Configurable</td></tr>
+            <tr><td>Stage 4</td><td>60 min</td><td>Disabled by default</td><td>Configurable</td></tr>
+          </tbody>
+        </table>
+        <p>Stops the moment any technician taps "Assign to Me" or "I'm Busy". Admins tune timings and recipients in Settings → Escalation Rules.</p>
+        <p>Detail: <a href="escalation_system.html">Escalation system reference</a>.</p>
+      </section>
+
+      <section id="references">
+        <h2>References</h2>
+        <div class="card-grid">
+          <div class="card"><a href="app_features.html">
+            <h3>App features</h3>
+            <p>Feature-by-feature reference: job cards, notifications, geofencing, copper, offline sync, audit.</p>
+          </a></div>
+          <div class="card"><a href="escalation_system.html">
+            <h3>Escalation system</h3>
+            <p>Technical reference: the 4-stage config schema, recipient rules, scheduler cadence, edge cases.</p>
+          </a></div>
+          <div class="card"><a href="screens_reference.html">
+            <h3>Screens reference</h3>
+            <p>Every screen in the app, what it does, who can see it.</p>
+          </a></div>
+          <div class="card"><a href="troubleshooting.html">
+            <h3>Troubleshooting &amp; FAQ</h3>
+            <p>Symptoms and fixes for the most common production issues.</p>
+          </a></div>
+        </div>
+      </section>
+
+      <section id="developer">
+        <h2>For developers</h2>
+        <div class="card-grid">
+          <div class="card"><a href="cloud_functions_deployment.html">
+            <h3>Cloud Functions deployment</h3>
+            <p>Function inventory, the two-region layout, deployment commands, common failure modes.</p>
+          </a></div>
+          <div class="card"><a href="firebase_security_rules.html">
+            <h3>Firebase security rules</h3>
+            <p>What storage rules enforce, what Firestore rules should enforce, action items.</p>
+          </a></div>
+          <div class="card"><a href="../CLAUDE.md">
+            <h3>CLAUDE.md</h3>
+            <p>Architecture, commands, role-based access, init order — the file Claude Code reads on every run.</p>
+          </a></div>
+          <div class="card"><a href="../README.md">
+            <h3>README.md</h3>
+            <p>Project setup, prerequisites, build commands.</p>
+          </a></div>
+        </div>
+      </section>
+
+      <hr />
+      <p style="color: var(--ctp-muted); font-size: 0.85em;">
+        Markdown is the single source of truth for every guide on this page.
+        To update, edit the <code>.md</code> in <code>docs/</code> and run
+        <code>tools/build-docs.ps1</code>. See <a href="CHANGELOG.html">changelog</a> for recent changes.
+      </p>
+    </main>
+  </div>
+</body>
+</html>

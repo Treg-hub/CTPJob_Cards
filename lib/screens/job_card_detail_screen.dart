@@ -14,6 +14,7 @@ import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
+import '../utils/role.dart' show isAdmin;
 import '../theme/app_theme.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
@@ -493,7 +494,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                             ),
                           ),
                         ),
-                        if ((photo['addedBy'] == FirebaseAuth.instance.currentUser?.uid || currentEmployee?.clockNo == '22') && _currentJobCard.status != JobStatus.closed && _currentJobCard.status != JobStatus.monitor)
+                        if ((photo['addedBy'] == FirebaseAuth.instance.currentUser?.uid || isAdmin(currentEmployee)) && _currentJobCard.status != JobStatus.closed && _currentJobCard.status != JobStatus.monitor)
                           Positioned(
                             top: 8,
                             right: 8,
@@ -1063,6 +1064,34 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
       await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+
+      // If this user just self-assigned by starting the job (wasn't previously
+      // assigned), notify the operator so they know who's now responsible.
+      if (!isAlreadyAssigned && jobCard.operatorClockNo != null && current != null) {
+        try {
+          final creatorEmp = await _firestoreService.getEmployee(jobCard.operatorClockNo!);
+          if (creatorEmp?.fcmToken != null) {
+            await _notificationService.sendCreatorNotification(
+              recipientToken: creatorEmp!.fcmToken!,
+              jobCardId: jobCard.id ?? '',
+              jobCardNumber: jobCard.jobCardNumber,
+              operator: jobCard.operator,
+              creator: jobCard.operator,
+              department: jobCard.department,
+              area: jobCard.area,
+              machine: jobCard.machine,
+              part: jobCard.part,
+              description: jobCard.description,
+              notificationType: 'self_assign',
+              assigneeName: current.name,
+              priority: jobCard.priority,
+            );
+          }
+        } catch (e) {
+          debugPrint('Failed to notify operator on start: $e');
+        }
+      }
+
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Job started!')));

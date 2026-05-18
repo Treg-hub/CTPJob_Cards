@@ -34,6 +34,7 @@ dependencies:
   cached_network_image: ^3.4.1
   pull_to_refresh_flutter3: ^2.0.2
   flutter_staggered_animations: ^1.1.1
+  audioplayers: ^6.1.0
 
   # Location & Background
   permission_handler: ^12.0.1
@@ -54,6 +55,7 @@ dependencies:
   google_maps_flutter: ^2.17.0
   flutter_map: ^8.3.0
   latlong2: ^0.9.1
+  flutter_markdown_plus: ^1.0.3
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +70,17 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/sounds/
+    - docs/CHANGELOG.md
+    - docs/app_features.md
+    - docs/cloud_functions_deployment.md
+    - docs/employee_guide.md
+    - docs/escalation_system.md
+    - docs/executive_overview.md
+    - docs/firebase_security_rules.md
+    - docs/manager_guide.md
+    - docs/screens_reference.md
+    - docs/troubleshooting.md
 
 flutter_launcher_icons:
   image_path: "assets/images/logo.png"

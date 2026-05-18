@@ -1,0 +1,198 @@
+# Troubleshooting & FAQ
+
+This guide covers the most common symptoms users hit in production and the fastest fix path for each. Sections are grouped by what the user sees, not by component.
+
+---
+
+## Notifications not arriving
+
+### Symptoms
+
+- You're on site but didn't get an alert for a P3+ job in your trade
+- Other technicians did get it
+- Manager dashboards show the job was created and alerts were sent
+
+### Check, in order
+
+1. **Notifications permission** — Settings → Apps → CTP Job Cards → Notifications → "Allowed". On Android 13+, the app must hold `POST_NOTIFICATIONS`.
+2. **Battery optimization** — Settings → Apps → CTP Job Cards → Battery → Unrestricted. Aggressive battery savers (Samsung, Xiaomi, Huawei) kill background FCM listeners after a few minutes idle. This is the #1 cause.
+3. **DND bypass** — for P4/P5 to break through Do Not Disturb, the app needs DND access. Settings → Sound & Vibration → Do Not Disturb → App exceptions.
+4. **FCM token registered** — open Settings inside the app and tap "Refresh FCM Token". If the token is null or stale, the Cloud Function has no way to reach you.
+5. **On-site status** — geofencing only alerts on-site technicians. If you're showing as off-site when you're physically on site, see "Geofence not triggering" below.
+
+If all of those check out, ask Admin to look at the `notifications` Firestore collection — it logs every send attempt and lists exactly which clock numbers were targeted.
+
+---
+
+## Full-screen P5 alarm not firing
+
+### Symptoms
+
+- P5 jobs arrive as a regular banner instead of a screen-takeover with loud alarm
+- The phone is on silent or DND when the alert should bypass
+
+### Check, in order
+
+1. **"Display over other apps" / System Alert Window** — Settings → Apps → CTP Job Cards → Special access → Display over other apps → Allow. Without this, the lock-screen takeover falls back to a banner.
+2. **Schedule exact alarms** — Settings → Apps → Special App Access → Alarms & Reminders → CTP Job Cards → Allow. P5 uses the exact-alarm API; without it the alarm fires late or not at all.
+3. **DND bypass** — see Notifications section.
+4. **Lock screen notifications** — Settings → Notifications → Lock screen → Show all content. Some OEMs hide content by default.
+5. **Sound profile** — even with bypass granted, some firmware mutes alarms in DND. Test by setting DND on and running the in-app "Test P5 Full Screen Alert" button on the Permissions onboarding page.
+
+---
+
+## Geofence not triggering
+
+### Symptoms
+
+- Walking onto site doesn't flip you to on-site
+- You never receive job alerts even with all other permissions granted
+
+### Check, in order
+
+1. **Location permission level** — must be "Allow All the Time", not "Only while using the app". Background location is the *only* thing that triggers the geofence when the screen is off.
+2. **Location services on** — phone-wide location switch must be enabled.
+3. **Geofence radius** — the active geofence is ~800 m around the configured centre. If you're outside it, you're correctly off-site; the radius can be reconfigured by Admin via the **Geofence Editor** screen.
+4. **Re-registration after reboot** — Android removes geofences on device reboot. The app re-registers on next launch; if you rebooted and didn't open the app, do so once.
+5. **Force-refresh location** — Settings → "Check Current Location" button. This calls `LocationService.checkCurrentLocation()` and updates `isOnSite` immediately.
+
+If the geofence still doesn't fire, Admin can check the device's reported lat/lng in the `employees` document — that confirms whether the OS is even sending location updates.
+
+---
+
+## Job cards not syncing
+
+### Symptoms
+
+- You created a job but it doesn't appear in View Jobs
+- Closure note didn't save after going offline
+
+### Check, in order
+
+1. **Connectivity indicator** — top of the Home screen shows a sync state badge. Yellow/red means writes are queued.
+2. **Sync queue contents** — Settings → Diagnostics → "View Sync Queue" (admin/dev only) lists pending writes in the Hive `sync_queue` box.
+3. **Force-sync action** — tap the sync badge to manually flush. `SyncService` listens to `connectivity_plus` and replays on reconnect, but the manual trigger is faster than waiting.
+4. **Firebase Auth session** — if your session expired, writes will fail silently and stay queued. Sign out and sign back in.
+
+If writes stay queued indefinitely, check Firestore security rules (Admin) — a rule rejection looks like a network error from the client.
+
+---
+
+## "Access denied. Manager role required"
+
+### Symptom
+
+- Dashboard tab shows the access-denied message instead of the dashboard
+
+### Cause
+
+Role is **not** a stored field — it's inferred from `Employee.position`. The Dashboard tab is gated by `position.toLowerCase().contains('manager')`. If your position string doesn't contain the word "manager" (case-insensitive), you're treated as a non-manager.
+
+### Fix
+
+Ask Admin to update your `position` field in the `employees` Firestore collection. Common examples that work:
+
+- `"Production Manager"` ✓
+- `"Workshop Manager"` ✓
+- `"Manager - Electrical"` ✓
+
+Examples that **don't** work even though they look manager-ish:
+
+- `"Supervisor"` ✗ (no "manager" substring)
+- `"Foreman"` ✗
+- `"Team Lead"` ✗
+
+If your role is in this grey area, talk to Admin about whether to extend `lib/utils/role.dart` to recognise it.
+
+---
+
+## Login fails / "No employee profile found"
+
+### Symptoms
+
+- Firebase Auth accepts the password
+- App immediately shows "No employee profile found. Please register first."
+
+### Cause
+
+The `employees` collection is queried by `uid` (Firebase Auth UID). If your employee document exists but has no `uid` field, or has the wrong `uid`, the lookup fails.
+
+### Fix
+
+Admin needs to set the `uid` field on your `employees/{clockNo}` document to match your Firebase Auth UID. The Firebase Console → Authentication tab shows the UID for each user account.
+
+If the document doesn't exist at all, use the Registration screen to create one.
+
+---
+
+## Copper tab missing
+
+### Symptom
+
+- Some users see a "Copper" tab in the bottom nav, you don't
+
+### Cause
+
+Copper Dashboard is whitelisted to clock numbers `22`, `5421`, and `20` only (see `lib/utils/role.dart`).
+
+### Fix
+
+If you need access, ask Admin to either extend the whitelist (code change) or to use one of the existing whitelisted accounts.
+
+---
+
+## Admin screen — "Incorrect password"
+
+### Symptom
+
+- Tapping Admin in Settings prompts for a password and rejects what you type
+
+### Cause
+
+The Admin password is a hardcoded check in `home_screen.dart` (search for `correctPassword`). It is not stored in Firestore.
+
+### Fix
+
+Get the current password from another Admin user. If everyone has forgotten it, a developer needs to change the constant in the source and ship a new build.
+
+---
+
+## Escalation didn't reach me even though I'm a manager
+
+### Symptoms
+
+- A job hit Stage 2 escalation and the dashboard logged it
+- You're on-site and have the right position, but you didn't get an alert
+
+### Check, in order
+
+1. **`notification_configs/global.stages.stage2.enabled === true`** — Admin can check this in the Admin → Escalation Config tab.
+2. **Stage 2 recipient rules include your role** — typical Stage 2 rules: `onsite_dept_managers`, `onsite_workshop_manager`. If you're a general manager and only dept managers are listed, you won't be notified.
+3. **`enabled_at` is in the past** — if Admin recently changed Stage 2's recipients, the function skips jobs created before `enabled_at` so the new recipients aren't blasted with backlog.
+4. **You're recorded as on-site** — recipient rules with the `onsite_` prefix filter by `isOnSite == true`. Geofence section above.
+
+---
+
+## Operator follow-up alerts
+
+### What they look like
+
+> "No response yet — Job #123. 10 minutes passed with no assignment. We've notified 4 people. Follow up directly."
+
+### What they mean
+
+These are sent to the operator who created the job, at each escalation stage, *regardless* of whether the operator is on-site. They are informational — the operator doesn't need to do anything in the app, but they can phone or radio someone directly if the job is critical.
+
+### Disabling for a specific job type
+
+Add the job type to `excluded_job_types` in `notification_configs/global`. The Cloud Function skips initial notification *and* all escalation stages for excluded types. Common example: `"maintenance"`.
+
+---
+
+## Where to look when nothing else works
+
+- **`notifications` Firestore collection** — every notification ever sent, with `sentTo`, `level`, `priority`, and timestamp. Authoritative log.
+- **`job_card_audit` Firestore collection** — append-only log of every job card mutation, with who and when.
+- **Firebase Console → Functions → Logs** — `escalateNotifications` logs each stage's query results; useful for tracing why a job did or didn't escalate.
+- **`memory-bank/learnings.md`** (if present) — running list of gotchas the team has hit before.
+- **Diagnostics screen inside the app** — surfaces FCM token, on-site status, last geofence event, and sync queue size in one place.

@@ -1,871 +1,571 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CTP Job Cards — Employee Guide</title>
-<style>
-/* ── Reset & Tokens ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --navy:         #0d1f35;
-  --blue:         #1a3a5c;
-  --blue-mid:     #2563a0;
-  --blue-light:   #dbeafe;
-  --blue-pale:    #f0f6ff;
-  --accent:       #f59e0b;
-  --accent-dark:  #d97706;
-  --green:        #16a34a;
-  --green-light:  #dcfce7;
-  --red:          #dc2626;
-  --red-light:    #fee2e2;
-  --orange:       #ea580c;
-  --orange-light: #ffedd5;
-  --grey-100:     #f1f5f9;
-  --grey-200:     #e2e8f0;
-  --grey-300:     #cbd5e1;
-  --grey-400:     #94a3b8;
-  --grey-600:     #475569;
-  --grey-700:     #334155;
-  --grey-900:     #0f172a;
-  --text:         #1e293b;
-  --radius:       7px;
-  --shadow-sm:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
-}
-
-html { scroll-behavior: smooth; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.72;
-  color: var(--text);
-  background: #fff;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 48px 36px 96px;
-}
-
-/* ── Header ── */
-.doc-header {
-  background: linear-gradient(140deg, var(--navy) 0%, #0f2d50 50%, #1a4a7a 100%);
-  color: #fff;
-  padding: 44px 44px 36px;
-  border-radius: 10px;
-  margin-bottom: 44px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(13,31,53,.35);
-}
-.doc-header::before {
-  content: '';
-  position: absolute;
-  top: -70px; right: -70px;
-  width: 260px; height: 260px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.03);
-}
-.doc-header::after {
-  content: '';
-  position: absolute;
-  bottom: -50px; left: 35%;
-  width: 180px; height: 180px;
-  border-radius: 50%;
-  background: rgba(245,158,11,.05);
-}
-.doc-header .eyebrow {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 12px;
-  position: relative;
-}
-.doc-header h1 {
-  font-size: 32px;
-  font-weight: 900;
-  line-height: 1.15;
-  margin-bottom: 10px;
-  position: relative;
-}
-.doc-header .subtitle {
-  opacity: .8;
-  font-size: 15px;
-  position: relative;
-}
-.doc-header .meta {
-  margin-top: 24px;
-  font-size: 12px;
-  opacity: .5;
-  border-top: 1px solid rgba(255,255,255,.12);
-  padding-top: 16px;
-  position: relative;
-}
-
-/* ── TOC ── */
-.toc {
-  background: var(--blue-pale);
-  border: 1px solid var(--blue-light);
-  border-radius: var(--radius);
-  padding: 24px 28px;
-  margin-bottom: 52px;
-}
-.toc-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--blue-mid);
-  margin-bottom: 14px;
-}
-.toc ol { padding-left: 20px; }
-.toc li { margin-bottom: 7px; font-size: 14px; }
-.toc a { color: var(--blue-mid); text-decoration: none; font-weight: 500; transition: color .15s; }
-.toc a:hover { color: var(--navy); text-decoration: underline; }
-
-/* ── Section Blocks ── */
-.section-block { margin-bottom: 64px; }
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 30px;
-  padding-bottom: 14px;
-  border-bottom: 2px solid var(--grey-200);
-}
-.section-icon {
-  width: 40px; height: 40px;
-  background: var(--blue);
-  color: #fff;
-  font-size: 18px;
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-}
-.section-header h2 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--navy);
-}
-
-/* ── Typography ── */
-h3 {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--grey-900);
-  margin: 34px 0 12px;
-}
-h4 {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--blue-mid);
-  margin: 24px 0 8px;
-  text-transform: uppercase;
-  letter-spacing: .8px;
-}
-p { margin-bottom: 14px; }
-ul, ol { padding-left: 22px; margin-bottom: 14px; }
-li { margin-bottom: 5px; color: var(--grey-700); }
-strong { color: var(--grey-900); }
-hr { border: none; border-top: 1px solid var(--grey-200); margin: 36px 0; }
-
-/* ── Tables ── */
-.table-wrap {
-  overflow-x: auto;
-  margin: 16px 0 24px;
-  border-radius: var(--radius);
-  border: 1px solid var(--grey-200);
-  box-shadow: var(--shadow-sm);
-}
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th {
-  background: var(--navy);
-  color: #fff;
-  font-weight: 700;
-  padding: 11px 14px;
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
-td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--grey-200);
-  vertical-align: top;
-}
-tr:nth-child(even) td { background: var(--grey-100); }
-tr:last-child td { border-bottom: none; }
-
-/* Priority colours */
-.td-p1 { font-weight: 700; color: #1d4ed8; }
-.td-p2 { font-weight: 700; color: #15803d; }
-.td-p3 { font-weight: 700; color: #b45309; }
-.td-p4 { font-weight: 700; color: #c2410c; }
-.td-p5 { font-weight: 700; color: #b91c1c; }
-
-/* ── Callouts ── */
-.callout {
-  display: flex;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: var(--radius);
-  margin: 18px 0;
-  border-left: 4px solid;
-  font-size: 13.5px;
-}
-.callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-.callout-body { flex: 1; }
-.callout-body p:last-child { margin-bottom: 0; }
-.callout.tip     { background: var(--blue-pale); border-color: var(--blue-mid); }
-.callout.warning { background: var(--orange-light); border-color: var(--orange); }
-.callout.danger  { background: var(--red-light); border-color: var(--red); }
-.callout.success { background: var(--green-light); border-color: var(--green); }
-
-/* ── Role Grid ── */
-.role-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 16px 0 24px;
-}
-.role-card {
-  border: 1px solid var(--grey-200);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  transition: border-color .2s, box-shadow .2s;
-}
-.role-card:hover { border-color: var(--blue-mid); box-shadow: var(--shadow-sm); }
-.role-card .role-tag {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--blue-mid);
-  margin-bottom: 8px;
-}
-.role-card p { margin: 0; font-size: 13px; color: var(--grey-600); }
-
-/* ── Permission Cards ── */
-.permission-card {
-  border: 1px solid var(--grey-200);
-  border-radius: var(--radius);
-  padding: 22px 24px;
-  margin: 14px 0;
-  box-shadow: var(--shadow-sm);
-  transition: border-color .2s;
-}
-.permission-card:hover { border-color: var(--accent); }
-.permission-card .perm-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 10px;
-}
-.perm-num {
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.perm-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--grey-900);
-  line-height: 1.3;
-}
-.perm-request {
-  font-size: 12.5px;
-  font-style: italic;
-  color: var(--grey-400);
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  background: var(--grey-100);
-  border-radius: 4px;
-}
-.perm-action {
-  background: var(--green-light);
-  border: 1px solid #86efac;
-  border-radius: var(--radius);
-  padding: 9px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--green);
-  margin-top: 10px;
-}
-
-/* ── Status Pills ── */
-.status-pill {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 100px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.s-open     { background: #dbeafe; color: #1d4ed8; }
-.s-progress { background: #ffedd5; color: #c2410c; }
-.s-monitor  { background: #fef9c3; color: #854d0e; }
-.s-closed   { background: #dcfce7; color: #15803d; }
-
-/* ── Status Flow ── */
-.status-flow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 16px 0 24px;
-}
-.status-flow .arrow { color: var(--grey-300); font-size: 18px; }
-
-/* ── Notification Cards ── */
-.notif-card {
-  border-radius: var(--radius);
-  padding: 20px 22px;
-  margin: 14px 0;
-  border: 1px solid;
-  box-shadow: var(--shadow-sm);
-}
-.notif-normal   { background: #f0f9ff; border-color: #7dd3fc; }
-.notif-medium   { background: var(--orange-light); border-color: #fb923c; }
-.notif-critical { background: var(--red-light); border-color: #f87171; }
-.notif-card h4  { margin-top: 0; }
-.notif-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 100px;
-  margin-bottom: 12px;
-}
-.badge-normal   { background: #0369a1; color: #fff; }
-.badge-medium   { background: var(--orange); color: #fff; }
-.badge-critical { background: var(--red); color: #fff; }
-
-/* ── Action Buttons ── */
-.action-demo {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 12px 0;
-}
-.action-btn {
-  padding: 7px 16px;
-  border-radius: 5px;
-  font-size: 12.5px;
-  font-weight: 700;
-  border: none;
-  cursor: default;
-  letter-spacing: .2px;
-}
-.btn-assign { background: var(--green); color: #fff; }
-.btn-busy   { background: var(--accent-dark); color: #fff; }
-.btn-dismiss{ background: var(--grey-400); color: #fff; }
-
-/* ── Escalation Timeline ── */
-.esc-timeline {
-  position: relative;
-  padding-left: 28px;
-  margin: 16px 0 24px;
-}
-.esc-timeline::before {
-  content: '';
-  position: absolute;
-  left: 9px; top: 12px; bottom: 12px;
-  width: 2px;
-  background: linear-gradient(to bottom, var(--blue-light), var(--red-light));
-}
-.esc-step {
-  position: relative;
-  padding: 13px 16px;
-  background: #fff;
-  border: 1px solid var(--grey-200);
-  border-radius: var(--radius);
-  margin-bottom: 10px;
-  box-shadow: var(--shadow-sm);
-}
-.esc-step::before {
-  content: '';
-  position: absolute;
-  left: -24px; top: 50%;
-  transform: translateY(-50%);
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: var(--blue-mid);
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 2px var(--blue-mid);
-}
-.esc-step.e1::before { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
-.esc-step.e2::before { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
-.esc-step.e3::before { background: #9333ea; box-shadow: 0 0 0 2px #9333ea; }
-.esc-step.e4::before { background: var(--grey-900); box-shadow: 0 0 0 2px var(--grey-900); }
-.esc-step .time  { font-size: 10.5px; font-weight: 700; color: var(--grey-400); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
-.esc-step .who   { font-size: 13.5px; font-weight: 600; color: var(--navy); }
-.esc-step .detail { font-size: 12.5px; color: var(--grey-600); margin-top: 2px; }
-
-/* ── Future Block ── */
-.future-block {
-  background: linear-gradient(140deg, var(--navy) 0%, #1a3a5c 100%);
-  color: #e2e8f0;
-  border-radius: 10px;
-  padding: 36px 40px;
-  margin-top: 52px;
-  box-shadow: 0 8px 32px rgba(13,31,53,.3);
-}
-.future-block h2 {
-  color: var(--accent);
-  font-size: 20px;
-  margin-bottom: 20px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255,255,255,.12);
-}
-.future-block h3 { color: #fff; margin-top: 24px; }
-.future-block p  { color: #94a3b8; }
-.future-block ul { color: #94a3b8; }
-.future-block li { color: #94a3b8; margin-bottom: 6px; }
-.future-block blockquote {
-  border-left: 3px solid var(--accent);
-  padding: 10px 16px;
-  margin: 12px 0;
-  background: rgba(255,255,255,.04);
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font-style: italic;
-  color: #e2e8f0;
-}
-.future-highlight {
-  background: rgba(245,158,11,.1);
-  border: 1px solid rgba(245,158,11,.25);
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  margin-top: 20px;
-  color: #fef3c7;
-  font-size: 13.5px;
-  line-height: 1.65;
-}
-
-/* ── Print ── */
-@media print {
-  body { max-width: 100%; padding: 0; font-size: 12px; }
-  .doc-header { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .section-block { page-break-inside: avoid; }
-  .future-block  { page-break-before: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .table-wrap, .permission-card, .notif-card, .esc-step { box-shadow: none; }
-  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .toc { display: none; }
-  a { color: inherit; text-decoration: none; }
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Employee Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
 </head>
 <body>
-
-<!-- ══════ HEADER ══════ -->
-<div class="doc-header">
-  <div class="eyebrow">CTP Job Cards System</div>
-  <h1>Employee Guide</h1>
-  <div class="subtitle">Onboarding, Job Card Workflow &amp; Notifications</div>
-  <div class="meta">For: Operators · Technicians &nbsp;|&nbsp; Version 1.1 &nbsp;|&nbsp; 2026</div>
-</div>
-
-<!-- ══════ TOC ══════ -->
-<div class="toc">
-  <div class="toc-label">Contents</div>
-  <ol>
-    <li><a href="#section1">Onboarding &amp; App Permissions</a></li>
-    <li><a href="#section2">Flow of Job Cards</a></li>
-    <li><a href="#section3">Notifications — Types &amp; What They Mean</a></li>
-    <li><a href="#section4">App Appearance — Light &amp; Dark Mode</a></li>
-    <li><a href="#section5">The Future: AI-Assisted Maintenance</a></li>
-  </ol>
-</div>
-
-<!-- ══════ SECTION 1 ══════ -->
-<div class="section-block" id="section1">
-  <div class="section-header">
-    <div class="section-icon">👤</div>
-    <h2>Onboarding &amp; App Permissions</h2>
-  </div>
-
-  <h3>Who Uses This App</h3>
-  <p>There are four types of users in the CTP Job Cards system:</p>
-  <div class="role-grid">
-    <div class="role-card">
-      <div class="role-tag">🏭 Operator</div>
-      <p>Reports faults and creates job cards when a machine or process has an issue.</p>
-    </div>
-    <div class="role-card">
-      <div class="role-tag">🔧 Technician</div>
-      <p>Receives job notifications, attends to faults, and closes jobs when resolved.</p>
-    </div>
-    <div class="role-card">
-      <div class="role-tag">📊 Manager</div>
-      <p>Oversees job cards in their department and ensures quality of records.</p>
-    </div>
-    <div class="role-card">
-      <div class="role-tag">⚙️ Admin</div>
-      <p>Manages the system, employee accounts, and configuration.</p>
-    </div>
-  </div>
-  <div class="callout tip">
-    <div class="callout-icon">ℹ️</div>
-    <div class="callout-body"><p><strong>Operators and Technicians are separate roles.</strong> An operator is the person who discovers and reports the fault. A technician is the person who attends to fix it.</p></div>
-  </div>
-
-  <h3>Logging In</h3>
-  <p>You log in using your <strong>Gmail address</strong> and <strong>password</strong>. Your account is linked to your clock number, which determines your role, your department, and what you see in the app.</p>
-  <p>If you have forgotten your password, tap <em>"Forgot Password"</em> on the login screen — a reset link will be sent to your email.</p>
-
-  <h3>First-Time Setup: App Permissions</h3>
-  <p>When you open the app for the first time, it will ask for six permissions. Each one is required for the app to work correctly. <strong>Do not skip or deny these.</strong></p>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">1</div>
-      <div class="perm-title">Location — "Allow All the Time"</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to access your location all the time."</div>
-    <p>The app uses your location to determine whether you are on site or off site. Only on-site technicians receive job card notifications. When you enter or leave the company boundary, the system logs it automatically and your on-site status updates in real time.</p>
-    <p><strong>Location is not used for surveillance.</strong> It is used solely to determine whether you are within the company boundary.</p>
-    <div class="perm-action">✓ Select "Allow All the Time" — choosing "Only While Using the App" will break background geofencing.</div>
-  </div>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">2</div>
-      <div class="perm-title">Notifications — "Allow"</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to send you notifications."</div>
-    <p>Every job card alert, escalation, and urgent fault reaches you through notifications. Without this permission you will receive nothing — the system will escalate jobs as if no one is responding.</p>
-    <div class="perm-action">✓ Always select "Allow."</div>
-  </div>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">3</div>
-      <div class="perm-title">Battery Optimisation — "Unrestricted"</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to run in the background without restrictions."</div>
-    <p>Android phones aggressively shut down background apps to save battery. If the app is "optimised," your phone may kill it after a few minutes, causing you to miss notifications entirely — especially overnight.</p>
-    <div class="perm-action">✓ Go to Settings → Apps → CTP Job Cards → Battery → Unrestricted.</div>
-  </div>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">4</div>
-      <div class="perm-title">Display Over Other Apps</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to appear over other apps."</div>
-    <p>Priority 5 faults — production is standing — require a full-screen alert that appears even if your phone is locked or another app is open. This permission makes that possible.</p>
-    <div class="perm-action">✓ Grant this permission. Without it, P5 alerts fall back to a standard banner, which is easily missed.</div>
-  </div>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">5</div>
-      <div class="perm-title">Do Not Disturb Access</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to override Do Not Disturb."</div>
-    <p>If your phone is in Do Not Disturb mode, standard notifications are silenced. This permission allows P5 critical alarms to bypass DND so the alarm still sounds when production is standing.</p>
-    <div class="perm-action">✓ Grant this permission for full P5 coverage.</div>
-  </div>
-
-  <div class="permission-card">
-    <div class="perm-header">
-      <div class="perm-num">6</div>
-      <div class="perm-title">Schedule Exact Alarms</div>
-    </div>
-    <div class="perm-request">App asks: "Allow CTP Job Cards to set exact alarms."</div>
-    <p>The P5 full-screen alarm uses the phone's alarm system to guarantee it fires at exactly the right moment, even in deep sleep mode. Without this, the alarm may arrive late or not at all.</p>
-    <div class="perm-action">✓ Grant when prompted. On some phones: Settings → Apps → Special App Access → Alarms &amp; Reminders.</div>
-  </div>
-</div>
-
-<!-- ══════ SECTION 2 ══════ -->
-<div class="section-block" id="section2">
-  <div class="section-header">
-    <div class="section-icon">📋</div>
-    <h2>Flow of Job Cards</h2>
-  </div>
-
-  <h3>What Is a Job Card?</h3>
-  <p>A job card is a formal digital record of a fault, breakdown, or maintenance task. It captures the department, area, machine, component, fault description, priority, and type (Mechanical / Electrical / Mech-Elec). It is the system's source of truth for every fault on site.</p>
-
-  <h3>Priority Levels</h3>
-  <p>Priority reflects the real production impact at the time the fault is reported:</p>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Priority</th><th>Production Impact</th><th>Expected Response</th></tr>
-      </thead>
-      <tbody>
-        <tr><td class="td-p1">P1</td><td>No effect on production — routine or planned work</td><td>Attend when available</td></tr>
-        <tr><td class="td-p2">P2</td><td>Minor impact — production continuing</td><td>Attend soon</td></tr>
-        <tr><td class="td-p3">P3</td><td>Moderate impact — degraded operation</td><td>Attend within the shift</td></tr>
-        <tr><td class="td-p4">P4</td><td>Significant impact — output reduced</td><td>Attend as soon as possible</td></tr>
-        <tr><td class="td-p5">P5</td><td><strong>Production is standing — stopped</strong></td><td><strong>Immediate response</strong></td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="callout warning">
-    <div class="callout-icon">⚠️</div>
-    <div class="callout-body"><p><strong>Priority must be honest.</strong> A P5 means production has stopped. Using P5 routinely when production is running erodes the system's ability to distinguish genuine emergencies. Managers monitor priority accuracy.</p></div>
-  </div>
-
-  <h3>Job Card Status</h3>
-  <div class="status-flow">
-    <span class="status-pill s-open">Open</span>
-    <span class="arrow">→</span>
-    <span class="status-pill s-progress">In-Progress</span>
-    <span class="arrow">→</span>
-    <span class="status-pill s-monitor">Monitor</span>
-    <span class="arrow">→</span>
-    <span class="status-pill s-closed">Closed</span>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Status</th><th>Meaning</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><span class="status-pill s-open">Open</span></td><td>Job has been created and is awaiting a technician — no one has accepted it yet</td></tr>
-        <tr><td><span class="status-pill s-progress">In-Progress</span></td><td>A technician has self-assigned and is actively working the job — escalation has stopped</td></tr>
-        <tr><td><span class="status-pill s-monitor">Monitor</span></td><td>Fault has been resolved but the machine is being watched for recurrence</td></tr>
-        <tr><td><span class="status-pill s-closed">Closed</span></td><td>Job is complete — fault resolved and confirmed</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="callout tip">
-    <div class="callout-icon">ℹ️</div>
-    <div class="callout-body"><p>The moment you tap <strong>Assign Self</strong> on a notification, the job card automatically moves from <strong>Open</strong> to <strong>In-Progress</strong>. You do not need to change it manually.</p></div>
-  </div>
-
-  <hr>
-
-  <h3>For Operators: Creating a Job Card</h3>
-  <p>When you discover a fault or breakdown, create a job card immediately. Do not wait.</p>
-  <ol>
-    <li>Open the CTP Job Cards app</li>
-    <li>Tap <strong>Create Job Card</strong></li>
-    <li>Fill in <em>all</em> fields — department, area, machine, part, description, priority, and type</li>
-    <li>Submit — the relevant technicians are notified instantly</li>
-  </ol>
-
-  <h4>What Good Looks Like</h4>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Instead of…</th><th>Write…</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>"Machine broken"</td><td>"Conveyor 3 drive motor tripping on overload — production line stopped"</td></tr>
-        <tr><td>"Pump issue"</td><td>"Cooling water pump P-02 not priming — no flow to chiller circuit"</td></tr>
-        <tr><td>"Fault on line"</td><td>"PLC fault code E-14 on Line 2 pressing machine — cycle will not complete"</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p>Once submitted, you can track the job's status in the app. You will receive a notification when a technician accepts the job and again when it is closed.</p>
-
-  <hr>
-
-  <h3>For Technicians: Receiving and Working a Job</h3>
-
-  <h4>Step 1 — Receive the Notification</h4>
-  <p>When a job matching your trade is created and you are on site, you receive a push notification showing the job number, priority, machine, area, and description. You have three options directly from the notification:</p>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Action</th><th>What It Does</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>Assign Self</strong></td><td>You take ownership of the job. The operator is notified. Escalation stops immediately.</td></tr>
-        <tr><td><strong>I'm Busy</strong></td><td>You acknowledge the job but cannot attend right now. The operator is notified. Escalation stops. The system continues looking for another technician.</td></tr>
-        <tr><td><strong>Dismiss</strong></td><td>You dismiss the alert. This is logged. Escalation continues until someone accepts.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="action-demo">
-    <span class="action-btn btn-assign">Assign Self</span>
-    <span class="action-btn btn-busy">I'm Busy</span>
-    <span class="action-btn btn-dismiss">Dismiss</span>
-  </div>
-  <div class="callout danger">
-    <div class="callout-icon">🔴</div>
-    <div class="callout-body"><p><strong>Always respond to notifications.</strong> If you do not respond, the system escalates the job to your foreman and then your manager. All responses are visible in the notification log.</p></div>
-  </div>
-
-  <h4>Step 2 — Work the Job</h4>
-  <p>Once accepted, navigate to <strong>My Assigned Jobs</strong> in the app to view full details. Update the status as you progress:</p>
-  <ul>
-    <li>When you self-assign: status changes automatically from <strong>Open</strong> to <strong>In-Progress</strong></li>
-    <li>When the fault is resolved but you want to monitor: change to <strong>Monitor</strong></li>
-    <li>When the job is fully complete: change to <strong>Closed</strong></li>
-  </ul>
-
-  <h4>Step 3 — Close the Job</h4>
-  <p>When closing a job you must add a note. A closed job with no note is an incomplete record. Include:</p>
-  <ul>
-    <li><strong>What was done</strong> — the actual repair or action taken</li>
-    <li><strong>Parts used</strong> — including numbers or specifications where possible</li>
-    <li><strong>Root cause</strong> — wear, contamination, operator error, age, incorrect adjustment?</li>
-    <li><strong>Recommendations</strong> — any follow-up work or scheduled maintenance needed</li>
-  </ul>
-  <p>The operator who raised the job is automatically notified when you close it.</p>
-
-  <hr>
-
-  <h3>Automatic Escalation: What Happens If Nobody Responds?</h3>
-  <p>The system has automatic escalation across <strong>four configurable stages</strong>. Each stage has its own timer and recipient list, configured by Admin under <strong>Settings → Escalation Rules</strong>. The defaults are:</p>
-
-  <div class="esc-timeline">
-    <div class="esc-step e0">
-      <div class="time">T = 0 min</div>
-      <div class="who">Job created — on-site technicians notified instantly</div>
-    </div>
-    <div class="esc-step e1">
-      <div class="time">Stage 1 · 5 minutes (default)</div>
-      <div class="who">Foremen and on-site managers alerted — operator may also be notified ("No response yet — follow up directly")</div>
-    </div>
-    <div class="esc-step e2">
-      <div class="time">Stage 2 · 10 minutes (default)</div>
-      <div class="who">Department managers and workshop manager — urgent alert</div>
-    </div>
-    <div class="esc-step e3">
-      <div class="time">Stage 3 · 30 minutes (default, currently disabled)</div>
-      <div class="who">Reserved for senior management / off-site escalation</div>
-    </div>
-    <div class="esc-step e4">
-      <div class="time">Stage 4 · 60 minutes (default, currently disabled)</div>
-      <div class="who">Final escalation tier</div>
-    </div>
-  </div>
-
-  <p>Escalation stops the moment any technician self-assigns or responds "I'm Busy." If your site uses different timings, your Admin can change them at any time — the defaults above are a starting point, not a fixed rule. Each stage can also be enabled or disabled independently.</p>
-
-  <p><strong>Operator follow-up:</strong> if you raised the job and no one has responded, you may receive a tailored notification telling you how many people have been notified so far — empowering you to follow up directly instead of waiting at the machine.</p>
-</div>
-
-<!-- ══════ SECTION 3 ══════ -->
-<div class="section-block" id="section3">
-  <div class="section-header">
-    <div class="section-icon">🔔</div>
-    <h2>Notifications — Types &amp; What They Mean</h2>
-  </div>
-
-  <div class="notif-card notif-normal">
-    <span class="notif-badge badge-normal">Priority 1 · 2 · 3</span>
-    <h4 style="color:#0369a1; margin-bottom:10px;">Normal Banner</h4>
-    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
-      <table style="border:none;">
-        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Standard Android notification banner at the top of the screen</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Default notification tone</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Appears and disappears. Tap to open the job.</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;">Jobs that need attention but are not stopping production</td></tr>
-      </table>
-    </div>
-  </div>
-
-  <div class="notif-card notif-medium">
-    <span class="notif-badge badge-medium">Priority 4</span>
-    <h4 style="color:#c2410c; margin-bottom:10px;">Persistent Banner</h4>
-    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
-      <table style="border:none;">
-        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Notification that stays in your panel until acted upon — cannot be swiped away</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Escalation alert tone with strong vibration pattern</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Remains visible until you tap an action button: Assign Self, Busy, or Dismiss</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;">Significant production impact — prompt response required</td></tr>
-      </table>
-    </div>
-  </div>
-
-  <div class="notif-card notif-critical">
-    <span class="notif-badge badge-critical">Priority 5 — CRITICAL</span>
-    <h4 style="color:#b91c1c; margin-bottom:10px;">Full-Screen Alarm</h4>
-    <div class="table-wrap" style="margin:0; border:none; box-shadow:none;">
-      <table style="border:none;">
-        <tr><td style="width:90px; font-weight:600; padding-left:0; border:none;">Appearance</td><td style="border:none;">Full-screen alert that takes over the entire phone, even from the lock screen</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Sound</td><td style="border:none; background:transparent;">Loud, repeating alarm — bypasses Do Not Disturb</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none;">Behaviour</td><td style="border:none;">Cannot be passively ignored. Tapping any action button dismisses the alarm and logs your response.</td></tr>
-        <tr><td style="font-weight:600; padding-left:0; border:none; background:transparent;">Used for</td><td style="border:none; background:transparent;"><strong>Production is standing. Immediate response required.</strong></td></tr>
-      </table>
-    </div>
-  </div>
-
-  <h3>Notification Action Buttons</h3>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Button</th><th>Effect</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>Assign Self</strong></td><td>Assigns the job to you, notifies the operator, stops escalation immediately</td></tr>
-        <tr><td><strong>I'm Busy</strong></td><td>Logs your response, notifies the operator, stops escalation — system continues looking for another technician</td></tr>
-        <tr><td><strong>Dismiss</strong></td><td>Logs a dismissed response. Escalation continues until someone accepts.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h3>On-Site Arrival &amp; Departure Notifications</h3>
-  <p>When you cross the company boundary you automatically receive:</p>
-  <ul>
-    <li><strong>"Arrived On-Site"</strong> — your status updates and job notifications begin routing to you</li>
-    <li><strong>"Left Site Area"</strong> — your status updates and job notifications pause until you return</li>
-  </ul>
-  <p>This is fully automatic — no action required from you.</p>
-</div>
-
-<!-- ══════ SECTION 4 ══════ -->
-<div class="section-block" id="section4">
-  <div class="section-header">
-    <div class="section-icon">🎨</div>
-    <h2>App Appearance — Light &amp; Dark Mode</h2>
-  </div>
-
-  <p>The app supports both a <strong>dark theme</strong> (the default — easier on the eyes in low-light environments such as workshops and night shifts) and a <strong>light theme</strong> (better visibility in bright outdoor sunlight).</p>
-  <p>To switch:</p>
-  <ol>
-    <li>Open the app and tap the <strong>gear icon</strong> (Settings) at the top right</li>
-    <li>Find the <strong>Dark Mode</strong> toggle near the top of the Settings screen</li>
-    <li>Tap the switch to flip between themes — the change is instant</li>
-  </ol>
-  <p>Your choice is remembered and applies every time you open the app. The orange CTP branding remains consistent across both themes.</p>
-</div>
-
-<!-- ══════ SECTION 5 ══════ -->
-<div class="future-block" id="section5">
-  <h2>🧠 The Future: AI-Assisted Maintenance</h2>
-
-  <h3>Predictive Maintenance</h3>
-  <p>By analysing the history of job cards — which machines fail most often, at what intervals, under what conditions — the system will generate predictive alerts:</p>
-  <ul>
-    <li>"Machine X has had 4 bearing failures in 6 months. Inspection recommended within 3 weeks."</li>
-    <li>"Fault frequency on Line 3 increases in summer. Pre-emptive service advised."</li>
-  </ul>
-  <p>This shifts the team from reacting to breakdowns to planning interventions during scheduled downtime.</p>
-
-  <h3>AI Chatbot — Manuals &amp; Fault Finding</h3>
-  <p>A conversational AI assistant will be integrated into the app with access to operator manuals, historical fault records, wiring diagrams, and parts lists. A technician on the floor will be able to ask:</p>
-  <blockquote>"The conveyor on Line 2 is tripping on overload. What are the common causes?"</blockquote>
-  <blockquote>"What is the torque spec for the main shaft bearing on the FX400 gearbox?"</blockquote>
-  <blockquote>"What was done the last time this fault appeared on Machine 7?"</blockquote>
-  <p>The assistant responds instantly with answers drawn from official documentation and real maintenance history.</p>
-
-  <div class="future-highlight">
-    <strong>Your job card entries today become the data that makes these AI tools accurate.</strong> Complete descriptions and clear closure notes are an investment in the system's future intelligence.
-  </div>
-</div>
-
+<header id="title-block-header">
+<h1 class="title">Employee Guide</h1>
+</header>
+<h1 id="ctp-job-cards--employee-guide">CTP Job Cards — Employee
+Guide</h1>
+<hr />
+<h2 id="section-1-onboarding--app-permissions">Section 1: Onboarding
+&amp; App Permissions</h2>
+<h3 id="who-uses-this-app">Who Uses This App</h3>
+<p>There are four types of users in the CTP Job Cards system:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Primary Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Operator</strong></td>
+<td>Reports faults and creates job cards when a machine or process has
+an issue</td>
+</tr>
+<tr>
+<td><strong>Technician</strong></td>
+<td>Receives job card notifications, attends to faults, and closes jobs
+when resolved</td>
+</tr>
+<tr>
+<td><strong>Manager</strong></td>
+<td>Oversees job cards in their department, monitors escalations, and
+ensures quality</td>
+</tr>
+<tr>
+<td><strong>Admin</strong></td>
+<td>Manages the system, employee accounts, and geofence
+configuration</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Operators and Technicians are separate roles.
+An operator is the person who discovers and reports the fault — a
+technician is the person who goes to fix it.</p>
+</blockquote>
+<hr />
+<h3 id="logging-in">Logging In</h3>
+<p>You log in using your <strong>company email address</strong> and
+<strong>password</strong> through the Firebase authentication system.
+Your email account is linked to your clock number behind the scenes,
+which determines what role you have, what department you belong to, and
+what you see in the app.</p>
+<p>If you have forgotten your password, use the "Forgot Password" option
+on the login screen and a reset link will be sent to your email.</p>
+<hr />
+<h3 id="why-you-need-this-app">Why You Need This App</h3>
+<p><strong>For Operators:</strong> This app is how you formally report a
+fault or breakdown. Instead of verbally reporting to a supervisor or
+writing on a paper log, you create a job card directly. This means the
+fault is instantly in the system, visible to the right technicians, and
+tracked to resolution — nothing gets lost.</p>
+<p><strong>For Technicians:</strong> This app is how you receive and
+manage your work. When a fault is reported, you are notified immediately
+on your phone. You can accept the job, indicate you are unavailable, and
+record what you did to fix it — all from the app.</p>
+<hr />
+<h3 id="first-time-setup-permissions-explained">First-Time Setup:
+Permissions Explained</h3>
+<p>When you open the app for the first time, it will ask for a number of
+permissions. Each one has a specific reason. <strong>Do not skip or deny
+these — without them, the app cannot do its job and you will miss urgent
+alerts.</strong></p>
+<hr />
+<h4 id="1-location--allow-all-the-time">1. Location — "Allow All the
+Time"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to access
+your location all the time.</em></p>
+<p><strong>Why it needs this:</strong> The app uses your location to
+determine whether you are on site or off site. This matters for two
+reasons:</p>
+<ul>
+<li><strong>On-site status</strong> — Your profile in the system is
+updated to show you are on site. Technicians who are on site receive job
+card notifications. If you are off site, the system knows not to send
+you alerts for jobs you cannot attend to.</li>
+<li><strong>Geofence detection</strong> — The moment you enter or leave
+the company boundary (approximately 800 m radius), the system logs it
+automatically. You will receive a notification confirming "Arrived
+On-Site" or "Left Site Area."</li>
+</ul>
+<p><strong>Location is not used for surveillance.</strong> It is used
+solely to determine whether you are within the company boundary and
+should be receiving job alerts.</p>
+<blockquote>
+<p>Select <strong>"Allow All the Time"</strong> — if you choose "Only
+While Using the App" the geofence will not work when the app is in the
+background.</p>
+</blockquote>
+<hr />
+<h4 id="2-notifications--allow">2. Notifications — "Allow"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to send
+you notifications.</em></p>
+<p><strong>Why it needs this:</strong> Every job card assigned to you,
+every escalation, every urgent fault — all of it reaches you through
+notifications. Without this permission, you will receive nothing. You
+will be invisible to the system and jobs will escalate as if no one is
+responding.</p>
+<blockquote>
+<p>Always select <strong>"Allow."</strong></p>
+</blockquote>
+<hr />
+<h4 id="3-battery-optimisation--dont-optimise--unrestricted">3. Battery
+Optimisation — "Don't Optimise" / "Unrestricted"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to run in
+the background without restrictions.</em></p>
+<p><strong>Why it needs this:</strong> Android phones, particularly
+newer models, aggressively shut down background apps to save battery. If
+the app is "optimised," your phone may kill it after a few minutes of
+not being used, meaning you will miss notifications entirely —
+especially overnight or during quiet periods.</p>
+<p>Exempting the app from battery optimisation ensures it stays alive to
+receive messages even when your phone has been idle.</p>
+<blockquote>
+<p>Navigate to <strong>Settings → Apps → CTP Job Cards → Battery →
+Unrestricted</strong> (wording varies by phone brand).</p>
+</blockquote>
+<hr />
+<h4 id="4-display-over-other-apps--system-alert-window">4. Display Over
+Other Apps / System Alert Window</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to appear
+over other apps.</em></p>
+<p><strong>Why it needs this:</strong> Priority 5 (P5) faults are the
+most urgent jobs on site — production is standing and needs an immediate
+response. When a P5 job card arrives, the app needs to display a
+full-screen alert that interrupts whatever you are doing: even if your
+phone is locked, even if another app is open.</p>
+<p>This permission allows that full-screen alarm to appear so you cannot
+miss a critical fault.</p>
+<blockquote>
+<p>Grant this permission. Without it, P5 alerts will fall back to a
+standard banner notification, which can be easily missed.</p>
+</blockquote>
+<hr />
+<h4 id="5-do-not-disturb-access">5. Do Not Disturb Access</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to
+override Do Not Disturb.</em></p>
+<p><strong>Why it needs this:</strong> If your phone is set to Do Not
+Disturb mode — common during night shifts or breaks — standard
+notifications are silenced. This permission allows P5 critical alerts to
+bypass Do Not Disturb so the alarm still sounds and the screen still
+lights up.</p>
+<blockquote>
+<p>Grant this permission for P5 fault coverage.</p>
+</blockquote>
+<hr />
+<h4 id="6-schedule-exact-alarms">6. Schedule Exact Alarms</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to set
+exact alarms.</em></p>
+<p><strong>Why it needs this:</strong> The full-screen alarm for P5
+faults uses the phone's alarm system — the same system that wakes you up
+in the morning — to guarantee the alert fires at the exact right moment,
+even if the phone is in deep sleep. Without this, the alarm may fire
+late or not at all.</p>
+<blockquote>
+<p>Grant this permission when prompted. On some phones it is found under
+<strong>Settings → Apps → Special App Access → Alarms &amp;
+Reminders.</strong></p>
+</blockquote>
+<hr />
+<h2 id="section-2-flow-of-job-cards">Section 2: Flow of Job Cards</h2>
+<h3 id="what-is-a-job-card">What is a Job Card?</h3>
+<p>A job card is a formal digital record of a fault, breakdown, or
+maintenance task. It captures:</p>
+<ul>
+<li><strong>Department</strong> — which department the job belongs
+to</li>
+<li><strong>Area</strong> — the specific area within the plant</li>
+<li><strong>Machine</strong> — the specific machine or asset</li>
+<li><strong>Part</strong> — the component or part affected</li>
+<li><strong>Description</strong> — a clear description of the fault or
+work required</li>
+<li><strong>Priority</strong> — how urgent the job is (1–5)</li>
+<li><strong>Type</strong> — Mechanical, Electrical, or Mech/Elec</li>
+</ul>
+<hr />
+<h3 id="priority-levels">Priority Levels</h3>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Impact on Production</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>No effect on production — routine or planned work</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>Minor impact — can continue but should be attended to soon</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>Moderate impact — attend within the shift</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>Significant impact — attend as soon as possible</td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td>Production is standing — immediate response required</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Priority must reflect actual impact. A P5 means production has
+stopped. Use it only when that is true.</p>
+</blockquote>
+<hr />
+<h3 id="job-card-status">Job Card Status</h3>
+<p>A job card moves through four statuses during its life:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Open</strong></td>
+<td>Job has been created and is awaiting a technician — no one has
+accepted it yet</td>
+</tr>
+<tr>
+<td><strong>In-Progress</strong></td>
+<td>A technician has self-assigned and is actively working the job —
+escalation has stopped</td>
+</tr>
+<tr>
+<td><strong>Monitor</strong></td>
+<td>Fault has been resolved but the machine is being watched for
+recurrence</td>
+</tr>
+<tr>
+<td><strong>Closed</strong></td>
+<td>Job is complete — fault resolved and confirmed</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>The moment you tap <strong>Assign Self</strong> on a notification (or
+open a job from the alert), the job card automatically moves from
+<strong>Open</strong> to <strong>In-Progress</strong>. You do not need
+to change it manually.</p>
+</blockquote>
+<hr />
+<h3 id="for-operators-creating-a-job-card">For Operators: Creating a Job
+Card</h3>
+<p>When you discover a fault or breakdown, create a job card
+immediately. Do not wait.</p>
+<p><strong>Steps:</strong></p>
+<ol type="1">
+<li>Open the CTP Job Cards app</li>
+<li>Tap <strong>Create Job Card</strong></li>
+<li>Fill in all fields — department, area, machine, part, description,
+and priority</li>
+<li>Submit</li>
+</ol>
+<p>The job card is live the moment you submit it. The relevant
+technicians are notified on their phones immediately.</p>
+<p><strong>Your responsibility as an operator is to fill in the form
+completely and accurately.</strong> Vague or incomplete job cards slow
+down the technician and create useless records in the system. Be
+specific:</p>
+<table>
+<thead>
+<tr>
+<th>Instead of...</th>
+<th>Write...</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Machine broken"</td>
+<td>"Conveyor 3 drive motor tripping on overload — production line
+stopped"</td>
+</tr>
+<tr>
+<td>"Pump issue"</td>
+<td>"Cooling water pump P-02 not priming — no flow to chiller
+circuit"</td>
+</tr>
+<tr>
+<td>"Fault on line"</td>
+<td>"PLC fault code E-14 on Line 2 pressing machine — cycle will not
+complete"</td>
+</tr>
+</tbody>
+</table>
+<p>Once you have submitted the job card, you can track its status in the
+app. You will receive a notification when a technician accepts the job
+and again when it is closed.</p>
+<hr />
+<h3 id="for-technicians-receiving-and-working-a-job">For Technicians:
+Receiving and Working a Job</h3>
+<h4 id="receiving-a-notification">Receiving a Notification</h4>
+<p>When a job card is created that matches your trade and you are on
+site, you will receive a push notification on your phone. The
+notification shows:</p>
+<ul>
+<li>Job number and priority</li>
+<li>Machine and area</li>
+<li>Description of the fault</li>
+</ul>
+<p>You have three options directly from the notification:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Assign Self</strong></td>
+<td>You take ownership of the job. The operator is notified you are
+attending. Escalation stops.</td>
+</tr>
+<tr>
+<td><strong>I'm Busy</strong></td>
+<td>You acknowledge the job but cannot take it right now. The operator
+is notified. Escalation stops. The system continues looking for another
+technician.</td>
+</tr>
+<tr>
+<td><strong>Dismiss</strong></td>
+<td>You dismiss the alert. The system logs this and escalation
+continues.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Always respond to notifications.</strong> If you do not
+respond, the system escalates the job to your foreman, then your
+manager. Repeated non-responses will be visible in the notification
+log.</p>
+</blockquote>
+<hr />
+<h4 id="working-the-job">Working the Job</h4>
+<p>Once you have accepted a job, navigate to <strong>My Assigned
+Jobs</strong> in the app to see the full details.</p>
+<p>Update the job status as you progress:</p>
+<ul>
+<li>When you self-assign the job: the status changes automatically from
+<strong>Open</strong> to <strong>In-Progress</strong></li>
+<li>When you have resolved the fault but want to watch the machine:
+change to <strong>Monitor</strong></li>
+<li>When the job is fully complete: change to
+<strong>Closed</strong></li>
+</ul>
+<hr />
+<h4 id="closing-a-job">Closing a Job</h4>
+<p>When you close a job, you must add a note. This is not optional — it
+is the maintenance record that managers, engineers, and future
+technicians will rely on.</p>
+<p>Your closure note should include:</p>
+<ul>
+<li>What was done</li>
+<li>Any parts used (include part numbers or specifications where
+possible)</li>
+<li>Root cause if known</li>
+<li>Any follow-up work recommended</li>
+</ul>
+<p><strong>A closed job with no note is a wasted record.</strong></p>
+<p>When you close the job, the operator who created it is automatically
+notified.</p>
+<hr />
+<h3 id="what-happens-if-nobody-responds">What Happens If Nobody
+Responds?</h3>
+<p>The system has automatic escalation across <strong>four configurable
+stages</strong>. Each stage has its own timer, recipient list, and
+on/off switch, configured by Admin under <strong>Settings → Escalation
+Rules</strong>. The defaults are:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Default Time After Creation</th>
+<th>Default State</th>
+<th>Default Recipients</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Stage 1</strong></td>
+<td>5 minutes</td>
+<td><strong>Enabled</strong></td>
+<td>On-site managers and foremen for the relevant department</td>
+</tr>
+<tr>
+<td><strong>Stage 2</strong></td>
+<td>10 minutes</td>
+<td><strong>Enabled</strong></td>
+<td>On-site department managers and the workshop manager (urgent
+alert)</td>
+</tr>
+<tr>
+<td><strong>Stage 3</strong></td>
+<td>30 minutes</td>
+<td>Disabled</td>
+<td>(Admin-configurable — typically senior management)</td>
+</tr>
+<tr>
+<td><strong>Stage 4</strong></td>
+<td>60 minutes</td>
+<td>Disabled</td>
+<td>(Admin-configurable — final escalation tier)</td>
+</tr>
+</tbody>
+</table>
+<p>Escalation stops the moment any technician self-assigns or responds
+"I'm Busy." If your site uses different timings or wants to switch on
+stages 3 and 4, your Admin can change them at any time — the defaults
+above are a starting point, not a fixed rule.</p>
+<hr />
+<h2 id="section-3-notifications--types-and-what-they-mean">Section 3:
+Notifications — Types and What They Mean</h2>
+<h3 id="notification-levels">Notification Levels</h3>
+<p>There are three levels of notification, determined by the priority of
+the job card:</p>
+<hr />
+<h4 id="level-1--normal-banner-priority-1-2-3">Level 1 — Normal Banner
+(Priority 1, 2, 3)</h4>
+<p><strong>Appearance:</strong> Standard Android notification banner at
+the top of the screen.</p>
+<p><strong>Sound:</strong> Default notification tone.</p>
+<p><strong>Behaviour:</strong> Appears and disappears like any other
+notification. Tap it to open the job.</p>
+<p><strong>Used for:</strong> Jobs that need attention but are not
+stopping production.</p>
+<hr />
+<h4 id="level-2--persistent-banner-priority-4">Level 2 — Persistent
+Banner (Priority 4)</h4>
+<p><strong>Appearance:</strong> A notification that stays in your
+notification panel until you act on it. It cannot be accidentally swiped
+away.</p>
+<p><strong>Sound:</strong> Escalation alert tone with stronger
+vibration.</p>
+<p><strong>Behaviour:</strong> Remains visible in your notification
+shade. Action buttons appear directly on the notification:
+<strong>Assign Self</strong>, <strong>Busy</strong>,
+<strong>Dismiss</strong>.</p>
+<p><strong>Used for:</strong> Jobs with significant production impact
+needing prompt attention.</p>
+<hr />
+<h4 id="level-3--full-screen-alarm-priority-5">Level 3 — Full-Screen
+Alarm (Priority 5)</h4>
+<p><strong>Appearance:</strong> A full-screen alert that takes over your
+entire phone screen, even from the lock screen.</p>
+<p><strong>Sound:</strong> Loud, repeating escalation alarm that
+continues until dismissed. Bypasses Do Not Disturb.</p>
+<p><strong>Behaviour:</strong> Cannot be ignored without deliberate
+action. Shows full job details and three buttons. Tapping any button
+logs your response and dismisses the alarm.</p>
+<p><strong>Used for:</strong> Production is standing. Immediate response
+required.</p>
+<blockquote>
+<p>If your phone does not have exact alarm permission granted, a P5 job
+will fall back to a persistent banner. This is why granting alarm
+permission during onboarding is critical.</p>
+</blockquote>
+<hr />
+<h3 id="on-site-arrival-and-departure-notifications">On-Site Arrival and
+Departure Notifications</h3>
+<p>When you cross the company boundary, you automatically receive:</p>
+<ul>
+<li><strong>"Arrived On-Site"</strong> — your status is updated and you
+start receiving job notifications</li>
+<li><strong>"Left Site Area"</strong> — your status is updated and job
+notifications pause until you return</li>
+</ul>
+<p>No action is required — this is fully automatic.</p>
+<hr />
+<h2 id="section-4-app-appearance--light-and-dark-mode">Section 4: App
+Appearance — Light and Dark Mode</h2>
+<p>The app supports both a <strong>dark theme</strong> (the default —
+easier on the eyes in low-light environments such as workshops and night
+shifts) and a <strong>light theme</strong> (better visibility in bright
+outdoor sunlight).</p>
+<p>To switch:</p>
+<ol type="1">
+<li>Open the app and tap the <strong>gear icon</strong> (Settings) at
+the top right</li>
+<li>Find the <strong>Dark Mode</strong> toggle near the top of the
+Settings screen</li>
+<li>Tap the switch to flip between themes — the change is instant</li>
+</ol>
+<p>Your choice is remembered and applies every time you open the app.
+The orange CTP branding remains consistent across both themes.</p>
+<hr />
+<h2 id="the-future-ai-assisted-maintenance">The Future: AI-Assisted
+Maintenance</h2>
+<h3 id="predictive-maintenance">Predictive Maintenance</h3>
+<p>By analysing the history of job cards — which machines fail most
+often, at what intervals, and with what parts — the system will identify
+patterns and generate predictive alerts:</p>
+<ul>
+<li>"Machine X has had 4 bearing failures in 6 months. Inspection
+recommended within 3 weeks."</li>
+<li>"Fault frequency on Line 3 increases in summer. Pre-emptive service
+advised."</li>
+</ul>
+<p>This shifts the team from always reacting to breakdowns to planning
+interventions during scheduled downtime.</p>
+<hr />
+<h3 id="ai-chatbot--operator-manuals-and-fault-finding">AI Chatbot —
+Operator Manuals and Fault Finding</h3>
+<p>A conversational AI assistant will be integrated into the app with
+access to:</p>
+<ul>
+<li>Operator and maintenance manuals for all plant equipment</li>
+<li>Historical fault and repair records from job cards</li>
+<li>Wiring diagrams, schematics, and parts lists</li>
+</ul>
+<p>A technician on the floor will be able to ask:</p>
+<blockquote>
+<p><em>"The conveyor on Line 2 is tripping on overload. What are the
+common causes?"</em> <em>"What is the torque spec for the main shaft
+bearing on the FX400 gearbox?"</em> <em>"What was done the last time
+this fault appeared on Machine 7?"</em></p>
+</blockquote>
+<p>The assistant responds with answers drawn from official documentation
+and real maintenance history — reducing time spent searching through
+manuals and helping with fault-finding guidance.</p>
+<p><strong>Your job card entries today become the data that makes these
+AI tools accurate. Complete descriptions and clear closure notes are an
+investment in the system's future intelligence.</strong></p>
 </body>
 </html>

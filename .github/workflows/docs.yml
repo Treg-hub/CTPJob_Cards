@@ -1,0 +1,41 @@
+name: Docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**/*.md'
+      - 'docs/docs.css'
+      - 'tools/build-docs.sh'
+      - 'tools/build-docs.ps1'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**/*.md'
+      - 'docs/**/*.html'
+      - 'docs/docs.css'
+      - 'tools/build-docs.sh'
+      - 'tools/build-docs.ps1'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  check-docs-drift:
+    name: Verify HTML matches markdown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Make build script executable
+        run: chmod +x tools/build-docs.sh
+
+      - name: Verify committed HTML matches markdown source
+        run: tools/build-docs.sh --check
+
+      - name: Hint on failure
+        if: failure()
+        run: |
+          echo "::error::Generated HTML drifted from markdown source."
+          echo "Run 'tools/build-docs.sh' locally (or 'pwsh tools/build-docs.ps1') and commit the regenerated HTML."
