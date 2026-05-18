@@ -204,6 +204,14 @@ class CtpJobCardsApp extends ConsumerWidget {
         } catch (e) {
           debugPrint('Update check error: $e');
         }
+        // After the initial screen is mounted, check for a pending job-detail
+        // navigation request (set by the native side when a notification was
+        // tapped while the app was killed).
+        try {
+          await NotificationService().checkPendingJobNavigation();
+        } catch (e) {
+          debugPrint('Pending job navigation error: $e');
+        }
       });
     }
 

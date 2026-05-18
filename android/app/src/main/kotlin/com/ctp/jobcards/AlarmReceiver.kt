@@ -13,10 +13,10 @@ class AlarmReceiver : BroadcastReceiver() {
         val description = intent.getStringExtra("description") ?: "Urgent job"
         val level = intent.getStringExtra("level") ?: "normal"
         val priority = intent.getStringExtra("priority") ?: "5"
-        val createdBy = intent.getStringExtra("operator") ?: "Unknown"
+        val operator = intent.getStringExtra("operator") ?: "Unknown"
         val location = intent.getStringExtra("location") ?: "Not specified"
 
-        Log.d("AlarmReceiver", "🚨 AlarmReceiver triggered for job: $jobCardNumber (P$priority)")
+        Log.d("AlarmReceiver", "🚨 AlarmReceiver triggered for job: $jobCardNumber (P$priority) operator=$operator")
 
         // ==================== SKIP IF APP IS OPEN ====================
         if (isAppInForeground(context)) {
@@ -30,7 +30,7 @@ class AlarmReceiver : BroadcastReceiver() {
             putExtra("description", description)
             putExtra("level", level)
             putExtra("priority", priority)
-            putExtra("createdBy", createdBy)
+            putExtra("operator", operator)
             putExtra("location", location)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }

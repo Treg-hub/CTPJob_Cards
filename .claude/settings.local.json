@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(where.exe msedge *)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\" --version)",
+      "PowerShell($zip = [System.IO.Compression.ZipFile]::OpenRead\\(\\(Resolve-Path 'ctp-job-cards-docs-2026-05-18.zip'\\).Path\\); $zip.Entries | Group-Object { [System.IO.Path]::GetExtension\\($_.Name\\) } | Sort-Object Count -Descending | ForEach-Object { '{0,-6} {1,3} files' -f $_.Name, $_.Count }; $zip.Dispose\\(\\))",
+      "Bash(git rm *)",
+      "Bash(git push *)"
+    ]
+  }
+}

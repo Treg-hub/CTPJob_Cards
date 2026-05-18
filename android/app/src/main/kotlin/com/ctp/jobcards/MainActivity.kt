@@ -141,11 +141,44 @@ class MainActivity : FlutterActivity() {
 
             Log.d(TAG, "🔗 Deep link — Job: $jobCardNumber, Action: $action, clockNo: $clockNo")
 
+            // Save the pending job number to SharedPreferences so Flutter can pick it
+            // up after the engine is ready (handles cold-start case where the Flutter
+            // navigator isn't mounted yet when this code runs).
+            getSharedPreferences("notification_prefs", MODE_PRIVATE)
+                .edit()
+                .putString("pendingJobCardNumber", jobCardNumber)
+                .apply()
+
+            // Cancel the notification from the shade now that the user has acted on it.
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(jobCardNumber.toIntOrNull() ?: 9999)
+
             when (action) {
+                "view_job" -> navigateToJobDetail(jobCardNumber)
                 "assign_self" -> assignJobToCurrentUser(jobCardNumber, clockNo, userName)
                 "busy" -> sendBusyNotificationToOperator(jobCardNumber, operator, clockNo, userName)
                 "dismiss" -> logDismissedAlert(jobCardNumber, operator, clockNo, userName)
+                else -> navigateToJobDetail(jobCardNumber)  // no action = tap on body = view
             }
+        }
+    }
+
+    // Tell Flutter to push the job detail screen. Safe to call even before the
+    // engine is ready — the Flutter side also reads the pending number from
+    // SharedPreferences on app start as a fallback.
+    private fun navigateToJobDetail(jobCardNumber: String) {
+        try {
+            val messenger = flutterEngine?.dartExecutor?.binaryMessenger
+                ?: FlutterEngineCache.getInstance().get("main_engine")?.dartExecutor?.binaryMessenger
+            if (messenger != null) {
+                MethodChannel(messenger, JOB_ALERT_CHANNEL)
+                    .invokeMethod("navigateToJobDetail", mapOf("jobCardNumber" to jobCardNumber))
+                Log.d(TAG, "✅ Requested navigation to job detail #$jobCardNumber")
+            } else {
+                Log.d(TAG, "ℹ️ Flutter engine not ready — Flutter will read pendingJobCardNumber on start")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to invoke navigateToJobDetail: ${e.message}")
         }
     }
 
@@ -186,20 +219,42 @@ class MainActivity : FlutterActivity() {
                     return@addOnSuccessListener
                 }
 
-                documents.documents[0].reference.update(
-                    mapOf(
+                val jobRef = documents.documents[0].reference
+
+                // Race-safe assignment via transaction: only the first tapper wins.
+                db.runTransaction { txn ->
+                    val snapshot = txn.get(jobRef)
+                    val existingAssignees = snapshot.get("assignedClockNos")
+                    val alreadyAssigned = when (existingAssignees) {
+                        is List<*> -> existingAssignees.isNotEmpty()
+                        is String -> existingAssignees.isNotEmpty()
+                        else -> false
+                    }
+                    if (alreadyAssigned) {
+                        throw Exception("ALREADY_ASSIGNED")
+                    }
+                    txn.update(jobRef, mapOf(
                         "assignedTo" to clockNo,
                         "assignedNames" to userName,
-                        "assignedClockNos" to clockNo,
+                        "assignedClockNos" to listOf(clockNo),
                         "status" to "open",
+                        "escalationStopped" to true,
                         "lastUpdatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).addOnSuccessListener {
+                    ))
+                    null
+                }.addOnSuccessListener {
                     Log.d(TAG, "✅ Job $jobCardNumber assigned to $userName ($clockNo)")
                     Toast.makeText(this, "✅ Job assigned to you!", Toast.LENGTH_LONG).show()
+                    navigateToJobDetail(jobCardNumber)
                     finish()
                 }.addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to assign job: ${e.message}")
+                    if (e.message == "ALREADY_ASSIGNED") {
+                        Log.w(TAG, "Job $jobCardNumber already assigned to someone else")
+                        Toast.makeText(this, "Job already assigned to another technician", Toast.LENGTH_LONG).show()
+                    } else {
+                        Log.e(TAG, "Failed to assign job: ${e.message}")
+                        Toast.makeText(this, "Failed to assign job", Toast.LENGTH_SHORT).show()
+                    }
                     finish()
                 }
             }

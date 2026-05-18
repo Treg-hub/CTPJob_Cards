@@ -48,11 +48,30 @@ async function logNotification({
   }
 }
 
-// ==================== HELPER: Get notification level ====================
-function getNotificationLevel(priority) {
+// ==================== HELPER: Notification levels ====================
+// Used for job creation and escalation — the priority determines how
+// aggressively the recipient is alerted.
+//   full-loud    → P5 background = full-screen alarm, foreground = persistent banner (70% vol)
+//   medium-high  → P4 = persistent banner, custom sound, DND bypass (foreground 50% vol)
+//   banner       → P3 = persistent banner with buttons, default sound
+//   normal       → P1, P2 = basic notification, no buttons, default sound
+function getCreationLevel(priority) {
   if (priority >= 5) return "full-loud";
   if (priority >= 4) return "medium-high";
+  if (priority >= 3) return "banner";
   return "normal";
+}
+
+// All post-creation events (self-assigned, completed, updated, busy response,
+// operator follow-up) are informational — they should never blast a full-screen
+// alarm at the recipient.
+function getUpdateLevel() {
+  return "normal";
+}
+
+// Legacy alias — kept temporarily so any external callers don't break.
+function getNotificationLevel(priority) {
+  return getCreationLevel(priority);
 }
 
 // ==================== DYNAMIC CONFIG LOADER ====================
@@ -263,7 +282,9 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
     }
   }
 
-  const level = getNotificationLevel(priority);
+  // Manual assignment is a creation-flow alert: the assignee needs to act on it,
+  // so it's priority-based (P5 = full-screen, P4 = loud banner, etc.).
+  const level = getCreationLevel(priority);
   const title = `Job Assigned by ${operator} #${jobCardNumber || "N/A"}`;
   const body = `Created by ${creator}\nLocation: ${area}\n${description}`;
   const isFullLoud = level === "full-loud";
@@ -279,7 +300,6 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
       notificationLevel: level,
       title,
       body,
-      channelId: isFullLoud ? "full_channel" : "normal_channel",
     },
     android: { priority: "high" },
   };
@@ -333,7 +353,9 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
     throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
   }
 
-  const level = getNotificationLevel(priority);
+  // Creator notifications are post-creation updates (self-assigned, completed,
+  // updated) — informational only, always normal level regardless of priority.
+  const level = getUpdateLevel();
   const isFullLoud = level === "full-loud";
 
   let title, body, triggeredByValue;
@@ -513,7 +535,7 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
   const job = event.data.data();
   const jobId = event.params.jobId;
   const priority = job.priority || 1;
-  const level = getNotificationLevel(priority);
+  const level = getCreationLevel(priority);
 
   const config = await getNotificationConfig();
   if (isJobTypeExcluded(config, job.type)) {
@@ -562,7 +584,7 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
 
   if (!before.assignedTo && after.assignedTo) {
     const priority = after.priority || 1;
-    const level = getNotificationLevel(priority);
+    const level = getCreationLevel(priority);
 
     const assigneeDoc = await db.collection("employees").doc(after.assignedTo).get();
     if (assigneeDoc.exists) {
@@ -668,7 +690,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       if (resolvedRecipients.length === 0) continue;
 
       const priority = job.priority || 1;
-      const level = priority <= 3 ? "normal" : (stageNum >= 2 ? "full-loud" : "medium-high");
+      const stageLevel = getCreationLevel(priority);   // P1/P2 normal, P3 banner, P4 medium-high, P5 full-loud
 
       const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
       const createdBy = creatorDoc.exists ? creatorDoc.data().name : (job.operator || "Unknown");
@@ -679,6 +701,11 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 
       for (const emp of resolvedRecipients) {
         const isOperator = emp.clockNo === job.operatorClockNo;
+
+        // Operator always gets a normal-level "no response" notification — they
+        // can't claim the job themselves and don't need a full-screen alarm.
+        // Other recipients get the priority-based stage level.
+        const empLevel = isOperator ? getUpdateLevel() : stageLevel;
 
         const title = isOperator
           ? `No response yet — Job #${jobNumber}`
@@ -694,7 +721,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
           title,
           body,
           jobCardNumber: jobNumber,
-          level,
+          level: empLevel,
           priority,
           createdBy,
           department: job.department,
