@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -443,7 +443,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       crossAxisAlignment: CrossAxisAlignment.start,
       children: grouped.entries.map((entry) {
         final section = entry.key;
-        final photos = entry.value..sort((a, b) => DateTime.parse(b['timestamp'] ?? '').compareTo(DateTime.parse(a['timestamp'] ?? '')));
+        final photos = entry.value
+          ..sort((a, b) {
+            final aTs = DateTime.tryParse(a['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bTs = DateTime.tryParse(b['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bTs.compareTo(aTs);
+          });
 
         return ExpansionTile(
           title: Text('$section (${photos.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -713,6 +718,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _addPhoto(String section) async {
+    final jobId = widget.jobCard.id;
+    if (jobId == null || jobId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot attach photo — job card not yet saved'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -720,12 +736,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       if (pickedFile == null) return;
 
       String downloadUrl;
+      final storagePath = 'job_cards/$jobId/photos/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       if (kIsWeb) {
         final bytes = await pickedFile.readAsBytes();
-        final storageRef = FirebaseStorage.instance.ref().child('job_cards/${widget.jobCard.id}/photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final uploadTask = storageRef.putData(bytes);
-        final snapshot = await uploadTask;
+        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+        final snapshot = await storageRef.putData(bytes);
         downloadUrl = await snapshot.ref.getDownloadURL();
       } else {
         final compressedFile = await FlutterImageCompress.compressAndGetFile(
@@ -738,9 +754,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
         if (compressedFile == null) throw Exception('Failed to compress image');
 
-        final storageRef = FirebaseStorage.instance.ref().child('job_cards/${widget.jobCard.id}/photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final uploadTask = storageRef.putFile(File(compressedFile.path));
-        final snapshot = await uploadTask;
+        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+        final snapshot = await storageRef.putFile(File(compressedFile.path));
         downloadUrl = await snapshot.ref.getDownloadURL();
       }
 
@@ -755,9 +770,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         'part': _currentJobCard.part,
       };
 
-      await FirebaseFirestore.instance.collection('job_cards').doc(widget.jobCard.id).update({
-        'photos': FieldValue.arrayUnion([photoMap]),
-      });
+      await _firestoreService.addPhotoToJobCard(jobId, photoMap);
 
       setState(() {
         _currentJobCard = _currentJobCard.copyWith(photos: [..._currentJobCard.photos, photoMap]);
@@ -766,9 +779,25 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Photo uploaded successfully'), backgroundColor: Colors.green));
       }
-    } catch (e) {
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        st,
+        reason: 'photo_upload_failed',
+        information: ['jobId:$jobId', 'section:$section'],
+      );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Failed to upload photo: $e'), backgroundColor: Colors.red));
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Photo upload failed'),
+            content: Text(
+              'The photo file may have reached Firebase Storage, but the job card was not updated.\n\n'
+              'Error: $e',
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+          ),
+        );
       }
     }
   }
@@ -783,16 +812,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete photos when job is closed or monitoring'), backgroundColor: Colors.red));
       return;
     }
+    final jobId = widget.jobCard.id;
+    if (jobId == null || jobId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot delete photo — job card not yet saved'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await FirebaseFirestore.instance.collection('job_cards').doc(widget.jobCard.id).update({
-        'photos': FieldValue.arrayRemove([photo]),
-      });
+      await _firestoreService.removePhotoFromJobCard(jobId, photo);
       setState(() {
         _currentJobCard = _currentJobCard.copyWith(photos: _currentJobCard.photos.where((p) => p != photo).toList());
       });
       messenger.showSnackBar(const SnackBar(content: Text('Photo deleted')));
-    } catch (e) {
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'photo_delete_failed', information: ['jobId:$jobId']);
       messenger.showSnackBar(SnackBar(content: Text('Error deleting photo: $e'), backgroundColor: Colors.red));
     }
   }
@@ -868,6 +903,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
         builder: (context, snapshot) {
           final jobCard = snapshot.hasData ? snapshot.data! : widget.jobCard;
+          // _currentJobCard is the source of truth for handlers that fire
+          // outside this build (_addPhoto, _deletePhoto, status changes).
+          // Keep it in sync with the latest stream emission. Safe to assign
+          // synchronously because non-photo updates now exclude the photos
+          // field server-side (see FirestoreService.updateJobCard).
           _currentJobCard = jobCard;
           return TabBarView(
             controller: _tabController,

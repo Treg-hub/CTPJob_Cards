@@ -1,8 +1,10 @@
 import 'dart:io' show Platform;
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 
@@ -174,6 +176,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           debugPrint('📍 Geofencing stop skipped on web platform');
         }
         await _firestoreService.clearLoggedInEmployee();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('permissionsCompleted');
+        await FirebaseCrashlytics.instance.setUserIdentifier('');
         currentEmployee = null;
         if (mounted) {
           Navigator.pushAndRemoveUntil(

@@ -134,9 +134,44 @@ class FirestoreService {
 
   Future<void> updateJobCard(String jobCardId, JobCard jobCard) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).set(jobCard.toFirestore(), SetOptions(merge: true));
+      // Exclude photos so a routine merge-set does not clobber concurrent
+      // arrayUnion/arrayRemove writes to the photos field. Photo mutations go
+      // through addPhotoToJobCard / removePhotoFromJobCard below.
+      await _firestore
+          .collection('job_cards')
+          .doc(jobCardId)
+          .set(jobCard.toFirestore(includePhotos: false), SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to update job card: $e');
+    }
+  }
+
+  /// Atomically append a photo entry to `job_cards/{jobCardId}.photos`.
+  ///
+  /// Uses [FieldValue.arrayUnion] so concurrent additions from multiple
+  /// clients (or from offline queues replaying) all land without overwriting
+  /// each other.
+  Future<void> addPhotoToJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    try {
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'photos': FieldValue.arrayUnion([photo]),
+      });
+    } catch (e) {
+      throw Exception('Failed to add photo: $e');
+    }
+  }
+
+  /// Atomically remove a photo entry from `job_cards/{jobCardId}.photos`.
+  ///
+  /// [photo] must be the exact map that was stored — Firestore arrayRemove
+  /// requires a deep equality match.
+  Future<void> removePhotoFromJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    try {
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'photos': FieldValue.arrayRemove([photo]),
+      });
+    } catch (e) {
+      throw Exception('Failed to remove photo: $e');
     }
   }
 
@@ -647,7 +682,7 @@ class FirestoreService {
         await SyncService().addToQueue(
           collection: 'job_cards',
           operation: 'update',
-          data: jobCard.toFirestore(),
+          data: jobCard.toFirestore(includePhotos: false),
           documentId: jobCard.id,
         );
         debugPrint('📤 JobCard queued for later sync (offline)');
