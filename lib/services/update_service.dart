@@ -291,22 +291,16 @@ class UpdateService {
   }
 
   Future<void> _launchDownload(BuildContext context, String downloadUrl) async {
+    debugPrint('UpdateService: launching download URL: $downloadUrl');
     try {
       final uri = Uri.parse(downloadUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to open download link')),
-          );
-        }
-      }
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e, st) {
+      debugPrint('UpdateService: failed to launch URL – $e');
       FirebaseCrashlytics.instance.recordError(e, st, reason: 'launch_download_url', fatal: false);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening download: $e')),
+          SnackBar(content: Text('Could not open download link. Try visiting the URL manually.\n$downloadUrl')),
         );
       }
     }
