@@ -11,7 +11,8 @@
       "Bash(gh repo *)",
       "Bash(gh pr *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(flutter test *)"
     ]
   }
 }
