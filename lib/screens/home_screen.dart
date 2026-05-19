@@ -65,6 +65,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
 
+  void _setupEmployeeStream(String clockNo) {
+    _employeeSubscription = _firestoreService
+        .getEmployeeStream(clockNo)
+        .listen((emp) {
+      if (mounted) setState(() => isOnSite = emp.isOnSite);
+    });
+  }
+
+  Future<void> _tryLoadCurrentEmployee() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final clockNo = prefs.getString('loggedInClockNo');
+      if (clockNo == null) return;
+      final emp = await _firestoreService.getEmployee(clockNo);
+      if (emp != null && mounted) {
+        setState(() => currentEmployee = emp);
+        _setupEmployeeStream(clockNo);
+      }
+    } catch (e) {
+      debugPrint('HomeScreen: deferred employee load failed: $e');
+    }
+  }
+
   List<Map<String, dynamic>> get _quickActions {
     final actions = [
       {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))},
@@ -99,13 +122,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadTestMode();
 
     if (currentEmployee != null) {
-      _employeeSubscription = _firestoreService
-          .getEmployeeStream(currentEmployee!.clockNo)
-          .listen((emp) {
-        if (mounted) {
-          setState(() => isOnSite = emp.isOnSite);
-        }
-      });
+      _setupEmployeeStream(currentEmployee!.clockNo);
+    } else {
+      _tryLoadCurrentEmployee();
     }
 
     if (!kIsWeb) {
