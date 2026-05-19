@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,16 +7,39 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Service for checking and handling app updates
+/// Service for checking and handling app updates via Firebase Remote Config.
 class UpdateService {
   static final UpdateService _instance = UpdateService._internal();
   factory UpdateService() => _instance;
   UpdateService._internal();
 
   static const String _lastCheckKey = 'last_update_check';
-  static const Duration _checkInterval = Duration(hours: 6);
+  static const Duration _checkInterval = Duration(hours: 24);
 
-  /// Normal check (respects 6h cooldown)
+  bool _initialized = false;
+
+  /// Configure Remote Config on first use. We force a zero SDK-side
+  /// minimumFetchInterval so every fetchAndActivate() actually hits the
+  /// network — cadence is enforced by our own SharedPreferences cooldown.
+  Future<void> _ensureRemoteConfigReady() async {
+    if (_initialized) return;
+    final rc = FirebaseRemoteConfig.instance;
+    await rc.setConfigSettings(RemoteConfigSettings(
+      fetchTimeout: const Duration(seconds: 10),
+      minimumFetchInterval: Duration.zero,
+    ));
+    await rc.setDefaults(const {
+      'latest_version': '',
+      'latest_build': '',
+      'download_url': '',
+      'force_update': false,
+      'release_notes': '',
+    });
+    _initialized = true;
+  }
+
+  /// Silent startup check (respects 24h cooldown). Shows the standard update
+  /// dialog only when a newer version is available.
   Future<void> checkForUpdate(BuildContext context) async {
     if (kIsWeb) return;
 
@@ -30,71 +54,98 @@ class UpdateService {
       }
 
       if (!context.mounted) return;
-      await _performUpdateCheck(context, prefs, now);
-    } catch (e) {
+      final result = await _performUpdateCheck(prefs, now);
+      if (result.hasUpdate && context.mounted) {
+        await _showUpdateDialog(
+          context,
+          result.latestVersion,
+          result.releaseNotes,
+          result.downloadUrl,
+          result.forceUpdate,
+        );
+      }
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'update_check_silent', fatal: false);
       debugPrint('Error checking for updates: $e');
     }
   }
 
-  /// Force immediate update check (ignores cooldown)
+  /// Manual check from Settings → "Check for Update". Ignores cooldown and
+  /// always surfaces a diagnostic dialog so the user can see exactly what
+  /// Remote Config returned (or why the check failed).
   Future<void> forceCheckForUpdate(BuildContext context) async {
     if (kIsWeb) return;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final now = DateTime.now().millisecondsSinceEpoch;
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await prefs.remove(_lastCheckKey);
 
-      // Clear last check so it always runs
-      await prefs.remove(_lastCheckKey);
-
-      debugPrint('Forcing immediate update check...');
-      if (!context.mounted) return;
-      await _performUpdateCheck(context, prefs, now);
-    } catch (e) {
-      debugPrint('Error forcing update check: $e');
+    debugPrint('Forcing immediate update check...');
+    final result = await _performUpdateCheck(prefs, now);
+    if (context.mounted) {
+      await _showDiagnosticDialog(context, result);
     }
   }
 
-  /// Internal method that does the actual check
-  Future<void> _performUpdateCheck(BuildContext context, SharedPreferences prefs, int now) async {
+  /// Runs the actual fetch + comparison and returns a structured result.
+  /// Never throws — failures are captured in [_UpdateCheckResult.error] so
+  /// the diagnostic dialog can render them.
+  Future<_UpdateCheckResult> _performUpdateCheck(SharedPreferences prefs, int now) async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
+    final currentBuild = packageInfo.buildNumber;
+    debugPrint('Current app version: $currentVersion+$currentBuild');
+
+    String latestVersion = '';
+    String latestBuild = '';
+    String downloadUrl = '';
+    bool forceUpdate = false;
+    String releaseNotes = '';
+    bool fetchSucceeded = false;
+    String? error;
+
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-      final currentBuild = packageInfo.buildNumber;
-
-      debugPrint('Current app version: $currentVersion+$currentBuild');
-
+      await _ensureRemoteConfigReady();
       await FirebaseRemoteConfig.instance.fetchAndActivate();
+      fetchSucceeded = true;
 
-      final latestVersion = FirebaseRemoteConfig.instance.getString('latest_version');
-      final latestBuild = FirebaseRemoteConfig.instance.getString('latest_build');
-      final downloadUrl = FirebaseRemoteConfig.instance.getString('download_url');
-      final forceUpdate = FirebaseRemoteConfig.instance.getBool('force_update');
-      final releaseNotes = FirebaseRemoteConfig.instance.getString('release_notes');
-
-      if (latestVersion.isEmpty || downloadUrl.isEmpty) {
-        debugPrint('Incomplete update config');
-        return;
-      }
-
-      if (!_isNewerVersion(currentVersion, latestVersion, currentBuild, latestBuild)) {
-        debugPrint('App is up to date');
-        await prefs.setInt(_lastCheckKey, now);
-        return;
-      }
-
-      debugPrint('New version available: $latestVersion+$latestBuild');
-      await prefs.setInt(_lastCheckKey, now);
-
-      if (context.mounted) {
-        await _showUpdateDialog(context, latestVersion, releaseNotes, downloadUrl, forceUpdate);
-      }
-    } catch (e) {
-      debugPrint('Error performing update check: $e');
+      final rc = FirebaseRemoteConfig.instance;
+      latestVersion = rc.getString('latest_version');
+      latestBuild = rc.getString('latest_build');
+      downloadUrl = rc.getString('download_url');
+      forceUpdate = rc.getBool('force_update');
+      releaseNotes = rc.getString('release_notes');
+      debugPrint('Remote Config -> latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
+    } catch (e, st) {
+      error = e.toString();
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'remote_config_fetch', fatal: false);
+      debugPrint('Remote Config fetch failed: $e');
     }
+
+    final configComplete = fetchSucceeded && latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
+    final hasUpdate = configComplete &&
+        _isNewerVersion(currentVersion, latestVersion, currentBuild, latestBuild);
+
+    if (fetchSucceeded) {
+      await prefs.setInt(_lastCheckKey, now);
+    }
+
+    return _UpdateCheckResult(
+      currentVersion: currentVersion,
+      currentBuild: currentBuild,
+      latestVersion: latestVersion,
+      latestBuild: latestBuild,
+      downloadUrl: downloadUrl,
+      releaseNotes: releaseNotes,
+      forceUpdate: forceUpdate,
+      fetchSucceeded: fetchSucceeded,
+      configComplete: configComplete,
+      hasUpdate: hasUpdate,
+      error: error,
+    );
   }
 
-  bool _isNewerVersion(String currentVersion, String latestVersion, String currentBuild, String? latestBuild) {
+  bool _isNewerVersion(String currentVersion, String latestVersion, String currentBuild, String latestBuild) {
     try {
       final currentParts = currentVersion.split('.').map(int.parse).toList();
       final latestParts = latestVersion.split('.').map(int.parse).toList();
@@ -107,16 +158,157 @@ class UpdateService {
         if (latest < current) return false;
       }
 
-      if (latestBuild != null) {
+      if (latestBuild.isNotEmpty) {
         final currentBuildNum = int.tryParse(currentBuild) ?? 0;
         final latestBuildNum = int.tryParse(latestBuild) ?? 0;
         return latestBuildNum > currentBuildNum;
       }
 
       return false;
-    } catch (e) {
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'version_compare', fatal: false);
       debugPrint('Error comparing versions: $e');
       return false;
+    }
+  }
+
+  Future<void> _showDiagnosticDialog(BuildContext context, _UpdateCheckResult r) async {
+    final Color statusColor;
+    final String statusText;
+    final IconData statusIcon;
+    if (!r.fetchSucceeded) {
+      statusColor = Colors.red;
+      statusText = 'Fetch failed';
+      statusIcon = Icons.error_outline;
+    } else if (!r.configComplete) {
+      statusColor = Colors.orange;
+      statusText = 'Remote Config keys missing';
+      statusIcon = Icons.warning_amber;
+    } else if (r.hasUpdate) {
+      statusColor = const Color(0xFFFF8C42);
+      statusText = 'Update available';
+      statusIcon = Icons.system_update;
+    } else {
+      statusColor = Colors.green;
+      statusText = 'Up to date';
+      statusIcon = Icons.check_circle;
+    }
+
+    final latestDisplay = r.latestVersion.isEmpty
+        ? '(not set)'
+        : (r.latestBuild.isEmpty ? r.latestVersion : '${r.latestVersion}+${r.latestBuild}');
+    final urlDisplay = r.downloadUrl.isEmpty
+        ? '(not set)'
+        : (r.downloadUrl.length > 60 ? '${r.downloadUrl.substring(0, 57)}...' : r.downloadUrl);
+
+    return showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Update check'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(statusIcon, color: statusColor, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        statusText,
+                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _kv('Current', '${r.currentVersion}+${r.currentBuild}'),
+              _kv('Latest', latestDisplay),
+              _kv('Force update', r.forceUpdate ? 'yes' : 'no'),
+              _kv('Download URL', urlDisplay),
+              if (r.releaseNotes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Release notes:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(r.releaseNotes),
+              ],
+              if (r.error != null) ...[
+                const SizedBox(height: 8),
+                const Text('Error:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                const SizedBox(height: 4),
+                Text(r.error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Close'),
+          ),
+          if (r.hasUpdate && r.downloadUrl.isNotEmpty)
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogCtx).pop();
+                await _launchDownload(context, r.downloadUrl);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8C42),
+                foregroundColor: Colors.black,
+              ),
+              child: const Text('Update Now'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _launchDownload(BuildContext context, String downloadUrl) async {
+    try {
+      final uri = Uri.parse(downloadUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open download link')),
+          );
+        }
+      }
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'launch_download_url', fatal: false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening download: $e')),
+        );
+      }
     }
   }
 
@@ -157,26 +349,7 @@ class UpdateService {
               child: const Text('Later'),
             ),
           ElevatedButton(
-            onPressed: () async {
-              try {
-                final uri = Uri.parse(downloadUrl);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Unable to open download link')),
-                    );
-                  }
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error opening download: $e')),
-                  );
-                }
-              }
-            },
+            onPressed: () => _launchDownload(context, downloadUrl),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF8C42),
               foregroundColor: Colors.black,
@@ -187,4 +360,32 @@ class UpdateService {
       ),
     );
   }
+}
+
+class _UpdateCheckResult {
+  final String currentVersion;
+  final String currentBuild;
+  final String latestVersion;
+  final String latestBuild;
+  final String downloadUrl;
+  final String releaseNotes;
+  final bool forceUpdate;
+  final bool fetchSucceeded;
+  final bool configComplete;
+  final bool hasUpdate;
+  final String? error;
+
+  _UpdateCheckResult({
+    required this.currentVersion,
+    required this.currentBuild,
+    required this.latestVersion,
+    required this.latestBuild,
+    required this.downloadUrl,
+    required this.releaseNotes,
+    required this.forceUpdate,
+    required this.fetchSucceeded,
+    required this.configComplete,
+    required this.hasUpdate,
+    this.error,
+  });
 }
