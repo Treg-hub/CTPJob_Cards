@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/assignment_event.dart';
 import '../models/copper_transaction.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -143,6 +144,45 @@ class FirestoreService {
           .set(jobCard.toFirestore(includePhotos: false), SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to update job card: $e');
+    }
+  }
+
+  /// Change a job card's [type] in place, reset escalation, and append a
+  /// type-change entry to assignmentHistory.
+  ///
+  /// Clearing `notifiedAtStage1..4` lets the existing escalation function
+  /// re-stamp from the next tick with the new routing. `escalationStopped`
+  /// stays untouched — if the job was already assigned, escalation remains
+  /// stopped (which is correct). The cloud function `onJobCardTypeChanged`
+  /// picks up the type delta and notifies the new audience.
+  Future<void> changeJobCardType({
+    required String jobCardId,
+    required JobType from,
+    required JobType to,
+    required Employee by,
+  }) async {
+    if (from == to) return;
+    try {
+      final event = AssignmentEvent(
+        assignedByName: by.name,
+        assignedByClockNo: by.clockNo,
+        assigneeClockNos: const [],
+        assigneeNames: const [],
+        timestamp: DateTime.now(),
+        typeChangedFrom: from.name,
+        typeChangedTo: to.name,
+      );
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'type': to.name,
+        'notifiedAtStage1': null,
+        'notifiedAtStage2': null,
+        'notifiedAtStage3': null,
+        'notifiedAtStage4': null,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+        'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
+      });
+    } catch (e) {
+      throw Exception('Failed to change job card type: $e');
     }
   }
 

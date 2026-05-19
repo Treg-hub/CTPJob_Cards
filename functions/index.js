@@ -530,30 +530,31 @@ async function sendNotification({
   }
 }
 
-// ==================== FIRESTORE TRIGGER: JOB CREATED ====================
-exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "job_cards/{jobId}" }, async (event) => {
-  const job = event.data.data();
-  const jobId = event.params.jobId;
+// ==================== HELPER: Notify creation recipients ====================
+// Shared between onJobCardCreated and onJobCardTypeChanged so the routing logic
+// stays in one place. When a type is changed mid-flight, the new audience needs
+// the same fan-out the original creation would have done — minus the P5
+// creator-CC (the creator already knows about their own job).
+async function notifyCreationRecipients(jobId, job, { triggeredBy = "job_created", titleOverride = null, includeCreatorOnP5 = true } = {}) {
   const priority = job.priority || 1;
   const level = getCreationLevel(priority);
 
   const config = await getNotificationConfig();
   if (isJobTypeExcluded(config, job.type)) {
-    console.log(`onJobCardCreated: job #${job.jobCardNumber || jobId} type ${job.type} is excluded`);
+    console.log(`notifyCreationRecipients: job #${job.jobCardNumber || jobId} type ${job.type} is excluded`);
     return;
   }
 
   const creationRules = getCreationRecipientRules(config, job.type);
   const recipients = await resolveRecipientsFromRules(creationRules, job.type, job.department);
 
-  if (priority >= 5 && job.operatorClockNo) {
+  if (includeCreatorOnP5 && priority >= 5 && job.operatorClockNo) {
     const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
     if (creatorDoc.exists) recipients.push({ token: creatorDoc.data().fcmToken, clockNo: job.operatorClockNo, ...creatorDoc.data() });
   }
 
   const createdBy = job.operator || "Unknown";
-
-  const title = `Job #${job.jobCardNumber || jobId} - Priority ${priority} - ${createdBy}`;
+  const title = titleOverride || `Job #${job.jobCardNumber || jobId} - Priority ${priority} - ${createdBy}`;
   const body = job.description;
 
   for (const emp of recipients) {
@@ -570,11 +571,37 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
       area: job.area,
       machine: job.machine,
       part: job.part,
-      triggeredBy: "job_created",
+      triggeredBy,
       initiatedByClockNo: job.operatorClockNo || null,
       initiatedByName: createdBy,
     });
   }
+}
+
+// ==================== FIRESTORE TRIGGER: JOB CREATED ====================
+exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "job_cards/{jobId}" }, async (event) => {
+  await notifyCreationRecipients(event.params.jobId, event.data.data(), { triggeredBy: "job_created" });
+});
+
+// ==================== FIRESTORE TRIGGER: JOB TYPE CHANGED ====================
+// Fires when a job's `type` field changes (manager/technician re-classified the
+// job). Re-runs the creation-recipient fan-out so the new audience
+// (e.g. electricians instead of mechanics) gets notified. Excluded types
+// (currently maintenance) stay silent — flipping TO maintenance sends nothing.
+exports.onJobCardTypeChanged = functions.firestore.onDocumentUpdated({ document: "job_cards/{jobId}" }, async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (!before || !after) return;
+  if (before.type === after.type) return;
+  if (after.status === "closed") return;
+  const jobId = event.params.jobId;
+  console.log(`onJobCardTypeChanged: job #${after.jobCardNumber || jobId} type ${before.type} → ${after.type}`);
+  const title = `Type changed → ${after.type} - Job #${after.jobCardNumber || jobId}`;
+  await notifyCreationRecipients(jobId, after, {
+    triggeredBy: "type_changed",
+    titleOverride: title,
+    includeCreatorOnP5: false,
+  });
 });
 
 // ==================== FIRESTORE TRIGGER: JOB ASSIGNED ====================

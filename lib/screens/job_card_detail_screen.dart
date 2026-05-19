@@ -14,7 +14,7 @@ import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
-import '../utils/role.dart' show isAdmin;
+import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
@@ -55,6 +55,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   bool get isTech => (currentEmployee?.position.toLowerCase().contains('technician') ?? false) || (currentEmployee?.position.toLowerCase().contains('tech') ?? false);
   bool get _canAddNotes => isManager || (currentEmployee?.position.toLowerCase().contains('electrical') ?? false) || (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
   bool get _canAddComments => !(currentEmployee?.position.toLowerCase().contains('electrical') ?? false) && !(currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
+
+  /// Operators are restricted to Maintenance jobs for Start/Complete/Monitor
+  /// actions — they can still comment on and view mech/elec jobs they raised.
+  /// See CLAUDE.md (Roles) for the full matrix.
+  bool _operatorRestrictedFor(JobCard job) {
+    return roleFromEmployee(currentEmployee) == UserRole.operator
+        && job.type != JobType.maintenance;
+  }
+
+  /// True when the current user can change the job type. Technicians, managers,
+  /// and admins can; operators cannot. Closed jobs are immutable.
+  bool _canChangeType(JobCard job) {
+    if (job.status == JobStatus.closed) return false;
+    final role = roleFromEmployee(currentEmployee);
+    return role == UserRole.technician || role == UserRole.manager || role == UserRole.admin;
+  }
 
   Future<void> _refreshJobCard() async {
     if (_currentJobCard.id != null) {
@@ -968,9 +984,22 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
     final isAssigned = jobCard.assignedClockNos?.contains(currentEmployee?.clockNo ?? '') ?? false;
-    // For in-progress / monitor states, only assigned users and managers see action buttons.
-    // For open state, everyone can tap Start (which also auto-assigns).
-    if (jobCard.status != JobStatus.open && !isAssigned && !isManager) return const SizedBox.shrink();
+    final role = roleFromEmployee(currentEmployee);
+    final operatorBlocked = _operatorRestrictedFor(jobCard);
+    // Technicians can JOIN an in-progress job (additional hands on a large job).
+    // Operators stay blocked unless the job is Maintenance.
+    final canJoinInProgress = jobCard.status == JobStatus.inProgress
+        && role == UserRole.technician
+        && !isAssigned;
+
+    // Hide the action row entirely when the user has nothing to do:
+    //  - Not Open (so no "Start" for fresh viewers)
+    //  - Not assigned (so no Complete/Monitor/Adjustment)
+    //  - Not a manager (managers can always act)
+    //  - Not eligible to join an in-progress job
+    if (jobCard.status != JobStatus.open && !isAssigned && !isManager && !canJoinInProgress) {
+      return const SizedBox.shrink();
+    }
 
     final buttons = <Widget>[];
 
@@ -978,9 +1007,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () => _startJob(jobCard),
+            onPressed: operatorBlocked ? null : () => _startJob(jobCard),
             icon: const Icon(Icons.play_arrow, size: 20),
-            label: const Text('Start', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            label: Text(
+              operatorBlocked ? 'Technicians only' : 'Start',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
@@ -992,43 +1024,63 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         ),
       );
     } else if (jobCard.status == JobStatus.inProgress) {
-      buttons.add(
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () => _showCompleteDialog(jobCard),
-            icon: const Icon(Icons.check_circle, size: 20),
-            label: const Text('Complete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      if (canJoinInProgress) {
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _startJob(jobCard),
+              icon: const Icon(Icons.group_add, size: 20),
+              label: const Text('Join (Start)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
-        ),
-      );
-      buttons.add(
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () => _showMonitorDialog(jobCard),
-            icon: const Icon(Icons.visibility, size: 20),
-            label: const Text('Monitor', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        );
+      }
+      if (isAssigned || isManager) {
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: operatorBlocked ? null : () => _showCompleteDialog(jobCard),
+              icon: const Icon(Icons.check_circle, size: 20),
+              label: const Text('Complete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
-        ),
-      );
+        );
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: operatorBlocked ? null : () => _showMonitorDialog(jobCard),
+              icon: const Icon(Icons.visibility, size: 20),
+              label: const Text('Monitor', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        );
+      }
     } else if (jobCard.status == JobStatus.monitor) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () => _showAdjustmentDialog(jobCard),
+            onPressed: operatorBlocked ? null : () => _showAdjustmentDialog(jobCard),
             icon: const Icon(Icons.refresh, size: 20),
             label: const Text('Adjustment Made', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
@@ -1461,6 +1513,91 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     );
   }
 
+  void _showChangeTypeDialog(JobCard jobCard) {
+    JobType selectedType = jobCard.type;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Job Type'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current: ${jobCard.type.displayName}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: JobType.values.map((t) => ChoiceChip(
+                  label: Text(t.displayName),
+                  selected: selectedType == t,
+                  onSelected: (_) => setDialogState(() => selectedType = t),
+                )).toList(),
+              ),
+              const SizedBox(height: 12),
+              if (selectedType != jobCard.type)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 30),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                  ),
+                  child: Text(
+                    selectedType == JobType.maintenance
+                        ? 'Maintenance jobs are silent — no notifications, no escalation.'
+                        : 'New ${selectedType.displayName} responders will be notified. Escalation timer will restart from the next tick.',
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: selectedType == jobCard.type
+                  ? null
+                  : () async {
+                      final by = currentEmployee;
+                      if (by == null || jobCard.id == null) {
+                        Navigator.pop(context);
+                        return;
+                      }
+                      final from = jobCard.type;
+                      try {
+                        await _firestoreService.changeJobCardType(
+                          jobCardId: jobCard.id!,
+                          from: from,
+                          to: selectedType,
+                          by: by,
+                        );
+                        await _refreshJobCard();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Type changed: ${from.displayName} → ${selectedType.displayName}')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error changing type: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                      }
+                    },
+              child: const Text('Change Type'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAssignmentButtons(JobCard jobCard) {
     if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
@@ -1518,7 +1655,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Job # + Status pill
+            // Row 1: Job # + Type pill + Status pill
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1526,32 +1663,59 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   'Job #${jobCard.jobCardNumber ?? jobCard.id ?? 'N/A'}',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                 ),
-                GestureDetector(
-                  onTap: isManager ? () => _showStatusChangeDialog(jobCard) : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: jobCard.status == JobStatus.closed
-                          ? Colors.green
-                          : jobCard.status == JobStatus.monitor
-                              ? Colors.orange
-                              : jobCard.status == JobStatus.inProgress
-                                  ? Colors.purple
-                                  : Colors.blue,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          jobCard.status.displayName.toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: _canChangeType(jobCard) ? () => _showChangeTypeDialog(jobCard) : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey,
+                          borderRadius: BorderRadius.circular(30),
                         ),
-                        if (isManager) const SizedBox(width: 4),
-                        if (isManager) const Icon(Icons.edit, color: Colors.white, size: 13),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              jobCard.type.displayName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            if (_canChangeType(jobCard)) const SizedBox(width: 4),
+                            if (_canChangeType(jobCard)) const Icon(Icons.edit, color: Colors.white, size: 13),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: isManager ? () => _showStatusChangeDialog(jobCard) : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: jobCard.status == JobStatus.closed
+                              ? Colors.green
+                              : jobCard.status == JobStatus.monitor
+                                  ? Colors.orange
+                                  : jobCard.status == JobStatus.inProgress
+                                      ? Colors.purple
+                                      : Colors.blue,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              jobCard.status.displayName.toUpperCase(),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            if (isManager) const SizedBox(width: 4),
+                            if (isManager) const Icon(Icons.edit, color: Colors.white, size: 13),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

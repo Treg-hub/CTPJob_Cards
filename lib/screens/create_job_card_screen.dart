@@ -688,6 +688,21 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
+                if (jobType == JobType.maintenance) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 30),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                    ),
+                    child: const Text(
+                      'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -958,6 +973,21 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                         )).toList(),
                       ),
+                      if (jobType == JobType.maintenance) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                          ),
+                          child: const Text(
+                            'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
