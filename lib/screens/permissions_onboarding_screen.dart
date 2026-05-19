@@ -1,3 +1,5 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +35,19 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('permissionsCompleted', true);
+
+    if (!kIsWeb && currentEmployee != null) {
+      final locationGranted = (await Permission.locationAlways.status).isGranted;
+      if (locationGranted) {
+        try {
+          await LocationService().startNativeMonitoring(currentEmployee!.clockNo);
+          debugPrint('✅ Native monitoring started after onboarding');
+        } catch (e, st) {
+          FirebaseCrashlytics.instance.recordError(e, st, reason: 'native_monitoring_start_post_onboarding');
+        }
+      }
+    }
+
     await LocationService().checkCurrentLocation();
 
     if (mounted) {

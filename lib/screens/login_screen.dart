@@ -1,13 +1,13 @@
-import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
-import '../services/location_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../services/notification_service.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
 
@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isForgotPasswordLoading = false;
 
   @override
   void initState() {
@@ -91,13 +92,17 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInClockNo', employee.clockNo);
       currentEmployee = employee;
 
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
+
+      if (!kIsWeb) {
         try {
-          debugPrint('🚀 Starting Native Monitoring for ${employee.clockNo}');
-          await LocationService().startNativeMonitoring(employee.clockNo);
-          debugPrint('✅ Native Monitoring started successfully');
-        } catch (e) {
-          debugPrint('❌ Location monitoring error: $e');
+          await FirebaseMessaging.instance.requestPermission();
+          await NotificationService()
+              .refreshAndSaveToken(employee.clockNo)
+              .timeout(const Duration(seconds: 5));
+        } catch (e, st) {
+          FirebaseCrashlytics.instance
+              .recordError(e, st, reason: 'fcm_register_at_login');
         }
       }
 
@@ -107,12 +112,28 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
         );
       }
-
-      if (!kIsWeb) _saveFcmToken(employee.clockNo);
     } on FirebaseAuthException catch (e) {
-      String msg = 'Login failed';
-      if (e.code == 'user-not-found') msg = 'No account found with this email';
-      if (e.code == 'wrong-password') msg = 'Incorrect password';
+      String msg;
+      switch (e.code) {
+        case 'user-not-found':
+          msg = 'No account found with this email';
+          break;
+        case 'wrong-password':
+        case 'invalid-credential':
+          msg = 'Incorrect password';
+          break;
+        case 'invalid-email':
+          msg = "That email address isn't valid";
+          break;
+        case 'too-many-requests':
+          msg = 'Too many attempts. Try again in a few minutes';
+          break;
+        case 'network-request-failed':
+          msg = 'No internet — check your connection';
+          break;
+        default:
+          msg = e.message ?? 'Login failed';
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       }
@@ -135,83 +156,65 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[\w.-]+$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email address'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isForgotPasswordLoading = true);
+
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Password reset email sent to $email'),
+            content: Text(
+              "Password reset email sent to $email. Check your spam folder if you don't see it within a minute.",
+            ),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 6),
           ),
         );
       }
-    } on FirebaseAuthException catch (e) {
-      String msg = 'Failed to send reset email';
-      if (e.code == 'user-not-found') msg = 'No account found with this email';
+    } on FirebaseAuthException catch (e, st) {
+      String msg;
+      switch (e.code) {
+        case 'user-not-found':
+          msg = 'No account found with this email';
+          break;
+        case 'invalid-email':
+          msg = "That email address isn't valid";
+          break;
+        case 'too-many-requests':
+          msg = 'Too many attempts. Try again in a few minutes';
+          break;
+        case 'network-request-failed':
+          msg = 'No internet — check your connection';
+          break;
+        default:
+          msg = e.message ?? 'Failed to send reset email';
+      }
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        st,
+        reason: 'password_reset_failed',
+        information: ['domain:${email.split('@').last}'],
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       }
-    }
-  }
-
-  Future<void> _saveFcmToken(String clockNo) async {
-    try {
-      final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission();
-      debugPrint('FCM permission status: ${settings.authorizationStatus}');
-      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Notification permission denied. Enable in settings for job alerts.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 5),
-            ),
-          );
-        }
-        return;
-      }
-
-      final token = await messaging.getToken();
-      debugPrint('FCM token retrieved: ${token != null ? 'YES (${token.substring(0, 20)}...)' : 'NULL'}');
-      if (token != null && token.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('employees').doc(clockNo).set({
-          'fcmToken': token,
-          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        debugPrint('FCM token saved to Firestore for $clockNo');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Notifications enabled for job alerts'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      } else {
-        debugPrint('FCM token is null or empty');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to get notification token. Try again later.'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('FCM token error: $e');
+    } catch (e, st) {
+      FirebaseCrashlytics.instance.recordError(e, st, reason: 'password_reset_failed');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error setting up notifications: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isForgotPasswordLoading = false);
     }
   }
 
@@ -259,11 +262,17 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: _forgotPassword,
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(color: Color(0xFFFF8C42), fontSize: 14),
-                  ),
+                  onPressed: _isForgotPasswordLoading ? null : _forgotPassword,
+                  child: _isForgotPasswordLoading
+                      ? const SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C42)),
+                        )
+                      : const Text(
+                          'Forgot Password?',
+                          style: TextStyle(color: Color(0xFFFF8C42), fontSize: 14),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),

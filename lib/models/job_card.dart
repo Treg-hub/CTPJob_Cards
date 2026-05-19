@@ -162,8 +162,14 @@ class JobCard {
     );
   }
 
-  Map<String, dynamic> toFirestore() {
-    return {
+  /// Serialise to a Firestore map.
+  ///
+  /// Set [includePhotos] to `false` for routine updates so that a `set(..., merge: true)`
+  /// write does not overwrite the `photos` array. Photo writes go through
+  /// `FirestoreService.addPhotoToJobCard` / `removePhotoFromJobCard` (arrayUnion/arrayRemove)
+  /// to avoid clobbering concurrent additions.
+  Map<String, dynamic> toFirestore({bool includePhotos = true}) {
+    final map = <String, dynamic>{
       'jobCardNumber': jobCardNumber,
       'department': department,
       'area': area,
@@ -194,8 +200,9 @@ class JobCard {
       'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
       'assignmentHistory': assignmentHistory.map((e) => e.toFirestore()).toList(),
-      'photos': photos,
     };
+    if (includePhotos) map['photos'] = photos;
+    return map;
   }
 
   JobCard copyWith({
@@ -284,8 +291,10 @@ class JobCard {
           'addedBy': 'Unknown',
           'timestamp': '',
         };
-      } else if (e is Map<String, dynamic>) {
-        return e;
+      } else if (e is Map) {
+        // Accept any Map shape (cloud_firestore may surface Map<Object?, Object?>
+        // depending on SDK version) and normalise the keys to String.
+        return e.map((k, v) => MapEntry(k.toString(), v));
       }
       return <String, dynamic>{};
     }).toList();
