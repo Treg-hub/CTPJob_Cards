@@ -34,21 +34,25 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
   Future<void> _completeOnboarding() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('permissionsCompleted', true);
 
-    if (!kIsWeb && currentEmployee != null) {
-      final locationGranted = (await Permission.locationAlways.status).isGranted;
-      if (locationGranted) {
-        try {
-          await LocationService().startNativeMonitoring(currentEmployee!.clockNo);
-          debugPrint('✅ Native monitoring started after onboarding');
-        } catch (e, st) {
-          FirebaseCrashlytics.instance.recordError(e, st, reason: 'native_monitoring_start_post_onboarding');
-        }
-      }
+    final locationGranted =
+        kIsWeb ? false : (await Permission.locationAlways.status).isGranted;
+
+    // Only persist completion when location is actually granted — otherwise
+    // main.dart's startup check will route the user back here on next launch.
+    if (locationGranted || kIsWeb) {
+      await prefs.setBool('permissionsCompleted', true);
     }
 
-    await LocationService().checkCurrentLocation();
+    if (!kIsWeb && currentEmployee != null && locationGranted) {
+      try {
+        await LocationService().startNativeMonitoring(currentEmployee!.clockNo);
+        debugPrint('✅ Native monitoring started after onboarding');
+      } catch (e, st) {
+        FirebaseCrashlytics.instance.recordError(e, st, reason: 'native_monitoring_start_post_onboarding');
+      }
+      await LocationService().checkCurrentLocation();
+    }
 
     if (mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));

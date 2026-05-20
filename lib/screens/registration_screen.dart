@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
-import 'home_screen.dart';
+import 'permissions_onboarding_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -84,7 +84,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('loggedInUid', credential.user!.uid);
       await prefs.setString('loggedInName', employee.name);
       await prefs.setString('loggedInClockNo', clockNo);
       currentEmployee = employee;
@@ -92,7 +91,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
         );
         _showSnack('Account created successfully!', Colors.green);
       }
