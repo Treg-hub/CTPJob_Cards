@@ -1,4 +1,31 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$d=$input|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.BACKUP\\.')){Write-Error 'Blocked: do not create .BACKUP files — use git instead';exit 1}"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$d=$input|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze $f --no-fatal-infos 2>&1|Select-Object -Last 10}",
+            "statusMessage": "flutter analyze..."
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(flutter pub *)",
