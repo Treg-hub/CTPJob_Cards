@@ -63,6 +63,7 @@ class JobCard {
   final String description;
   final String notes;
   final String comments;
+  final String correctiveAction;
   final int reoccurrenceCount;
   final JobStatus status;
   final DateTime? createdAt;
@@ -98,6 +99,7 @@ class JobCard {
     required this.description,
     this.notes = '',
     this.comments = '',
+    this.correctiveAction = '',
     this.reoccurrenceCount = 1,
     this.status = JobStatus.open,
     this.createdAt,
@@ -136,6 +138,7 @@ class JobCard {
       description: data['description'] as String? ?? '',
       notes: data['notes'] as String? ?? '',
       comments: data['comments'] as String? ?? '',
+      correctiveAction: data['correctiveAction'] as String? ?? '',
       reoccurrenceCount: data['reoccurrenceCount'] as int? ?? 1,
       status: JobStatusExtension.fromString(data['status'] as String? ?? 'Open'),
       createdAt: data['createdAt'] != null
@@ -203,6 +206,7 @@ class JobCard {
       'description': description,
       'notes': notes,
       'comments': comments,
+      'correctiveAction': correctiveAction,
       'reoccurrenceCount': reoccurrenceCount,
       'status': status.name,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
@@ -240,6 +244,7 @@ class JobCard {
     String? description,
     String? notes,
     String? comments,
+    String? correctiveAction,
     int? reoccurrenceCount,
     JobStatus? status,
     DateTime? createdAt,
@@ -275,6 +280,7 @@ class JobCard {
       description: description ?? this.description,
       notes: notes ?? this.notes,
       comments: comments ?? this.comments,
+      correctiveAction: correctiveAction ?? this.correctiveAction,
       reoccurrenceCount: reoccurrenceCount ?? this.reoccurrenceCount,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,

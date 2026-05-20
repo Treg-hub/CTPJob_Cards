@@ -945,8 +945,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       _buildDetailsCard(jobCard),
                       const SizedBox(height: sectionSpacing),
                       _buildActivityLogCard(jobCard),
-                      const SizedBox(height: sectionSpacing),
-                      _buildAssignmentLogCard(jobCard),
                     ],
                   ),
                 ),
@@ -1125,11 +1123,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         ? List<String>.from(jobCard.assignedNames ?? [])
         : <String>[...(jobCard.assignedNames ?? []), user];
 
-    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Started by $user';
     final updated = jobCard.copyWith(
       status: JobStatus.inProgress,
       startedAt: now,
-      notes: jobCard.notes + note,
       assignedClockNos: updatedClockNos,
       assignedNames: updatedNames,
       assignedAt: isAlreadyAssigned ? jobCard.assignedAt : now,
@@ -1358,13 +1354,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   Future<void> _completeJob(JobCard jobCard, bool withMonitoring, String description) async {
     final now = DateTime.now();
     final user = currentEmployee?.name ?? 'User';
-    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Completed by $user: $description';
+    final caEntry = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] '
+        '${withMonitoring ? 'Monitoring' : 'Completed'} by $user: $description';
     final updated = jobCard.copyWith(
       status: withMonitoring ? JobStatus.monitor : JobStatus.closed,
       completedBy: user,
       completedAt: now,
       monitoringStartedAt: withMonitoring ? now : null,
-      notes: jobCard.notes + note,
+      correctiveAction: jobCard.correctiveAction + caEntry,
     );
     final event = AssignmentEvent(
       assignedByName: withMonitoring ? 'Monitoring by $user' : 'Completed by $user',
@@ -1421,10 +1418,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   Future<void> _adjustmentMade(JobCard jobCard, String description) async {
     final now = DateTime.now();
     final user = currentEmployee?.name ?? 'User';
-    final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Adjustment made by $user: $description – restarted monitoring';
+    final caEntry = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Adjustment by $user: $description – restarted monitoring';
     final updated = jobCard.copyWith(
       monitoringStartedAt: now,
-      notes: jobCard.notes + note,
+      correctiveAction: jobCard.correctiveAction + caEntry,
     );
     final event = AssignmentEvent(
       assignedByName: 'Adjustment by $user',
@@ -1484,11 +1481,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 }
                 final now = DateTime.now();
                 final user = currentEmployee?.name ?? 'User';
-                final note = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Status changed to ${selectedStatus.displayName} by $user';
+                final event = AssignmentEvent(
+                  assignedByName: 'Status → ${selectedStatus.displayName} by $user',
+                  assignedByClockNo: currentEmployee?.clockNo ?? '',
+                  assigneeClockNos: [],
+                  assigneeNames: [],
+                  timestamp: now,
+                );
+                final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory)..add(event);
                 final updated = jobCard.copyWith(
                   status: selectedStatus,
                   monitoringStartedAt: selectedStatus == JobStatus.monitor ? now : null,
-                  notes: jobCard.notes + note,
+                  assignmentHistory: newHistory,
                 );
                 try {
                   await _firestoreService.saveJobCardOfflineAware(updated);
@@ -1646,7 +1650,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Widget _buildHeroHeader(JobCard jobCard) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1743,15 +1746,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Count: $_reoccurrenceCount', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
-                    if (jobCard.createdAt != null)
-                      Text(_formatDateTime(jobCard.createdAt!), style: TextStyle(fontSize: 11.5, color: muted)),
-                  ],
                 ),
               ],
             ),
@@ -1852,6 +1846,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 )),
             if (jobCard.notes.isEmpty)
               Text('No notes', style: TextStyle(color: muted)),
+
+            // ==================== CORRECTIVE ACTION SECTION ====================
+            if (jobCard.correctiveAction.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Corrective Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
+              const SizedBox(height: 4),
+              ..._parseNotes(jobCard.correctiveAction).map((entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(entry, style: TextStyle(fontSize: 14.5, color: onSurface)),
+                  )),
+            ],
           ],
         ),
       ),
@@ -1869,48 +1874,46 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
-            const SizedBox(height: 6),
-            // Two-column row for Created By + Completed By
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(child: _buildCompactDetail('Created By', jobCard.operator)),
-                if (jobCard.completedBy != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCompactDetail('Completed By', jobCard.completedBy!)),
-                ],
+                Text('Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: onSurface)),
+                Text('Count: ${jobCard.reoccurrenceCount}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: onSurface)),
               ],
             ),
+            const SizedBox(height: 6),
+            _buildDetailRow('Created By', jobCard.operator, jobCard.createdAt, muted, onSurface),
             if (jobCard.assignedNames != null && jobCard.assignedNames!.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: 90, child: Text('Assigned To', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: muted))),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: jobCard.assignedNames!.map((name) {
-                        return Chip(
-                          avatar: const Icon(Icons.person, size: 14, color: Colors.green),
-                          label: Text(name, style: TextStyle(color: onSurface, fontSize: 12)),
-                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          side: BorderSide(color: Theme.of(context).colorScheme.outline),
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
+              _buildCompactDetail('Assigned To', jobCard.assignedNames!.join(', ')),
+            ],
+            if (jobCard.completedBy != null) ...[
+              const SizedBox(height: 6),
+              _buildDetailRow('Completed By', jobCard.completedBy!, jobCard.completedAt, muted, onSurface),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, DateTime? timestamp, Color muted, Color onSurface) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: muted)),
+              const SizedBox(height: 2),
+              Text(value, style: TextStyle(fontSize: 13.5, color: onSurface)),
+            ],
+          ),
+        ),
+        if (timestamp != null)
+          Text(_formatDateTime(timestamp), style: TextStyle(fontSize: 11.5, color: muted)),
+      ],
     );
   }
 
@@ -1926,6 +1929,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Widget _buildActivityLogCard(JobCard jobCard) {
+    // Merge lifecycle timestamps + assignmentHistory into one sorted list.
+    final entries = <(DateTime, String)>[
+      if (jobCard.createdAt != null) (jobCard.createdAt!, 'Created'),
+      if (jobCard.startedAt != null) (jobCard.startedAt!, 'Started'),
+      if (jobCard.notificationReceivedAt != null) (jobCard.notificationReceivedAt!, 'Notification Received'),
+      if (jobCard.completedAt != null) (jobCard.completedAt!, 'Completed'),
+      if (jobCard.monitoringStartedAt != null) (jobCard.monitoringStartedAt!, 'Monitoring Started'),
+      if (jobCard.lastUpdatedAt != null) (jobCard.lastUpdatedAt!, 'Last Updated'),
+      ...jobCard.assignmentHistory.map((e) => (e.timestamp, _eventLabel(e))),
+    ]..sort((a, b) => b.$1.compareTo(a.$1));
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1936,14 +1950,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             padding: const EdgeInsets.all(10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (jobCard.createdAt != null) _buildTimelineRow('Created', jobCard.createdAt!),
-                if (jobCard.startedAt != null) _buildTimelineRow('Started', jobCard.startedAt!),
-                if (jobCard.notificationReceivedAt != null) _buildTimelineRow('Notification Received', jobCard.notificationReceivedAt!),
-                if (jobCard.completedAt != null) _buildTimelineRow('Completed', jobCard.completedAt!),
-                if (jobCard.monitoringStartedAt != null) _buildTimelineRow('Monitoring Started', jobCard.monitoringStartedAt!),
-                if (jobCard.lastUpdatedAt != null) _buildTimelineRow('Last Updated', jobCard.lastUpdatedAt!),
-              ],
+              children: entries.isEmpty
+                  ? [Text('No activity yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))]
+                  : entries.map((e) => _buildTimelineRow(e.$2, e.$1)).toList(),
             ),
           ),
         ],
@@ -1951,32 +1960,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     );
   }
 
-  Widget _buildAssignmentLogCard(JobCard jobCard) {
-    final parsedHistory = _parseAssignmentHistory(jobCard.assignmentHistory);
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ExpansionTile(
-        title: Text('Assignment Log', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: parsedHistory.isEmpty
-                  ? [Text('No assignment history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))]
-                  : parsedHistory.map((entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(entry, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface), textAlign: TextAlign.left),
-                        ),
-                      )).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _eventLabel(AssignmentEvent event) {
+    if (event.isTypeChange) {
+      return 'Type changed: ${event.typeChangedFrom} → ${event.typeChangedTo} by ${event.assignedByName}';
+    }
+    if (event.assigneeNames.isEmpty) return event.assignedByName;
+    return '${event.isUnassign ? 'Unassigned' : 'Assigned to'} ${event.assigneeNames.join(', ')} by ${event.assignedByName}';
   }
 
   Widget _buildTimelineRow(String label, DateTime dateTime) {
@@ -1995,14 +1984,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   List<String> _parseNotes(String notes) => notes.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
 
-  List<String> _parseAssignmentHistory(List<AssignmentEvent> history) {
-    return history.reversed.map((event) {
-      final formatted = event.assigneeNames.isEmpty
-          ? event.assignedByName
-          : '${event.isUnassign ? 'Unassigned' : 'Assigned to'} ${event.assigneeNames.join(', ')} by ${event.assignedByName}';
-      return '[${_formatDateTime(event.timestamp)}] $formatted';
-    }).toList();
-  }
 
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
