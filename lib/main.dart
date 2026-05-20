@@ -50,14 +50,14 @@ void main() async {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-    if (kIsWeb) {
-      FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: false);
+    if (!kIsWeb) {
+      FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
     }
+    FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: !kIsWeb);
   } catch (e) {
     debugPrint('Firebase warning: $e');
   }
