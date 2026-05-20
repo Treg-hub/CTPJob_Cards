@@ -30,7 +30,8 @@ const String _loudBannerChannel     = 'banner_loud_channel';
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-  final AudioPlayer _foregroundSoundPlayer = AudioPlayer();
+  // audioplayers_web is not bundled in the web build; audio alerts are Android-only.
+  final AudioPlayer? _foregroundSoundPlayer = kIsWeb ? null : AudioPlayer();
 
   // ==================== PERMISSIONS ====================
   Future<void> _requestPermissions() async {
@@ -112,10 +113,12 @@ class NotificationService {
   // foreground notifications. Notification channels can't do per-event volume on
   // Android 8+, so we play the sound externally via audioplayers.
   Future<void> _playForegroundSound(double volume) async {
+    final player = _foregroundSoundPlayer;
+    if (player == null) return;
     try {
-      await _foregroundSoundPlayer.stop();
-      await _foregroundSoundPlayer.setVolume(volume);
-      await _foregroundSoundPlayer.play(AssetSource('sounds/escalation_alert.mp3'));
+      await player.stop();
+      await player.setVolume(volume);
+      await player.play(AssetSource('sounds/escalation_alert.mp3'));
       debugPrint('🔊 Playing foreground sound at ${(volume * 100).toInt()}% volume');
     } catch (e) {
       debugPrint('Error playing foreground sound: $e');
