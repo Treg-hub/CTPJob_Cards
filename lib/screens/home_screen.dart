@@ -14,9 +14,9 @@ import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/location_service.dart';
-import '../theme/app_theme.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' as role_utils;
+import '../widgets/job_card_tile.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
@@ -630,158 +630,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return card;
   }
 
-  Widget _buildJobCardWidget(JobCard job) {
-    return Card(
-      elevation: 6,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job))),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'P${job.priority}',
-                      style: TextStyle(
-                        color: _getPriorityColor('P${job.priority}'),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part} | ${job.operator}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 11.5,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (job.jobCardNumber != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'JC #${job.jobCardNumber}',
-                        style: TextStyle(color: onColor(Colors.blue), fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: Text(
-                      job.description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.normal,
-                        fontSize: 15,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (job.comments.isNotEmpty) Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _getLastCommentPreview(job.comments),
-                  style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (job.notes.isNotEmpty) Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  job.notes.split('\n').last.trim(),
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      job.status.displayName,
-                      style: TextStyle(color: onColor(_getStatusColor(job.status.name)), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      job.type.displayName,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          (job.assignedNames is List)
-                              ? (job.assignedNames as List).join(', ')
-                              : (job.assignedNames?.toString() ?? 'Unassigned'),
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5),
-                          textAlign: TextAlign.end,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
-                          style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                          textAlign: TextAlign.end,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Row(
-                    children: [
-                      if (job.comments.isNotEmpty) Icon(Icons.comment_outlined, size: 16, color: Colors.blue[400]),
-                      if (job.notes.isNotEmpty) Icon(Icons.build_outlined, size: 16, color: Colors.orange[400]),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildRecentJobCards() {
     return StreamBuilder<List<JobCard>>(
       stream: _firestoreService.getAllJobCards(),
@@ -872,7 +720,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       child: SlideAnimation(
                         verticalOffset: 50.0,
                         child: FadeInAnimation(
-                          child: _buildJobCardWidget(topJobs[index]),
+                          child: JobCardTile(
+                            job: topJobs[index],
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: topJobs[index]))),
+                          ),
                         ),
                       ),
                     );
@@ -960,7 +811,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 child: SlideAnimation(
                   verticalOffset: 50.0,
                   child: FadeInAnimation(
-                    child: _buildJobCardWidget(topJobs[index]),
+                    child: JobCardTile(
+                      job: topJobs[index],
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: topJobs[index]))),
+                    ),
                   ),
                 ),
               );
@@ -1050,7 +904,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: assignedJobs.length,
-          itemBuilder: (context, index) => _buildJobCardWidget(assignedJobs[index]),
+          itemBuilder: (context, index) => JobCardTile(
+            job: assignedJobs[index],
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: assignedJobs[index]))),
+          ),
         );
       },
     );
@@ -1096,49 +953,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: assignedJobs.length,
-          itemBuilder: (context, index) => _buildJobCardWidget(assignedJobs[index]),
+          itemBuilder: (context, index) => JobCardTile(
+            job: assignedJobs[index],
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: assignedJobs[index]))),
+          ),
         );
       },
     );
-  }
-
-  Color _getPriorityColor(String priority) {
-    final num = int.tryParse(priority.substring(1)) ?? 0;
-    switch (num) {
-      case 1: return Theme.of(context).appColors.priority1;
-      case 2: return Theme.of(context).appColors.priority2;
-      case 3: return Theme.of(context).appColors.priority3;
-      case 4: return Theme.of(context).appColors.priority4;
-      case 5: return Theme.of(context).appColors.priority5;
-      default: return Colors.grey;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'open':
-        return Theme.of(context).appColors.statusOpen;
-      case 'in progress':
-        return Theme.of(context).appColors.statusInProgress;
-      case 'completed':
-        return Theme.of(context).appColors.statusCompleted;
-      case 'cancelled':
-        return Theme.of(context).appColors.statusCancelled;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _getLastCommentPreview(String comments) {
-    final parts = comments.split('\n').where((c) => c.trim().isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    final lastComment = parts.last;
-    final lines = lastComment.split('');
-    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
   }
 
   Widget _buildDashboardTab() {

@@ -4,6 +4,7 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/job_card_tile.dart';
 
 class ViewJobCardsScreen extends StatefulWidget {
   const ViewJobCardsScreen({
@@ -80,49 +81,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     if (empPosition?.contains('mechanical') ?? false) return 'Mechanical';
     return null;
   }
-
-  Color _getPriorityColor(String priority) {
-    final num = int.tryParse(priority.substring(1)) ?? 0;
-    final appColors = Theme.of(context).appColors;
-    switch (num) {
-      case 1: return appColors.priority1;
-      case 2: return appColors.priority2;
-      case 3: return appColors.priority3;
-      case 4: return appColors.priority4;
-      case 5: return appColors.priority5;
-      default: return Colors.grey;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    final appColors = Theme.of(context).appColors;
-    switch (status.toLowerCase()) {
-      case 'open': return appColors.statusOpen;
-      case 'inprogress':
-      case 'in_progress':
-      case 'in progress': return appColors.statusInProgress;
-      case 'monitor':
-      case 'monitoring':
-      case 'completed': return appColors.statusCompleted;
-      case 'closed':
-      case 'cancelled': return appColors.statusCancelled;
-      default: return Colors.grey;
-    }
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _getLastCommentPreview(String comments) {
-    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    final lastComment = parts.last;
-    final lines = lastComment.split('\n');
-    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
-  }
-
-
 
   // ==================== CASCADING FILTERS ====================
   Widget _buildCascadingFilters() {
@@ -272,157 +230,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   }
 
   // ==================== IMPROVED JOB CARD (same as HomeScreen) ====================
-  Widget _buildJobCardWidget(JobCard job) {
-    return Card(
-      elevation: 6,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: job)),
-        ),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'P${job.priority}',
-                      style: TextStyle(
-                        color: _getPriorityColor('P${job.priority}'),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part} | ${job.operator}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 11.5,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-               Row(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                     decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 204),
-                       borderRadius: BorderRadius.circular(6),
-                     ),
-                   child: Text(
-                     'JC #${job.jobCardNumber ?? 'N/A'}',
-                     style: const TextStyle(
-                       color: Colors.white,
-                       fontSize: 12,
-                       fontWeight: FontWeight.w600,
-                     ),
-                   ),
-                   ),
-                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      job.description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (job.comments.isNotEmpty) Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _getLastCommentPreview(job.comments),
-                  style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (job.notes.isNotEmpty) Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  job.notes.split('\n').first.trim(),
-                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(job.status.name),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      job.status.displayName,
-                      style: TextStyle(
-                        color: onColor(_getStatusColor(job.status.name)),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      job.type.displayName,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-                  const Spacer(),
-
-                  // FIXED: Prevents horizontal overflow when many people are assigned
-                  Expanded(
-                    child: Text(
-                      job.assignedNames?.join(', ') ?? 'Unassigned',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-                  Text(
-                    job.lastUpdatedAt != null ? _formatDateTime(job.lastUpdatedAt!) : '—',
-                    style: const TextStyle(color: Color(0xFFFF8C42), fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -621,7 +428,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               : ListView.builder(
                   padding: const EdgeInsets.all(8),
                   itemCount: jobs.length,
-                  itemBuilder: (context, index) => _buildJobCardWidget(jobs[index]),
+                  itemBuilder: (context, index) => JobCardTile(
+                    job: jobs[index],
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobs[index]))),
+                  ),
                 ),
         ),
       ],

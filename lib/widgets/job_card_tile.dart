@@ -36,19 +36,25 @@ class JobCardTile extends StatelessWidget {
     }
   }
 
-  String _lastCommentPreview(String comments) {
-    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
+  String _lastEntry(String text) {
+    final parts = text.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
     if (parts.isEmpty) return '';
-    final last = parts.last;
-    final lines = last.split('\n');
-    return lines.length > 1 ? lines[1].trim() : last.trim();
+    return parts.last.trim();
   }
 
   String _formatDateTime(DateTime dt) =>
-      '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
+      '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final statusColor = _statusColor(context, job.status.name);
+    final lastComment = job.comments.isNotEmpty ? _lastEntry(job.comments) : '';
+    final lastNote = job.notes.isNotEmpty ? _lastEntry(job.notes) : '';
+    final lastCA = job.correctiveAction.isNotEmpty ? _lastEntry(job.correctiveAction) : '';
+
     return Card(
       elevation: 6,
       margin: const EdgeInsets.only(bottom: 12),
@@ -61,50 +67,62 @@ class JobCardTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'P${job.priority}',
-                      style: TextStyle(
-                        color: _priorityColor(context, job.priority),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
+              // Row 1: Priority + breadcrumb | Status + Type badges
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'P${job.priority}',
+                            style: TextStyle(
+                              color: _priorityColor(context, job.priority),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part}',
+                            style: TextStyle(color: muted, fontSize: 11.5, height: 1.2),
+                          ),
+                        ],
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    TextSpan(
-                      text:
-                          ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part} | ${job.operator}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 11.5,
-                        height: 1.2,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      job.status.displayName,
+                      style: TextStyle(color: onColor(statusColor), fontSize: 11, fontWeight: FontWeight.w600),
                     ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: Colors.blueGrey, borderRadius: BorderRadius.circular(20)),
+                    child: Text(job.type.displayName, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
+              // Row 2: JC# badge + Description
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (job.jobCardNumber != null) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
+                      decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(6)),
                       child: Text(
                         'JC #${job.jobCardNumber}',
-                        style: TextStyle(
-                          color: onColor(Colors.blue),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: onColor(Colors.blue), fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -112,107 +130,86 @@ class JobCardTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       job.description,
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontSize: 15,
-                        height: 1.3,
-                      ),
+                      style: TextStyle(color: onSurface, fontSize: 15, fontWeight: FontWeight.w600, height: 1.3),
                     ),
                   ),
                 ],
               ),
-              if (job.comments.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    _lastCommentPreview(job.comments),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue.shade300,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              if (job.notes.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    job.notes.split('\n').last.trim(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _statusColor(context, job.status.name),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      job.status.displayName,
-                      style: TextStyle(
-                        color: onColor(_statusColor(context, job.status.name)),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+              // Row 3: Comment preview
+              if (lastComment.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.comment_outlined, size: 13, color: Colors.blue[400]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        lastComment,
+                        style: TextStyle(fontSize: 12, color: Colors.blue.shade300, fontStyle: FontStyle.italic),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey,
-                      borderRadius: BorderRadius.circular(20),
+                  ],
+                ),
+              ],
+              // Row 4: Note preview
+              if (lastNote.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.edit_note, size: 13, color: muted),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        lastNote,
+                        style: TextStyle(fontSize: 12, color: muted, fontStyle: FontStyle.italic),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    child: Text(
-                      job.type.displayName,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ],
+                ),
+              ],
+              // Row 5: Corrective action preview (only when populated)
+              if (lastCA.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(Icons.check_circle_outline, size: 13, color: Colors.green[600]),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        lastCA,
+                        style: TextStyle(fontSize: 12, color: Colors.green[700], fontStyle: FontStyle.italic),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              // Row 6: Assigned names + Created timestamp
+              Row(
+                children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          job.assignedNames?.join(', ') ?? 'Unassigned',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 12.5,
-                          ),
-                          textAlign: TextAlign.end,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          job.lastUpdatedAt != null
-                              ? _formatDateTime(job.lastUpdatedAt!)
-                              : '—',
-                          style: const TextStyle(color: kBrandOrange, fontSize: 12),
-                          textAlign: TextAlign.end,
-                        ),
-                      ],
+                    child: Text(
+                      job.assignedNames?.isNotEmpty == true ? job.assignedNames!.join(', ') : 'Unassigned',
+                      style: TextStyle(color: muted, fontSize: 12.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Row(
-                    children: [
-                      if (job.comments.isNotEmpty)
-                        Icon(Icons.comment_outlined, size: 16, color: Colors.blue[400]),
-                      if (job.notes.isNotEmpty)
-                        Icon(Icons.build_outlined, size: 16, color: Colors.orange[400]),
-                    ],
+                  Text(
+                    job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
+                    style: const TextStyle(color: kBrandOrange, fontSize: 12),
                   ),
                 ],
               ),
