@@ -676,7 +676,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           );
         }
 
-        var recentJobs = allJobs.where((job) => job.lastUpdatedAt != null).toList()
+        var recentJobs = allJobs
+            .where((job) =>
+                job.lastUpdatedAt != null &&
+                (job.status == JobStatus.open || job.status == JobStatus.inProgress))
+            .toList()
           ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
 
         var topJobs = recentJobs.take(20).toList();
@@ -793,7 +797,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         }
 
         var recentJobs = allJobs
-            .where((job) => job.lastUpdatedAt != null && job.type == type)
+            .where((job) =>
+                job.lastUpdatedAt != null &&
+                job.type == type &&
+                (job.status == JobStatus.open || job.status == JobStatus.inProgress))
             .toList()
           ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
 

@@ -36,21 +36,56 @@ class JobCardTile extends StatelessWidget {
     }
   }
 
+  IconData _statusIcon(JobStatus status) {
+    switch (status) {
+      case JobStatus.open: return Icons.radio_button_unchecked;
+      case JobStatus.inProgress: return Icons.autorenew;
+      case JobStatus.monitor: return Icons.visibility;
+      case JobStatus.closed: return Icons.check_circle;
+    }
+  }
+
   String _lastEntry(String text) {
     final parts = text.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
     if (parts.isEmpty) return '';
     return parts.last.trim();
   }
 
-  String _formatDateTime(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
-      '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  String _relativeTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+  }
+
+  List<Widget> _typeIcons(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    const size = 18.0;
+    switch (job.type) {
+      case JobType.mechanical:
+        return [Icon(Icons.build, size: size, color: color)];
+      case JobType.electrical:
+        return [Icon(Icons.bolt, size: size, color: color)];
+      case JobType.mechanicalElectrical:
+        return [
+          Icon(Icons.build, size: size, color: color),
+          const SizedBox(width: 2),
+          Icon(Icons.bolt, size: size, color: color),
+        ];
+      case JobType.maintenance:
+        return [Icon(Icons.circle_outlined, size: size, color: color)];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final onSurface = Theme.of(context).colorScheme.onSurface;
     final statusColor = _statusColor(context, job.status.name);
+    final priorityColor = _priorityColor(context, job.priority);
     final lastComment = job.comments.isNotEmpty ? _lastEntry(job.comments) : '';
     final lastNote = job.notes.isNotEmpty ? _lastEntry(job.notes) : '';
     final lastCA = job.correctiveAction.isNotEmpty ? _lastEntry(job.correctiveAction) : '';
@@ -58,7 +93,10 @@ class JobCardTile extends StatelessWidget {
     return Card(
       elevation: 6,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: priorityColor, width: 2),
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -67,47 +105,26 @@ class JobCardTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Priority + breadcrumb | Status + Type badges
+              // Row 1: Type icon(s) + breadcrumb | Status icon + label
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  ..._typeIcons(context),
+                  const SizedBox(width: 6),
                   Expanded(
-                    child: RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'P${job.priority}',
-                            style: TextStyle(
-                              color: _priorityColor(context, job.priority),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                              height: 1.2,
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' | ${job.department} > ${job.area} > ${job.machine} > ${job.part}',
-                            style: TextStyle(color: muted, fontSize: 11.5, height: 1.2),
-                          ),
-                        ],
-                      ),
+                    child: Text(
+                      '${job.department} > ${job.area} > ${job.machine} > ${job.part}',
+                      style: TextStyle(color: muted, fontSize: 11.5, height: 1.2),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
-                    child: Text(
-                      job.status.displayName,
-                      style: TextStyle(color: onColor(statusColor), fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                  Icon(_statusIcon(job.status), size: 14, color: statusColor),
                   const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: Colors.blueGrey, borderRadius: BorderRadius.circular(20)),
-                    child: Text(job.type.displayName, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                  Text(
+                    job.status.displayName,
+                    style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -196,7 +213,7 @@ class JobCardTile extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 8),
-              // Row 6: Assigned names + Created timestamp
+              // Row 6: Assigned names + Created timestamp (relative)
               Row(
                 children: [
                   Expanded(
@@ -208,7 +225,7 @@ class JobCardTile extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    job.createdAt != null ? _formatDateTime(job.createdAt!) : '—',
+                    job.createdAt != null ? _relativeTime(job.createdAt!) : '—',
                     style: const TextStyle(color: kBrandOrange, fontSize: 12),
                   ),
                 ],
