@@ -1,31 +1,4 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "$d=$input|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.BACKUP\\.')){Write-Error 'Blocked: do not create .BACKUP files — use git instead';exit 1}"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "$d=$input|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze $f --no-fatal-infos 2>&1|Select-Object -Last 10}",
-            "statusMessage": "flutter analyze..."
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(flutter pub *)",
@@ -42,7 +15,37 @@
       "Bash(gh pr *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(flutter test *)"
+      "Bash(flutter test *)",
+      "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" add .claude/settings.local.json)",
+      "Bash(git -C C:/Users/Admin/CTPJob_Cards commit -m ' *)",
+      "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" push origin master)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.BACKUP\\.')){Write-Output 'Blocked: do not create .BACKUP files — use git instead';exit 2}",
+            "shell": "powershell"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze $f --no-fatal-infos 2>&1|Select-Object -Last 10}",
+            "shell": "powershell",
+            "statusMessage": "flutter analyze..."
+          }
+        ]
+      }
     ]
   }
 }
