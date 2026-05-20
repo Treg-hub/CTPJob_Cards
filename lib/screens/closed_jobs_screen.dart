@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
+import '../widgets/job_card_tile.dart';
 
 class ClosedJobsScreen extends StatefulWidget {
   const ClosedJobsScreen({super.key});
@@ -94,14 +95,6 @@ class _ClosedJobsScreenState extends State<ClosedJobsScreen> {
       machines = [];
       searchQuery = '';
     });
-  }
-
-  String _getLastCommentPreview(String comments) {
-    final parts = comments.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    final lastComment = parts.last;
-    final lines = lastComment.split('\n');
-    return lines.length > 1 ? lines[1].trim() : lastComment.trim();
   }
 
   void _showAddCommentDialog(JobCard job) {
@@ -255,52 +248,30 @@ class _ClosedJobsScreenState extends State<ClosedJobsScreen> {
                 }
 
                 return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   itemCount: jobs.length,
                   itemBuilder: (context, index) {
                     final job = jobs[index];
-                    final completedAt = job.completedAt;
-                    return Card(
-                      margin: const EdgeInsets.all(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    job.description,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                ),
-                                ElevatedButton.icon(
-                                  onPressed: () => _showAddCommentDialog(job),
-                                  icon: const Icon(Icons.comment, size: 16),
-                                  label: const Text('Add Comment'),
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    textStyle: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              ],
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        JobCardTile(job: job),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4, top: 2),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _showAddCommentDialog(job),
+                              icon: const Icon(Icons.comment, size: 16),
+                              label: const Text('Add Comment'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${job.department} > ${job.machine} > ${job.area}\n${job.type.displayName} | P${job.priority} | Closed by: ${job.completedBy ?? "Unknown"}\nNotes: ${job.notes}${job.comments.isNotEmpty ? '\nComments: ${_getLastCommentPreview(job.comments)}' : ''}',
-                              style: const TextStyle(fontSize: 14, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              completedAt != null
-                                  ? 'Closed: ${completedAt.day}/${completedAt.month}/${completedAt.year}'
-                                  : '',
-                              style: const TextStyle(fontSize: 12, color: Colors.white70),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   },
                 );
