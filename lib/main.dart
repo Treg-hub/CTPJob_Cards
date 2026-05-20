@@ -156,8 +156,11 @@ void main() async {
       initialScreen = const LoginScreen();
     } else {
       // Employee loaded (or fetch failed transiently) — keep user logged in
-      if (currentEmployee != null && !kIsWeb) {
-        NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+      if (currentEmployee != null) {
+        await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
+        if (!kIsWeb) {
+          NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+        }
       }
 
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
@@ -168,16 +171,15 @@ void main() async {
         initialScreen = const HomeScreen();
       }
 
-      if (!kIsWeb) {
+      if (!kIsWeb && permissionsCompleted && locationGranted) {
         try {
           await LocationService().startNativeMonitoring(clockNo);
           debugPrint('✅ Native monitoring started on auto-login');
         } catch (e) {
           debugPrint('Location monitoring error on auto-login: $e');
         }
+        LocationService().checkCurrentLocation();
       }
-
-      LocationService().checkCurrentLocation();
     }
   } else {
     initialScreen = const LoginScreen();

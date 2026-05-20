@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/assignment_event.dart';
 import '../models/copper_transaction.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -134,9 +135,83 @@ class FirestoreService {
 
   Future<void> updateJobCard(String jobCardId, JobCard jobCard) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).set(jobCard.toFirestore(), SetOptions(merge: true));
+      // Exclude photos so a routine merge-set does not clobber concurrent
+      // arrayUnion/arrayRemove writes to the photos field. Photo mutations go
+      // through addPhotoToJobCard / removePhotoFromJobCard below.
+      await _firestore
+          .collection('job_cards')
+          .doc(jobCardId)
+          .set(jobCard.toFirestore(includePhotos: false), SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to update job card: $e');
+    }
+  }
+
+  /// Change a job card's [type] in place, reset escalation, and append a
+  /// type-change entry to assignmentHistory.
+  ///
+  /// Clearing `notifiedAtStage1..4` lets the existing escalation function
+  /// re-stamp from the next tick with the new routing. `escalationStopped`
+  /// stays untouched — if the job was already assigned, escalation remains
+  /// stopped (which is correct). The cloud function `onJobCardTypeChanged`
+  /// picks up the type delta and notifies the new audience.
+  Future<void> changeJobCardType({
+    required String jobCardId,
+    required JobType from,
+    required JobType to,
+    required Employee by,
+  }) async {
+    if (from == to) return;
+    try {
+      final event = AssignmentEvent(
+        assignedByName: by.name,
+        assignedByClockNo: by.clockNo,
+        assigneeClockNos: const [],
+        assigneeNames: const [],
+        timestamp: DateTime.now(),
+        typeChangedFrom: from.name,
+        typeChangedTo: to.name,
+      );
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'type': to.name,
+        'notifiedAtStage1': null,
+        'notifiedAtStage2': null,
+        'notifiedAtStage3': null,
+        'notifiedAtStage4': null,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+        'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
+      });
+    } catch (e) {
+      throw Exception('Failed to change job card type: $e');
+    }
+  }
+
+  /// Atomically append a photo entry to `job_cards/{jobCardId}.photos`.
+  ///
+  /// Uses [FieldValue.arrayUnion] so concurrent additions from multiple
+  /// clients (or from offline queues replaying) all land without overwriting
+  /// each other.
+  Future<void> addPhotoToJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    try {
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'photos': FieldValue.arrayUnion([photo]),
+      });
+    } catch (e) {
+      throw Exception('Failed to add photo: $e');
+    }
+  }
+
+  /// Atomically remove a photo entry from `job_cards/{jobCardId}.photos`.
+  ///
+  /// [photo] must be the exact map that was stored — Firestore arrayRemove
+  /// requires a deep equality match.
+  Future<void> removePhotoFromJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    try {
+      await _firestore.collection('job_cards').doc(jobCardId).update({
+        'photos': FieldValue.arrayRemove([photo]),
+      });
+    } catch (e) {
+      throw Exception('Failed to remove photo: $e');
     }
   }
 
@@ -647,7 +722,7 @@ class FirestoreService {
         await SyncService().addToQueue(
           collection: 'job_cards',
           operation: 'update',
-          data: jobCard.toFirestore(),
+          data: jobCard.toFirestore(includePhotos: false),
           documentId: jobCard.id,
         );
         debugPrint('📤 JobCard queued for later sync (offline)');

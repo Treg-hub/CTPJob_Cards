@@ -15,7 +15,15 @@ UserRole roleFromEmployee(Employee? employee) {
   if (employee == null) return UserRole.operator;
   final pos = employee.position.toLowerCase();
   if (pos.contains('manager')) return UserRole.manager;
-  if (pos.contains('mechanical') || pos.contains('electrical')) return UserRole.technician;
+  // Broad substring match — covers "Mechanic", "Mechanical", "Diesel Mechanic",
+  // "Electrical", "Electrician", "Auto Electrician", "Technician",
+  // "Maintenance Technician". Manager is checked first so "Mechanical Manager"
+  // still resolves to manager.
+  if (pos.contains('mechanic') ||
+      pos.contains('electric') ||
+      pos.contains('technician')) {
+    return UserRole.technician;
+  }
   return UserRole.operator;
 }
 

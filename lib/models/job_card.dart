@@ -4,17 +4,36 @@ import 'assignment_event.dart';
 enum JobType {
   mechanical('Mechanical'),
   electrical('Electrical'),
-  mechanicalElectrical('Mech/Elec ?'),
+  mechanicalElectrical('Mech/Elec'),
   maintenance('Maintenance');
 
   const JobType(this.displayName);
   final String displayName;
 
+  /// Parse a stored Firestore string back into a [JobType].
+  ///
+  /// New writes use [name] (camelCase, e.g. "mechanicalElectrical"), so the
+  /// case-sensitive name match is the fast path. Legacy/display-name forms
+  /// ("Mech/Elec ?", "Mechanical", etc.) are also accepted so old docs read
+  /// correctly without a migration.
   static JobType fromString(String value) {
-    return JobType.values.firstWhere(
-      (type) => type.name == value.toLowerCase(),
-      orElse: () => JobType.mechanical,
-    );
+    for (final t in JobType.values) {
+      if (t.name == value) return t;
+    }
+    final normalized = value.toLowerCase().replaceAll(' ', '').replaceAll('?', '');
+    switch (normalized) {
+      case 'mechanical':
+        return JobType.mechanical;
+      case 'electrical':
+        return JobType.electrical;
+      case 'mech/elec':
+      case 'mechelec':
+      case 'mechanicalelectrical':
+        return JobType.mechanicalElectrical;
+      case 'maintenance':
+        return JobType.maintenance;
+    }
+    return JobType.mechanical;
   }
 }
 
@@ -162,8 +181,14 @@ class JobCard {
     );
   }
 
-  Map<String, dynamic> toFirestore() {
-    return {
+  /// Serialise to a Firestore map.
+  ///
+  /// Set [includePhotos] to `false` for routine updates so that a `set(..., merge: true)`
+  /// write does not overwrite the `photos` array. Photo writes go through
+  /// `FirestoreService.addPhotoToJobCard` / `removePhotoFromJobCard` (arrayUnion/arrayRemove)
+  /// to avoid clobbering concurrent additions.
+  Map<String, dynamic> toFirestore({bool includePhotos = true}) {
+    final map = <String, dynamic>{
       'jobCardNumber': jobCardNumber,
       'department': department,
       'area': area,
@@ -194,8 +219,9 @@ class JobCard {
       'monitoringStartedAt': monitoringStartedAt != null ? Timestamp.fromDate(monitoringStartedAt!) : null,
       'closedAt': closedAt != null ? Timestamp.fromDate(closedAt!) : null,
       'assignmentHistory': assignmentHistory.map((e) => e.toFirestore()).toList(),
-      'photos': photos,
     };
+    if (includePhotos) map['photos'] = photos;
+    return map;
   }
 
   JobCard copyWith({
@@ -284,8 +310,10 @@ class JobCard {
           'addedBy': 'Unknown',
           'timestamp': '',
         };
-      } else if (e is Map<String, dynamic>) {
-        return e;
+      } else if (e is Map) {
+        // Accept any Map shape (cloud_firestore may surface Map<Object?, Object?>
+        // depending on SDK version) and normalise the keys to String.
+        return e.map((k, v) => MapEntry(k.toString(), v));
       }
       return <String, dynamic>{};
     }).toList();

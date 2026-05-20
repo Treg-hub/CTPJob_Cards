@@ -7,6 +7,11 @@ class AssignmentEvent {
   final List<String> assigneeNames;
   final DateTime timestamp;
   final bool isUnassign; // true for unassign events
+  // Optional type-change marker. When non-null, this entry records a job type
+  // change rather than an assignment — the assignee lists are typically empty
+  // and the by-fields identify who made the change.
+  final String? typeChangedFrom;
+  final String? typeChangedTo;
 
   const AssignmentEvent({
     required this.assignedByName,
@@ -15,7 +20,11 @@ class AssignmentEvent {
     required this.assigneeNames,
     required this.timestamp,
     this.isUnassign = false,
+    this.typeChangedFrom,
+    this.typeChangedTo,
   });
+
+  bool get isTypeChange => typeChangedFrom != null && typeChangedTo != null;
 
   factory AssignmentEvent.fromFirestore(Map<String, dynamic> data) {
     return AssignmentEvent(
@@ -25,6 +34,8 @@ class AssignmentEvent {
       assigneeNames: List<String>.from(data['assigneeNames'] ?? []),
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       isUnassign: data['isUnassign'] as bool? ?? false,
+      typeChangedFrom: data['typeChangedFrom'] as String?,
+      typeChangedTo: data['typeChangedTo'] as String?,
     );
   }
 
@@ -36,6 +47,8 @@ class AssignmentEvent {
       'assigneeNames': assigneeNames,
       'timestamp': Timestamp.fromDate(timestamp),
       'isUnassign': isUnassign,
+      if (typeChangedFrom != null) 'typeChangedFrom': typeChangedFrom,
+      if (typeChangedTo != null) 'typeChangedTo': typeChangedTo,
     };
   }
 }

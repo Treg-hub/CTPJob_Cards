@@ -77,12 +77,44 @@ Four roles, **inferred from `Employee.position` and `Employee.department`** — 
 
 | Role | Inference | Key Screens |
 |------|-----------|-------------|
-| Technician | `position` contains `mechanical` or `electrical` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard |
+| Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard |
 | Manager | `position` contains `manager` | ManagerDashboard, ViewJobCards, DailyReview (web), NotificationHistory |
 | Operator | neither manager nor technician | Home, CreateJobCard (primary), ViewJobCards |
-| Admin | password gate via Settings (`SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor |
+| Admin | hardcoded `clockNo == "22"` (also a password gate in `SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor |
+
+### Capability matrix (job card actions)
+
+| Action | Operator | Technician | Manager | Admin |
+|---|---|---|---|---|
+| Create job card (any type) | ✅ | ✅ | ✅ | ✅ |
+| Start / Complete / Monitor — Maintenance | ✅ | ✅ | ✅ | ✅ |
+| Start / Complete / Monitor — Mech/Elec/MechElec | ❌ | ✅ | ✅ | ✅ |
+| Join (Start) an in-progress job | ❌ | ✅ (Maintenance + any if technician) | ✅ | ✅ |
+| Change job card type | ❌ | ✅ | ✅ | ✅ |
+| Assign / unassign others | ❌ | ❌ | ✅ | ✅ |
+| Close / reopen / move to monitor via status pill | ❌ | ❌ | ✅ | ✅ |
+| Add note | ❌ | ✅ | ✅ | ✅ |
+| Add comment | ✅ | ❌ | ✅ | ✅ |
+| Add photo | ✅ | ✅ | ✅ | ✅ |
+| Remove photo (own) | ✅ | ✅ | ✅ | ✅ |
+| Remove photo (any) | ❌ | ❌ | ❌ | ✅ |
+
+**Operator gating** (Maintenance only for Start/Complete/Monitor on mech/elec jobs) is enforced by `_operatorRestrictedFor()` in `job_card_detail_screen.dart`. Operators can still create any type — they need to raise mech/elec faults.
+
+**Technician join-in-progress**: when an open Mechanical/Electrical/Mech-Elec job is already in progress, additional technicians can self-assign by tapping "Join (Start)" on the detail screen. The data model (`assignedClockNos: List<String>`) supports multiple assignees.
+
+**Type changes** route through `FirestoreService.changeJobCardType()` which resets `notifiedAtStageN`, appends a `type_changed` entry to `assignmentHistory`, and triggers the `onJobCardTypeChanged` cloud function to notify the new audience.
 
 Additional flags: `isSuperManager` (`department == "general"`) sees factory-wide manager views; CopperDashboard is whitelisted to specific clock numbers (`22`, `5421`, `20`).
+
+## Job Card Types & Notifications
+
+Four types: **Mechanical**, **Electrical**, **Mech/Elec** (notifies both), **Maintenance**.
+
+- The first three fan out at creation per `notification_configs/global` (`creation_recipients_by_type`) and escalate through stages 1–4.
+- **Maintenance is silent** — `excluded_job_types: ["maintenance"]` in `notification_configs/global` means zero creation notifications and zero escalation. Use for planned/routine work; the responsible team must pull these from job lists themselves. `autoCloseMonitoringJobs` is type-agnostic, so a Maintenance job in Monitor will still auto-close after 7 days.
+- **Type enum serialization** lives in `lib/models/job_card.dart`. Writes use `type.name` (camelCase, e.g. `"mechanicalElectrical"`); `JobType.fromString` accepts both that form and legacy display names. Don't change the enum names without a migration plan — Firestore docs store the name verbatim.
+- Changing a type after creation re-fires the creation notification via the `onJobCardTypeChanged` Firestore trigger (in `africa-south1`), excluding the original creator from any P5 CC.
 
 ## Firestore Collections
 

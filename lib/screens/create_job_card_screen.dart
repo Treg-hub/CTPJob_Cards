@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:io';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
@@ -217,7 +218,19 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
       try {
         final file = File(filePath);
-        if (!file.existsSync()) continue;
+        if (!file.existsSync()) {
+          // Fail loudly rather than silently skipping — a missing temp file
+          // (OS cache eviction, etc.) used to drop photos with no signal.
+          FirebaseCrashlytics.instance.recordError(
+            Exception('Compressed photo missing before upload'),
+            StackTrace.current,
+            reason: 'photo_temp_file_missing',
+            information: ['path:$filePath'],
+          );
+          throw Exception(
+            'Photo ${i + 1} file was cleaned up before upload — please re-add it and retry',
+          );
+        }
 
         final jobUuid = uuid.v4();
         final storageRef = storage
@@ -243,7 +256,13 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
             SnackBar(content: Text('Photo ${i + 1} uploaded')),
           );
         }
-      } catch (e) {
+      } catch (e, st) {
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          st,
+          reason: 'photo_upload_failed_at_create',
+          information: ['index:$i', 'path:$filePath'],
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed photo ${i + 1}: $e'), backgroundColor: Colors.red),
@@ -669,6 +688,21 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
+                if (jobType == JobType.maintenance) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 30),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                    ),
+                    child: const Text(
+                      'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -939,6 +973,21 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                         )).toList(),
                       ),
+                      if (jobType == JobType.maintenance) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                          ),
+                          child: const Text(
+                            'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
