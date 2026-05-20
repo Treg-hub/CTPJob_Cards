@@ -88,23 +88,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  bool get _canCreateJobCard => isOnSite || _overrideOnSite;
+
   List<Map<String, dynamic>> get _quickActions {
+    final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
     final actions = [
-      {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))},
+      createAction,
       {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))},
       {'title': 'My Assigned Jobs', 'icon': Icons.assignment_turned_in, 'color': const Color(0xFF10B981), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()))},
     ];
 
+    List<Map<String, dynamic>> result;
     if (isOperator || !isManager && !isTechnician) {
-      return [actions[0], actions[1], actions[2]];
+      result = [actions[0], actions[1], actions[2]];
     } else if (isTechnician) {
-      return [actions[2], actions[1], actions[0]];
+      result = [actions[2], actions[1], actions[0]];
     } else if (isManager || isSuperManager) {
       final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-      return [actions[0], viewJobsAction];
+      result = [actions[0], viewJobsAction];
     } else {
-      return actions;
+      result = actions;
     }
+
+    if (!_canCreateJobCard) {
+      result = result.where((a) => a['title'] != 'Create Job Card').toList();
+    }
+    return result;
   }
 
   double get _iconSize => _isDesktop ? 96 : 80;
