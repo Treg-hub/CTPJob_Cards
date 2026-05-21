@@ -222,12 +222,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         if (!file.existsSync()) {
           // Fail loudly rather than silently skipping — a missing temp file
           // (OS cache eviction, etc.) used to drop photos with no signal.
-          if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
+          if (!kIsWeb) {
+            FirebaseCrashlytics.instance.recordError(
             Exception('Compressed photo missing before upload'),
             StackTrace.current,
             reason: 'photo_temp_file_missing',
             information: ['path:$filePath'],
           );
+          }
           throw Exception(
             'Photo ${i + 1} file was cleaned up before upload — please re-add it and retry',
           );
@@ -258,12 +260,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
           );
         }
       } catch (e, st) {
-        if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
+        if (!kIsWeb) {
+          FirebaseCrashlytics.instance.recordError(
           e,
           st,
           reason: 'photo_upload_failed_at_create',
           information: ['index:$i', 'path:$filePath'],
         );
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed photo ${i + 1}: $e'), backgroundColor: Colors.red),

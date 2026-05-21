@@ -796,12 +796,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Photo uploaded successfully'), backgroundColor: Colors.green));
       }
     } catch (e, st) {
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance.recordError(
         e,
         st,
         reason: 'photo_upload_failed',
         information: ['jobId:$jobId', 'section:$section'],
       );
+      }
       if (mounted) {
         await showDialog<void>(
           context: context,

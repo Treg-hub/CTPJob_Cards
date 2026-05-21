@@ -200,12 +200,14 @@ class _LoginScreenState extends State<LoginScreen> {
         default:
           msg = e.message ?? 'Failed to send reset email';
       }
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance.recordError(
         e,
         st,
         reason: 'password_reset_failed',
         information: ['domain:${email.split('@').last}'],
       );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       }
