@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/notification_service.dart';
+import 'home_screen.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
 
@@ -92,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInClockNo', employee.clockNo);
       currentEmployee = employee;
 
-      await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
+      if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
 
       if (!kIsWeb) {
         try {
@@ -109,7 +110,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+          MaterialPageRoute(
+            builder: (_) => kIsWeb ? const HomeScreen() : const PermissionsOnboardingScreen(),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -197,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
         default:
           msg = e.message ?? 'Failed to send reset email';
       }
-      FirebaseCrashlytics.instance.recordError(
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
         e,
         st,
         reason: 'password_reset_failed',
@@ -207,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       }
     } catch (e, st) {
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'password_reset_failed');
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'password_reset_failed');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -220,92 +223,172 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
     final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: screenWidth * 0.6,
-                child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-              ),
-              const SizedBox(height: 24),
-              Text('CTP Job Cards', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-              const SizedBox(height: 8),
-              Text('Welcome back', style: TextStyle(fontSize: 18, color: colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 48),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 800) {
+                return _buildWideLayout(colorScheme);
+              }
+              return _buildNarrowLayout(colorScheme);
+            },
+          ),
+          IgnorePointer(child: _buildPerimeterGlow()),
+        ],
+      ),
+    );
+  }
 
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
+  Widget _buildPerimeterGlow() {
+    const glow = Color(0xFFFF8C42);
+    const extent = 160.0;
+    const opacity = 0.45;
+    gradient(Alignment from, Alignment to) => BoxDecoration(
+          gradient: LinearGradient(
+            begin: from,
+            end: to,
+            colors: [glow.withValues(alpha: opacity), Colors.transparent],
+          ),
+        );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(top: 0, left: 0, right: 0, height: extent,
+            child: DecoratedBox(decoration: gradient(Alignment.topCenter, Alignment.bottomCenter))),
+        Positioned(bottom: 0, left: 0, right: 0, height: extent,
+            child: DecoratedBox(decoration: gradient(Alignment.bottomCenter, Alignment.topCenter))),
+        Positioned(top: 0, bottom: 0, left: 0, width: extent,
+            child: DecoratedBox(decoration: gradient(Alignment.centerLeft, Alignment.centerRight))),
+        Positioned(top: 0, bottom: 0, right: 0, width: extent,
+            child: DecoratedBox(decoration: gradient(Alignment.centerRight, Alignment.centerLeft))),
+      ],
+    );
+  }
+
+  Widget _buildWideLayout(ColorScheme colorScheme) {
+    return Row(
+      children: [
+        // Left branding panel
+        Expanded(
+          child: Container(
+            color: const Color(0xFF1A1A1A),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/images/logo.png', width: 260, fit: BoxFit.contain),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'CTP Job Cards',
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _isForgotPasswordLoading ? null : _forgotPassword,
-                  child: _isForgotPasswordLoading
-                      ? const SizedBox(
-                          height: 14,
-                          width: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C42)),
-                        )
-                      : const Text(
-                          'Forgot Password?',
-                          style: TextStyle(color: Color(0xFFFF8C42), fontSize: 14),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8C42),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              TextButton(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const RegistrationScreen()));
-                },
-                child: const Text(
-                  "Don't have an account? Register",
-                  style: TextStyle(color: Color(0xFFFF8C42), fontSize: 16),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
+        // Orange accent divider
+        Container(width: 4, color: const Color(0xFFFF8C42)),
+        // Right login panel
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 40),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Welcome back',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sign in to your account',
+                      style: TextStyle(fontSize: 15, color: colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 40),
+                    _buildFormFields(colorScheme),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNarrowLayout(ColorScheme colorScheme) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/images/logo.png', width: 180, fit: BoxFit.contain),
+            const SizedBox(height: 20),
+            Text('CTP Job Cards', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+            const SizedBox(height: 6),
+            Text('Welcome back', style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 40),
+            _buildFormFields(colorScheme),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildFormFields(ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'Email'),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _passwordController,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Password'),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _isForgotPasswordLoading ? null : _forgotPassword,
+            child: _isForgotPasswordLoading
+                ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C42)))
+                : const Text('Forgot Password?', style: TextStyle(color: Color(0xFFFF8C42), fontSize: 14)),
+          ),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _login,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFF8C42),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: _isLoading
+              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+              : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+        ),
+        const SizedBox(height: 20),
+        TextButton(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegistrationScreen())),
+          child: const Text("Don't have an account? Register", style: TextStyle(color: Color(0xFFFF8C42), fontSize: 16)),
+        ),
+      ],
     );
   }
 }

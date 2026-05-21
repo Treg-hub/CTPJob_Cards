@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:io';
@@ -221,7 +222,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         if (!file.existsSync()) {
           // Fail loudly rather than silently skipping — a missing temp file
           // (OS cache eviction, etc.) used to drop photos with no signal.
-          FirebaseCrashlytics.instance.recordError(
+          if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
             Exception('Compressed photo missing before upload'),
             StackTrace.current,
             reason: 'photo_temp_file_missing',
@@ -257,7 +258,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
           );
         }
       } catch (e, st) {
-        FirebaseCrashlytics.instance.recordError(
+        if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
           e,
           st,
           reason: 'photo_upload_failed_at_create',

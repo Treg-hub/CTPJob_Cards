@@ -157,7 +157,7 @@ void main() async {
     } else {
       // Employee loaded (or fetch failed transiently) — keep user logged in
       if (currentEmployee != null) {
-        await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
+        if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
         if (!kIsWeb) {
           NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
         }
