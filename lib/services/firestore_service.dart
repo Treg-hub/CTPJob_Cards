@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -252,6 +254,46 @@ class FirestoreService {
         .where('assignedClockNos', arrayContains: employeeClockNo)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+  }
+
+  Stream<List<JobCard>> getMyJobCards(String clockNo) {
+    final controller = StreamController<List<JobCard>>();
+
+    List<JobCard> assignedJobs = [];
+    List<JobCard> createdJobs = [];
+
+    void emit() {
+      final assignedIds = assignedJobs.map((j) => j.id!).toSet();
+      controller.add([
+        ...assignedJobs,
+        ...createdJobs.where((j) => !assignedIds.contains(j.id)),
+      ]);
+    }
+
+    final s1 = _firestore
+        .collection('job_cards')
+        .where('assignedClockNos', arrayContains: clockNo)
+        .snapshots()
+        .listen((snap) {
+      assignedJobs = snap.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      emit();
+    });
+
+    final s2 = _firestore
+        .collection('job_cards')
+        .where('operatorClockNo', isEqualTo: clockNo)
+        .snapshots()
+        .listen((snap) {
+      createdJobs = snap.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      emit();
+    });
+
+    controller.onCancel = () {
+      s1.cancel();
+      s2.cancel();
+    };
+
+    return controller.stream;
   }
 
   Stream<List<JobCard>> getCompletedJobCards() {

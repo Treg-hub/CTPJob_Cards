@@ -13,6 +13,7 @@ import '../models/job_card.dart';
 
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' as role_utils;
@@ -21,7 +22,6 @@ import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
-import 'my_assigned_jobs_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
@@ -53,6 +53,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Timer? _testModeTimer;
   int _pendingReviewCount = 0;
   StreamSubscription<List<JobCard>>? _reviewCountSubscription;
+
+  String? _myWorkSelectedDepartment;
+  String? _myWorkSelectedArea;
+  String? _myWorkSelectedMachine;
 
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
@@ -92,22 +96,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   List<Map<String, dynamic>> get _quickActions {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
-    final actions = [
-      createAction,
-      {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))},
-      {'title': 'My Assigned Jobs', 'icon': Icons.assignment_turned_in, 'color': const Color(0xFF10B981), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()))},
-    ];
+    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
 
     List<Map<String, dynamic>> result;
-    if (isOperator || !isManager && !isTechnician) {
-      result = [actions[0], actions[1], actions[2]];
-    } else if (isTechnician) {
-      result = [actions[2], actions[1], actions[0]];
-    } else if (isManager || isSuperManager) {
-      final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-      result = [actions[0], viewJobsAction];
+    if (isManager || isSuperManager) {
+      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+      result = [createAction, viewJobsFactory];
     } else {
-      result = actions;
+      result = [createAction, viewJobsAction];
     }
 
     if (!_canCreateJobCard) {
@@ -197,7 +193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         if (!mounted) return;
         if (message.data['notificationType'] == 'assigned') {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAssignedJobsScreen()));
+          setState(() => _selectedIndex = 1);
         } else if (message.data['jobId'] != null) {
           _handleJobDeepLink(message.data['jobId']);
         }
@@ -833,146 +829,514 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildMyWorkTab() {
-    if (kIsWeb) {
-      return Column(
-        children: [
-          Text(
-            'Assigned | History',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: _buildAssignedJobs()),
-                Expanded(child: _buildWorkHistory()),
-              ],
-            ),
-          ),
-        ],
-      );
-    } else {
-      return DefaultTabController(
-        length: 2,
-        child: Column(
-          children: [
-            const TabBar(
-              tabs: [
-                Tab(text: 'Assigned'),
-                Tab(text: 'History'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _buildAssignedJobs(),
-                  _buildWorkHistory(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  Widget _buildAssignedJobs() {
     if (currentEmployee == null) {
       return Center(
-        child: Text('Please log in to view assigned jobs', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        child: Text('Please log in to view your work',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
 
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAssignedJobCards(currentEmployee!.clockNo),
+      stream: _firestoreService.getMyJobCards(currentEmployee!.clockNo),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text('Error: ${snapshot.error}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            child: Text('Error: ${snapshot.error}',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           );
         }
-
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final assignedJobs = snapshot.data!;
+        final all = snapshot.data!;
 
-        if (assignedJobs.isEmpty) {
-          return Center(
-            child: Text('No jobs assigned to you', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          );
-        }
+        final activeJobs = all
+            .where((j) => j.status == JobStatus.open || j.status == JobStatus.inProgress)
+            .toList()
+          ..sort((a, b) =>
+              (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: assignedJobs.length,
-          itemBuilder: (context, index) => JobCardTile(
-            job: assignedJobs[index],
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: assignedJobs[index]))),
+        final monitorJobs = all
+            .where((j) => j.status == JobStatus.monitor)
+            .toList()
+          ..sort((a, b) =>
+              (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+
+        final closedJobs = all
+            .where((j) => j.status == JobStatus.closed)
+            .toList()
+          ..sort((a, b) =>
+              (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+
+        return DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              TabBar(
+                tabs: [
+                  Tab(text: 'Active (${activeJobs.length})'),
+                  Tab(text: 'Monitoring (${monitorJobs.length})'),
+                  Tab(text: 'Closed (${closedJobs.length})'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildActiveTab(activeJobs),
+                    _buildReadOnlyJobList(monitorJobs, 'No jobs in monitoring'),
+                    _buildReadOnlyJobList(closedJobs, 'No closed jobs'),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildWorkHistory() {
-    if (currentEmployee == null) {
-      return Center(
-        child: Text('Please log in to view work history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+  bool _operatorRestrictedFor(JobCard job) =>
+      isOperator && job.type != JobType.maintenance;
+
+  Future<void> _startWork(JobCard job) async {
+    try {
+      await _firestoreService.saveJobCardOfflineAware(
+        job.copyWith(status: JobStatus.inProgress, startedAt: DateTime.now()),
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Work started'), backgroundColor: Colors.blue),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting work: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showMyWorkCompleteDialog(BuildContext context, JobCard job) {
+    final notesController = TextEditingController();
+    bool isCompleting = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Complete Job'),
+          content: TextField(
+            controller: notesController,
+            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: isCompleting
+                  ? null
+                  : () async {
+                      final note = notesController.text.trim();
+                      if (note.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Please enter a description'),
+                              backgroundColor: Colors.red),
+                        );
+                        return;
+                      }
+                      setDialogState(() => isCompleting = true);
+                      try {
+                        final now = DateTime.now();
+                        final user = currentEmployee?.name ?? 'User';
+                        final timestamp =
+                            '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}]';
+                        final completedJob = job.copyWith(
+                          status: JobStatus.closed,
+                          completedBy: user,
+                          completedAt: now,
+                          notes: job.notes.isNotEmpty
+                              ? '${job.notes}\n\n$timestamp Completed by $user: $note'
+                              : '$timestamp Completed by $user: $note',
+                        );
+                        await _firestoreService.saveJobCardOfflineAware(completedJob);
+
+                        if (job.operatorClockNo != null) {
+                          try {
+                            final creatorEmp =
+                                await _firestoreService.getEmployee(job.operatorClockNo!);
+                            if (creatorEmp?.fcmToken != null) {
+                              await _notificationService.sendCreatorNotification(
+                                recipientToken: creatorEmp!.fcmToken!,
+                                jobCardId: job.id!,
+                                jobCardNumber: job.jobCardNumber ?? 0,
+                                operator: currentEmployee?.name ?? 'Unknown',
+                                creator: job.operator,
+                                department: job.department,
+                                area: job.area,
+                                machine: job.machine,
+                                part: job.part,
+                                description: job.description,
+                                notificationType: 'closed',
+                                assigneeName: currentEmployee?.name ?? 'Unknown',
+                              );
+                            }
+                          } catch (e) {
+                            debugPrint('Error sending creator notification: $e');
+                          }
+                        }
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Job completed')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Error completing job: $e'),
+                                backgroundColor: Colors.red),
+                          );
+                        }
+                      } finally {
+                        if (context.mounted) setDialogState(() => isCompleting = false);
+                      }
+                    },
+              child: isCompleting
+                  ? const SizedBox(
+                      height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Complete'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMyWorkMonitorDialog(BuildContext context, JobCard job) {
+    final notesController = TextEditingController();
+    bool isMonitoring = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Start Monitoring'),
+          content: TextField(
+            controller: notesController,
+            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: isMonitoring
+                  ? null
+                  : () async {
+                      final note = notesController.text.trim();
+                      if (note.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Please enter a description'),
+                              backgroundColor: Colors.red),
+                        );
+                        return;
+                      }
+                      setDialogState(() => isMonitoring = true);
+                      try {
+                        final now = DateTime.now();
+                        final user = currentEmployee?.name ?? 'User';
+                        final timestamp =
+                            '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}]';
+                        final monitoredJob = job.copyWith(
+                          status: JobStatus.monitor,
+                          monitoringStartedAt: now,
+                          notes: job.notes.isNotEmpty
+                              ? '${job.notes}\n\n$timestamp Monitoring started by $user: $note'
+                              : '$timestamp Monitoring started by $user: $note',
+                        );
+                        await _firestoreService.saveJobCardOfflineAware(monitoredJob);
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Job moved to monitoring')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Error starting monitoring: $e'),
+                                backgroundColor: Colors.red),
+                          );
+                        }
+                      } finally {
+                        if (context.mounted) setDialogState(() => isMonitoring = false);
+                      }
+                    },
+              child: isMonitoring
+                  ? const SizedBox(
+                      height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Start Monitoring'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveTab(List<JobCard> allActive) {
+    final departments = allActive.map((j) => j.department).toSet().toList()..sort();
+    final areas = _myWorkSelectedDepartment == null
+        ? <String>[]
+        : allActive
+            .where((j) => j.department == _myWorkSelectedDepartment)
+            .map((j) => j.area)
+            .toSet()
+            .toList()
+          ..sort();
+    final machines = _myWorkSelectedArea == null
+        ? <String>[]
+        : allActive
+            .where((j) =>
+                j.department == _myWorkSelectedDepartment &&
+                j.area == _myWorkSelectedArea)
+            .map((j) => j.machine)
+            .toSet()
+            .toList()
+          ..sort();
+
+    var jobs = allActive;
+    if (_myWorkSelectedDepartment != null) {
+      jobs = jobs.where((j) => j.department == _myWorkSelectedDepartment).toList();
+    }
+    if (_myWorkSelectedArea != null) {
+      jobs = jobs.where((j) => j.area == _myWorkSelectedArea).toList();
+    }
+    if (_myWorkSelectedMachine != null) {
+      jobs = jobs.where((j) => j.machine == _myWorkSelectedMachine).toList();
     }
 
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('Error: ${snapshot.error}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          );
-        }
+    return Column(
+      children: [
+        _buildMyWorkFilterChips(departments, areas, machines),
+        Expanded(
+          child: jobs.isEmpty
+              ? Center(
+                  child: Text(
+                    allActive.isEmpty
+                        ? 'No active jobs assigned to you'
+                        : 'No jobs match the selected filters',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  itemCount: jobs.length,
+                  itemBuilder: (context, index) {
+                    final job = jobs[index];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        JobCardTile(
+                          job: job,
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => JobCardDetailScreen(jobCard: job))),
+                        ),
+                        if (!_operatorRestrictedFor(job))
+                          _buildMyWorkActionButtons(context, job),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final allJobs = snapshot.data!;
-        final assignedJobs = allJobs
-            .where((job) => (job.status == JobStatus.monitor || job.status == JobStatus.closed) &&
-                            (job.assignedClockNos?.contains(currentEmployee!.clockNo) ?? false))
-            .toList()
-          ..sort((a, b) {
-            if (a.status == JobStatus.monitor && b.status != JobStatus.monitor) return -1;
-            if (a.status != JobStatus.monitor && b.status == JobStatus.monitor) return 1;
-            return (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0));
-          });
-
-        if (assignedJobs.isEmpty) {
-          return Center(
-            child: Text('No work history', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: assignedJobs.length,
-          itemBuilder: (context, index) => JobCardTile(
-            job: assignedJobs[index],
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: assignedJobs[index]))),
+  Widget _buildMyWorkActionButtons(BuildContext context, JobCard job) {
+    const btnPadding = EdgeInsets.symmetric(vertical: 8);
+    if (job.startedAt == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+        child: ElevatedButton(
+          onPressed: () => _startWork(job),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.black,
+            padding: btnPadding,
           ),
-        );
-      },
+          child: const Text('Start'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => _showMyWorkCompleteDialog(context, job),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.black,
+                padding: btnPadding,
+              ),
+              child: const Text('Complete'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => _showMyWorkMonitorDialog(context, job),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.black,
+                padding: btnPadding,
+              ),
+              child: const Text('Monitor'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyWorkFilterChips(
+      List<String> depts, List<String> areas, List<String> machines) {
+    final hasFilters = _myWorkSelectedDepartment != null ||
+        _myWorkSelectedArea != null ||
+        _myWorkSelectedMachine != null;
+
+    if (depts.isEmpty && !hasFilters) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: depts
+                      .map((dept) => FilterChip(
+                            label: Text(dept, style: const TextStyle(fontSize: 12)),
+                            selected: _myWorkSelectedDepartment == dept,
+                            onSelected: (_) => setState(() {
+                              _myWorkSelectedDepartment = dept;
+                              _myWorkSelectedArea = null;
+                              _myWorkSelectedMachine = null;
+                            }),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            labelStyle: _myWorkSelectedDepartment == dept
+                                ? const TextStyle(color: Color(0xFFFF8C42))
+                                : TextStyle(
+                                    color: Theme.of(context).appColors.chipUnselectedLabel),
+                          ))
+                      .toList(),
+                ),
+              ),
+              if (hasFilters)
+                IconButton(
+                  icon: const Icon(Icons.filter_alt_off, size: 20),
+                  tooltip: 'Clear filters',
+                  onPressed: () => setState(() {
+                    _myWorkSelectedDepartment = null;
+                    _myWorkSelectedArea = null;
+                    _myWorkSelectedMachine = null;
+                  }),
+                ),
+            ],
+          ),
+          if (_myWorkSelectedDepartment != null && areas.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: areas
+                  .map((area) => FilterChip(
+                        label: Text(area, style: const TextStyle(fontSize: 12)),
+                        selected: _myWorkSelectedArea == area,
+                        onSelected: (_) => setState(() {
+                          _myWorkSelectedArea = area;
+                          _myWorkSelectedMachine = null;
+                        }),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        labelStyle: _myWorkSelectedArea == area
+                            ? const TextStyle(color: Color(0xFFFF8C42))
+                            : TextStyle(
+                                color: Theme.of(context).appColors.chipUnselectedLabel),
+                      ))
+                  .toList(),
+            ),
+          ],
+          if (_myWorkSelectedArea != null && machines.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: machines
+                  .map((machine) => FilterChip(
+                        label: Text(machine, style: const TextStyle(fontSize: 12)),
+                        selected: _myWorkSelectedMachine == machine,
+                        onSelected: (_) =>
+                            setState(() => _myWorkSelectedMachine = machine),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        labelStyle: _myWorkSelectedMachine == machine
+                            ? const TextStyle(color: Color(0xFFFF8C42))
+                            : TextStyle(
+                                color: Theme.of(context).appColors.chipUnselectedLabel),
+                      ))
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyJobList(List<JobCard> jobs, String emptyMessage) {
+    if (jobs.isEmpty) {
+      return Center(
+        child: Text(emptyMessage,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: jobs.length,
+      itemBuilder: (context, index) => JobCardTile(
+        job: jobs[index],
+        onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => JobCardDetailScreen(jobCard: jobs[index]))),
+      ),
     );
   }
 
   Widget _buildDashboardTab() {
-    if (currentEmployee == null || !currentEmployee!.position.toLowerCase().contains('manager')) {
+    if (currentEmployee == null ||
+        role_utils.roleFromEmployee(currentEmployee) != role_utils.UserRole.manager) {
       return Center(
-        child: Text('Access denied. Manager role required.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        child: Text('Access denied. Manager role required.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
     }
     return const ManagerDashboardScreen();
