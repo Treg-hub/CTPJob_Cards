@@ -177,7 +177,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         await _firestoreService.clearLoggedInEmployee();
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('permissionsCompleted');
-        await FirebaseCrashlytics.instance.setUserIdentifier('');
+        if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier('');
         currentEmployee = null;
         if (mounted) {
           Navigator.pushAndRemoveUntil(

@@ -65,7 +65,7 @@ class UpdateService {
         );
       }
     } catch (e, st) {
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'update_check_silent', fatal: false);
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'update_check_silent', fatal: false);
       debugPrint('Error checking for updates: $e');
     }
   }
@@ -118,7 +118,7 @@ class UpdateService {
       debugPrint('Remote Config -> latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
     } catch (e, st) {
       error = e.toString();
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'remote_config_fetch', fatal: false);
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'remote_config_fetch', fatal: false);
       debugPrint('Remote Config fetch failed: $e');
     }
 
@@ -166,7 +166,7 @@ class UpdateService {
 
       return false;
     } catch (e, st) {
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'version_compare', fatal: false);
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'version_compare', fatal: false);
       debugPrint('Error comparing versions: $e');
       return false;
     }
@@ -297,7 +297,7 @@ class UpdateService {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e, st) {
       debugPrint('UpdateService: failed to launch URL – $e');
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'launch_download_url', fatal: false);
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'launch_download_url', fatal: false);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not open download link. Try visiting the URL manually.\n$downloadUrl')),
