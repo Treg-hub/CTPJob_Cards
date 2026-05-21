@@ -26,7 +26,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install pandoc
-        run: sudo apt-get update && sudo apt-get install -y pandoc
+        run: |
+          curl -sL https://github.com/jgm/pandoc/releases/download/3.9.0.2/pandoc-3.9.0.2-1-amd64.deb -o /tmp/pandoc.deb
+          sudo dpkg -i /tmp/pandoc.deb
 
       - name: Make build script executable
         run: chmod +x tools/build-docs.sh
