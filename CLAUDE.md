@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Workflow
+
+**Always use feature branches — never commit implementation work directly to `master`.**
+
+1. Before starting any implementation, create a feature branch:
+   ```bash
+   git checkout -b feat/<short-description>   # new features / refactors
+   git checkout -b fix/<short-description>    # bug fixes
+   git checkout -b docs/<short-description>   # documentation only
+   ```
+2. Commit work to that branch, then open a PR into `master`:
+   ```bash
+   gh pr create --base master --title "..." --body "..."
+   ```
+3. After the PR is merged (or the user approves merging), `master` is updated.
+4. Delete the feature branch locally and remotely after merging.
+
+**Never push implementation commits directly to `master`.** Hotfixes to CLAUDE.md or settings files are the only acceptable direct-to-master commits.
+
 ## Project Overview
 
 CTP Job Cards is a **Flutter + Firebase** mobile app for field technician job card tracking. It targets Android (primary), with iOS/web secondary. The app is production-grade with offline-first sync, real-time push notifications with escalation logic, background geofencing, role-based access, and audit logging.
