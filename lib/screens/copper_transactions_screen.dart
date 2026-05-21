@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../providers/current_employee_provider.dart';
 import '../services/copper_service.dart';
-import '../services/firestore_service.dart';
 import '../models/copper_transaction.dart';
+import '../utils/role.dart';
 
-class CopperTransactionsScreen extends StatefulWidget {
+class CopperTransactionsScreen extends ConsumerStatefulWidget {
   const CopperTransactionsScreen({super.key});
 
   @override
-  State<CopperTransactionsScreen> createState() => _CopperTransactionsScreenState();
+  ConsumerState<CopperTransactionsScreen> createState() => _CopperTransactionsScreenState();
 }
 
-class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
+class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScreen> {
   final CopperService _copperService = CopperService();
-  final FirestoreService _firestoreService = FirestoreService();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _editCommentsController = TextEditingController();
-
-  String? _currentClockNo;
-  bool _isGPeens = false;
 
   DateTimeRange? _dateRange;
   String _searchQuery = '';
@@ -27,13 +25,6 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() => _searchQuery = _searchController.text));
-    _loadCurrentClockNo();
-  }
-
-  Future<void> _loadCurrentClockNo() async {
-    _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
-    _isGPeens = _currentClockNo == '22';
-    setState(() {});
   }
 
   @override
@@ -63,11 +54,12 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
   }
 
   Future<void> _editComments(CopperTransaction tx) async {
+    final messenger = ScaffoldMessenger.of(context);
     _editCommentsController.text = tx.comments;
     showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -84,13 +76,12 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => Navigator.of(sheetContext).pop(),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
                     onPressed: () async {
-                      final navigator = Navigator.of(context);
-                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(sheetContext);
                       try {
                         await _copperService.updateTransactionComments(tx.id, _editCommentsController.text);
                         navigator.pop();
@@ -134,6 +125,9 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    final isCopperAuth = isCopperAuthorized(employee);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Copper Transactions'),
@@ -172,62 +166,59 @@ class _CopperTransactionsScreenState extends State<CopperTransactionsScreen> {
             ),
           ),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async => setState(() {}),
-              child: StreamBuilder<List<CopperTransaction>>(
-                stream: _copperService.getTransactionsStream(range: _dateRange),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+            child: StreamBuilder<List<CopperTransaction>>(
+              stream: _copperService.getTransactionsStream(range: _dateRange),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final transactions = snapshot.data!.where((tx) {
+                  if (_searchQuery.isNotEmpty) {
+                    final query = _searchQuery.toLowerCase();
+                    return tx.comments.toLowerCase().contains(query) || tx.type.toLowerCase().contains(query);
                   }
-                  final transactions = snapshot.data!.where((tx) {
-                    if (_searchQuery.isNotEmpty) {
-                      final query = _searchQuery.toLowerCase();
-                      return tx.comments.toLowerCase().contains(query) || tx.type.toLowerCase().contains(query);
-                    }
-                    return true;
-                  }).toList();
-                  return ListView.separated(
-                    itemCount: transactions.length,
-                    separatorBuilder: (context, index) => const Divider(),
-                    itemBuilder: (context, index) {
-                      final tx = transactions[index];
-                      return Card(
-                        child: InkWell(
-                          onTap: () => _editComments(tx),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(_getIconForType(tx.type), color: _getColorForType(tx.type)),
-                                    const SizedBox(width: 8),
-                                    Text(DateFormat('MM/dd HH:mm').format(tx.timestamp.toDate()), style: const TextStyle(fontSize: 12)),
-                                    const Spacer(),
-                                    Text('${tx.amountKg.toStringAsFixed(1)} kg', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(tx.type, style: const TextStyle(fontSize: 14)),
-                                if (tx.fromBucket != null || tx.toBucket != null)
-                                  Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                if (tx.rPerKg != null && _isGPeens)
-                                  Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
-                                if (tx.totalValueR != null && _isGPeens)
-                                  Text('Total: R ${tx.totalValueR!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
-                                const SizedBox(height: 4),
-                                Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                              ],
-                            ),
+                  return true;
+                }).toList();
+                return ListView.separated(
+                  itemCount: transactions.length,
+                  separatorBuilder: (context, index) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final tx = transactions[index];
+                    return Card(
+                      child: InkWell(
+                        onTap: () => _editComments(tx),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(_getIconForType(tx.type), color: _getColorForType(tx.type)),
+                                  const SizedBox(width: 8),
+                                  Text(DateFormat('MM/dd HH:mm').format(tx.timestamp.toDate()), style: const TextStyle(fontSize: 12)),
+                                  const Spacer(),
+                                  Text('${tx.amountKg.toStringAsFixed(1)} kg', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(tx.type, style: const TextStyle(fontSize: 14)),
+                              if (tx.fromBucket != null || tx.toBucket != null)
+                                Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              if (tx.rPerKg != null && isCopperAuth)
+                                Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
+                              if (tx.totalValueR != null && isCopperAuth)
+                                Text('Total: R ${tx.totalValueR!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
+                              const SizedBox(height: 4),
+                              Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],

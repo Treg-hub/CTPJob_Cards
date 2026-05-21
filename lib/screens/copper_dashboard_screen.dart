@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
 import '../providers/copper_provider.dart';
+import '../providers/current_employee_provider.dart';
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 import '../services/copper_service.dart';
-import '../services/firestore_service.dart';
+import '../utils/role.dart';
 
 class CopperDashboardScreen extends ConsumerStatefulWidget {
   const CopperDashboardScreen({super.key});
@@ -17,11 +18,10 @@ class CopperDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> with SingleTickerProviderStateMixin {
+  static const double _bucketMaxKg = 500;
+
   late TabController _tabController;
   final CopperService _copperService = CopperService();
-  final FirestoreService _firestoreService = FirestoreService();
-  String? _currentClockNo;
-  bool _isGPeens = false;
   bool _isLoading = false;
 
   // Transaction form controllers
@@ -30,19 +30,15 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   final TextEditingController _sellAmountController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   String _selectedType = 'addToSort';
-  double _reuseAmount = 0;
+
+  double get _reuseAmount =>
+      (double.tryParse(_amountController.text) ?? 0) -
+      (double.tryParse(_sellAmountController.text) ?? 0);
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadClockNo();
-  }
-
-  Future<void> _loadClockNo() async {
-    _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
-    _isGPeens = _currentClockNo == '22';
-    if (mounted) setState(() {});
   }
 
   @override
@@ -56,7 +52,8 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   }
 
   Future<void> _executeTransaction() async {
-    if (_currentClockNo == null) return;
+    final employee = ref.read(currentEmployeeProvider).valueOrNull;
+    if (employee == null) return;
 
     final amount = double.tryParse(_amountController.text) ?? 0;
     final rPerKg = double.tryParse(_rPerKgController.text) ?? 0;
@@ -66,9 +63,19 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Amount must be greater than 0')));
       return;
     }
-    if (_selectedType == 'removeFromSort' && sellAmount > amount) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sell amount cannot exceed total amount')));
-      return;
+
+    if (_selectedType == 'removeFromSort') {
+      final sortKg = ref.read(copperNotifierProvider).valueOrNull?.sortKg ?? 0;
+      if (amount > sortKg) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Cannot remove ${amount.toStringAsFixed(1)} kg — only ${sortKg.toStringAsFixed(1)} kg in sort bucket'),
+        ));
+        return;
+      }
+      if (sellAmount > amount) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sell amount cannot exceed total amount')));
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -78,30 +85,28 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       final notifier = ref.read(copperNotifierProvider.notifier);
       switch (_selectedType) {
         case 'addToSort':
-          await notifier.performAddToSort(amount, _commentsController.text, _currentClockNo!);
+          await notifier.performAddToSort(amount, _commentsController.text, employee.clockNo);
           break;
         case 'plateBars':
-          await notifier.performPlateBars(amount, _commentsController.text, _currentClockNo!);
+          await notifier.performPlateBars(amount, _commentsController.text, employee.clockNo);
           break;
         case 'removeFromSort':
           final reuseAmount = amount - sellAmount;
-          await notifier.performSort(reuseAmount, sellAmount, _commentsController.text, _currentClockNo!);
+          await notifier.performSort(reuseAmount, sellAmount, _commentsController.text, employee.clockNo);
           break;
         case 'useReuse':
-          await notifier.performUseReuse(amount, _commentsController.text, _currentClockNo!);
+          await notifier.performUseReuse(amount, _commentsController.text, employee.clockNo);
           break;
         case 'recordSale':
           if (rPerKg <= 0) throw Exception('R/kg required for sale');
-          await notifier.performRecordSale(amount, rPerKg, _commentsController.text, _currentClockNo!);
+          await notifier.performRecordSale(amount, rPerKg, _commentsController.text, employee.clockNo);
           break;
       }
 
-      // Clear form
       _amountController.clear();
       _rPerKgController.clear();
       _sellAmountController.clear();
       _commentsController.clear();
-      _reuseAmount = 0;
 
       messenger.showSnackBar(const SnackBar(content: Text('Transaction successful ✅')));
     } catch (e) {
@@ -133,7 +138,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       ]);
     }
 
-    final csvString = Csv().encode(csvRows);
+    final csvString = CsvEncoder().convert(csvRows);
     final messenger = ScaffoldMessenger.of(context);
     await Clipboard.setData(ClipboardData(text: csvString));
 
@@ -143,6 +148,9 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   }
 
   Widget _buildTransactionTab() {
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    final isCopperAuth = isCopperAuthorized(employee);
+
     return ref.watch(copperNotifierProvider).when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Center(child: Text('Error: $error')),
@@ -173,7 +181,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                 const DropdownMenuItem(value: 'plateBars', child: Text('Plate Bars to Sell')),
                 const DropdownMenuItem(value: 'removeFromSort', child: Text('Remove from Sort (split to reuse/sell)')),
                 const DropdownMenuItem(value: 'useReuse', child: Text('Use from Reuse')),
-                if (_isGPeens) const DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
+                if (isCopperAuth) const DropdownMenuItem(value: 'recordSale', child: Text('Record Sale')),
               ],
               onChanged: (v) => setState(() => _selectedType = v!),
             ),
@@ -182,11 +190,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
               controller: _amountController,
               decoration: const InputDecoration(labelText: 'Amount (kg)'),
               keyboardType: TextInputType.number,
-              onChanged: (value) {
-                setState(() {
-                  _reuseAmount = (double.tryParse(value) ?? 0) - (double.tryParse(_sellAmountController.text) ?? 0);
-                });
-              },
+              onChanged: (_) => setState(() {}),
             ),
             if (_selectedType == 'removeFromSort') ...[
               const SizedBox(height: 12),
@@ -194,11 +198,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                 controller: _sellAmountController,
                 decoration: const InputDecoration(labelText: 'Sell Amount (kg)'),
                 keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  setState(() {
-                    _reuseAmount = (double.tryParse(_amountController.text) ?? 0) - (double.tryParse(value) ?? 0);
-                  });
-                },
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 8),
               Text(
@@ -210,7 +210,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
                 ),
               ),
             ],
-            if (_selectedType == 'recordSale' && _isGPeens) ...[
+            if (_selectedType == 'recordSale' && isCopperAuth) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _rPerKgController,
@@ -241,6 +241,8 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   }
 
   Widget _buildHistoryTab() {
+    final isCopperAuth = isCopperAuthorized(ref.watch(currentEmployeeProvider).valueOrNull);
+
     return StreamBuilder<List<CopperTransaction>>(
       stream: _copperService.getTransactionsStream(),
       builder: (context, snapshot) {
@@ -260,35 +262,29 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
               ),
             ),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {});
-                  await Future.delayed(const Duration(milliseconds: 500));
-                },
-                child: ListView.separated(
-                  itemCount: txs.length,
-                  separatorBuilder: (_, __) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final tx = txs[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      child: ListTile(
-                        leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
-                        title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (tx.fromBucket != null || tx.toBucket != null)
-                              Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
-                            if (tx.rPerKg != null && _isGPeens) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
-                            Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                          ],
-                        ),
-                        trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
+              child: ListView.separated(
+                itemCount: txs.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final tx = txs[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: ListTile(
+                      leading: Icon(_getIcon(tx.type), color: _getColor(tx.type)),
+                      title: Text('${tx.type.toUpperCase()} • ${tx.amountKg.toStringAsFixed(1)} kg'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (tx.fromBucket != null || tx.toBucket != null)
+                            Text('${tx.fromBucket ?? ''} → ${tx.toBucket ?? ''}'),
+                          if (tx.rPerKg != null && isCopperAuth) Text('R/kg: ${tx.rPerKg!.toStringAsFixed(2)}'),
+                          Text(tx.comments, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
                       ),
-                    );
-                  },
-                ),
+                      trailing: Text(DateFormat('dd/MM HH:mm').format(tx.timestamp.toDate())),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -363,7 +359,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
               Text('${kg.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               LinearProgressIndicator(
-                value: (kg / 500).clamp(0.0, 1.0),
+                value: (kg / _bucketMaxKg).clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[300],
                 color: color,
               ),
