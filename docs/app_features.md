@@ -64,7 +64,7 @@ Planned:
 
 *Four roles with distinct access scopes and responsibilities*
 
-Every employee account in the system has a **role** field that controls what they can see and do. Roles are set by an Admin and are tied to each employee's clock number.
+Every employee's role controls what they can see and do. Roles are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. An Admin can adjust an employee's effective role by updating their `position` string.
 
 ### Operator
 
@@ -82,7 +82,7 @@ Receives job card notifications (when on site), attends to faults, self-assigns 
 
 Oversees all job cards in their department. Enforces data quality for operators and technicians. Receives escalation notifications. Has full department visibility on the Manager Dashboard.
 
-**Key Screens:** Manager Dashboard · View Job Cards · Copper Dashboard · Notification History
+**Key Screens:** Manager Dashboard · View Job Cards · Daily Review · Monitoring Dashboard
 
 ### Admin
 
@@ -285,7 +285,7 @@ Example transactions:
 
 ### Access
 
-- The **Copper Dashboard** is accessible to Managers and Admins
+- The **Copper Dashboard** is restricted to copper-authorised users only
 - Inventory levels and transaction history are visible in real time
 - All transactions are logged with timestamps, quantities, and responsible user
 

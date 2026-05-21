@@ -45,15 +45,19 @@ New employee sign-up. Creates a Firebase Auth account from email + password, the
 
 `lib/screens/permissions_onboarding_screen.dart` — **Roles:** All (first launch)
 
-Three-page swipeable walkthrough shown after first login. Explains the app, asks for critical Android permissions, then routes to Home.
+Seven-page swipeable walkthrough shown after first login (and after registration). Explains the app, branches on the user's role, then requests critical Android permissions.
 
 #### Pages
 
-- **Welcome** — app intro
-- **How It Works** — explains job alerts, on-site/off-site behaviour, escalation
-- **Grant Permissions** — Notifications, System Alert Window (full-screen alerts), Notification Policy (DND bypass), Battery Optimisation, Background Location
+1. **Welcome** — app intro
+2. **Your Role** — role-specific overview (Technician / Manager / Operator / Admin)
+3. **Job Card Flow** — end-to-end creation → resolution walkthrough
+4. **Job Status** — explains Open / In-Progress / Monitor / Closed
+5. **Priority Levels** — P1–P5 with notification behaviour for each
+6. **Escalation** — 4-stage timeline with default timers
+7. **Grant Permissions** — Notifications, System Alert Window, DND override, Battery Unrestricted, Background Location, Exact Alarms
 
-> **Note:** Sets `permissionsCompleted: true` in `SharedPreferences` on completion. `main.dart` checks this flag plus `locationAlways` permission — if either is missing, this screen reappears on next launch.
+> **Note:** Sets `permissionsCompleted: true` in `SharedPreferences` only if `locationAlways` permission was actually granted — if it is denied, the screen reappears on next launch. Also fires `LocationService.startNativeMonitoring()` and `checkCurrentLocation()` on completion.
 
 ---
 
@@ -69,11 +73,11 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 
 #### Standard Tiles
 
-- `Create Job Card`
+- `Create Job Card` — **hidden when the employee is off-site** (`isOnSite: false`); off-site employees must be on-site to create new jobs
 - `My Assigned Jobs`
 - `View Job Cards`
 - `Closed Jobs`
-- `Copper Dashboard`
+- `Copper Dashboard` — visible only to copper-authorised users
 - `Settings`
 
 #### Manager-Only Tiles
@@ -155,7 +159,7 @@ Full view of a single job card. The most feature-rich screen in the app.
 
 ### View Job Cards
 
-`lib/screens/view_job_cards_screen.dart` — **Roles:** Manager, Admin
+`lib/screens/view_job_cards_screen.dart` — **Roles:** All
 
 Browse every job card in the system. Four status tabs with live counts; filters for department, area, machine, type, priority, date range.
 
@@ -290,7 +294,7 @@ Inventory and transaction tracking for the copper recovery side of operations.
 
 ### Copper Dashboard
 
-`lib/screens/copper_dashboard_screen.dart` — **Roles:** All
+`lib/screens/copper_dashboard_screen.dart` — **Roles:** Copper-authorised users only
 
 Current copper stock plus quick-entry forms for inbound/outbound transactions.
 
@@ -307,7 +311,7 @@ Current copper stock plus quick-entry forms for inbound/outbound transactions.
 
 ### Copper Transactions
 
-`lib/screens/copper_transactions_screen.dart` — **Roles:** All
+`lib/screens/copper_transactions_screen.dart` — **Roles:** Copper-authorised only (same as Copper Dashboard)
 
 Full history table of every copper transaction. Sortable by date, type, amount.
 
@@ -319,7 +323,7 @@ Full history table of every copper transaction. Sortable by date, type, amount.
 
 ### Sort Copper
 
-`lib/screens/sort_copper_screen.dart` — **Roles:** All
+`lib/screens/sort_copper_screen.dart` — **Roles:** Copper-authorised only (same as Copper Dashboard)
 
 Dedicated entry form for sorting raw copper into nuggets or rods. Pulled out into its own screen so it can be a quick one-tap workflow from Home or Copper Dashboard.
 
@@ -377,13 +381,16 @@ Behaviour that affects multiple screens.
 
 ### Role-Based Visibility
 
-*Determined in `home_screen.dart`*
+*Canonical logic in `lib/utils/role.dart` (`roleFromEmployee()`)*
 
-The Home screen is the single source of truth for who sees which tiles. Roles are inferred from the `position` field on `employees/{clockNo}`:
+Roles are inferred from the `position` and `department` fields on `employees/{clockNo}` — there is no explicit role field. Inference order:
 
-- **Manager** — position contains "manager" (case-insensitive)
-- **Admin** — clock number is in the admin allowlist (currently `22`)
-- **Technician** — anyone else
+- **Admin** — `clockNo == "22"` (also gated by password in `SettingsScreen`)
+- **Manager** — `position` contains `"manager"` (case-insensitive)
+- **Technician** — `position` contains `"mechanical"`, `"electrical"`, or `"technician"` (case-insensitive)
+- **Operator** — everyone else (default catch-all)
+
+Additional flags: `isSuperManager()` → `department == "general"` (factory-wide manager view); `isCopperAuthorized()` → copper-authorised users only (managed in `lib/utils/role.dart`).
 
 ### Offline-First Saves
 

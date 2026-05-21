@@ -51,10 +51,18 @@ lib/
 ├── services/                    # All business logic (Firestore, Sync, Location, Notifications)
 ├── screens/                     # UI screens (ConsumerStatefulWidget where Riverpod needed)
 ├── widgets/                     # Reusable UI components
+├── utils/                       # Pure helpers: role inference (role.dart), docs catalog (doc_catalog.dart)
 └── theme/app_theme.dart         # Material3 theme + AppColors extension
 ```
 
-**State management**: Riverpod (`flutter_riverpod ^2.5.3`). Screens extend `ConsumerStatefulWidget` / `ConsumerWidget` to read providers. State lives in `providers/`.
+**State management**: Riverpod (`flutter_riverpod ^2.5.3`). Screens extend `ConsumerStatefulWidget` / `ConsumerWidget` to read providers. State lives in `providers/`:
+
+| Provider | What it manages |
+|---|---|
+| `currentEmployeeProvider` | Logged-in `Employee` loaded from SharedPreferences + Firestore |
+| `themeNotifierProvider` | Dark/light theme toggle, persisted to SharedPreferences |
+| `permissionsProvider` | Live status of 4 critical Android permissions; logs grants to Firestore |
+| `copperNotifierProvider` | `CopperInventory` async state; wraps all copper transaction operations |
 
 **Backend**: Firestore is the single source of truth. All writes go through `FirestoreService`, which also appends to the `job_card_audit` collection for every change.
 
@@ -63,6 +71,14 @@ lib/
 **Push notifications**: FCM via `firebase_messaging`. Cloud Functions live in `/functions/index.js`. HTTP/callable functions deploy to `africa-south1`; **scheduled functions (`escalateNotifications`, `autoCloseMonitoringJobs`) must stay in `europe-west1`** — Firebase scheduled functions require a region that supports App Engine, which `africa-south1` does not. Escalation runs as 4 configurable stages stored in `notification_configs/global` (defaults: 5 / 10 / 30 / 60 min; stages 3 and 4 are disabled by default). `FirebaseMessagingService.kt` handles native FCM receipt; `FullScreenJobAlertActivity.kt` renders the full-screen overlay.
 
 **Geofencing**: `LocationService` + `BackgroundGeofenceService` use `geolocator` + `workmanager`. Native Kotlin code in `android/app/src/main/kotlin/com/ctp/jobcards/` handles `GeofenceReceiver`, `GeofenceHelper`, `AlertForegroundService`, and `AlarmReceiver`. The `GeofenceEditorScreen` allows on-device geofence configuration.
+
+**Other services**:
+
+| Service | Purpose |
+|---|---|
+| `ConnectivityService` | Wrapper around `connectivity_plus`; `isOnline()` helper + stream for `SyncService` |
+| `JobAlertService` | MethodChannel `job_alert_channel` — triggers the native full-screen urgent alert from background |
+| `UpdateService` | Remote Config version check with 24-hour cooldown; shows update dialog or force-upgrade prompt |
 
 ## Key Android Details
 
@@ -77,10 +93,10 @@ Four roles, **inferred from `Employee.position` and `Employee.department`** — 
 
 | Role | Inference | Key Screens |
 |------|-----------|-------------|
-| Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard |
-| Manager | `position` contains `manager` | ManagerDashboard, ViewJobCards, DailyReview (web), NotificationHistory |
-| Operator | neither manager nor technician | Home, CreateJobCard (primary), ViewJobCards |
-| Admin | hardcoded `clockNo == "22"` (also a password gate in `SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor |
+| Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard, ClosedJobs |
+| Manager | `position` contains `manager` | ManagerDashboard, ViewJobCards, DailyReview, MonitoringDashboard, ClosedJobs |
+| Operator | neither manager nor technician | Home, CreateJobCard (primary), ViewJobCards, ClosedJobs |
+| Admin | hardcoded `clockNo == "22"` (also a password gate in `SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor, NotificationDiagnostics |
 
 ### Capability matrix (job card actions)
 
@@ -105,7 +121,7 @@ Four roles, **inferred from `Employee.position` and `Employee.department`** — 
 
 **Type changes** route through `FirestoreService.changeJobCardType()` which resets `notifiedAtStageN`, appends a `type_changed` entry to `assignmentHistory`, and triggers the `onJobCardTypeChanged` cloud function to notify the new audience.
 
-Additional flags: `isSuperManager` (`department == "general"`) sees factory-wide manager views; CopperDashboard is whitelisted to specific clock numbers (`22`, `5421`, `20`).
+Additional flags: `isSuperManager` (`department == "general"`) sees factory-wide manager views; CopperDashboard is restricted to copper-authorised users only (managed via `isCopperAuthorized()` in `lib/utils/role.dart`).
 
 ## Job Card Types & Notifications
 
@@ -147,12 +163,25 @@ Located in `/functions/index.js` (Node.js v24). Two regions in use:
 - **`africa-south1`** (default per `firebase.json`): `createCustomToken`, `onJobCardCreated`, `clearEscalationStamps`, etc.
 - **`europe-west1`** (set per-function): `escalateNotifications` (every 2 min) and `autoCloseMonitoringJobs` (scheduled) — scheduled functions require an App-Engine-supported region.
 
-Key responsibilities:
-- `createCustomToken` — custom auth token issuance
-- `onJobCardCreated` — initial notification dispatch to creation recipients
-- `escalateNotifications` — 4-stage escalation driven by `notification_configs/global`
-- `autoCloseMonitoringJobs` — auto-close Monitor jobs after threshold
-- Recipient routing via rules (`onsite_mechanics`, `onsite_electricians`, `onsite_managers`, `foremen`, `onsite_dept_managers`, `onsite_workshop_manager`, `offsite_*`, `operator`)
+Full function inventory:
+
+| Function | Type | Trigger / Notes |
+|---|---|---|
+| `createCustomToken` | onCall | Issues custom auth token for native layers |
+| `sendJobAssignmentNotification` | onCall | Sends assignment notification to selected employees |
+| `sendCreatorNotification` | onCall | Sends update/close notification to the original creator |
+| `onJobCardCreated` | Firestore onCreate | `job_cards/{id}` — dispatches creation notifications per `creation_recipients_by_type` |
+| `onJobCardTypeChanged` | Firestore onUpdate | `job_cards/{id}` — detects type change, resets escalation stamps, re-fires creation notification |
+| `onJobCardAssigned` | Firestore onUpdate | `job_cards/{id}` — detects assignment change, sets `escalationStopped: true` |
+| `onAlertResponseCreated` | Firestore onCreate | Handles acknowledge/close responses; updates job status and triggers follow-up notifications |
+| `onCopperTransactionWrite` | Firestore onWrite | `copperTransactions/{id}` — syncs transaction to `copper_inventory/main` atomically |
+| `escalateNotifications` | Scheduler (`europe-west1`) | 4-stage escalation cron; resolves recipient rules against live employee list |
+| `autoCloseMonitoringJobs` | Scheduler (`europe-west1`) | Closes Monitor jobs after 7 days with no updates |
+| `clearEscalationStamps` | onCall | Bulk-clears `notifiedAtStage1..4` — used for admin resets and legacy backfill |
+| `migrateEmployeeIds` | onCall | Admin: migrates old employee doc format |
+| `migrateJobStatuses` | onCall | Admin: migrates old status enum format |
+
+Recipient routing via rules (`onsite_mechanics`, `onsite_electricians`, `onsite_managers`, `foremen`, `onsite_dept_managers`, `onsite_workshop_manager`, `offsite_*`, `operator`) resolved by `resolveRecipientsFromRules()` in `functions/index.js`.
 
 See `docs/cloud_functions_deployment.md` for the full inventory and deployment steps.
 

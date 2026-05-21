@@ -87,22 +87,33 @@ account to an existing record; it does not grant any role.</p>
 <h3 id="permissions-onboarding">Permissions Onboarding</h3>
 <p><code>lib/screens/permissions_onboarding_screen.dart</code> —
 <strong>Roles:</strong> All (first launch)</p>
-<p>Three-page swipeable walkthrough shown after first login. Explains
-the app, asks for critical Android permissions, then routes to Home.</p>
+<p>Seven-page swipeable walkthrough shown after first login (and after
+registration). Explains the app, branches on the user's role, then
+requests critical Android permissions.</p>
 <h4 id="pages">Pages</h4>
-<ul>
+<ol type="1">
 <li><strong>Welcome</strong> — app intro</li>
-<li><strong>How It Works</strong> — explains job alerts,
-on-site/off-site behaviour, escalation</li>
+<li><strong>Your Role</strong> — role-specific overview (Technician /
+Manager / Operator / Admin)</li>
+<li><strong>Job Card Flow</strong> — end-to-end creation → resolution
+walkthrough</li>
+<li><strong>Job Status</strong> — explains Open / In-Progress / Monitor
+/ Closed</li>
+<li><strong>Priority Levels</strong> — P1–P5 with notification behaviour
+for each</li>
+<li><strong>Escalation</strong> — 4-stage timeline with default
+timers</li>
 <li><strong>Grant Permissions</strong> — Notifications, System Alert
-Window (full-screen alerts), Notification Policy (DND bypass), Battery
-Optimisation, Background Location</li>
-</ul>
+Window, DND override, Battery Unrestricted, Background Location, Exact
+Alarms</li>
+</ol>
 <blockquote>
 <p><strong>Note:</strong> Sets <code>permissionsCompleted: true</code>
-in <code>SharedPreferences</code> on completion. <code>main.dart</code>
-checks this flag plus <code>locationAlways</code> permission — if either
-is missing, this screen reappears on next launch.</p>
+in <code>SharedPreferences</code> only if <code>locationAlways</code>
+permission was actually granted — if it is denied, the screen reappears
+on next launch. Also fires
+<code>LocationService.startNativeMonitoring()</code> and
+<code>checkCurrentLocation()</code> on completion.</p>
 </blockquote>
 <hr />
 <h2 id="core-job-card-flow">Core Job Card Flow</h2>
@@ -115,11 +126,14 @@ All logged-in users</p>
 and a grid of tiles to navigate everywhere else.</p>
 <h4 id="standard-tiles">Standard Tiles</h4>
 <ul>
-<li><code>Create Job Card</code></li>
+<li><code>Create Job Card</code> — <strong>hidden when the employee is
+off-site</strong> (<code>isOnSite: false</code>); off-site employees
+must be on-site to create new jobs</li>
 <li><code>My Assigned Jobs</code></li>
 <li><code>View Job Cards</code></li>
 <li><code>Closed Jobs</code></li>
-<li><code>Copper Dashboard</code></li>
+<li><code>Copper Dashboard</code> — visible only to copper-authorised
+users</li>
 <li><code>Settings</code></li>
 </ul>
 <h4 id="manager-only-tiles">Manager-Only Tiles</h4>
@@ -227,7 +241,7 @@ original creator</li>
 </ul>
 <h3 id="view-job-cards">View Job Cards</h3>
 <p><code>lib/screens/view_job_cards_screen.dart</code> —
-<strong>Roles:</strong> Manager, Admin</p>
+<strong>Roles:</strong> All</p>
 <p>Browse every job card in the system. Four status tabs with live
 counts; filters for department, area, machine, type, priority, date
 range.</p>
@@ -392,7 +406,7 @@ shrink the radius, people currently inside the old boundary may flip to
 operations.</p>
 <h3 id="copper-dashboard">Copper Dashboard</h3>
 <p><code>lib/screens/copper_dashboard_screen.dart</code> —
-<strong>Roles:</strong> All</p>
+<strong>Roles:</strong> Copper-authorised users only</p>
 <p>Current copper stock plus quick-entry forms for inbound/outbound
 transactions.</p>
 <h4 id="transaction-types">Transaction Types</h4>
@@ -412,7 +426,8 @@ clock no 22 ("Copper Sell Ready")</li>
 </ul>
 <h3 id="copper-transactions">Copper Transactions</h3>
 <p><code>lib/screens/copper_transactions_screen.dart</code> —
-<strong>Roles:</strong> All</p>
+<strong>Roles:</strong> Copper-authorised only (same as Copper
+Dashboard)</p>
 <p>Full history table of every copper transaction. Sortable by date,
 type, amount.</p>
 <h4 id="capabilities-3">Capabilities</h4>
@@ -423,7 +438,8 @@ type, amount.</p>
 </ul>
 <h3 id="sort-copper">Sort Copper</h3>
 <p><code>lib/screens/sort_copper_screen.dart</code> —
-<strong>Roles:</strong> All</p>
+<strong>Roles:</strong> Copper-authorised only (same as Copper
+Dashboard)</p>
 <p>Dedicated entry form for sorting raw copper into nuggets or rods.
 Pulled out into its own screen so it can be a quick one-tap workflow
 from Home or Copper Dashboard.</p>
@@ -485,17 +501,25 @@ ENTER and the next escalation cycle will treat the user as on-site.</p>
 <h2 id="cross-cutting-concerns">Cross-Cutting Concerns</h2>
 <p>Behaviour that affects multiple screens.</p>
 <h3 id="role-based-visibility">Role-Based Visibility</h3>
-<p><em>Determined in <code>home_screen.dart</code></em></p>
-<p>The Home screen is the single source of truth for who sees which
-tiles. Roles are inferred from the <code>position</code> field on
-<code>employees/{clockNo}</code>:</p>
+<p><em>Canonical logic in <code>lib/utils/role.dart</code>
+(<code>roleFromEmployee()</code>)</em></p>
+<p>Roles are inferred from the <code>position</code> and
+<code>department</code> fields on <code>employees/{clockNo}</code> —
+there is no explicit role field. Inference order:</p>
 <ul>
-<li><strong>Manager</strong> — position contains "manager"
-(case-insensitive)</li>
-<li><strong>Admin</strong> — clock number is in the admin allowlist
-(currently <code>22</code>)</li>
-<li><strong>Technician</strong> — anyone else</li>
+<li><strong>Admin</strong> — <code>clockNo == "22"</code> (also gated by
+password in <code>SettingsScreen</code>)</li>
+<li><strong>Manager</strong> — <code>position</code> contains
+<code>"manager"</code> (case-insensitive)</li>
+<li><strong>Technician</strong> — <code>position</code> contains
+<code>"mechanical"</code>, <code>"electrical"</code>, or
+<code>"technician"</code> (case-insensitive)</li>
+<li><strong>Operator</strong> — everyone else (default catch-all)</li>
 </ul>
+<p>Additional flags: <code>isSuperManager()</code> →
+<code>department == "general"</code> (factory-wide manager view);
+<code>isCopperAuthorized()</code> → copper-authorised users only
+(managed in <code>lib/utils/role.dart</code>).</p>
 <h3 id="offline-first-saves">Offline-First Saves</h3>
 <p><em><code>SyncService</code> + Hive <code>sync_queue</code></em></p>
 <p>Any screen that writes to Firestore (Create Job Card, Job Card

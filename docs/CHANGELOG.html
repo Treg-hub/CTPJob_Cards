@@ -40,6 +40,53 @@ from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
 <hr />
 <h2
+id="2026-05-21--job-card-detail-redesign-onboarding-fix-off-site-gate-docs-accuracy-pass">2026-05-21
+— Job card detail redesign, onboarding fix, off-site gate, docs accuracy
+pass</h2>
+<h3 id="user-facing-changes">User-facing changes</h3>
+<ul>
+<li><strong>Job card detail screen redesigned</strong> — unified tile
+layout, streamlined sections and visual hierarchy across the Details,
+Assignment, and Timeline tabs.</li>
+<li><strong>Home screen: Create Job Card tile hidden when
+off-site</strong> — employees whose <code>isOnSite</code> flag is
+<code>false</code> no longer see the Create Job Card tile. This prevents
+creating jobs while off-site without overriding the on-site check.</li>
+<li><strong>Registration now routes through onboarding</strong> —
+first-time registrants are routed through the full 7-page
+<code>PermissionsOnboardingScreen</code> (same as existing users) so
+location monitoring and permission grants happen immediately after
+account creation.</li>
+<li><strong>Unified job card tile</strong> — <code>JobCardTile</code>
+widget refactored for consistent display across Home recent-jobs list,
+ViewJobCards, MyAssignedJobs, ClosedJobs, and DailyReview.</li>
+</ul>
+<h3 id="documentation-corrections">Documentation corrections</h3>
+<ul>
+<li><strong>Permissions onboarding</strong>: corrected page count from 3
+to 7; listed all pages (Welcome, Your Role, Job Card Flow, Job Status,
+Priority Levels, Escalation, Grant Permissions).</li>
+<li><strong>View Job Cards</strong>: role corrected from "Manager,
+Admin" to "All" — operators and technicians can browse job lists.</li>
+<li><strong>Copper Dashboard / Transactions / Sort Copper</strong>: role
+corrected from "All" to copper-authorised users only.</li>
+<li><strong>Role-Based Visibility</strong> section: corrected inference
+order (Admin → Manager → Technician → Operator catch-all); removed
+incorrect "Technician = anyone else" statement.</li>
+<li><strong>app_features.md</strong>: corrected copper access claim
+("Managers and Admins" → specific clock number whitelist); corrected
+role description ("set by Admin" → inferred from <code>position</code>
+field).</li>
+<li><strong>CLAUDE.md</strong>: added <code>utils/</code> to
+architecture tree; documented all 4 Riverpod providers; added missing
+services (<code>ConnectivityService</code>,
+<code>JobAlertService</code>, <code>UpdateService</code>); expanded
+Cloud Functions inventory to all 13 functions; fixed Manager role key
+screens (removed non-existent "NotificationHistory", added
+MonitoringDashboard and DailyReview).</li>
+</ul>
+<hr />
+<h2
 id="2026-05-18--documentation-portal-role-aware-onboarding-accuracy-pass">2026-05-18
 — Documentation portal, role-aware onboarding, accuracy pass</h2>
 <h3 id="new-for-users">New for users</h3>
