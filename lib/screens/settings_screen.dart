@@ -1,7 +1,6 @@
-import 'dart:io' show Platform;
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,12 +133,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ? null
             : ElevatedButton(
                 onPressed: () async {
-                  if (permKey == 'notification_policy' && Platform.isAndroid) {
+                  if (permKey == 'notification_policy' && defaultTargetPlatform == TargetPlatform.android) {
                     const intent = android_intent.AndroidIntent(
                       action: 'android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS',
                     );
                     await intent.launch();
-                  } else if (permKey == 'ignore_battery' && Platform.isAndroid) {
+                  } else if (permKey == 'ignore_battery' && defaultTargetPlatform == TargetPlatform.android) {
                     const intent = android_intent.AndroidIntent(
                       action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
                     );
@@ -170,7 +169,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (confirm == true) {
       try {
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        if (!kIsWeb) {
           _locationService.stopNativeMonitoring();
         } else if (kIsWeb) {
           debugPrint('📍 Geofencing stop skipped on web platform');
@@ -345,27 +344,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
 
-          const SizedBox(height: 24),
-          const Text('App Permissions Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<Map<String, bool>>(
-            future: _notificationService.checkAllCriticalPermissions(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())));
-              }
-              final perms = snapshot.data!;
-              return Column(
-                children: [
-                  _buildPermissionTile('Notifications', perms['post_notifications'] ?? false, 'notification'),
-                  _buildPermissionTile('Display over other apps (Full-screen)', perms['system_alert_window'] ?? false, 'system_alert_window'),
-                  _buildPermissionTile('DND / Notification Policy', perms['notification_policy'] ?? false, 'notification_policy'),
-                  _buildPermissionTile('Ignore Battery Optimization', perms['ignore_battery'] ?? false, 'ignore_battery'),
-                  _buildPermissionTile('Location (Always)', true, 'location'),
-                ],
-              );
-            },
-          ),
+          if (!kIsWeb) ...[
+            const SizedBox(height: 24),
+            const Text('App Permissions Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            FutureBuilder<Map<String, bool>>(
+              future: _notificationService.checkAllCriticalPermissions(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())));
+                }
+                final perms = snapshot.data!;
+                return Column(
+                  children: [
+                    _buildPermissionTile('Notifications', perms['post_notifications'] ?? false, 'notification'),
+                    _buildPermissionTile('Display over other apps (Full-screen)', perms['system_alert_window'] ?? false, 'system_alert_window'),
+                    _buildPermissionTile('DND / Notification Policy', perms['notification_policy'] ?? false, 'notification_policy'),
+                    _buildPermissionTile('Ignore Battery Optimization', perms['ignore_battery'] ?? false, 'ignore_battery'),
+                    _buildPermissionTile('Location (Always)', true, 'location'),
+                  ],
+                );
+              },
+            ),
+          ],
 
           const SizedBox(height: 24),
           const Text('Notification Tests', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),

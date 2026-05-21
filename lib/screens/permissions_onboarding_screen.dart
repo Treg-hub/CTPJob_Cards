@@ -590,6 +590,7 @@ class _PermissionsPageState extends State<_PermissionsPage> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) return;
     _refreshStatuses().then((_) {
       if (!_locationStatus.isGranted || !_notificationStatus.isGranted) {
         _grantPermissions();
@@ -598,12 +599,14 @@ class _PermissionsPageState extends State<_PermissionsPage> {
   }
 
   Future<void> _refreshStatuses() async {
+    if (kIsWeb) return;
     final loc = await Permission.locationAlways.status;
     final notif = await Permission.notification.status;
     if (mounted) setState(() { _locationStatus = loc; _notificationStatus = notif; });
   }
 
   Future<void> _grantPermissions() async {
+    if (kIsWeb) return;
     setState(() => _checking = true);
     if (!_locationStatus.isGranted) {
       final whenInUse = await Permission.locationWhenInUse.status;

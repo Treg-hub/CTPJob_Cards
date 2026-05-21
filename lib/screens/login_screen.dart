@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/notification_service.dart';
+import 'home_screen.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
 
@@ -109,7 +110,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+          MaterialPageRoute(
+            builder: (_) => kIsWeb ? const HomeScreen() : const PermissionsOnboardingScreen(),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
