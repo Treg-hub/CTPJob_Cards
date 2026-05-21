@@ -19,7 +19,11 @@
       "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" add .claude/settings.local.json)",
       "Bash(git -C C:/Users/Admin/CTPJob_Cards commit -m ' *)",
       "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" push origin master)",
-      "Bash(claude plugin *)"
+      "Bash(claude plugin *)",
+      "Bash(git commit -m 'Add Git workflow section to CLAUDE.md: feature branches + PR into master *)",
+      "Bash(git checkout *)",
+      "Bash(grep -r \"class.*Csv\\\\|ListToCsv\\\\|CsvToList\" ~/.pub-cache/hosted/pub.dev/csv-*/lib/ 2>/dev/null | head -20)",
+      "Bash(find ~/.pub-cache -path \"*/csv-*/lib/*.dart\" 2>/dev/null | head -5 && ls ~/.pub-cache/hosted/pub.dev/ | grep csv)"
     ]
   },
   "hooks": {

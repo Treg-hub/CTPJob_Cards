@@ -143,11 +143,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         final dept = currentEmployee?.department;
         final filtered = jobs.where((j) => !j.isClosed &&
             (dept == null || j.department == dept || dept == 'general')).toList();
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
           _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
           _unassignedCount = filtered.where((j) => !j.isAssigned).length;
         });
+        }
       });
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
