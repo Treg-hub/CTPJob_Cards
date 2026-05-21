@@ -185,7 +185,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: selectedClockNos.isEmpty || isSaving
+                          onPressed: isSaving
                               ? null
                               : () async {
                                   setDialogState(() => isSaving = true);
@@ -796,7 +796,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Photo uploaded successfully'), backgroundColor: Colors.green));
       }
     } catch (e, st) {
-      FirebaseCrashlytics.instance.recordError(
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(
         e,
         st,
         reason: 'photo_upload_failed',
@@ -843,7 +843,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       });
       messenger.showSnackBar(const SnackBar(content: Text('Photo deleted')));
     } catch (e, st) {
-      FirebaseCrashlytics.instance.recordError(e, st, reason: 'photo_delete_failed', information: ['jobId:$jobId']);
+      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'photo_delete_failed', information: ['jobId:$jobId']);
       messenger.showSnackBar(SnackBar(content: Text('Error deleting photo: $e'), backgroundColor: Colors.red));
     }
   }

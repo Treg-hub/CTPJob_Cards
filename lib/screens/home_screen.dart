@@ -47,6 +47,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   String? _pendingJobId;
   bool _showDeptOnly = true;
   int _openJobCount = 0;
+  int _inProgressCount = 0;
+  int _unassignedCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
@@ -138,9 +140,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final count = jobs.where((j) => !j.isClosed && 
-          (currentEmployee == null || j.department == currentEmployee!.department || currentEmployee!.department == 'general')).length;
-        if (mounted) setState(() => _openJobCount = count);
+        final dept = currentEmployee?.department;
+        final filtered = jobs.where((j) => !j.isClosed &&
+            (dept == null || j.department == dept || dept == 'general')).toList();
+        if (mounted) setState(() {
+          _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
+          _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
+          _unassignedCount = filtered.where((j) => !j.isAssigned).length;
+        });
       });
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
@@ -470,35 +477,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
         children: [
-          SizedBox(
-            height: 72,
-            child: Card(
-              elevation: 4,
-              child: Padding(
-                padding: EdgeInsets.all(_cardPadding),
-                child: Row(
-                  children: [
-                    Icon(
-                      isOnSite ? Icons.check_circle : Icons.cancel,
-                      color: isOnSite ? Colors.green : Colors.red,
-                      size: _isDesktop ? 20 : 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                        style: TextStyle(
-                          fontSize: _isDesktop ? 14 : 16,
-                          fontWeight: FontWeight.w500,
+          if (!kIsWeb) ...[
+            SizedBox(
+              height: 72,
+              child: Card(
+                elevation: 4,
+                child: Padding(
+                  padding: EdgeInsets.all(_cardPadding),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isOnSite ? Icons.check_circle : Icons.cancel,
+                        color: isOnSite ? Colors.green : Colors.red,
+                        size: _isDesktop ? 20 : 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
+                          style: TextStyle(
+                            fontSize: _isDesktop ? 14 : 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
 
           Text(
             'Quick Actions',
@@ -520,15 +529,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 action['color'] as Color,
                 action['onTap'] as VoidCallback,
               )),
-              if (kIsWeb && isManager)
+              if (kIsWeb && (isManager || isSuperManager))
                 _DailyReviewTile(
                   pendingCount: _pendingReviewCount,
                   iconSize: _iconSize,
                   padding: _cardPaddingInsets,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const DailyReviewScreen()),
+                    MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
                   ),
                 ),
             ],
@@ -615,7 +623,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               padding: const EdgeInsets.all(6),
               decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
               child: Text(
-                _openJobCount.toString(),
+                (_openJobCount + _inProgressCount).toString(),
                 style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ),
@@ -686,12 +694,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         }
 
         if (kIsWeb && (isManager || isSuperManager)) {
+          final openJobs = topJobs.where((j) => j.status == JobStatus.open).toList()
+            ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+          final inProgressJobs = topJobs.where((j) => j.status == JobStatus.inProgress).toList()
+            ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
           return Column(
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildFilteredRecentJobs(JobType.electrical)),
-                  Expanded(child: _buildFilteredRecentJobs(JobType.mechanical)),
+                  Expanded(child: _buildStatusColumn('Open', openJobs, const Color(0xFFFF8C42))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildStatusColumn('In Progress', inProgressJobs, Colors.blue)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -746,85 +760,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildFilteredRecentJobs(JobType type) {
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red))),
+  Widget _buildStatusColumn(String title, List<JobCard> jobs, Color accent) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
             ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Column(
-                  children: [
-                    SkeletonLoader(height: 80),
-                    SizedBox(height: 12),
-                    SkeletonLoader(height: 80),
-                    SizedBox(height: 12),
-                    SkeletonLoader(height: 80),
-                  ],
-                ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${jobs.length}',
+                style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
-          );
-        }
-
-        final allJobs = snapshot.data!;
-        if (allJobs.isEmpty) {
-          return Card(
-            elevation: 4,
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (jobs.isEmpty)
+          Card(
+            elevation: 2,
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Center(
-                child: Text('No ${type.displayName} jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                child: Text(
+                  'No $title jobs',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
               ),
             ),
-          );
-        }
-
-        var recentJobs = allJobs
-            .where((job) =>
-                job.lastUpdatedAt != null &&
-                job.type == type &&
-                (job.status == JobStatus.open || job.status == JobStatus.inProgress))
-            .toList()
-          ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
-
-        var topJobs = recentJobs.take(10).toList();
-
-        return AnimationLimiter(
-          child: ListView.builder(
+          )
+        else
+          ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: topJobs.length,
-            itemBuilder: (context, index) {
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 375),
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: JobCardTile(
-                      job: topJobs[index],
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: topJobs[index]))),
-                    ),
-                  ),
-                ),
-              );
-            },
+            itemCount: jobs.length,
+            itemBuilder: (context, index) => JobCardTile(
+              job: jobs[index],
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobs[index]))),
+            ),
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -1437,15 +1422,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           child: const Text('CTP Job Cards'),
         ),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color.fromRGBO(255, 140, 66, 1), Color.fromARGB(255, 124, 124, 124)],
+              colors: [const Color(0xFFFF8C42), isOnSite ? Colors.green : Colors.red],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
         actions: [
+          if (kIsWeb)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isOnSite ? Colors.green.shade700 : Colors.red.shade700,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isOnSite ? Icons.check_circle : Icons.cancel, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      isOnSite ? 'ON SITE' : 'OFF SITE',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
