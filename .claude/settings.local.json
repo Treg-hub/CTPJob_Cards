@@ -18,7 +18,8 @@
       "Bash(flutter test *)",
       "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" add .claude/settings.local.json)",
       "Bash(git -C C:/Users/Admin/CTPJob_Cards commit -m ' *)",
-      "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" push origin master)"
+      "Bash(git -C \"C:/Users/Admin/CTPJob_Cards\" push origin master)",
+      "Bash(claude plugin *)"
     ]
   },
   "hooks": {
@@ -28,8 +29,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.BACKUP\\.')){Write-Output 'Blocked: do not create .BACKUP files — use git instead';exit 2}"
+            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.BACKUP\\.')){Write-Output 'Blocked: do not create .BACKUP files — use git instead';exit 2}",
+            "shell": "powershell"
           }
         ]
       }
@@ -40,14 +41,14 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
             "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze $f --no-fatal-infos 2>&1|Select-Object -Last 10}",
+            "shell": "powershell",
             "statusMessage": "flutter analyze..."
           },
           {
             "type": "command",
-            "shell": "powershell",
             "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'functions[\\\\/].*\\.js$')){cd C:/Users/Admin/CTPJob_Cards/functions;./node_modules/.bin/eslint $f --max-warnings 0 2>&1|Select-Object -Last 15}",
+            "shell": "powershell",
             "statusMessage": "eslint..."
           }
         ]
