@@ -6,6 +6,26 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-05-21 — Job card detail redesign, onboarding fix, off-site gate, docs accuracy pass
+
+### User-facing changes
+
+- **Job card detail screen redesigned** — unified tile layout, streamlined sections and visual hierarchy across the Details, Assignment, and Timeline tabs.
+- **Home screen: Create Job Card tile hidden when off-site** — employees whose `isOnSite` flag is `false` no longer see the Create Job Card tile. This prevents creating jobs while off-site without overriding the on-site check.
+- **Registration now routes through onboarding** — first-time registrants are routed through the full 7-page `PermissionsOnboardingScreen` (same as existing users) so location monitoring and permission grants happen immediately after account creation.
+- **Unified job card tile** — `JobCardTile` widget refactored for consistent display across Home recent-jobs list, ViewJobCards, MyAssignedJobs, ClosedJobs, and DailyReview.
+
+### Documentation corrections
+
+- **Permissions onboarding**: corrected page count from 3 to 7; listed all pages (Welcome, Your Role, Job Card Flow, Job Status, Priority Levels, Escalation, Grant Permissions).
+- **View Job Cards**: role corrected from "Manager, Admin" to "All" — operators and technicians can browse job lists.
+- **Copper Dashboard / Transactions / Sort Copper**: role corrected from "All" to copper-authorised users only.
+- **Role-Based Visibility** section: corrected inference order (Admin → Manager → Technician → Operator catch-all); removed incorrect "Technician = anyone else" statement.
+- **app_features.md**: corrected copper access claim ("Managers and Admins" → specific clock number whitelist); corrected role description ("set by Admin" → inferred from `position` field).
+- **CLAUDE.md**: added `utils/` to architecture tree; documented all 4 Riverpod providers; added missing services (`ConnectivityService`, `JobAlertService`, `UpdateService`); expanded Cloud Functions inventory to all 13 functions; fixed Manager role key screens (removed non-existent "NotificationHistory", added MonitoringDashboard and DailyReview).
+
+---
+
 ## 2026-05-18 — Documentation portal, role-aware onboarding, accuracy pass
 
 ### New for users

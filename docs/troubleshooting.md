@@ -133,7 +133,7 @@ If the document doesn't exist at all, use the Registration screen to create one.
 
 ### Cause
 
-Copper Dashboard is whitelisted to clock numbers `22`, `5421`, and `20` only (see `lib/utils/role.dart`).
+Copper Dashboard is restricted to copper-authorised users only (see `lib/utils/role.dart`).
 
 ### Fix
 
