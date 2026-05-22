@@ -9,6 +9,7 @@ flutter build apk --target-platform android-arm64 --release
         Build new version
             flutter clean
             flutter pub get
+            node build-landing.js
             flutter build web --release
             firebase deploy --only hosting
             flutter build apk --target-platform android-arm64 --release
