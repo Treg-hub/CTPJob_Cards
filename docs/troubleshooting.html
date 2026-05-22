@@ -203,34 +203,6 @@ user account.</p>
 <p>If the document doesn't exist at all, use the Registration screen to
 create one.</p>
 <hr />
-<h2 id="copper-tab-missing">Copper tab missing</h2>
-<h3 id="symptom-1">Symptom</h3>
-<ul>
-<li>Some users see a "Copper" tab in the bottom nav, you don't</li>
-</ul>
-<h3 id="cause-2">Cause</h3>
-<p>Copper Dashboard is restricted to copper-authorised users only (see
-<code>lib/utils/role.dart</code>).</p>
-<h3 id="fix-2">Fix</h3>
-<p>If you need access, ask Admin to either extend the whitelist (code
-change) or to use one of the existing whitelisted accounts.</p>
-<hr />
-<h2 id="admin-screen--incorrect-password">Admin screen — "Incorrect
-password"</h2>
-<h3 id="symptom-2">Symptom</h3>
-<ul>
-<li>Tapping Admin in Settings prompts for a password and rejects what
-you type</li>
-</ul>
-<h3 id="cause-3">Cause</h3>
-<p>The Admin password is a hardcoded check in
-<code>home_screen.dart</code> (search for <code>correctPassword</code>).
-It is not stored in Firestore.</p>
-<h3 id="fix-3">Fix</h3>
-<p>Get the current password from another Admin user. If everyone has
-forgotten it, a developer needs to change the constant in the source and
-ship a new build.</p>
-<hr />
 <h2 id="escalation-didnt-reach-me-even-though-im-a-manager">Escalation
 didn't reach me even though I'm a manager</h2>
 <h3 id="symptoms-5">Symptoms</h3>

@@ -1,0 +1,25 @@
+# Files and directories that must NEVER be deployed to Firebase Hosting.
+#
+# Note: Firebase Hosting itself reads its ignore list from `firebase.json`
+# under `hosting.ignore`. This .firebaseignore file is kept as the canonical
+# human-readable record of what is excluded — both `firebase.json` and any
+# CI / deploy script should respect these patterns.
+#
+# If you add an entry here, also add it to `hosting.ignore` in firebase.json.
+
+# Developer-only documentation. Contains security rule details, Cloud
+# Functions inventory, and internal architecture notes. Must stay private.
+dev-docs/
+dev-docs/**
+
+# Source files and build tooling
+serve_web.js
+serve_landing.js
+.claude/
+tools/
+
+# Project metadata
+CLAUDE.md
+README.md
+.gitignore
+.gitattributes

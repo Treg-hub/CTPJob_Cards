@@ -19,9 +19,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 - **Permissions onboarding**: corrected page count from 3 to 7; listed all pages (Welcome, Your Role, Job Card Flow, Job Status, Priority Levels, Escalation, Grant Permissions).
 - **View Job Cards**: role corrected from "Manager, Admin" to "All" — operators and technicians can browse job lists.
-- **Copper Dashboard / Transactions / Sort Copper**: role corrected from "All" to copper-authorised users only.
 - **Role-Based Visibility** section: corrected inference order (Admin → Manager → Technician → Operator catch-all); removed incorrect "Technician = anyone else" statement.
-- **app_features.md**: corrected copper access claim ("Managers and Admins" → specific clock number whitelist); corrected role description ("set by Admin" → inferred from `position` field).
 - **CLAUDE.md**: added `utils/` to architecture tree; documented all 4 Riverpod providers; added missing services (`ConnectivityService`, `JobAlertService`, `UpdateService`); expanded Cloud Functions inventory to all 13 functions; fixed Manager role key screens (removed non-existent "NotificationHistory", added MonitoringDashboard and DailyReview).
 
 ---

@@ -77,7 +77,6 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 - `My Assigned Jobs`
 - `View Job Cards`
 - `Closed Jobs`
-- `Copper Dashboard` — visible only to copper-authorised users
 - `Settings`
 
 #### Manager-Only Tiles
@@ -88,7 +87,7 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 
 #### Admin-Only Tiles
 
-- `Admin` — shown when the logged-in employee is in the admin list (clock no 22)
+- `Admin` — shown when the logged-in employee is on the admin whitelist
 
 > **Info:** The On-Site indicator reflects the live value of `employees/{clockNo}.isOnSite`, which is driven by background geofencing in `location_service.dart`.
 
@@ -288,51 +287,7 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 
 ---
 
-## Copper Management
-
-Inventory and transaction tracking for the copper recovery side of operations.
-
-### Copper Dashboard
-
-`lib/screens/copper_dashboard_screen.dart` — **Roles:** Copper-authorised users only
-
-Current copper stock plus quick-entry forms for inbound/outbound transactions.
-
-#### Transaction Types
-
-- **In** — copper arriving (raw)
-- **Sort** — sorted into nuggets / rods
-- **Sell (Nuggets)** and **Sell (Rods)** — outbound sales with R/kg rate
-
-#### Notable Behaviour
-
-- When cumulative sell total crosses 400 kg, the `onCopperTransactionWrite` Cloud Function notifies employee clock no 22 ("Copper Sell Ready")
-- Stream-based — live updates from `copperTransactions` and `copperInventory` collections
-
-### Copper Transactions
-
-`lib/screens/copper_transactions_screen.dart` — **Roles:** Copper-authorised only (same as Copper Dashboard)
-
-Full history table of every copper transaction. Sortable by date, type, amount.
-
 #### Capabilities
-
-- Filter by transaction type
-- Date-range filter
-- CSV export
-
-### Sort Copper
-
-`lib/screens/sort_copper_screen.dart` — **Roles:** Copper-authorised only (same as Copper Dashboard)
-
-Dedicated entry form for sorting raw copper into nuggets or rods. Pulled out into its own screen so it can be a quick one-tap workflow from Home or Copper Dashboard.
-
-#### Inputs
-
-- Amount sorted (kg)
-- Output type (Nuggets / Rods)
-- Sorter name (auto-filled from `currentEmployee`)
-- Optional notes
 
 ---
 
@@ -385,18 +340,18 @@ Behaviour that affects multiple screens.
 
 Roles are inferred from the `position` and `department` fields on `employees/{clockNo}` — there is no explicit role field. Inference order:
 
-- **Admin** — `clockNo == "22"` (also gated by password in `SettingsScreen`)
+- **Admin** — restricted by admin whitelist (also gated in `SettingsScreen`)
 - **Manager** — `position` contains `"manager"` (case-insensitive)
 - **Technician** — `position` contains `"mechanical"`, `"electrical"`, or `"technician"` (case-insensitive)
 - **Operator** — everyone else (default catch-all)
 
-Additional flags: `isSuperManager()` → `department == "general"` (factory-wide manager view); `isCopperAuthorized()` → copper-authorised users only (managed in `lib/utils/role.dart`).
+Additional flags: `isSuperManager()` → `department == "general"` (factory-wide manager view).
 
 ### Offline-First Saves
 
 *`SyncService` + Hive `sync_queue`*
 
-Any screen that writes to Firestore (Create Job Card, Job Card Detail, Copper Dashboard, etc.) goes through `FirestoreService.saveJobCardOfflineAware` or the equivalent. If `connectivity_plus` reports offline, the write is queued to the Hive `sync_queue` box. When connectivity returns, `SyncService` replays the queue.
+Any screen that writes to Firestore (Create Job Card, Job Card Detail, etc.) goes through `FirestoreService.saveJobCardOfflineAware` or the equivalent. If `connectivity_plus` reports offline, the write is queued to the Hive `sync_queue` box. When connectivity returns, `SyncService` replays the queue.
 
 ### Audit Log
 

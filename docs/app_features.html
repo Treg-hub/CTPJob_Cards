@@ -118,7 +118,6 @@ notified on closure.</li>
 <li>Permanent audit trail</li>
 <li>Manager dashboard</li>
 <li>Role-based access</li>
-<li>Copper inventory tracking</li>
 <li>Light &amp; dark theme</li>
 <li>Notification action buttons</li>
 </ul>
@@ -529,50 +528,6 @@ site.</p>
 access (not "Only While Using the App"). Without background location
 access, geofencing cannot run when the screen is off, and notifications
 will fail to route correctly.</p>
-<hr />
-<h2 id="copper-inventory-module">Copper Inventory Module</h2>
-<p><em>Real-time copper stock tracking and transaction logging</em></p>
-<p>The copper inventory module provides a dedicated screen for tracking
-copper stock levels and recording transactions. It uses two Firestore
-collections — <code>copper_inventory</code> for current stock and
-<code>copper_transactions</code> for the transaction log.</p>
-<p>Example stats:</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Current Stock</td>
-<td>847 kg</td>
-</tr>
-<tr>
-<td>This Week In</td>
-<td>+120 kg</td>
-</tr>
-<tr>
-<td>This Week Out</td>
-<td>−65 kg</td>
-</tr>
-</tbody>
-</table>
-<p>Example transactions:</p>
-<ul>
-<li>Stock received — Supplier A · +120 kg · Today 08:14</li>
-<li>Issued to Workshop B · −65 kg · Yesterday 14:30</li>
-</ul>
-<h3 id="access">Access</h3>
-<ul>
-<li>The <strong>Copper Dashboard</strong> is restricted to
-copper-authorised users only</li>
-<li>Inventory levels and transaction history are visible in real
-time</li>
-<li>All transactions are logged with timestamps, quantities, and
-responsible user</li>
-</ul>
 <hr />
 <h2 id="offline-mode--sync">Offline Mode &amp; Sync</h2>
 <p><em>Works without connectivity — syncs automatically when back

@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["serve_web.js"],
       "port": 8081
+    },
+    {
+      "name": "landing",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve_landing.js"],
+      "port": 8082
     }
   ]
 }

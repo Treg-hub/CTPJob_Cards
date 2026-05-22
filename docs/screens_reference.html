@@ -132,8 +132,6 @@ must be on-site to create new jobs</li>
 <li><code>My Assigned Jobs</code></li>
 <li><code>View Job Cards</code></li>
 <li><code>Closed Jobs</code></li>
-<li><code>Copper Dashboard</code> — visible only to copper-authorised
-users</li>
 <li><code>Settings</code></li>
 </ul>
 <h4 id="manager-only-tiles">Manager-Only Tiles</h4>
@@ -147,7 +145,7 @@ contains "manager"</li>
 <h4 id="admin-only-tiles">Admin-Only Tiles</h4>
 <ul>
 <li><code>Admin</code> — shown when the logged-in employee is in the
-admin list (clock no 22)</li>
+admin whitelist</li>
 </ul>
 <blockquote>
 <p><strong>Info:</strong> The On-Site indicator reflects the live value
@@ -401,56 +399,6 @@ shrink the radius, people currently inside the old boundary may flip to
 <code>isOnSite: false</code> within minutes.</p>
 </blockquote>
 <hr />
-<h2 id="copper-management">Copper Management</h2>
-<p>Inventory and transaction tracking for the copper recovery side of
-operations.</p>
-<h3 id="copper-dashboard">Copper Dashboard</h3>
-<p><code>lib/screens/copper_dashboard_screen.dart</code> —
-<strong>Roles:</strong> Copper-authorised users only</p>
-<p>Current copper stock plus quick-entry forms for inbound/outbound
-transactions.</p>
-<h4 id="transaction-types">Transaction Types</h4>
-<ul>
-<li><strong>In</strong> — copper arriving (raw)</li>
-<li><strong>Sort</strong> — sorted into nuggets / rods</li>
-<li><strong>Sell (Nuggets)</strong> and <strong>Sell (Rods)</strong> —
-outbound sales with R/kg rate</li>
-</ul>
-<h4 id="notable-behaviour">Notable Behaviour</h4>
-<ul>
-<li>When cumulative sell total crosses 400 kg, the
-<code>onCopperTransactionWrite</code> Cloud Function notifies employee
-clock no 22 ("Copper Sell Ready")</li>
-<li>Stream-based — live updates from <code>copperTransactions</code> and
-<code>copperInventory</code> collections</li>
-</ul>
-<h3 id="copper-transactions">Copper Transactions</h3>
-<p><code>lib/screens/copper_transactions_screen.dart</code> —
-<strong>Roles:</strong> Copper-authorised only (same as Copper
-Dashboard)</p>
-<p>Full history table of every copper transaction. Sortable by date,
-type, amount.</p>
-<h4 id="capabilities-3">Capabilities</h4>
-<ul>
-<li>Filter by transaction type</li>
-<li>Date-range filter</li>
-<li>CSV export</li>
-</ul>
-<h3 id="sort-copper">Sort Copper</h3>
-<p><code>lib/screens/sort_copper_screen.dart</code> —
-<strong>Roles:</strong> Copper-authorised only (same as Copper
-Dashboard)</p>
-<p>Dedicated entry form for sorting raw copper into nuggets or rods.
-Pulled out into its own screen so it can be a quick one-tap workflow
-from Home or Copper Dashboard.</p>
-<h4 id="inputs">Inputs</h4>
-<ul>
-<li>Amount sorted (kg)</li>
-<li>Output type (Nuggets / Rods)</li>
-<li>Sorter name (auto-filled from <code>currentEmployee</code>)</li>
-<li>Optional notes</li>
-</ul>
-<hr />
 <h2 id="configuration--utilities">Configuration &amp; Utilities</h2>
 <p>Per-user preferences, diagnostics, and developer tools.</p>
 <h3 id="settings">Settings</h3>
@@ -507,8 +455,8 @@ ENTER and the next escalation cycle will treat the user as on-site.</p>
 <code>department</code> fields on <code>employees/{clockNo}</code> —
 there is no explicit role field. Inference order:</p>
 <ul>
-<li><strong>Admin</strong> — <code>clockNo == "22"</code> (also gated by
-password in <code>SettingsScreen</code>)</li>
+<li><strong>Admin</strong> — restricted by admin whitelist (also gated
+in <code>SettingsScreen</code>)</li>
 <li><strong>Manager</strong> — <code>position</code> contains
 <code>"manager"</code> (case-insensitive)</li>
 <li><strong>Technician</strong> — <code>position</code> contains
@@ -518,12 +466,11 @@ password in <code>SettingsScreen</code>)</li>
 </ul>
 <p>Additional flags: <code>isSuperManager()</code> →
 <code>department == "general"</code> (factory-wide manager view);
-<code>isCopperAuthorized()</code> → copper-authorised users only
-(managed in <code>lib/utils/role.dart</code>).</p>
+</p>
 <h3 id="offline-first-saves">Offline-First Saves</h3>
 <p><em><code>SyncService</code> + Hive <code>sync_queue</code></em></p>
 <p>Any screen that writes to Firestore (Create Job Card, Job Card
-Detail, Copper Dashboard, etc.) goes through
+Detail, etc.) goes through
 <code>FirestoreService.saveJobCardOfflineAware</code> or the equivalent.
 If <code>connectivity_plus</code> reports offline, the write is queued
 to the Hive <code>sync_queue</code> box. When connectivity returns,

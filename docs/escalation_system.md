@@ -88,7 +88,7 @@ A scheduled function that runs **every 2 minutes** in `europe-west1`. It reads t
   "excluded_job_types": ["maintenance"],
 
   "last_updated": "2026-05-15T17:00:00Z",
-  "updated_by_clock_no": "22"
+  "updated_by_clock_no": "<admin clock no>"
 }
 ```
 
