@@ -91,6 +91,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('loggedInName', employee.name);
       await prefs.setString('loggedInClockNo', employee.clockNo);
+      await prefs.setString('loggedInPosition', employee.position);
+      await prefs.setString('loggedInDepartment', employee.department);
       currentEmployee = employee;
 
       if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
