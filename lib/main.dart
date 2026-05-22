@@ -150,6 +150,23 @@ void main() async {
       }
     }
 
+    // Both cache and network failed transiently — build a stub from SharedPreferences
+    // so HomeScreen always has a name to display while Firestore loads in the background.
+    if (currentEmployee == null && !employeeNotFound) {
+      final name = prefs.getString('loggedInName') ?? '';
+      final position = prefs.getString('loggedInPosition') ?? '';
+      final department = prefs.getString('loggedInDepartment') ?? '';
+      if (name.isNotEmpty) {
+        currentEmployee = Employee(
+          clockNo: clockNo,
+          name: name,
+          position: position,
+          department: department,
+        );
+        debugPrint('⚡ Employee stub built from SharedPreferences for $clockNo');
+      }
+    }
+
     if (employeeNotFound) {
       // Account was explicitly confirmed missing — clear session
       await prefs.remove('loggedInClockNo');

@@ -86,6 +86,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('loggedInName', employee.name);
       await prefs.setString('loggedInClockNo', clockNo);
+      await prefs.setString('loggedInPosition', employee.position);
+      await prefs.setString('loggedInDepartment', employee.department);
       currentEmployee = employee;
 
       if (mounted) {

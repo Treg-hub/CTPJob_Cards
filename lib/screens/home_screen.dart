@@ -75,7 +75,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
         .listen((emp) {
-      if (mounted) setState(() => isOnSite = emp.isOnSite);
+      if (mounted) {
+        setState(() {
+          currentEmployee = emp;
+          isOnSite = emp.isOnSite;
+        });
+      }
     });
   }
 
@@ -84,6 +89,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
       if (clockNo == null) return;
+
+      // Phase 1: immediately show cached name while Firestore loads
+      if (currentEmployee == null) {
+        final name = prefs.getString('loggedInName') ?? '';
+        final position = prefs.getString('loggedInPosition') ?? '';
+        final department = prefs.getString('loggedInDepartment') ?? '';
+        if (name.isNotEmpty && mounted) {
+          setState(() {
+            currentEmployee = Employee(
+              clockNo: clockNo,
+              name: name,
+              position: position,
+              department: department,
+            );
+          });
+        }
+      }
+
+      // Phase 2: replace stub with canonical Firestore data
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && mounted) {
         setState(() => currentEmployee = emp);
