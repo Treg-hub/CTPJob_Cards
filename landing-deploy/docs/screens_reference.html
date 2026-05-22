@@ -144,7 +144,7 @@ contains "manager"</li>
 </ul>
 <h4 id="admin-only-tiles">Admin-Only Tiles</h4>
 <ul>
-<li><code>Admin</code> — shown when the logged-in employee is in the
+<li><code>Admin</code> — shown when the logged-in employee is on the
 admin whitelist</li>
 </ul>
 <blockquote>
@@ -465,8 +465,7 @@ in <code>SettingsScreen</code>)</li>
 <li><strong>Operator</strong> — everyone else (default catch-all)</li>
 </ul>
 <p>Additional flags: <code>isSuperManager()</code> →
-<code>department == "general"</code> (factory-wide manager view);
-</p>
+<code>department == "general"</code> (factory-wide manager view).</p>
 <h3 id="offline-first-saves">Offline-First Saves</h3>
 <p><em><code>SyncService</code> + Hive <code>sync_queue</code></em></p>
 <p>Any screen that writes to Firestore (Create Job Card, Job Card
