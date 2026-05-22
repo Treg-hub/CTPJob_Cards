@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Employee Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Employee Guide</h1>
+</header>
+<h1 id="ctp-job-cards--employee-guide">CTP Job Cards — Employee
+Guide</h1>
+<hr />
+<h2 id="section-1-onboarding--app-permissions">Section 1: Onboarding
+&amp; App Permissions</h2>
+<h3 id="who-uses-this-app">Who Uses This App</h3>
+<p>There are four types of users in the CTP Job Cards system:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Primary Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Operator</strong></td>
+<td>Reports faults and creates job cards when a machine or process has
+an issue</td>
+</tr>
+<tr>
+<td><strong>Technician</strong></td>
+<td>Receives job card notifications, attends to faults, and closes jobs
+when resolved</td>
+</tr>
+<tr>
+<td><strong>Manager</strong></td>
+<td>Oversees job cards in their department, monitors escalations, and
+ensures quality</td>
+</tr>
+<tr>
+<td><strong>Admin</strong></td>
+<td>Manages the system, employee accounts, and geofence
+configuration</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Operators and Technicians are separate roles.
+An operator is the person who discovers and reports the fault — a
+technician is the person who goes to fix it.</p>
+</blockquote>
+<hr />
+<h3 id="logging-in">Logging In</h3>
+<p>You log in using your <strong>company email address</strong> and
+<strong>password</strong> through the Firebase authentication system.
+Your email account is linked to your clock number behind the scenes,
+which determines what role you have, what department you belong to, and
+what you see in the app.</p>
+<p>If you have forgotten your password, use the "Forgot Password" option
+on the login screen and a reset link will be sent to your email.</p>
+<hr />
+<h3 id="why-you-need-this-app">Why You Need This App</h3>
+<p><strong>For Operators:</strong> This app is how you formally report a
+fault or breakdown. Instead of verbally reporting to a supervisor or
+writing on a paper log, you create a job card directly. This means the
+fault is instantly in the system, visible to the right technicians, and
+tracked to resolution — nothing gets lost.</p>
+<p><strong>For Technicians:</strong> This app is how you receive and
+manage your work. When a fault is reported, you are notified immediately
+on your phone. You can accept the job, indicate you are unavailable, and
+record what you did to fix it — all from the app.</p>
+<hr />
+<h3 id="first-time-setup-permissions-explained">First-Time Setup:
+Permissions Explained</h3>
+<p>When you open the app for the first time, it will ask for a number of
+permissions. Each one has a specific reason. <strong>Do not skip or deny
+these — without them, the app cannot do its job and you will miss urgent
+alerts.</strong></p>
+<hr />
+<h4 id="1-location--allow-all-the-time">1. Location — "Allow All the
+Time"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to access
+your location all the time.</em></p>
+<p><strong>Why it needs this:</strong> The app uses your location to
+determine whether you are on site or off site. This matters for two
+reasons:</p>
+<ul>
+<li><strong>On-site status</strong> — Your profile in the system is
+updated to show you are on site. Technicians who are on site receive job
+card notifications. If you are off site, the system knows not to send
+you alerts for jobs you cannot attend to.</li>
+<li><strong>Geofence detection</strong> — The moment you enter or leave
+the company boundary (approximately 800 m radius), the system logs it
+automatically. You will receive a notification confirming "Arrived
+On-Site" or "Left Site Area."</li>
+</ul>
+<p><strong>Location is not used for surveillance.</strong> It is used
+solely to determine whether you are within the company boundary and
+should be receiving job alerts.</p>
+<blockquote>
+<p>Select <strong>"Allow All the Time"</strong> — if you choose "Only
+While Using the App" the geofence will not work when the app is in the
+background.</p>
+</blockquote>
+<hr />
+<h4 id="2-notifications--allow">2. Notifications — "Allow"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to send
+you notifications.</em></p>
+<p><strong>Why it needs this:</strong> Every job card assigned to you,
+every escalation, every urgent fault — all of it reaches you through
+notifications. Without this permission, you will receive nothing. You
+will be invisible to the system and jobs will escalate as if no one is
+responding.</p>
+<blockquote>
+<p>Always select <strong>"Allow."</strong></p>
+</blockquote>
+<hr />
+<h4 id="3-battery-optimisation--dont-optimise--unrestricted">3. Battery
+Optimisation — "Don't Optimise" / "Unrestricted"</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to run in
+the background without restrictions.</em></p>
+<p><strong>Why it needs this:</strong> Android phones, particularly
+newer models, aggressively shut down background apps to save battery. If
+the app is "optimised," your phone may kill it after a few minutes of
+not being used, meaning you will miss notifications entirely —
+especially overnight or during quiet periods.</p>
+<p>Exempting the app from battery optimisation ensures it stays alive to
+receive messages even when your phone has been idle.</p>
+<blockquote>
+<p>Navigate to <strong>Settings → Apps → CTP Job Cards → Battery →
+Unrestricted</strong> (wording varies by phone brand).</p>
+</blockquote>
+<hr />
+<h4 id="4-display-over-other-apps--system-alert-window">4. Display Over
+Other Apps / System Alert Window</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to appear
+over other apps.</em></p>
+<p><strong>Why it needs this:</strong> Priority 5 (P5) faults are the
+most urgent jobs on site — production is standing and needs an immediate
+response. When a P5 job card arrives, the app needs to display a
+full-screen alert that interrupts whatever you are doing: even if your
+phone is locked, even if another app is open.</p>
+<p>This permission allows that full-screen alarm to appear so you cannot
+miss a critical fault.</p>
+<blockquote>
+<p>Grant this permission. Without it, P5 alerts will fall back to a
+standard banner notification, which can be easily missed.</p>
+</blockquote>
+<hr />
+<h4 id="5-do-not-disturb-access">5. Do Not Disturb Access</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to
+override Do Not Disturb.</em></p>
+<p><strong>Why it needs this:</strong> If your phone is set to Do Not
+Disturb mode — common during night shifts or breaks — standard
+notifications are silenced. This permission allows P5 critical alerts to
+bypass Do Not Disturb so the alarm still sounds and the screen still
+lights up.</p>
+<blockquote>
+<p>Grant this permission for P5 fault coverage.</p>
+</blockquote>
+<hr />
+<h4 id="6-schedule-exact-alarms">6. Schedule Exact Alarms</h4>
+<p><strong>What the app asks:</strong> <em>Allow CTP Job Cards to set
+exact alarms.</em></p>
+<p><strong>Why it needs this:</strong> The full-screen alarm for P5
+faults uses the phone's alarm system — the same system that wakes you up
+in the morning — to guarantee the alert fires at the exact right moment,
+even if the phone is in deep sleep. Without this, the alarm may fire
+late or not at all.</p>
+<blockquote>
+<p>Grant this permission when prompted. On some phones it is found under
+<strong>Settings → Apps → Special App Access → Alarms &amp;
+Reminders.</strong></p>
+</blockquote>
+<hr />
+<h2 id="section-2-flow-of-job-cards">Section 2: Flow of Job Cards</h2>
+<h3 id="what-is-a-job-card">What is a Job Card?</h3>
+<p>A job card is a formal digital record of a fault, breakdown, or
+maintenance task. It captures:</p>
+<ul>
+<li><strong>Department</strong> — which department the job belongs
+to</li>
+<li><strong>Area</strong> — the specific area within the plant</li>
+<li><strong>Machine</strong> — the specific machine or asset</li>
+<li><strong>Part</strong> — the component or part affected</li>
+<li><strong>Description</strong> — a clear description of the fault or
+work required</li>
+<li><strong>Priority</strong> — how urgent the job is (1–5)</li>
+<li><strong>Type</strong> — Mechanical, Electrical, or Mech/Elec</li>
+</ul>
+<hr />
+<h3 id="priority-levels">Priority Levels</h3>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Impact on Production</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>No effect on production — routine or planned work</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>Minor impact — can continue but should be attended to soon</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>Moderate impact — attend within the shift</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>Significant impact — attend as soon as possible</td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td>Production is standing — immediate response required</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Priority must reflect actual impact. A P5 means production has
+stopped. Use it only when that is true.</p>
+</blockquote>
+<hr />
+<h3 id="job-card-status">Job Card Status</h3>
+<p>A job card moves through four statuses during its life:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Open</strong></td>
+<td>Job has been created and is awaiting a technician — no one has
+accepted it yet</td>
+</tr>
+<tr>
+<td><strong>In-Progress</strong></td>
+<td>A technician has self-assigned and is actively working the job —
+escalation has stopped</td>
+</tr>
+<tr>
+<td><strong>Monitor</strong></td>
+<td>Fault has been resolved but the machine is being watched for
+recurrence</td>
+</tr>
+<tr>
+<td><strong>Closed</strong></td>
+<td>Job is complete — fault resolved and confirmed</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>The moment you tap <strong>Assign Self</strong> on a notification (or
+open a job from the alert), the job card automatically moves from
+<strong>Open</strong> to <strong>In-Progress</strong>. You do not need
+to change it manually.</p>
+</blockquote>
+<hr />
+<h3 id="for-operators-creating-a-job-card">For Operators: Creating a Job
+Card</h3>
+<p>When you discover a fault or breakdown, create a job card
+immediately. Do not wait.</p>
+<p><strong>Steps:</strong></p>
+<ol type="1">
+<li>Open the CTP Job Cards app</li>
+<li>Tap <strong>Create Job Card</strong></li>
+<li>Fill in all fields — department, area, machine, part, description,
+and priority</li>
+<li>Submit</li>
+</ol>
+<p>The job card is live the moment you submit it. The relevant
+technicians are notified on their phones immediately.</p>
+<p><strong>Your responsibility as an operator is to fill in the form
+completely and accurately.</strong> Vague or incomplete job cards slow
+down the technician and create useless records in the system. Be
+specific:</p>
+<table>
+<thead>
+<tr>
+<th>Instead of...</th>
+<th>Write...</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Machine broken"</td>
+<td>"Conveyor 3 drive motor tripping on overload — production line
+stopped"</td>
+</tr>
+<tr>
+<td>"Pump issue"</td>
+<td>"Cooling water pump P-02 not priming — no flow to chiller
+circuit"</td>
+</tr>
+<tr>
+<td>"Fault on line"</td>
+<td>"PLC fault code E-14 on Line 2 pressing machine — cycle will not
+complete"</td>
+</tr>
+</tbody>
+</table>
+<p>Once you have submitted the job card, you can track its status in the
+app. You will receive a notification when a technician accepts the job
+and again when it is closed.</p>
+<hr />
+<h3 id="for-technicians-receiving-and-working-a-job">For Technicians:
+Receiving and Working a Job</h3>
+<h4 id="receiving-a-notification">Receiving a Notification</h4>
+<p>When a job card is created that matches your trade and you are on
+site, you will receive a push notification on your phone. The
+notification shows:</p>
+<ul>
+<li>Job number and priority</li>
+<li>Machine and area</li>
+<li>Description of the fault</li>
+</ul>
+<p>You have three options directly from the notification:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Assign Self</strong></td>
+<td>You take ownership of the job. The operator is notified you are
+attending. Escalation stops.</td>
+</tr>
+<tr>
+<td><strong>I'm Busy</strong></td>
+<td>You acknowledge the job but cannot take it right now. The operator
+is notified. Escalation stops. The system continues looking for another
+technician.</td>
+</tr>
+<tr>
+<td><strong>Dismiss</strong></td>
+<td>You dismiss the alert. The system logs this and escalation
+continues.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Always respond to notifications.</strong> If you do not
+respond, the system escalates the job to your foreman, then your
+manager. Repeated non-responses will be visible in the notification
+log.</p>
+</blockquote>
+<hr />
+<h4 id="working-the-job">Working the Job</h4>
+<p>Once you have accepted a job, navigate to <strong>My Assigned
+Jobs</strong> in the app to see the full details.</p>
+<p>Update the job status as you progress:</p>
+<ul>
+<li>When you self-assign the job: the status changes automatically from
+<strong>Open</strong> to <strong>In-Progress</strong></li>
+<li>When you have resolved the fault but want to watch the machine:
+change to <strong>Monitor</strong></li>
+<li>When the job is fully complete: change to
+<strong>Closed</strong></li>
+</ul>
+<hr />
+<h4 id="closing-a-job">Closing a Job</h4>
+<p>When you close a job, you must add a note. This is not optional — it
+is the maintenance record that managers, engineers, and future
+technicians will rely on.</p>
+<p>Your closure note should include:</p>
+<ul>
+<li>What was done</li>
+<li>Any parts used (include part numbers or specifications where
+possible)</li>
+<li>Root cause if known</li>
+<li>Any follow-up work recommended</li>
+</ul>
+<p><strong>A closed job with no note is a wasted record.</strong></p>
+<p>When you close the job, the operator who created it is automatically
+notified.</p>
+<hr />
+<h3 id="what-happens-if-nobody-responds">What Happens If Nobody
+Responds?</h3>
+<p>The system has automatic escalation across <strong>four configurable
+stages</strong>. Each stage has its own timer, recipient list, and
+on/off switch, configured by Admin under <strong>Settings → Escalation
+Rules</strong>. The defaults are:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Default Time After Creation</th>
+<th>Default State</th>
+<th>Default Recipients</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Stage 1</strong></td>
+<td>5 minutes</td>
+<td><strong>Enabled</strong></td>
+<td>On-site managers and foremen for the relevant department</td>
+</tr>
+<tr>
+<td><strong>Stage 2</strong></td>
+<td>10 minutes</td>
+<td><strong>Enabled</strong></td>
+<td>On-site department managers and the workshop manager (urgent
+alert)</td>
+</tr>
+<tr>
+<td><strong>Stage 3</strong></td>
+<td>30 minutes</td>
+<td>Disabled</td>
+<td>(Admin-configurable — typically senior management)</td>
+</tr>
+<tr>
+<td><strong>Stage 4</strong></td>
+<td>60 minutes</td>
+<td>Disabled</td>
+<td>(Admin-configurable — final escalation tier)</td>
+</tr>
+</tbody>
+</table>
+<p>Escalation stops the moment any technician self-assigns or responds
+"I'm Busy." If your site uses different timings or wants to switch on
+stages 3 and 4, your Admin can change them at any time — the defaults
+above are a starting point, not a fixed rule.</p>
+<hr />
+<h2 id="section-3-notifications--types-and-what-they-mean">Section 3:
+Notifications — Types and What They Mean</h2>
+<h3 id="notification-levels">Notification Levels</h3>
+<p>There are three levels of notification, determined by the priority of
+the job card:</p>
+<hr />
+<h4 id="level-1--normal-banner-priority-1-2-3">Level 1 — Normal Banner
+(Priority 1, 2, 3)</h4>
+<p><strong>Appearance:</strong> Standard Android notification banner at
+the top of the screen.</p>
+<p><strong>Sound:</strong> Default notification tone.</p>
+<p><strong>Behaviour:</strong> Appears and disappears like any other
+notification. Tap it to open the job.</p>
+<p><strong>Used for:</strong> Jobs that need attention but are not
+stopping production.</p>
+<hr />
+<h4 id="level-2--persistent-banner-priority-4">Level 2 — Persistent
+Banner (Priority 4)</h4>
+<p><strong>Appearance:</strong> A notification that stays in your
+notification panel until you act on it. It cannot be accidentally swiped
+away.</p>
+<p><strong>Sound:</strong> Escalation alert tone with stronger
+vibration.</p>
+<p><strong>Behaviour:</strong> Remains visible in your notification
+shade. Action buttons appear directly on the notification:
+<strong>Assign Self</strong>, <strong>Busy</strong>,
+<strong>Dismiss</strong>.</p>
+<p><strong>Used for:</strong> Jobs with significant production impact
+needing prompt attention.</p>
+<hr />
+<h4 id="level-3--full-screen-alarm-priority-5">Level 3 — Full-Screen
+Alarm (Priority 5)</h4>
+<p><strong>Appearance:</strong> A full-screen alert that takes over your
+entire phone screen, even from the lock screen.</p>
+<p><strong>Sound:</strong> Loud, repeating escalation alarm that
+continues until dismissed. Bypasses Do Not Disturb.</p>
+<p><strong>Behaviour:</strong> Cannot be ignored without deliberate
+action. Shows full job details and three buttons. Tapping any button
+logs your response and dismisses the alarm.</p>
+<p><strong>Used for:</strong> Production is standing. Immediate response
+required.</p>
+<blockquote>
+<p>If your phone does not have exact alarm permission granted, a P5 job
+will fall back to a persistent banner. This is why granting alarm
+permission during onboarding is critical.</p>
+</blockquote>
+<hr />
+<h3 id="on-site-arrival-and-departure-notifications">On-Site Arrival and
+Departure Notifications</h3>
+<p>When you cross the company boundary, you automatically receive:</p>
+<ul>
+<li><strong>"Arrived On-Site"</strong> — your status is updated and you
+start receiving job notifications</li>
+<li><strong>"Left Site Area"</strong> — your status is updated and job
+notifications pause until you return</li>
+</ul>
+<p>No action is required — this is fully automatic.</p>
+<hr />
+<h2 id="section-4-app-appearance--light-and-dark-mode">Section 4: App
+Appearance — Light and Dark Mode</h2>
+<p>The app supports both a <strong>dark theme</strong> (the default —
+easier on the eyes in low-light environments such as workshops and night
+shifts) and a <strong>light theme</strong> (better visibility in bright
+outdoor sunlight).</p>
+<p>To switch:</p>
+<ol type="1">
+<li>Open the app and tap the <strong>gear icon</strong> (Settings) at
+the top right</li>
+<li>Find the <strong>Dark Mode</strong> toggle near the top of the
+Settings screen</li>
+<li>Tap the switch to flip between themes — the change is instant</li>
+</ol>
+<p>Your choice is remembered and applies every time you open the app.
+The orange CTP branding remains consistent across both themes.</p>
+<hr />
+<h2 id="the-future-ai-assisted-maintenance">The Future: AI-Assisted
+Maintenance</h2>
+<h3 id="predictive-maintenance">Predictive Maintenance</h3>
+<p>By analysing the history of job cards — which machines fail most
+often, at what intervals, and with what parts — the system will identify
+patterns and generate predictive alerts:</p>
+<ul>
+<li>"Machine X has had 4 bearing failures in 6 months. Inspection
+recommended within 3 weeks."</li>
+<li>"Fault frequency on Line 3 increases in summer. Pre-emptive service
+advised."</li>
+</ul>
+<p>This shifts the team from always reacting to breakdowns to planning
+interventions during scheduled downtime.</p>
+<hr />
+<h3 id="ai-chatbot--operator-manuals-and-fault-finding">AI Chatbot —
+Operator Manuals and Fault Finding</h3>
+<p>A conversational AI assistant will be integrated into the app with
+access to:</p>
+<ul>
+<li>Operator and maintenance manuals for all plant equipment</li>
+<li>Historical fault and repair records from job cards</li>
+<li>Wiring diagrams, schematics, and parts lists</li>
+</ul>
+<p>A technician on the floor will be able to ask:</p>
+<blockquote>
+<p><em>"The conveyor on Line 2 is tripping on overload. What are the
+common causes?"</em> <em>"What is the torque spec for the main shaft
+bearing on the FX400 gearbox?"</em> <em>"What was done the last time
+this fault appeared on Machine 7?"</em></p>
+</blockquote>
+<p>The assistant responds with answers drawn from official documentation
+and real maintenance history — reducing time spent searching through
+manuals and helping with fault-finding guidance.</p>
+<p><strong>Your job card entries today become the data that makes these
+AI tools accurate. Complete descriptions and clear closure notes are an
+investment in the system's future intelligence.</strong></p>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>CHANGELOG</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">CHANGELOG</h1>
+</header>
+<h1 id="ctp-job-cards--documentation-changelog">CTP Job Cards —
+Documentation Changelog</h1>
+<p>Append-only log of user-visible changes. Add a new entry at the top
+each release; do not edit historical entries except to fix factual
+errors.</p>
+<p>The role guides, the onboarding flow, and the reference docs all draw
+from this log. Whatever you write here is what staff will read next time
+they open the docs portal.</p>
+<hr />
+<h2
+id="2026-05-21--job-card-detail-redesign-onboarding-fix-off-site-gate-docs-accuracy-pass">2026-05-21
+— Job card detail redesign, onboarding fix, off-site gate, docs accuracy
+pass</h2>
+<h3 id="user-facing-changes">User-facing changes</h3>
+<ul>
+<li><strong>Job card detail screen redesigned</strong> — unified tile
+layout, streamlined sections and visual hierarchy across the Details,
+Assignment, and Timeline tabs.</li>
+<li><strong>Home screen: Create Job Card tile hidden when
+off-site</strong> — employees whose <code>isOnSite</code> flag is
+<code>false</code> no longer see the Create Job Card tile. This prevents
+creating jobs while off-site without overriding the on-site check.</li>
+<li><strong>Registration now routes through onboarding</strong> —
+first-time registrants are routed through the full 7-page
+<code>PermissionsOnboardingScreen</code> (same as existing users) so
+location monitoring and permission grants happen immediately after
+account creation.</li>
+<li><strong>Unified job card tile</strong> — <code>JobCardTile</code>
+widget refactored for consistent display across Home recent-jobs list,
+ViewJobCards, MyAssignedJobs, ClosedJobs, and DailyReview.</li>
+</ul>
+<h3 id="documentation-corrections">Documentation corrections</h3>
+<ul>
+<li><strong>Permissions onboarding</strong>: corrected page count from 3
+to 7; listed all pages (Welcome, Your Role, Job Card Flow, Job Status,
+Priority Levels, Escalation, Grant Permissions).</li>
+<li><strong>View Job Cards</strong>: role corrected from "Manager,
+Admin" to "All" — operators and technicians can browse job lists.</li>
+<li><strong>Role-Based Visibility</strong> section: corrected inference
+order (Admin → Manager → Technician → Operator catch-all); removed
+incorrect "Technician = anyone else" statement.</li>
+<li><strong>CLAUDE.md</strong>: added <code>utils/</code> to
+architecture tree; documented all 4 Riverpod providers; added missing
+services (<code>ConnectivityService</code>,
+<code>JobAlertService</code>, <code>UpdateService</code>); expanded
+Cloud Functions inventory to all 13 functions; fixed Manager role key
+screens (removed non-existent "NotificationHistory", added
+MonitoringDashboard and DailyReview).</li>
+</ul>
+<hr />
+<h2
+id="2026-05-18--documentation-portal-role-aware-onboarding-accuracy-pass">2026-05-18
+— Documentation portal, role-aware onboarding, accuracy pass</h2>
+<h3 id="new-for-users">New for users</h3>
+<ul>
+<li><strong>One docs portal</strong> — <code>docs/index.html</code> is
+the single entry point. Sidebar nav links to every guide (employee,
+manager, executive, app features, escalation, screens, troubleshooting).
+Open it in any browser.</li>
+<li><strong>Role-aware onboarding</strong> — first-login carousel now
+branches on your role (Technician / Manager / Operator / Admin). The
+shared pages on P1–P5 priorities, escalation, and permissions stay the
+same for everyone — that's the part everyone needs to know.</li>
+<li><strong>P1–P5 explained explicitly</strong> — onboarding now shows
+all five priority levels with the exact notification behaviour (banner /
+persistent / full-screen alarm) tied to each.</li>
+<li><strong>4-stage escalation diagram</strong> — onboarding includes a
+stage-by-stage walkthrough with the actual defaults (5 / 10 min enabled;
+30 / 60 min disabled, configurable by Admin).</li>
+</ul>
+<h3 id="new-for-admins">New for admins</h3>
+<ul>
+<li><strong>Three new docs</strong> —
+<ul>
+<li><a href="cloud_functions_deployment.md">Cloud Functions deployment
+guide</a> — function inventory, two-region layout
+(<code>africa-south1</code> + <code>europe-west1</code>), deployment
+commands, common failure modes.</li>
+<li><a href="troubleshooting.md">Troubleshooting &amp; FAQ</a> —
+symptom-driven fixes for notifications, geofence, sync, login, and
+escalation.</li>
+<li><a href="firebase_security_rules.md">Firebase security rules
+guide</a> — what <code>storage.rules</code> enforces, what Firestore
+rules <em>should</em> enforce, action items for tightening.</li>
+</ul></li>
+</ul>
+<h3 id="documentation-toolchain">Documentation toolchain</h3>
+<ul>
+<li><strong>Markdown is now the single source of truth.</strong> Every
+doc lives as <code>.md</code> first; HTML and PDF are generated by
+<code>tools/build-docs.ps1</code>. To update a guide: edit the
+<code>.md</code>, run the script, commit all three.</li>
+<li><strong>Backfilled orphans</strong> —
+<code>app_features.html</code>, <code>escalation_system.html</code>,
+<code>screens_reference.html</code> now have corresponding
+<code>.md</code> files so future edits go through markdown.</li>
+<li><strong>CI workflow</strong> —
+<code>.github/workflows/docs.yml</code> regenerates and validates HTML
+on every PR.</li>
+</ul>
+<h3 id="accuracy-fixes">Accuracy fixes</h3>
+<ul>
+<li><code>CLAUDE.md</code> — escalation corrected from 3-stage to
+4-stage; the <code>Employee.role</code> field reference removed (role is
+inferred from <code>position</code>); region split between
+<code>africa-south1</code> and <code>europe-west1</code>
+documented.</li>
+<li>Role guides — escalation defaults corrected to 5 / 10 / 30 / 60 min
+with stages 3 and 4 disabled by default (previously documented as 2 / 7
+/ 30 / 60 with all enabled).</li>
+<li><code>manager_guide.md</code> — Daily Review (web) added; previously
+undocumented.</li>
+</ul>
+<h3 id="removed">Removed</h3>
+<ul>
+<li><code>migrate.html</code> — orphan build artifact at repo root, not
+linked anywhere.</li>
+</ul>
+<hr />
+<!-- Add new entries above this line. Keep entries scoped to a single release. -->
+</body>
+</html>

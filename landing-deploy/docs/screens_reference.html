@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Screens Reference</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Screens Reference</h1>
+</header>
+<!--
+Title: CTP Job Cards — Screens Reference
+Backfilled from screens_reference.html on 2026-05-18.
+-->
+
+<h1 id="ctp-job-cards--screens-reference">CTP Job Cards — Screens
+Reference</h1>
+<p><em>Engineering Reference</em></p>
+<hr />
+<h2 id="onboarding--authentication">Onboarding &amp; Authentication</h2>
+<p>Screens shown when no user is logged in or during first-launch
+permission setup.</p>
+<h3 id="login">Login</h3>
+<p><code>lib/screens/login_screen.dart</code> — <strong>Roles:</strong>
+All</p>
+<p>Email + password authentication via
+<code>FirebaseAuth.signInWithEmailAndPassword</code>. On successful
+sign-in, looks up the matching <code>employees</code> document by
+Firebase UID, saves <code>loggedInClockNo</code> to
+<code>SharedPreferences</code>, refreshes the FCM token, and routes to
+either <strong>Permissions Onboarding</strong> (first run) or
+<strong>Home</strong>.</p>
+<h4 id="key-actions">Key Actions</h4>
+<ul>
+<li><strong>Login</strong> — Sign in with email + password</li>
+<li><strong>Forgot password</strong> — Sends a Firebase Auth reset
+email</li>
+<li><strong>Register</strong> — Navigates to the Registration
+screen</li>
+</ul>
+<blockquote>
+<p><strong>Info:</strong> Auto-login: <code>main.dart</code> bypasses
+this screen entirely if <code>SharedPreferences</code> has a saved
+<code>loggedInClockNo</code>, OR if
+<code>FirebaseAuth.currentUser</code> is still valid after a
+reinstall.</p>
+</blockquote>
+<h3 id="registration">Registration</h3>
+<p><code>lib/screens/registration_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>New employee sign-up. Creates a Firebase Auth account from email +
+password, then writes a corresponding <code>employees</code> document
+containing the clock number, name, position, and department.</p>
+<h4 id="required-fields">Required Fields</h4>
+<ul>
+<li>Email, password</li>
+<li>Clock number (must match the employee record in HR)</li>
+<li>Name, position, department</li>
+</ul>
+<blockquote>
+<p><strong>Warning:</strong> Admins should pre-populate the
+<code>employees</code> collection. Self-registration only links an Auth
+account to an existing record; it does not grant any role.</p>
+</blockquote>
+<h3 id="permissions-onboarding">Permissions Onboarding</h3>
+<p><code>lib/screens/permissions_onboarding_screen.dart</code> —
+<strong>Roles:</strong> All (first launch)</p>
+<p>Seven-page swipeable walkthrough shown after first login (and after
+registration). Explains the app, branches on the user's role, then
+requests critical Android permissions.</p>
+<h4 id="pages">Pages</h4>
+<ol type="1">
+<li><strong>Welcome</strong> — app intro</li>
+<li><strong>Your Role</strong> — role-specific overview (Technician /
+Manager / Operator / Admin)</li>
+<li><strong>Job Card Flow</strong> — end-to-end creation → resolution
+walkthrough</li>
+<li><strong>Job Status</strong> — explains Open / In-Progress / Monitor
+/ Closed</li>
+<li><strong>Priority Levels</strong> — P1–P5 with notification behaviour
+for each</li>
+<li><strong>Escalation</strong> — 4-stage timeline with default
+timers</li>
+<li><strong>Grant Permissions</strong> — Notifications, System Alert
+Window, DND override, Battery Unrestricted, Background Location, Exact
+Alarms</li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> Sets <code>permissionsCompleted: true</code>
+in <code>SharedPreferences</code> only if <code>locationAlways</code>
+permission was actually granted — if it is denied, the screen reappears
+on next launch. Also fires
+<code>LocationService.startNativeMonitoring()</code> and
+<code>checkCurrentLocation()</code> on completion.</p>
+</blockquote>
+<hr />
+<h2 id="core-job-card-flow">Core Job Card Flow</h2>
+<p>The screens every technician and most managers use day-to-day.</p>
+<h3 id="home">Home</h3>
+<p><code>lib/screens/home_screen.dart</code> — <strong>Roles:</strong>
+All logged-in users</p>
+<p>The main hub after login. Shows the logged-in employee, a live
+<strong>On-Site / Off-Site</strong> indicator, an employee directory,
+and a grid of tiles to navigate everywhere else.</p>
+<h4 id="standard-tiles">Standard Tiles</h4>
+<ul>
+<li><code>Create Job Card</code> — <strong>hidden when the employee is
+off-site</strong> (<code>isOnSite: false</code>); off-site employees
+must be on-site to create new jobs</li>
+<li><code>My Assigned Jobs</code></li>
+<li><code>View Job Cards</code></li>
+<li><code>Closed Jobs</code></li>
+<li><code>Settings</code></li>
+</ul>
+<h4 id="manager-only-tiles">Manager-Only Tiles</h4>
+<ul>
+<li><code>Manager Dashboard</code> — shown when <code>position</code>
+contains "manager"</li>
+<li><code>Monitoring Dashboard</code></li>
+<li><code>Daily Review</code> with pulse animation when pending count
+&gt; 5</li>
+</ul>
+<h4 id="admin-only-tiles">Admin-Only Tiles</h4>
+<ul>
+<li><code>Admin</code> — shown when the logged-in employee is in the
+admin whitelist</li>
+</ul>
+<blockquote>
+<p><strong>Info:</strong> The On-Site indicator reflects the live value
+of <code>employees/{clockNo}.isOnSite</code>, which is driven by
+background geofencing in <code>location_service.dart</code>.</p>
+</blockquote>
+<h3 id="create-job-card">Create Job Card</h3>
+<p><code>lib/screens/create_job_card_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Form for raising a new job card. The factory structure (department →
+area → machine → part) is loaded from Firestore, and previously-used
+parts for the selected machine are suggested.</p>
+<h4 id="required-fields-1">Required Fields</h4>
+<ul>
+<li>Department, Area, Machine, Part</li>
+<li>Job Type — <code>Mechanical</code>, <code>Electrical</code>,
+<code>Mech/Elec ?</code>, <code>Maintenance</code></li>
+<li>Priority (1–5)</li>
+<li>Operator name + clock number</li>
+<li>Description</li>
+<li>Optional photos (per section)</li>
+</ul>
+<h4 id="what-happens-on-save">What Happens On Save</h4>
+<ul>
+<li>Calls <code>FirestoreService.saveJobCardOfflineAware</code> → if
+online, runs a transaction that increments the global
+<code>counters/jobCards.nextJobCardNumber</code> and writes the doc</li>
+<li>If offline, queues the write to Hive via
+<code>SyncService</code></li>
+<li>The <code>onJobCardCreated</code> Cloud Function trigger fires and
+dispatches initial notifications based on
+<code>creation_recipients_by_type</code></li>
+</ul>
+<h4 id="sidebar-widget">Sidebar Widget</h4>
+<ul>
+<li><strong>Similar Job Cards</strong> — wide-layout sidebar streams
+matching open cards as the form is filled, helping prevent
+duplicates</li>
+</ul>
+<h3 id="my-assigned-jobs">My Assigned Jobs</h3>
+<p><code>lib/screens/my_assigned_jobs_screen.dart</code> —
+<strong>Roles:</strong> Technicians (primary)</p>
+<p>The technician's personal queue. Two tabs:</p>
+<h4 id="tabs">Tabs</h4>
+<ul>
+<li><code>Assigned</code> — Active cards where the technician's clock
+number is in <code>assignedClockNos</code></li>
+<li><code>History</code> — Jobs the technician has worked on or
+completed</li>
+</ul>
+<h4 id="per-card-actions">Per-Card Actions</h4>
+<ul>
+<li>Tap to open <strong>Job Card Detail</strong></li>
+<li>Quick "Self-Assign" if a job is unassigned and the technician's
+skill matches</li>
+<li>Mark as "Busy" — fires a notification back to the creator via the
+<code>alertResponses</code> collection and sets
+<code>escalationStopped: true</code></li>
+</ul>
+<h3 id="job-card-detail">Job Card Detail</h3>
+<p><code>lib/screens/job_card_detail_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Full view of a single job card. The most feature-rich screen in the
+app.</p>
+<h4 id="sections">Sections</h4>
+<ul>
+<li><strong>Header</strong> — Job #, status, priority, type, department,
+area, machine, part</li>
+<li><strong>Description &amp; notes</strong> — editable inline by
+assignees</li>
+<li><strong>Photos</strong> — before/during/after sections, tap to open
+full-screen viewer</li>
+<li><strong>Assignment</strong> — assign to one or more technicians;
+selector orders by <code>isOnSite</code> first, then position</li>
+<li><strong>Status workflow</strong> — Open → In Progress → Monitoring →
+Closed</li>
+<li><strong>Assignment history</strong> — timestamped list of who was
+assigned/unassigned</li>
+<li><strong>Comments &amp; reviewedBy</strong></li>
+<li><strong>Related Jobs</strong> tab pair (<code>My Department</code>,
+<code>All Factory</code>) — surfaces same-machine/area history</li>
+</ul>
+<h4 id="notifications-triggered-here">Notifications Triggered Here</h4>
+<ul>
+<li>Assigning a job → <code>sendJobAssignmentNotification</code> Cloud
+Function call</li>
+<li>Closing/updating → <code>sendCreatorNotification</code> to the
+original creator</li>
+<li>Both also trigger <code>onJobCardAssigned</code> which sets
+<code>escalationStopped: true</code></li>
+</ul>
+<h3 id="view-job-cards">View Job Cards</h3>
+<p><code>lib/screens/view_job_cards_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Browse every job card in the system. Four status tabs with live
+counts; filters for department, area, machine, type, priority, date
+range.</p>
+<h4 id="tabs-1">Tabs</h4>
+<ul>
+<li><code>Open</code></li>
+<li><code>In Progress</code></li>
+<li><code>Monitoring</code></li>
+<li><code>Closed</code></li>
+</ul>
+<h4 id="capabilities">Capabilities</h4>
+<ul>
+<li>Tap any card to open <strong>Job Card Detail</strong></li>
+<li>Filter and search across all factory structure levels</li>
+<li>Wide-layout view with split master/detail on tablets</li>
+</ul>
+<h3 id="closed-jobs">Closed Jobs</h3>
+<p><code>lib/screens/closed_jobs_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Lighter-weight read-only browser of completed and auto-closed jobs.
+Useful for technicians who want to look up past work without the full
+filter UI of <strong>View Job Cards</strong>.</p>
+<h4 id="capabilities-1">Capabilities</h4>
+<ul>
+<li>Date-range filter</li>
+<li>Tap to open the detail view (read-only)</li>
+</ul>
+<h3 id="daily-review">Daily Review</h3>
+<p><code>lib/screens/daily_review_screen.dart</code> —
+<strong>Roles:</strong> Manager</p>
+<p>Daily sign-off queue for managers. Each closed/monitored job needs a
+manager review checkmark — this screen surfaces what's still
+pending.</p>
+<h4 id="tabs-2">Tabs</h4>
+<ul>
+<li><code>Pending Review (N)</code> — Cards the logged-in manager hasn't
+marked yet</li>
+<li><code>Reviewed</code> — Already-marked cards</li>
+</ul>
+<h4 id="filter-logic">Filter Logic</h4>
+<ul>
+<li>Mechanical Manager: sees cards where job type is Mechanical or
+Mech/Elec</li>
+<li>Electrical Manager: sees cards where job type is Electrical or
+Mech/Elec</li>
+<li>Other Managers: sees cards in their own <code>department</code></li>
+</ul>
+<blockquote>
+<p><strong>Info:</strong> The Home tile for Daily Review has a pulsing
+red animation when the pending count is above 5 — a visual nudge to keep
+the queue clean.</p>
+</blockquote>
+<hr />
+<h2 id="manager--admin">Manager &amp; Admin</h2>
+<p>Dashboards and tooling for oversight roles.</p>
+<h3 id="manager-dashboard">Manager Dashboard</h3>
+<p><code>lib/screens/manager_dashboard_screen.dart</code> —
+<strong>Roles:</strong> Manager</p>
+<p>KPI rollups for the manager's domain.</p>
+<h4 id="tiles">Tiles</h4>
+<ul>
+<li><strong>Open vs. Closed</strong> count this week / month</li>
+<li><strong>Average time to close</strong></li>
+<li><strong>Per-technician throughput</strong> — completed jobs by clock
+no</li>
+<li><strong>Top recurring machines</strong> — highest
+<code>reoccurrenceCount</code> jobs</li>
+</ul>
+<h3 id="monitoring-dashboard">Monitoring Dashboard</h3>
+<p><code>lib/screens/monitoring_dashboard_screen.dart</code> —
+<strong>Roles:</strong> Manager</p>
+<p>Visibility into the "Monitoring" state — jobs that were marked
+completed but kept open for 7 days to confirm the fix held.</p>
+<h4 id="tabs-3">Tabs</h4>
+<ul>
+<li><code>Active Monitoring</code> — Jobs currently in the 7-day
+monitoring window</li>
+<li><code>Recently Auto-Closed</code> — Jobs the
+<code>autoCloseMonitoringJobs</code> scheduler closed in the last 7
+days</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> <code>autoCloseMonitoringJobs</code> runs
+daily at 08:00 SAST in <code>europe-west1</code>. It closes any
+monitoring job that hasn't had updates for 7 days since
+<code>monitoringStartedAt</code>, appending an auto-close note to
+<code>notes</code>.</p>
+</blockquote>
+<h3 id="admin">Admin</h3>
+<p><code>lib/screens/admin_screen.dart</code> — <strong>Roles:</strong>
+Admin only</p>
+<p>The control panel. Four tabs.</p>
+<h4 id="tab-employees">Tab: Employees</h4>
+<ul>
+<li>Spreadsheet-style editor for the <code>employees</code>
+collection</li>
+<li>Add / edit / bulk-delete employees</li>
+<li>Per-row toggle for <code>isOnSite</code></li>
+<li>FCM token visible and editable (for debugging)</li>
+<li>CSV import / export with template download</li>
+</ul>
+<h4 id="tab-structures">Tab: Structures</h4>
+<ul>
+<li>Manages the factory hierarchy stored under
+<code>factoryStructure</code></li>
+<li>Add/delete Departments, Areas, and Machine/Parts</li>
+<li>Cascading deletes with confirmation dialogs</li>
+</ul>
+<h4 id="tab-settings">Tab: Settings</h4>
+<ul>
+<li><strong>Force Location Check Now</strong> — manually runs
+<code>LocationService.checkCurrentLocation</code></li>
+<li><strong>Simulate 30-min WorkManager Check</strong> — triggers the
+background geofence callback for testing</li>
+<li><strong>Escalation Config</strong> — per-stage cards with Enable
+toggle, minutes input, recipient checkboxes (including a <em>Job Creator
+(Operator)</em> option that sends a tailored "follow up directly" alert
+to the person who raised the job). Writes to
+<code>notification_configs/global</code>. See <a
+href="escalation_system.html">Escalation Reference</a></li>
+<li><strong>Save Escalation Config</strong> — writes the doc; prompts to
+confirm when re-enabling stages so old jobs aren't bombarded. Writes
+<code>enabled_at = now</code> on any stage transitioning from disabled →
+enabled</li>
+<li><strong>Reset Escalation Stamps</strong> — calls the
+<code>clearEscalationStamps</code> Cloud Function. Two uses: (a) clears
+all stage stamps from open jobs so they re-process, (b) backfills
+<code>notifiedAtStage1..4 = null</code> on legacy docs so they appear in
+the composite indexes</li>
+</ul>
+<h4 id="tab-job-cards">Tab: Job Cards</h4>
+<ul>
+<li>Spreadsheet-style export and delete tooling for the
+<code>job_cards</code> collection</li>
+<li>CSV export with full filter applied</li>
+<li>Bulk delete with confirmation</li>
+</ul>
+<h3 id="geofence-editor">Geofence Editor</h3>
+<p><code>lib/screens/geofence_editor_screen.dart</code> —
+<strong>Roles:</strong> Admin only</p>
+<p>Map-based editor for the factory geofence boundary stored in
+<code>config/geofence</code>. The native Android
+<code>GeofenceHelper</code> reads this to decide on-site vs
+off-site.</p>
+<h4 id="capabilities-2">Capabilities</h4>
+<ul>
+<li>Drop a centre point on the map (or enter lat/long)</li>
+<li>Adjust radius via slider</li>
+<li>Save writes <code>config/geofence</code> with the new
+<code>center.lat</code>, <code>center.lng</code>,
+<code>radius_meters</code></li>
+</ul>
+<blockquote>
+<p><strong>Warning:</strong> Changing the geofence affects every
+employee's <code>isOnSite</code> on their next location check. If you
+shrink the radius, people currently inside the old boundary may flip to
+<code>isOnSite: false</code> within minutes.</p>
+</blockquote>
+<hr />
+<h2 id="configuration--utilities">Configuration &amp; Utilities</h2>
+<p>Per-user preferences, diagnostics, and developer tools.</p>
+<h3 id="settings">Settings</h3>
+<p><code>lib/screens/settings_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Per-user preferences and self-service tooling.</p>
+<h4 id="sections-1">Sections</h4>
+<ul>
+<li><strong>Account</strong> — current user info, On-Site indicator,
+<code>Log Out</code></li>
+<li><strong>Appearance</strong> — Dark/Light mode toggle (writes to
+Riverpod theme provider)</li>
+<li><strong>Permissions Status</strong> — live status for Notifications,
+System Alert Window, Notification Policy, Battery Optimisation. Tapping
+any row jumps to the OS settings page</li>
+<li><strong>Notification Tests</strong>
+<ul>
+<li>Full Screen Alert (Priority 5, bypasses DND)</li>
+<li>Persistent Notification with action buttons</li>
+<li>Medium-priority notification</li>
+<li>Standard normal notification</li>
+</ul></li>
+<li><strong>Diagnostics</strong> — link to <a
+href="#notification-diagnostics">Notification Diagnostics</a></li>
+</ul>
+<h3 id="notification-diagnostics">Notification Diagnostics</h3>
+<p><code>lib/screens/notification_diagnostics_screen.dart</code> —
+<strong>Roles:</strong> All (test tool)</p>
+<p>Developer/admin tool for verifying the notification + geofence stack
+works end-to-end on a device.</p>
+<h4 id="tests-available">Tests Available</h4>
+<ul>
+<li><strong>Test ENTER</strong> — simulates a geofence enter event.
+Writes to <code>geo_fence_logs</code> and flips
+<code>isOnSite: true</code> on the current employee</li>
+<li><strong>Test EXIT</strong> — simulates an exit event. Flips
+<code>isOnSite: false</code></li>
+<li><strong>Force FCM Token Refresh</strong></li>
+<li><strong>Print current employee state</strong> — dumps clock no,
+position, isOnSite, fcmToken</li>
+</ul>
+<blockquote>
+<p><strong>Tip:</strong> Use this when you need to test the escalation
+system but the device isn't physically inside the geofence. Hit Test
+ENTER and the next escalation cycle will treat the user as on-site.</p>
+</blockquote>
+<hr />
+<h2 id="cross-cutting-concerns">Cross-Cutting Concerns</h2>
+<p>Behaviour that affects multiple screens.</p>
+<h3 id="role-based-visibility">Role-Based Visibility</h3>
+<p><em>Canonical logic in <code>lib/utils/role.dart</code>
+(<code>roleFromEmployee()</code>)</em></p>
+<p>Roles are inferred from the <code>position</code> and
+<code>department</code> fields on <code>employees/{clockNo}</code> —
+there is no explicit role field. Inference order:</p>
+<ul>
+<li><strong>Admin</strong> — restricted by admin whitelist (also gated
+in <code>SettingsScreen</code>)</li>
+<li><strong>Manager</strong> — <code>position</code> contains
+<code>"manager"</code> (case-insensitive)</li>
+<li><strong>Technician</strong> — <code>position</code> contains
+<code>"mechanical"</code>, <code>"electrical"</code>, or
+<code>"technician"</code> (case-insensitive)</li>
+<li><strong>Operator</strong> — everyone else (default catch-all)</li>
+</ul>
+<p>Additional flags: <code>isSuperManager()</code> →
+<code>department == "general"</code> (factory-wide manager view);
+</p>
+<h3 id="offline-first-saves">Offline-First Saves</h3>
+<p><em><code>SyncService</code> + Hive <code>sync_queue</code></em></p>
+<p>Any screen that writes to Firestore (Create Job Card, Job Card
+Detail, etc.) goes through
+<code>FirestoreService.saveJobCardOfflineAware</code> or the equivalent.
+If <code>connectivity_plus</code> reports offline, the write is queued
+to the Hive <code>sync_queue</code> box. When connectivity returns,
+<code>SyncService</code> replays the queue.</p>
+<h3 id="audit-log">Audit Log</h3>
+<p><em><code>job_card_audit</code> collection</em></p>
+<p>Every write to <code>job_cards</code> via
+<code>FirestoreService</code> appends a corresponding entry to
+<code>job_card_audit</code>. Future read screens could surface this for
+forensic / compliance use.</p>
+<hr />
+<p><em>CTP Job Cards · Screens Reference · Engineering
+documentation</em></p>
+</body>
+</html>
