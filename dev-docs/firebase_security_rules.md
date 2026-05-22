@@ -58,7 +58,6 @@ Because `firestore.rules` is not tracked, this section documents what the **depl
 | `job_card_audit` | `FirestoreService.appendAudit()` only | Managers, Admin | High (audit log) |
 | `employees` | Registration screen, Admin screen | All authenticated users (for routing/recipient lookup) | High (contains clockNo, position, FCM tokens) |
 | `notifications` | Cloud Functions only | Managers (Notification History), Admin | Medium (operational log) |
-| `copper_inventory` / `copper_transactions` | Copper-authorised users only | Copper-authorised users only | Medium |
 | `notification_configs/global` | Admin screen only | Cloud Functions (`escalateNotifications`) | High (controls who gets paged) |
 | `alertResponses` | Notification action buttons (any auth user) | Cloud Functions (`onAlertResponseCreated`) | Low |
 

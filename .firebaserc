@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "ctp-job-cards"
+  },
+  "targets": {
+    "ctp-job-cards": {
+      "hosting": {
+        "app": [
+          "ctp-job-cards"
+        ],
+        "landing": [
+          "ctp-job-cards-landing"
+        ]
+      }
+    }
   }
 }

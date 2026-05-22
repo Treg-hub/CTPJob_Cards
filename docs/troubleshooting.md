@@ -125,38 +125,6 @@ If the document doesn't exist at all, use the Registration screen to create one.
 
 ---
 
-## Copper tab missing
-
-### Symptom
-
-- Some users see a "Copper" tab in the bottom nav, you don't
-
-### Cause
-
-Copper Dashboard is restricted to copper-authorised users only (see `lib/utils/role.dart`).
-
-### Fix
-
-If you need access, ask Admin to either extend the whitelist (code change) or to use one of the existing whitelisted accounts.
-
----
-
-## Admin screen — "Incorrect password"
-
-### Symptom
-
-- Tapping Admin in Settings prompts for a password and rejects what you type
-
-### Cause
-
-The Admin password is a hardcoded check in `home_screen.dart` (search for `correctPassword`). It is not stored in Firestore.
-
-### Fix
-
-Get the current password from another Admin user. If everyone has forgotten it, a developer needs to change the constant in the source and ship a new build.
-
----
-
 ## Escalation didn't reach me even though I'm a manager
 
 ### Symptoms
