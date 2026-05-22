@@ -287,10 +287,6 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 
 ---
 
-#### Capabilities
-
----
-
 ## Configuration & Utilities
 
 Per-user preferences, diagnostics, and developer tools.
