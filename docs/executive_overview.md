@@ -160,7 +160,6 @@ There is no server to maintain, no on-site hardware to manage, and no single poi
 | Offline support with automatic sync | Live |
 | Role-based access control | Live |
 | Notification action buttons (Assign / Busy / Dismiss) | Live |
-| Copper inventory tracking | Live |
 
 ---
 

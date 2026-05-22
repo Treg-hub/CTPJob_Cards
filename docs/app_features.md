@@ -50,7 +50,6 @@ Live:
 - Permanent audit trail
 - Manager dashboard
 - Role-based access
-- Copper inventory tracking
 - Light & dark theme
 - Notification action buttons
 
@@ -265,31 +264,6 @@ Users must grant **"Allow All the Time"** location access (not "Only While Using
 
 ---
 
-## Copper Inventory Module
-
-*Real-time copper stock tracking and transaction logging*
-
-The copper inventory module provides a dedicated screen for tracking copper stock levels and recording transactions. It uses two Firestore collections — `copper_inventory` for current stock and `copper_transactions` for the transaction log.
-
-Example stats:
-
-| Metric | Value |
-|--------|-------|
-| Current Stock | 847 kg |
-| This Week In | +120 kg |
-| This Week Out | −65 kg |
-
-Example transactions:
-- Stock received — Supplier A · +120 kg · Today 08:14
-- Issued to Workshop B · −65 kg · Yesterday 14:30
-
-### Access
-
-- The **Copper Dashboard** is restricted to copper-authorised users only
-- Inventory levels and transaction history are visible in real time
-- All transactions are logged with timestamps, quantities, and responsible user
-
----
 
 ## Offline Mode & Sync
 

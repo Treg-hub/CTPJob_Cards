@@ -18,7 +18,6 @@ The global default region is `africa-south1` (set in `functions.setGlobalOptions
 | `sendCreatorNotification` | Callable | HTTPS | Pushes an FCM message back to the operator who created the job. |
 | `onJobCardCreated` | Firestore trigger | `onDocumentCreated('job_cards/{jobId}')` | Routes the initial notification to on-site mechanics/electricians per `creation_recipients_by_type`. |
 | `onJobCardAssigned` | Firestore trigger | `onDocumentUpdated('job_cards/{jobId}')` | Fires creator/dismiss notifications when `assignedClockNos` changes. |
-| `onCopperTransactionWrite` | Firestore trigger | `onDocumentWritten('copperTransactions/{docId}')` | Notifies copper-authorized users of inventory changes. |
 | `onAlertResponseCreated` | Firestore trigger | `onDocumentCreated('alertResponses/{responseId}')` | Handles "I'm Busy" and "Dismissed" responses from notification action buttons. |
 | `migrateEmployeeIds` | Callable | HTTPS | One-time migration helper. |
 | `migrateJobStatuses` | Callable | HTTPS | One-time migration helper. |
