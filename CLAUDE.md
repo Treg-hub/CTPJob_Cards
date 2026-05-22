@@ -85,128 +85,94 @@ lib/
 
 **Backend**: Firestore is the single source of truth. All writes go through `FirestoreService`, which also appends to the `job_card_audit` collection for every change.
 
-**Offline sync**: `SyncService` queues failed writes in a Hive box (`sync_queue`). It listens to `connectivity_plus` and replays the queue when connectivity is restored. `SyncQueueItem` is `@HiveType` annotated — run `build_runner` after modifying it.
+**Offline sync**: `SyncService` queues failed writes in a Hive box (`sync_queue`). It listens to `connectivity_plus` and replays the queue when connectivity is restored.
 
-**Push notifications**: FCM via `firebase_messaging`. Cloud Functions live in `/functions/index.js`. HTTP/callable functions deploy to `africa-south1`; **scheduled functions (`escalateNotifications`, `autoCloseMonitoringJobs`) must stay in `europe-west1`** — Firebase scheduled functions require a region that supports App Engine, which `africa-south1` does not. Escalation runs as 4 configurable stages stored in `notification_configs/global` (defaults: 5 / 10 / 30 / 60 min; stages 3 and 4 are disabled by default). `FirebaseMessagingService.kt` handles native FCM receipt; `FullScreenJobAlertActivity.kt` renders the full-screen overlay.
+**Push notifications**: FCM via `firebase_messaging` + Cloud Functions with 4-stage escalation.
 
-**Geofencing**: `LocationService` + `BackgroundGeofenceService` use `geolocator` + `workmanager`. Native Kotlin code in `android/app/src/main/kotlin/com/ctp/jobcards/` handles `GeofenceReceiver`, `GeofenceHelper`, `AlertForegroundService`, and `AlarmReceiver`. The `GeofenceEditorScreen` allows on-device geofence configuration.
+**Geofencing**: Uses `geolocator` + `workmanager` with native Kotlin support.
 
-**Other services**:
+---
 
-| Service | Purpose |
-|---|---|
-| `ConnectivityService` | Wrapper around `connectivity_plus`; `isOnline()` helper + stream for `SyncService` |
-| `JobAlertService` | MethodChannel `job_alert_channel` — triggers the native full-screen urgent alert from background |
-| `UpdateService` | Remote Config version check with 24-hour cooldown; shows update dialog or force-upgrade prompt |
+## Architecture Visualization & Role-Based Access
+
+For a detailed, visual, and up-to-date understanding of screens, roles, and permissions, refer to:
+
+**`docs/architecture/visualization.md`**
+
+This file is the **single source of truth** for role-based access in the app and contains:
+
+- **Permission Matrix** — Clear table showing which roles can access which screens + restrictions
+- **Navigation Flow Diagram** — Role-aware navigation with branches
+- **Role-to-Screen Access Graph** — Visual mapping of roles to accessible screens
+- **High-Level Architecture Overview** — Current state management, navigation style, and authorization approach
+
+### How to Regenerate
+After making significant changes to screens, roles, navigation, or permission logic, run this inside **OpenCode**:
+
+```bash
+/update-architecture
+```
+
+This performs a full recursive analysis of `lib/` and updates the visualization file.
+
+### Current Role System Summary
+- Roles are **derived** from `Employee.position` + `department` (see `lib/utils/role.dart`)
+- Admin is currently gated by hardcoded `clockNo == "22"`
+- There is **no go_router** and **no centralized route guards**
+- Permission checks are scattered across multiple screens
+- Copper features are controlled by a hardcoded whitelist
+
+---
 
 ## Key Android Details
 
 - **Min/Target SDK**: Driven by `flutter.minSdkVersion` / `flutter.targetSdkVersion` in `android/app/build.gradle.kts`
-- **Java/Kotlin target**: Java 11 (desugaring enabled), Kotlin 1.9.22 (Gradle plugin 2.2.20)
+- **Java/Kotlin target**: Java 11 (desugaring enabled), Kotlin 1.9.22
 - **NDK ABI filter**: `arm64-v8a` only
-- **JVM heap**: `-Xmx8G -XX:MaxMetaspaceSize=4G` in `gradle.properties` — don't lower these without testing
+- **JVM heap**: `-Xmx8G -XX:MaxMetaspaceSize=4G` in `gradle.properties`
 
 ## Role-Based Access
 
-Four roles, **inferred from `Employee.position` and `Employee.department`** — the `Employee` model has no explicit `role` field. The canonical inference lives in `lib/utils/role.dart` (`roleFromEmployee()` returning a `UserRole` enum). Admin is gated by a password prompt in `SettingsScreen`, not by position.
+Four roles, **inferred from `Employee.position` and `Employee.department`**.
 
 | Role | Inference | Key Screens |
 |------|-----------|-------------|
-| Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, MyAssignedJobs, JobCardDetail, CreateJobCard, ClosedJobs |
-| Manager | `position` contains `manager` | ManagerDashboard, ViewJobCards, DailyReview, MonitoringDashboard, ClosedJobs |
-| Operator | neither manager nor technician | Home, CreateJobCard (primary), ViewJobCards, ClosedJobs |
-| Admin | hardcoded `clockNo == "22"` (also a password gate in `SettingsScreen` → "Admin") | AdminScreen (Employees / Structures / Escalation Config / Job Cards tabs), GeofenceEditor, NotificationDiagnostics |
+| Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, CreateJobCard, ViewJobCards, JobCardDetail |
+| Manager | `position` contains `manager` | ManagerDashboard, DailyReview, ViewJobCards |
+| Operator | neither manager nor technician | Limited actions on JobCardDetail |
+| Admin | `clockNo == "22"` | Full access to AdminScreen and all admin features |
 
-### Capability matrix (job card actions)
-
-| Action | Operator | Technician | Manager | Admin |
-|---|---|---|---|---|
-| Create job card (any type) | ✅ | ✅ | ✅ | ✅ |
-| Start / Complete / Monitor — Maintenance | ✅ | ✅ | ✅ | ✅ |
-| Start / Complete / Monitor — Mech/Elec/MechElec | ❌ | ✅ | ✅ | ✅ |
-| Join (Start) an in-progress job | ❌ | ✅ (Maintenance + any if technician) | ✅ | ✅ |
-| Change job card type | ❌ | ✅ | ✅ | ✅ |
-| Assign / unassign others | ❌ | ❌ | ✅ | ✅ |
-| Close / reopen / move to monitor via status pill | ❌ | ❌ | ✅ | ✅ |
-| Add note | ❌ | ✅ | ✅ | ✅ |
-| Add comment | ✅ | ❌ | ✅ | ✅ |
-| Add photo | ✅ | ✅ | ✅ | ✅ |
-| Remove photo (own) | ✅ | ✅ | ✅ | ✅ |
-| Remove photo (any) | ❌ | ❌ | ❌ | ✅ |
-
-**Operator gating** (Maintenance only for Start/Complete/Monitor on mech/elec jobs) is enforced by `_operatorRestrictedFor()` in `job_card_detail_screen.dart`. Operators can still create any type — they need to raise mech/elec faults.
-
-**Technician join-in-progress**: when an open Mechanical/Electrical/Mech-Elec job is already in progress, additional technicians can self-assign by tapping "Join (Start)" on the detail screen. The data model (`assignedClockNos: List<String>`) supports multiple assignees.
-
-**Type changes** route through `FirestoreService.changeJobCardType()` which resets `notifiedAtStageN`, appends a `type_changed` entry to `assignmentHistory`, and triggers the `onJobCardTypeChanged` cloud function to notify the new audience.
-
-Additional flags: `isSuperManager` (`department == "general"`) sees factory-wide manager views; CopperDashboard is restricted to copper-authorised users only (managed via `isCopperAuthorized()` in `lib/utils/role.dart`).
+See `docs/architecture/visualization.md` for the complete and visual permission matrix.
 
 ## Job Card Types & Notifications
 
-Four types: **Mechanical**, **Electrical**, **Mech/Elec** (notifies both), **Maintenance**.
+Four types: **Mechanical**, **Electrical**, **Mech/Elec**, **Maintenance**.
 
-- The first three fan out at creation per `notification_configs/global` (`creation_recipients_by_type`) and escalate through stages 1–4.
-- **Maintenance is silent** — `excluded_job_types: ["maintenance"]` in `notification_configs/global` means zero creation notifications and zero escalation. Use for planned/routine work; the responsible team must pull these from job lists themselves. `autoCloseMonitoringJobs` is type-agnostic, so a Maintenance job in Monitor will still auto-close after 7 days.
-- **Type enum serialization** lives in `lib/models/job_card.dart`. Writes use `type.name` (camelCase, e.g. `"mechanicalElectrical"`); `JobType.fromString` accepts both that form and legacy display names. Don't change the enum names without a migration plan — Firestore docs store the name verbatim.
-- Changing a type after creation re-fires the creation notification via the `onJobCardTypeChanged` Firestore trigger (in `africa-south1`), excluding the original creator from any P5 CC.
+- Maintenance jobs are **silent** (excluded from creation notifications and escalation).
+- Type changes re-fire notifications via the `onJobCardTypeChanged` trigger.
 
 ## Firestore Collections
 
-- `job_cards` — core job card documents
-- `job_card_audit` — append-only audit log (written by `FirestoreService`)
-- `employees` — user profiles with roles
-- `notifications` — notification log (written by Cloud Functions)
-- `copper_inventory` / `copper_transactions` — copper stock management
+- `job_cards`
+- `job_card_audit`
+- `employees`
+- `notifications`
+- `copper_inventory` / `copper_transactions`
 
 ## Local Storage
 
-- **Hive box `sync_queue`**: `SyncQueueItem` objects (offline write queue)
-- **SharedPreferences**: `loggedInClockNo` (logged-in employee), `permissionsCompleted` (onboarding flag)
-
-## Initialization Order
-
-`main.dart` bootstraps in this exact sequence — order matters:
-1. Hive init
-2. Firebase + Crashlytics
-3. `NotificationService.init()`
-4. Firestore persistence settings
-5. `SyncService.init()` + queue listener
-6. Auth state check → route to `LoginScreen` or `HomeScreen` (with permissions check)
-7. Background location monitoring start
+- **Hive**: `sync_queue`
+- **SharedPreferences**: `loggedInClockNo`, `permissionsCompleted`
 
 ## Cloud Functions
 
-Located in `/functions/index.js` (Node.js v24). Two regions in use:
-
-- **`africa-south1`** (default per `firebase.json`): `createCustomToken`, `onJobCardCreated`, `clearEscalationStamps`, etc.
-- **`europe-west1`** (set per-function): `escalateNotifications` (every 2 min) and `autoCloseMonitoringJobs` (scheduled) — scheduled functions require an App-Engine-supported region.
-
-Full function inventory:
-
-| Function | Type | Trigger / Notes |
-|---|---|---|
-| `createCustomToken` | onCall | Issues custom auth token for native layers |
-| `sendJobAssignmentNotification` | onCall | Sends assignment notification to selected employees |
-| `sendCreatorNotification` | onCall | Sends update/close notification to the original creator |
-| `onJobCardCreated` | Firestore onCreate | `job_cards/{id}` — dispatches creation notifications per `creation_recipients_by_type` |
-| `onJobCardTypeChanged` | Firestore onUpdate | `job_cards/{id}` — detects type change, resets escalation stamps, re-fires creation notification |
-| `onJobCardAssigned` | Firestore onUpdate | `job_cards/{id}` — detects assignment change, sets `escalationStopped: true` |
-| `onAlertResponseCreated` | Firestore onCreate | Handles acknowledge/close responses; updates job status and triggers follow-up notifications |
-| `onCopperTransactionWrite` | Firestore onWrite | `copperTransactions/{id}` — syncs transaction to `copper_inventory/main` atomically |
-| `escalateNotifications` | Scheduler (`europe-west1`) | 4-stage escalation cron; resolves recipient rules against live employee list |
-| `autoCloseMonitoringJobs` | Scheduler (`europe-west1`) | Closes Monitor jobs after 7 days with no updates |
-| `clearEscalationStamps` | onCall | Bulk-clears `notifiedAtStage1..4` — used for admin resets and legacy backfill |
-| `migrateEmployeeIds` | onCall | Admin: migrates old employee doc format |
-| `migrateJobStatuses` | onCall | Admin: migrates old status enum format |
-
-Recipient routing via rules (`onsite_mechanics`, `onsite_electricians`, `onsite_managers`, `foremen`, `onsite_dept_managers`, `onsite_workshop_manager`, `offsite_*`, `operator`) resolved by `resolveRecipientsFromRules()` in `functions/index.js`.
-
-See `docs/cloud_functions_deployment.md` for the full inventory and deployment steps.
+Located in `/functions/index.js`. Uses two regions:
+- `africa-south1` (default)
+- `europe-west1` (for scheduled functions)
 
 ## Testing
 
-Coverage is minimal — one smoke test in `test/widget_test.dart` that verifies `LoginScreen` renders. There is no mock layer; service calls hit real Firebase in tests.
+Minimal test coverage currently exists.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

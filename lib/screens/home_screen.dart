@@ -96,6 +96,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   bool get _canCreateJobCard => isOnSite || _overrideOnSite;
 
+  /// Returns true if [job] falls within the current manager's scope.
+  /// Mechanical managers → Mechanical + MechElec types only.
+  /// Electrical managers → Electrical + MechElec types only.
+  /// Super managers (department == "general") → all jobs.
+  /// Other managers → jobs matching their department.
+  bool _isInManagerScope(JobCard job) {
+    final emp = currentEmployee;
+    if (emp == null) return true;
+    if (emp.department.toLowerCase() == 'general') return true;
+    final pos = emp.position.toLowerCase();
+    if (pos.contains('electrical') && pos.contains('manager')) {
+      return job.type == JobType.electrical || job.type == JobType.mechanicalElectrical;
+    }
+    if (pos.contains('mechanical') && pos.contains('manager')) {
+      return job.type == JobType.mechanical || job.type == JobType.mechanicalElectrical;
+    }
+    return job.department == emp.department;
+  }
+
   List<Map<String, dynamic>> get _quickActions {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
     final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
@@ -140,15 +159,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     try {
       _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final dept = currentEmployee?.department;
-        final filtered = jobs.where((j) => !j.isClosed &&
-            (dept == null || j.department == dept || dept == 'general')).toList();
+        final filtered = jobs.where((j) => !j.isClosed && _isInManagerScope(j)).toList();
         if (mounted) {
           setState(() {
-          _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
-          _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
-          _unassignedCount = filtered.where((j) => !j.isAssigned).length;
-        });
+            _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
+            _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
+            _unassignedCount = filtered.where((j) => !j.isAssigned).length;
+          });
         }
       });
     } catch (e) {
@@ -684,22 +701,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
         var recentJobs = allJobs
             .where((job) =>
-                job.lastUpdatedAt != null &&
-                (job.status == JobStatus.open || job.status == JobStatus.inProgress))
+                job.status == JobStatus.open || job.status == JobStatus.inProgress)
             .toList()
-          ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+          ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
 
         var topJobs = recentJobs.take(20).toList();
 
         if ((isManager || isSuperManager) && _showDeptOnly) {
-          topJobs = topJobs.where((j) => j.department == currentEmployee!.department).toList();
+          topJobs = topJobs.where(_isInManagerScope).toList();
         }
 
         if (kIsWeb && (isManager || isSuperManager)) {
           final openJobs = topJobs.where((j) => j.status == JobStatus.open).toList()
-            ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
           final inProgressJobs = topJobs.where((j) => j.status == JobStatus.inProgress).toList()
-            ..sort((a, b) => (b.lastUpdatedAt ?? DateTime(0)).compareTo(a.lastUpdatedAt ?? DateTime(0)));
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
           return Column(
             children: [
               Row(
