@@ -235,7 +235,18 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     return Scaffold(
       appBar: AppBar(
         title: const Text('All Job Cards'),
-        backgroundColor: const Color(0xFFFF8C42),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFFF8C42),
+                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           // Staff Filter Icons
           ToggleButtons(
@@ -250,12 +261,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               });
             },
             borderRadius: BorderRadius.circular(8),
+            borderColor: Colors.black,
+            selectedBorderColor: Colors.black,
             selectedColor: const Color(0xFFFF8C42),
             fillColor: const Color(0xFFFF8C42).withValues(alpha: 51),
             children: const [
-              Icon(Icons.build, size: 24, color: Colors.black), // Mechanical
-              Icon(Icons.bolt, size: 24, color: Colors.black), // Electrical
-              Icon(Icons.circle_outlined, size: 24, color: Colors.black), // All
+              Icon(Icons.build, size: 24, color: Colors.black),
+              Icon(Icons.bolt, size: 24, color: Colors.black),
+              Icon(Icons.circle_outlined, size: 24, color: Colors.black),
             ],
           ),
         ],

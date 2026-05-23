@@ -90,6 +90,13 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      setState(() {
+        _selectedCard = null;
+        _inputController.clear();
+      });
+    });
     _loadCards();
   }
 
@@ -197,197 +204,205 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Daily Review',
-                style: TextStyle(fontSize: 18, color: Colors.black)),
-            Text(
-              _scopeLabel,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-          ],
-        ),
+        title: Text('Daily Review — $_scopeLabel'),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [kBrandOrange, Color.fromARGB(255, 124, 124, 124)],
+              colors: [
+                kBrandOrange,
+                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.black,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.black54,
-          tabs: [
-            Tab(text: 'Pending Review (${_pendingCards.length})'),
-            Tab(
-                text:
-                    'Reviewed (${_filteredReviewedCards.length})'),
-          ],
-        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
+          : Column(
               children: [
-                _buildTwoPanel(_pendingCards),
-                _buildTwoPanel(_filteredReviewedCards, showDateFilter: true),
+                TabBar(
+                  controller: _tabController,
+                  tabs: [
+                    Tab(text: 'Pending Review (${_pendingCards.length})'),
+                    Tab(text: 'Reviewed (${_filteredReviewedCards.length})'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTwoPanel(_pendingCards),
+                      _buildTwoPanel(_filteredReviewedCards, showDateFilter: true),
+                    ],
+                  ),
+                ),
               ],
             ),
     );
   }
 
   Widget _buildTwoPanel(List<JobCard> cards, {bool showDateFilter = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left panel — card list
-        SizedBox(
-          width: 400,
-          child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 700;
+
+        final Widget cardList = cards.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green[300]),
+                    const SizedBox(height: 12),
+                    Text(
+                      showDateFilter
+                          ? 'No reviewed cards in this range'
+                          : 'All caught up — nothing to review!',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: cards.length,
+                itemBuilder: (context, index) {
+                  final card = cards[index];
+                  final isSelected = _selectedCard?.id == card.id;
+                  return Container(
+                    decoration: isSelected
+                        ? BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: kBrandOrange, width: 2),
+                          )
+                        : null,
+                    child: JobCardTile(
+                      job: card,
+                      onTap: () => setState(() {
+                        _selectedCard = card;
+                        _inputController.clear();
+                      }),
+                    ),
+                  );
+                },
+              );
+
+        // Narrow: show list or detail, not both
+        if (isNarrow) {
+          if (_selectedCard != null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _selectedCard = null),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.arrow_back, size: 20),
+                        SizedBox(width: 8),
+                        Text('Back to list'),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(child: _buildDetailPanel(_selectedCard!)),
+              ],
+            );
+          }
+          return Column(
             children: [
               if (showDateFilter) _buildDateFilter(),
-              Expanded(
-                child: cards.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_outline,
-                                size: 64, color: Colors.green[300]),
-                            const SizedBox(height: 12),
-                            Text(
-                              showDateFilter
-                                  ? 'No reviewed cards in this range'
-                                  : 'All caught up — nothing to review!',
-                              style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: cards.length,
-                        itemBuilder: (context, index) {
-                          final card = cards[index];
-                          final isSelected = _selectedCard?.id == card.id;
-                          return Container(
-                            decoration: isSelected
-                                ? BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: kBrandOrange, width: 2),
-                                  )
-                                : null,
-                            child: JobCardTile(
-                              job: card,
-                              onTap: () => setState(() {
-                                _selectedCard = card;
-                                _inputController.clear();
-                              }),
-                            ),
-                          );
-                        },
-                      ),
-              ),
+              Expanded(child: cardList),
             ],
-          ),
-        ),
+          );
+        }
 
-        const VerticalDivider(width: 1, thickness: 1),
-
-        // Right panel — detail + edit
-        Expanded(
-          child: _selectedCard == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.arrow_back,
-                          size: 48, color: Colors.grey[400]),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Select a job card to review',
-                        style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant),
+        // Wide: side-by-side
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 400,
+              child: Column(
+                children: [
+                  if (showDateFilter) _buildDateFilter(),
+                  Expanded(child: cardList),
+                ],
+              ),
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+            Expanded(
+              child: _selectedCard == null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.arrow_back, size: 48, color: Colors.grey[400]),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Select a job card to review',
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                )
-              : _buildDetailPanel(_selectedCard!),
-        ),
-      ],
+                    )
+                  : _buildDetailPanel(_selectedCard!),
+            ),
+          ],
+        );
+      },
     );
   }
 
+  Future<void> _pickDateRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: (_filterFrom != null && _filterTo != null)
+          ? DateTimeRange(start: _filterFrom!, end: _filterTo!)
+          : null,
+    );
+    if (range != null && mounted) {
+      setState(() {
+        _filterFrom = range.start;
+        _filterTo = range.end;
+      });
+    }
+  }
+
   Widget _buildDateFilter() {
+    final hasFilter = _filterFrom != null || _filterTo != null;
+    String fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Row(
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.calendar_today, size: 14),
-              label: Text(
-                _filterFrom != null
-                    ? '${_filterFrom!.day}/${_filterFrom!.month}/${_filterFrom!.year}'
-                    : 'From date',
-                style: const TextStyle(fontSize: 12),
+          if (hasFilter)
+            Expanded(
+              child: InputChip(
+                avatar: const Icon(Icons.date_range, size: 16),
+                label: Text(
+                  '${_filterFrom != null ? fmt(_filterFrom!) : '...'} → ${_filterTo != null ? fmt(_filterTo!) : '...'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onPressed: _pickDateRange,
+                onDeleted: () => setState(() {
+                  _filterFrom = null;
+                  _filterTo = null;
+                }),
               ),
-              onPressed: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: _filterFrom ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null && mounted) {
-                  setState(() => _filterFrom = date);
-                }
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.calendar_today, size: 14),
-              label: Text(
-                _filterTo != null
-                    ? '${_filterTo!.day}/${_filterTo!.month}/${_filterTo!.year}'
-                    : 'To date',
-                style: const TextStyle(fontSize: 12),
+            )
+          else
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.date_range, size: 14),
+                label: const Text('Filter by date', style: TextStyle(fontSize: 12)),
+                onPressed: _pickDateRange,
               ),
-              onPressed: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: _filterTo ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null && mounted) {
-                  setState(() => _filterTo = date);
-                }
-              },
-            ),
-          ),
-          if (_filterFrom != null || _filterTo != null)
-            IconButton(
-              icon: const Icon(Icons.clear, size: 16),
-              tooltip: 'Clear filter',
-              onPressed: () => setState(() {
-                _filterFrom = null;
-                _filterTo = null;
-              }),
             ),
         ],
       ),
@@ -589,7 +604,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
     switch (status) {
       case JobStatus.open: return c.statusOpen;
       case JobStatus.inProgress: return c.statusInProgress;
-      case JobStatus.monitor: return c.statusCompleted;
+      case JobStatus.monitor: return Colors.amber[700]!;
       case JobStatus.closed: return c.statusCancelled;
     }
   }
