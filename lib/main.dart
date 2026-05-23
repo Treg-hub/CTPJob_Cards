@@ -298,6 +298,7 @@ class CtpJobCardsApp extends ConsumerWidget {
           unselectedLabelColor: Colors.black54,
           indicatorColor: Colors.black,
           labelStyle: TextStyle(fontWeight: FontWeight.bold),
+          labelPadding: EdgeInsets.symmetric(horizontal: 8),
         ),
         switchTheme: const SwitchThemeData(
           thumbColor: WidgetStatePropertyAll(kBrandOrange),
@@ -364,6 +365,7 @@ class CtpJobCardsApp extends ConsumerWidget {
           labelColor: kBrandOrange,
           unselectedLabelColor: Colors.white70,
           indicatorColor: kBrandOrange,
+          labelPadding: EdgeInsets.symmetric(horizontal: 8),
         ),
         switchTheme: const SwitchThemeData(
           thumbColor: WidgetStatePropertyAll(kBrandOrange),

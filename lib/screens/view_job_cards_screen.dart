@@ -301,24 +301,16 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   Widget _buildNarrowLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
     return Column(
       children: [
-        // Status Tabs
-        Container(
-          color: const Color(0xFFFF8C42),
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: 'Open ($openCount)'),
-              Tab(text: 'In Progress ($inProgressCount)'),
-              Tab(text: 'Monitoring ($monitorCount)'),
-              Tab(text: 'Closed ($closedCount)'),
-            ],
-            labelColor: Colors.black,
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: Colors.black,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+        TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            Tab(text: 'Open ($openCount)'),
+            Tab(text: 'In Progress ($inProgressCount)'),
+            Tab(text: 'Monitoring ($monitorCount)'),
+            Tab(text: 'Closed ($closedCount)'),
+          ],
         ),
 
         // Cascading Filters
@@ -343,22 +335,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   Widget _buildWideLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
     return Column(
       children: [
-        // Status Tabs
-        Container(
-          color: const Color(0xFFFF8C42),
-          child: TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(text: 'Open ($openCount)'),
-              Tab(text: 'In Progress ($inProgressCount)'),
-              Tab(text: 'Monitoring ($monitorCount)'),
-              Tab(text: 'Closed ($closedCount)'),
-            ],
-            labelColor: Colors.black,
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: Colors.black,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+        TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'Open ($openCount)'),
+            Tab(text: 'In Progress ($inProgressCount)'),
+            Tab(text: 'Monitoring ($monitorCount)'),
+            Tab(text: 'Closed ($closedCount)'),
+          ],
         ),
 
         // Cascading Filters

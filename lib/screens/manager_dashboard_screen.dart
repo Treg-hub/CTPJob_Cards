@@ -83,12 +83,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manager Dashboard'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadDepartmentsFromFirestore),
-        ],
-      ),
       body: StreamBuilder<List<JobCard>>(
         stream: _firestoreService.getAllJobCards(),
         builder: (context, snapshot) {
@@ -98,30 +92,48 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           final filteredJobs = _getFilteredJobs(allJobs);
           final openJobs = filteredJobs.where((j) => !j.isClosed).toList();
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCollapsibleKPIs(openJobs, filteredJobs),
-                const SizedBox(height: 16),
-                _buildDepartmentFilter(),
-                const SizedBox(height: 8),
-                _buildDateRangeFilter(),
-                const SizedBox(height: 24),
-                const Text('Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                _buildTrendlineChart(filteredJobs),
-                const SizedBox(height: 24),
-                _buildSmartDepartmentAreaChart(openJobs),
-                const SizedBox(height: 24),
-                _buildPriorityBreakdown(openJobs),
-                const SizedBox(height: 24),
-                _buildTechnicianLeaderboard(filteredJobs),
-                const SizedBox(height: 40), // Extra space at bottom
-              ],
-            ),
+          return Stack(
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildCollapsibleKPIs(openJobs, filteredJobs),
+                    const SizedBox(height: 16),
+                    _buildDepartmentFilter(),
+                    const SizedBox(height: 8),
+                    _buildDateRangeFilter(),
+                    const SizedBox(height: 24),
+                    const Text('Analytics', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    _buildTrendlineChart(filteredJobs),
+                    const SizedBox(height: 24),
+                    _buildSmartDepartmentAreaChart(openJobs),
+                    const SizedBox(height: 24),
+                    _buildPriorityBreakdown(openJobs),
+                    const SizedBox(height: 24),
+                    _buildTechnicianLeaderboard(filteredJobs),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: const CircleBorder(),
+                  elevation: 2,
+                  child: IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh',
+                    onPressed: _loadDepartmentsFromFirestore,
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
