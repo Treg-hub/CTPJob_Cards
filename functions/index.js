@@ -69,10 +69,6 @@ function getUpdateLevel() {
   return "normal";
 }
 
-// Legacy alias — kept temporarily so any external callers don't break.
-function getNotificationLevel(priority) {
-  return getCreationLevel(priority);
-}
 
 // ==================== DYNAMIC CONFIG LOADER ====================
 function defaultNotificationConfig() {
@@ -234,7 +230,7 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department, operat
 }
 
 // ==================== CUSTOM TOKEN AUTH ====================
-exports.createCustomToken = functions.https.onCall(async (data, context) => {
+exports.createCustomToken = functions.https.onCall(async (data, _context) => {
   const clockNo = data.clockNo || (data.data && data.data.clockNo) || data;
   if (!clockNo) throw new functions.https.HttpsError("invalid-argument", "clockNo is required");
 
