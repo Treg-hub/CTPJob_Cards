@@ -158,7 +158,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   double get _iconSize => _isDesktop ? 96 : 80;
-  double get _cardPadding => _isDesktop ? 0 : 2 * 0.75;
   EdgeInsets get _cardPaddingInsets => _isDesktop ? const EdgeInsets.all(20) : const EdgeInsets.all(16);
   double get _gridSpacing => _isDesktop ? 6 : (_isTablet ? 15 : 12);
   double get _screenPadding => _isDesktop ? 20 : 16;
@@ -520,38 +519,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
         children: [
-          if (!kIsWeb) ...[
-            SizedBox(
-              height: 72,
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: EdgeInsets.all(_cardPadding),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isOnSite ? Icons.check_circle : Icons.cancel,
-                        color: isOnSite ? Colors.green : Colors.red,
-                        size: _isDesktop ? 20 : 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
-                          style: TextStyle(
-                            fontSize: _isDesktop ? 14 : 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
           Text(
             'Quick Actions',
             style: TextStyle(
@@ -1473,28 +1440,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ),
         ),
         actions: [
-          if (kIsWeb)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isOnSite ? Colors.green.shade700 : Colors.red.shade700,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(isOnSite ? Icons.check_circle : Icons.cancel, size: 14, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      isOnSite ? 'ON SITE' : 'OFF SITE',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Center(

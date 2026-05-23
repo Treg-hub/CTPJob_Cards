@@ -905,10 +905,6 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
           preferredSize: const Size.fromHeight(48.0),
           child: TabBar(
             controller: _tabController,
-            labelColor: Colors.black,
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: Colors.black,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
             tabs: const [
               Tab(text: 'Related'),
               Tab(text: 'Details'),
