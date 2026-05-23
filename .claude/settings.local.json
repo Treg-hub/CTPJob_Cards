@@ -53,13 +53,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze $f --no-fatal-infos 2>&1|Select-Object -Last 10}",
+            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'\\.dart$')){flutter analyze \"$f\" --no-fatal-infos 2>&1}",
             "shell": "powershell",
             "statusMessage": "flutter analyze..."
           },
           {
             "type": "command",
-            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'functions[\\\\/].*\\.js$')){cd C:/Users/Admin/CTPJob_Cards/functions;./node_modules/.bin/eslint $f --max-warnings 0 2>&1|Select-Object -Last 15}",
+            "command": "$json=[Console]::In.ReadToEnd();$d=$json|ConvertFrom-Json;$f=$d.tool_input.file_path;if($f-and($f-match'functions[\\\\/].*\\.js$')){Set-Location C:/Users/Admin/CTPJob_Cards/functions;npx eslint \"$f\" --max-warnings 0 2>&1}",
             "shell": "powershell",
             "statusMessage": "eslint..."
           }
