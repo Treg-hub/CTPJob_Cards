@@ -900,16 +900,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     return Scaffold(
       appBar: AppBar(
         title: const Text('Job Card Details'),
-        backgroundColor: const Color(0xFFFF8C42),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48.0),
-          child: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Related'),
-              Tab(text: 'Details'),
-              Tab(text: 'Photos'),
-            ],
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFFF8C42),
+                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
         ),
       ),
@@ -923,9 +923,20 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
           // synchronously because non-photo updates now exclude the photos
           // field server-side (see FirestoreService.updateJobCard).
           _currentJobCard = jobCard;
-          return TabBarView(
-            controller: _tabController,
+          return Column(
             children: [
+              TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Related'),
+                  Tab(text: 'Details'),
+                  Tab(text: 'Photos'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
               _buildRelatedTab(),
               RefreshIndicator(
                 onRefresh: _refreshJobCard,
@@ -965,6 +976,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       ],
                     ),
                     _buildPhotosSection(),
+                  ],
+                ),
+              ),
                   ],
                 ),
               ),

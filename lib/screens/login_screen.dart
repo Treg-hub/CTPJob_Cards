@@ -278,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Left branding panel
         Expanded(
           child: Container(
-            color: const Color(0xFF1A1A1A),
+            color: Colors.black,
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(48),
