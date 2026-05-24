@@ -31,7 +31,8 @@
       "Bash(Get-Content 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Admin-CTPJob-Cards\\\\c012bc0a-8d4f-45f3-b5a2-54cb90a94e61\\\\tasks\\\\bprixj6y3.output' -Raw)",
       "PowerShell(Get-NetTCPConnection -LocalPort 8181 -ErrorAction SilentlyContinue | Select-Object OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"done\")",
       "mcp__Claude_in_Chrome__list_connected_browsers",
-      "mcp__Claude_in_Chrome__computer"
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(git pull *)"
     ]
   },
   "hooks": {

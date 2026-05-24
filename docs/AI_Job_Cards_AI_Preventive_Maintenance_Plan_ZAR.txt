@@ -1,0 +1,491 @@
+# AI Integration Plan for CTP Job Cards — Preventive Maintenance, Training Insights & Real-Time Corrective Guidance (ZAR Version)
+
+**Status**: Draft (for future implementation review)  
+**Date**: 2026-05 (extracted & converted)  
+**Owner**: (to be assigned)  
+**Related**: User request for AI-driven historical PM review + suggestions to managers + per-job-card corrective action guidance on creation.  
+**Exchange Rate Used for Conversion**: 1 USD = R16.45 ZAR (mid-market rate as of May 2026; see Section 12 for details and source). All costs in this document are shown in South African Rand.
+
+---
+
+## 1. Context & Goals
+
+### Why this change?
+The CTP Job Cards app already captures rich historical data:
+- Structured asset hierarchy (`department` > `area` > `machine` > `part`)
+- `reoccurrenceCount`, full lifecycle timestamps, `correctiveAction`, photos, assignment history
+- Existing "similar/related jobs" queries and UI in `JobCardDetailScreen`
+- Strong notification + escalation system with dynamic config
+
+Current state is **reactive**. Recurring breakdowns are visible in data and reoccurrence counts, but there is no automated translation of that history into:
+- **Preventive maintenance (PM) recommendations** for high-recurrence assets
+- **Training / process improvement suggestions** for managers (operator creation patterns, technician self-assignment behavior, documentation quality, resolution times)
+- **Actionable, job-specific fault-finding / corrective guidance** delivered to the technician or relevant party at the moment a job card is created
+
+The user wants AI to close this loop:
+1. **Preventive Maintenance Manager role** (selected managers: workshop, mechanical, electrical + admin) receives regular, evidence-backed suggestions for new PM tasks or schedule changes.
+2. Managers receive behavioral / training insights derived from who creates cards, who assigns themselves, resolution quality, etc.
+3. Individuals (technicians, operators) get AI-suggested diagnostic paths / checks / corrective steps tailored to a new job card, based on similar past cards + general knowledge, shown in-app when they open the detail.
+
+This is a natural, high-value evolution that leverages existing data and infrastructure while staying consistent with the service-based MVVM + Riverpod + Cloud Functions architecture.
+
+### Business Outcomes Targeted
+- Reduce repeat breakdowns via data-driven PM.
+- Improve first-time fix rates and reduce MTTR (mean time to repair) via better on-the-spot guidance.
+- Surface training gaps (e.g., certain departments creating low-quality descriptions, techs struggling with specific machine types).
+- Make the "reoccurrence" data actionable instead of just a counter.
+
+### Constraints from User Answers (this session)
+- **Cost priority**: Minimal / free as possible. Favor cheapest models (Gemini Flash family), aggressive context limiting, on-demand or low-frequency batch, usage logging + monitoring.
+- **Recipients for PM outputs**: Workshop manager + mechanical manager + electrical manager + admin (not blanket "all managers").
+- **Real-time suggestion delivery**: **In-app only** (primarily `JobCardDetailScreen`; optionally surface on Home for "my jobs"). No push notifications for AI suggestions (to avoid fatigue).
+- **Data volume**: Plan for medium scale (assume 500–5000 historical cards, pagination/scaling notes required). Unknown exacts → design defensively.
+- **Sensitivity**: Low. General fault descriptions are acceptable for LLM prompts. Still require disclaimers, audit logging of generations, and "suggestion only — human verify" UX.
+
+---
+
+## 2. Current State Analysis (from Codebase Exploration)
+
+### Data Model Strengths (lib/models/job_card.dart)
+- Excellent for analysis: `machine` + `part` + `area` + `department` + `type` + `description` + `correctiveAction` + `reoccurrenceCount` + rich timestamps (`createdAt`, `startedAt`, `completedAt`, `closedAt`, notification stages) + `assignmentHistory` (who assigned whom when) + `reviewedBy`.
+- `JobType.maintenance` is already "silent" (excluded from notifications/escalation) — natural fit for AI-proposed PM follow-ups.
+- Existing related-jobs query helpers in `FirestoreService` (exact match on dept/area/machine/part/type, excluding part, all-parts-on-machine, etc.) — these already power history views in the detail screen and are perfect cheap context for LLM prompts.
+
+### Query & Service Layer
+- `FirestoreService`:
+  - `getAllJobCardsFuture()` (capped at 1000 — note scaling limit).
+  - Multiple targeted `get*Stream` and `Future` helpers for assets (getDepartmentsForJobCards, getMachinesForJobCards, getPreviousParts, etc.).
+  - Related-jobs streams designed exactly for "what happened before on this asset".
+  - `createJobCard` (with counter), `updateJobCard`, type changes, photo array ops, audit-friendly patterns.
+- Direct Firestore usage in some screens (e.g. `ManagerDashboardScreen` does its own dept aggregation).
+
+### Backend (functions/index.js)
+- Mature trigger system: `onJobCardCreated`, `onJobCardTypeChanged`, `onJobCardAssigned` (note: some legacy `assignedTo` fields vs current array model).
+- Extremely configurable notification routing via `notification_configs/global` + rich recipient resolvers (`onsite_workshop_manager`, `onsite_dept_managers`, mechanics/electricians by position substring, etc.).
+- Scheduled functions already run in `europe-west1` (escalation every 2 min, daily auto-close).
+- `logNotification` helper + `notifications` collection for full audit.
+- Dynamic config + excluded types pattern — easy to extend for AI features.
+
+### Role & Permission System (lib/utils/role.dart + visualization)
+- Derived roles (`roleFromEmployee`): technician (mechanic/electric/technician in position), manager (contains "manager"), operator (default), admin (hardcoded `clockNo === '22'`).
+- Super-manager via `department === 'general'`.
+- Hardcoded whitelists (copper: 22/5421/20; admin: 22).
+- **No centralized route guards**; checks scattered (see `dev-docs/architecture/visualization.md` for full matrix).
+- `ManagerDashboardScreen` already gated to managers/admins and contains historical KPI views + dept filtering + charts (fl_chart) — ideal host for AI PM + training sections.
+- `JobCardDetailScreen` already shows related historical cards and has rich editing (notes, correctiveAction, comments) — perfect place to surface + act on AI suggestions.
+
+### UI & Delivery Patterns
+- HomeScreen: tabs, quick actions to ManagerDashboard (for managers), job lists.
+- ManagerDashboard: date range, dept multi-select, KPIs, job lists. Direct Firestore reads + local state.
+- JobCardDetail: complex ConsumerStateful with Riverpod, photo handling, status transitions, "similar jobs" horizontal/vertical lists powered by the related streams.
+- Notifications: rich levels (full-loud to normal), in-app + FCM, native urgent alerts via `JobAlertService`.
+- No existing AI, LLM, predictive, or "insights beyond basic charts" code.
+
+### Gaps / Risks Identified
+- Batch historical queries will hit the 1000 limit in current `getAllJobCardsFuture` — will need pagination or direct admin SDK queries in CF.
+- No vector search / embeddings yet (Firestore supports it now via Vertex; can be Phase 4).
+- LLM calls must be server-side only (keys, cost control, full history context).
+- Any AI output **must** be clearly labeled as suggestion + require human judgment (industrial maintenance safety).
+- Cost: even cheap models add up on naive "every job + full history" prompts.
+- No current feedback loop on suggestion quality.
+- Architecture docs (visualization.md) will need update after implementation.
+
+### Existing Reusable Assets (high value)
+- Related jobs query family in `FirestoreService` (lines ~322-399).
+- Recipient resolution + config system in Cloud Functions.
+- ManagerDashboard filtering/KPI/charting skeleton.
+- JobCard model + copyWith + Firestore serialization.
+- Audit patterns via `assignmentHistory` and `job_card_audit` collection (writes happen in service for some ops).
+- `notification_configs` as single source for routing (can add AI-specific toggles).
+
+---
+
+## 3. Recommended Approach (Single Concrete Path)
+
+**Primary: Server-side LLM orchestration in Cloud Functions + Gemini (cost-optimized Flash models) + heavy reuse of existing queries and notification patterns. In-app delivery only. Phased rollout.**
+
+### Core Technical Choices
+- **LLM**: Google Gemini (Vertex AI for Firebase or `@google/generative-ai` / `firebase-ai` SDK in Node). 
+  - Rationale for cost focus: Currently among the cheapest high-quality models (Flash variants). Native Google/Firebase integration (same project, africa-south1 + global endpoints available, unified billing with existing Firebase). No new vendor onboarding. Excellent structured output / JSON mode for checklists.
+  - Fallback if costs spike: switch prompt model or add client-side caching / on-demand generation.
+- **Invocation points**:
+  - **Real-time corrective guidance**: Firestore `onJobCardCreated` trigger (or a lightweight callable the client can force re-gen). Fetch top relevant historical cards using **existing** `getExactRelated...` / `getRelatedExcludingPart...` streams or one-shot equivalents → build compact prompt (current job + 5–8 similar resolved examples with their correctiveAction + outcomes) → call cheap Gemini Flash → write structured suggestion to Firestore (new subcollection or field on the job card doc) → client listens and renders.
+  - **Historical PM + training batch**: New scheduled Cloud Function (europe-west1, e.g. "0 6 * * 1" weekly or "on demand" via callable triggered from Manager UI). Paginated full scan or asset-clustered queries → group by (dept+area+machine+part or machine-level) → LLM summarization per cluster for failure modes + concrete PM proposals (with evidence counts, recurrence stats, suggested interval) + cross-cutting training themes (e.g. "Electrical jobs in Dept X have 40% higher re-open rate when description < 20 chars"). Store in new `ai_recommendations` collection. Notify only the selected managers (workshop/mech/elec + admin) using **existing** recipient resolver patterns.
+- **Storage**:
+  - Extend or add to JobCard: `aiSuggestion` (or better: `job_cards/{id}/aiSuggestions` subcollection for versioning + feedback).
+  - New collection: `ai_recommendations` (typed docs: `{ type: 'preventive_maintenance' | 'training_insight', assetKey?, recommendation, evidence: {jobIds, stats}, confidence, status: 'proposed'|'accepted'|'rejected'|'implemented', generatedByModel, promptVersion, createdAt, reviewedBy?, feedback? }`).
+  - Usage log collection `ai_usage_logs` (prompt tokens, cost estimate, latency, jobId or batchId) for cost monitoring — critical for "minimal cost" goal.
+- **Delivery (in-app only)**:
+  - `JobCardDetailScreen`: New prominent but collapsible "AI Recommended First Checks / Fault-Finding Path" section (checklist of 3–7 concrete steps, grounded in similar past cards with links). Buttons: "Copy to Notes", "Mark as Used in Resolution", "Thumbs Up/Down + comment" (writes feedback for future improvement).
+  - Home / My Jobs area (optional Phase 1.5): Small "AI suggestions available" badges or a dedicated "Suggestions" tab/filter for the current user's open/assigned jobs.
+  - `ManagerDashboardScreen`: New "AI Preventive & Training Insights" panel or tab (filterable by dept/asset, list of proposed PM tasks with "Create Maintenance Job Card" action that pre-fills a silent maintenance-type card, training bullets with supporting stats and links to example jobs). Role-restricted to the selected managers + admin (extend `isAdmin` pattern or add `isAiInsightsAuthorized` using the same manager position checks + specific names if needed).
+  - Feedback everywhere feeds back into `ai_recommendations` and can be used to refine prompts or for RAG later.
+- **Prompt Strategy (cost + quality)**:
+  - Tiny system prompt: "You are a cautious industrial maintenance assistant for a South African manufacturing plant. Output only JSON. Every suggestion must cite specific past job cards or recurrence stats. Always end with 'Human verification required — do not act without inspecting the asset.'"
+  - Context: current job + only the highest-signal fields from 5–8 similar past cards (description, correctiveAction, reoccurrenceCount, time-to-close derived, who fixed it).
+  - For batch: one prompt per asset cluster or one "executive summary" prompt over aggregated stats + top examples.
+  - Structured outputs / JSON mode to make parsing reliable and reduce token waste.
+  - Version prompts (`promptVersion`) so we can A/B or rollback.
+- **Cost Controls (explicitly addressed)**:
+  - Use cheapest current Gemini Flash model for 95% of calls.
+  - Hard limits: max 8 similar cards per real-time suggestion; max context ~4k–8k tokens.
+  - Batch only weekly (or monthly) + on-demand "Run AI Analysis Now" button for managers (avoids surprise costs).
+  - Client-side debounce / "generate on first open" for real-time (avoid generating for every create if many are never opened).
+  - Full token + estimated cost logging on every call.
+  - Alerting (simple CF or Remote Config) if monthly spend proxy exceeds threshold.
+  - Future: prompt caching (Gemini supports), or move hot assets to small cached summaries.
+- **Safety & Trust**:
+  - Every UI surface has clear "AI-generated suggestion — not a substitute for trained judgment and physical inspection" banner + link to source jobs.
+  - No automatic creation of PM jobs or auto-updates to correctiveAction.
+  - All generations logged with full prompt context (or hash) + output + model version for audit / debugging bad suggestions.
+  - Feedback mechanism is first-class (helps both UX and future prompt improvement).
+- **Role Extension**:
+  - Add helper in `role.dart`: `canAccessAiInsights(Employee?)` — true for admin (22) **or** position contains "manager" **and** (department === 'general' or specific workshop/mech/elec managers via a small allow-list or position match refinement).
+  - Or reuse/extend the existing dynamic `notification_configs` with a new `ai_insights_recipients` array (e.g. ["onsite_workshop_manager", "mechanical_manager", "electrical_manager"]) and resolve via the same machinery. This is elegant and keeps routing in one place.
+  - Gate new UI sections with this check (consistent with current ManagerDashboard pattern).
+
+### Why this over alternatives?
+- **Pure client-side Gemini SDK on Flutter**: Rejected — keys exposure, no full historical context easily available, cost harder to control centrally, inconsistent with "server for business logic".
+- **BigQuery + scheduled analytics only (no LLM)**: Too limited for natural-language corrective guidance and nuanced training insights.
+- **Third-party vendor (non-Google)**: Higher integration cost and latency; contradicts "minimal cost / friction".
+- **Full RAG + vector search from day 1**: Overkill and adds cost/complexity. Phase 4 nice-to-have once we have 6–12 months of feedback data.
+- **Always-on push for suggestions**: Explicitly ruled out by user.
+
+This path maximizes reuse (big win for surgical changes), keeps costs minimal by design, fits the existing CF + Firestore + role patterns perfectly, and delivers value in small safe increments.
+
+---
+
+## 4. Phased Implementation Roadmap
+
+### Phase 0 — Foundations (1–2 days dev)
+- Enable Vertex AI / Gemini API in the Firebase/Google Cloud project (africa-south1 + global as needed).
+- Add minimal deps to `functions/package.json` (generative AI SDK) + `npm install`.
+- Add new Firestore collections/indexes (via console or deployment): `ai_recommendations`, `ai_usage_logs`, optional `job_cards/{id}/aiSuggestions` subcollection + composite indexes for queries by asset + status.
+- Extend `FirestoreService` with thin wrappers (or direct queries from CF for batch).
+- Add basic cost/usage monitoring collection writes.
+- Update `analysis_options.yaml` / lint if needed; run `flutter analyze`.
+
+### Phase 1 — Real-Time Corrective Guidance MVP (core user-visible win)
+- Modify `onJobCardCreated` (or add parallel lightweight trigger/callable) to optionally generate suggestion for non-maintenance types.
+- Implement prompt builder + Gemini call helper (reusable).
+- Write suggestion to new subcollection or JobCard extension field.
+- Update `JobCard` model (add optional `aiSuggestion` or keep flexible with subdocs).
+- In `JobCardDetailScreen`: new section (after description or in the notes/corrective area) that renders the checklist + source links + feedback buttons. Use existing similar-jobs UI patterns for "evidence".
+- Gate behind a Remote Config or feature flag initially ("ai_suggestions_enabled").
+- Add "Regenerate suggestion" action (for when description is updated).
+- Basic usage logging.
+- Test: create several real historical-style job cards with known recurrences; inspect prompt context and output quality.
+- **Success criteria**: Tech opens a new job card detail and sees grounded, useful (even if imperfect) steps within seconds; feedback works; no extra push noise.
+
+### Phase 2 — Historical PM Recommendations + Manager Visibility
+- New scheduled CF (or callable "runAiPreventiveBatch") in europe-west1.
+- Pagination logic over job cards (reuse or extend `getAllJobCardsFuture` style, or raw admin SDK with `startAfter`).
+- Asset clustering + per-cluster LLM analysis → concrete PM proposals.
+- Store in `ai_recommendations` with rich evidence.
+- Extend `ManagerDashboardScreen` (or new extracted widget): "Preventive Maintenance Insights" panel visible only to authorized managers (workshop/mech/elec + admin). List cards with "Create Draft Maintenance Job" action (pre-fills CreateJobCardScreen with type=maintenance, description populated from rec, links back to evidence jobs).
+- Training insight bullets in same panel (or separate "Team & Process Insights" subsection).
+- Notify the selected managers (via existing log + perhaps a quiet in-app or one-off FCM using current patterns) when a new batch of high-priority recs is ready.
+- Feedback on recommendations (accept/reject/implemented) updates the doc status.
+- Update architecture visualization + role matrix.
+
+### Phase 3 — Polish, Feedback Loop, Cost Hardening, Training Insights Refinement
+- HomeScreen integration: surface "AI guidance available" for the user's current jobs.
+- Better prompt versioning + A/B via Remote Config.
+- Usage dashboard (simple Admin-only view or export to BigQuery if needed) showing tokens/cost estimates, top assets analyzed, feedback scores.
+- "On-demand analysis" button for a specific asset from Manager UI.
+- Improve training insights (e.g. link to specific operators or techs with patterns — privacy-friendly aggregation).
+- Error handling, retry with backoff for LLM calls, graceful degradation (show "AI temporarily unavailable" if quota hit).
+- Update all docs (manager_guide.md, app_features.md, escalation_system.md if relevant, README).
+- Memory Bank updates per AGENTS.md.
+
+### Phase 4 (Future) — Advanced
+- Firestore vector embeddings on job cards (description + correctiveAction + outcome embeddings) + knn for much better "similar past failures" retrieval → higher quality suggestions at similar or lower cost.
+- Continuous improvement: fine-tune or few-shot examples from high-feedback suggestions.
+- Integration points with any external PM scheduling / CMMS if one exists.
+- Mobile on-device small model for ultra-cheap offline basic suggestions (stretch).
+
+---
+
+## 5. Critical Files & Change Areas (to be modified or created)
+
+### New Files (surgical, follow patterns)
+- `functions/ai_helpers.js` (or inline in index.js initially) — prompt builders, Gemini client wrapper, usage logger, recommendation generator.
+- `lib/models/ai_recommendation.dart` (plain data class + from/to Firestore, similar to copper models).
+- `lib/widgets/ai_suggestion_card.dart` (reusable renderer + feedback UI for both job detail and manager views).
+- Possibly `lib/screens/preventive_insights_screen.dart` (if dashboard gets too crowded; otherwise embed in ManagerDashboard).
+
+### Modified Core Files
+- `lib/models/job_card.dart` — optional small extension (aiSuggestion snapshot or ignore and use subcollection).
+- `lib/services/firestore_service.dart` — new methods: `getAiSuggestionsForJob`, `saveAiSuggestionFeedback`, `getPreventiveRecommendations(...)`, pagination helpers, `getJobCardsForAsset` etc. (reuse existing patterns heavily).
+- `lib/utils/role.dart` — add `canAccessAiInsights(Employee?)` or equivalent (document the exact manager selection logic).
+- `lib/screens/job_card_detail_screen.dart` — add AI suggestion section (large but localized change; reuse related-jobs list logic).
+- `lib/screens/manager_dashboard_screen.dart` — new panel/widget for insights + actions (fits existing filter + chart layout).
+- `lib/screens/home_screen.dart` — minor (optional badges or quick nav to suggestions).
+- `functions/index.js` — 
+  - Add Gemini init + helpers.
+  - Extend `onJobCardCreated` (or new parallel trigger).
+  - New `generateAiSuggestionForJob` callable or internal.
+  - New scheduled (or callable) `runPreventiveMaintenanceAnalysis`.
+  - Extend recipient resolvers if using config-driven approach for the 4 manager types.
+  - Usage logging on every LLM call.
+- `firebase.json` / Firestore indexes (add vector or composite if Phase 4; basic ones for new collections early).
+- `pubspec.yaml` — none or very minimal (no client LLM SDK needed).
+- `functions/package.json` + lock — add generative AI package (small).
+- `dev-docs/architecture/visualization.md` (regenerate via /update-architecture after).
+- Documentation: `docs/manager_guide.md`, `docs/app_features.md`, possibly new `docs/ai_features.md`.
+
+### Config / Ops
+- `notification_configs/global` (optional extension for AI toggles + recipient rules).
+- Remote Config keys for feature flags and model selection.
+- IAM / secrets for Vertex access in CF (standard Firebase setup).
+
+---
+
+## 6. Reusable Functions & Utilities (with exact paths)
+
+**High-priority reuse targets** (do not duplicate):
+- `FirestoreService.getExactRelatedJobCardsStream` / `getRelatedExcludingPartStream` / `getAllPartsStream` / `getExactAllTypesStream` (lib/services/firestore_service.dart:322–399) — primary context source for real-time prompts.
+- All asset filter helpers (`getDepartmentsForJobCards`, `getMachinesForJobCards`, `getPreviousParts` etc.).
+- `getAllJobCardsFuture` (with note on 1000 limit — will wrap with pagination).
+- Cloud Functions: `resolveRecipientsFromRules`, `getOnsite*` family, `logNotification`, `getNotificationConfig` (functions/index.js) — for notifying the exact 4 manager types + audit.
+- `notifyCreationRecipients` pattern for any AI-triggered comms (quiet in-app style).
+- `roleFromEmployee`, `isAdmin`, `isSuperManager` (lib/utils/role.dart) — base for new `canAccessAiInsights`.
+- ManagerDashboard layout, dept loading, dateRange, fl_chart KPI cards (lib/screens/manager_dashboard_screen.dart).
+- JobCardDetail related-jobs rendering logic and status/assignment handling (lib/screens/job_card_detail_screen.dart).
+- JobCard model serialization + copyWith (lib/models/job_card.dart).
+- Existing `assignmentHistory` append pattern for any "AI suggested X" audit events.
+
+**New small utilities** only where unavoidable (e.g. prompt builder, cost estimator, feedback writer).
+
+---
+
+## 7. Verification & Testing Strategy
+
+### Pre-Implementation
+- `flutter analyze` clean on current tree.
+- Run existing tests (`flutter test`).
+- Manual smoke: create/view/close several job cards across types and roles; confirm related-jobs still work; ManagerDashboard loads with real data.
+
+### During Implementation (per phase)
+- **Unit / isolated**:
+  - Prompt builder unit tests (Dart in a test/ or Node in functions).
+  - Model serialization round-trips for new AI models.
+- **Integration (emulators where possible)**:
+  - CF emulator + Firestore emulator: fire a job create, assert suggestion doc written, tokens logged.
+  - Batch analysis callable with small synthetic dataset (seed 50–100 historical cards with known clusters).
+- **UI**:
+  - Widget tests or manual flows for the new sections in detail + dashboard.
+  - Role gating: login as non-authorized manager → insights hidden; login as workshop manager or admin → visible.
+- **End-to-end user validation (most important)**:
+  1. As operator: create a job on a known recurring asset (use real historical examples).
+  2. As technician: open detail → see AI section with checklist grounded in past jobs → use "copy to notes", give feedback.
+  3. As authorized manager (workshop/mech/elec): open ManagerDashboard → see new AI panel → review 1–2 PM recs with evidence links → "create draft maintenance job" → verify it pre-fills correctly (type=maintenance, silent).
+  4. Run on-demand or wait for scheduled batch; verify only authorized people see outputs.
+  5. Check `ai_usage_logs` for reasonable token counts and cost estimates.
+  6. Create a deliberately bad/out-of-domain job → verify graceful handling + disclaimer.
+- **Cost & safety**:
+  - Monitor logs for 1–2 weeks of real usage after soft launch (behind flag).
+  - Review a sample of 20–30 real AI outputs with plant experts for usefulness and any hallucination risks.
+  - Confirm no PII leakage (even though low sensitivity declared).
+- **Performance**:
+  - Suggestion generation latency < 8–12s end-to-end (Flash is fast).
+  - No regression on job create time or detail screen load (lazy load the AI section).
+- **Analysis gate** (per AGENTS.md):
+  - Run `flutter analyze` before any PR.
+  - Update Memory Bank (`memory-bank/*.md`) especially `decisions.md`, `progress.md`, `systemPatterns.md`.
+  - Regenerate architecture visualization.
+
+### Rollout
+- Feature flag (Remote Config) default off → pilot with 1–2 trusted managers + techs → full for authorized roles.
+- Monitor crashlytics + new AI error logs.
+- Post-launch: 30-day review of feedback scores, actual cost vs projection, reduction in repeat jobs on assets that received PM recs (manual or simple query).
+
+---
+
+## 8. Risks, Mitigations & Open Decisions
+
+**Risks** (flagged per AGENTS.md safety guidance):
+- **Incorrect maintenance advice** (safety/operational): Mitigation — strong disclaimers everywhere, source citations, no auto-action, feedback + expert review loop before Phase 2 full use. Human always owns the decision.
+- **Cost overrun**: Mitigation — design limits + logging + on-demand only + cheapest models + weekly batch. Add budget alerts early.
+- **Low quality / generic suggestions** (user frustration): Mitigation — ground every output in real historical cards (leverage existing related queries); collect feedback from day 1; iterate prompts in Phase 3.
+- **Role creep / unauthorized access**: Mitigation — explicit `canAccessAiInsights` with the 4 specific manager groups + admin; document in visualization.md.
+- **Data volume / query cost in CF**: Mitigation — pagination from day 1; consider Cloud Functions memory/timeout tuning; sample if needed.
+- **LLM provider change later**: Mitigation — abstract the call behind a small interface in CF helpers.
+
+**Security-sensitive notes**:
+- LLM calls carry job content (even low-sensitivity). All calls server-side. Log what was sent (or hash + metadata) for audit.
+- New collections must have proper Firestore rules (read for authorized roles only; writes only via CF or with transaction safeguards).
+- No client-side API keys.
+
+**Open / to confirm post-plan** (low ambiguity now thanks to answers):
+- Exact position strings or clockNos for "mechanical manager", "electrical manager", "workshop manager" (to implement the recipient check precisely — may need small extension to current substring logic or explicit allow list in config).
+- Whether "Create Draft Maintenance Job" from AI rec should also notify the relevant techs or just pre-fill for the manager.
+- Desired cadence for batch (weekly vs bi-weekly vs monthly) and whether managers want a "force run" that bypasses schedule.
+- Any plant-specific terminology or "forbidden" suggestion patterns to hard-code into system prompt (e.g. never recommend X on Y asset).
+
+---
+
+## 9. Git, Process & Documentation Requirements (per AGENTS.md / CLAUDE.md)
+
+- **Always** work on feature branch: `git checkout -b feat/ai-preventive-maintenance-insights` (or `feat/ai-job-guidance-pm`).
+- Never push directly to master.
+- Before suggesting push/PR: provide clear summary, exact commands, and a good commit message.
+- PR description must include: testing steps (the E2E validation above), role matrix updates, cost monitoring notes, screenshots of new UI sections, and link to this plan.
+- Run `flutter analyze` + relevant manual flows before PR.
+- After merge: delete branch locally + remote.
+- Update Memory Bank files after significant work.
+- Regenerate `dev-docs/architecture/visualization.md` (run the internal /update-architecture command or manual analysis).
+- Update relevant docs in `/docs/` and any user guides.
+
+---
+
+## 10. Next Steps After Plan Approval
+
+1. User approves plan (via exit_plan_mode process).
+2. Create feature branch.
+3. Implement Phase 0 + 1 (MVP real-time guidance) in small commits.
+4. Internal demo + feedback collection.
+5. Phase 2.
+6. Full verification + PR.
+7. Post-launch monitoring + iteration per feedback.
+
+This plan is intentionally surgical, reuses the best existing patterns (related jobs, dynamic routing, manager dashboard, role derivation), and directly addresses the three user goals while respecting cost, safety, and architectural constraints.
+
+---
+
+**End of current draft plan.** (Will be refined with any additional clarifications before future approval.)
+
+---
+
+## 11. Board / Executive Selling Context & Strategic Value Proposition
+
+### One-Sentence Pitch
+We have already invested in a production-grade job card system that captures rich, structured maintenance history on every breakdown. This proposal adds a low-cost, low-risk AI layer that turns that existing data into **preventive actions and targeted training** — moving the plant from reactive firefighting to data-driven reliability, with measurable impact on uptime, safety, and technician effectiveness.
+
+### Why Now — Alignment with Current Investment
+- The CTP Job Cards app (Flutter + Firebase) is live and mature. It already records department/area/machine/part, reoccurrence counts, full timestamps, corrective actions, assignment history, and photos.
+- There is **already** a "similar jobs" feature in the detail screen that surfaces historical context manually.
+- Managers (especially workshop, mechanical, and electrical) are already using the ManagerDashboard for KPIs and reviews.
+- We have sophisticated notification routing and role-based access.
+- **The data asset exists.** The missing piece is the intelligence layer that synthesizes it at scale and delivers actionable recommendations at the right moment (job creation for techs; monthly review cycle for the four key managers).
+
+Without this, the reoccurrence counter and historical data remain largely passive — visible but not systematically converted into fewer future jobs or better first-time fixes.
+
+### Quantifiable Business Value (Board-Relevant)
+1. **Reduced Repeat Breakdowns & Downtime**  
+   High-recurrence assets (pumps, conveyors, panels, etc.) are currently handled case-by-case. AI will surface specific, evidence-backed PM tasks (e.g., "Add 2-weekly lubrication check on Pump 3B — 7 related jobs in last 9 months, average repair 4.2 hrs each"). Accepted recommendations can be turned into maintenance-type job cards with one click.
+
+2. **Improved First-Time Fix Rate & Reduced MTTR**  
+   Real-time AI guidance on new job cards (in-app only, grounded in the last similar resolved jobs) gives technicians a short, prioritized checklist of checks and likely corrective steps before they even reach the asset. Early value visible within weeks of Phase 1.
+
+3. **Targeted, Low-Cost Training & Process Improvement**  
+   Monthly batch analysis will reveal patterns such as:
+   - Certain departments creating jobs with insufficient description → repeat visits.
+   - Technicians self-assigning high-priority electrical jobs but taking 2× longer than peers.
+   - Specific machine types with poor documentation quality.
+   These become precise, actionable training or SOP recommendations for the mechanical/electrical/workshop managers — far more valuable than generic training budgets.
+
+4. **Safety & Risk Reduction**  
+   Fewer unplanned breakdowns = fewer rushed repairs, less exposure for technicians, lower chance of secondary damage or incidents. Every prevented repeat job is a safety win.
+
+5. **Data-Driven Culture & Talent**  
+   Demonstrates to the maintenance team (and future hires) that the company is modernizing reliability practices using the data they already generate daily. Supports retention in a skilled-trade environment.
+
+6. **Foundation for Future Phases**  
+   The same architecture (grounded prompts + feedback loop + usage logging) becomes the base for vector search/RAG (Phase 4), predictive signals, or integration with any future CMMS/work-order system.
+
+### Risk-Adjusted, Low-Commitment Path
+- **Phased & gated**: Real-time guidance (Phase 1) delivers technician value quickly and cheaply. Historical PM + training insights (Phase 2) run monthly for only the four authorized managers.
+- **Cost floor is extremely low** (see detailed model in Section 12). Designed from the start for minimal spend via cheapest models, tight context limits, weekly-or-monthly batch only, and full usage logging.
+- **Human-in-the-loop mandatory**: No autonomous actions. Every suggestion carries disclaimers and source links. Feedback is built in from day 1.
+- **Pilot-friendly**: Feature flags + limited rollout to trusted managers/techs first.
+- **Reversible & measurable**: Clear success metrics (repeat job rate on AI-reviewed assets, feedback scores on suggestions, manager adoption of PM recommendations, token/cost dashboard).
+
+### Competitive / Modernization Angle
+Most plants of similar size still run paper or basic CMMS systems with no intelligence. This positions CTP as an early adopter of practical, affordable AI for maintenance in the region — using the exact data and workflows the team already trusts.
+
+### Ask of the Board
+Approval to proceed with a **low-cost, high-visibility pilot** (primarily internal dev time + negligible cloud spend). Primary success criteria after 60–90 days: 
+- Measurable technician usage of the in-app guidance.
+- At least 3–5 concrete PM recommendations accepted and scheduled by the authorized managers.
+- Documented cost under agreed threshold (e.g. < R825 per month all-in).
+- Positive qualitative feedback from the four manager stakeholders.
+
+This is not a large transformation program. It is a high-leverage intelligence layer on an asset (the job card history) we have already paid to capture.
+
+---
+
+## 12. Detailed Cost Model & Monthly Projections
+**Focus**: Monthly batch run for the four authorized managers (workshop + mechanical + electrical managers + admin) to review PM and training recommendations before any implementation. Real-time suggestions on job creation are included as they are the cheapest and highest-frequency component.
+
+**Exchange Rate Note**: All figures converted at **1 USD = R16.45 ZAR** (mid-market rate as of May 2026, sourced from Xe.com / Wise / public rates around R16.45–R16.48). This rate is used for planning conservatism. Actual cloud billing will be in USD but reported in ZAR for internal review. Figures are estimates only.
+
+### Key Assumptions (Medium-Volume Scenario — Conservative)
+- Total historical job cards: 2,000–4,000 (growing)
+- New job cards created: 150–300 per month (mix of mechanical/electrical/mech-elec; maintenance excluded from AI)
+- Real-time suggestions generated: ~80% of new non-maintenance cards (many jobs are never opened immediately, or generated on first detail view to save cost)
+- Monthly batch frequency: **once per month** (or on-demand "Run Analysis" by authorized managers) — as specified
+- Authorized managers reviewing outputs: 4 people
+- LLM: Google Gemini Flash (or current cheapest high-quality variant) — chosen explicitly for cost
+- Context per real-time suggestion: current job + top 5–8 similar resolved cards (using existing cheap Firestore queries) → ~2,500–4,500 input tokens + 400–700 output tokens
+- Batch analysis: one paginated scan of recent 12–24 months data → asset clustering (50–150 significant assets with recurrence) → 1 LLM call per cluster or grouped summary prompts → total 30k–120k tokens per monthly run (highly variable; can be capped)
+- All LLM calls server-side in Cloud Functions (africa-south1 / europe-west1)
+- Full token + estimated cost logging on every call (`ai_usage_logs` collection)
+- Feature flags + "generate on open" + hard context caps to prevent runaway spend
+- No vector embeddings or RAG in Phases 1–3 (major cost saver)
+
+### Estimated Monthly Cost Breakdown (Medium Volume, Monthly Batch) — in ZAR
+
+| Category                          | Low-End Estimate (ZAR) | Realistic / Conservative (ZAR) | Notes / Controls |
+|-----------------------------------|------------------------|--------------------------------|------------------|
+| **Gemini Flash — Real-time suggestions** (80–240 jobs/mo) | R8 – R33 | R33 – R99 | ~R0.008–R0.025 per suggestion at Flash pricing + small context. "Generate on first open" + feature flag keeps this near zero if adoption is gradual. |
+| **Gemini Flash — Monthly batch PM + training analysis** (1 run) | R16 – R49 | R49 – R165 | One full-ish scan + 50–120 cluster/summary prompts. Can be further reduced by only re-analyzing assets with new jobs since last run (incremental). |
+| **Cloud Functions (2nd gen) invocations & execution time** | R16 – R49 | R49 – R132 | onJobCardCreated extensions + 1 scheduled monthly + occasional on-demand callables + any regenerate actions. Very cheap at low volume. |
+| **Firestore reads/writes** (extra for suggestions, recommendations, feedback, usage logs, indexes) | R16 – R66 | R49 – R132 | Negligible per suggestion (subcollection writes). Batch writes ~hundreds of recs + logs. Storage growth slow. |
+| **Firestore storage & indexes** (new collections + any temporary batch data) | < R16 | R16 – R33 | Recommendations + logs are small text/JSON docs. |
+| **Other (Remote Config, minor egress, etc.)** | Negligible | < R16 | — |
+| **TOTAL ESTIMATED MONTHLY (all-in)** | **R60 – R165** | **R165 – R410** (upper bound with buffer) | With the controls below, **most months will land well under R250** even at the high end of medium volume. |
+
+**Annual projection (first 12 months, including Phase 0–2 rollout)**: **R1,970 – R4,935** all-in cloud costs (excluding internal dev time).
+
+This is deliberately engineered to be **lower than the cost of one manager spending 2–3 hours manually reviewing reports** in many organizations' fully-loaded labor cost.
+
+### Aggressive Cost-Control Levers Already Designed In
+- Cheapest production-grade model (Flash family) for >95% of calls; reserve larger models only for rare summarization if needed.
+- Strict per-call context caps (never dump entire history).
+- Real-time generation is lazy (on detail open or explicit "Get AI guidance" tap) rather than synchronous on every create.
+- Monthly batch only (not daily/weekly) + "Run now" button gives managers control.
+- Incremental analysis possible in Phase 2+ (only assets with activity since last run).
+- Full visibility: every token and estimated Rand cost written to Firestore; simple Admin or Manager dashboard widget can show "AI spend this month".
+- Kill switch / feature flag that disables all new generations instantly.
+- Prompt caching (Gemini supports) and/or cached per-asset summaries in Phase 3.
+- Monitoring + simple threshold alerting (e.g. "if projected monthly > R658, pause and notify admin").
+
+### Comparison — Cost of Status Quo (Manual)
+- One mechanical or workshop manager spending 4–8 hours per month manually digging through ViewJobCards / ClosedJobs / Excel exports to spot patterns: easily R2,470 – R6,580+ in loaded labor cost per month, with lower consistency and no real-time guidance for techs.
+- Missed PM opportunities continue to generate repeat jobs (parts + labor + downtime).
+- Training needs stay anecdotal rather than data-backed.
+
+**The AI layer pays for itself many times over** even at the conservative upper cost bound, before considering uptime or safety gains.
+
+### One-Time / Setup Costs (Non-Recurring)
+- Developer time for Phases 0–2 (internal or contracted): primary cost driver. Plan assumes this is the main investment.
+- GCP/Firebase enablement (Vertex AI API, IAM for CF service account): R0 or minutes of admin time.
+- Initial index creation and collection setup: negligible.
+- Pilot data seeding / prompt tuning with real historical examples: 1–2 days of domain expert + dev time.
+
+### ROI Timeline & Success Metrics (Board View)
+- **Weeks 1–4 (Phase 1 live, behind flag)**: Technicians using in-app guidance on repeat-prone assets. Early feedback scores. Cost < R82/month.
+- **Month 2–3 (Phase 2 live)**: First 5–15 PM recommendations reviewed by the 4 managers; 2–5 accepted and scheduled as maintenance jobs. Visible drop in repeat jobs on 1–2 pilot assets. Cost still < R250/month.
+- **Month 4–6**: Quantifiable reduction in reoccurrence rate or MTTR on AI-influenced assets. Training recommendations acted on. Documented manager time saved vs previous manual review.
+- **Ongoing**: Cost remains flat or drops as we add caching and incremental logic, while value compounds (fewer jobs overall = fewer suggestions to generate).
+
+All numbers above are **estimates based on public Gemini / Firebase pricing as of mid-2026, converted at R16.45 per USD**. Actuals will be validated in the first 30 days of pilot with live usage logging (costs will be tracked in USD then converted for reporting). The architecture includes every control needed to stay in the "minimal cost" envelope the user requested.
+
+---
+
+**Plan Status**: Full plan extracted to standalone text file with all costs converted to South African Rand (ZAR) using 1 USD = R16.45. Ready for review and future implementation. Original source plan file (with USD) remains at the session path for reference.
+
+---
+
+**End of AI Integration Plan (ZAR Version)**
