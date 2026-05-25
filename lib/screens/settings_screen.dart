@@ -206,9 +206,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Settings'),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color.fromRGBO(255, 140, 66, 1), Color.fromARGB(255, 124, 124, 124)],
+              colors: [const Color(0xFFFF8C42), isOnSite ? Colors.green : Colors.red],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
