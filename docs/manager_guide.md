@@ -27,14 +27,35 @@ A job card with vague information is almost useless for analysis, reporting, or 
 
 ### Real-Time Visibility
 
-Your **Manager Dashboard** gives you a live view of:
+Your **Manager Dashboard** gives you a live view of everything in your department. Use the **department** and **date range** filter chips at the top to scope the data to what you need.
 
-- All open, in-progress, monitoring, and recently closed job cards in your department
-- Which technicians are currently on site and which are off site
-- Jobs that have escalated and why
-- Jobs that have been open for too long without a technician assigned
+#### KPI Cards
 
-> **Daily Review (web)** — when you sign in on a desktop browser, an additional **Daily Review** screen is available. It lets you scope the day's jobs by department or job type and add manager notes inline. Use this for your morning review pass.
+Nine KPI cards give you an at-a-glance picture:
+
+| KPI | What It Shows |
+|-----|---------------|
+| Open Jobs | All currently open (non-closed) jobs |
+| High Priority | Open P4 and P5 jobs |
+| Monitoring | Jobs in Monitor status — resolved but being watched |
+| Closed Today | Jobs closed today |
+| Pending Assignment | Open jobs with no technician assigned yet |
+| Avg Resolution | Average time from creation to close |
+| Overdue >3d | Open jobs older than 3 days |
+| Overdue >7d | Open jobs older than 7 days |
+| Completion % | Percentage of jobs closed in the selected period |
+
+**Tap any KPI card** (except Avg Resolution and Completion %) to open a filtered list of exactly those jobs and then drill into any individual job card.
+
+#### Analytics Charts
+
+Below the KPIs:
+- **Open Jobs by Day** — 30-day area chart showing your open job stock over time (department-filtered; always shows the last 30 days regardless of the date range chip)
+- **Trendline** — opened vs. closed jobs over the selected period
+- **Priority Breakdown** — bar chart of open jobs by priority (P1 Low → P5 Crit)
+- **Team Performance** — table listing each technician with their closed count, average resolution time, and number of currently assigned jobs. Sort order is by closed count. An assigned count above 3 is highlighted in orange as a workload warning.
+
+> **Daily Review** — an additional **Daily Review** screen lets you scope the day's closed and monitored jobs by department or job type and add manager review notes inline. Use this for your morning review pass. The Home tile pulses red when your pending review queue exceeds 5 items.
 
 ### Notification History
 

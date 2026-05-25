@@ -6,6 +6,22 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-05-23 — Dashboard overhaul, screen consistency, and UI improvements
+
+### User-facing changes
+
+- **Manager Dashboard rebuilt** — department and date-range filters are now displayed above the KPI section. Nine KPI cards replace the previous four: Open Jobs, High Priority (P4–P5), Monitoring, Closed Today, Pending Assignment, Avg Resolution Time, Overdue >3 days, Overdue >7 days, and Completion %. Every KPI card that represents a job list is now tappable — tapping it opens a filtered list of exactly those jobs. KPI section is collapsible. Priority breakdown bar chart labels updated to P1 Low / P2 Med / P3 Mid / P4 High / P5 Crit.
+- **Manager Dashboard analytics** — technician leaderboard replaced with a **Team Performance table** showing each technician's closed count, average resolution time, and currently assigned count. New **Open Jobs by Day** area chart shows the last 30 days of open job stock, department-filtered. Trendline chart now includes a legend.
+- **Daily Review: responsive layout** — on narrow screens (< 700 px) the list and detail panels stack vertically with a back-navigation button. On wider screens both panels display side by side.
+- **Daily Review: date range filter** — the two separate date pickers have been replaced with a single date-range picker. The selected range is shown as a deletable chip.
+- **Daily Review: Monitor status badge** — the Monitor badge colour changed from green to amber to better reflect "watch" state (not yet resolved).
+- **Daily Review: tab switching** — switching between Pending and Reviewed tabs now clears the selected card and any text in the input field.
+- **Unified gradient app bar** — every screen now shows a gradient app bar: orange on the left fading to **green** when the current user is on-site, or **red** when off-site. This provides a persistent on-site status cue across the entire app.
+- **Tab bars moved into body** — on View Job Cards and Job Card Detail the tab bar is now part of the scrollable body, not pinned to the app bar chrome.
+- **Login screen** — left panel background changed to pure black.
+
+---
+
 ## 2026-05-21 — Job card detail redesign, onboarding fix, off-site gate, docs accuracy pass
 
 ### User-facing changes
