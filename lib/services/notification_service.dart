@@ -428,9 +428,6 @@ class NotificationService {
       }
     });
 
-    // Foreground tap on a notification body (no action button) — same as tap-to-view
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-
     debugPrint('NotificationService initialized successfully');
   }
 

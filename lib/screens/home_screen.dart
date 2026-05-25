@@ -238,13 +238,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Future<void> _setupFirebaseMessaging() async {
     try {
-      await _notificationService.initialize();
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         if (!mounted) return;
         if (message.data['notificationType'] == 'assigned') {
           setState(() => _selectedIndex = 1);
-        } else if (message.data['jobId'] != null) {
-          _handleJobDeepLink(message.data['jobId']);
         }
       });
     } catch (e) {
