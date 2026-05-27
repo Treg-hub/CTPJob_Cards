@@ -234,7 +234,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                         debugPrint('Error sending creator notification: $e');
                                       }
                                     }
-                                    if (mounted) {
+                                    if (context.mounted) {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(content: Text('Employees assigned!')),
@@ -242,7 +242,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                     }
                                   } catch (e) {
                                     setDialogState(() => isSaving = false);
-                                    if (mounted) {
+                                    if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('Error assigning: $e'), backgroundColor: Colors.red),
                                       );

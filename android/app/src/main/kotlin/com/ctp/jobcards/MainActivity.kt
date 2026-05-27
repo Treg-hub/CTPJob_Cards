@@ -34,12 +34,18 @@ class MainActivity : FlutterActivity() {
         handleDeepLink(intent)
         createUrgentNotificationChannel()
 
+        // Android 14+ requires the user to grant USE_FULL_SCREEN_INTENT via Settings.
+        // Only open Settings once per install — otherwise the page opens on every
+        // cold start and looks like a bug to the user.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (!notificationManager.canUseFullScreenIntent()) {
+            val prefs = getSharedPreferences("notification_prefs", MODE_PRIVATE)
+            val alreadyAsked = prefs.getBoolean("fullScreenIntentPromptShown", false)
+            if (!notificationManager.canUseFullScreenIntent() && !alreadyAsked) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
                 intent.data = Uri.fromParts("package", packageName, null)
                 startActivity(intent)
+                prefs.edit().putBoolean("fullScreenIntentPromptShown", true).apply()
             }
         }
     }

@@ -64,20 +64,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final uid = credential.user!.uid;
 
-      final query = await FirebaseFirestore.instance
+      var query = await FirebaseFirestore.instance
           .collection('employees')
           .where('uid', isEqualTo: uid)
           .limit(1)
           .get();
 
+      // Fallback: admin-created accounts and reinstall-recovery users may have
+      // an employee doc that doesn't yet carry their auth uid. Match by email
+      // and self-heal the doc with the current uid so the next login takes the
+      // fast path above.
       if (query.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No employee profile found. Please register first.'), backgroundColor: Colors.orange),
-          );
+        final emailQuery = await FirebaseFirestore.instance
+            .collection('employees')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (emailQuery.docs.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No employee profile found. Please register first.'), backgroundColor: Colors.orange),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
         }
-        setState(() => _isLoading = false);
-        return;
+
+        try {
+          await emailQuery.docs.first.reference.set(
+            {'uid': uid, 'uidHealedAt': FieldValue.serverTimestamp()},
+            SetOptions(merge: true),
+          );
+        } catch (e, st) {
+          if (!kIsWeb) {
+            FirebaseCrashlytics.instance.recordError(e, st, reason: 'login_uid_self_heal_failed');
+          }
+          // Non-fatal — continue with the employee data we already have.
+          // The user can still log in this session; next time they'll fall
+          // through to this branch again until the rules / data are fixed.
+        }
+        query = emailQuery;
       }
 
       final empData = query.docs.first.data();

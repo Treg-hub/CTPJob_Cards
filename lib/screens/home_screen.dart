@@ -48,7 +48,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _showDeptOnly = true;
   int _openJobCount = 0;
   int _inProgressCount = 0;
-  int _unassignedCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
@@ -187,7 +186,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           setState(() {
             _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
             _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
-            _unassignedCount = filtered.where((j) => !j.isAssigned).length;
           });
         }
       });
