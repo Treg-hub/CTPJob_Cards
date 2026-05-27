@@ -139,6 +139,10 @@ The technician's personal queue. Two tabs:
 
 Full view of a single job card. The most feature-rich screen in the app.
 
+#### App Bar
+
+Gradient: orange → green (on-site) / red (off-site). The tab bar sits in the body (not pinned to the app bar chrome) — consistent with the View Job Cards pattern.
+
 #### Sections
 
 - **Header** — Job #, status, priority, type, department, area, machine, part
@@ -162,7 +166,11 @@ Full view of a single job card. The most feature-rich screen in the app.
 
 Browse every job card in the system. Four status tabs with live counts; filters for department, area, machine, type, priority, date range.
 
-#### Tabs
+#### App Bar
+
+Gradient: orange → green (on-site) / red (off-site). Toggle buttons for filtering have a black border for visibility.
+
+#### Tabs (in body, not pinned to app bar)
 
 - `Open`
 - `In Progress`
@@ -197,6 +205,27 @@ Daily sign-off queue for managers. Each closed/monitored job needs a manager rev
 - `Pending Review (N)` — Cards the logged-in manager hasn't marked yet
 - `Reviewed` — Already-marked cards
 
+Switching tabs clears the selected card and resets the input field.
+
+#### Layout
+
+Responsive two-panel layout:
+
+- **Narrow (< 700 px)** — list and detail stack vertically. Selecting a card pushes the detail panel with a back button.
+- **Wide (≥ 700 px)** — list on the left, detail on the right simultaneously.
+
+#### Date Range Filter (Reviewed tab)
+
+A single **date range picker** produces a deletable chip showing the selected range. Clearing the chip removes the filter. The previous two separate date pickers have been replaced by this single control.
+
+#### App Bar
+
+Gradient: orange (left) → **green** (on-site) or **red** (off-site). Title shows the scope label, e.g. "Daily Review — Mechanical Jobs — Factory Wide".
+
+#### Monitor Status Badge
+
+Cards in Monitor status display an **amber** badge (not green) to distinguish "watching" from "resolved".
+
 #### Filter Logic
 
 - Mechanical Manager: sees cards where job type is Mechanical or Mech/Elec
@@ -215,14 +244,38 @@ Dashboards and tooling for oversight roles.
 
 `lib/screens/manager_dashboard_screen.dart` — **Roles:** Manager
 
-KPI rollups for the manager's domain.
+KPI rollups and analytics for the manager's domain. Filters sit at the top; below them are collapsible KPIs, then an analytics section.
 
-#### Tiles
+#### Filters (above KPIs)
 
-- **Open vs. Closed** count this week / month
-- **Average time to close**
-- **Per-technician throughput** — completed jobs by clock no
-- **Top recurring machines** — highest `reoccurrenceCount` jobs
+- **Department filter** — chip-based multi-select. Defaults to the logged-in manager's own department. Selecting "All Departments" removes the department constraint.
+- **Date range** — choice chips: 7 Days / 30 Days / All Time (default 30 days).
+
+#### KPI Cards (9 cards, collapsible section)
+
+Each tappable KPI opens a filtered job list for that subset. Non-tappable KPIs display a computed value only.
+
+| KPI | What it counts | Tappable |
+|-----|----------------|----------|
+| Open Jobs | All open (non-closed) jobs in scope | Yes |
+| High Priority | Open P4 + P5 jobs | Yes |
+| Monitoring | Jobs at Monitor status | Yes |
+| Closed Today | Jobs closed today | Yes |
+| Pending Assign | Open jobs with no assigned technician | Yes |
+| Avg Resolution | Average hours/days from creation to close | No |
+| Overdue >3d | Open jobs older than 3 days | Yes |
+| Overdue >7d | Open jobs older than 7 days | Yes |
+| Completion % | Closed / total in date range | No |
+
+On phones (< 600 px wide) the KPI grid shows 3 columns; on wider screens it shows 6.
+
+#### Analytics Section
+
+- **Open Jobs by Day** — area chart of open job count over the last 30 days. Respects the department filter; date-range filter is intentionally excluded so the chart shows accurate historical stock levels.
+- **Trendline** — line chart of opened vs. closed jobs over the selected period, with a legend.
+- **Department Area Chart** — area breakdown of open jobs by department.
+- **Priority Breakdown** — bar chart of open jobs per priority level, labelled P1 Low / P2 Med / P3 Mid / P4 High / P5 Crit.
+- **Team Performance** — table showing each technician (by name): closed count, average resolution time, and currently assigned count. Sorted by closed count descending. Assigned count > 3 is highlighted in orange.
 
 ### Monitoring Dashboard
 
@@ -329,6 +382,10 @@ Developer/admin tool for verifying the notification + geofence stack works end-t
 ## Cross-Cutting Concerns
 
 Behaviour that affects multiple screens.
+
+### Gradient App Bar & On-Site Indicator
+
+Every authenticated screen uses a gradient `AppBar` defined in `app_theme.dart`: orange (`kBrandOrange`) on the left fading to **green** when `currentEmployee.isOnSite == true`, or **red** when off-site. This is a persistent visual cue — any screen in the app immediately communicates the user's current on-site status via the app bar colour.
 
 ### Role-Based Visibility
 

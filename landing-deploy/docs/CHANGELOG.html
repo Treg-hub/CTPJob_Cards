@@ -40,10 +40,55 @@ from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
 <hr />
 <h2
+id="2026-05-23--dashboard-overhaul-screen-consistency-and-ui-improvements">2026-05-23
+— Dashboard overhaul, screen consistency, and UI improvements</h2>
+<h3 id="user-facing-changes">User-facing changes</h3>
+<ul>
+<li><strong>Manager Dashboard rebuilt</strong> — department and
+date-range filters are now displayed above the KPI section. Nine KPI
+cards replace the previous four: Open Jobs, High Priority (P4–P5),
+Monitoring, Closed Today, Pending Assignment, Avg Resolution Time,
+Overdue &gt;3 days, Overdue &gt;7 days, and Completion %. Every KPI card
+that represents a job list is now tappable — tapping it opens a filtered
+list of exactly those jobs. KPI section is collapsible. Priority
+breakdown bar chart labels updated to P1 Low / P2 Med / P3 Mid / P4 High
+/ P5 Crit.</li>
+<li><strong>Manager Dashboard analytics</strong> — technician
+leaderboard replaced with a <strong>Team Performance table</strong>
+showing each technician's closed count, average resolution time, and
+currently assigned count. New <strong>Open Jobs by Day</strong> area
+chart shows the last 30 days of open job stock, department-filtered.
+Trendline chart now includes a legend.</li>
+<li><strong>Daily Review: responsive layout</strong> — on narrow screens
+(&lt; 700 px) the list and detail panels stack vertically with a
+back-navigation button. On wider screens both panels display side by
+side.</li>
+<li><strong>Daily Review: date range filter</strong> — the two separate
+date pickers have been replaced with a single date-range picker. The
+selected range is shown as a deletable chip.</li>
+<li><strong>Daily Review: Monitor status badge</strong> — the Monitor
+badge colour changed from green to amber to better reflect "watch" state
+(not yet resolved).</li>
+<li><strong>Daily Review: tab switching</strong> — switching between
+Pending and Reviewed tabs now clears the selected card and any text in
+the input field.</li>
+<li><strong>Unified gradient app bar</strong> — every screen now shows a
+gradient app bar: orange on the left fading to <strong>green</strong>
+when the current user is on-site, or <strong>red</strong> when off-site.
+This provides a persistent on-site status cue across the entire
+app.</li>
+<li><strong>Tab bars moved into body</strong> — on View Job Cards and
+Job Card Detail the tab bar is now part of the scrollable body, not
+pinned to the app bar chrome.</li>
+<li><strong>Login screen</strong> — left panel background changed to
+pure black.</li>
+</ul>
+<hr />
+<h2
 id="2026-05-21--job-card-detail-redesign-onboarding-fix-off-site-gate-docs-accuracy-pass">2026-05-21
 — Job card detail redesign, onboarding fix, off-site gate, docs accuracy
 pass</h2>
-<h3 id="user-facing-changes">User-facing changes</h3>
+<h3 id="user-facing-changes-1">User-facing changes</h3>
 <ul>
 <li><strong>Job card detail screen redesigned</strong> — unified tile
 layout, streamlined sections and visual hierarchy across the Details,

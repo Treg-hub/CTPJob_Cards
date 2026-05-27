@@ -347,10 +347,18 @@ The Manager Dashboard gives department managers a real-time view of everything h
 
 ### Dashboard Panels
 
-- **Live Job Overview** — All Open, In-Progress, Monitor, and recently Closed job cards for the manager's department, visible in real time as technicians update them.
-- **Technician On-Site Status** — Which technicians are currently on site (and receiving notifications) versus off site, updated automatically by the geofencing system.
-- **Escalation Log** — Jobs that have escalated — when, to whom, and what stage they reached. Recurring escalation patterns indicate coverage or response problems.
-- **Notification History** — Full log of every notification sent — who received it, when, and what action they took. Provides accountability for non-response patterns.
+Use the **department** and **date range** filter chips at the top to focus the data on your team and timeframe.
+
+**KPI Cards (9)**
+
+Nine at-a-glance metrics: Open Jobs, High Priority (P4–P5), Monitoring, Closed Today, Pending Assignment, Avg Resolution Time, Overdue >3 Days, Overdue >7 Days, and Completion %. Every countable KPI is tappable — tapping it opens a filtered job list so you can immediately drill into the relevant cards.
+
+**Analytics Charts**
+
+- **Open Jobs by Day** — 30-day area chart of open job stock, department-filtered.
+- **Trendline** — opened vs. closed jobs over the selected period, with legend.
+- **Priority Breakdown** — bar chart of open jobs by priority, labelled P1 Low through P5 Crit.
+- **Team Performance** — per-technician table showing closed count, average resolution time, and currently assigned count. Assigned count > 3 is flagged in orange as a potential overload indicator.
 
 ### Manager Responsibilities in the System
 

@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CTP Job Cards — Workshop Briefing</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --brand: #FF8C42;
+    --brand-dim: #C9692E;
+    --bg: #1A1A1A;
+    --bg-soft: #242424;
+    --bg-card: #2C2C2C;
+    --text: #FFFFFF;
+    --text-muted: rgba(255,255,255,0.72);
+    --text-dim: rgba(255,255,255,0.48);
+    --border: rgba(255,255,255,0.08);
+    --p1: #4CAF50;
+    --p2: #8BC34A;
+    --p3: #FFC107;
+    --p4: #FF9800;
+    --p5: #FF3D00;
+    --good: #4CAF50;
+    --bad: #FF3D00;
+    --info: #4DA3FF;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.4;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    padding: 4vh 6vw;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+  .slide.active { display: flex; }
+
+  /* HEADER */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3vh;
+    padding-bottom: 1.6vh;
+    border-bottom: 2px solid var(--brand);
+  }
+  .slide-title {
+    font-size: 3.4vw;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .slide-tag {
+    font-size: 1.1vw;
+    font-weight: 600;
+    color: var(--brand);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 0.6vh 1.2vw;
+    border: 2px solid var(--brand);
+    border-radius: 999px;
+  }
+  .slide-tag.demo {
+    background: var(--brand);
+    color: #1a1a1a;
+  }
+
+  /* CONTENT */
+  .slide-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2.2vh;
+    overflow: hidden;
+    font-size: 1.7vw;
+    color: var(--text-muted);
+  }
+  .slide-body.center { justify-content: center; align-items: center; text-align: center; }
+  .slide-body p { color: var(--text-muted); }
+  .slide-body strong { color: var(--text); font-weight: 600; }
+
+  .hero-quote {
+    font-size: 3vw;
+    line-height: 1.25;
+    color: var(--text);
+    font-weight: 500;
+    max-width: 80%;
+    text-align: center;
+  }
+  .hero-quote .brand { color: var(--brand); }
+  .hero-quote small { display: block; margin-top: 3vh; font-size: 1.3vw; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
+
+  ul.checks { list-style: none; display: flex; flex-direction: column; gap: 1.6vh; }
+  ul.checks li {
+    display: flex; align-items: flex-start; gap: 1.4vw;
+    padding: 1.6vh 2vw;
+    background: var(--bg-soft);
+    border-left: 4px solid var(--brand);
+    border-radius: 6px;
+    font-size: 1.6vw;
+  }
+  ul.checks li::before {
+    content: "▸";
+    color: var(--brand);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.35vw;
+  }
+  table th, table td {
+    padding: 1.2vh 1.2vw;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table th {
+    background: var(--bg-soft);
+    color: var(--brand);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 1.05vw;
+  }
+  table td.role { font-weight: 600; color: var(--text); }
+  table .yes { color: var(--good); font-weight: 700; }
+  table .no { color: var(--text-dim); }
+  table .silent { color: var(--p3); font-weight: 600; }
+
+  .badge {
+    display: inline-block;
+    padding: 0.4vh 0.9vw;
+    border-radius: 4px;
+    font-size: 1vw;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .badge.p1 { background: var(--p1); color: white; }
+  .badge.p2 { background: var(--p2); color: #111; }
+  .badge.p3 { background: var(--p3); color: #111; }
+  .badge.p4 { background: var(--p4); color: white; }
+  .badge.p5 { background: var(--p5); color: white; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2vw; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6vw; }
+
+  .card {
+    background: var(--bg-soft);
+    border-radius: 10px;
+    padding: 2.4vh 2vw;
+    border: 1px solid var(--border);
+  }
+  .card h3 {
+    color: var(--brand);
+    font-size: 1.5vw;
+    margin-bottom: 1.2vh;
+    font-weight: 700;
+  }
+  .card p { font-size: 1.3vw; color: var(--text-muted); }
+
+  /* STEPS */
+  .steps {
+    display: flex; flex-direction: column; gap: 1.1vh;
+  }
+  .step {
+    display: flex; gap: 1.4vw; align-items: center;
+    background: var(--bg-soft);
+    padding: 1.3vh 1.6vw;
+    border-radius: 8px;
+    border-left: 4px solid var(--brand);
+  }
+  .step-n {
+    flex-shrink: 0;
+    width: 3.4vw; height: 3.4vw;
+    background: var(--brand);
+    color: #1a1a1a;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6vw; font-weight: 800;
+  }
+  .step-text h4 { color: var(--text); font-size: 1.3vw; margin-bottom: 0.3vh; }
+  .step-text p { color: var(--text-muted); font-size: 1.1vw; line-height: 1.35; }
+
+  /* PERMISSIONS GRID */
+  .perm-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.6vh 1.8vw;
+  }
+  .perm {
+    display: flex; gap: 1.2vw;
+    background: var(--bg-soft);
+    padding: 1.6vh 1.6vw;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .perm-num {
+    flex-shrink: 0;
+    width: 3.6vw; height: 3.6vw;
+    background: var(--brand);
+    color: #1a1a1a;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8vw; font-weight: 800;
+  }
+  .perm-text h4 { color: var(--text); font-size: 1.35vw; margin-bottom: 0.5vh; }
+  .perm-text p { color: var(--text-muted); font-size: 1.1vw; line-height: 1.35; }
+
+  /* PRIORITY TABLE */
+  .priority-list {
+    display: flex; flex-direction: column; gap: 1vh;
+  }
+  .priority-list .pri-row {
+    display: grid;
+    grid-template-columns: 8vw 1fr;
+    gap: 1.6vw;
+    align-items: center;
+    padding: 1.4vh 1.6vw;
+    background: var(--bg-soft);
+    border-radius: 8px;
+    border-left: 6px solid;
+  }
+  .pri-row.p1 { border-left-color: var(--p1); }
+  .pri-row.p2 { border-left-color: var(--p2); }
+  .pri-row.p3 { border-left-color: var(--p3); }
+  .pri-row.p4 { border-left-color: var(--p4); }
+  .pri-row.p5 { border-left-color: var(--p5); }
+  .pri-label { font-size: 2vw; font-weight: 800; }
+  .pri-label.p1 { color: var(--p1); }
+  .pri-label.p2 { color: var(--p2); }
+  .pri-label.p3 { color: var(--p3); }
+  .pri-label.p4 { color: var(--p4); }
+  .pri-label.p5 { color: var(--p5); }
+  .pri-text { font-size: 1.5vw; color: var(--text-muted); }
+  .pri-text strong { color: var(--text); }
+
+  /* STATUS FLOW */
+  .status-flow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1.2vw;
+    margin: 2vh 0;
+  }
+  .status-pill {
+    flex: 1;
+    padding: 2vh 1vw;
+    background: var(--bg-soft);
+    border-radius: 10px;
+    border: 2px solid;
+    text-align: center;
+  }
+  .status-pill.open { border-color: var(--info); }
+  .status-pill.progress { border-color: var(--p4); }
+  .status-pill.monitor { border-color: var(--p3); }
+  .status-pill.closed { border-color: var(--good); }
+  .status-pill h4 { font-size: 1.7vw; color: var(--text); margin-bottom: 0.5vh; }
+  .status-pill p { font-size: 1.05vw; color: var(--text-muted); }
+  .arrow { color: var(--brand); font-size: 2.2vw; font-weight: 800; }
+
+  /* NOTIFICATION FLOW DIAGRAM */
+  .notif-flow {
+    background: var(--bg-soft);
+    padding: 2.4vh 2vw;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6vh;
+  }
+  .flow-node {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 0.9vh 1.6vw;
+    border-radius: 6px;
+    color: var(--brand);
+    font-weight: 700;
+    font-size: 1.25vw;
+    text-align: center;
+  }
+  .flow-arrow {
+    color: var(--text-dim);
+    font-size: 1.4vw;
+    line-height: 1;
+  }
+  .flow-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.6vw;
+    width: 100%;
+    margin-top: 0.6vh;
+  }
+  .flow-path {
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 1.8vh 1.4vw;
+    border-top: 3px solid;
+    text-align: center;
+  }
+  .flow-path.a { border-top-color: var(--good); }
+  .flow-path.b { border-top-color: var(--p5); }
+  .flow-path .path-label {
+    font-size: 1.1vw;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 0.6vh;
+  }
+  .flow-path.a .path-label { color: var(--good); }
+  .flow-path.b .path-label { color: var(--p5); }
+  .flow-path .path-sub {
+    color: var(--text);
+    font-size: 1.3vw;
+    font-weight: 600;
+    margin-bottom: 1.2vh;
+  }
+  .flow-path .path-desc {
+    color: var(--text-muted);
+    font-size: 1.1vw;
+    line-height: 1.45;
+    margin-bottom: 1.2vh;
+  }
+  .flow-path .path-result {
+    font-weight: 700;
+    font-size: 1.15vw;
+  }
+  .flow-path.a .path-result { color: var(--good); }
+  .flow-path.b .path-result { color: var(--p5); }
+
+  /* CALLOUT BOX */
+  .callout {
+    background: linear-gradient(135deg, rgba(255,140,66,0.15), rgba(255,140,66,0.05));
+    border-left: 5px solid var(--brand);
+    padding: 2vh 2vw;
+    border-radius: 8px;
+    font-size: 1.5vw;
+    color: var(--text);
+    font-style: italic;
+  }
+  .callout strong { color: var(--brand); font-style: normal; }
+
+  /* DO / DONT */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.6vw;
+  }
+  .compare .col {
+    background: var(--bg-soft);
+    border-radius: 10px;
+    padding: 2vh 1.6vw;
+  }
+  .compare .col.bad { border-top: 4px solid var(--bad); }
+  .compare .col.good { border-top: 4px solid var(--good); }
+  .compare h4 {
+    font-size: 1.4vw;
+    margin-bottom: 1.2vh;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .compare .bad h4 { color: var(--bad); }
+  .compare .good h4 { color: var(--good); }
+  .compare .row { padding: 1vh 0; border-bottom: 1px dashed var(--border); font-size: 1.2vw; color: var(--text-muted); }
+  .compare .row:last-child { border-bottom: none; }
+  .compare .row strong { color: var(--text); display: block; margin-bottom: 0.3vh; }
+
+  /* STATS */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.4vw;
+  }
+  .stat {
+    background: var(--bg-soft);
+    border-radius: 10px;
+    padding: 2.4vh 1.4vw;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat .n {
+    font-size: 3.2vw;
+    font-weight: 800;
+    color: var(--brand);
+    line-height: 1;
+    margin-bottom: 0.8vh;
+  }
+  .stat .l {
+    font-size: 1vw;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* FOOTER */
+  .deck-footer {
+    position: absolute;
+    bottom: 1.6vh;
+    left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 4vw;
+    font-size: 0.95vw;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .progress-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 4px;
+    background: var(--brand);
+    transition: width 0.3s ease;
+  }
+  .nav-hint { font-size: 0.85vw; color: var(--text-dim); }
+  .nav-hint kbd {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2vh 0.6vw;
+    font-family: inherit;
+    color: var(--text-muted);
+    font-size: 0.9vw;
+  }
+
+  /* ROLES GRID */
+  .roles {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.6vw 1.8vw;
+  }
+  .role-card {
+    background: var(--bg-soft);
+    border-radius: 10px;
+    padding: 2.2vh 1.8vw;
+    border-top: 4px solid var(--brand);
+  }
+  .role-card h3 { color: var(--brand); font-size: 1.8vw; margin-bottom: 0.8vh; }
+  .role-card .who { color: var(--text); font-size: 1.25vw; margin-bottom: 0.8vh; }
+  .role-card .what { color: var(--text-muted); font-size: 1.15vw; }
+
+  /* THREE ASKS */
+  .asks { display: flex; flex-direction: column; gap: 2vh; max-width: 80%; margin: 0 auto; }
+  .ask {
+    display: flex; gap: 2vw; align-items: center;
+    background: var(--bg-soft);
+    padding: 2.4vh 2vw;
+    border-radius: 12px;
+    border-left: 6px solid var(--brand);
+  }
+  .ask-n {
+    width: 5vw; height: 5vw;
+    background: var(--brand);
+    color: #1a1a1a;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.6vw; font-weight: 900;
+    flex-shrink: 0;
+  }
+  .ask-text { font-size: 1.7vw; color: var(--text); }
+  .ask-text strong { color: var(--brand); }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- ============ SLIDE 1 — Cover ============ -->
+<section class="slide active">
+  <div class="slide-body center">
+    <div class="hero-quote">
+      Every job card you fill in today<br>
+      becomes the <span class="brand">brain</span> of tomorrow's<br>
+      preventive maintenance.
+      <small>CTP Job Cards — Workshop Briefing</small>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 — Roles ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">The Four Roles</div>
+    <div class="slide-tag">Who's who</div>
+  </header>
+  <div class="slide-body">
+    <div class="roles">
+      <div class="role-card">
+        <h3>Operator</h3>
+        <div class="who">You run a machine</div>
+        <div class="what">You <strong>report faults</strong> — create job cards.</div>
+      </div>
+      <div class="role-card">
+        <h3>Technician</h3>
+        <div class="who">Mechanical, Electrical, or both</div>
+        <div class="what">You <strong>receive</strong>, <strong>accept</strong>, and <strong>fix</strong> jobs.</div>
+      </div>
+      <div class="role-card">
+        <h3>Manager</h3>
+        <div class="who">Dept / Workshop / Mech / Elec</div>
+        <div class="what">Oversee jobs, monitor escalations, review quality.</div>
+      </div>
+      <div class="role-card">
+        <h3>Admin</h3>
+        <div class="who">System administrator</div>
+        <div class="what">Configures employees, geofence, escalation rules.</div>
+      </div>
+    </div>
+    <div class="callout">Operator and Technician are <strong>separate roles</strong>. Operators find faults. Technicians fix them.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3 — Getting the app, one-time setup ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Getting the App — One-Time Setup</div>
+    <div class="slide-tag">5 steps</div>
+  </header>
+  <div class="slide-body">
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-text">
+          <h4>Click the invitation link</h4>
+          <p>Admin sends you a link. Open it, enter your email — this adds you to <strong>Firebase App Distribution</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-text">
+          <h4>Receive the download email</h4>
+          <p>Firebase emails you a download link for the CTP Job Cards app. Open it on your phone.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-text">
+          <h4>Download &amp; install</h4>
+          <p>Tap the link, install the app, grant the six permissions when prompted.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">4</div>
+        <div class="step-text">
+          <h4>Register on the app</h4>
+          <p>First open: register with your email and <strong>create a password</strong>. This links your account to your <strong>clock number</strong> in the employee collection.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">5</div>
+        <div class="step-text">
+          <h4>Sign in</h4>
+          <p>Enter your <strong>email and the password you just created</strong>. From now on, that's all it takes.</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout">Forgot your password later? Use the <strong>"Forgot Password"</strong> link on the sign-in screen — a reset email comes through.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 4 — Permissions ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Six Permissions — All Required</div>
+    <div class="slide-tag">First time only</div>
+  </header>
+  <div class="slide-body">
+    <div class="perm-grid">
+      <div class="perm"><div class="perm-num">1</div><div class="perm-text">
+        <h4>Location — "Allow All the Time"</h4>
+        <p>Detects the ~800 m geofence around site. Auto "Arrived On-Site" notifications. Not surveillance.</p>
+      </div></div>
+      <div class="perm"><div class="perm-num">2</div><div class="perm-text">
+        <h4>Notifications — Allow</h4>
+        <p>How you find out a job exists. Deny this and the app is mute.</p>
+      </div></div>
+      <div class="perm"><div class="perm-num">3</div><div class="perm-text">
+        <h4>Battery Optimisation — Unrestricted</h4>
+        <p>Android kills background apps. Without this you miss notifications, especially overnight.</p>
+      </div></div>
+      <div class="perm"><div class="perm-num">4</div><div class="perm-text">
+        <h4>Display Over Other Apps</h4>
+        <p>Allows the P5 full-screen alarm — even on the lock screen.</p>
+      </div></div>
+      <div class="perm"><div class="perm-num">5</div><div class="perm-text">
+        <h4>Do Not Disturb Access</h4>
+        <p>Lets P5 alarms bypass DND during night shifts and breaks.</p>
+      </div></div>
+      <div class="perm"><div class="perm-num">6</div><div class="perm-text">
+        <h4>Schedule Exact Alarms</h4>
+        <p>Uses the phone's real alarm system so P5 fires on time even in deep sleep.</p>
+      </div></div>
+    </div>
+    <div class="callout">Five of six permissions exist <strong>specifically</strong> to make sure a P5 actually reaches you.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 5 — How notifications work ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">How a Notification Reaches Your Phone</div>
+    <div class="slide-tag">Why battery optimisation matters</div>
+  </header>
+  <div class="slide-body">
+    <div class="notif-flow">
+      <div class="flow-node">Cloud Function (Belgium)</div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-node">Firebase Cloud Messaging (Google)</div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-node">Android OS on your phone — always running</div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-split">
+        <div class="flow-path a">
+          <div class="path-label">Path A</div>
+          <div class="path-sub">P1–P4 banners</div>
+          <div class="path-desc">The OS shows the banner itself. The app doesn't need to be running.</div>
+          <div class="path-result">✓ Works even if the app is sleeping</div>
+        </div>
+        <div class="flow-path b">
+          <div class="path-label">Path B</div>
+          <div class="path-sub">P5 full-screen alarm</div>
+          <div class="path-desc">The OS wakes the app — which then fires the alarm, overrides Do Not Disturb, plays the loud sound.</div>
+          <div class="path-result">✗ Fails silently if Android puts the app to sleep</div>
+        </div>
+      </div>
+    </div>
+    <div class="callout">Android delivers normal banners even if our app is asleep. But the <strong>P5 full-screen alarm needs our app awake to fire it</strong>. Battery optimisation puts our app to sleep. Turn it off, or you miss the alarm that matters most.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 6 — Geofence ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">The Geofence — How We Know You're On Site</div>
+    <div class="slide-tag">Automatic</div>
+  </header>
+  <div class="slide-body">
+    <div class="grid-2">
+      <div class="card">
+        <h3>What it does</h3>
+        <p>An <strong>800 m boundary</strong> around the site. The moment you cross in: you get <strong>"Arrived On-Site"</strong> and jobs start routing to you.</p>
+        <p style="margin-top:1vh;">Cross out: <strong>"Left Site Area"</strong>. Jobs stop routing to you.</p>
+        <p style="margin-top:1vh;">All automatic — as long as Location is "Allow All the Time" and battery optimisation is off.</p>
+      </div>
+      <div class="card">
+        <h3>What it's NOT</h3>
+        <p>✗ Not used to track movements off site<br>
+        ✗ Not used to log where you eat lunch<br>
+        ✗ Not used to "check on you"</p>
+        <p style="margin-top:1.2vh;">It only ever checks: <strong>inside the boundary</strong> or <strong>outside the boundary</strong>. That's it.</p>
+      </div>
+    </div>
+    <div class="callout">Two reasons it exists: A technician at home shouldn't be assigned a breakdown. And a <strong>P5 cannot be assigned to anyone off site</strong> — the server refuses to send it.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 7 — Anatomy of a job card ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Anatomy of a Job Card</div>
+    <div class="slide-tag demo">▶ LIVE DEMO</div>
+  </header>
+  <div class="slide-body">
+    <div class="grid-2">
+      <div class="card" style="border-top:4px solid var(--info);">
+        <h3 style="color:var(--info);">When operator creates</h3>
+        <ul class="checks" style="margin-top:0.6vh;">
+          <li><strong>Department</strong> → <strong>Area</strong> → <strong>Machine</strong> → <strong>Part</strong></li>
+          <li><strong>Description</strong> of the fault</li>
+          <li><strong>Priority</strong> 1–5</li>
+          <li><strong>Type</strong>: Mechanical / Electrical / Mech-Elec</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:4px solid var(--good);">
+        <h3 style="color:var(--good);">When technician works &amp; closes</h3>
+        <ul class="checks" style="margin-top:0.6vh;">
+          <li><strong>Notes</strong> — running observations, parts used, follow-ups</li>
+          <li><strong>Photos</strong> — before, after, part numbers, damage</li>
+          <li><strong>Complete (Corrective Action)</strong> — what you actually did to resolve the fault. <em>Required at closure.</em></li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">Dept → Area → Machine → Part is how the system later groups failures. <strong>Notes and Corrective Action</strong> are what teach it cause and cure. Skip a field, pick the wrong machine, or write nothing in Complete — that data is <strong>lost to us forever</strong>.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 8 — Priorities ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Priorities — Be Honest</div>
+    <div class="slide-tag">P1 to P5</div>
+  </header>
+  <div class="slide-body">
+    <div class="priority-list">
+      <div class="pri-row p1"><div class="pri-label p1">P1</div><div class="pri-text">No effect on production — routine work.</div></div>
+      <div class="pri-row p2"><div class="pri-label p2">P2</div><div class="pri-text">Minor impact — can continue but attend soon.</div></div>
+      <div class="pri-row p3"><div class="pri-label p3">P3</div><div class="pri-text">Moderate impact — attend within the shift.</div></div>
+      <div class="pri-row p4"><div class="pri-label p4">P4</div><div class="pri-text">Significant impact — attend ASAP. Persistent banner.</div></div>
+      <div class="pri-row p5"><div class="pri-label p5">P5</div><div class="pri-text"><strong>Production is standing.</strong> Full-screen alarm. Immediate response.</div></div>
+    </div>
+    <div class="callout">P5 is for <strong>production has stopped</strong>. Use it for that, and only that. Crying wolf with P5 numbs the team to the real ones.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 9 — Lifecycle ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">The Full Job Card Lifecycle</div>
+    <div class="slide-tag demo">▶ LIVE DEMO</div>
+  </header>
+  <div class="slide-body">
+    <div class="status-flow">
+      <div class="status-pill open"><h4>OPEN</h4><p>Awaiting technician</p></div>
+      <div class="arrow">→</div>
+      <div class="status-pill progress"><h4>IN-PROGRESS</h4><p>Tech accepted, working</p></div>
+      <div class="arrow">→</div>
+      <div class="status-pill monitor"><h4>MONITOR</h4><p>Fixed, watching</p></div>
+      <div class="arrow">→</div>
+      <div class="status-pill closed"><h4>CLOSED</h4><p>Done, with note</p></div>
+    </div>
+    <div class="grid-3" style="margin-top:1vh;">
+      <div class="card"><h3>Assign Self</h3><p>You take it. Status flips to In-Progress. Escalation <strong>stops</strong>.</p></div>
+      <div class="card"><h3>I'm Busy</h3><p style="color:var(--p4);"><strong>After-hours only</strong> — night shifts, Saturday, Sunday.</p><p style="margin-top:0.6vh;">Acknowledges the job but you can't take it. Operator notified. Escalation <strong>stops</strong>. System finds someone else.</p></div>
+      <div class="card"><h3>Dismiss</h3><p>You dismiss the alert. Escalation <strong>continues</strong>. Logged against you.</p></div>
+    </div>
+    <div class="callout">A closed job <strong>requires</strong> a closure note. It is the maintenance record managers, engineers, and future technicians will rely on.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 10 — Three notification levels ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Three Notification Levels</div>
+    <div class="slide-tag demo">▶ LIVE P5 ON PHONE</div>
+  </header>
+  <div class="slide-body">
+    <div class="grid-3">
+      <div class="card" style="border-top:4px solid var(--p3);">
+        <h3 style="color:var(--p3);">Normal Banner</h3>
+        <p><strong>P1, P2, P3</strong></p>
+        <p style="margin-top:1vh;">Standard notification, default tone. Tap to open.</p>
+      </div>
+      <div class="card" style="border-top:4px solid var(--p4);">
+        <h3 style="color:var(--p4);">Persistent Banner</h3>
+        <p><strong>P4</strong></p>
+        <p style="margin-top:1vh;">Stays in your notification shade until you act. Cannot be swiped away. Action buttons on the notification.</p>
+      </div>
+      <div class="card" style="border-top:4px solid var(--p5);">
+        <h3 style="color:var(--p5);">Full-Screen Alarm</h3>
+        <p><strong>P5</strong></p>
+        <p style="margin-top:1vh;">Takes over the whole screen, even on lock screen. Loud, repeating. Bypasses Do Not Disturb.</p>
+      </div>
+    </div>
+    <div class="callout">Plus automatic <strong>"Arrived On-Site"</strong> and <strong>"Left Site Area"</strong> notifications when you cross the geofence.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 11 — Escalation ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Escalation — What Happens If You Ignore It</div>
+    <div class="slide-tag">4 stages, automatic</div>
+  </header>
+  <div class="slide-body">
+    <table>
+      <thead><tr><th>Stage</th><th>Trigger</th><th>Default state</th><th>Who gets notified</th></tr></thead>
+      <tbody>
+        <tr><td><strong style="color:var(--brand);">Stage 1</strong></td><td>5 min after creation</td><td class="yes">ON</td><td>On-site managers + foremen for that dept</td></tr>
+        <tr><td><strong style="color:var(--brand);">Stage 2</strong></td><td>10 min after creation</td><td class="yes">ON</td><td>Dept managers + the workshop manager (urgent)</td></tr>
+        <tr><td><strong style="color:var(--text-muted);">Stage 3</strong></td><td>30 min after creation</td><td class="no">OFF by default</td><td>Admin-configurable — typically senior management</td></tr>
+        <tr><td><strong style="color:var(--text-muted);">Stage 4</strong></td><td>60 min after creation</td><td class="no">OFF by default</td><td>Admin-configurable — final tier</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 2 minutes</strong>, in a Google data centre in Belgium. It does not forget. It does not sleep.</p>
+    <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>I'm Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 12a — Notification matrix: technician side ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">What Notifications You Get — Operators &amp; Technicians</div>
+    <div class="slide-tag">From the live code</div>
+  </header>
+  <div class="slide-body">
+    <table>
+      <thead><tr><th>Notification</th><th>Operator</th><th>Technician</th></tr></thead>
+      <tbody>
+        <tr><td><strong>New job created</strong> — matching trade, on site</td><td class="no">—</td><td class="yes">✓ Level by priority</td></tr>
+        <tr><td><strong>Manual assignment</strong> — assigned to you</td><td class="no">—</td><td class="yes">✓ P5 blocked if off-site</td></tr>
+        <tr><td><strong>Self-Assigned</strong> — someone took your job</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>Job Completed</strong> — your reported job closed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>Job Updated</strong> — note added, status changed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>I'm Busy response</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>Alert Dismissed</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>Job auto-closed</strong> — sat in Monitor too long</td><td class="yes">✓</td><td class="yes">✓ Assignee</td></tr>
+        <tr><td><strong>Arrived On-Site / Left Site Area</strong></td><td class="yes">✓ You</td><td class="yes">✓ You</td></tr>
+        <tr><td><strong>Maintenance-type jobs</strong></td><td colspan="2" class="silent">🔇 Silent — no notifications at any stage</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ SLIDE 12b — Notification matrix: manager side ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">What Notifications You Get — Managers &amp; Admin</div>
+    <div class="slide-tag">From the live code</div>
+  </header>
+  <div class="slide-body">
+    <table>
+      <thead><tr><th>Notification</th><th>Foreman / Dept Manager</th><th>Workshop Manager</th><th>Admin</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Stage 1 escalation</strong> — 5 min</td><td class="yes">✓ On-site, by dept</td><td class="no">—</td><td class="no">—</td></tr>
+        <tr><td><strong>Stage 2 escalation</strong> — 10 min</td><td class="yes">✓ On-site dept managers</td><td class="yes">✓ On-site</td><td class="no">—</td></tr>
+        <tr><td><strong>Stage 3 escalation</strong> — 30 min</td><td colspan="3" class="no" style="text-align:center;">OFF by default — admin-configurable</td></tr>
+        <tr><td><strong>Stage 4 escalation</strong> — 60 min</td><td colspan="3" class="no" style="text-align:center;">OFF by default — admin-configurable</td></tr>
+        <tr><td><strong>Arrived On-Site / Left Site Area</strong></td><td class="yes">✓ You</td><td class="yes">✓ You</td><td class="yes">✓ You</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">Off-site = no jobs. <strong>P5 cannot be sent to anyone off-site</strong> — the Cloud Function refuses. Maintenance jobs never escalate.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 13 — Accountability ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Accountability — Everything Is Logged</div>
+    <div class="slide-tag demo">▶ LIVE FIRESTORE BACKEND</div>
+  </header>
+  <div class="slide-body">
+    <ul class="checks">
+      <li>Every accept, busy, dismiss, status change, and close is recorded with <strong>your clock number</strong> and a <strong>timestamp to the second</strong>.</li>
+      <li><strong><code>notifications</code></strong> collection — every notification sent and every response (Assign Self / Busy / Dismiss).</li>
+      <li><strong><code>job_cards</code></strong> — each card carries its own <code>assignmentHistory</code>: who accepted, when, and any handoffs.</li>
+      <li><strong><code>geo_fence_logs</code></strong> — every on-site / off-site transition, with the source that detected it.</li>
+      <li>All of it lives in the cloud. <strong>Nobody on the workshop floor — including managers — can delete it.</strong></li>
+    </ul>
+    <div class="card" style="border-left:5px solid var(--good); background:linear-gradient(135deg, rgba(76,175,80,0.12), rgba(76,175,80,0.04));">
+      <h3 style="color:var(--good);">Your protection — formal review procedure</h3>
+      <p style="font-size:1.25vw;">Any review of tracking data from your device follows a <strong>formal, documented procedure</strong>. You will be <strong>notified in advance</strong> before any inspection of your activity. Audit data is not accessed casually or without process.</p>
+      <p style="font-size:1.15vw; margin-top:0.8vh; color:var(--text-muted);">Now I'll show you the actual Firestore backend — exactly what is recorded, nothing more.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 14 — Closure notes / the pitch ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Your Closure Notes Are the Data</div>
+    <div class="slide-tag">The buy-in</div>
+  </header>
+  <div class="slide-body">
+    <div class="hero-quote" style="font-size:2vw; max-width:95%; text-align:left;">
+      Operators describe symptoms.<br>
+      <span class="brand">Technicians record cause and cure.</span><br>
+      That's the difference.
+    </div>
+    <div class="compare">
+      <div class="col bad">
+        <h4>✗ Useless</h4>
+        <div class="row"><strong>Corrective Action</strong>"Fixed it"</div>
+        <div class="row"><strong>Notes</strong>"Done"</div>
+        <div class="row"><strong>Root cause</strong>(blank)</div>
+        <div class="row"><strong>Follow-up</strong>(blank)</div>
+      </div>
+      <div class="col good">
+        <h4>✓ Useful</h4>
+        <div class="row"><strong>Corrective Action</strong>"Replaced 4kW SEW gear motor — bearing on output shaft seized. Aligned coupling to 0.05 mm."</div>
+        <div class="row"><strong>Notes</strong>"2x SKF 6308-2RS bearings. Suspect oil contamination — recommend oil sample on next service."</div>
+        <div class="row"><strong>Root cause</strong>"Coolant ingress through failed shaft seal."</div>
+        <div class="row"><strong>Follow-up</strong>"Re-inspect shaft seal in 2 weeks. Check oil colour."</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 15 — Three payoffs ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Why Accurate Notes Matter — 3 Payoffs</div>
+    <div class="slide-tag">Preventive Maintenance</div>
+  </header>
+  <div class="slide-body">
+    <div class="grid-3">
+      <div class="card">
+        <h3>1. AI uses your notes as evidence</h3>
+        <p>When another tech opens a job on the same machine + part, the system pulls <strong>your closure note</strong> and shows: <em>"Last time this fault was fixed, here's exactly what was done."</em></p>
+        <p style="margin-top:1vh;">"Fixed it" = they get nothing. Real detail = head start of hours.</p>
+      </div>
+      <div class="card">
+        <h3>2. Reoccurrence triggers PM</h3>
+        <p>The system counts repeat faults per machine. Cross a threshold and the AI flags it to the workshop manager with a <strong>PM recommendation backed by your notes</strong>.</p>
+        <p style="margin-top:1vh;">Your note becomes the reason the breakdown stops happening.</p>
+      </div>
+      <div class="card">
+        <h3>3. Fault-finding assistant learns from you</h3>
+        <p>The in-app AI chatbot will be trained on closure notes. Tech on the floor asks <em>"What was done last time the FX400 tripped?"</em></p>
+        <p style="margin-top:1vh;">The answer is <strong>your closure note</strong>. Wrote nothing? They get nothing at 3am.</p>
+      </div>
+    </div>
+    <div class="callout"><strong>The deal:</strong> 60 extra seconds at closure. In return — fewer 2am callouts, fewer repeat breakdowns, the next tech gets your solution on their screen.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 16 — Dark mode ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Dark Mode &amp; Quality of Life</div>
+    <div class="slide-tag demo">▶ FLIP IT LIVE</div>
+  </header>
+  <div class="slide-body center">
+    <div class="hero-quote" style="font-size:2.2vw;">
+      Dark mode <span class="brand">on by default</span> — easier on the eyes
+      <br>in the workshop and on nights.
+      <small>Settings → Dark Mode</small>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 17 — Fun facts ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Behind the Scenes</div>
+    <div class="slide-tag">By the numbers</div>
+  </header>
+  <div class="slide-body">
+    <div class="stats">
+      <div class="stat"><div class="n">18,800</div><div class="l">Lines of code</div></div>
+      <div class="stat"><div class="n">19</div><div class="l">Screens</div></div>
+      <div class="stat"><div class="n">13</div><div class="l">Cloud functions</div></div>
+      <div class="stat"><div class="n">360</div><div class="l">Code improvements</div></div>
+      <div class="stat"><div class="n">7</div><div class="l">Weeks of build time</div></div>
+      <div class="stat"><div class="n">3x</div><div class="l">Backups, automatic</div></div>
+    </div>
+    <ul class="checks">
+      <li>The escalation engine runs in a Google data centre in <strong>Belgium</strong>. The database lives in <strong>Johannesburg</strong>. Two continents — under 2 seconds to your pocket.</li>
+      <li>One cloud function's <strong>only</strong> job is to wake up every 2 minutes and check whether a job is sitting open — and shout at someone.</li>
+      <li>Every photo, every note, every tap is backed up <strong>three times</strong> automatically. We could lose the entire workshop and not lose a single job card.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ SLIDE 18 — Three asks ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">Three Asks — Starting Tomorrow</div>
+    <div class="slide-tag">The close</div>
+  </header>
+  <div class="slide-body" style="justify-content:center;">
+    <div class="asks">
+      <div class="ask"><div class="ask-n">1</div><div class="ask-text"><strong>Grant every permission.</strong> All six. No exceptions.</div></div>
+      <div class="ask"><div class="ask-n">2</div><div class="ask-text"><strong>Respond to every notification.</strong> Assign Self, I'm Busy, or Dismiss — but respond.</div></div>
+      <div class="ask"><div class="ask-n">3</div><div class="ask-text"><strong>Fill in every closure note like the AI is reading it.</strong> Because in a few weeks, it will be.</div></div>
+    </div>
+    <div class="callout" style="margin-top:2vh; text-align:center;">Garbage in, garbage out. <strong>Truth in</strong> — and the workshop starts to feel different.</div>
+  </div>
+</section>
+
+</div><!-- /deck -->
+
+<div class="deck-footer">
+  <div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> navigate · <kbd>F</kbd> fullscreen · <kbd>Esc</kbd> exit</div>
+  <div id="counter">1 / 19</div>
+</div>
+<div class="progress-bar" id="progress" style="width:5%"></div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  const progress = document.getElementById('progress');
+  let i = 0;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { show(i + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(i - 1); e.preventDefault(); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+    else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+    else if (/^[0-9]$/.test(e.key)) {
+      const n = parseInt(e.key);
+      if (n === 0) show(9);
+      else show(n - 1);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a,button,kbd')) return;
+    show(i + 1);
+  });
+
+  show(0);
+</script>
+</body>
+</html>

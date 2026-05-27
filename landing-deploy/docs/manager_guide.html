@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Manager Guide</title>
+  <title>manager_guide</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Manager Guide</h1>
+<h1 class="title">manager_guide</h1>
 </header>
 <h1 id="ctp-job-cards--manager-guide">CTP Job Cards — Manager Guide</h1>
 <hr />
@@ -85,20 +85,82 @@ manager.</p>
 <hr />
 <h2 id="what-the-system-gives-you">What the System Gives You</h2>
 <h3 id="real-time-visibility">Real-Time Visibility</h3>
-<p>Your <strong>Manager Dashboard</strong> gives you a live view of:</p>
+<p>Your <strong>Manager Dashboard</strong> gives you a live view of
+everything in your department. Use the <strong>department</strong> and
+<strong>date range</strong> filter chips at the top to scope the data to
+what you need.</p>
+<h4 id="kpi-cards">KPI Cards</h4>
+<p>Nine KPI cards give you an at-a-glance picture:</p>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>What It Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open Jobs</td>
+<td>All currently open (non-closed) jobs</td>
+</tr>
+<tr>
+<td>High Priority</td>
+<td>Open P4 and P5 jobs</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Jobs in Monitor status — resolved but being watched</td>
+</tr>
+<tr>
+<td>Closed Today</td>
+<td>Jobs closed today</td>
+</tr>
+<tr>
+<td>Pending Assignment</td>
+<td>Open jobs with no technician assigned yet</td>
+</tr>
+<tr>
+<td>Avg Resolution</td>
+<td>Average time from creation to close</td>
+</tr>
+<tr>
+<td>Overdue &gt;3d</td>
+<td>Open jobs older than 3 days</td>
+</tr>
+<tr>
+<td>Overdue &gt;7d</td>
+<td>Open jobs older than 7 days</td>
+</tr>
+<tr>
+<td>Completion %</td>
+<td>Percentage of jobs closed in the selected period</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tap any KPI card</strong> (except Avg Resolution and
+Completion %) to open a filtered list of exactly those jobs and then
+drill into any individual job card.</p>
+<h4 id="analytics-charts">Analytics Charts</h4>
+<p>Below the KPIs:</p>
 <ul>
-<li>All open, in-progress, monitoring, and recently closed job cards in
-your department</li>
-<li>Which technicians are currently on site and which are off site</li>
-<li>Jobs that have escalated and why</li>
-<li>Jobs that have been open for too long without a technician
-assigned</li>
+<li><strong>Open Jobs by Day</strong> — 30-day area chart showing your
+open job stock over time (department-filtered; always shows the last 30
+days regardless of the date range chip)</li>
+<li><strong>Trendline</strong> — opened vs. closed jobs over the
+selected period</li>
+<li><strong>Priority Breakdown</strong> — bar chart of open jobs by
+priority (P1 Low → P5 Crit)</li>
+<li><strong>Team Performance</strong> — table listing each technician
+with their closed count, average resolution time, and number of
+currently assigned jobs. Sort order is by closed count. An assigned
+count above 3 is highlighted in orange as a workload warning.</li>
 </ul>
 <blockquote>
-<p><strong>Daily Review (web)</strong> — when you sign in on a desktop
-browser, an additional <strong>Daily Review</strong> screen is
-available. It lets you scope the day's jobs by department or job type
-and add manager notes inline. Use this for your morning review pass.</p>
+<p><strong>Daily Review</strong> — an additional <strong>Daily
+Review</strong> screen lets you scope the day's closed and monitored
+jobs by department or job type and add manager review notes inline. Use
+this for your morning review pass. The Home tile pulses red when your
+pending review queue exceeds 5 items.</p>
 </blockquote>
 <h3 id="notification-history">Notification History</h3>
 <p>Every notification sent by the system is logged. You can see:</p>

@@ -32,7 +32,8 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 8181 -ErrorAction SilentlyContinue | Select-Object OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"done\")",
       "mcp__Claude_in_Chrome__list_connected_browsers",
       "mcp__Claude_in_Chrome__computer",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "PowerShell($first = git log --reverse --format=\"%ad\" --date=short | Select-Object -First 1; $latest = git log -1 --format=\"%ad\" --date=short; Write-Output \"First commit: $first\"; Write-Output \"Latest commit: $latest\"; $contribs = git shortlog -sn HEAD; Write-Output \"---\"; Write-Output $contribs)"
     ]
   },
   "hooks": {

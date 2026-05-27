@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Screens Reference</title>
+  <title>screens_reference</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Screens Reference</h1>
+<h1 class="title">screens_reference</h1>
 </header>
 <!--
 Title: CTP Job Cards — Screens Reference
@@ -210,6 +210,10 @@ skill matches</li>
 <strong>Roles:</strong> All</p>
 <p>Full view of a single job card. The most feature-rich screen in the
 app.</p>
+<h4 id="app-bar">App Bar</h4>
+<p>Gradient: orange → green (on-site) / red (off-site). The tab bar sits
+in the body (not pinned to the app bar chrome) — consistent with the
+View Job Cards pattern.</p>
 <h4 id="sections">Sections</h4>
 <ul>
 <li><strong>Header</strong> — Job #, status, priority, type, department,
@@ -243,7 +247,11 @@ original creator</li>
 <p>Browse every job card in the system. Four status tabs with live
 counts; filters for department, area, machine, type, priority, date
 range.</p>
-<h4 id="tabs-1">Tabs</h4>
+<h4 id="app-bar-1">App Bar</h4>
+<p>Gradient: orange → green (on-site) / red (off-site). Toggle buttons
+for filtering have a black border for visibility.</p>
+<h4 id="tabs-in-body-not-pinned-to-app-bar">Tabs (in body, not pinned to
+app bar)</h4>
 <ul>
 <li><code>Open</code></li>
 <li><code>In Progress</code></li>
@@ -273,12 +281,36 @@ filter UI of <strong>View Job Cards</strong>.</p>
 <p>Daily sign-off queue for managers. Each closed/monitored job needs a
 manager review checkmark — this screen surfaces what's still
 pending.</p>
-<h4 id="tabs-2">Tabs</h4>
+<h4 id="tabs-1">Tabs</h4>
 <ul>
 <li><code>Pending Review (N)</code> — Cards the logged-in manager hasn't
 marked yet</li>
 <li><code>Reviewed</code> — Already-marked cards</li>
 </ul>
+<p>Switching tabs clears the selected card and resets the input
+field.</p>
+<h4 id="layout">Layout</h4>
+<p>Responsive two-panel layout:</p>
+<ul>
+<li><strong>Narrow (&lt; 700 px)</strong> — list and detail stack
+vertically. Selecting a card pushes the detail panel with a back
+button.</li>
+<li><strong>Wide (≥ 700 px)</strong> — list on the left, detail on the
+right simultaneously.</li>
+</ul>
+<h4 id="date-range-filter-reviewed-tab">Date Range Filter (Reviewed
+tab)</h4>
+<p>A single <strong>date range picker</strong> produces a deletable chip
+showing the selected range. Clearing the chip removes the filter. The
+previous two separate date pickers have been replaced by this single
+control.</p>
+<h4 id="app-bar-2">App Bar</h4>
+<p>Gradient: orange (left) → <strong>green</strong> (on-site) or
+<strong>red</strong> (off-site). Title shows the scope label, e.g.
+"Daily Review — Mechanical Jobs — Factory Wide".</p>
+<h4 id="monitor-status-badge">Monitor Status Badge</h4>
+<p>Cards in Monitor status display an <strong>amber</strong> badge (not
+green) to distinguish "watching" from "resolved".</p>
 <h4 id="filter-logic">Filter Logic</h4>
 <ul>
 <li>Mechanical Manager: sees cards where job type is Mechanical or
@@ -298,22 +330,102 @@ the queue clean.</p>
 <h3 id="manager-dashboard">Manager Dashboard</h3>
 <p><code>lib/screens/manager_dashboard_screen.dart</code> —
 <strong>Roles:</strong> Manager</p>
-<p>KPI rollups for the manager's domain.</p>
-<h4 id="tiles">Tiles</h4>
+<p>KPI rollups and analytics for the manager's domain. Filters sit at
+the top; below them are collapsible KPIs, then an analytics section.</p>
+<h4 id="filters-above-kpis">Filters (above KPIs)</h4>
 <ul>
-<li><strong>Open vs. Closed</strong> count this week / month</li>
-<li><strong>Average time to close</strong></li>
-<li><strong>Per-technician throughput</strong> — completed jobs by clock
-no</li>
-<li><strong>Top recurring machines</strong> — highest
-<code>reoccurrenceCount</code> jobs</li>
+<li><strong>Department filter</strong> — chip-based multi-select.
+Defaults to the logged-in manager's own department. Selecting "All
+Departments" removes the department constraint.</li>
+<li><strong>Date range</strong> — choice chips: 7 Days / 30 Days / All
+Time (default 30 days).</li>
+</ul>
+<h4 id="kpi-cards-9-cards-collapsible-section">KPI Cards (9 cards,
+collapsible section)</h4>
+<p>Each tappable KPI opens a filtered job list for that subset.
+Non-tappable KPIs display a computed value only.</p>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>What it counts</th>
+<th>Tappable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open Jobs</td>
+<td>All open (non-closed) jobs in scope</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>High Priority</td>
+<td>Open P4 + P5 jobs</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Jobs at Monitor status</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Closed Today</td>
+<td>Jobs closed today</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Pending Assign</td>
+<td>Open jobs with no assigned technician</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Avg Resolution</td>
+<td>Average hours/days from creation to close</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Overdue &gt;3d</td>
+<td>Open jobs older than 3 days</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Overdue &gt;7d</td>
+<td>Open jobs older than 7 days</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Completion %</td>
+<td>Closed / total in date range</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>On phones (&lt; 600 px wide) the KPI grid shows 3 columns; on wider
+screens it shows 6.</p>
+<h4 id="analytics-section">Analytics Section</h4>
+<ul>
+<li><strong>Open Jobs by Day</strong> — area chart of open job count
+over the last 30 days. Respects the department filter; date-range filter
+is intentionally excluded so the chart shows accurate historical stock
+levels.</li>
+<li><strong>Trendline</strong> — line chart of opened vs. closed jobs
+over the selected period, with a legend.</li>
+<li><strong>Department Area Chart</strong> — area breakdown of open jobs
+by department.</li>
+<li><strong>Priority Breakdown</strong> — bar chart of open jobs per
+priority level, labelled P1 Low / P2 Med / P3 Mid / P4 High / P5
+Crit.</li>
+<li><strong>Team Performance</strong> — table showing each technician
+(by name): closed count, average resolution time, and currently assigned
+count. Sorted by closed count descending. Assigned count &gt; 3 is
+highlighted in orange.</li>
 </ul>
 <h3 id="monitoring-dashboard">Monitoring Dashboard</h3>
 <p><code>lib/screens/monitoring_dashboard_screen.dart</code> —
 <strong>Roles:</strong> Manager</p>
 <p>Visibility into the "Monitoring" state — jobs that were marked
 completed but kept open for 7 days to confirm the fix held.</p>
-<h4 id="tabs-3">Tabs</h4>
+<h4 id="tabs-2">Tabs</h4>
 <ul>
 <li><code>Active Monitoring</code> — Jobs currently in the 7-day
 monitoring window</li>
@@ -448,6 +560,15 @@ ENTER and the next escalation cycle will treat the user as on-site.</p>
 <hr />
 <h2 id="cross-cutting-concerns">Cross-Cutting Concerns</h2>
 <p>Behaviour that affects multiple screens.</p>
+<h3 id="gradient-app-bar--on-site-indicator">Gradient App Bar &amp;
+On-Site Indicator</h3>
+<p>Every authenticated screen uses a gradient <code>AppBar</code>
+defined in <code>app_theme.dart</code>: orange
+(<code>kBrandOrange</code>) on the left fading to <strong>green</strong>
+when <code>currentEmployee.isOnSite == true</code>, or
+<strong>red</strong> when off-site. This is a persistent visual cue —
+any screen in the app immediately communicates the user's current
+on-site status via the app bar colour.</p>
 <h3 id="role-based-visibility">Role-Based Visibility</h3>
 <p><em>Canonical logic in <code>lib/utils/role.dart</code>
 (<code>roleFromEmployee()</code>)</em></p>
