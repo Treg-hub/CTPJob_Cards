@@ -34,15 +34,6 @@ class NotificationService {
   final AudioPlayer? _foregroundSoundPlayer = kIsWeb ? null : AudioPlayer();
 
   // ==================== PERMISSIONS ====================
-  Future<void> _requestPermissions() async {
-    try {
-      final settings = await _messaging.requestPermission(alert: true, badge: true, sound: true);
-      debugPrint('FCM Permission: ${settings.authorizationStatus}');
-    } catch (e) {
-      debugPrint('Error requesting FCM permissions: $e');
-    }
-  }
-
   Future<Map<String, bool>> checkAllCriticalPermissions() async {
     final results = <String, bool>{};
     results['post_notifications'] = await Permission.notification.isGranted;
@@ -377,12 +368,14 @@ class NotificationService {
   }
 
   // ==================== INITIALIZE ====================
+  // Silent setup only — channels, FCM listeners, MethodChannel handlers.
+  // Permission requests are owned by PermissionsOnboardingScreen so the user
+  // sees them in a guided flow instead of being bounced through system dialogs
+  // before they reach the login screen on a fresh install.
   Future<void> initialize() async {
     if (kIsWeb) return;
 
-    await _requestPermissions();
     await _createNotificationChannels();
-    await requestAllCriticalPermissions();
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);

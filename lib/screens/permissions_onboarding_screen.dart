@@ -1,29 +1,35 @@
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart' show currentEmployee;
+import '../models/employee.dart';
+import '../providers/current_employee_provider.dart';
+import '../providers/permissions_provider.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../utils/role.dart';
 import 'home_screen.dart';
 
-class PermissionsOnboardingScreen extends StatefulWidget {
+class PermissionsOnboardingScreen extends ConsumerStatefulWidget {
   const PermissionsOnboardingScreen({super.key});
 
   @override
-  State<PermissionsOnboardingScreen> createState() => _PermissionsOnboardingScreenState();
+  ConsumerState<PermissionsOnboardingScreen> createState() => _PermissionsOnboardingScreenState();
 }
 
-class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScreen> {
+class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboardingScreen> {
   int _currentPage = 0;
   bool _isLoading = false;
   final PageController _pageController = PageController();
 
-  late final List<Widget> _pages = [
+  // Rebuilt every frame from the latest employee value so the role page reflects
+  // the right role even if the employee provider resolves after this screen mounts.
+  List<Widget> _buildPages(Employee? emp) => [
     const _WelcomePage(),
-    _YourRolePage(role: roleFromEmployee(currentEmployee)),
+    _YourRolePage(role: roleFromEmployee(emp)),
     const _JobCardFlowPage(),
     const _JobStatusPage(),
     const _PriorityLevelsPage(),
@@ -61,12 +67,17 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
 
   @override
   Widget build(BuildContext context) {
+    // Watch the live employee value. Falls back to the global mutable
+    // `currentEmployee` from main.dart so this screen still works during the
+    // brief window after registration before the provider has resolved.
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull ?? currentEmployee;
+    final pages = _buildPages(emp);
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             LinearProgressIndicator(
-              value: (_currentPage + 1) / _pages.length,
+              value: (_currentPage + 1) / pages.length,
               backgroundColor: Colors.grey[200],
               color: const Color(0xFFFF8C42),
             ),
@@ -74,7 +85,7 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
               child: PageView(
                 controller: _pageController,
                 onPageChanged: (index) => setState(() => _currentPage = index),
-                children: _pages,
+                children: pages,
               ),
             ),
             Padding(
@@ -86,7 +97,7 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _isLoading ? null : () {
-                      if (_currentPage < _pages.length - 1) {
+                      if (_currentPage < pages.length - 1) {
                         _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
                       } else {
                         _completeOnboarding();
@@ -95,7 +106,7 @@ class _PermissionsOnboardingScreenState extends State<PermissionsOnboardingScree
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8C42), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14)),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(_currentPage == _pages.length - 1 ? "Let's Get Started" : "Next", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        : Text(_currentPage == pages.length - 1 ? "Let's Get Started" : "Next", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -576,53 +587,81 @@ class _EscalationPage extends StatelessWidget {
 }
 
 // PAGE 7 - Permissions + Test Buttons
-class _PermissionsPage extends StatefulWidget {
+class _PermissionsPage extends ConsumerStatefulWidget {
   const _PermissionsPage();
   @override
-  State<_PermissionsPage> createState() => _PermissionsPageState();
+  ConsumerState<_PermissionsPage> createState() => _PermissionsPageState();
 }
 
-class _PermissionsPageState extends State<_PermissionsPage> {
-  PermissionStatus _locationStatus = PermissionStatus.denied;
-  PermissionStatus _notificationStatus = PermissionStatus.denied;
+class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
   bool _checking = false;
 
   @override
   void initState() {
     super.initState();
     if (kIsWeb) return;
-    _refreshStatuses().then((_) {
-      if (!_locationStatus.isGranted || !_notificationStatus.isGranted) {
+    // Auto-trigger the guided grant flow once the provider has loaded.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final statuses = await ref.read(permissionsProvider.future);
+      final allGranted = statuses.values.every((s) => s.isGranted);
+      if (!allGranted && mounted) {
         _grantPermissions();
       }
     });
   }
 
-  Future<void> _refreshStatuses() async {
-    if (kIsWeb) return;
-    final loc = await Permission.locationAlways.status;
-    final notif = await Permission.notification.status;
-    if (mounted) setState(() { _locationStatus = loc; _notificationStatus = notif; });
-  }
-
+  /// Walks through every required permission in the right order:
+  /// - locationWhenInUse must be granted before locationAlways on Android 10+.
+  /// - The remaining critical permissions (SAW, notification-policy,
+  ///   battery-optimization) are requested via NotificationService so the
+  ///   same flow handles "opens settings page" cases.
   Future<void> _grantPermissions() async {
     if (kIsWeb) return;
     setState(() => _checking = true);
-    if (!_locationStatus.isGranted) {
+    try {
       final whenInUse = await Permission.locationWhenInUse.status;
-      if (!whenInUse.isGranted) await Permission.locationWhenInUse.request();
-      await Permission.locationAlways.request();
+      if (!whenInUse.isGranted) {
+        await Permission.locationWhenInUse.request();
+      }
+      if (!(await Permission.locationAlways.status).isGranted) {
+        await Permission.locationAlways.request();
+      }
+      if (!(await Permission.notification.status).isGranted) {
+        await Permission.notification.request();
+      }
+      if (!(await Permission.camera.status).isGranted) {
+        await Permission.camera.request();
+      }
+      // SAW + battery-optimization + notification-policy + opens-settings-page
+      // for SAW if still denied. This used to fire from NotificationService
+      // .initialize() at app launch — moved here so it only runs in the
+      // guided flow.
+      await NotificationService().requestAllCriticalPermissions();
+    } finally {
+      ref.invalidate(permissionsProvider);
+      if (mounted) setState(() => _checking = false);
     }
-    if (!_notificationStatus.isGranted) await Permission.notification.request();
-    await _refreshStatuses();
-    setState(() => _checking = false);
+  }
+
+  Future<void> _requestSingle(Permission perm) async {
+    if (kIsWeb) return;
+    if (perm == Permission.locationAlways) {
+      final whenInUse = await Permission.locationWhenInUse.status;
+      if (!whenInUse.isGranted) {
+        await Permission.locationWhenInUse.request();
+      }
+    }
+    await perm.request();
+    ref.invalidate(permissionsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
-    final locationGranted = _locationStatus.isGranted;
-    final notifGranted = _notificationStatus.isGranted;
-    final allGranted = locationGranted && notifGranted;
+    final items = ref.watch(requiredPermissionsProvider);
+    final statusAsync = ref.watch(permissionsProvider);
+    final statusMap = statusAsync.valueOrNull ?? const <Permission, PermissionStatus>{};
+    final allGranted = items.isNotEmpty &&
+        items.every((it) => (statusMap[it.permission] ?? PermissionStatus.denied).isGranted);
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -637,10 +676,12 @@ class _PermissionsPageState extends State<_PermissionsPage> {
               style: TextStyle(fontSize: 15),
             ),
             const SizedBox(height: 20),
-            _buildPermissionRow("Location (Always)", "Know when you're onsite so you get the right jobs", locationGranted),
-            _buildPermissionRow("Notifications", "Get loud, full-screen alerts even when your phone is on silent", notifGranted),
-            _buildPermissionRow("Display over other apps", "Urgent jobs can take over your screen", true),
-            _buildPermissionRow("Camera", "Quickly upload photos of completed work", true),
+            for (final item in items)
+              _buildPermissionRow(
+                item: item,
+                granted: (statusMap[item.permission] ?? PermissionStatus.denied).isGranted,
+                onTapGrant: () => _requestSingle(item.permission),
+              ),
             const SizedBox(height: 16),
             if (!allGranted) ...[
               Container(
@@ -687,24 +728,44 @@ class _PermissionsPageState extends State<_PermissionsPage> {
     );
   }
 
-  Widget _buildPermissionRow(String title, String subtitle, bool granted) {
+  Widget _buildPermissionRow({
+    required PermissionItem item,
+    required bool granted,
+    required VoidCallback onTapGrant,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(granted ? Icons.check_circle : Icons.radio_button_unchecked, color: granted ? Colors.green : Colors.grey, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                Text(subtitle, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
+      child: InkWell(
+        onTap: granted ? null : onTapGrant,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                granted ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: granted ? Colors.green : Colors.grey,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    Text(item.description, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              if (!granted)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Icon(Icons.chevron_right, color: Color(0xFFFF8C42), size: 22),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
