@@ -764,10 +764,10 @@
           <div>
             <div class="font-semibold text-gray-800 mb-1">Register with Firebase App Distribution</div>
             <p class="text-sm text-gray-500 mb-2">
-              Scan the QR code below or tap the download button. You will be taken to the Firebase App Distribution page and prompted to sign in with your email address. This registers you as an authorised tester.
+              Tap <strong>"Register to Download"</strong> in the Download section below, or scan the QR code. You will be taken to the Firebase App Distribution invite page — sign in with your personal Gmail to register as an authorised user.
             </p>
             <p class="text-sm text-gray-500">
-              <strong>Note:</strong> If your email has not been added to the authorised list yet, contact Gert Peens at
+              <strong>Note:</strong> If your Gmail has not been added to the authorised list yet, contact Gert Peens at
               <a href="mailto:gertp@ctpgravure.co.za" class="text-brand hover:underline">gertp@ctpgravure.co.za</a>
               before proceeding.
             </p>
@@ -851,16 +851,16 @@
         <div class="p-5 md:p-6">
           <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
 
-            <!-- QR Code — generated from the Firebase App Distribution URL -->
+            <!-- QR Code — generated from the Firebase App Distribution sign-up URL -->
             <div class="flex flex-col items-center gap-2 flex-shrink-0">
               <div id="qr-canvas-container"
                    class="w-44 h-44 rounded-card overflow-hidden flex items-center justify-center bg-brand-pale border-2 border-brand">
                 <!-- qrcode.js renders into this div -->
               </div>
-              <span class="text-xs text-gray-400 text-center">Scan to open in browser,<br/>then sign in &amp; download</span>
+              <span class="text-xs text-gray-400 text-center">Scan to register &amp; download</span>
             </div>
 
-            <!-- Version + download button -->
+            <!-- Version + two-step download flow -->
             <div class="flex-1 w-full">
               <div class="flex flex-wrap items-center gap-2 mb-4">
                 <!-- MAINTENANCE: Update version number here on each release -->
@@ -883,17 +883,34 @@
                 </ul>
               </div>
 
-              <!-- Download button — links to Firebase App Distribution -->
-              <a href="https://appdistribution.firebase.google.com/testerapps/1:296041546243:android:c4e3fec58d94ae6db60436/releases/4q0npb9l72rug?utm_source=firebase-console"
-                 id="download-btn"
-                 target="_blank" rel="noopener noreferrer"
-                 class="btn-download inline-flex items-center justify-center gap-2 w-full md:w-auto bg-brand hover:bg-brand-dark active:bg-brand-darker text-white font-bold rounded-card px-6 py-3.5 transition-colors text-base">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download Latest Version
-              </a>
+              <!-- Step 1: Register -->
+              <div class="bg-brand-pale border border-brand rounded-card p-4 mb-3">
+                <div class="text-xs font-bold text-brand-darker uppercase tracking-wide mb-1">Step 1 — Register with Firebase</div>
+                <p class="text-xs text-gray-600 mb-3">Tap below to register your email. Firebase will verify you as an authorised user and send you a confirmation email. You only need to do this once.</p>
+                <a href="https://appdistribution.firebase.dev/i/f2e3806abd48ac49"
+                   id="register-btn"
+                   target="_blank" rel="noopener noreferrer"
+                   class="btn-download inline-flex items-center justify-center gap-2 w-full bg-brand hover:bg-brand-dark active:bg-brand-darker text-white font-bold rounded-card px-5 py-3 transition-colors text-sm">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                  Register to Download
+                </a>
+              </div>
+
+              <!-- Step 2: Download -->
+              <div class="border border-gray-200 rounded-card p-4">
+                <div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Step 2 — Download the App</div>
+                <p class="text-xs text-gray-500 mb-3">Already registered? Tap below to go directly to the download page. If you haven't registered yet, complete Step 1 first.</p>
+                <a href="https://appdistribution.firebase.google.com/testerapps/1:296041546243:android:c4e3fec58d94ae6db60436/releases/1nd9j71886nto?utm_source=firebase-console"
+                   id="download-btn"
+                   target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center justify-center gap-2 w-full bg-white hover:bg-surface active:bg-gray-100 text-brand border-2 border-brand font-bold rounded-card px-5 py-3 transition-colors text-sm">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download Latest Version
+                </a>
+              </div>
 
               <p class="text-xs text-gray-400 mt-3">
-                Requires Android 6.0 or later · ~30 MB · You must be a registered tester to download
+                Requires Android 6.0 or later · ~30 MB · Registration required before downloading
               </p>
             </div>
           </div>
@@ -950,10 +967,10 @@
       header.classList.toggle('header-scrolled', window.scrollY > 8);
     }, { passive: true });
 
-    // Generate QR code for the Firebase App Distribution URL
-    // This renders the QR code into #qr-canvas-container via qrcode.js
+    // Generate QR code for the Firebase App Distribution sign-up / invite URL
+    // New users must register first before they can download the APK
     (function() {
-      const DOWNLOAD_URL = 'https://appdistribution.firebase.google.com/testerapps/1:296041546243:android:c4e3fec58d94ae6db60436/releases/4q0npb9l72rug?utm_source=firebase-console';
+      const DOWNLOAD_URL = 'https://appdistribution.firebase.dev/i/f2e3806abd48ac49';
       const container = document.getElementById('qr-canvas-container');
 
       try {
