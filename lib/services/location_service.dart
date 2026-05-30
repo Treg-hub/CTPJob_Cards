@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
+import '../constants/collections.dart';
 
 const String locationTaskName = "ctp_location_check_task";
 const MethodChannel _channel = MethodChannel('ctp/geofence');
@@ -36,7 +37,7 @@ void callbackDispatcher() {
       }
 
       final settingsDoc = await FirebaseFirestore.instance
-          .collection('settings')
+          .collection(Collections.settings)
           .doc('geofence')
           .get();
 
@@ -123,7 +124,7 @@ class LocationService {
 
     try {
       final settingsDoc = await FirebaseFirestore.instance
-          .collection('settings')
+          .collection(Collections.settings)
           .doc('geofence')
           .get();
 
@@ -204,7 +205,7 @@ class LocationService {
       debugPrint('📍 checkCurrentLocation() called');
 
       final settingsDoc = await FirebaseFirestore.instance
-          .collection('settings')
+          .collection(Collections.settings)
           .doc('geofence')
           .get();
 

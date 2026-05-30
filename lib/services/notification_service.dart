@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart' show currentEmployee, navigatorKey;
 import '../models/job_card.dart';
+import '../constants/collections.dart';
 import '../screens/job_card_detail_screen.dart';
 
 // Channel IDs — must match those declared on the native side (FirebaseMessagingService.kt).
@@ -152,7 +153,7 @@ class NotificationService {
               : firebaseUser.uid;
 
           final empDoc = await FirebaseFirestore.instance
-              .collection('employees')
+              .collection(Collections.employees)
               .doc(realClockNo)
               .get();
 
@@ -181,7 +182,7 @@ class NotificationService {
         debugPrint('   → Handling ASSIGN SELF for job #$payload');
 
         final query = await FirebaseFirestore.instance
-            .collection('job_cards')
+            .collection(Collections.jobCards)
             .where('jobCardNumber', isEqualTo: int.tryParse(payload))
             .limit(1)
             .get();
@@ -207,7 +208,7 @@ class NotificationService {
         final creatorClockNo = jobData['operatorClockNo'];
         if (creatorClockNo != null) {
           final creatorDoc = await FirebaseFirestore.instance
-              .collection('employees')
+              .collection(Collections.employees)
               .doc(creatorClockNo)
               .get();
 
@@ -232,7 +233,7 @@ class NotificationService {
         //   1. Notifies the job creator that this technician is busy
         //   2. Sets escalationStopped: true on the job card to halt escalation
         debugPrint('   → Handling BUSY for job #$payload by $name ($clockNo)');
-        await FirebaseFirestore.instance.collection('alertResponses').add({
+        await FirebaseFirestore.instance.collection(Collections.alertResponses).add({
           'jobCardNumber': payload,
           'action': 'busy',
           'clockNo': clockNo,
@@ -242,7 +243,7 @@ class NotificationService {
         debugPrint('   Busy response written to alertResponses for job #$payload');
       } else if (actionId == 'dismiss') {
         debugPrint('   → Handling DISMISS for job #$payload by $name ($clockNo)');
-        await FirebaseFirestore.instance.collection('alertResponses').add({
+        await FirebaseFirestore.instance.collection(Collections.alertResponses).add({
           'jobCardNumber': payload,
           'action': 'dismissed',
           'clockNo': clockNo,
@@ -391,7 +392,7 @@ class NotificationService {
     _messaging.onTokenRefresh.listen((newToken) async {
       final clockNo = currentEmployee?.clockNo;
       if (clockNo != null) {
-        await FirebaseFirestore.instance.collection('employees').doc(clockNo).set({
+        await FirebaseFirestore.instance.collection(Collections.employees).doc(clockNo).set({
           'fcmToken': newToken,
           'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
@@ -454,7 +455,7 @@ class NotificationService {
       }
 
       final query = await FirebaseFirestore.instance
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('jobCardNumber', isEqualTo: jobNum)
           .limit(1)
           .get();
@@ -610,7 +611,7 @@ class NotificationService {
     try {
       final token = await _messaging.getToken();
       if (token != null && token.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('employees').doc(clockNo).set({
+        await FirebaseFirestore.instance.collection(Collections.employees).doc(clockNo).set({
           'fcmToken': token,
           'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));

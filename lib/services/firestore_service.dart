@@ -8,6 +8,7 @@ import '../models/assignment_event.dart';
 import '../models/copper_transaction.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import '../constants/collections.dart';
 import 'connectivity_service.dart';
 import 'sync_service.dart';
 
@@ -17,7 +18,7 @@ class FirestoreService {
   // Employee operations
   Future<Employee?> getEmployee(String clockNo) async {
     try {
-      final doc = await _firestore.collection('employees').doc(clockNo).get();
+      final doc = await _firestore.collection(Collections.employees).doc(clockNo).get();
       if (!doc.exists) return null;
       return Employee.fromFirestore(doc.data()!, clockNo);
     } catch (e) {
@@ -27,7 +28,7 @@ class FirestoreService {
 
   Future<void> updateEmployee(Employee employee) async {
     try {
-      await _firestore.collection('employees').doc(employee.clockNo).set(
+      await _firestore.collection(Collections.employees).doc(employee.clockNo).set(
             employee.toFirestore(),
             SetOptions(merge: true),
           );
@@ -38,7 +39,7 @@ class FirestoreService {
 
   Future<void> createEmployee(Employee employee) async {
     try {
-      await _firestore.collection('employees').doc(employee.clockNo).set(employee.toFirestore());
+      await _firestore.collection(Collections.employees).doc(employee.clockNo).set(employee.toFirestore());
     } catch (e) {
       throw Exception('Failed to create employee: $e');
     }
@@ -46,7 +47,7 @@ class FirestoreService {
 
   Future<void> deleteEmployee(String clockNo) async {
     try {
-      await _firestore.collection('employees').doc(clockNo).delete();
+      await _firestore.collection(Collections.employees).doc(clockNo).delete();
     } catch (e) {
       throw Exception('Failed to delete employee: $e');
     }
@@ -54,7 +55,7 @@ class FirestoreService {
 
   Future<void> deleteAllEmployees() async {
     try {
-      final snapshot = await _firestore.collection('employees').get();
+      final snapshot = await _firestore.collection(Collections.employees).get();
       const int chunkSize = 500;
       final docs = snapshot.docs;
 
@@ -73,7 +74,7 @@ class FirestoreService {
 
   Future<List<Employee>> getAllEmployees() async {
     try {
-      final snapshot = await _firestore.collection('employees').get();
+      final snapshot = await _firestore.collection(Collections.employees).get();
       return snapshot.docs.map((doc) {
         final data = doc.data();
         return Employee.fromFirestore(data, doc.id);
@@ -84,7 +85,7 @@ class FirestoreService {
   }
 
   Stream<List<Employee>> getEmployeesStream() {
-    return _firestore.collection('employees').snapshots().map((snapshot) {
+    return _firestore.collection(Collections.employees).snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
         return Employee.fromFirestore(data, doc.id);
@@ -94,7 +95,7 @@ class FirestoreService {
   
   Stream<Employee> getEmployeeStream(String clockNo) {
     return _firestore
-        .collection('employees')
+        .collection(Collections.employees)
         .doc(clockNo)
         .snapshots()
         .map((doc) {
@@ -111,7 +112,7 @@ class FirestoreService {
     try {
       await _firestore.runTransaction((transaction) async {
         // Get the counter document
-        final counterRef = _firestore.collection('counters').doc('jobCards');
+        final counterRef = _firestore.collection(Collections.counters).doc('jobCards');
         final counterSnapshot = await transaction.get(counterRef);
 
         int nextNumber;
@@ -127,7 +128,7 @@ class FirestoreService {
 
         // Create job card with the number
         final jobCardWithNumber = jobCard.copyWith(jobCardNumber: nextNumber);
-        final jobCardRef = _firestore.collection('job_cards').doc(); // Auto-ID
+        final jobCardRef = _firestore.collection(Collections.jobCards).doc(); // Auto-ID
         transaction.set(jobCardRef, jobCardWithNumber.toFirestore());
       });
     } catch (e) {
@@ -141,7 +142,7 @@ class FirestoreService {
       // arrayUnion/arrayRemove writes to the photos field. Photo mutations go
       // through addPhotoToJobCard / removePhotoFromJobCard below.
       await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .doc(jobCardId)
           .set(jobCard.toFirestore(includePhotos: false), SetOptions(merge: true));
     } catch (e) {
@@ -174,7 +175,7 @@ class FirestoreService {
         typeChangedFrom: from.name,
         typeChangedTo: to.name,
       );
-      await _firestore.collection('job_cards').doc(jobCardId).update({
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update({
         'type': to.name,
         'notifiedAtStage1': null,
         'notifiedAtStage2': null,
@@ -195,7 +196,7 @@ class FirestoreService {
   /// each other.
   Future<void> addPhotoToJobCard(String jobCardId, Map<String, dynamic> photo) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).update({
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update({
         'photos': FieldValue.arrayUnion([photo]),
       });
     } catch (e) {
@@ -209,7 +210,7 @@ class FirestoreService {
   /// requires a deep equality match.
   Future<void> removePhotoFromJobCard(String jobCardId, Map<String, dynamic> photo) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).update({
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update({
         'photos': FieldValue.arrayRemove([photo]),
       });
     } catch (e) {
@@ -219,7 +220,7 @@ class FirestoreService {
 
   Future<void> deleteJobCard(String jobCardId) async {
     try {
-      await _firestore.collection('job_cards').doc(jobCardId).delete();
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).delete();
     } catch (e) {
       throw Exception('Failed to delete job card: $e');
     }
@@ -227,7 +228,7 @@ class FirestoreService {
 
   Future<JobCard?> getJobCard(String jobCardId) async {
     try {
-      final doc = await _firestore.collection('job_cards').doc(jobCardId).get();
+      final doc = await _firestore.collection(Collections.jobCards).doc(jobCardId).get();
       if (!doc.exists) return null;
       return JobCard.fromFirestore(doc);
     } catch (e) {
@@ -236,12 +237,12 @@ class FirestoreService {
   }
 
   Stream<JobCard> getJobCardStream(String jobCardId) {
-    return _firestore.collection('job_cards').doc(jobCardId).snapshots().map((doc) => JobCard.fromFirestore(doc));
+    return _firestore.collection(Collections.jobCards).doc(jobCardId).snapshots().map((doc) => JobCard.fromFirestore(doc));
   }
 
   Stream<List<JobCard>> getOpenJobCards() {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('status', isEqualTo: 'open')
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
@@ -249,7 +250,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getAssignedJobCards(String employeeClockNo) {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('status', isEqualTo: 'open')
         .where('assignedClockNos', arrayContains: employeeClockNo)
         .snapshots()
@@ -271,7 +272,7 @@ class FirestoreService {
     }
 
     final s1 = _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('assignedClockNos', arrayContains: clockNo)
         .snapshots()
         .listen((snap) {
@@ -280,7 +281,7 @@ class FirestoreService {
     });
 
     final s2 = _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('operatorClockNo', isEqualTo: clockNo)
         .snapshots()
         .listen((snap) {
@@ -298,7 +299,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getCompletedJobCards() {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('status', isEqualTo: 'closed')
         .orderBy('completedAt', descending: true)
         .snapshots()
@@ -307,7 +308,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getAllJobCards() {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
@@ -327,7 +328,7 @@ class FirestoreService {
       required String type,
     }) {
       return _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
           .where('machine', isEqualTo: machine)
@@ -348,7 +349,7 @@ class FirestoreService {
       required String type,
     }) {
       return _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
           .where('machine', isEqualTo: machine)
@@ -368,7 +369,7 @@ class FirestoreService {
       required String part,
     }) {
       return _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
           .where('machine', isEqualTo: machine)
@@ -387,7 +388,7 @@ class FirestoreService {
       required String machine,
     }) {
       return _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
           .where('machine', isEqualTo: machine)
@@ -400,7 +401,7 @@ class FirestoreService {
 
   Future<List<JobCard>> getAllJobCardsFuture() async {
     try {
-      final snapshot = await _firestore.collection('job_cards').limit(1000).get();
+      final snapshot = await _firestore.collection(Collections.jobCards).limit(1000).get();
       return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
     } catch (e) {
       throw Exception('Failed to get all job cards: $e');
@@ -410,7 +411,7 @@ class FirestoreService {
   Future<List<String>> getDepartmentsForJobCards(String status) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: status)
           .get();
 
@@ -428,7 +429,7 @@ class FirestoreService {
   Future<List<String>> getAreasForJobCards(String status, String department) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: status)
           .where('department', isEqualTo: department)
           .get();
@@ -447,7 +448,7 @@ class FirestoreService {
   Future<List<String>> getMachinesForJobCards(String status, String department, String area) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: status)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
@@ -467,7 +468,7 @@ class FirestoreService {
   Future<List<String>> getPreviousParts(String department, String area, String machine) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('department', isEqualTo: department)
           .where('area', isEqualTo: area)
           .where('machine', isEqualTo: machine)
@@ -487,7 +488,7 @@ class FirestoreService {
   // Factory structure operations
   Future<Map<String, dynamic>> getFactoryStructure() async {
     try {
-      final doc = await _firestore.collection('structures').doc('factory').get();
+      final doc = await _firestore.collection(Collections.structures).doc('factory').get();
       return doc.data()?['data'] as Map<String, dynamic>? ?? {};
     } catch (e) {
       throw Exception('Failed to load factory structure: $e');
@@ -496,7 +497,7 @@ class FirestoreService {
 
   Future<void> updateFactoryStructure(Map<String, dynamic> structure) async {
     try {
-      await _firestore.collection('structures').doc('factory').set({'data': structure});
+      await _firestore.collection(Collections.structures).doc('factory').set({'data': structure});
     } catch (e) {
       throw Exception('Failed to update factory structure: $e');
     }
@@ -505,7 +506,7 @@ class FirestoreService {
   // Settings operations
   Future<void> initializeSettings() async {
     try {
-      final doc = await _firestore.collection('settings').doc('app').get();
+      final doc = await _firestore.collection(Collections.settings).doc('app').get();
       
       if (doc.exists) {
         debugPrint('Settings loaded successfully');
@@ -520,7 +521,7 @@ class FirestoreService {
 
   Future<String> getSwitchUserPassword() async {
     try {
-      final doc = await _firestore.collection('settings').doc('app').get();
+      final doc = await _firestore.collection(Collections.settings).doc('app').get();
       return doc.data()?['switchUserPassword'] as String? ?? 'admin123';
     } catch (e) {
       throw Exception('Failed to get switch user password: $e');
@@ -529,7 +530,7 @@ class FirestoreService {
 
   Future<void> updateSwitchUserPassword(String newPassword) async {
     try {
-      await _firestore.collection('settings').doc('app').set({
+      await _firestore.collection(Collections.settings).doc('app').set({
         'switchUserPassword': newPassword,
       }, SetOptions(merge: true));
     } catch (e) {
@@ -539,7 +540,7 @@ class FirestoreService {
 
   Future<Map<String, dynamic>> getNotificationConfig() async {
     try {
-      final doc = await _firestore.collection('notification_configs').doc('global').get();
+      final doc = await _firestore.collection(Collections.notificationConfigs).doc('global').get();
       if (doc.exists) return doc.data()!;
     } catch (e) {
       throw Exception('Failed to get notification config: $e');
@@ -558,7 +559,7 @@ class FirestoreService {
 
   Future<void> saveNotificationConfig(Map<String, dynamic> config) async {
     try {
-      await _firestore.collection('notification_configs').doc('global').set(config);
+      await _firestore.collection(Collections.notificationConfigs).doc('global').set(config);
     } catch (e) {
       throw Exception('Failed to save notification config: $e');
     }
@@ -566,7 +567,7 @@ class FirestoreService {
 
   Future<String?> getCopperPassword() async {
     try {
-      final doc = await _firestore.collection('settings').doc('app').get();
+      final doc = await _firestore.collection(Collections.settings).doc('app').get();
       return doc.data()?['copperPassword'] as String?;
     } catch (e) {
       throw Exception('Failed to get copper password: $e');
@@ -593,7 +594,7 @@ class FirestoreService {
   Future<int> getOpenJobCardsCount() async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: 'open')
           .count()
           .get();
@@ -607,7 +608,7 @@ class FirestoreService {
     try {
       final startTimestamp = Timestamp.fromDate(startDate);
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: 'closed')
           .where('completedAt', isGreaterThanOrEqualTo: startTimestamp)
           .count()
@@ -621,7 +622,7 @@ class FirestoreService {
   Future<Map<String, int>> getEmployeePerformance() async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: 'closed')
           .get();
 
@@ -643,7 +644,7 @@ class FirestoreService {
     try {
       // Get all completed job cards and filter in memory to avoid composite index requirement
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: 'closed')
           .get();
 
@@ -671,7 +672,7 @@ class FirestoreService {
 
   Future<Map<String, int>> getJobCardsByPriority() async {
     try {
-      final snapshot = await _firestore.collection('job_cards').get();
+      final snapshot = await _firestore.collection(Collections.jobCards).get();
 
       final priorityCounts = <String, int>{};
       for (var doc in snapshot.docs) {
@@ -690,7 +691,7 @@ class FirestoreService {
 
   Future<Map<String, int>> getJobCardsByType() async {
     try {
-      final snapshot = await _firestore.collection('job_cards').get();
+      final snapshot = await _firestore.collection(Collections.jobCards).get();
 
       final typeCounts = <String, int>{};
       for (var doc in snapshot.docs) {
@@ -709,7 +710,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getMonitoringJobCards() {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('status', isEqualTo: 'monitor')
         .orderBy('monitoringStartedAt', descending: false)
         .snapshots()
@@ -719,7 +720,7 @@ class FirestoreService {
   Future<List<JobCard>> getRecentlyAutoClosed(DateTime startDate) async {
     try {
       final snapshot = await _firestore
-          .collection('job_cards')
+          .collection(Collections.jobCards)
           .where('status', isEqualTo: 'closed')
           .where('closedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
           .orderBy('closedAt', descending: true)
@@ -732,7 +733,7 @@ class FirestoreService {
 
   Stream<List<JobCard>> getClosedJobCards() {
     return _firestore
-        .collection('job_cards')
+        .collection(Collections.jobCards)
         .where('status', isEqualTo: 'closed')
         .orderBy('closedAt', descending: true)
         .snapshots()
@@ -742,7 +743,7 @@ class FirestoreService {
   // Copper transaction operations
   Future<void> createCopperTransaction(CopperTransaction transaction) async {
     try {
-      await _firestore.collection('copper_transactions').doc(transaction.id).set(transaction.toFirestore());
+      await _firestore.collection(Collections.copperTransactions).doc(transaction.id).set(transaction.toFirestore());
     } catch (e) {
       throw Exception('Failed to create copper transaction: $e');
     }
@@ -762,7 +763,7 @@ class FirestoreService {
     } else {
       if (jobCard.id != null) {
         await SyncService().addToQueue(
-          collection: 'job_cards',
+          collection: Collections.jobCards,
           operation: 'update',
           data: jobCard.toFirestore(includePhotos: false),
           documentId: jobCard.id,
@@ -784,7 +785,7 @@ class FirestoreService {
       debugPrint('✅ CopperTransaction saved directly to Firestore');
     } else {
       await SyncService().addToQueue(
-        collection: 'copper_transactions',
+        collection: Collections.copperTransactions,
         operation: 'create',
         data: transaction.toFirestore(),
         documentId: transaction.id,
@@ -803,7 +804,7 @@ class FirestoreService {
         final end = (i + batchSize < jobCardIds.length) ? i + batchSize : jobCardIds.length;
         for (var j = i; j < end; j++) {
           batch.update(
-            _firestore.collection('job_cards').doc(jobCardIds[j]),
+            _firestore.collection(Collections.jobCards).doc(jobCardIds[j]),
             {'reviewedBy.$managerClockNo': FieldValue.serverTimestamp()},
           );
         }
@@ -825,7 +826,7 @@ class FirestoreService {
     String? notes,
   }) async {
     try {
-      await _firestore.collection('geo_fence_logs').add({
+      await _firestore.collection(Collections.geoFenceLogs).add({
         'timestamp': FieldValue.serverTimestamp(),
         'clockNo': clockNo,
         'eventType': eventType,
