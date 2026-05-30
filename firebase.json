@@ -27,12 +27,7 @@
     "region": "africa-south1",
     "predeploy": []
   },
-  "firestore": {
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
+  "// NOTE": "Firestore & Storage rules/indexes are centralized in /firebase (single source of truth). Deploy them from there, never from this app folder.",
   "hosting": [
     {
       "target": "app",
