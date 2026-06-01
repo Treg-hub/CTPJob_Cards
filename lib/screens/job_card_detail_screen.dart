@@ -77,8 +77,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   bool get _canEditBreadcrumb =>
       (_currentJobCard.operatorClockNo == currentEmployee?.clockNo ||
        isAdmin(currentEmployee)) &&
-      _currentJobCard.status != JobStatus.closed &&
-      _currentJobCard.status != JobStatus.cancelled;
+      _currentJobCard.status != JobStatus.closed;
 
   Future<void> _refreshJobCard() async {
     if (_currentJobCard.id != null) {
