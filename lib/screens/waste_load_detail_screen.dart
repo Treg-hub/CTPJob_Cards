@@ -95,7 +95,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             Text('Actual (weighbridge): ${formatSAWeight(result.actualWeightKg)}'),
             const SizedBox(height: 8),
             Text('Variance: ${formatSAWeight(result.varianceKg)}  (${result.variancePercent.toStringAsFixed(1)}%)'),
-            Text('Thresholds: ${result.thresholdPercent.toStringAsFixed(0)}% or ${result.thresholdKg.toStringAsFixed(0)} kg', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text('Thresholds: ${result.thresholdPercent.toStringAsFixed(0)}% or ${result.thresholdKg.toStringAsFixed(0)} kg', style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
             if (isDev)
               Container(
                 margin: const EdgeInsets.only(top: 12),
@@ -200,7 +200,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
               const SizedBox(height: 16),
               Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled (safety valve). Contact admin.', style: const TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled (safety valve). Contact admin.', style: const TextStyle(color: Color(0xFF616161)), textAlign: TextAlign.center),
               if (_isAdmin) ...[
                 const SizedBox(height: 16),
                 ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
@@ -477,7 +477,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           if (_isAdmin) ...[
             const SizedBox(height: 16),
             const Text('Admin: Soft delete and full edit available in a future version.',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+                style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
           ],
           const SizedBox(height: 24),
         ],
@@ -489,9 +489,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.grey),
+        Icon(icon, size: 16, color: const Color(0xFF757575)),
         const SizedBox(width: 8),
-        Text('$label  ', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text('$label  ', style: const TextStyle(color: Color(0xFF616161), fontSize: 13)),
         Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
       ],
     );
@@ -499,23 +499,26 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
   Widget _weightBox(String label, String value, Color color) {
     final isGrey = color == Colors.grey;
+    // When the box is grey (no data entered), use a dark text colour for
+    // WCAG AA contrast on the light grey background.
+    final valueColor = isGrey ? const Color(0xFF424242) : null;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isGrey ? null : color.withValues(alpha: 0.08),
+        color: isGrey ? Colors.grey.shade100 : color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isGrey ? Colors.grey.shade300 : color.withValues(alpha: 0.3)),
+        border: Border.all(color: isGrey ? Colors.grey.shade400 : color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
           const SizedBox(height: 4),
           Text(value,
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: isGrey ? Colors.grey : null)),
+                  color: valueColor)),
         ],
       ),
     );
@@ -536,7 +539,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       case WasteLoadStatus.completed:          return Colors.green;
       case WasteLoadStatus.scheduled:          return Colors.blue;
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
-      case WasteLoadStatus.cancelled:          return Colors.grey;
+      case WasteLoadStatus.cancelled:          return const Color(0xFF757575);
       default:                                 return Colors.orange;
     }
   }

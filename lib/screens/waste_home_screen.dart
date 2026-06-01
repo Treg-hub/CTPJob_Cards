@@ -16,6 +16,7 @@ import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_queued_screen.dart';
+import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
 // Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
@@ -56,7 +57,7 @@ class _IncomingLoadCard extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Date picker
-              const Text('Expected date', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text('Expected date', style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
               const SizedBox(height: 6),
               InkWell(
                 onTap: () async {
@@ -87,7 +88,7 @@ class _IncomingLoadCard extends StatelessWidget {
               ),
 
               const SizedBox(height: 14),
-              const Text('Notes', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text('Notes', style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
               const SizedBox(height: 6),
               TextField(
                 controller: notesCtrl,
@@ -208,18 +209,18 @@ class _IncomingLoadCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('Contractor ID: ${load.contractorId}',
-                style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
             if (load.scheduledNotes != null && load.scheduledNotes!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text('Note: ${load.scheduledNotes}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                    style: const TextStyle(fontSize: 12, color: Colors.black87)),
               ),
             const SizedBox(height: 4),
             Row(
               children: [
                 Icon(Icons.access_time, size: 14,
-                    color: isPast ? Colors.red : Colors.black45),
+                    color: isPast ? Colors.red : const Color(0xFF616161)),
                 const SizedBox(width: 4),
                 Text(
                   '${isToday ? 'Today' : isPast ? 'Overdue' : 'Expected'} — '
@@ -227,7 +228,7 @@ class _IncomingLoadCard extends StatelessWidget {
                   '${scheduledDate.hour.toString().padLeft(2, '0')}:${scheduledDate.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isPast ? Colors.red.shade700 : Colors.black54,
+                    color: isPast ? Colors.red.shade700 : Colors.black87,
                     fontWeight: isPast ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
@@ -425,7 +426,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Items pending offline sync',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
               ),
               const SizedBox(height: 12),
               if (breakdown.isEmpty)
@@ -462,7 +463,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
               const SizedBox(height: 12),
               const Text(
                 'Auto-syncs on reconnect. Use the orange cloud retry icon (top right) to force now.',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
               ),
               const SizedBox(height: 8),
               Align(
@@ -495,7 +496,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
       case WasteLoadStatus.completed:          return Colors.green;
       case WasteLoadStatus.scheduled:          return const Color(0xFF2E7D32);
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
-      case WasteLoadStatus.cancelled:          return Colors.grey;
+      case WasteLoadStatus.cancelled:          return const Color(0xFF757575);
       default:                                 return Colors.orange;
     }
   }
@@ -521,7 +522,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.block, size: 64, color: Colors.grey),
+                const Icon(Icons.block, size: 64, color: Color(0xFF757575)),
                 const SizedBox(height: 16),
                 Text(
                   _pilotModeActive
@@ -534,13 +535,13 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                   _pilotModeActive
                       ? 'Your clock number (${_userClock ?? 'unknown'}) is not included in the pilot list.'
                       : 'The feature flag has disabled WasteTrack (safety valve).',
-                  style: const TextStyle(color: Colors.grey),
+                  style: const TextStyle(color: Color(0xFF616161)),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Contact an administrator to adjust access or pilot configuration.',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  style: const TextStyle(color: Color(0xFF424242), fontSize: 12),
                 ),
                 if (isAdmin) ...[
                   const SizedBox(height: 20),
@@ -648,7 +649,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
             ),
           if (isAdmin)
             IconButton(
-              icon: Icon(wasteEnabled ? Icons.toggle_on : Icons.toggle_off, color: wasteEnabled ? Colors.green : Colors.grey),
+              icon: Icon(wasteEnabled ? Icons.toggle_on : Icons.toggle_off, color: wasteEnabled ? Colors.green : const Color(0xFF757575)),
               tooltip: wasteEnabled ? 'Disable WasteTrack (safety valve)' : 'Enable WasteTrack',
               onPressed: () async {
                 await _wasteService.setWasteMasterEnabled(!wasteEnabled);
@@ -890,7 +891,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                                   Text(
                                                     '${load.mainWasteType}'
                                                     '${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
-                                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                    style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ],
@@ -901,20 +902,19 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                                                 Text(formatSADate(load.dateTime),
-                                                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                                    style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
                                                 const SizedBox(height: 3),
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                   decoration: BoxDecoration(
-                                                    color: statusColor.withValues(alpha: 0.1),
+                                                    color: statusColor,
                                                     borderRadius: BorderRadius.circular(20),
-                                                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
                                                   ),
                                                   child: Text(
                                                     load.status.displayLabel,
                                                     style: TextStyle(
-                                                        fontSize: 10,
-                                                        color: statusColor,
+                                                        fontSize: 11,
+                                                        color: onColor(statusColor),
                                                         fontWeight: FontWeight.w600),
                                                   ),
                                                 ),

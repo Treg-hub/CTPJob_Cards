@@ -196,7 +196,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     debugPrint('AdminScreen initState'); // Debug
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -555,11 +555,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         title: const Text('Admin - Manage Collections'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: const [
-            Tab(text: 'Employees'),
-            Tab(text: 'Structures'),
-            Tab(text: 'Settings'),
-            Tab(text: 'Job Cards'),
+            Tab(icon: Icon(Icons.people, size: 18), text: 'Employees'),
+            Tab(icon: Icon(Icons.account_tree, size: 18), text: 'Structures'),
+            Tab(icon: Icon(Icons.tune, size: 18), text: 'Settings'),
+            Tab(icon: Icon(Icons.assignment, size: 18), text: 'Job Cards'),
+            Tab(icon: Icon(Icons.location_on, size: 18), text: 'On Site'),
           ],
         ),
       ),
@@ -570,12 +572,118 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           _buildStructuresTab(),
           _buildSettingsTab(),
           _buildJobCardsTab(),
+          _buildOnsiteTab(),
         ],
       ),
       floatingActionButton: (_tabController.index == 0 || _tabController.index == 3) ? FloatingActionButton(
-        onPressed: () => _tabController.index == 0 ? _showEmployeeDialog() : null, // No add for job cards yet
+        onPressed: () => _tabController.index == 0 ? _showEmployeeDialog() : null,
         child: const Icon(Icons.add),
       ) : null,
+    );
+  }
+
+  Widget _buildOnsiteTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('employees')
+          .where('isOnSite', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}'));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_off, size: 56, color: Colors.grey.shade400),
+                const SizedBox(height: 12),
+                const Text('No employees currently on site',
+                    style: TextStyle(fontSize: 16, color: Color(0xFF757575))),
+              ],
+            ),
+          );
+        }
+
+        // Group by department
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final dept = (data['department'] as String? ?? 'Unknown').trim();
+          grouped.putIfAbsent(dept, () => []).add({...data, 'id': doc.id});
+        }
+        final depts = grouped.keys.toList()..sort();
+
+        return Column(
+          children: [
+            Container(
+              width: double.infinity,
+              color: Colors.green.shade50,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              child: Text(
+                '${docs.length} employee${docs.length == 1 ? '' : 's'} on site',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  for (final dept in depts) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+                      child: Text(
+                        dept,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF757575),
+                            letterSpacing: 0.5),
+                      ),
+                    ),
+                    for (final emp in grouped[dept]!)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.green.shade100,
+                            child: Text(
+                              (emp['name'] as String? ?? '?')[0].toUpperCase(),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade800),
+                            ),
+                          ),
+                          title: Text(
+                            emp['name'] as String? ?? '—',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(emp['position'] as String? ?? '—'),
+                          trailing: Text(
+                            emp['id'] as String? ?? '',
+                            style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                color: Color(0xFF757575)),
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -680,9 +788,21 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                           DataCell(isEditing ? TextField(controller: _positionController) : Text(emp.position)),
                           DataCell(isEditing ? TextField(controller: _departmentController) : Text(emp.department)),
                           DataCell(
-                            Checkbox(
-                              value: emp.isOnSite,
-                              onChanged: (v) => _firestoreService.updateEmployee(emp.copyWith(isOnSite: v ?? true)),
+                            GestureDetector(
+                              onTap: () => _firestoreService.updateEmployee(emp.copyWith(isOnSite: !emp.isOnSite)),
+                              child: Chip(
+                                label: Text(
+                                  emp.isOnSite ? 'On Site' : 'Off Site',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: emp.isOnSite ? Colors.green.shade800 : Colors.grey.shade700,
+                                  ),
+                                ),
+                                backgroundColor: emp.isOnSite ? Colors.green.shade100 : Colors.grey.shade200,
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                              ),
                             ),
                           ),
                           DataCell(isEditing ? SizedBox(width: 150, child: TextField(controller: _fcmController)) : SizedBox(width: 150, child: Text(emp.fcmToken != null ? (emp.fcmToken!.length > 100 ? '${emp.fcmToken!.substring(0, 100)}...' : emp.fcmToken!) : '', overflow: TextOverflow.ellipsis))),

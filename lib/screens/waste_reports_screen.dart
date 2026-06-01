@@ -240,11 +240,11 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.block, size: 64, color: Colors.grey),
+              const Icon(Icons.block, size: 64, color: Color(0xFF757575)),
               const SizedBox(height: 16),
               Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Reports disabled by feature flag.', style: const TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Reports disabled by feature flag.', style: const TextStyle(color: Color(0xFF616161)), textAlign: TextAlign.center),
               if (isAdmin) ...[
                 const SizedBox(height: 16),
                 ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); _loadRealData(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
@@ -337,7 +337,7 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
                               const SizedBox(height: 8),
                               const Text(
                                 'Deviation calculated with shared util (same as weighbridge entry screen). Exports now include variance columns.',
-                                style: TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
                               ),
                             ],
                           ),
@@ -369,7 +369,7 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
                       // Excel note (per task - cannot add package)
                       const Text(
                         'Excel (.xlsx) export not available: would require adding the "excel" package in pubspec.yaml (outside allowed edit scope for safety). CSV is fully functional and opens directly in Excel/Sheets.',
-                        style: TextStyle(color: Colors.grey, fontSize: 11),
+                        style: TextStyle(color: Color(0xFF616161), fontSize: 12),
                       ),
                       const SizedBox(height: 24),
                       const Text('Recent Loads (live data)', style: TextStyle(fontWeight: FontWeight.bold)),

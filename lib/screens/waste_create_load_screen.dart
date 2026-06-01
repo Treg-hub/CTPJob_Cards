@@ -93,13 +93,13 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.block, size: 64, color: Colors.grey),
+                Icon(Icons.block, size: 64, color: const Color(0xFF757575)),
                 SizedBox(height: 16),
                 Text('WasteTrack is currently disabled or not available in pilot for your account.',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
                 SizedBox(height: 8),
-                Text('Contact an administrator for access.', style: TextStyle(color: Colors.grey)),
+                Text('Contact an administrator for access.', style: TextStyle(color: const Color(0xFF616161))),
               ],
             ),
           ),
@@ -126,7 +126,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                   const SizedBox(height: 8),
                   const Text(
                     'This choice locks the entire load. One load = one main waste type only.',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: const Color(0xFF616161)),
                   ),
                   const SizedBox(height: 24),
 
@@ -174,7 +174,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                                             padding: const EdgeInsets.only(top: 4),
                                             child: Text(
                                               '${type.subtypes.length} subtypes',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                              style: const TextStyle(fontSize: 12, color: const Color(0xFF616161)),
                                             ),
                                           ),
                                       ],
@@ -353,7 +353,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.block, size: 64, color: Colors.grey),
+                const Icon(Icons.block, size: 64, color: const Color(0xFF757575)),
                 const SizedBox(height: 16),
                 Text(
                   isMasterOff
@@ -366,13 +366,13 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                   isMasterOff
                       ? 'Contact an administrator to re-enable.'
                       : 'Your clock number (${_userClock ?? 'unknown'}) is not included in the current pilot list.',
-                  style: const TextStyle(color: Colors.grey),
+                  style: const TextStyle(color: const Color(0xFF616161)),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'This screen is unavailable until the feature flag allows access.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: const Color(0xFF616161)),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -394,7 +394,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           children: [
             // Live total (per spec)
             Card(
-              color: Colors.green.shade50,
+              color: Colors.green.shade100,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -446,7 +446,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             const Text('Waste Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Text(
               'Each item requires at least 1 photo (enforced on save)',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(color: const Color(0xFF616161), fontSize: 12),
             ),
             const SizedBox(height: 8),
 
@@ -520,7 +520,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             const SizedBox(height: 8),
             const Text(
               'Next steps in this flow: Mark Complete → Driver Signature → Weighbridge (Admin/Manager)',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: const Color(0xFF616161)),
               textAlign: TextAlign.center,
             ),
           ],
@@ -616,7 +616,7 @@ class _AddWasteItemDialogState extends State<_AddWasteItemDialog> {
               decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
             ),
             const SizedBox(height: 12),
-            Text('Photos * (${_photos.length})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text('Photos * (${_photos.length})', style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
             const SizedBox(height: 6),
             Row(
               children: [

@@ -199,7 +199,7 @@ class _WasteBeginCollectionScreenState
                   ),
                   if (widget.load.scheduledByName != null)
                     Text('Scheduled by: ${widget.load.scheduledByName}',
-                        style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        style: const TextStyle(fontSize: 12, color: Colors.black87)),
                   if (widget.load.scheduledNotes != null &&
                       widget.load.scheduledNotes!.isNotEmpty)
                     Padding(
@@ -264,14 +264,14 @@ class _WasteBeginCollectionScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: Colors.grey.shade400),
                 ),
                 child: const Text(
                   'At least one item with a photo is required.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: Color(0xFF424242)),
                 ),
               )
             else
@@ -369,7 +369,7 @@ class _WasteBeginCollectionScreenState
               const Text(
                 'Complete all fields, add at least one item with photo, and capture signature to submit.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: Color(0xFF616161)),
               ),
             const SizedBox(height: 24),
           ],
@@ -459,7 +459,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (widget.subtypes.isNotEmpty) ...[
-              const Text('Subtype', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Text('Subtype', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
               DropdownButton<String>(
                 value: _subtype,
                 isExpanded: true,
@@ -492,7 +492,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
             ),
             const SizedBox(height: 12),
             Text('Photos (${_photos.length}) *',
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
             const SizedBox(height: 6),
             Row(
               children: [

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee;
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
@@ -17,6 +18,8 @@ import '../utils/role.dart' show isAdmin;
 import 'admin_screen.dart';
 import 'documentation_screen.dart';
 import 'notification_diagnostics_screen.dart';
+import 'notification_inbox_screen.dart';
+import 'notification_test_screen.dart';
 import 'login_screen.dart';
 import '../widgets/reset_permissions_button.dart';
 
@@ -32,12 +35,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
   bool isOnSite = true;
+  Stream<QuerySnapshot>? _inboxStream;
 
   @override
   void initState() {
     super.initState();
     _loadOnSiteStatus();
     _initializeLocalNotifications();
+    _setupInboxStream();
+  }
+
+  void _setupInboxStream() {
+    final clockNo = currentEmployee?.clockNo;
+    if (clockNo == null) return;
+    _inboxStream = FirebaseFirestore.instance
+        .collection('notification_inbox')
+        .doc(clockNo)
+        .collection('items')
+        .where('read', isEqualTo: false)
+        .snapshots();
   }
 
   Future<void> _initializeLocalNotifications() async {
@@ -52,69 +68,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() => isOnSite = emp.isOnSite);
       }
     } catch (_) {}
-  }
-
-  Future<void> _testFullScreenAlert() async {
-    try {
-      await _notificationService.testFullLoudNotification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ FULL SCREEN (Priority 4-5) triggered! Should bypass DND + take over screen'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _testPersistentNotification() async {
-    try {
-      await _notificationService.testMediumHighNotification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Persistent / Medium-High triggered! (custom sound + vibration)'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _testGeneralNotification() async {
-    try {
-      await _notificationService.testNormalNotification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ General (Normal) notification triggered!'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 
   Widget _buildPermissionTile(String title, bool isGranted, String permKey) {
@@ -215,232 +168,271 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Current User Card
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Current User', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  Text(
-                    currentEmployee?.name ?? 'Unknown',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('Clock No: ${currentEmployee?.clockNo ?? '—'}'),
-                  Text('Department: ${currentEmployee?.department ?? '—'}'),
-                  const SizedBox(height: 8),
-                  Row(
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _inboxStream,
+        builder: (context, inboxSnap) {
+          final unreadCount = inboxSnap.data?.docs.length ?? 0;
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
+
+              // ── Your Profile ─────────────────────────────────────
+              _SectionHeader('Your Profile'),
+              Card(
+                elevation: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(isOnSite ? Icons.check_circle : Icons.cancel, color: isOnSite ? Colors.green : Colors.red),
-                      const SizedBox(width: 8),
-                      Text(isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused'),
+                      Text('Current User', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 6),
+                      Text(
+                        currentEmployee?.name ?? 'Unknown',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Clock No: ${currentEmployee?.clockNo ?? '—'}'),
+                      Text('Department: ${currentEmployee?.department ?? '—'}'),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(isOnSite ? Icons.check_circle : Icons.cancel,
+                              color: isOnSite ? Colors.green : Colors.red, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            isOnSite ? 'ON SITE – Ready for jobs' : 'OFF SITE – Notifications paused',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isOnSite ? Colors.green.shade700 : Colors.red.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                elevation: 2,
+                child: ListTile(
+                  leading: const Icon(Icons.menu_book, color: Color(0xFFFF8C42)),
+                  title: const Text('Documentation'),
+                  subtitle: const Text('Guides, references, and troubleshooting'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentationScreen())),
+                ),
+              ),
+
+              // ── Preferences ──────────────────────────────────────
+              const SizedBox(height: 16),
+              _SectionHeader('Preferences'),
+              Card(
+                elevation: 2,
+                child: SwitchListTile(
+                  secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFFF8C42)),
+                  title: const Text('Dark Mode'),
+                  subtitle: Text(isDark ? 'Switch to light theme' : 'Switch to dark theme'),
+                  value: isDark,
+                  activeThumbColor: const Color(0xFFFF8C42),
+                  onChanged: (_) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
+                ),
+              ),
+
+              // ── Notifications ─────────────────────────────────────
+              const SizedBox(height: 16),
+              _SectionHeader('Notifications'),
+              Card(
+                elevation: 2,
+                child: ListTile(
+                  leading: unreadCount > 0
+                      ? Badge(
+                          label: Text('$unreadCount'),
+                          child: const Icon(Icons.notifications_outlined, color: Color(0xFFFF8C42)),
+                        )
+                      : const Icon(Icons.notifications_outlined, color: Color(0xFFFF8C42)),
+                  title: const Text('Notification Inbox'),
+                  subtitle: Text(unreadCount > 0
+                      ? '$unreadCount unread — received while offsite'
+                      : 'No unread notifications'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationInboxScreen())),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                elevation: 2,
+                child: ListTile(
+                  leading: const Icon(Icons.science_outlined, color: Colors.blueGrey),
+                  title: const Text('Notification Tests'),
+                  subtitle: const Text('Test full-screen, persistent, and general alerts'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationTestScreen())),
+                ),
+              ),
+
+              // ── App & Connectivity ────────────────────────────────
+              const SizedBox(height: 16),
+              _SectionHeader('App & Connectivity'),
+              const ResetPermissionsButton(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Checking for updates...'), duration: Duration(seconds: 1)),
+                        );
+                        try {
+                          await UpdateService().forceCheckForUpdate(context);
+                        } catch (e) {
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.system_update),
+                      label: const Text('Check for Update'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8C42),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Refreshing FCM token...'), duration: Duration(seconds: 1)),
+                        );
+                        try {
+                          await _notificationService.refreshToken();
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('FCM Token refreshed'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh FCM Token'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
 
-          const SizedBox(height: 16),
-
-          // Documentation entry — role-filtered list inside.
-          Card(
-            elevation: 2,
-            child: ListTile(
-              leading: const Icon(Icons.menu_book, color: Color(0xFFFF8C42)),
-              title: const Text('Documentation'),
-              subtitle: const Text('Guides, references, and troubleshooting'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DocumentationScreen()),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          const ResetPermissionsButton(),
-          const SizedBox(height: 16),
-
-          // Theme toggle
-          Card(
-            elevation: 2,
-            child: SwitchListTile(
-              secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFFF8C42)),
-              title: const Text('Dark Mode'),
-              subtitle: Text(isDark ? 'Switch to light theme' : 'Switch to dark theme'),
-              value: isDark,
-              activeThumbColor: const Color(0xFFFF8C42),
-              onChanged: (_) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Update & FCM buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Checking for updates...'), duration: Duration(seconds: 1)),
-                    );
-                    try {
-                      await UpdateService().forceCheckForUpdate(context);
-                    } catch (e) {
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                      );
+              // ── App Permissions ───────────────────────────────────
+              if (!kIsWeb) ...[
+                const SizedBox(height: 16),
+                _SectionHeader('App Permissions'),
+                FutureBuilder<Map<String, bool>>(
+                  future: _notificationService.checkAllCriticalPermissions(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())));
                     }
+                    final perms = snapshot.data!;
+                    return Column(
+                      children: [
+                        _buildPermissionTile('Notifications', perms['post_notifications'] ?? false, 'notification'),
+                        _buildPermissionTile('Display over other apps (Full-screen)', perms['system_alert_window'] ?? false, 'system_alert_window'),
+                        _buildPermissionTile('DND / Notification Policy', perms['notification_policy'] ?? false, 'notification_policy'),
+                        _buildPermissionTile('Ignore Battery Optimization', perms['ignore_battery'] ?? false, 'ignore_battery'),
+                        _buildPermissionTile('Location (Always)', true, 'location'),
+                      ],
+                    );
                   },
-                  icon: const Icon(Icons.system_update),
-                  label: const Text('Check for Update'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8C42),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ],
+
+              // ── Admin ────────────────────────────────────────────
+              if (isAdminUser) ...[
+                const SizedBox(height: 16),
+                _SectionHeader('Admin'),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.amber.shade300, width: 1),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.amber.shade50.withValues(alpha: isDark ? 0.05 : 1.0),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.settings, color: Color(0xFF14B8A6)),
+                        title: const Text('Admin Settings'),
+                        subtitle: const Text('Employees, structures, escalation config, job cards'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.bug_report, color: Colors.purple),
+                        title: const Text('Notification Diagnostics'),
+                        subtitle: const Text('Advanced fullscreen & permission testing'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Refreshing FCM token...'), duration: Duration(seconds: 1)),
-                    );
-                    try {
-                      await _notificationService.refreshToken();
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('✅ FCM Token refreshed!'), backgroundColor: Colors.green),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh FCM Token'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueGrey,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+              ],
+
+              // ── Account ───────────────────────────────────────────
+              const SizedBox(height: 24),
+              Card(
+                elevation: 2,
+                child: ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: const Text('Log Out'),
+                  onTap: _logout,
                 ),
               ),
+              const SizedBox(height: 16),
             ],
-          ),
+          );
+        },
+      ),
+    );
+  }
+}
 
-          if (!kIsWeb) ...[
-            const SizedBox(height: 24),
-            const Text('App Permissions Required', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            FutureBuilder<Map<String, bool>>(
-              future: _notificationService.checkAllCriticalPermissions(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())));
-                }
-                final perms = snapshot.data!;
-                return Column(
-                  children: [
-                    _buildPermissionTile('Notifications', perms['post_notifications'] ?? false, 'notification'),
-                    _buildPermissionTile('Display over other apps (Full-screen)', perms['system_alert_window'] ?? false, 'system_alert_window'),
-                    _buildPermissionTile('DND / Notification Policy', perms['notification_policy'] ?? false, 'notification_policy'),
-                    _buildPermissionTile('Ignore Battery Optimization', perms['ignore_battery'] ?? false, 'ignore_battery'),
-                    _buildPermissionTile('Location (Always)', true, 'location'),
-                  ],
-                );
-              },
-            ),
-          ],
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader(this.title);
 
-          const SizedBox(height: 24),
-          const Text('Notification Tests', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.fullscreen, color: Colors.red, size: 28),
-              title: const Text('1. Full Screen Alert Test'),
-              subtitle: const Text('Priority 5 full-screen takeover (bypasses DND)'),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                onPressed: _testFullScreenAlert,
-                child: const Text('TEST'),
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Row(
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF757575),
+              letterSpacing: 0.8,
             ),
           ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.notifications_active, color: Colors.orange, size: 28),
-              title: const Text('2. Persistent Notification'),
-              subtitle: const Text('Red persistent banner with action buttons'),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-                onPressed: _testPersistentNotification,
-                child: const Text('TEST'),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.notifications, color: Colors.blue, size: 28),
-              title: const Text('3. General Notification'),
-              subtitle: const Text('Standard job assignment / alert'),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                onPressed: _testGeneralNotification,
-                child: const Text('TEST'),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          if (isAdminUser) ...[
-            const Text('Admin (Clock 22)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.settings, color: Color(0xFF14B8A6)),
-                title: const Text('Manage Collections'),
-                subtitle: const Text('Firestore admin tools, migrations, employees'),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.bug_report, color: Colors.purple),
-                title: const Text('Notification Diagnostics'),
-                subtitle: const Text('Advanced fullscreen & permission testing'),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 32),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Log Out'),
-              onTap: _logout,
-            ),
-          ),
+          const SizedBox(width: 8),
+          const Expanded(child: Divider(height: 1)),
         ],
       ),
     );
