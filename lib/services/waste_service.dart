@@ -277,6 +277,7 @@ class WasteService {
     }
 
     // 4. Upload item photos and write items (reuse existing patterns).
+    int totalPhotoCount = 0;
     for (final item in itemsData) {
       final itemRef = _firestore.collection(Collections.wasteItems).doc();
       final photoUrls = <String>[];
@@ -293,10 +294,12 @@ class WasteService {
         }
       }
 
+      totalPhotoCount += photoUrls.length;
+
       final itemData = {
         ...item,
         'load_id': loadId,
-        'photo_urls': photoUrls,
+        'photos': photoUrls,
         'createdAt': FieldValue.serverTimestamp(),
       }..remove('localPhotoPaths');
 
@@ -309,6 +312,7 @@ class WasteService {
       );
     }
 
+    await ref.update({'photo_count': totalPhotoCount});
     await SyncService().processNow();
   }
 
@@ -337,39 +341,6 @@ class WasteService {
   // ---------------------------------------------------------------------------
   // PHOTO HANDLING (reused & adapted from Job Cards patterns)
   // ---------------------------------------------------------------------------
-
-  /// Shows camera/gallery chooser, picks image, compresses heavily, returns local path.
-  /// Call this while building a load/item (offline friendly).
-  Future<String?> pickAndCompressPhoto() async {
-    final picker = ImagePicker();
-
-    // Simple chooser (can be improved with a nice dialog later)
-    final source = await showImageSourceDialog(); // defined below or passed from UI
-    if (source == null) return null;
-
-    final pickedFile = await picker.pickImage(source: source, imageQuality: 85);
-    if (pickedFile == null) return null;
-
-    final compressedFile = await FlutterImageCompress.compressAndGetFile(
-      pickedFile.path,
-      '${pickedFile.path}_waste_compressed.jpg',
-      minWidth: 1024,
-      minHeight: 1024,
-      quality: 70,
-      format: CompressFormat.jpeg,
-    );
-
-    if (compressedFile == null) return null;
-    return compressedFile.path;
-  }
-
-  // Placeholder — in real screens we will show a proper dialog.
-  // For service, we accept source directly in a second method.
-  Future<ImageSource?> showImageSourceDialog() async {
-    // This is intentionally not implemented here — UI layer should call a dialog
-    // and then pass the chosen source to pickAndCompressPhotoFromSource.
-    return null;
-  }
 
   Future<String?> pickAndCompressPhotoFromSource(ImageSource source) async {
     final picker = ImagePicker();
@@ -601,6 +572,7 @@ class WasteService {
       }
 
       // Photo + finalize pass (live uploads here; failures go to central queue WITH concrete itemId)
+      int totalPhotoCount = loadPhotoUrls.length;
       for (final prep in preparedItems) {
         final itemRef = prep['itemRef'] as DocumentReference;
         final List<String> localPhotos = List<String>.from(prep['localPhotos'] as List);
@@ -625,6 +597,8 @@ class WasteService {
           }
         }
 
+        totalPhotoCount += photoUrls.length;
+
         final itemData = {
           ...itemDataBase,
           'photos': photoUrls,
@@ -642,6 +616,7 @@ class WasteService {
       }
 
       await batch.commit();
+      await updateLoad(loadId, {'photo_count': totalPhotoCount});
 
       return {
         'id': loadId,

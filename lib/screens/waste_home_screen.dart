@@ -839,34 +839,93 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                   ),
                                 )
                               else
-                                ..._recentLoads.map((load) => Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  child: ListTile(
-                                    leading: Icon(
-                                      _statusIcon(load.status),
-                                      color: _statusColor(load.status),
+                                ..._recentLoads.where((load) {
+                                  if (_filter == 'today') {
+                                    return DateUtils.isSameDay(load.dateTime, DateTime.now());
+                                  }
+                                  if (_filter == 'week') {
+                                    return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+                                  }
+                                  return true;
+                                }).map((load) {
+                                  final statusColor = _statusColor(load.status);
+                                  return Card(
+                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(color: statusColor.withValues(alpha: 0.3)),
                                     ),
-                                    title: Text(load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType),
-                                    subtitle: Text(
-                                      '${load.mainWasteType}${load.driverName.isNotEmpty ? ' • ${load.driverName}' : ''}${load.vehicleReg.isNotEmpty ? ' • ${load.vehicleReg}' : ''}',
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(10),
+                                      onTap: () async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)),
+                                        );
+                                        if (mounted) _loadRecentLoads();
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withValues(alpha: 0.12),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(_statusIcon(load.status), color: statusColor, size: 20),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType,
+                                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '${load.mainWasteType}'
+                                                    '${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
+                                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Text(formatSADate(load.dateTime),
+                                                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                                const SizedBox(height: 3),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor.withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                                                  ),
+                                                  child: Text(
+                                                    load.status.displayLabel,
+                                                    style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: statusColor,
+                                                        fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                    trailing: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(formatSADate(load.dateTime), style: const TextStyle(fontSize: 12)),
-                                        Text(load.status.displayLabel, style: TextStyle(fontSize: 10, color: _statusColor(load.status))),
-                                      ],
-                                    ),
-                                    onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)),
-                                      );
-                                      if (mounted) _loadRecentLoads();
-                                    },
-                                  ),
-                                )),
+                                  );
+                                }),
                             ],
                           ),
                         ),

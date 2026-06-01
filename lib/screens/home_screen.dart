@@ -524,28 +524,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: _gridSpacing,
-            runSpacing: _gridSpacing,
-            children: [
-              ..._quickActions.map((action) => _buildQuickActionCard(
-                action['title'] as String,
-                action['icon'] as IconData,
-                action['color'] as Color,
-                action['onTap'] as VoidCallback,
-              )),
-              if (kIsWeb && (isManager || isSuperManager))
-                _DailyReviewTile(
-                  pendingCount: _pendingReviewCount,
-                  iconSize: _iconSize,
-                  padding: _cardPaddingInsets,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: _gridSpacing,
+              runSpacing: _gridSpacing,
+              children: [
+                ..._quickActions.map((action) => _buildQuickActionCard(
+                  action['title'] as String,
+                  action['icon'] as IconData,
+                  action['color'] as Color,
+                  action['onTap'] as VoidCallback,
+                )),
+                if (kIsWeb && (isManager || isSuperManager))
+                  _DailyReviewTile(
+                    pendingCount: _pendingReviewCount,
+                    iconSize: _iconSize,
+                    padding: _cardPaddingInsets,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 24),
