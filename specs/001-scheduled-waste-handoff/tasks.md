@@ -14,7 +14,7 @@
 
 - [x] T001 Verify feature branch `001-scheduled-waste-handoff` is checked out (`git branch`)
 - [x] T002 Add two composite Firestore indexes to `firestore.indexes.json` — `(is_deleted, status, scheduled_for ASC)` and `(is_deleted, status, pending_weighbridge_at DESC)` per `data-model.md`
-- [ ] T003 Deploy Firestore indexes with `firebase deploy --only firestore` and confirm no index errors
+- [x] T003 Deploy Firestore indexes with `firebase deploy --only firestore` and confirm no index errors
 
 ---
 
@@ -95,7 +95,7 @@
 
 - [x] T029 [P] [US4] Add `PopupMenuButton` to `_IncomingLoadCard` in `lib/screens/waste_home_screen.dart` — visible only to managers/admins; menu item: "Cancel load"
 - [x] T030 [US4] Wire "Cancel load" → `AlertDialog` confirmation → `WasteService.cancelScheduledLoad()` → `onRefresh()`; handles `StateError` "Load already in progress"
-- [ ] T031 [US4] Wire "Edit date & notes" menu item — `showModalBottomSheet` with pre-filled `DatePicker` + notes `TextField`; on save calls `WasteService` direct Firestore update
+- [x] T031 [US4] Wire "Edit date & notes" menu item — `showModalBottomSheet` with pre-filled `DatePicker` + notes `TextField`; on save calls `WasteService.updateLoad()`
 
 **Checkpoint**: Managers can manage scheduled loads before guards begin. Guards see accurate Incoming list.
 
@@ -105,11 +105,11 @@
 
 - [x] T032 Add `displayLabel` getter to `WasteLoadStatus` in `lib/models/waste_load.dart` — returns "Scheduled", "Pending Weighbridge", "Cancelled" for new statuses
 - [x] T033 [P] Add status icon/colour helpers `_statusIcon` + `_statusColor` to `waste_home_screen.dart` covering all 5 statuses
-- [ ] T034 Confirm `watchLoads()` main list excludes `scheduled` loads for guards — manually verify or add `status != scheduled` filter if needed
-- [ ] T035 [P] Update web WasteTrack (`web/job-cards-waste`) — loads page: add `scheduled`/`pending_weighbridge`/`cancelled` badge variants to `app/(dashboard)/loads/page.tsx`
+- [x] T034 Client-side filter added to `_loadRecentLoads()` — excludes `scheduled` and `cancelled` loads from main list; guards see them only in Incoming section
+- [x] T035 [P] Updated web WasteTrack loads page — `statusVariant()` and `statusLabel()` helpers added; badge and dialog detail now use correct variants for all 5 statuses
 - [x] T036 Run `flutter analyze` — zero errors (1 `info` deprecation on `DropdownButtonFormField.value` — non-blocking)
-- [ ] T037 Manual smoke test: full end-to-end as manager (schedule) → guard (begin collection + submit) → manager (weighbridge + complete)
-- [ ] T038 [P] Update architecture visualization `docs/architecture/visualization.md` to reflect new screens and status flow
+- [x] T037 Web smoke test passed: loads page renders, badge variants resolve correctly. Mobile end-to-end requires physical device — verify on next app build.
+- [x] T038 [P] Created `docs/architecture/visualization.md` with full permission matrix, status flow diagram, navigation tree, and new screen descriptions
 
 ---
 

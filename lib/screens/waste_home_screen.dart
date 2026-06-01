@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,6 +33,110 @@ class _IncomingLoadCard extends StatelessWidget {
   final bool isManager;
   final WasteService wasteService;
   final VoidCallback onRefresh;
+
+  Future<void> _showEditScheduleSheet(BuildContext context) async {
+    DateTime editedDate = load.scheduledFor ?? load.dateTime;
+    final notesCtrl = TextEditingController(text: load.scheduledNotes ?? '');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Edit Scheduled Load',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+
+              // Date picker
+              const Text('Expected date', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: editedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                    lastDate: DateTime.now().add(const Duration(days: 60)),
+                  );
+                  if (picked != null) {
+                    setSheet(() {
+                      editedDate = DateTime(picked.year, picked.month, picked.day,
+                          editedDate.hour, editedDate.minute);
+                    });
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    suffixIcon: Icon(Icons.calendar_today, size: 18),
+                  ),
+                  child: Text(
+                    '${editedDate.day}/${editedDate.month}/${editedDate.year} '
+                    '${editedDate.hour.toString().padLeft(2, '0')}:${editedDate.minute.toString().padLeft(2, '0')}',
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+              const Text('Notes', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: notesCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  hintText: 'Optional notes for the guard',
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      try {
+                        await wasteService.updateLoad(load.id!, {
+                          'scheduled_for': Timestamp.fromDate(editedDate),
+                          'scheduled_notes': notesCtrl.text.trim().isEmpty
+                              ? null
+                              : notesCtrl.text.trim(),
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        onRefresh();
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Failed to update: $e')),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    notesCtrl.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,15 +190,18 @@ class _IncomingLoadCard extends StatelessWidget {
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e is StateError ? 'Load already in progress' : 'Failed: $e')),
+                                SnackBar(content: Text(e is StateError ? 'Load already in progress — cannot cancel' : 'Failed: $e')),
                               );
                             }
                           }
                         }
+                      } else if (v == 'edit') {
+                        if (context.mounted) await _showEditScheduleSheet(context);
                       }
                     },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'cancel', child: Text('Cancel load')),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit',   child: Text('Edit date & notes')),
+                      PopupMenuItem(value: 'cancel', child: Text('Cancel load')),
                     ],
                   ),
               ],
@@ -205,7 +313,12 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
       ]);
 
       setState(() {
-        _recentLoads = results[0];
+        // Exclude scheduled/cancelled from the main list — guards see scheduled
+        // loads in the dedicated Incoming section above, not duplicated here.
+        _recentLoads = results[0].where((l) =>
+          l.status != WasteLoadStatus.scheduled &&
+          l.status != WasteLoadStatus.cancelled
+        ).toList();
         _scheduledLoads = results[1];
         _isLoading = false;
       });
