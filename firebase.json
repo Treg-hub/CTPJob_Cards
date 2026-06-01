@@ -23,7 +23,10 @@
     }
   },
   
+  "// FUNCTIONS NOTE": "This codebase is named 'jobcards' so a `firebase deploy --only functions` from this repo only touches the 14 Job Cards functions and CANNOT delete the WasteTrack/Overtime functions that live in the monorepo (codebase 'wastetrack-overtime', deployed from CTP-Factory-System/firebase/). Do not remove the 'codebase' field.",
   "functions": {
+    "source": "functions",
+    "codebase": "jobcards",
     "region": "africa-south1",
     "predeploy": []
   },
