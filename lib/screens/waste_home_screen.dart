@@ -8,11 +8,145 @@ import '../services/waste_service.dart';
 import '../models/waste_load.dart';
 import '../utils/formatters.dart';
 import 'waste_create_load_screen.dart';
+import 'waste_schedule_load_screen.dart';
+import 'waste_begin_collection_screen.dart';
 import 'waste_admin_screen.dart';
 import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_queued_screen.dart';
+
+// ---------------------------------------------------------------------------
+// Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
+// ---------------------------------------------------------------------------
+
+class _IncomingLoadCard extends StatelessWidget {
+  const _IncomingLoadCard({
+    required this.load,
+    required this.isManager,
+    required this.wasteService,
+    required this.onRefresh,
+  });
+
+  final WasteLoad load;
+  final bool isManager;
+  final WasteService wasteService;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduledDate = load.scheduledFor ?? load.dateTime;
+    final isToday = DateUtils.isSameDay(scheduledDate, DateTime.now());
+    final isPast = scheduledDate.isBefore(DateTime.now());
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: isToday || isPast
+          ? const Color(0xFFE8F5E9)
+          : Theme.of(context).cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: Color(0xFF2E7D32), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.local_shipping, color: Color(0xFF2E7D32), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    load.mainWasteType,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                ),
+                if (isManager)
+                  PopupMenuButton<String>(
+                    onSelected: (v) async {
+                      if (v == 'cancel') {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Cancel Load?'),
+                            content: const Text('This load will be removed from the guard\'s list and cannot be undone.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel Load')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          try {
+                            await wasteService.cancelScheduledLoad(load.id!);
+                            onRefresh();
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e is StateError ? 'Load already in progress' : 'Failed: $e')),
+                              );
+                            }
+                          }
+                        }
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'cancel', child: Text('Cancel load')),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Contractor ID: ${load.contractorId}',
+                style: const TextStyle(fontSize: 13, color: Colors.black54)),
+            if (load.scheduledNotes != null && load.scheduledNotes!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('Note: ${load.scheduledNotes}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black45)),
+              ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 14,
+                    color: isPast ? Colors.red : Colors.black45),
+                const SizedBox(width: 4),
+                Text(
+                  '${isToday ? 'Today' : isPast ? 'Overdue' : 'Expected'} — '
+                  '${scheduledDate.day}/${scheduledDate.month}/${scheduledDate.year} '
+                  '${scheduledDate.hour.toString().padLeft(2, '0')}:${scheduledDate.minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isPast ? Colors.red.shade700 : Colors.black54,
+                    fontWeight: isPast ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.play_arrow, size: 18),
+                label: const Text('Begin Collection'),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => WasteBeginCollectionScreen(load: load)),
+                  );
+                  onRefresh();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Focused WasteTrack home screen for Security Manager / Guard + Admin.
 /// This will become the default landing for those roles (per spec + user requirement).
@@ -26,6 +160,7 @@ class WasteHomeScreen extends ConsumerStatefulWidget {
 class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   final WasteService _wasteService = WasteService();
   List<WasteLoad> _recentLoads = [];
+  List<WasteLoad> _scheduledLoads = [];
   bool _isLoading = true;
   String _filter = 'all'; // all | today | pending
 
@@ -62,16 +197,16 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   Future<void> _loadRecentLoads() async {
     setState(() => _isLoading = true);
     try {
-      // Attempt to sync any queued offline photos on refresh (real resilience)
       await _wasteService.processOfflineWasteQueue();
 
-      // For now simple fetch; later convert to proper stream + provider
-      final snapshot = await _wasteService
-          .watchLoads(limit: 20)
-          .first; // temporary
+      final results = await Future.wait([
+        _wasteService.watchLoads(limit: 20).first,
+        _wasteService.watchScheduledLoads().first,
+      ]);
 
       setState(() {
-        _recentLoads = snapshot;
+        _recentLoads = results[0];
+        _scheduledLoads = results[1];
         _isLoading = false;
       });
     } catch (e) {
@@ -82,6 +217,51 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
         );
       }
     }
+  }
+
+  void _showNewLoadMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('What would you like to do?',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFF2E7D32),
+                child: Icon(Icons.event_available, color: Colors.white),
+              ),
+              title: const Text('Schedule Incoming Load'),
+              subtitle: const Text('Arrange a collection before the truck arrives'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
+              },
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.blueGrey,
+                child: Icon(Icons.add, color: Colors.white),
+              ),
+              title: const Text('New Load (on the spot)'),
+              subtitle: const Text('Create a load while the truck is here'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Shows a lightweight, dismissible bottom sheet with per-item breakdown of currently queued
@@ -171,6 +351,26 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
         );
       },
     );
+  }
+
+  IconData _statusIcon(WasteLoadStatus s) {
+    switch (s) {
+      case WasteLoadStatus.completed:          return Icons.check_circle;
+      case WasteLoadStatus.scheduled:          return Icons.event_available;
+      case WasteLoadStatus.pendingWeighbridge: return Icons.scale;
+      case WasteLoadStatus.cancelled:          return Icons.cancel;
+      default:                                 return Icons.hourglass_bottom;
+    }
+  }
+
+  Color _statusColor(WasteLoadStatus s) {
+    switch (s) {
+      case WasteLoadStatus.completed:          return Colors.green;
+      case WasteLoadStatus.scheduled:          return const Color(0xFF2E7D32);
+      case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
+      case WasteLoadStatus.cancelled:          return Colors.grey;
+      default:                                 return Colors.orange;
+    }
   }
 
   @override
@@ -357,13 +557,15 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
       floatingActionButton: wasteEnabled
           ? FloatingActionButton.extended(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()),
-                );
+                if (isAdmin || isManager) {
+                  _showNewLoadMenu(context);
+                } else {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
+                }
               },
               icon: const Icon(Icons.add),
-              label: const Text('New Load'),
+              label: Text(isAdmin || isManager ? 'New / Schedule' : 'New Load'),
               backgroundColor: const Color(0xFF2E7D32),
             )
           : null,
@@ -473,54 +675,81 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                         ),
 
                       Expanded(
-                        child: _recentLoads.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No waste loads yet.\nTap + New Load to get started.',
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: _loadRecentLoads,
-                                child: ListView.builder(
-                                  itemCount: _recentLoads.length,
-                                  itemBuilder: (context, index) {
-                                    final load = _recentLoads[index];
-                                    return Card(
-                                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      child: ListTile(
-                                        leading: Icon(
-                                          load.status == WasteLoadStatus.completed
-                                              ? Icons.check_circle
-                                              : Icons.hourglass_bottom,
-                                          color: load.status == WasteLoadStatus.completed
-                                              ? Colors.green
-                                              : Colors.orange,
+                        child: RefreshIndicator(
+                          onRefresh: _loadRecentLoads,
+                          child: ListView(
+                            children: [
+                              // ── Incoming section (scheduled loads awaiting guard) ──
+                              if (_scheduledLoads.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.local_shipping, color: Color(0xFF2E7D32), size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Incoming (${_scheduledLoads.length})',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF2E7D32),
                                         ),
-                                        title: Text(load.loadNumber),
-                                        subtitle: Text(
-                                          '${load.mainWasteType} • ${load.driverName} • ${load.vehicleReg}',
-                                        ),
-                                        trailing: Text(
-                                          formatSADate(load.dateTime),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        onTap: () async {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => WasteLoadDetailScreen(load: load),
-                                            ),
-                                          );
-                                          if (mounted) {
-                                            _loadRecentLoads(); // refresh after weighbridge entry, sync, etc.
-                                          }
-                                        },
                                       ),
-                                    );
-                                  },
+                                    ],
+                                  ),
                                 ),
-                              ),
+                                ..._scheduledLoads.map((load) => _IncomingLoadCard(
+                                  load: load,
+                                  isManager: isManager || isAdmin,
+                                  wasteService: _wasteService,
+                                  onRefresh: _loadRecentLoads,
+                                )),
+                                const Divider(height: 24, indent: 16, endIndent: 16),
+                              ],
+
+                              // ── Recent loads list ─────────────────────────────────
+                              if (_recentLoads.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 40),
+                                  child: Center(
+                                    child: Text(
+                                      'No waste loads yet.\nTap + New Load to get started.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ..._recentLoads.map((load) => Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  child: ListTile(
+                                    leading: Icon(
+                                      _statusIcon(load.status),
+                                      color: _statusColor(load.status),
+                                    ),
+                                    title: Text(load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType),
+                                    subtitle: Text(
+                                      '${load.mainWasteType}${load.driverName.isNotEmpty ? ' • ${load.driverName}' : ''}${load.vehicleReg.isNotEmpty ? ' • ${load.vehicleReg}' : ''}',
+                                    ),
+                                    trailing: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(formatSADate(load.dateTime), style: const TextStyle(fontSize: 12)),
+                                        Text(load.status.displayLabel, style: TextStyle(fontSize: 10, color: _statusColor(load.status))),
+                                      ],
+                                    ),
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)),
+                                      );
+                                      if (mounted) _loadRecentLoads();
+                                    },
+                                  ),
+                                )),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),

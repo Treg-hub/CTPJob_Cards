@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Status values for a Waste Load (matches spec).
+/// Status values for a Waste Load.
 enum WasteLoadStatus {
   draft('draft'),
-  completed('completed');
+  completed('completed'),
+  // Two-phase handoff statuses (manager schedules → guard collects → manager weighbridges)
+  scheduled('scheduled'),
+  pendingWeighbridge('pending_weighbridge'),
+  cancelled('cancelled');
 
   const WasteLoadStatus(this.value);
   final String value;
@@ -12,9 +16,25 @@ enum WasteLoadStatus {
     switch (value?.toLowerCase()) {
       case 'completed':
         return WasteLoadStatus.completed;
+      case 'scheduled':
+        return WasteLoadStatus.scheduled;
+      case 'pending_weighbridge':
+        return WasteLoadStatus.pendingWeighbridge;
+      case 'cancelled':
+        return WasteLoadStatus.cancelled;
       case 'draft':
       default:
         return WasteLoadStatus.draft;
+    }
+  }
+
+  String get displayLabel {
+    switch (this) {
+      case WasteLoadStatus.draft:            return 'Draft';
+      case WasteLoadStatus.completed:        return 'Completed';
+      case WasteLoadStatus.scheduled:        return 'Scheduled';
+      case WasteLoadStatus.pendingWeighbridge: return 'Pending Weighbridge';
+      case WasteLoadStatus.cancelled:        return 'Cancelled';
     }
   }
 }
@@ -23,7 +43,7 @@ enum WasteLoadStatus {
 /// One load = one main waste type + any number of its subtypes (as WasteItems).
 class WasteLoad {
   final String? id;
-  final String loadNumber; // e.g. WT-20260531-001
+  final String loadNumber;
   final String mainWasteType;
   final DateTime dateTime;
   final String contractorId;
@@ -37,11 +57,26 @@ class WasteLoad {
   final String? notes;
   final WasteLoadStatus status;
   final String? driverSignatureUrl;
-  final List<String> loadPhotos; // optional load-level photos (full truck etc.)
+  final List<String> loadPhotos;
   final String? createdBy;
   final String? completedBy;
   final DateTime? completedAt;
   final bool isDeleted;
+  final double recordedWeightKg;
+
+  // ── Two-phase handoff fields ──────────────────────────────────────────────
+  /// When the contractor is expected (set by manager at scheduling time).
+  final DateTime? scheduledFor;
+  /// clockNo of the manager who scheduled the load.
+  final String? scheduledBy;
+  /// Display name of the manager who scheduled the load.
+  final String? scheduledByName;
+  /// Optional notes from the manager for the guard (e.g. "approx 500kg, heavy vehicle").
+  final String? scheduledNotes;
+  /// When the guard submitted the collection (transitions to pending_weighbridge).
+  final DateTime? pendingWeighbridgeAt;
+  /// clockNo of the guard who collected (filled on submitCollection).
+  final String? collectedBy;
 
   const WasteLoad({
     this.id,
@@ -65,11 +100,13 @@ class WasteLoad {
     this.completedAt,
     this.isDeleted = false,
     this.recordedWeightKg = 0.0,
+    this.scheduledFor,
+    this.scheduledBy,
+    this.scheduledByName,
+    this.scheduledNotes,
+    this.pendingWeighbridgeAt,
+    this.collectedBy,
   });
-
-  /// Total weight of all items (calculated at creation time and stored for deviation checks).
-  /// Falls back to 0 if not present on the doc (older loads or items not yet summed).
-  final double recordedWeightKg;
 
   factory WasteLoad.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -99,6 +136,12 @@ class WasteLoad {
       completedAt: (data['completed_at'] as Timestamp?)?.toDate(),
       isDeleted: data['is_deleted'] as bool? ?? false,
       recordedWeightKg: (data['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0,
+      scheduledFor: (data['scheduled_for'] as Timestamp?)?.toDate(),
+      scheduledBy: data['scheduled_by'] as String?,
+      scheduledByName: data['scheduled_by_name'] as String?,
+      scheduledNotes: data['scheduled_notes'] as String?,
+      pendingWeighbridgeAt: (data['pending_weighbridge_at'] as Timestamp?)?.toDate(),
+      collectedBy: data['collected_by'] as String?,
     );
   }
 
@@ -125,6 +168,12 @@ class WasteLoad {
           completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'is_deleted': isDeleted,
       'recorded_weight_kg': recordedWeightKg,
+      if (scheduledFor != null) 'scheduled_for': Timestamp.fromDate(scheduledFor!),
+      if (scheduledBy != null) 'scheduled_by': scheduledBy,
+      if (scheduledByName != null) 'scheduled_by_name': scheduledByName,
+      if (scheduledNotes != null) 'scheduled_notes': scheduledNotes,
+      if (pendingWeighbridgeAt != null) 'pending_weighbridge_at': Timestamp.fromDate(pendingWeighbridgeAt!),
+      if (collectedBy != null) 'collected_by': collectedBy,
     };
   }
 
@@ -150,6 +199,12 @@ class WasteLoad {
     DateTime? completedAt,
     bool? isDeleted,
     double? recordedWeightKg,
+    DateTime? scheduledFor,
+    String? scheduledBy,
+    String? scheduledByName,
+    String? scheduledNotes,
+    DateTime? pendingWeighbridgeAt,
+    String? collectedBy,
   }) {
     return WasteLoad(
       id: id ?? this.id,
@@ -175,6 +230,12 @@ class WasteLoad {
       completedAt: completedAt ?? this.completedAt,
       isDeleted: isDeleted ?? this.isDeleted,
       recordedWeightKg: recordedWeightKg ?? this.recordedWeightKg,
+      scheduledFor: scheduledFor ?? this.scheduledFor,
+      scheduledBy: scheduledBy ?? this.scheduledBy,
+      scheduledByName: scheduledByName ?? this.scheduledByName,
+      scheduledNotes: scheduledNotes ?? this.scheduledNotes,
+      pendingWeighbridgeAt: pendingWeighbridgeAt ?? this.pendingWeighbridgeAt,
+      collectedBy: collectedBy ?? this.collectedBy,
     );
   }
 }

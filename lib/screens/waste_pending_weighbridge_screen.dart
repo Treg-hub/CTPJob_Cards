@@ -11,7 +11,7 @@ import '../utils/formatters.dart';
 import 'waste_load_detail_screen.dart';
 
 /// Pending Weighbridge screen (Phase 3/6 hardened).
-/// Real data via enhanced WasteService.watchPendingWeighbridge (3+ days, completed, no weighbridge).
+/// Real data via WasteService.watchPendingWeighbridge — streams loads in pending_weighbridge status.
 /// Gated to Admin + Security Manager (existing role checks).
 class WastePendingWeighbridgeScreen extends ConsumerStatefulWidget {
   const WastePendingWeighbridgeScreen({super.key});
@@ -64,7 +64,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
     try {
       // Drain any queued weighbridge updates / photos before loading fresh pending list
       await _wasteService.processOfflineWasteQueue();
-      final data = await _wasteService.watchPendingWeighbridge(daysThreshold: 3).first;
+      final data = await _wasteService.watchPendingWeighbridge().first;
       if (mounted) {
         setState(() {
           _pending = data;
@@ -178,7 +178,9 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                                 leading: const Icon(Icons.warning_amber, color: Colors.orange),
                                 title: Text('${load.loadNumber} • ${load.mainWasteType}'),
                                 subtitle: Text(
-                                  '${formatSADate(load.dateTime)} • ${load.driverName} • ${load.vehicleReg}\nCompleted ${load.completedAt != null ? formatSADate(load.completedAt!) : 'recently'}',
+                                  '${load.driverName.isNotEmpty ? load.driverName : 'No driver'} • ${load.vehicleReg.isNotEmpty ? load.vehicleReg : ''}\n'
+                                  '${load.collectedBy != null ? 'Collected by: ${load.collectedBy}' : ''}'
+                                  '${load.pendingWeighbridgeAt != null ? '  •  ${formatSADate(load.pendingWeighbridgeAt!)}' : ''}',
                                 ),
                                 isThreeLine: true,
                                 trailing: const Text('ENTER\nWEIGHBRIDGE', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.orange)),
