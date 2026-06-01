@@ -71,6 +71,14 @@ const List<DocEntry> docCatalog = [
     roles: _allUserFacingRoles,
   ),
   DocEntry(
+    id: 'waste_user_guide',
+    title: 'WasteTrack User Guide',
+    description: 'Scheduling loads, collecting waste, weighbridge sign-off, reports.',
+    icon: Icons.recycling,
+    roles: _allUserFacingRoles,
+    requiresWaste: true,
+  ),
+  DocEntry(
     id: 'cloud_functions_deployment',
     title: 'Cloud Functions Deployment',
     description: 'Function inventory, regions, deployment commands.',
@@ -88,14 +96,24 @@ const List<DocEntry> docCatalog = [
   ),
 ];
 
-/// Returns the docs visible to [employee] given their inferred role plus
-/// admin status. Admin-only docs are filtered out for non-admin users.
+/// Returns the docs visible to [employee] given their inferred role,
+/// admin status, and waste access.
+///
+/// Gate order:
+/// 1. `requiresAdmin` — immediately excluded if the user is not admin.
+/// 2. Admin users bypass all further checks and see everything.
+/// 3. `requiresWaste` — excluded if `isWasteUser()` is false, even if the
+///    base role matches. This keeps WasteTrack-specific guides away from
+///    general job-card users (mechanics, operators from other departments).
+/// 4. `roles` — standard role membership check.
 List<DocEntry> docsForUser(Employee? employee) {
   final role = roleFromEmployee(employee);
   final admin = isAdmin(employee);
+  final wasteUser = isWasteUser(employee);
   return docCatalog.where((doc) {
     if (doc.requiresAdmin && !admin) return false;
     if (admin) return true;
+    if (doc.requiresWaste && !wasteUser) return false;
     return doc.roles.contains(role);
   }).toList(growable: false);
 }

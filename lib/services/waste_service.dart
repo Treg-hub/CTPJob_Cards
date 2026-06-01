@@ -151,6 +151,172 @@ class WasteService {
   }
 
   // ---------------------------------------------------------------------------
+  // TWO-PHASE HANDOFF (manager schedules → guard collects → manager weighbridges)
+  // ---------------------------------------------------------------------------
+
+  /// Manager creates a shell load. No Cloud Function needed — no load number
+  /// is assigned at scheduling time (number assigned when guard submits via [submitCollection]).
+  Future<String> createScheduledLoad({
+    required String contractorId,
+    required String mainWasteType,
+    required DateTime scheduledFor,
+    required String scheduledBy,
+    required String scheduledByName,
+    String? scheduledNotes,
+  }) async {
+    final doc = await _firestore.collection(Collections.wasteLoads).add({
+      'load_number': '',
+      'contractor_id': contractorId,
+      'main_waste_type': mainWasteType,
+      'date_time': Timestamp.fromDate(scheduledFor),
+      'scheduled_for': Timestamp.fromDate(scheduledFor),
+      'scheduled_by': scheduledBy,
+      'scheduled_by_name': scheduledByName,
+      if (scheduledNotes != null && scheduledNotes.isNotEmpty)
+        'scheduled_notes': scheduledNotes,
+      'status': WasteLoadStatus.scheduled.value,
+      'driver_name': '',
+      'vehicle_reg': '',
+      'load_photos': [],
+      'is_deleted': false,
+      'created_by': scheduledBy,
+      'recorded_weight_kg': 0.0,
+    });
+    return doc.id;
+  }
+
+  /// Stream of all scheduled (not yet collected) loads, ordered by expected date ascending.
+  /// Used by guard home screen "Incoming" section.
+  Stream<List<WasteLoad>> watchScheduledLoads({int limit = 50}) {
+    return _firestore
+        .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
+        .where('status', isEqualTo: WasteLoadStatus.scheduled.value)
+        .orderBy('scheduled_for', descending: false)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+  }
+
+  /// Manager cancels a scheduled load before the guard begins collection.
+  /// Throws [StateError] if the load is no longer in [scheduled] status.
+  Future<void> cancelScheduledLoad(String loadId) async {
+    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
+    await _firestore.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+      if (current != WasteLoadStatus.scheduled) {
+        throw StateError('Load is no longer scheduled — cannot cancel (current: ${current.value})');
+      }
+      tx.update(ref, {'status': WasteLoadStatus.cancelled.value, 'updatedAt': FieldValue.serverTimestamp()});
+    });
+  }
+
+  /// Guard submits a completed collection on a scheduled load.
+  /// Uses a Firestore transaction to assert the load is still [scheduled] before
+  /// writing, preventing double-collection. Then uploads photos/signature and
+  /// writes items, using the same offline resilience pattern as [saveCompleteWasteLoad].
+  Future<void> submitCollection({
+    required String loadId,
+    required String driverName,
+    required String vehicleReg,
+    required String collectedBy,
+    required List<Map<String, dynamic>> itemsData,
+    List<String> itemPhotoPaths = const [],
+    String? signatureLocalPath,
+  }) async {
+    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
+
+    // 1. Atomic status transition (prevents double-collection).
+    await _firestore.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+      if (current != WasteLoadStatus.scheduled) {
+        throw StateError('Load already started or completed (current: ${current.value})');
+      }
+      tx.update(ref, {
+        'status': WasteLoadStatus.pendingWeighbridge.value,
+        'driver_name': driverName,
+        'vehicle_reg': vehicleReg,
+        'collected_by': collectedBy,
+        'pending_weighbridge_at': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+
+    // 2. Queue the status update for offline resilience.
+    await SyncService().addToQueue(
+      collection: Collections.wasteLoads,
+      operation: 'update',
+      data: {
+        'status': WasteLoadStatus.pendingWeighbridge.value,
+        'driver_name': driverName,
+        'vehicle_reg': vehicleReg,
+        'collected_by': collectedBy,
+        'pending_weighbridge_at': DateTime.now().toIso8601String(),
+      },
+      documentId: loadId,
+    );
+
+    // 3. Upload signature if provided.
+    if (signatureLocalPath != null) {
+      try {
+        final sigUrl = await uploadSignature(
+          signatureBytes: await File(signatureLocalPath).readAsBytes(),
+          loadId: loadId,
+        );
+        await ref.update({'driver_signature_url': sigUrl});
+      } catch (_) {
+        await SyncService().addToQueue(
+          collection: 'waste_signatures',
+          operation: 'upload',
+          data: {'localPath': signatureLocalPath, 'loadId': loadId},
+          documentId: '${loadId}_sig',
+        );
+      }
+    }
+
+    // 4. Upload item photos and write items (reuse existing patterns).
+    int totalPhotoCount = 0;
+    for (final item in itemsData) {
+      final itemRef = _firestore.collection(Collections.wasteItems).doc();
+      final photoUrls = <String>[];
+
+      for (final path in (item['localPhotoPaths'] as List<String>? ?? [])) {
+        try {
+          final url = await uploadWastePhoto(
+            localPath: path,
+            wasteRef: 'waste_items/${itemRef.id}',
+          );
+          photoUrls.add(url);
+        } catch (_) {
+          await queueOfflineWastePhoto(localPath: path, loadId: loadId, itemId: itemRef.id);
+        }
+      }
+
+      totalPhotoCount += photoUrls.length;
+
+      final itemData = {
+        ...item,
+        'load_id': loadId,
+        'photos': photoUrls,
+        'createdAt': FieldValue.serverTimestamp(),
+      }..remove('localPhotoPaths');
+
+      await itemRef.set(itemData);
+      await SyncService().addToQueue(
+        collection: Collections.wasteItems,
+        operation: 'set',
+        data: itemData,
+        documentId: itemRef.id,
+      );
+    }
+
+    await ref.update({'photo_count': totalPhotoCount});
+    await SyncService().processNow();
+  }
+
+  // ---------------------------------------------------------------------------
   // CRUD - ITEMS
   // ---------------------------------------------------------------------------
 
@@ -175,39 +341,6 @@ class WasteService {
   // ---------------------------------------------------------------------------
   // PHOTO HANDLING (reused & adapted from Job Cards patterns)
   // ---------------------------------------------------------------------------
-
-  /// Shows camera/gallery chooser, picks image, compresses heavily, returns local path.
-  /// Call this while building a load/item (offline friendly).
-  Future<String?> pickAndCompressPhoto() async {
-    final picker = ImagePicker();
-
-    // Simple chooser (can be improved with a nice dialog later)
-    final source = await showImageSourceDialog(); // defined below or passed from UI
-    if (source == null) return null;
-
-    final pickedFile = await picker.pickImage(source: source, imageQuality: 85);
-    if (pickedFile == null) return null;
-
-    final compressedFile = await FlutterImageCompress.compressAndGetFile(
-      pickedFile.path,
-      '${pickedFile.path}_waste_compressed.jpg',
-      minWidth: 1024,
-      minHeight: 1024,
-      quality: 70,
-      format: CompressFormat.jpeg,
-    );
-
-    if (compressedFile == null) return null;
-    return compressedFile.path;
-  }
-
-  // Placeholder — in real screens we will show a proper dialog.
-  // For service, we accept source directly in a second method.
-  Future<ImageSource?> showImageSourceDialog() async {
-    // This is intentionally not implemented here — UI layer should call a dialog
-    // and then pass the chosen source to pickAndCompressPhotoFromSource.
-    return null;
-  }
 
   Future<String?> pickAndCompressPhotoFromSource(ImageSource source) async {
     final picker = ImagePicker();
@@ -439,6 +572,7 @@ class WasteService {
       }
 
       // Photo + finalize pass (live uploads here; failures go to central queue WITH concrete itemId)
+      int totalPhotoCount = loadPhotoUrls.length;
       for (final prep in preparedItems) {
         final itemRef = prep['itemRef'] as DocumentReference;
         final List<String> localPhotos = List<String>.from(prep['localPhotos'] as List);
@@ -463,6 +597,8 @@ class WasteService {
           }
         }
 
+        totalPhotoCount += photoUrls.length;
+
         final itemData = {
           ...itemDataBase,
           'photos': photoUrls,
@@ -480,6 +616,7 @@ class WasteService {
       }
 
       await batch.commit();
+      await updateLoad(loadId, {'photo_count': totalPhotoCount});
 
       return {
         'id': loadId,
@@ -566,20 +703,17 @@ class WasteService {
   // Client-side post-filter for weighbridge nulls (Firestore null/absent handling varies).
   // ---------------------------------------------------------------------------
 
-  Stream<List<WasteLoad>> watchPendingWeighbridge({int daysThreshold = 3}) {
-    final cutoff = DateTime.now().subtract(Duration(days: daysThreshold));
+  /// Streams loads awaiting manager weighbridge entry.
+  /// Uses the [pendingWeighbridge] status set by the guard on [submitCollection].
+  Stream<List<WasteLoad>> watchPendingWeighbridge() {
     return _firestore
         .collection(Collections.wasteLoads)
         .where('is_deleted', isEqualTo: false)
-        .where('status', isEqualTo: 'completed')
-        .where('date_time', isLessThan: Timestamp.fromDate(cutoff))
-        .orderBy('date_time', descending: true)
+        .where('status', isEqualTo: WasteLoadStatus.pendingWeighbridge.value)
+        .orderBy('pending_weighbridge_at', descending: true)
         .limit(100)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WasteLoad.fromFirestore(d))
-            .where((l) => l.weighbridgeNumber == null || (l.weighbridgeNumber ?? '').isEmpty)
-            .toList());
+        .map((snap) => snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
   // ---------------------------------------------------------------------------

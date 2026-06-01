@@ -25,6 +25,7 @@ import 'view_job_cards_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
+import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
 import 'daily_review_screen.dart';
 import 'waste_home_screen.dart';
@@ -44,6 +45,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   final LocationService _locationService = LocationService();
 
   bool isOnSite = true;
+  bool? _previousIsOnSite;
   bool _overrideOnSite = false;
   String? _pendingJobId;
   bool _showDeptOnly = true;
@@ -75,12 +77,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
         .listen((emp) {
-      if (mounted) {
-        setState(() {
-          currentEmployee = emp;
-          isOnSite = emp.isOnSite;
-        });
+      if (!mounted) return;
+      final wasOffsite = _previousIsOnSite == false;
+      final isNowOnsite = emp.isOnSite;
+      setState(() {
+        currentEmployee = emp;
+        isOnSite = emp.isOnSite;
+        _previousIsOnSite = emp.isOnSite;
+      });
+      if (wasOffsite && isNowOnsite) {
+        _checkInboxOnReturn(clockNo);
       }
+    });
+  }
+
+  void _checkInboxOnReturn(String clockNo) {
+    FirebaseFirestore.instance
+        .collection('notification_inbox')
+        .doc(clockNo)
+        .collection('items')
+        .where('read', isEqualTo: false)
+        .get()
+        .then((snap) {
+      if (!mounted || snap.docs.isEmpty) return;
+      final count = snap.docs.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Welcome back! $count notification${count == 1 ? '' : 's'} waiting for review.'),
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: const Color(0xFFFF8C42),
+            onPressed: () {
+              if (mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationInboxScreen()),
+                );
+              }
+            },
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }).catchError((e) {
+      debugPrint('HomeScreen: inbox check on return failed: $e');
     });
   }
 
@@ -524,28 +566,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: _gridSpacing,
-            runSpacing: _gridSpacing,
-            children: [
-              ..._quickActions.map((action) => _buildQuickActionCard(
-                action['title'] as String,
-                action['icon'] as IconData,
-                action['color'] as Color,
-                action['onTap'] as VoidCallback,
-              )),
-              if (kIsWeb && (isManager || isSuperManager))
-                _DailyReviewTile(
-                  pendingCount: _pendingReviewCount,
-                  iconSize: _iconSize,
-                  padding: _cardPaddingInsets,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: _gridSpacing,
+              runSpacing: _gridSpacing,
+              children: [
+                ..._quickActions.map((action) => _buildQuickActionCard(
+                  action['title'] as String,
+                  action['icon'] as IconData,
+                  action['color'] as Color,
+                  action['onTap'] as VoidCallback,
+                )),
+                if (kIsWeb && (isManager || isSuperManager))
+                  _DailyReviewTile(
+                    pendingCount: _pendingReviewCount,
+                    iconSize: _iconSize,
+                    padding: _cardPaddingInsets,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 24),
@@ -1459,6 +1504,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               ),
             ),
           ),
+          if (currentEmployee != null)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('notification_inbox')
+                  .doc(currentEmployee!.clockNo)
+                  .collection('items')
+                  .where('read', isEqualTo: false)
+                  .snapshots(),
+              builder: (ctx, snap) {
+                final count = snap.data?.docs.length ?? 0;
+                return IconButton(
+                  icon: Badge(
+                    label: count > 0 ? Text('$count') : null,
+                    isLabelVisible: count > 0,
+                    child: const Icon(Icons.notifications_outlined, color: Colors.black),
+                  ),
+                  tooltip: 'Notification Inbox',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationInboxScreen()),
+                  ),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.black),
             onPressed: () {

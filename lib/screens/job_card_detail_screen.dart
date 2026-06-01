@@ -72,6 +72,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     return role == UserRole.technician || role == UserRole.manager || role == UserRole.admin;
   }
 
+  /// Only the original creator (matched by clockNo) or an admin can correct
+  /// the breadcrumb. Terminal statuses are immutable.
+  bool get _canEditBreadcrumb =>
+      (_currentJobCard.operatorClockNo == currentEmployee?.clockNo ||
+       isAdmin(currentEmployee)) &&
+      _currentJobCard.status != JobStatus.closed &&
+      _currentJobCard.status != JobStatus.cancelled;
+
   Future<void> _refreshJobCard() async {
     if (_currentJobCard.id != null) {
       final updated = await _firestoreService.getJobCard(_currentJobCard.id!);
@@ -747,7 +755,24 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     try {
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      final source = await showDialog<ImageSource>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Select Photo Source'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+              child: const Text('Camera'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+              child: const Text('Gallery'),
+            ),
+          ],
+        ),
+      );
+      if (source == null) return;
+      final pickedFile = await picker.pickImage(source: source);
 
       if (pickedFile == null) return;
 
@@ -1614,6 +1639,164 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     );
   }
 
+  Future<void> _showBreadcrumbEditDialog() async {
+    final structure = await _firestoreService.getFactoryStructure();
+    if (!mounted) return;
+
+    String newDept = _currentJobCard.department;
+    String newArea = _currentJobCard.area;
+    String newMachine = _currentJobCard.machine;
+    String newPart = _currentJobCard.part;
+    final partCtrl = TextEditingController(text: newPart);
+    List<String> previousParts = [];
+
+    if (newDept.isNotEmpty && newArea.isNotEmpty && newMachine.isNotEmpty) {
+      previousParts = await _firestoreService.getPreviousParts(newDept, newArea, newMachine);
+    }
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Edit Location'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Department', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: structure.keys.map((dept) => ChoiceChip(
+                    label: Text(dept),
+                    selected: newDept == dept,
+                    onSelected: (_) => setS(() {
+                      newDept = dept;
+                      newArea = newMachine = newPart = '';
+                      partCtrl.clear();
+                      previousParts = [];
+                    }),
+                  )).toList(),
+                ),
+                if (newDept.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Area / Section', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: ((structure[newDept] as Map<String, dynamic>? ?? {}).keys)
+                        .map((area) => ChoiceChip(
+                              label: Text(area),
+                              selected: newArea == area,
+                              onSelected: (_) => setS(() {
+                                newArea = area;
+                                newMachine = newPart = '';
+                                partCtrl.clear();
+                                previousParts = [];
+                              }),
+                            ))
+                        .toList(),
+                  ),
+                ],
+                if (newArea.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Machine / Location', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: ((structure[newDept]?[newArea] as List<dynamic>? ?? []).cast<String>())
+                        .map((machine) => ChoiceChip(
+                              label: Text(machine),
+                              selected: newMachine == machine,
+                              onSelected: (_) async {
+                                setS(() {
+                                  newMachine = machine;
+                                  newPart = '';
+                                  partCtrl.clear();
+                                });
+                                final parts = await _firestoreService.getPreviousParts(newDept, newArea, machine);
+                                if (ctx.mounted) setS(() => previousParts = parts);
+                              },
+                            ))
+                        .toList(),
+                  ),
+                ],
+                if (newMachine.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Part / Component', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  if (previousParts.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: previousParts
+                          .map((p) => ActionChip(
+                                label: Text(p),
+                                onPressed: () => setS(() {
+                                  newPart = p;
+                                  partCtrl.text = p;
+                                }),
+                              ))
+                          .toList(),
+                    ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: partCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Part / Component',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onChanged: (v) => setS(() => newPart = v),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: newDept.isNotEmpty &&
+                      newArea.isNotEmpty &&
+                      newMachine.isNotEmpty &&
+                      newPart.trim().isNotEmpty
+                  ? () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final updated = _currentJobCard.copyWith(
+                          department: newDept,
+                          area: newArea,
+                          machine: newMachine,
+                          part: newPart.trim(),
+                        );
+                        await _firestoreService.saveJobCardOfflineAware(updated);
+                        if (mounted) setState(() => _currentJobCard = updated);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update location: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  : null,
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    partCtrl.dispose();
+  }
+
   Widget _buildAssignmentButtons(JobCard jobCard) {
     if (jobCard.status == JobStatus.closed) return const SizedBox.shrink();
 
@@ -1735,31 +1918,39 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               ],
             ),
             const SizedBox(height: 6),
-            // Row 2: Priority + breadcrumb (left) | Count + date (right)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'P${jobCard.priority}',
-                          style: TextStyle(
-                            color: _getPriorityColor('P${jobCard.priority}'),
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.bold,
+            // Row 2: Priority + breadcrumb — tappable for creator / admin
+            GestureDetector(
+              onTap: _canEditBreadcrumb ? _showBreadcrumbEditDialog : null,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'P${jobCard.priority}',
+                            style: TextStyle(
+                              color: _getPriorityColor('P${jobCard.priority}'),
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        TextSpan(
-                          text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
-                          style: TextStyle(fontSize: 14.5, color: Theme.of(context).colorScheme.onSurface),
-                        ),
-                      ],
+                          TextSpan(
+                            text: ' | ${jobCard.department.isEmpty ? 'N/A' : jobCard.department} > ${jobCard.area.isEmpty ? 'N/A' : jobCard.area} > ${jobCard.machine.isEmpty ? 'N/A' : jobCard.machine} > ${jobCard.part.isEmpty ? 'N/A' : jobCard.part}',
+                            style: TextStyle(fontSize: 14.5, color: Theme.of(context).colorScheme.onSurface),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  if (_canEditBreadcrumb)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, top: 2),
+                      child: Icon(Icons.edit, size: 13, color: Colors.grey),
+                    ),
+                ],
+              ),
             ),
           ],
         ),

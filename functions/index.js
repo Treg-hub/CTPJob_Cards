@@ -8,6 +8,30 @@ const db = admin.firestore();
 
 functions.setGlobalOptions({ region: "africa-south1" });
 
+// ==================== IN-MEMORY CACHES (module-level, server-side only) ====================
+// Config cache: notification_configs/global is almost never changed; cache for 10 min.
+let _configCache = null;
+let _configCachedAt = 0;
+const CONFIG_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Employee cache: employee records change rarely; isOnSite changes when clocking in/out.
+// 5-minute TTL ensures onsite/offsite split stays accurate within one escalation cycle.
+let _employeeCache = null;
+let _employeeCachedAt = 0;
+const EMPLOYEE_TTL_MS = 5 * 60 * 1000; // 5 minutes — bounded by isOnSite change frequency
+
+async function getAllEmployeesCached() {
+  if (_employeeCache && (Date.now() - _employeeCachedAt) < EMPLOYEE_TTL_MS) {
+    return _employeeCache;
+  }
+  const snap = await db.collection("employees").get();
+  // Normalise to plain objects; clockNo = document ID (employees collection uses clockNo as doc ID)
+  _employeeCache = snap.docs.map((d) => ({ clockNo: d.id, token: d.data().fcmToken, ...d.data() }));
+  _employeeCachedAt = Date.now();
+  console.log(`getAllEmployeesCached: refreshed (${_employeeCache.length} employees)`);
+  return _employeeCache;
+}
+
 // ==================== HELPER: Log to notifications collection ====================
 async function logNotification({
   jobCardId = null,
@@ -117,6 +141,10 @@ function defaultNotificationConfig() {
 }
 
 async function getNotificationConfig() {
+  if (_configCache && (Date.now() - _configCachedAt) < CONFIG_TTL_MS) {
+    return _configCache;
+  }
+
   const defaults = defaultNotificationConfig();
 
   let data = null;
@@ -127,10 +155,13 @@ async function getNotificationConfig() {
     console.error("Failed to load notification config, using defaults:", e);
   }
 
-  if (!data) return defaults;
+  if (!data) {
+    _configCache = defaults;
+    _configCachedAt = Date.now();
+    return _configCache;
+  }
 
   // Merge with defaults so partially-migrated docs (missing top-level keys) still work.
-  // The doc's values win when present; missing top-level fields fall back to defaults.
   const merged = {
     ...data,
     stages: data.stages || defaults.stages,
@@ -142,7 +173,9 @@ async function getNotificationConfig() {
     console.warn("notification_configs/global has no 'stages' field — using default stage config. Update the doc to silence this.");
   }
 
-  return merged;
+  _configCache = merged;
+  _configCachedAt = Date.now();
+  return _configCache;
 }
 
 // Maps Dart enum job type to the key used in recipients_by_type
@@ -184,39 +217,45 @@ function getCreationRecipientRules(config, jobType) {
 }
 
 // ==================== NEW HELPER: Resolve recipients from rules ====================
-async function resolveRecipientsFromRules(ruleNames, jobType, department, operatorClockNo = null) {
+async function resolveRecipientsFromRules(ruleNames, jobType, department, operatorClockNo = null, allEmps = null) {
   const allRecipients = [];
 
   for (const rule of ruleNames) {
     if (rule === "onsite_mechanics") {
-      allRecipients.push(...(await getOnsiteMechanics()));
+      allRecipients.push(...(await getOnsiteMechanics(allEmps)));
     } else if (rule === "onsite_electricians") {
-      allRecipients.push(...(await getOnsiteElectricians()));
+      allRecipients.push(...(await getOnsiteElectricians(allEmps)));
     } else if (rule === "onsite_managers") {
-      allRecipients.push(...(await getOnsiteRelevantManagers(jobType)));
+      allRecipients.push(...(await getOnsiteRelevantManagers(jobType, allEmps)));
     } else if (rule === "foremen") {
-      allRecipients.push(...(await getOnsiteDeptForemenShiftLeaders(department)));
+      allRecipients.push(...(await getOnsiteDeptForemenShiftLeaders(department, allEmps)));
     } else if (rule === "onsite_dept_managers") {
-      allRecipients.push(...(await getOnsiteDeptManagers(department)));
+      allRecipients.push(...(await getOnsiteDeptManagers(department, allEmps)));
     } else if (rule === "onsite_workshop_manager") {
-      const wm = await getOnsiteWorkshopManager();
+      const wm = await getOnsiteWorkshopManager(allEmps);
       if (wm) allRecipients.push(wm);
     } else if (rule === "offsite_managers") {
-      allRecipients.push(...(await getOffsiteRelevantManagers(jobType)));
+      allRecipients.push(...(await getOffsiteRelevantManagers(jobType, allEmps)));
     } else if (rule === "offsite_dept_managers") {
-      allRecipients.push(...(await getOffsiteDeptManagers(department)));
+      allRecipients.push(...(await getOffsiteDeptManagers(department, allEmps)));
     } else if (rule === "offsite_workshop_manager") {
-      const wm = await getOffsiteWorkshopManager();
+      const wm = await getOffsiteWorkshopManager(allEmps);
       if (wm) allRecipients.push(wm);
     } else if (rule === "operator") {
       // Special rule: the job's creator. Ignores isOnSite — operator should be
       // notified regardless of location since they raised the job.
       if (operatorClockNo) {
-        const opDoc = await db.collection("employees").doc(operatorClockNo).get();
-        if (opDoc.exists) {
-          allRecipients.push({ token: opDoc.data().fcmToken, clockNo: opDoc.id, isOperator: true, ...opDoc.data() });
+        // Use cache when available; fall back to individual doc read
+        const cachedOp = allEmps ? allEmps.find((e) => e.clockNo === operatorClockNo) : null;
+        if (cachedOp) {
+          allRecipients.push({ ...cachedOp, isOperator: true });
         } else {
-          console.log(`operator rule: employee ${operatorClockNo} not found, skipping`);
+          const opDoc = await db.collection("employees").doc(operatorClockNo).get();
+          if (opDoc.exists) {
+            allRecipients.push({ token: opDoc.data().fcmToken, clockNo: opDoc.id, isOperator: true, ...opDoc.data() });
+          } else {
+            console.log(`operator rule: employee ${operatorClockNo} not found, skipping`);
+          }
         }
       } else {
         console.log("operator rule: no operatorClockNo on job, skipping");
@@ -270,11 +309,30 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
 
   if (!recipientToken) throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
   
-  if (priority >= 5 && recipientClockNo) {
+  if (recipientClockNo) {
     const empDoc = await db.collection("employees").doc(recipientClockNo).get();
     if (empDoc.exists && empDoc.data().isOnSite !== true) {
-      console.log(`P5 assignment blocked - ${recipientClockNo} is off-site`);
-      return { success: false, reason: "Recipient is off-site" };
+      console.log(`Assignment blocked - ${recipientClockNo} is off-site, parking in inbox`);
+      await db.collection("notification_inbox")
+        .doc(recipientClockNo).collection("items").add({
+          type: "job_assigned",
+          jobCardId: jobCardId || null,
+          jobCardNumber: jobCardNumber || null,
+          title: `Job Assigned by ${operator || "Unknown"} #${jobCardNumber || "N/A"}`,
+          body: `Created by ${creator || operator || "Unknown"}\nLocation: ${area}\n${description}`,
+          department: department || null,
+          area: area || null,
+          machine: machine || null,
+          part: part || null,
+          priority,
+          triggeredBy: "assignment_callable",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+          readAt: null,
+          initiatedByClockNo: initiatedByClockNo || null,
+          initiatedByName: initiatedByName || null,
+        });
+      return { success: false, reason: "Recipient is off-site", parked: true };
     }
   }
 
@@ -369,6 +427,44 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
     triggeredByValue = "job_updated";
   }
 
+  // Check if the creator is currently onsite before sending the push notification.
+  // If offsite, park the notification in the inbox for review on their return.
+  let creatorClockNo = null;
+  if (jobCardId) {
+    try {
+      const jobDoc = await db.collection("job_cards").doc(jobCardId).get();
+      if (jobDoc.exists) creatorClockNo = jobDoc.data().operatorClockNo || null;
+    } catch (e) {
+      console.warn(`sendCreatorNotification: could not look up job ${jobCardId}:`, e.message);
+    }
+  }
+  if (creatorClockNo) {
+    const creatorEmp = await db.collection("employees").doc(creatorClockNo).get();
+    if (creatorEmp.exists && creatorEmp.data().isOnSite !== true) {
+      console.log(`sendCreatorNotification: creator ${creatorClockNo} is offsite — parking in inbox (${triggeredByValue})`);
+      await db.collection("notification_inbox")
+        .doc(creatorClockNo).collection("items").add({
+          type: triggeredByValue,
+          jobCardId: jobCardId || null,
+          jobCardNumber: jobCardNumber || null,
+          title,
+          body,
+          department: department || null,
+          area: area || null,
+          machine: machine || null,
+          part: part || null,
+          priority,
+          triggeredBy: triggeredByValue,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+          readAt: null,
+          initiatedByClockNo: initiatedByClockNo || null,
+          initiatedByName: assigneeName || initiatedByName || null,
+        });
+      return { success: true, parked: true };
+    }
+  }
+
   const messagePayload = {
     token: recipientToken,
     data: {
@@ -393,7 +489,7 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
     jobCardId,
     jobCardNumber,
     triggeredBy: triggeredByValue,
-    sentTo: [innerData.recipientClockNo || "unknown"],
+    sentTo: [creatorClockNo || innerData.recipientClockNo || "unknown"],
     level,
     priority,
     title,
@@ -410,7 +506,13 @@ exports.sendCreatorNotification = functions.https.onCall(async (data) => {
 });
 
 // ==================== DYNAMIC RECIPIENT HELPERS ====================
-async function getOnsiteMechanics() {
+async function getOnsiteMechanics(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === true && /mechanical|mechanic/i.test(pos) && !/manager/i.test(pos);
+    });
+  }
   const snaps = await db.collection("employees").where("isOnSite", "==", true).get();
   return snaps.docs
     .filter((doc) => {
@@ -421,7 +523,13 @@ async function getOnsiteMechanics() {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOnsiteElectricians() {
+async function getOnsiteElectricians(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === true && /electrician|electrical/i.test(pos) && !/manager/i.test(pos);
+    });
+  }
   const snaps = await db.collection("employees").where("isOnSite", "==", true).get();
   return snaps.docs
     .filter((doc) => {
@@ -432,7 +540,13 @@ async function getOnsiteElectricians() {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOnsiteDeptForemenShiftLeaders(dept) {
+async function getOnsiteDeptForemenShiftLeaders(dept, allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === true && e.department === dept && /foreman|shift leader/i.test(pos);
+    });
+  }
   const snaps = await db.collection("employees")
     .where("department", "==", dept)
     .where("isOnSite", "==", true)
@@ -611,6 +725,33 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
 
     const assigneeDoc = await db.collection("employees").doc(after.assignedTo).get();
     if (assigneeDoc.exists) {
+      if (assigneeDoc.data().isOnSite !== true) {
+        // Employee is offsite — park notification in inbox for review on return
+        console.log(`onJobCardAssigned: ${after.assignedTo} is offsite — parking in inbox`);
+        await db.collection("notification_inbox")
+          .doc(after.assignedTo).collection("items").add({
+            type: "job_assigned",
+            jobCardId: event.params.jobId,
+            jobCardNumber: after.jobCardNumber || event.params.jobId,
+            title: "New Job Assigned",
+            body: `${after.department} - ${after.machine}\n${after.area} - ${after.part || ""}\n${after.description}`,
+            department: after.department || null,
+            area: after.area || null,
+            machine: after.machine || null,
+            part: after.part || null,
+            priority,
+            triggeredBy: "job_assigned",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+            readAt: null,
+            initiatedByClockNo: after.lastUpdatedBy || null,
+            initiatedByName: after.lastUpdatedByName || null,
+          });
+        // Still stop escalation — job is assigned regardless of notification delivery
+        await event.data.after.ref.update({ escalationStopped: true });
+        return;
+      }
+
       await sendNotification({
         token: assigneeDoc.data().fcmToken,
         recipientClockNo: after.assignedTo,
@@ -636,12 +777,13 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
 
 // ==================== SCHEDULED: ESCALATION (4 stages, config-driven) ====================
 exports.escalateNotifications = functions.scheduler.onSchedule({
-  schedule: "every 2 minutes",
+  schedule: "every 5 minutes",
   region: "europe-west1",
   timeZone: "Africa/Johannesburg",
 }, async () => {
   console.log("escalateNotifications: started");
   const config = await getNotificationConfig();
+  const allEmps = await getAllEmployeesCached();
   const now = admin.firestore.FieldValue.serverTimestamp();
 
   for (let stageNum = 1; stageNum <= 4; stageNum++) {
@@ -707,7 +849,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const rules = getStageRecipients(config, stageNum, job.type);
       if (rules.length === 0) continue;
 
-      const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department, job.operatorClockNo);
+      const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department, job.operatorClockNo, allEmps);
       console.log(`Stage ${stageNum} job #${job.jobCardNumber || doc.id}: type=${job.type}, dept=${job.department}, recipients=${resolvedRecipients.length}`);
 
       if (resolvedRecipients.length === 0) continue;
@@ -715,8 +857,8 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const priority = job.priority || 1;
       const stageLevel = getCreationLevel(priority);   // P1/P2 normal, P3 banner, P4 medium-high, P5 full-loud
 
-      const creatorDoc = await db.collection("employees").doc(job.operatorClockNo).get();
-      const createdBy = creatorDoc.exists ? creatorDoc.data().name : (job.operator || "Unknown");
+      const creatorEmp = allEmps.find((e) => e.clockNo === job.operatorClockNo);
+      const createdBy = creatorEmp ? (creatorEmp.name || job.operator || "Unknown") : (job.operator || "Unknown");
 
       const jobNumber = job.jobCardNumber || doc.id;
       // Count of non-operator recipients (people we've notified other than the operator themselves)
@@ -814,9 +956,27 @@ exports.onCopperTransactionWrite = functions.firestore.onDocumentWritten({ docum
   if (sellTotal > 400) {
     const emp22 = await db.collection("employees").doc("22").get();
     if (emp22.exists && emp22.data().fcmToken) {
+      const title = "Copper Sell Ready";
+      const body = `Total sell copper: ${sellTotal}kg`;
+
+      if (emp22.data().isOnSite !== true) {
+        console.log(`onCopperTransactionWrite: employee 22 is offsite — parking in inbox`);
+        await db.collection("notification_inbox")
+          .doc("22").collection("items").add({
+            type: "copper_sell",
+            title,
+            body,
+            triggeredBy: "copper_sell",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+            readAt: null,
+          });
+        return;
+      }
+
       await messaging.send({
         token: emp22.data().fcmToken,
-        notification: { title: "Copper Sell Ready", body: `Total sell copper: ${sellTotal}kg` },
+        notification: { title, body },
         data: { click_action: "FLUTTER_NOTIFICATION_CLICK", triggeredBy: "copper_sell" },
         android: { priority: "high" },
       });
@@ -825,8 +985,8 @@ exports.onCopperTransactionWrite = functions.firestore.onDocumentWritten({ docum
         triggeredBy: "copper_sell",
         sentTo: ["22"],
         level: "normal",
-        title: "Copper Sell Ready",
-        body: `Total sell copper: ${sellTotal}kg`,
+        title,
+        body,
         initiatedByClockNo: null,
         initiatedByName: null,
       });
@@ -869,15 +1029,44 @@ exports.onAlertResponseCreated = functions.firestore
       }
 
       const creatorDoc = await db.collection("employees").doc(creatorClockNo).get();
-      if (!creatorDoc.exists || !creatorDoc.data().fcmToken) {
+      if (!creatorDoc.exists) {
+        console.error(`Creator ${creatorClockNo} not found`);
+        return null;
+      }
+
+      const title = `Busy Response - Job #${jobCardNumber}`;
+      const body = `${userName} (${clockNo}) is busy and cannot take this job right now.`;
+
+      if (creatorDoc.data().isOnSite !== true) {
+        console.log(`onAlertResponseCreated: creator ${creatorClockNo} is offsite — parking in inbox`);
+        await db.collection("notification_inbox")
+          .doc(creatorClockNo).collection("items").add({
+            type: "busy_response",
+            jobCardId: jobSnap.docs[0].id,
+            jobCardNumber: parseInt(jobCardNumber),
+            title,
+            body,
+            department: job.department || null,
+            area: job.area || null,
+            machine: job.machine || null,
+            part: job.part || null,
+            triggeredBy: "busy_response",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+            readAt: null,
+            initiatedByClockNo: clockNo,
+            initiatedByName: userName,
+          });
+        await jobSnap.docs[0].ref.update({ escalationStopped: true });
+        return null;
+      }
+
+      if (!creatorDoc.data().fcmToken) {
         console.error(`Creator ${creatorClockNo} has no FCM token`);
         return null;
       }
 
       const creatorToken = creatorDoc.data().fcmToken;
-
-      const title = `Busy Response - Job #${jobCardNumber}`;
-      const body = `${userName} (${clockNo}) is busy and cannot take this job right now.`;
 
       await messaging.send({
         token: creatorToken,
@@ -942,7 +1131,21 @@ exports.onAlertResponseCreated = functions.firestore
   });
 
 // ==================== NEW: On-site only manager helpers ====================
-async function getOnsiteRelevantManagers(jobType) {
+async function getOnsiteRelevantManagers(jobType, allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      if (!e.isOnSite || !/manager/i.test(pos)) return false;
+      const dept = (e.department || "").toLowerCase();
+      if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
+        return dept.includes("mechanical") || dept.includes("workshop");
+      }
+      if (jobType === "electrical" || jobType === "mechanicalElectrical") {
+        return dept.includes("electrical") || dept.includes("workshop");
+      }
+      return false;
+    });
+  }
   const snaps = await db.collection("employees")
     .where("isOnSite", "==", true)
     .get();
@@ -964,7 +1167,13 @@ async function getOnsiteRelevantManagers(jobType) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOnsiteDeptManagers(dept) {
+async function getOnsiteDeptManagers(dept, allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === true && e.department === dept && /manager/i.test(pos);
+    });
+  }
   const snaps = await db.collection("employees")
     .where("department", "==", dept)
     .where("isOnSite", "==", true)
@@ -978,7 +1187,14 @@ async function getOnsiteDeptManagers(dept) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOnsiteWorkshopManager() {
+async function getOnsiteWorkshopManager(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === true && e.department === "Workshop" &&
+             /manager/i.test(pos) && !/mechanical|electrical/i.test(pos);
+    })[0] || null;
+  }
   const snaps = await db.collection("employees")
     .where("department", "==", "Workshop")
     .where("isOnSite", "==", true)
@@ -993,7 +1209,21 @@ async function getOnsiteWorkshopManager() {
 }
 
 // ==================== Off-site manager helpers ====================
-async function getOffsiteRelevantManagers(jobType) {
+async function getOffsiteRelevantManagers(jobType, allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      if (e.isOnSite !== false || !/manager/i.test(pos)) return false;
+      const dept = (e.department || "").toLowerCase();
+      if (jobType === "mechanical" || jobType === "mechanicalElectrical") {
+        return dept.includes("mechanical") || dept.includes("workshop");
+      }
+      if (jobType === "electrical" || jobType === "mechanicalElectrical") {
+        return dept.includes("electrical") || dept.includes("workshop");
+      }
+      return false;
+    });
+  }
   const snaps = await db.collection("employees")
     .where("isOnSite", "==", false)
     .get();
@@ -1015,7 +1245,13 @@ async function getOffsiteRelevantManagers(jobType) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOffsiteDeptManagers(dept) {
+async function getOffsiteDeptManagers(dept, allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === false && e.department === dept && /manager/i.test(pos);
+    });
+  }
   const snaps = await db.collection("employees")
     .where("department", "==", dept)
     .where("isOnSite", "==", false)
@@ -1029,7 +1265,14 @@ async function getOffsiteDeptManagers(dept) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
-async function getOffsiteWorkshopManager() {
+async function getOffsiteWorkshopManager(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => {
+      const pos = (e.position || "").toLowerCase();
+      return e.isOnSite === false && e.department === "Workshop" &&
+             /manager/i.test(pos) && !/mechanical|electrical/i.test(pos);
+    })[0] || null;
+  }
   const snaps = await db.collection("employees")
     .where("department", "==", "Workshop")
     .where("isOnSite", "==", false)

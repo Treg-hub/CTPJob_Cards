@@ -60,9 +60,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   void initState() {
     super.initState();
 
-    // Default to logged-in user's department + auto-load areas
-    if (currentEmployee?.department != null && currentEmployee!.department.isNotEmpty) {
-      selectedDepartment = currentEmployee!.department;
+    // Default to the logged-in user's department, but NOT for Mechanical/Electrical
+    // workers who roam the whole factory and should pick their department per job.
+    final dept = currentEmployee?.department ?? '';
+    final deptLower = dept.toLowerCase();
+    final isMechOrElec =
+        deptLower.contains('mechanical') || deptLower.contains('electrical');
+    if (dept.isNotEmpty && !isMechOrElec) {
+      selectedDepartment = dept;
     }
   }
   Color _getPriorityColor(String priority) {
@@ -211,6 +216,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     final List<Map<String, dynamic>> uploaded = [];
     final storage = FirebaseStorage.instance;
     const uuid = Uuid();
+    final folderUuid = uuid.v4();
 
     for (int i = 0; i < photos.length; i++) {
       final photoData = photos[i];
@@ -235,10 +241,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
           );
         }
 
-        final jobUuid = uuid.v4();
         final storageRef = storage
             .ref()
-            .child('job_cards/$jobUuid/photos/photo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            .child('job_cards/$folderUuid/photos/photo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
         await storageRef.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
         final downloadUrl = await storageRef.getDownloadURL();

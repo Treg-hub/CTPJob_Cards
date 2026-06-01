@@ -175,6 +175,9 @@ Located in `/functions/index.js`. Uses two regions:
 Minimal test coverage currently exists.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+**Active feature**: Scheduled Waste Load Handoff (`001-scheduled-waste-handoff`)
+**Plan**: `specs/001-scheduled-waste-handoff/plan.md`
+**Spec**: `specs/001-scheduled-waste-handoff/spec.md`
+**Research**: `specs/001-scheduled-waste-handoff/research.md`
+**Data model**: `specs/001-scheduled-waste-handoff/data-model.md`
 <!-- SPECKIT END -->

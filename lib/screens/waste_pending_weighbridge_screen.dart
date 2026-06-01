@@ -7,11 +7,10 @@ import '../services/sync_service.dart';
 import '../models/waste_load.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
-import '../utils/formatters.dart';
 import 'waste_load_detail_screen.dart';
 
 /// Pending Weighbridge screen (Phase 3/6 hardened).
-/// Real data via enhanced WasteService.watchPendingWeighbridge (3+ days, completed, no weighbridge).
+/// Real data via WasteService.watchPendingWeighbridge — streams loads in pending_weighbridge status.
 /// Gated to Admin + Security Manager (existing role checks).
 class WastePendingWeighbridgeScreen extends ConsumerStatefulWidget {
   const WastePendingWeighbridgeScreen({super.key});
@@ -62,9 +61,10 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
       _error = null;
     });
     try {
-      // Drain any queued weighbridge updates / photos before loading fresh pending list
-      await _wasteService.processOfflineWasteQueue();
-      final data = await _wasteService.watchPendingWeighbridge(daysThreshold: 3).first;
+      final data = await _wasteService
+          .watchPendingWeighbridge()
+          .first
+          .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
         setState(() {
           _pending = data;
@@ -162,7 +162,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                               Icon(Icons.check_circle, size: 64, color: Colors.green),
                               SizedBox(height: 16),
-                              Text('No loads pending weighbridge entry (>3 days).', textAlign: TextAlign.center),
+                              Text('No outstanding weighbridge entries.', textAlign: TextAlign.center),
                               SizedBox(height: 8),
                               Text('Great job keeping weighbridge up to date!', style: TextStyle(color: Colors.grey)),
                             ]),
@@ -173,61 +173,159 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                           itemCount: _pending.length,
                           itemBuilder: (context, i) {
                             final load = _pending[i];
+                            final waitingSince = load.pendingWeighbridgeAt;
+                            final waitDuration = waitingSince != null
+                                ? DateTime.now().difference(waitingSince)
+                                : null;
+                            final waitLabel = waitDuration == null
+                                ? ''
+                                : waitDuration.inHours >= 1
+                                    ? '${waitDuration.inHours}h waiting'
+                                    : '${waitDuration.inMinutes}m waiting';
+                            final isUrgent = waitDuration != null && waitDuration.inHours >= 2;
+
                             return Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.warning_amber, color: Colors.orange),
-                                title: Text('${load.loadNumber} • ${load.mainWasteType}'),
-                                subtitle: Text(
-                                  '${formatSADate(load.dateTime)} • ${load.driverName} • ${load.vehicleReg}\nCompleted ${load.completedAt != null ? formatSADate(load.completedAt!) : 'recently'}',
+                              margin: const EdgeInsets.only(bottom: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: isUrgent ? Colors.red.shade300 : Colors.amber.shade300,
+                                  width: 1,
                                 ),
-                                isThreeLine: true,
-                                trailing: const Text('ENTER\nWEIGHBRIDGE', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.orange)),
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
                                 onTap: () async {
-                                  // Real flow per spec: open detail (has weighbridge entry + prominent deviation alerts + offline queue resilience)
                                   await Navigator.push(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => WasteLoadDetailScreen(load: load),
-                                    ),
+                                    MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)),
                                   );
-                                  // Refresh list on return (in case weighbridge was entered or sync happened)
-                                  if (mounted) {
-                                    _loadPending();
-                                  }
+                                  if (mounted) _loadPending();
                                 },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.scale,
+                                              color: isUrgent ? Colors.red : Colors.amber.shade700,
+                                              size: 18),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              load.loadNumber.isNotEmpty
+                                                  ? '${load.loadNumber}  •  ${load.mainWasteType}'
+                                                  : load.mainWasteType,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold, fontSize: 15),
+                                            ),
+                                          ),
+                                          if (waitLabel.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: isUrgent
+                                                    ? Colors.red.shade50
+                                                    : Colors.amber.shade50,
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(
+                                                    color: isUrgent
+                                                        ? Colors.red.shade300
+                                                        : Colors.amber.shade300),
+                                              ),
+                                              child: Text(
+                                                waitLabel,
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isUrgent
+                                                        ? Colors.red.shade700
+                                                        : Colors.amber.shade800,
+                                                    fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.person, size: 14, color: Colors.grey),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            load.driverName.isNotEmpty ? load.driverName : 'No driver',
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Icon(Icons.local_shipping, size: 14, color: Colors.grey),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            load.vehicleReg.isNotEmpty ? load.vehicleReg : '—',
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: FilledButton.icon(
+                                          onPressed: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                  builder: (_) => WasteLoadDetailScreen(load: load)),
+                                            );
+                                            if (mounted) _loadPending();
+                                          },
+                                          icon: const Icon(Icons.scale, size: 16),
+                                          label: const Text('Enter Weighbridge Weight'),
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: const Color(0xFF2E7D32),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             );
                           },
                         ),
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          try {
-            final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
-                .httpsCallable('checkWastePendingWeighbridge');
-            final result = await callable.call();
-            if (mounted) {
-              // ignore: use_build_context_synchronously
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Check result: ${result.data['message'] ?? result.data}'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              _loadPending(); // refresh list
-            }
-          } catch (e) {
-            if (mounted) {
-              // ignore: use_build_context_synchronously
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Check failed: $e'), backgroundColor: Colors.red),
-              );
-            }
-          }
-        },
-        icon: const Icon(Icons.refresh),
-        label: const Text('Run Manual Check (Pilot)'),
-      ),
+      // Admin-only: trigger the server-side pending-weighbridge check function
+      floatingActionButton: role_utils.isWasteAdmin(currentEmployee)
+          ? FloatingActionButton(
+              mini: true,
+              backgroundColor: Colors.grey.shade700,
+              tooltip: 'Admin: run server-side pending check',
+              onPressed: () async {
+                try {
+                  final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+                      .httpsCallable('checkWastePendingWeighbridge');
+                  final result = await callable.call();
+                  if (mounted) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Server check: ${result.data['message'] ?? result.data}'),
+                      backgroundColor: Colors.green,
+                    ));
+                    _loadPending();
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Check failed: $e'),
+                      backgroundColor: Colors.red,
+                    ));
+                  }
+                }
+              },
+              child: const Icon(Icons.rule, color: Colors.white),
+            )
+          : null,
     );
   }
 }

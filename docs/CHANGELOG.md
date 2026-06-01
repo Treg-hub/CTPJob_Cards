@@ -6,6 +6,33 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-01 — Offsite notification inbox, admin on-site view, settings redesign, waste contrast fixes
+
+### User-facing changes
+
+- **Notification Inbox** — Notifications are no longer sent as push alerts when you are off site. Instead they are held in a new **Notification Inbox** (bell icon in the top bar). Unread items show a live count badge. When you come back on site and open the app, a banner tells you how many are waiting. Tap any item in the inbox to open the related job card and mark it as read.
+
+- **Notifications affected by offsite hold** — All of the following are now held rather than pushed when the recipient is off-site:
+  - Job assignment (assigned directly by a manager while you are off shift)
+  - Job completion and update acknowledgements (sent back to the person who raised the job)
+  - "I'm Busy" responses from technicians (sent back to the job creator)
+  - Copper sell threshold alert (for authorised users only)
+
+- **Admin — On Site tab** — A new **On Site** tab in Admin Settings shows every employee currently marked on-site, grouped by department, updating in real time. Useful for supervisors to see who is available on the floor.
+
+- **Admin — Employee list** — The `isOnSite` column in the employee table is now a green **"On Site"** / grey **"Off Site"** status chip. Tapping the chip toggles the employee's status directly — no need to open the edit row.
+
+- **Settings screen redesigned** — Reorganised into labelled sections: Your Profile, Preferences, Notifications, App & Connectivity, App Permissions, Admin, Account. Notification test buttons moved to a dedicated sub-screen (Settings → Notifications → Notification Tests) to reduce clutter.
+
+- **Admin settings — Tab icons** — All five admin tabs now display an icon alongside the label for faster navigation.
+
+- **Waste screens — contrast fixes** — Several waste screens had light-grey text or icons that were hard to read on white backgrounds:
+  - Weight boxes on the load detail screen now use dark text when no weighbridge data has been entered (was grey-on-grey).
+  - Disabled-state block icons across create, home, and reports screens are now a darker grey.
+  - The empty items placeholder in the begin-collection screen has a more visible border.
+
+---
+
 ## 2026-05-23 — Dashboard overhaul, screen consistency, and UI improvements
 
 ### User-facing changes
