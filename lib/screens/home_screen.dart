@@ -27,6 +27,7 @@ import 'job_card_detail_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'daily_review_screen.dart';
+import 'waste_home_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -1379,6 +1380,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
+      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+        _buildWasteTab(),
     ];
 
     if (index >= children.length) return;
@@ -1386,6 +1389,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // WASTE TRACK placeholder tab (will become the dedicated home for Security roles)
+  // ---------------------------------------------------------------------------
+  Widget _buildWasteTab() {
+    // Security roles land here directly (per approved plan)
+    return const WasteHomeScreen();
   }
 
   @override
@@ -1404,6 +1415,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
       if (_isCopperAuthorized)
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
+      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+        const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
     ];
 
     final List<Widget> children = [
@@ -1413,6 +1426,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
+      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+        _buildWasteTab(),   // TODO: real focused Waste home for Security Manager/Guard
     ];
 
     if (_selectedIndex >= children.length) {

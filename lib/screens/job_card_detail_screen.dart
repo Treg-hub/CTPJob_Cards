@@ -822,7 +822,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   Future<void> _deletePhoto(Map<String, dynamic> photo) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (photo['addedBy'] != currentUid && currentEmployee?.clockNo != '22') {
+    if (photo['addedBy'] != currentUid && !isAdmin(currentEmployee)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You can only delete your own photos'), backgroundColor: Colors.red));
       return;
     }

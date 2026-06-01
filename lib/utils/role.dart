@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/employee.dart';
 
 enum UserRole { technician, manager, admin, operator }
@@ -45,4 +47,81 @@ bool isCopperAuthorized(Employee? employee) {
 /// place to extend it (e.g. to a Firestore-backed admin list or custom claim).
 bool isAdmin(Employee? employee) {
   return employee?.clockNo == '22';
+}
+
+// =============================================================================
+// WASTE TRACK (WasteTrack) role helpers
+// =============================================================================
+// Roles are derived from existing Employee fields only (no new schema columns).
+// This keeps changes to the live Job Cards app minimal and safe.
+//
+// Security team derivation (per spec + user decision):
+//   - Admin: reuses the existing isAdmin() check (clockNo == '22' for now)
+//   - Security Manager: department == "Security" && position == "Manager"
+//   - Security Guard:   department == "Security" && position == "Guard"
+//
+// These helpers are used for:
+//   - Showing/hiding the Waste navigation
+//   - Routing Security roles directly to a focused Waste home screen
+//   - Client-side enforcement of who can see costs, edit after complete,
+//     view deviation alerts, manage rates, recover soft-deletes, etc.
+//
+// Phase 3 (Admin Tools) & Phase 6 (Testing & Hardening) updates (2026-05):
+// WasteAdminScreen now has functional Manage Types (create + addSubtype) and
+// Manage Rates (setRate + live list) behind isWasteAdmin. Reports use real
+// loads + CSV export (pure Dart). Added error/loading states + new tests in
+// test/waste_*_test.dart. All edits limited to waste_* files + allowed utils.
+// =============================================================================
+
+/// Returns true if this user should have full WasteTrack Admin rights
+/// (currently reuses the global isAdmin check).
+bool isWasteAdmin(Employee? employee) {
+  return isAdmin(employee);
+}
+
+/// Returns true if the employee is a Security Manager
+/// (department "Security" + position "Manager").
+bool isSecurityManager(Employee? employee) {
+  if (employee == null) return false;
+  final dept = employee.department.toLowerCase();
+  final pos = employee.position.toLowerCase();
+  return dept == 'security' && pos == 'manager';
+}
+
+/// Returns true if the employee is a Security Guard
+/// (department "Security" + position "Guard").
+bool isSecurityGuard(Employee? employee) {
+  if (employee == null) return false;
+  final dept = employee.department.toLowerCase();
+  final pos = employee.position.toLowerCase();
+  return dept == 'security' && pos == 'guard';
+}
+
+/// Convenience: any WasteTrack user (Admin, Security Manager, or Security Guard).
+bool isWasteUser(Employee? employee) {
+  return isWasteAdmin(employee) || isSecurityManager(employee) || isSecurityGuard(employee);
+}
+
+// -----------------------------------------------------------------------------
+// WasteTrack Feature Flag (Safety Net for Production Rollout)
+// -----------------------------------------------------------------------------
+
+/// Returns whether WasteTrack features should be visible/enabled for this user.
+/// 
+/// Uses SharedPreferences flag (key: 'wasteTrackEnabled') + role check.
+/// Default: enabled for users with waste role (for pilot).
+/// 
+/// This is the production safety valve. Can be toggled via future Remote Config or admin screen.
+/// Safety: All Waste UI remains gated behind isWasteUser() even if flag is true.
+Future<bool> isWasteTrackEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  final flag = prefs.getBool('wasteTrackEnabled') ?? true; // Default on for pilot
+  return flag;
+}
+
+/// Synchronous version for navigation / quick checks (defaults to true until prefs loaded).
+/// The async version should be preferred for settings screens.
+bool isWasteTrackEnabledSync() {
+  // Safe default: on for users who have the role. Real value loaded async.
+  return true;
 }

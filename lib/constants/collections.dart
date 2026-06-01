@@ -27,4 +27,18 @@ class Collections {
   static const String geoFenceLogs = 'geo_fence_logs';
   static const String alertResponses = 'alertResponses';
   static const String feedback = 'feedback';
+
+  // ----- Waste Management / WasteTrack (waste_ prefix) -----
+  // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.
+  static const String wasteLoads = 'waste_loads';
+  static const String wasteItems = 'waste_items';
+  static const String wasteTypes = 'waste_types';
+  static const String wasteContractors = 'waste_contractors';
+  static const String wasteCollectionCompanies = 'waste_collection_companies';
+  static const String wasteRates = 'waste_rates';
+  static const String wasteDeletedLoads = 'waste_deleted_loads';
+  static const String wasteSettings = 'waste_settings';
+  static const String wasteAudit = 'waste_audit';
+  static const String wasteUsageLogs = 'waste_usage_logs';
+  static const String wasteCounters = 'waste_counters';
 }
