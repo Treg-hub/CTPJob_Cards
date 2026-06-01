@@ -62,9 +62,10 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
       _error = null;
     });
     try {
-      // Drain any queued weighbridge updates / photos before loading fresh pending list
-      await _wasteService.processOfflineWasteQueue();
-      final data = await _wasteService.watchPendingWeighbridge().first;
+      final data = await _wasteService
+          .watchPendingWeighbridge()
+          .first
+          .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
         setState(() {
           _pending = data;
@@ -162,7 +163,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                               Icon(Icons.check_circle, size: 64, color: Colors.green),
                               SizedBox(height: 16),
-                              Text('No loads pending weighbridge entry (>3 days).', textAlign: TextAlign.center),
+                              Text('No outstanding weighbridge entries.', textAlign: TextAlign.center),
                               SizedBox(height: 8),
                               Text('Great job keeping weighbridge up to date!', style: TextStyle(color: Colors.grey)),
                             ]),

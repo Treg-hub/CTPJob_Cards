@@ -44,9 +44,16 @@ class _WasteScheduleLoadScreenState
   }
 
   Future<void> _loadData() async {
+    const timeout = Duration(seconds: 10);
     try {
-      final contractors = await _wasteService.watchContractors().first;
-      final types = await _wasteService.watchWasteTypes().first;
+      final contractors = await _wasteService
+          .watchContractors()
+          .first
+          .timeout(timeout, onTimeout: () => []);
+      final types = await _wasteService
+          .watchWasteTypes()
+          .first
+          .timeout(timeout, onTimeout: () => []);
       if (mounted) {
         setState(() {
           _contractors = contractors;
@@ -58,7 +65,7 @@ class _WasteScheduleLoadScreenState
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
+          SnackBar(content: Text('Failed to load data — check connection')),
         );
       }
     }
@@ -147,6 +154,36 @@ class _WasteScheduleLoadScreenState
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : (_contractors.isEmpty || _wasteTypes.isEmpty)
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.settings_suggest, size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('Setup Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(
+                      _contractors.isEmpty && _wasteTypes.isEmpty
+                          ? 'No contractors or waste types have been added yet.\nAsk an admin to set these up in Waste Admin.'
+                          : _contractors.isEmpty
+                              ? 'No contractors have been added yet.\nAsk an admin to add them in Waste Admin.'
+                              : 'No waste types have been added yet.\nAsk an admin to add them in Waste Admin.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: _loadData,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(

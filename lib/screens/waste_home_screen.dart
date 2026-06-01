@@ -304,29 +304,43 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
 
   Future<void> _loadRecentLoads() async {
     setState(() => _isLoading = true);
+    const timeout = Duration(seconds: 12);
     try {
-      await _wasteService.processOfflineWasteQueue();
+      final loadsResult = await _wasteService
+          .watchLoads(limit: 20)
+          .first
+          .timeout(timeout, onTimeout: () => []);
 
-      final results = await Future.wait([
-        _wasteService.watchLoads(limit: 20).first,
-        _wasteService.watchScheduledLoads().first,
-      ]);
+      // Gracefully handle scheduled loads even if index is still building
+      List<WasteLoad> scheduledResult = [];
+      try {
+        scheduledResult = await _wasteService
+            .watchScheduledLoads()
+            .first
+            .timeout(timeout, onTimeout: () => []);
+      } catch (_) {
+        // Index may still be building — show empty incoming section until ready
+      }
 
-      setState(() {
-        // Exclude scheduled/cancelled from the main list — guards see scheduled
-        // loads in the dedicated Incoming section above, not duplicated here.
-        _recentLoads = results[0].where((l) =>
-          l.status != WasteLoadStatus.scheduled &&
-          l.status != WasteLoadStatus.cancelled
-        ).toList();
-        _scheduledLoads = results[1];
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() {
+          _recentLoads = loadsResult.where((l) =>
+            l.status != WasteLoadStatus.scheduled &&
+            l.status != WasteLoadStatus.cancelled
+          ).toList();
+          _scheduledLoads = scheduledResult;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load waste loads: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Could not load loads — check connection and retry'),
+            action: SnackBarAction(label: 'Retry', onPressed: _loadRecentLoads),
+            backgroundColor: Colors.orange,
+          ),
         );
       }
     }
@@ -669,16 +683,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
       ),
       floatingActionButton: wasteEnabled
           ? FloatingActionButton.extended(
-              onPressed: () {
-                if (isAdmin || isManager) {
-                  _showNewLoadMenu(context);
-                } else {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
-                }
-              },
+              onPressed: () => _showNewLoadMenu(context),
               icon: const Icon(Icons.add),
-              label: Text(isAdmin || isManager ? 'New / Schedule' : 'New Load'),
+              label: const Text('New / Schedule'),
               backgroundColor: const Color(0xFF2E7D32),
             )
           : null,

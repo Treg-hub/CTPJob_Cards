@@ -54,7 +54,10 @@ class _WasteBeginCollectionScreenState
 
   Future<void> _loadWasteTypes() async {
     try {
-      final types = await _wasteService.watchWasteTypes().first;
+      final types = await _wasteService
+          .watchWasteTypes()
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) setState(() => _wasteTypes = types);
     } catch (_) {}
   }
