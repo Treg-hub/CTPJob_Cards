@@ -14,11 +14,12 @@ The global default region is `africa-south1` (set in `functions.setGlobalOptions
 | Function | Type | Trigger | Purpose |
 |----------|------|---------|---------|
 | `createCustomToken` | Callable | HTTPS | Issues a Firebase custom auth token for clock-number-based login. |
-| `sendJobAssignmentNotification` | Callable | HTTPS | Pushes an FCM message to a specific recipient token (assignment, busy, dismissed responses). |
-| `sendCreatorNotification` | Callable | HTTPS | Pushes an FCM message back to the operator who created the job. |
-| `onJobCardCreated` | Firestore trigger | `onDocumentCreated('job_cards/{jobId}')` | Routes the initial notification to on-site mechanics/electricians per `creation_recipients_by_type`. |
-| `onJobCardAssigned` | Firestore trigger | `onDocumentUpdated('job_cards/{jobId}')` | Fires creator/dismiss notifications when `assignedClockNos` changes. |
-| `onAlertResponseCreated` | Firestore trigger | `onDocumentCreated('alertResponses/{responseId}')` | Handles "I'm Busy" and "Dismissed" responses from notification action buttons. |
+| `sendJobAssignmentNotification` | Callable | HTTPS | Pushes an FCM message to the recipient. Checks `isOnSite` for all priorities — if off-site, parks the notification to `notification_inbox/{clockNo}/items` instead. |
+| `sendCreatorNotification` | Callable | HTTPS | Pushes an FCM message back to the job creator on completion, self-assign, or update. Looks up creator's `isOnSite` via `jobCardId`; parks to inbox if off-site. |
+| `onJobCardCreated` | Firestore trigger | `onDocumentCreated('job_cards/{jobId}')` | Routes the initial notification to on-site mechanics/electricians per `creation_recipients_by_type`. Already onsite-safe via rule-based resolution. |
+| `onJobCardAssigned` | Firestore trigger | `onDocumentUpdated('job_cards/{jobId}')` | Fires when `assignedTo` transitions from null → value. Checks `isOnSite`; parks to inbox if off-site, else sends FCM push. Sets `escalationStopped: true` in both paths. |
+| `onAlertResponseCreated` | Firestore trigger | `onDocumentCreated('alertResponses/{responseId}')` | Handles "I'm Busy" responses — notifies the job creator if on-site, parks to inbox if off-site. Logs dismissals. |
+| `onCopperTransactionWrite` | Firestore trigger | `onDocumentWritten('copperTransactions/{docId}')` | Alerts employee #22 when total sell copper exceeds 400 kg. Checks `isOnSite`; parks to inbox if off-site. |
 | `migrateEmployeeIds` | Callable | HTTPS | One-time migration helper. |
 | `migrateJobStatuses` | Callable | HTTPS | One-time migration helper. |
 | `clearEscalationStamps` | Callable | HTTPS | Resets `notifiedAtStage1..4` fields when an admin changes recipient rules (so old jobs don't bombard the new audience). |
@@ -27,7 +28,7 @@ The global default region is `africa-south1` (set in `functions.setGlobalOptions
 
 | Function | Type | Schedule | Purpose |
 |----------|------|----------|---------|
-| `escalateNotifications` | Scheduled | every 2 minutes | Reads `notification_configs/global`, advances jobs through stages 1→4, fires notifications to the configured recipient rules. |
+| `escalateNotifications` | Scheduled | every 5 minutes | Reads `notification_configs/global` (cached 10 min), fetches employees (cached 5 min), advances jobs through stages 1→4. All stages use onsite-only rules; no offsite push during escalation. |
 | `autoCloseMonitoringJobs` | Scheduled | `0 8 * * *` (08:00 daily) | Auto-closes Monitor-status jobs older than 7 days. |
 
 ### Why two regions
@@ -66,6 +67,16 @@ The npm scripts in `functions/package.json` shortcut the common commands:
 npm --prefix functions run deploy   # firebase deploy --only functions
 npm --prefix functions run logs     # firebase functions:log
 ```
+
+---
+
+## Notification Inbox collection
+
+Functions write to `notification_inbox/{clockNo}/items/{itemId}` when a recipient is off-site. The Flutter app reads this via a real-time listener (no composite index needed — single-field `read` query only). Documents are never auto-deleted; the user marks them read via the app.
+
+**Fields per item:** `type`, `jobCardId`, `jobCardNumber`, `title`, `body`, `department`, `area`, `machine`, `part`, `priority`, `triggeredBy`, `createdAt` (server timestamp), `read` (bool), `readAt` (timestamp|null), `initiatedByClockNo`, `initiatedByName`.
+
+**Security rules** must allow each employee to read/write only their own `notification_inbox/{clockNo}` subtree (match by UID or custom claim). Currently not tracked in `firestore.rules` in repo — add before going to production.
 
 ---
 
@@ -119,6 +130,8 @@ curl http://localhost:5001/ctp-job-cards/europe-west1/escalateNotifications
 | `failed-precondition: query requires an index` | Composite index missing | Open the Firebase Console error link to auto-create, then redeploy `firestore.indexes.json` |
 | Cold-start timeouts on `onJobCardCreated` | Function instance was idle | Acceptable — first invocation after idle warms up; subsequent calls are fast |
 | Notifications go to the wrong recipients | `recipients_by_type` keys don't match (mechanical vs mech/elec) | Check `jobTypeKey()` in `index.js` — the Dart enum `mechanicalElectrical` maps to `mech/elec` (with slash) |
+| Employee receives no push notification after assignment | Employee's `isOnSite` is `false` — notification was parked to inbox | Expected behaviour. Check `notification_inbox/{clockNo}/items` in the Firebase Console to confirm the inbox item was written |
+| Inbox items never appear in the app | Employee is reading a different clockNo's inbox | Confirm `currentEmployee.clockNo` matches the Firestore doc ID in the `notification_inbox` collection |
 | Schema drift between admin app and Cloud Function | `_buildStageDoc` in `admin_screen.dart` writes a field that `getNotificationConfig` doesn't read (or vice versa) | Keep both in sync — see `escalation_config_structure.md` |
 
 ---

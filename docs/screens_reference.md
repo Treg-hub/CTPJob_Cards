@@ -91,6 +91,8 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 
 > **Info:** The On-Site indicator reflects the live value of `employees/{clockNo}.isOnSite`, which is driven by background geofencing in `location_service.dart`.
 
+> **Notification bell** — a bell icon in the AppBar shows a live badge with the count of unread inbox items. Tapping it opens the [Notification Inbox](#notification-inbox). When the employee's `isOnSite` transitions from `false` to `true`, a SnackBar appears with the unread count and an "Open" shortcut if items are waiting.
+
 ### Create Job Card
 
 `lib/screens/create_job_card_screen.dart` — **Roles:** All
@@ -156,9 +158,9 @@ Gradient: orange → green (on-site) / red (off-site). The tab bar sits in the b
 
 #### Notifications Triggered Here
 
-- Assigning a job → `sendJobAssignmentNotification` Cloud Function call
-- Closing/updating → `sendCreatorNotification` to the original creator
-- Both also trigger `onJobCardAssigned` which sets `escalationStopped: true`
+- Assigning a job → `sendJobAssignmentNotification` Cloud Function call. If the assignee is **off-site**, the notification is parked in their [Notification Inbox](#notification-inbox) instead of sent as a push.
+- Closing/updating → `sendCreatorNotification` to the original creator. If the creator is off-site, parked to inbox.
+- Both also trigger `onJobCardAssigned` which sets `escalationStopped: true` regardless of delivery method.
 
 ### View Job Cards
 
@@ -294,13 +296,13 @@ Visibility into the "Monitoring" state — jobs that were marked completed but k
 
 `lib/screens/admin_screen.dart` — **Roles:** Admin only
 
-The control panel. Four tabs.
+The control panel. Five scrollable tabs with icons.
 
 #### Tab: Employees
 
 - Spreadsheet-style editor for the `employees` collection
 - Add / edit / bulk-delete employees
-- Per-row toggle for `isOnSite`
+- `isOnSite` column shows a tappable green **"On Site"** / grey **"Off Site"** chip — tap to toggle the employee's status directly
 - FCM token visible and editable (for debugging)
 - CSV import / export with template download
 
@@ -323,6 +325,13 @@ The control panel. Four tabs.
 - Spreadsheet-style export and delete tooling for the `job_cards` collection
 - CSV export with full filter applied
 - Bulk delete with confirmation
+
+#### Tab: On Site
+
+- Real-time view of every employee currently marked `isOnSite: true`
+- Grouped by department with a green header showing the total on-site count
+- Each row shows: name, position, clock number
+- Updates live as employees clock in and out
 
 ### Geofence Editor
 
@@ -348,23 +357,63 @@ Per-user preferences, diagnostics, and developer tools.
 
 `lib/screens/settings_screen.dart` — **Roles:** All
 
-Per-user preferences and self-service tooling.
+Per-user preferences and self-service tooling. Organised into labelled sections:
 
 #### Sections
 
-- **Account** — current user info, On-Site indicator, `Log Out`
-- **Appearance** — Dark/Light mode toggle (writes to Riverpod theme provider)
-- **Permissions Status** — live status for Notifications, System Alert Window, Notification Policy, Battery Optimisation. Tapping any row jumps to the OS settings page
-- **Notification Tests**
-  - Full Screen Alert (Priority 5, bypasses DND)
-  - Persistent Notification with action buttons
-  - Medium-priority notification
-  - Standard normal notification
-- **Diagnostics** — link to [Notification Diagnostics](#notification-diagnostics)
+- **Your Profile** — current user info (name, clock, department), live on-site / off-site indicator, link to Documentation
+- **Preferences** — Dark/Light mode toggle (writes to Riverpod theme provider)
+- **Notifications** — link to [Notification Inbox](#notification-inbox) with live unread count badge; link to [Notification Tests](#notification-tests)
+- **App & Connectivity** — Reset Permissions, Check for Update, Refresh FCM Token
+- **App Permissions** — live status for Notifications, System Alert Window, Notification Policy, Battery Optimisation. Tapping any row jumps to the OS settings page
+- **Admin** *(Admin only)* — amber-bordered card containing links to Admin Settings and Notification Diagnostics
+- **Account** — Log Out
+
+### Notification Inbox
+
+`lib/screens/notification_inbox_screen.dart` — **Roles:** All
+
+Shows notifications that were held because the employee was off-site at the time of delivery. Accessible from the bell icon in the Home screen AppBar (with live unread badge) and from the Notifications section in Settings.
+
+#### Layout
+
+- **Unread** section at the top — highlighted with a coloured border and an orange dot indicator; "Mark all read" action in header
+- **Earlier** section — previously-read items in muted style
+- Empty state: "You're all caught up" with a green check icon
+
+#### Per-item Actions
+
+- **Tap** — marks item as read and navigates to the relevant job card (if one exists)
+- **Mark all read** — batch-marks every unread item via a Firestore batch write
+
+#### Notification Types Displayed
+
+| Type | Icon | Colour |
+|------|------|--------|
+| `job_assigned` | Person + job card | Blue |
+| `job_closed` | Check circle | Green |
+| `self_assigned` | Person add | Teal |
+| `job_updated` | Edit note | Deep Orange |
+| `busy_response` | Do-not-disturb | Red |
+| `copper_sell` | Coin | Amber |
+
+#### Data Source
+
+`notification_inbox/{clockNo}/items` — subcollection per employee. Writes are created by Cloud Functions (not the Flutter app). Items persist until manually marked read; they are not auto-deleted.
+
+### Notification Tests
+
+`lib/screens/notification_test_screen.dart` — **Roles:** All
+
+Extracted self-contained screen for triggering the three notification delivery modes on the current device. Accessible from Settings → Notifications → Notification Tests.
+
+- **Full Screen Alert** (P5) — bypasses DND, takes over screen
+- **Persistent Notification** — red banner with action buttons
+- **General Notification** — standard banner
 
 ### Notification Diagnostics
 
-`lib/screens/notification_diagnostics_screen.dart` — **Roles:** All (test tool)
+`lib/screens/notification_diagnostics_screen.dart` — **Roles:** Admin
 
 Developer/admin tool for verifying the notification + geofence stack works end-to-end on a device.
 
