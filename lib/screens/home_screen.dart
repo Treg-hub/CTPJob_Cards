@@ -73,6 +73,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
 
+  /// Returns true when the currently visible tab is the Waste tab.
+  /// The Waste tab index is dynamic — it shifts depending on whether the
+  /// Manager and Copper tabs are present for this user.
+  bool get _isOnWasteTab {
+    if (!role_utils.isWasteUser(currentEmployee) ||
+        !role_utils.isWasteTrackEnabledSync()) {
+      return false;
+    }
+    int idx = 2; // 0=Home, 1=MyWork
+    if (currentEmployee != null &&
+        currentEmployee!.position.toLowerCase().contains('manager')) {
+      idx++;
+    }
+    if (_isCopperAuthorized) { idx++; }
+    return _selectedIndex == idx;
+  }
+
   void _setupEmployeeStream(String clockNo) {
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
@@ -1555,12 +1572,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showFeedbackDialog,
-        backgroundColor: const Color(0xFFFF8C42),
-        tooltip: 'Give Feedback',
-        child: const Icon(Icons.feedback, color: Colors.black),
-      ),
+      floatingActionButton: _isOnWasteTab
+          ? null
+          : FloatingActionButton(
+              onPressed: _showFeedbackDialog,
+              backgroundColor: const Color(0xFFFF8C42),
+              tooltip: 'Give Feedback',
+              child: const Icon(Icons.feedback, color: Colors.black),
+            ),
     );
   }
 

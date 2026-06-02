@@ -65,6 +65,16 @@ Every notification sent by the system is logged. You can see:
 - Who responded (assigned themselves, reported busy, dismissed)
 - Which jobs escalated to you because no technician responded in time
 
+### Notification Inbox — Off-Site Delivery
+
+If you are **off-site** (your `isOnSite` status is false) when an escalation or job update arrives, the notification is not pushed to your phone. Instead it is held in your **Notification Inbox** and delivered when you return on-site.
+
+- The **bell icon** in the Home screen app bar shows a live count of unread inbox items.
+- When you arrive on site, a banner appears with the count and a shortcut to your inbox.
+- Items persist until you mark them read — they do not expire.
+
+This means a job may have escalated to you while you were off shift without you receiving a push alert. Review your inbox at the start of each shift.
+
 ### Escalation Notifications
 
 When a P4 or P5 job has not been accepted within the escalation window, **you will receive a notification.** When this happens:

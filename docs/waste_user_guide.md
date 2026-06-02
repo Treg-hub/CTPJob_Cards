@@ -29,6 +29,16 @@ From the WasteTrack home screen you can see:
 - Loads pending weighbridge sign-off
 - A summary of completed and queued loads
 
+The list updates automatically in real time — there is no need to pull down to refresh.
+
+### Filtering loads
+
+Use the **All / Today / This Week** chips at the top to narrow the list. When a filter is active and no loads match, the screen shows a "No loads match" message with a tap-to-clear button.
+
+### Screen actions (⋮ More actions menu)
+
+Reports, Pending Weighbridge, Waste Admin, and the enable/disable toggle are grouped under the **⋮** menu at the top right of the screen. If there are queued offline items, a cloud sync button appears next to it.
+
 ---
 
 ## Section 2: For Security Managers — Scheduling a Load
@@ -42,7 +52,7 @@ From the WasteTrack home screen you can see:
 5. Add a **note** if any special instructions apply.
 6. Tap **Schedule** to save.
 
-The load will appear in the home screen under "Scheduled" and will be visible to security guards on duty.
+The load will appear on the home screen under "Scheduled" and will be visible to security guards on duty. The home screen updates live — guards will see the new load without needing to refresh.
 
 ### Managing Existing Loads
 
@@ -78,11 +88,11 @@ When a contractor arrives to collect waste:
 
 During collection, add each type of waste being loaded:
 
-1. Tap **Add Item**.
+1. Tap **Add Item**. A slide-up panel will appear.
 2. Select the **waste category** (e.g. cardboard, scrap metal, e-waste).
 3. Enter the **recorded weight** in kg (the weight as measured on site before the truck leaves).
 4. Take a **photo** of the waste. At least one item must have a photo.
-5. Tap **Save Item**.
+5. Tap **Add Item** to save the entry.
 
 Repeat for each waste type in the load.
 
@@ -101,9 +111,9 @@ Once all items are added:
 
 After the truck returns from the weighbridge:
 
-1. On the load detail screen, tap **Enter Weighbridge Weight**.
-2. Enter the **actual weighbridge weight** in kg (the certified weight from the external weighbridge).
-3. Tap **Confirm**.
+1. On the load detail screen, an amber **"Weighbridge entry required"** banner appears at the top of the screen when the load is waiting for this step.
+2. Scroll to the **Weighbridge Entry** section and enter the **actual weighbridge weight** in kg (the certified weight from the external weighbridge).
+3. Tap **Save Weighbridge Weight**.
 
 The system automatically compares the recorded weight to the actual weight. If the difference exceeds **5% or 50 kg**, a **deviation flag** is set. The security manager will see this highlighted in reports.
 

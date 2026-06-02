@@ -428,6 +428,143 @@ Developer/admin tool for verifying the notification + geofence stack works end-t
 
 ---
 
+## WasteTrack Module
+
+Screens for the waste management feature. Accessible via the **Waste** tab in the bottom navigation bar. Roles: Security Manager (`department == "Security"` && `position == "Manager"`), Security Guard (`department == "Security"` && `position == "Guard"`), and Admin. Other employees do not see the Waste tab.
+
+### Waste Home
+
+`lib/screens/waste_home_screen.dart` — **Roles:** Security Manager, Security Guard, Admin
+
+Entry point for WasteTrack. Shows load cards grouped by status: **Incoming** (scheduled, awaiting collection), **In Progress** (collection started), **Pending Weighbridge** (waiting for actual weight), and a summary count of Completed loads.
+
+Load list is driven by two live `StreamSubscription`s on `watchLoads()` and `watchScheduledLoads()` — updates are reflected in real time without any manual refresh.
+
+#### Role-based differences
+
+- **Security Manager** — sees all loads; can tap **Schedule Load** to create a new scheduled load; can edit or cancel any scheduled load via bottom sheet
+- **Security Guard** — sees only loads ready for collection (scheduled, incoming); tapping a card opens **Begin Collection**
+- **Admin** — full visibility; Admin button navigates to **Waste Admin**
+
+#### Key Actions
+
+- **+ New / Schedule** *(FAB)* — bottom sheet with "Schedule Incoming Load" or "New Load (on the spot)"
+- **Begin Collection** *(Guard/Admin)* — opens **Waste Begin Collection** for that load
+- **⋮ More actions** *(top-right overflow menu)* — Pending Weighbridge, Reports, Waste Admin, Enable/Disable toggle (shown per role). Cloud sync retry button appears alongside when queue is non-empty.
+- **All / Today / This Week** filter chips — apply to both scheduled and recent loads; shows "No loads match" empty state with a clear-filter button when active filter returns zero results
+
+### Waste Schedule Load
+
+`lib/screens/waste_schedule_load_screen.dart` — **Roles:** Security Manager, Admin
+
+Form for creating a new scheduled waste load. Saves to `waste_loads` via `WasteService.createLoad` (Cloud Function `createWasteLoad`) which assigns an auto-incremented load number (format: `WT-YYYYMMDD-NNN`).
+
+#### Required Fields
+
+- Contractor (from `waste_contractors`)
+- Main waste type (from `waste_types`)
+- Scheduled date/time
+- Optional notes
+
+### Waste Begin Collection
+
+`lib/screens/waste_begin_collection_screen.dart` — **Roles:** Security Guard, Admin
+
+Opens for a specific scheduled load when a guard taps **Begin Collection**. Transitions the load status from `scheduled` → `pending_weighbridge` on submission. Guard fills in driver name, vehicle reg, adds waste items with photos, and captures the contractor signature.
+
+Add-item uses a `showModalBottomSheet` (not a dialog) for camera stability. Calls `WasteService.submitCollection` which stores `collectedByName` from `currentEmployee.name` on the load document.
+
+### Waste Create Load
+
+`lib/screens/waste_create_load_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Two-screen flow: **Step 1** selects the main waste type (grid with category-aware icons); **Step 2** fills load details and adds items. A step progress bar is shown at the top of each screen.
+
+Add-item uses `showModalBottomSheet` (camera-safe). Subtypes are loaded dynamically from the selected `WasteType.subtypes` — not hardcoded.
+
+On successful save, `saveCompleteWasteLoad` returns the new load ID. The screen immediately fetches the full load and `pushReplacement`s to **Waste Load Detail** so the user can capture the signature without navigating back through the home screen.
+
+`contractor_name` is stored on the load document at save time (looked up from the `_contractors` list by the selected `_contractorId`).
+
+#### Key Actions
+
+- **Add Item** — slide-up sheet: select subtype, enter weight, attach photo(s)
+- **Remove Item** — tap × on item card
+- **Create Load** — validates required fields and items, saves via `saveCompleteWasteLoad`, navigates to detail on success
+- Offline: item writes are queued via `SyncService` if connectivity is lost
+
+### Waste Signature
+
+`lib/screens/waste_signature_screen.dart` — **Roles:** Security Guard, Admin
+
+Full-screen signature capture. The contractor driver signs directly on the phone screen. Signature is stored as a PNG byte array, uploaded to Firebase Storage under `waste/{loadId}/signature/`, and the download URL is saved to the load document.
+
+### Waste Load Detail
+
+`lib/screens/waste_load_detail_screen.dart` — **Roles:** All WasteTrack roles
+
+Full detail view of a single waste load.
+
+#### Layout (top to bottom)
+
+1. **Amber action banner** — shown only when `status == pendingWeighbridge` and the user is Admin or Manager. Prompts immediate weighbridge entry.
+2. **Status stepper** — 4-step horizontal progress bar showing current lifecycle position. Steps vary by flow: `scheduled` loads show (Scheduled → Collecting → Weighbridge → Complete); direct loads show (Created → Signature → Weighbridge → Complete).
+3. **Status banner** — coloured icon + type name + status label.
+4. **Info card** — driver, vehicle, contractor name (`contractorName` field; falls back to `contractorId`), date, and collector name (`collectedByName` field; falls back to clock number).
+5. **Items card** — live `StreamBuilder` on `WasteService.watchItemsForLoad()`. Lists each item: subtype, weight, quantity, photo count.
+6. **Weight card** — recorded weight vs. actual weighbridge weight with inline variance row (green if within thresholds, red if deviation).
+7. **Weighbridge entry** *(Admin/Manager only, non-terminal status)* — text field + save button.
+8. **Mark Complete & Signature button** *(draft status only)* — navigates to **Waste Signature**, then marks load complete.
+
+#### Status actions available per role
+
+| Current status | Guard action | Manager action |
+|----------------|-------------|----------------|
+| Scheduled | Begin Collection | Edit / Cancel |
+| Draft / In Progress | Capture Signature | View |
+| Pending Weighbridge | View | Enter Weighbridge Weight (amber banner) |
+| Completed | View only | View only |
+
+### Waste Pending Weighbridge
+
+`lib/screens/waste_pending_weighbridge_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+List screen showing all loads in `pending_weighbridge` status. Guard or manager enters the actual weighbridge weight. On save, `WasteService.saveWeighbridgeWeight` computes the deviation, writes the result to `waste_loads`, and triggers a deviation flag if thresholds are exceeded (> 5% or > 50 kg).
+
+### Waste Queued
+
+`lib/screens/waste_queued_screen.dart` — **Roles:** Security Guard, Admin
+
+Shows loads that are queued locally (created or updated offline and not yet synced to Firestore). Reflects the Hive `sync_queue` entries for WasteTrack operations. Guard can review pending items and manually trigger a sync flush.
+
+### Waste Reports
+
+`lib/screens/waste_reports_screen.dart` — **Roles:** Security Manager, Admin
+
+Date-range report of completed loads. Filterable by contractor and waste type.
+
+#### Capabilities
+
+- **Run Report** — queries `waste_loads` with server-side date and status filters
+- **Export CSV** — pure-Dart CSV generation, written to device storage
+- Deviation-flagged loads are highlighted in the results table
+
+### Waste Admin
+
+`lib/screens/waste_admin_screen.dart` — **Roles:** Admin only
+
+Configuration panel for the WasteTrack module. Three tabs:
+
+| Tab | What it manages |
+|-----|-----------------|
+| **Manage Types** | Create waste type categories; add sub-types; set active/inactive |
+| **Manage Rates** | Set cost rate per kg per waste type; view current rate list |
+| **Contractors** | Add/edit contractor records used when scheduling loads |
+
+Writes to `waste_types`, `waste_rates`, and `waste_contractors` collections.
+
+---
+
 ## Cross-Cutting Concerns
 
 Behaviour that affects multiple screens.

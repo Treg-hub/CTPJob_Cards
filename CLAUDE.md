@@ -65,12 +65,13 @@ firebase deploy --only firestore
 lib/
 ├── main.dart                    # Entry point: Hive → Firebase → Notifications → Sync → Auth routing
 ├── firebase_options.dart        # Auto-generated, do not edit manually
+├── constants/                   # Canonical Firestore collection name constants (collections.dart)
 ├── models/                      # Plain Dart data classes (some are @HiveType)
 ├── providers/                   # Riverpod Providers and StateNotifiers
-├── services/                    # All business logic (Firestore, Sync, Location, Notifications)
+├── services/                    # All business logic (Firestore, Sync, Location, Notifications, Waste)
 ├── screens/                     # UI screens (ConsumerStatefulWidget where Riverpod needed)
 ├── widgets/                     # Reusable UI components
-├── utils/                       # Pure helpers: role inference (role.dart), docs catalog (doc_catalog.dart)
+├── utils/                       # Pure helpers: role inference (role.dart), docs catalog, formatters, deviation
 └── theme/app_theme.dart         # Material3 theme + AppColors extension
 ```
 
@@ -82,6 +83,7 @@ lib/
 | `themeNotifierProvider` | Dark/light theme toggle, persisted to SharedPreferences |
 | `permissionsProvider` | Live status of 4 critical Android permissions; logs grants to Firestore |
 | `copperNotifierProvider` | `CopperInventory` async state; wraps all copper transaction operations |
+| `wasteNotifierProvider` | Current in-progress `WasteLoad` state; wraps load creation, item additions, and weighbridge sign-off |
 
 **Backend**: Firestore is the single source of truth. All writes go through `FirestoreService`, which also appends to the `job_card_audit` collection for every change.
 
@@ -118,9 +120,10 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 ### Current Role System Summary
 - Roles are **derived** from `Employee.position` + `department` (see `lib/utils/role.dart`)
 - Admin is currently gated by hardcoded `clockNo == "22"`
+- WasteTrack roles are derived from `department == "Security"` + `position` — `isSecurityManager()` and `isSecurityGuard()` are separate helpers in `role.dart`
 - There is **no go_router** and **no centralized route guards**
 - Permission checks are scattered across multiple screens
-- Copper features are controlled by a hardcoded whitelist
+- Copper features are controlled by a hardcoded clock-number whitelist (`_copperAuthorizedClockNos` in `role.dart`)
 
 ---
 
@@ -133,14 +136,16 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 
 ## Role-Based Access
 
-Four roles, **inferred from `Employee.position` and `Employee.department`**.
+Roles are **inferred from `Employee.position` and `Employee.department`** (see `lib/utils/role.dart`).
 
 | Role | Inference | Key Screens |
 |------|-----------|-------------|
 | Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, CreateJobCard, ViewJobCards, JobCardDetail |
 | Manager | `position` contains `manager` | ManagerDashboard, DailyReview, ViewJobCards |
-| Operator | neither manager nor technician | Limited actions on JobCardDetail |
+| Operator | neither manager nor technician | Home, CreateJobCard (on-site only), JobCardDetail |
 | Admin | `clockNo == "22"` | Full access to AdminScreen and all admin features |
+| Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |
+| Security Guard | `department == "Security"` && `position == "Guard"` | WasteHome, WasteBeginCollection, WasteLoadDetail, WasteSignature, WastePendingWeighbridge |
 
 See `docs/architecture/visualization.md` for the complete and visual permission matrix.
 
@@ -153,11 +158,21 @@ Four types: **Mechanical**, **Electrical**, **Mech/Elec**, **Maintenance**.
 
 ## Firestore Collections
 
-- `job_cards`
-- `job_card_audit`
-- `employees`
-- `notifications`
-- `copper_inventory` / `copper_transactions`
+All collection names are defined as constants in `lib/constants/collections.dart` — always use the constant, never a string literal. Canonical names are mirrored in `packages/shared-ts/src/collections.ts` (web apps).
+
+**Job Cards (unprefixed — legacy owner):**
+- `job_cards`, `job_card_audit`, `counters`, `structures`, `settings`
+- `notification_configs`, `notifications`, `alertResponses`
+- `copper_inventory`, `copper_transactions`
+- `geo_fence_logs`, `feedback`, `employees` (shared)
+
+**Notification Inbox (subcollection):**
+- `notification_inbox/{clockNo}/items` — off-site-held notifications per employee; written by Cloud Functions, read by `NotificationInboxScreen`
+
+**WasteTrack (`waste_` prefix):**
+- `waste_loads`, `waste_items`, `waste_types`, `waste_contractors`
+- `waste_collection_companies`, `waste_rates`, `waste_settings`
+- `waste_deleted_loads`, `waste_audit`, `waste_usage_logs`, `waste_counters`
 
 ## Local Storage
 
@@ -166,18 +181,31 @@ Four types: **Mechanical**, **Electrical**, **Mech/Elec**, **Maintenance**.
 
 ## Cloud Functions
 
-Located in `/functions/index.js`. Uses two regions:
-- `africa-south1` (default)
-- `europe-west1` (for scheduled functions)
+Located in `/functions/index.js`. Named codebase: **`jobcards`** (set in `firebase.json`) — deploys from this repo only touch Job Cards functions and cannot wipe WasteTrack/Overtime functions in the monorepo.
+
+Two regions:
+- `africa-south1` — all callable + Firestore-trigger functions
+- `europe-west1` — scheduled functions only (`escalateNotifications`, `autoCloseMonitoringJobs`)
+
+Key functions:
+- `onJobCardCreated` — dispatches creation notifications
+- `onJobCardAssigned` / `sendJobAssignmentNotification` — assignment alerts; parks to inbox if recipient is off-site
+- `sendCreatorNotification` — notifies job creator on status changes; parks if off-site
+- `onAlertResponseCreated` — handles Busy responses; parks to inbox if creator is off-site
+- `escalateNotifications` *(scheduled, every 2 min, europe-west1)* — 4-stage escalation loop
+- `autoCloseMonitoringJobs` *(scheduled, 08:00 SAST, europe-west1)* — closes Monitor jobs after 7 days
+- `clearEscalationStamps` — admin-triggered; clears stage stamps on open jobs
+- `onCopperTransactionWrite` — copper sell alert; parks to inbox if recipient is off-site
+- `onJobCardTypeChanged` — re-fires notifications when job type changes
+- `createWasteLoad` *(callable, africa-south1)* — atomic load creation with daily sequence number (WT-YYYYMMDD-NNN)
 
 ## Testing
 
-Minimal test coverage currently exists.
+WasteTrack has the most test coverage:
+- `test/waste_deviation_test.dart` — deviation threshold logic
+- `test/waste_formatters_test.dart` — weight/date formatters
+- `test/waste_offline_resilience_test.dart` — offline queue and sync behavior
+- `test/waste_widget_smoke_test.dart` — basic widget render smoke tests
+- `test/pilot_verification_harness.dart` — end-to-end pilot verification checklist
 
-<!-- SPECKIT START -->
-**Active feature**: Scheduled Waste Load Handoff (`001-scheduled-waste-handoff`)
-**Plan**: `specs/001-scheduled-waste-handoff/plan.md`
-**Spec**: `specs/001-scheduled-waste-handoff/spec.md`
-**Research**: `specs/001-scheduled-waste-handoff/research.md`
-**Data model**: `specs/001-scheduled-waste-handoff/data-model.md`
-<!-- SPECKIT END -->
+Job Cards core has minimal test coverage.

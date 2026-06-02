@@ -48,10 +48,13 @@ Live:
 - Real-time geofencing
 - Offline sync
 - Permanent audit trail
-- Manager dashboard
+- Manager dashboard & Daily Review
+- Notification Inbox (offsite hold & delivery)
 - Role-based access
 - Light & dark theme
 - Notification action buttons
+- Copper Inventory module (clock-number restricted)
+- WasteTrack module (Security department)
 
 Planned:
 - Predictive maintenance AI
@@ -63,7 +66,7 @@ Planned:
 
 *Four roles with distinct access scopes and responsibilities*
 
-Every employee's role controls what they can see and do. Roles are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. An Admin can adjust an employee's effective role by updating their `position` string.
+Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is granted based on a hardcoded clock number whitelist, not the position string. To promote someone to Admin, the clock number must be added to the whitelist in the codebase.
 
 ### Operator
 
@@ -88,6 +91,8 @@ Oversees all job cards in their department. Enforces data quality for operators 
 Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, and has access to all data across all departments.
 
 **Key Screens:** Admin Screen · Geofence Editor · Employee Management
+
+> **Admin access is gated by clock number.** Only the clock number on the admin whitelist is granted Admin access — changing an employee's `position` string has no effect on Admin access.
 
 ### Authentication
 
@@ -199,6 +204,17 @@ Every notification includes three action buttons that can be tapped without open
 | **Assign Self** | Status → In-Progress. Technician assigned. | **Stops immediately** | Operator receives "Technician on the way" |
 | **I'm Busy** | No change to status | Stops for this technician — system continues looking for another | Operator receives "Technician unavailable" |
 | **Dismiss** | No change | Escalation continues — next stage fires on schedule | Logged in notification history |
+
+### Notification Inbox — Off-Site Hold
+
+When a user is off-site, the system does **not** send a live push notification. Instead, the notification is held in a **Notification Inbox** until the user is back on site.
+
+Notifications held in the inbox include: job assignments made while off shift, job closure/update acknowledgements sent back to the creator, "I'm Busy" responses from technicians, and Copper sell-threshold alerts (for authorised users).
+
+- The **bell icon** in the Home screen app bar shows a live unread-count badge.
+- When the user returns on-site and opens the app, a banner appears: "X notifications waiting" with a one-tap shortcut to the inbox.
+- Items in the inbox persist until manually marked as read — they do not expire.
+- Tapping any inbox item navigates directly to the relevant job card and marks it as read.
 
 ### On-Site Entry & Departure Notifications
 
@@ -357,6 +373,7 @@ Nine at-a-glance metrics: Open Jobs, High Priority (P4–P5), Monitoring, Closed
 
 - **Open Jobs by Day** — 30-day area chart of open job stock, department-filtered.
 - **Trendline** — opened vs. closed jobs over the selected period, with legend.
+- **Department Area Chart** — area breakdown of open jobs by department.
 - **Priority Breakdown** — bar chart of open jobs by priority, labelled P1 Low through P5 Crit.
 - **Team Performance** — per-technician table showing closed count, average resolution time, and currently assigned count. Assigned count > 3 is flagged in orange as a potential overload indicator.
 
@@ -411,9 +428,10 @@ Every action taken on a job card — creation, status change, assignment, notifi
 
 Admins have access to all data across all departments plus system configuration tools not available to any other role.
 
-- **Employee Management** — Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers.
+- **Employee Management** — Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers. The `isOnSite` column shows a tappable green/grey chip — tap to toggle an employee's on-site status directly.
 - **Geofence Editor** — Draw and adjust the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
 - **Escalation Rules** — Configure the timer and recipient list for each of the four escalation stages. Tune to match your site's staffing and response capacity.
+- **On Site View** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave. Useful for supervisors checking floor availability without leaving the app.
 
 ### Technology Stack
 

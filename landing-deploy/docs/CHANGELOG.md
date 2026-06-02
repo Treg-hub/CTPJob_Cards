@@ -6,6 +6,94 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-02 — WasteTrack UX overhaul, notification inbox fixes
+
+### User-facing changes
+
+**WasteTrack home screen**
+
+- **Live updates** — The load list now updates automatically in real time. You no longer need to pull down to refresh; new or updated loads appear as soon as they change.
+- **Actions moved to overflow menu** — The toolbar buttons (Pending Weighbridge, Reports, Waste Admin, Enable/Disable toggle) are now grouped under a **⋮ More actions** menu at the top right. The cloud sync retry button remains visible at all times when there are queued items.
+- **Filter empty states** — When the Today or This Week filter returns no results, the screen now shows a clear "No loads match" message with a tap-to-clear button instead of a blank list.
+- **Contractor name on scheduled load cards** — Incoming scheduled load cards now show the contractor's display name instead of the internal contractor ID.
+
+**WasteTrack load detail screen**
+
+- **Waste items now listed** — The load detail screen now shows all waste items in the load (subtype, weight, photo count) directly on the page. Previously you could not see the item breakdown from the detail view.
+- **Status progress stepper** — A four-step progress bar (Created → Signature → Weighbridge → Complete, or Scheduled → Collecting → Weighbridge → Complete for two-phase loads) is shown at the top of the detail screen so you can see at a glance where the load is in its lifecycle.
+- **Weighbridge action banner** — When a load is in **Pending Weighbridge** status, a highlighted amber banner now appears at the top of the screen prompting the manager to enter the weighbridge weight. Previously this was easy to miss.
+- **Collector name shown** — The "Collected by" field now shows the guard's name instead of their clock number.
+
+**WasteTrack create load flow**
+
+- **Opens load detail after saving** — After creating a new load, the app now navigates you directly to the load detail screen. You can immediately capture the driver signature without going back to the home screen to find the load.
+- **Waste type icons** — The waste type selection grid now shows category-specific icons (hazardous, recyclables, cardboard, metal, e-waste, organic) instead of a generic trash icon for every type.
+- **Add item is a slide-up sheet** — The "Add Waste Item" form is now a slide-up bottom sheet instead of a pop-up dialog. This is more stable when the camera is involved and easier to use on smaller screens.
+
+**WasteTrack begin collection**
+
+- Same camera-stable slide-up sheet for adding waste items during collection (consistent with create load flow above).
+
+**Notification inbox**
+
+- **On-site status indicator in app bar** — The notification inbox screen's app bar now shows the same orange → green (on-site) / orange → red (off-site) gradient as every other screen in the app.
+
+### Developer / architecture changes
+
+- **Firestore rules: notification_inbox added** — The `notification_inbox/{clockNo}/items` subcollection was missing from the Firestore security rules, causing permission denied errors when the Flutter app tried to read or mark inbox items. Rule added to the Job Cards tier. Deployed to production.
+- **`WasteLoad` model: `contractorName`, `collectedByName` fields** — Both are now stored on the load document at creation/collection time and read back for display, avoiding secondary lookups.
+- **`WasteService.getLoad()`** — New method for fetching a single load by ID, used by the post-creation navigation.
+
+---
+
+## 2026-06-01 — WasteTrack module, offsite notification inbox, admin on-site view, settings redesign
+
+### User-facing changes
+
+**WasteTrack — Waste Management Module**
+
+A full waste management module is now integrated into the app for Security department staff. Accessible via the **Waste** tab in the bottom navigation bar (only visible to Security Manager, Security Guard, and Admin roles).
+
+- **Security Manager** — Schedule waste loads with contractor, waste type, and date. Edit or cancel scheduled loads before collection begins. Review completed loads and deviation reports. Export CSV reports by date range.
+- **Security Guard** — Begin collections for scheduled loads. Add waste items with recorded weights and photos. Capture the contractor's on-screen signature. Enter the actual weighbridge weight after the truck returns from the external scale.
+- **Deviation alerts** — When the difference between the recorded weight and the actual weighbridge weight exceeds 5% or 50 kg, the load is flagged for manager review.
+- **Load numbering** — Each load is assigned an automatic daily sequence number (format: WT-YYYYMMDD-NNN).
+- **Admin** — Full WasteTrack configuration panel: manage waste types, sub-types, cost rates, and contractor records.
+
+**Offsite Notification Hold (Notification Inbox)**
+
+- **Notification Inbox** — Notifications are no longer sent as push alerts when you are off site. Instead they are held in a new **Notification Inbox** (bell icon in the top bar). Unread items show a live count badge. When you come back on site and open the app, a banner tells you how many are waiting. Tap any item in the inbox to open the related job card and mark it as read.
+
+- **Notifications affected by offsite hold** — All of the following are now held rather than pushed when the recipient is off-site:
+  - Job assignment (assigned directly by a manager while you are off shift)
+  - Job completion and update acknowledgements (sent back to the person who raised the job)
+  - "I'm Busy" responses from technicians (sent back to the job creator)
+  - Copper sell threshold alert (for authorised users only)
+
+**Admin & Settings**
+
+- **Admin — On Site tab** — A new **On Site** tab in Admin Settings shows every employee currently marked on-site, grouped by department, updating in real time. Useful for supervisors to see who is available on the floor.
+
+- **Admin — Employee list** — The `isOnSite` column in the employee table is now a green **"On Site"** / grey **"Off Site"** status chip. Tapping the chip toggles the employee's status directly — no need to open the edit row.
+
+- **Settings screen redesigned** — Reorganised into labelled sections: Your Profile, Preferences, Notifications, App & Connectivity, App Permissions, Admin, Account. Notification test buttons moved to a dedicated sub-screen (Settings → Notifications → Notification Tests) to reduce clutter.
+
+- **Admin settings — Tab icons** — All five admin tabs now display an icon alongside the label for faster navigation.
+
+- **Waste screens — contrast fixes** — Several waste screens had light-grey text or icons that were hard to read on white backgrounds:
+  - Weight boxes on the load detail screen now use dark text when no weighbridge data has been entered (was grey-on-grey).
+  - Disabled-state block icons across create, home, and reports screens are now a darker grey.
+  - The empty items placeholder in the begin-collection screen has a more visible border.
+
+### Developer / architecture changes
+
+- **WasteTrack collections** — 11 new Firestore collections added under the `waste_` prefix (see `lib/constants/collections.dart`).
+- **`createWasteLoad` Cloud Function** — Callable function in `africa-south1` handles atomic load creation and daily sequence numbering.
+- **`lib/constants/collections.dart`** — New canonical constants file for all Firestore collection names. All services now use constants instead of inline string literals.
+- **Functions codebase named `jobcards`** — Deploys from this repo are now scoped to Job Cards functions only; cannot accidentally wipe WasteTrack/Overtime functions in the shared Firebase project.
+
+---
+
 ## 2026-05-23 — Dashboard overhaul, screen consistency, and UI improvements
 
 ### User-facing changes

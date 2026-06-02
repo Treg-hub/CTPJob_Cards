@@ -105,6 +105,7 @@ class _WasteScheduleLoadScreenState
     try {
       await _wasteService.createScheduledLoad(
         contractorId: _selectedContractor!.id!,
+        contractorName: _selectedContractor!.name,
         mainWasteType: _selectedType!.mainType,
         scheduledFor: _scheduledFor,
         scheduledBy: employee?.clockNo ?? '',
