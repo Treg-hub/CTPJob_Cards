@@ -316,41 +316,47 @@ class UpdateService {
     return showDialog(
       context: context,
       barrierDismissible: !forceUpdate,
-      builder: (context) => AlertDialog(
-        title: Text('Update Available (v$version)'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (releaseNotes != null && releaseNotes.isNotEmpty) ...[
-                const Text('What\'s New:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(releaseNotes),
-                const SizedBox(height: 16),
+      builder: (context) => PopScope(
+        canPop: !forceUpdate,
+        child: AlertDialog(
+          title: Text('Update Available (v$version)'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (releaseNotes != null && releaseNotes.isNotEmpty) ...[
+                  const Text('What\'s New:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(releaseNotes),
+                  const SizedBox(height: 16),
+                ],
+                const Text(
+                  'A new version of the app is available. Please update to continue using the latest features.',
+                  style: TextStyle(color: Colors.grey),
+                ),
               ],
-              const Text(
-                'A new version of the app is available. Please update to continue using the latest features.',
-                style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          actions: [
+            if (!forceUpdate)
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Later'),
               ),
-            ],
-          ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _launchDownload(context, downloadUrl);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8C42),
+                foregroundColor: Colors.black,
+              ),
+              child: const Text('Update Now'),
+            ),
+          ],
         ),
-        actions: [
-          if (!forceUpdate)
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Later'),
-            ),
-          ElevatedButton(
-            onPressed: () => _launchDownload(context, downloadUrl),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF8C42),
-              foregroundColor: Colors.black,
-            ),
-            child: const Text('Update Now'),
-          ),
-        ],
       ),
     );
   }

@@ -13,6 +13,7 @@ import '../models/job_card.dart';
 
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee;
@@ -237,6 +238,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     if (!kIsWeb) {
       _notificationService.refreshToken();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        try {
+          await UpdateService().checkForUpdate(context);
+        } catch (e) {
+          debugPrint('Update check error: $e');
+        }
+        try {
+          await NotificationService().checkPendingJobNavigation();
+        } catch (e) {
+          debugPrint('Pending job navigation error: $e');
+        }
+      });
     }
 
     try {
