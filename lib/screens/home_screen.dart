@@ -87,8 +87,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       role_utils.isFleetUser(currentEmployee, _cachedFleetSettings);
 
   /// Returns true when the currently visible tab is the Waste tab.
-  /// The Waste tab index is dynamic — it shifts depending on whether the
-  /// Manager and Copper tabs are present for this user.
   bool get _isOnWasteTab {
     if (!role_utils.isWasteUser(currentEmployee) ||
         !role_utils.isWasteTrackEnabledSync()) {
@@ -101,6 +99,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
     if (_isCopperAuthorized) { idx++; }
     return _selectedIndex == idx;
+  }
+
+  /// Returns true when the currently visible tab is the Fleet tab.
+  bool get _isOnFleetTab {
+    if (!_isFleetUser) return false;
+    int idx = 2; // 0=Home, 1=MyWork
+    if (currentEmployee != null &&
+        currentEmployee!.position.toLowerCase().contains('manager')) {
+      idx++;
+    }
+    if (_isCopperAuthorized) idx++;
+    if (role_utils.isWasteUser(currentEmployee) &&
+        role_utils.isWasteTrackEnabledSync()) {
+      idx++;
+    }
+    return _selectedIndex == idx;
+  }
+
+  String get _appBarTitle {
+    if (_isOnWasteTab) return 'Waste Recovery';
+    if (_isOnFleetTab) return 'Fleet Maintenance';
+    return 'CTP Job Cards';
   }
 
   void _setupEmployeeStream(String clockNo) {
@@ -1582,7 +1602,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       appBar: AppBar(
         title: GestureDetector(
           onTap: () => _showPasswordDialog(context),
-          child: const Text('CTP Job Cards'),
+          child: Text(_appBarTitle),
         ),
         flexibleSpace: Container(
           decoration: BoxDecoration(
@@ -1654,7 +1674,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: _isOnWasteTab
+      floatingActionButton: (_isOnWasteTab || _isOnFleetTab)
           ? null
           : FloatingActionButton(
               onPressed: _showFeedbackDialog,

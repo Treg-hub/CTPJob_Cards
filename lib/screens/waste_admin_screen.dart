@@ -15,7 +15,10 @@ import '../widgets/waste_app_bar.dart';
 /// Basic Waste Admin screen.
 /// Visible only to isWasteAdmin (currently clockNo == '22').
 class WasteAdminScreen extends ConsumerStatefulWidget {
-  const WasteAdminScreen({super.key});
+  /// When [embedded] is true the screen skips its own Scaffold/AppBar so it
+  /// can live inside a TabBarView in WasteHomeScreen.
+  final bool embedded;
+  const WasteAdminScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<WasteAdminScreen> createState() => _WasteAdminScreenState();
@@ -30,11 +33,13 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
   bool _pilotModeEnabled = false;
   String _pilotClockCsv = '';
   final TextEditingController _pilotCsvController = TextEditingController();
+  bool _wasteEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadPilotConfig();
+    _loadWasteEnabled();
     // Consistency: drain any offline waste ops when admin opens controls (rates, types, flags)
     _wasteService.processOfflineWasteQueue();
   }
@@ -43,6 +48,11 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
   void dispose() {
     _pilotCsvController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadWasteEnabled() async {
+    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
+    if (mounted) setState(() => _wasteEnabled = enabled);
   }
 
   Future<void> _loadPilotConfig() async {
@@ -266,38 +276,32 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     final isAdmin = role_utils.isWasteAdmin(currentEmployee);
 
     if (!isAdmin) {
+      if (widget.embedded) return const Center(child: Text('Access denied. Admin only.'));
       return const Scaffold(
         body: Center(child: Text('Access denied. Admin only.')),
       );
     }
 
-    return Scaffold(
-      appBar: WasteAppBar(
-        title: 'WasteTrack Admin',
-        isOnSite: null,
-        actions: [
-          if (SyncService().getQueuedWasteOperationCount() > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Tooltip(
-                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                    const SizedBox(width: 2),
-                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-      body: _isProcessing
+    final bodyContent = _isProcessing
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // ── Master enable / disable toggle ─────────────────────────
+                Card(
+                  child: SwitchListTile(
+                    title: const Text('WasteTrack Enabled', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(_wasteEnabled ? 'System is live — loads, weighbridge and reports are active.' : 'System disabled. Guards cannot submit loads.'),
+                    value: _wasteEnabled,
+                    activeThumbColor: Theme.of(context).appColors.wasteGreen,
+                    onChanged: (v) async {
+                      setState(() => _wasteEnabled = v);
+                      await _wasteService.setWasteMasterEnabled(v);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Thresholds (read-only for now; settings doc editable via console or future form)
                 Card(
                   child: Padding(
@@ -583,7 +587,27 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                   ),
                 ),
               ],
+            );
+
+    if (widget.embedded) return bodyContent;
+
+    return Scaffold(
+      appBar: WasteAppBar(
+        title: 'WasteTrack Admin',
+        isOnSite: null,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                const SizedBox(width: 2),
+                Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+              ]),
             ),
+        ],
+      ),
+      body: bodyContent,
     );
   }
 }

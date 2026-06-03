@@ -13,7 +13,8 @@ import '../theme/app_theme.dart';
 /// Cost overview and reports for fleet cost managers and admins.
 /// Shows month/YTD KPIs, per-asset spend list, and CSV export.
 class FleetReportsScreen extends ConsumerStatefulWidget {
-  const FleetReportsScreen({super.key});
+  final bool embedded;
+  const FleetReportsScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<FleetReportsScreen> createState() =>
@@ -123,13 +124,7 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
     final monthFmt = DateFormat('MMMM yyyy');
     final dateFmt = DateFormat('d MMM yyyy');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cost Reports'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
-      body: StreamBuilder<List<FleetCostLine>>(
+    final body = StreamBuilder<List<FleetCostLine>>(
         stream: _service.watchCostLines(from: _from, to: _to, limit: 500),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -310,7 +305,15 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
             ],
           );
         },
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cost Reports'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
       ),
+      body: body,
     );
   }
 }

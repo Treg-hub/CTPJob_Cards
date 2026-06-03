@@ -10,7 +10,8 @@ import '../utils/role.dart' as role_utils;
 
 /// Admin-only screen: manage the fleet asset register (forklifts, grabs, etc.).
 class FleetAssetsScreen extends ConsumerStatefulWidget {
-  const FleetAssetsScreen({super.key});
+  final bool embedded;
+  const FleetAssetsScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<FleetAssetsScreen> createState() => _FleetAssetsScreenState();
@@ -22,24 +23,11 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!role_utils.isFleetAdmin(currentEmployee)) {
-      return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
-      );
+      if (widget.embedded) return const Center(child: Text('Admin access required.'));
+      return const Scaffold(body: Center(child: Text('Admin access required.')));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fleet Assets'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-        onPressed: () => _openAssetForm(context, null),
-        child: const Icon(Icons.add),
-      ),
-      body: StreamBuilder<List<FleetAsset>>(
+    final body = StreamBuilder<List<FleetAsset>>(
         stream: _service.watchAssets(activeOnly: false),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -70,14 +58,30 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
             },
           );
         },
+    );
+    // When embedded in a TabBarView the parent scaffold owns the FAB.
+    // Just return the body filling the full available space.
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Fleet Assets'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
       ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
+        onPressed: () => _openAssetForm(context, null),
+        child: const Icon(Icons.add),
+      ),
+      body: body,
     );
   }
 
   void _openAssetForm(BuildContext context, FleetAsset? existing) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _AssetFormScreen(service: _service, asset: existing),
+        builder: (_) => FleetAssetFormScreen(service: _service, asset: existing),
       ),
     );
   }
@@ -154,16 +158,16 @@ class _AssetTile extends StatelessWidget {
 // Asset add/edit form screen
 // ---------------------------------------------------------------------------
 
-class _AssetFormScreen extends ConsumerStatefulWidget {
-  const _AssetFormScreen({required this.service, this.asset});
+class FleetAssetFormScreen extends ConsumerStatefulWidget {
+  const FleetAssetFormScreen({super.key, required this.service, this.asset});
   final FleetService service;
   final FleetAsset? asset;
 
   @override
-  ConsumerState<_AssetFormScreen> createState() => _AssetFormScreenState();
+  ConsumerState<FleetAssetFormScreen> createState() => FleetAssetFormScreenState();
 }
 
-class _AssetFormScreenState extends ConsumerState<_AssetFormScreen> {
+class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _tagCtrl = TextEditingController();

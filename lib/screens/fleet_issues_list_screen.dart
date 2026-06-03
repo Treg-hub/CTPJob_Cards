@@ -10,7 +10,8 @@ import 'fleet_issue_detail_screen.dart';
 /// Full list of fleet issues with status filter chips.
 /// Visible to mechanic, cost manager, and admin.
 class FleetIssuesListScreen extends ConsumerStatefulWidget {
-  const FleetIssuesListScreen({super.key});
+  final bool embedded;
+  const FleetIssuesListScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<FleetIssuesListScreen> createState() =>
@@ -24,13 +25,7 @@ class _FleetIssuesListScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fleet Issues'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
+    final body = Column(
         children: [
           // Filter chips
           SingleChildScrollView(
@@ -101,7 +96,15 @@ class _FleetIssuesListScreenState
             ),
           ),
         ],
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Fleet Issues'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
       ),
+      body: body,
     );
   }
 }

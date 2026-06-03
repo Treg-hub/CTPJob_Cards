@@ -22,7 +22,10 @@ import '../utils/deviation.dart';
 /// Costs shown only to Waste Admins (via existing role check).
 /// CSV implemented with pure Dart (no extra packages needed; Excel would require pubspec edit - see comment).
 class WasteReportsScreen extends ConsumerStatefulWidget {
-  const WasteReportsScreen({super.key});
+  /// When [embedded] is true the screen skips its own Scaffold/AppBar so it
+  /// can live inside a TabBarView in WasteHomeScreen.
+  final bool embedded;
+  const WasteReportsScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<WasteReportsScreen> createState() => _WasteReportsScreenState();
@@ -216,44 +219,20 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
   Widget build(BuildContext context) {
     final isAdmin = _isAdmin;
 
-    return Scaffold(
-      appBar: WasteAppBar(
-        title: 'Waste Reports',
-        isOnSite: currentEmployee?.isOnSite,
-        actions: [
-          if (SyncService().getQueuedWasteOperationCount() > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Tooltip(
-                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                    const SizedBox(width: 2),
-                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                  ],
-                ),
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: _isLoading ? null : _exportPdf,
-            tooltip: 'Export PDF',
-          ),
-          IconButton(
-            icon: const Icon(Icons.table_chart),
-            onPressed: _isLoading ? null : _exportCsv,
-            tooltip: 'Export CSV (Excel compatible)',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadRealData,
-            tooltip: 'Refresh data',
-          ),
-        ],
-      ),
-      body: _isLoading
+    // Action buttons — shown in AppBar when standalone, or inline row when embedded.
+    final actionButtons = Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _isLoading ? null : _exportPdf, tooltip: 'Export PDF'),
+        IconButton(icon: const Icon(Icons.table_chart), onPressed: _isLoading ? null : _exportCsv, tooltip: 'Export CSV'),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadRealData, tooltip: 'Refresh'),
+      ],
+    );
+
+    final bodyContent = Column(
+      children: [
+        if (widget.embedded) actionButtons,
+        Expanded(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
@@ -365,6 +344,32 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
                     ],
                   ),
                 ),
+        ),  // Expanded
+      ],
+    ); // bodyContent Column
+
+    if (widget.embedded) return bodyContent;
+
+    return Scaffold(
+      appBar: WasteAppBar(
+        title: 'Waste Reports',
+        isOnSite: currentEmployee?.isOnSite,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                const SizedBox(width: 2),
+                Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+              ]),
+            ),
+          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _isLoading ? null : _exportPdf, tooltip: 'Export PDF'),
+          IconButton(icon: const Icon(Icons.table_chart), onPressed: _isLoading ? null : _exportCsv, tooltip: 'Export CSV'),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadRealData, tooltip: 'Refresh'),
+        ],
+      ),
+      body: bodyContent,
     );
   }
 }

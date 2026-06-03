@@ -9,7 +9,11 @@ import 'fleet_work_record_detail_screen.dart';
 
 /// Work records list with asset and work-type filters.
 class FleetWorkRecordsListScreen extends ConsumerStatefulWidget {
-  const FleetWorkRecordsListScreen({super.key});
+  /// When [costsPendingOnly] is true, only work records without cost lines
+  /// are shown — used when embedded as the Costs tab.
+  final bool embedded;
+  final bool costsPendingOnly;
+  const FleetWorkRecordsListScreen({super.key, this.embedded = false, this.costsPendingOnly = false});
 
   @override
   ConsumerState<FleetWorkRecordsListScreen> createState() =>
@@ -22,35 +26,42 @@ class _FleetWorkRecordsListScreenState
 
   @override
   Widget build(BuildContext context) {
+    final body = StreamBuilder<List<FleetWorkRecord>>(
+      stream: _service.watchWorkRecords(limit: 100),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        var records = snapshot.data ?? [];
+        if (widget.costsPendingOnly) {
+          records = records.where((r) => !r.hasCostLines).toList();
+        }
+        if (records.isEmpty) {
+          return Center(
+            child: Text(
+              widget.costsPendingOnly
+                  ? 'All work records have been costed.'
+                  : 'No work records yet.\nTap "Log Work" to add the first one.',
+              textAlign: TextAlign.center),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(12),
+          itemCount: records.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (context, index) =>
+              WorkRecordTile(record: records[index]),
+        );
+      },
+    );
+    if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Work Records'),
         backgroundColor: kBrandOrange,
         foregroundColor: Colors.white,
       ),
-      body: StreamBuilder<List<FleetWorkRecord>>(
-        stream: _service.watchWorkRecords(limit: 100),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final records = snapshot.data ?? [];
-          if (records.isEmpty) {
-            return const Center(
-              child: Text(
-                  'No work records yet.\nTap "Log Work" to add the first one.',
-                  textAlign: TextAlign.center),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: records.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (context, index) =>
-                WorkRecordTile(record: records[index]),
-          );
-        },
-      ),
+      body: body,
     );
   }
 }

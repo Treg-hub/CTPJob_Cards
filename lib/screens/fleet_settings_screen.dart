@@ -12,7 +12,8 @@ import '../utils/role.dart' as role_utils;
 /// Admin-only screen: fleet configuration (reporter departments, cost managers,
 /// asset/work types, feature flag).
 class FleetSettingsScreen extends ConsumerStatefulWidget {
-  const FleetSettingsScreen({super.key});
+  final bool embedded;
+  const FleetSettingsScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<FleetSettingsScreen> createState() =>
@@ -79,40 +80,21 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!role_utils.isFleetAdmin(currentEmployee)) {
-      return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
-      );
+      if (widget.embedded) return const Center(child: Text('Admin access required.'));
+      return const Scaffold(body: Center(child: Text('Admin access required.')));
     }
     if (_loading) {
+      if (widget.embedded) return const Center(child: CircularProgressIndicator());
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final s = _settings!;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fleet Settings'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child:
-                  const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
-        ],
-      ),
-      body: ListView(
+    final saveAction = _saving
+        ? const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+        : TextButton(onPressed: _save, child: const Text('Save', style: TextStyle(color: Colors.white)));
+
+    final body = ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // ── Feature flag ──────────────────────────────────────────────
@@ -176,7 +158,30 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
 
           const SizedBox(height: 80),
         ],
+    );
+
+    if (widget.embedded) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [saveAction],
+            ),
+          ),
+          Expanded(child: body),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Fleet Settings'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
+        actions: [saveAction],
       ),
+      body: body,
     );
   }
 }
