@@ -1,0 +1,324 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../main.dart' show currentEmployee;
+import '../models/fleet_asset.dart';
+import '../models/fleet_type.dart';
+import '../services/fleet_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
+
+/// Admin-only screen: manage the fleet asset register (forklifts, grabs, etc.).
+class FleetAssetsScreen extends ConsumerStatefulWidget {
+  const FleetAssetsScreen({super.key});
+
+  @override
+  ConsumerState<FleetAssetsScreen> createState() => _FleetAssetsScreenState();
+}
+
+class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
+  final _service = FleetService();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!role_utils.isFleetAdmin(currentEmployee)) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Fleet Assets'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
+        onPressed: () => _openAssetForm(context, null),
+        child: const Icon(Icons.add),
+      ),
+      body: StreamBuilder<List<FleetAsset>>(
+        stream: _service.watchAssets(activeOnly: false),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          final assets = snapshot.data ?? [];
+          if (assets.isEmpty) {
+            return const Center(
+              child: Text(
+                'No assets yet.\nTap + to add a forklift or grab.',
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: assets.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final asset = assets[index];
+              return _AssetTile(
+                asset: asset,
+                onTap: () => _openAssetForm(context, asset),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void _openAssetForm(BuildContext context, FleetAsset? existing) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _AssetFormScreen(service: _service, asset: existing),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Asset tile
+// ---------------------------------------------------------------------------
+
+class _AssetTile extends StatelessWidget {
+  const _AssetTile({required this.asset, required this.onTap});
+  final FleetAsset asset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>();
+    return Card(
+      color: colors?.cardSurface,
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(
+          backgroundColor: asset.active ? kBrandOrange : Colors.grey,
+          foregroundColor: Colors.white,
+          child: Icon(
+            asset.typeName.toLowerCase().contains('grab')
+                ? Icons.precision_manufacturing
+                : Icons.forklift,
+            size: 20,
+          ),
+        ),
+        title: Row(
+          children: [
+            Text(asset.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (asset.hasOpenOosIssue) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'OOS',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ],
+        ),
+        subtitle: Text(
+          '${asset.typeName}  •  Tag: ${asset.assetTag}'
+          '${asset.serial != null ? '  •  S/N: ${asset.serial}' : ''}',
+          style: TextStyle(color: colors?.textMuted, fontSize: 12),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!asset.active)
+              Chip(
+                label: const Text('Inactive', style: TextStyle(fontSize: 11)),
+                backgroundColor: Colors.grey.withAlpha(50),
+                padding: EdgeInsets.zero,
+              ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Asset add/edit form screen
+// ---------------------------------------------------------------------------
+
+class _AssetFormScreen extends ConsumerStatefulWidget {
+  const _AssetFormScreen({required this.service, this.asset});
+  final FleetService service;
+  final FleetAsset? asset;
+
+  @override
+  ConsumerState<_AssetFormScreen> createState() => _AssetFormScreenState();
+}
+
+class _AssetFormScreenState extends ConsumerState<_AssetFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _tagCtrl = TextEditingController();
+  final _serialCtrl = TextEditingController();
+
+  List<FleetType> _assetTypes = [];
+  FleetType? _selectedType;
+  bool _active = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.asset;
+    if (a != null) {
+      _nameCtrl.text = a.name;
+      _tagCtrl.text = a.assetTag;
+      _serialCtrl.text = a.serial ?? '';
+      _active = a.active;
+    }
+    _loadTypes();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _tagCtrl.dispose();
+    _serialCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTypes() async {
+    final snap = await widget.service
+        .watchTypes(kind: 'asset_type')
+        .first;
+    if (mounted) {
+      setState(() {
+        _assetTypes = snap;
+        if (widget.asset != null) {
+          _selectedType = _assetTypes
+              .where((t) => t.id == widget.asset!.typeId)
+              .firstOrNull;
+        }
+        _selectedType ??= _assetTypes.firstOrNull;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an asset type.')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final asset = FleetAsset(
+        id: widget.asset?.id,
+        typeId: _selectedType!.id!,
+        typeName: _selectedType!.label,
+        name: _nameCtrl.text.trim(),
+        assetTag: _tagCtrl.text.trim(),
+        serial: _serialCtrl.text.trim().isEmpty ? null : _serialCtrl.text.trim(),
+        active: _active,
+        hasOpenOosIssue: widget.asset?.hasOpenOosIssue ?? false,
+      );
+      await widget.service.saveAsset(asset);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.asset != null;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isEdit ? 'Edit Asset' : 'Add Asset'),
+        backgroundColor: kBrandOrange,
+        foregroundColor: Colors.white,
+        actions: [
+          if (_saving)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white)),
+            )
+          else
+            TextButton(
+              onPressed: _save,
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Asset type
+            DropdownButtonFormField<FleetType>(
+              key: ValueKey(_selectedType?.id),
+              initialValue: _selectedType,
+              decoration: const InputDecoration(labelText: 'Asset Type *'),
+              items: _assetTypes
+                  .map((t) =>
+                      DropdownMenuItem(value: t, child: Text(t.label)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedType = v),
+              validator: (v) => v == null ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Name *', hintText: 'e.g. Forklift 01'),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _tagCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Asset Tag *', hintText: 'e.g. FL-001'),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _serialCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Serial Number (optional)'),
+            ),
+            const SizedBox(height: 24),
+            SwitchListTile(
+              title: const Text('Active'),
+              subtitle: const Text('Inactive assets are hidden in pickers'),
+              value: _active,
+              onChanged: (v) => setState(() => _active = v),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

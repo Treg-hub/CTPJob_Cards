@@ -31,6 +31,9 @@ import 'settings_screen.dart';
 import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
+import 'fleet_home_screen.dart';
+import '../models/fleet_settings.dart';
+import '../services/fleet_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -65,6 +68,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   String? _myWorkSelectedArea;
   String? _myWorkSelectedMachine;
 
+  // Fleet Maintenance — cached settings loaded once in initState
+  FleetSettings? _cachedFleetSettings;
+
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -75,6 +81,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get isSuperManager => role_utils.isSuperManager(currentEmployee);
 
   bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
+
+  bool get _isFleetUser =>
+      (_cachedFleetSettings?.fleetEnabled ?? false) &&
+      role_utils.isFleetUser(currentEmployee, _cachedFleetSettings);
 
   /// Returns true when the currently visible tab is the Waste tab.
   /// The Waste tab index is dynamic — it shifts depending on whether the
@@ -225,6 +235,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   double get _gridSpacing => _isDesktop ? 6 : (_isTablet ? 15 : 12);
   double get _screenPadding => _isDesktop ? 20 : 16;
 
+  Future<void> _loadFleetSettings() async {
+    try {
+      final settings = await FleetService().getSettings();
+      if (mounted) setState(() => _cachedFleetSettings = settings);
+    } catch (e) {
+      debugPrint('Fleet settings load error: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -232,6 +251,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadShowDeptOnly();
     _loadOverrideOnSite();
     _loadTestMode();
+    _loadFleetSettings();
 
     if (currentEmployee != null) {
       _setupEmployeeStream(currentEmployee!.clockNo);
@@ -1493,6 +1513,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildCopperTab(),
       if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
         _buildWasteTab(),
+      if (_isFleetUser)
+        _buildFleetTab(),
     ];
 
     if (index >= children.length) return;
@@ -1508,6 +1530,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Widget _buildWasteTab() {
     // Security roles land here directly (per approved plan)
     return const WasteHomeScreen();
+  }
+
+  // ---------------------------------------------------------------------------
+  // FLEET MAINTENANCE tab
+  // ---------------------------------------------------------------------------
+  Widget _buildFleetTab() {
+    return const FleetHomeScreen();
   }
 
   @override
@@ -1528,6 +1557,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
       if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
+      if (_isFleetUser)
+        const BottomNavigationBarItem(icon: Icon(Icons.directions_car_outlined), label: 'Fleet'),
     ];
 
     final List<Widget> children = [
@@ -1539,6 +1570,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildCopperTab(),
       if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
         _buildWasteTab(),   // TODO: real focused Waste home for Security Manager/Guard
+      if (_isFleetUser)
+        _buildFleetTab(),
     ];
 
     if (_selectedIndex >= children.length) {

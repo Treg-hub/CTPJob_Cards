@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/employee.dart';
+import '../models/fleet_settings.dart';
 
 enum UserRole { technician, manager, admin, operator }
 
@@ -124,4 +125,48 @@ Future<bool> isWasteTrackEnabled() async {
 bool isWasteTrackEnabledSync() {
   // Safe default: on for users who have the role. Real value loaded async.
   return true;
+}
+
+// =============================================================================
+// FLEET MAINTENANCE role helpers
+// =============================================================================
+// Fleet roles are derived from Employee fields + FleetSettings config:
+//   - Fleet Mechanic:     department == "Workshop" && position == "Hyster Mechanic"
+//   - Fleet Reporter:     employee.department in fleet_settings.reporterDepartments
+//   - Fleet Cost Manager: employee.clockNo in fleet_settings.costManagerClockNos
+//   - Fleet Admin:        reuses isAdmin() (clockNo == '22')
+//
+// Helpers that check reporter/cost-manager take FleetSettings as a parameter —
+// the caller is responsible for loading and caching the settings doc.
+// The home_screen loads settings in initState and stores the result in state.
+// =============================================================================
+
+/// True when the employee is the Hyster mechanic
+/// (department "Workshop" + position "Hyster Mechanic"). Case-sensitive match.
+bool isFleetMechanic(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department == 'Workshop' && employee.position == 'Hyster Mechanic';
+}
+
+/// True when the employee's department is in the configurable reporter allow-list.
+bool isFleetReporter(Employee? employee, FleetSettings? settings) {
+  if (employee == null || settings == null) return false;
+  return settings.reporterDepartments.contains(employee.department);
+}
+
+/// True when the employee's clock number is in the cost-manager allow-list.
+bool isFleetCostManager(Employee? employee, FleetSettings? settings) {
+  if (employee == null || settings == null) return false;
+  return settings.costManagerClockNos.contains(employee.clockNo);
+}
+
+/// True when the employee has full fleet admin rights (reuses global isAdmin).
+bool isFleetAdmin(Employee? employee) => isAdmin(employee);
+
+/// Convenience: any Fleet user (shows Fleet tab when true).
+bool isFleetUser(Employee? employee, FleetSettings? settings) {
+  return isFleetMechanic(employee) ||
+      isFleetAdmin(employee) ||
+      isFleetReporter(employee, settings) ||
+      isFleetCostManager(employee, settings);
 }

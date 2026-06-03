@@ -28,6 +28,19 @@ class Collections {
   static const String alertResponses = 'alertResponses';
   static const String feedback = 'feedback';
 
+  // ----- Fleet Maintenance (fleet_ prefix) -----
+  // Hyster forklift & grab maintenance — integrated inside this app.
+  // See docs/COLLECTIONS.md for full schema.
+  static const String fleetAssets = 'fleet_assets';
+  static const String fleetIssues = 'fleet_issues';
+  static const String fleetWorkRecords = 'fleet_work_records';
+  static const String fleetWorkParts = 'fleet_work_parts'; // sub-collection of fleetWorkRecords
+  static const String fleetCostLines = 'fleet_cost_lines';
+  static const String fleetTypes = 'fleet_types';
+  static const String fleetSettings = 'fleet_settings';
+  static const String fleetCounters = 'fleet_counters';
+  static const String fleetAudit = 'fleet_audit';
+
   // ----- Waste Management / WasteTrack (waste_ prefix) -----
   // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.
   static const String wasteLoads = 'waste_loads';
