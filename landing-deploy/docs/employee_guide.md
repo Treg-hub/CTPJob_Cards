@@ -48,10 +48,11 @@ When you open the app for the first time, it will ask for a number of permission
 **Why it needs this:**
 The app uses your location to determine whether you are on site or off site. This matters for two reasons:
 
-- **On-site status** — Your profile in the system is updated to show you are on site. Technicians who are on site receive job card notifications. If you are off site, the system knows not to send you alerts for jobs you cannot attend to.
-- **Geofence detection** — The moment you enter or leave the company boundary (approximately 800 m radius), the system logs it automatically. You will receive a notification confirming "Arrived On-Site" or "Left Site Area."
+- **On-site status** — Your profile is updated to show you are on site. Employees who are on site receive live job card notifications. If you are off site, push notifications are held in your **Notification Inbox** instead of delivered to your phone — so nothing is lost, and you can review everything when you arrive.
+- **Geofence detection** — The moment you enter or leave the company boundary (approximately 800 m radius), the system logs it automatically.
+- **Return alert** — When you come back on site and open the app, a banner will appear if you have notifications waiting. Tap **Open** to go straight to your inbox.
 
-**Location is not used for surveillance.** It is used solely to determine whether you are within the company boundary and should be receiving job alerts.
+**Location is not used for surveillance.** It is used solely to determine whether you are within the company boundary and whether you should be receiving live job alerts.
 
 > Select **"Allow All the Time"** — if you choose "Only While Using the App" the geofence will not work when the app is in the background.
 
@@ -165,9 +166,11 @@ A job card moves through four statuses during its life:
 
 When you discover a fault or breakdown, create a job card immediately. Do not wait.
 
+> **You must be on-site to create a job card.** The **Create Job Card** tile is hidden from the home screen when your on-site status is off-site. If you are physically on site but the tile is missing, open Settings and tap **Check Current Location** to refresh your on-site status.
+
 **Steps:**
 1. Open the CTP Job Cards app
-2. Tap **Create Job Card**
+2. Tap **Create Job Card** (visible only when on-site)
 3. Fill in all fields — department, area, machine, part, description, and priority
 4. Submit
 
@@ -189,7 +192,7 @@ Once you have submitted the job card, you can track its status in the app. You w
 
 #### Receiving a Notification
 
-When a job card is created that matches your trade and you are on site, you will receive a push notification on your phone. The notification shows:
+When a job card is created that matches your trade and **you are on site**, you will receive a push notification on your phone. The notification shows:
 - Job number and priority
 - Machine and area
 - Description of the fault
@@ -203,6 +206,21 @@ You have three options directly from the notification:
 | **Dismiss** | You dismiss the alert. The system logs this and escalation continues. |
 
 > **Always respond to notifications.** If you do not respond, the system escalates the job to your foreman, then your manager. Repeated non-responses will be visible in the notification log.
+
+#### Notification Inbox — When You Are Off Site
+
+If you are **off site** when a job is assigned to you or when feedback comes in about a job you raised, the system does not send a push notification to your phone. Instead, the notification is held in your **Notification Inbox** so you see it when you are back on shift.
+
+**How to check your inbox:**
+1. Open the app. A **bell icon** in the top bar shows a badge with the number of unread items.
+2. Tap the bell to open your inbox.
+3. Unread items appear at the top, highlighted with an orange border. Tap any item to open the job card and mark it as read.
+4. You can also reach the inbox from **Settings → Notifications → Notification Inbox**.
+
+**On-site return alert:**
+When you arrive on site and open the app, a banner will appear at the bottom of the screen if there are unread notifications waiting. Tap **Open** to go directly to your inbox.
+
+> Notifications held in your inbox do **not** expire or disappear automatically. They remain until you read them.
 
 ---
 

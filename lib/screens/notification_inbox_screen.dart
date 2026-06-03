@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
 import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
 import 'job_card_detail_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -86,8 +87,20 @@ class _NotificationInboxScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notification Inbox'),
-        backgroundColor: const Color(0xFFFF8C42),
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kBrandOrange,
+                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _itemsRef!

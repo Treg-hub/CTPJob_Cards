@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:typed_data';
 
 import '../models/waste_load.dart';
+import '../models/waste_item.dart';
 import '../utils/deviation.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
@@ -32,11 +33,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   bool _isManager = false;
   bool _isSaving = false;
 
-  // Phase 7 feature flag defense (mirrors home/create exactly, minimal)
-  bool _effectiveWasteEnabled = true;
-  bool _pilotModeActive = false;
-  String? _userClock;
-
   @override
   void initState() {
     super.initState();
@@ -46,22 +42,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (_currentLoad.actualWeighbridgeWeightKg != null) {
       _weighbridgeController.text = _currentLoad.actualWeighbridgeWeightKg!.toString();
     }
-    _loadFeatureStatus();
     // Offline resilience: drain queued updates/photos when opening a load (weighbridge entry flow)
     _wasteService.processOfflineWasteQueue();
-  }
-
-  Future<void> _loadFeatureStatus() async {
-    final clock = currentEmployee?.clockNo;
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
-    final pilot = await _wasteService.isPilotModeEnabled();
-    if (mounted) {
-      setState(() {
-        _effectiveWasteEnabled = enabled;
-        _pilotModeActive = pilot;
-        _userClock = clock;
-      });
-    }
   }
 
   void _calculateAndShowDeviation() {
@@ -189,28 +171,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   Widget build(BuildContext context) {
     final canEditWeighbridge = _isAdmin || _isManager;
 
-    if (!_effectiveWasteEnabled) {
-      return Scaffold(
-        appBar: AppBar(title: Text(_currentLoad.loadNumber), backgroundColor: const Color(0xFF2E7D32)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.block, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled (safety valve). Contact admin.', style: const TextStyle(color: Color(0xFF616161)), textAlign: TextAlign.center),
-              if (_isAdmin) ...[
-                const SizedBox(height: 16),
-                ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
-              ],
-            ]),
-          ),
-        ),
-      );
-    }
-
     final statusColor = _statusColor(_currentLoad.status);
     final recorded = _currentLoad.recordedWeightKg;
     final actual = _currentLoad.actualWeighbridgeWeightKg;
@@ -223,6 +183,48 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+
+          if (_currentLoad.status == WasteLoadStatus.pendingWeighbridge && canEditWeighbridge)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade600, width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.scale, color: Colors.amber.shade800, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Weighbridge entry required',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          'Enter the actual weighbridge weight below to complete this load.',
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ── Status stepper ────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _WasteStatusStepper(status: _currentLoad.status),
+          ),
 
           // ── Status banner ──────────────────────────────────
           Container(
@@ -263,18 +265,82 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                   const Divider(height: 16),
                   _infoRow(Icons.local_shipping, 'Vehicle', _currentLoad.vehicleReg.isNotEmpty ? _currentLoad.vehicleReg : '—'),
                   const Divider(height: 16),
-                  _infoRow(Icons.business, 'Contractor', _currentLoad.contractorId.isNotEmpty ? _currentLoad.contractorId : '—'),
+                  _infoRow(Icons.business, 'Contractor',
+                      (_currentLoad.contractorName?.isNotEmpty == true)
+                          ? _currentLoad.contractorName!
+                          : (_currentLoad.contractorId.isNotEmpty ? _currentLoad.contractorId : '—')),
                   const Divider(height: 16),
                   _infoRow(Icons.calendar_today, 'Date', formatSADate(_currentLoad.dateTime)),
                   if (_currentLoad.collectedBy != null) ...[
                     const Divider(height: 16),
-                    _infoRow(Icons.badge, 'Collected by', _currentLoad.collectedBy!),
+                    _infoRow(
+                      Icons.badge,
+                      'Collected by',
+                      _currentLoad.collectedByName?.isNotEmpty == true
+                          ? _currentLoad.collectedByName!
+                          : _currentLoad.collectedBy!,
+                    ),
                   ],
                 ],
               ),
             ),
           ),
+          // ── Items section ─────────────────────────────────
           const SizedBox(height: 12),
+          if (_currentLoad.id != null)
+            StreamBuilder<List<WasteItem>>(
+              stream: _wasteService.watchItemsForLoad(_currentLoad.id!),
+              builder: (context, snap) {
+                final items = snap.data ?? [];
+                if (snap.connectionState == ConnectionState.waiting && items.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  );
+                }
+                if (items.isEmpty) return const SizedBox.shrink();
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Waste Items (${items.length})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 10),
+                        ...items.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.delete_outline, size: 16, color: Color(0xFF2E7D32)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.subtype,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                    Text(
+                                      '${item.weightKg.toStringAsFixed(1)} kg'
+                                      '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
+                                      '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
 
           // ── Weight card ────────────────────────────────────
           Card(
@@ -542,5 +608,94 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       case WasteLoadStatus.cancelled:          return const Color(0xFF757575);
       default:                                 return Colors.orange;
     }
+  }
+}
+
+class _WasteStatusStepper extends StatelessWidget {
+  const _WasteStatusStepper({required this.status});
+  final WasteLoadStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    // Steps: Scheduled → Collected → Weighbridge → Complete
+    // For direct (non-scheduled) loads: Draft → Awaiting Weighbridge → Complete
+    final steps = status == WasteLoadStatus.scheduled
+        ? ['Scheduled', 'Collecting', 'Weighbridge', 'Complete']
+        : ['Created', 'Signature', 'Weighbridge', 'Complete'];
+    final currentIdx = switch (status) {
+      WasteLoadStatus.scheduled          => 0,
+      WasteLoadStatus.draft              => 1,
+      WasteLoadStatus.pendingWeighbridge => 2,
+      WasteLoadStatus.completed          => 3,
+      WasteLoadStatus.cancelled          => -1,
+    };
+    if (status == WasteLoadStatus.cancelled) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.cancel, size: 16, color: Color(0xFF757575)),
+            SizedBox(width: 8),
+            Text('Cancelled', style: TextStyle(color: Color(0xFF757575), fontWeight: FontWeight.w500)),
+          ],
+        ),
+      );
+    }
+    return Row(
+      children: List.generate(steps.length, (i) {
+        final done = i < currentIdx;
+        final active = i == currentIdx;
+        return Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: done ? const Color(0xFF2E7D32)
+                            : active ? Colors.orange
+                            : Colors.grey.shade200,
+                        border: active ? Border.all(color: Colors.orange, width: 2) : null,
+                      ),
+                      child: Icon(
+                        done ? Icons.check : Icons.circle,
+                        size: done ? 16 : 8,
+                        color: done ? Colors.white : active ? Colors.orange : Colors.grey.shade400,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      steps[i],
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                        color: active ? Colors.orange : done ? const Color(0xFF2E7D32) : Colors.grey,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              if (i < steps.length - 1)
+                Expanded(
+                  child: Container(
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    color: done ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+                  ),
+                ),
+            ],
+          ),
+        );
+      }),
+    );
   }
 }

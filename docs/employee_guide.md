@@ -166,9 +166,11 @@ A job card moves through four statuses during its life:
 
 When you discover a fault or breakdown, create a job card immediately. Do not wait.
 
+> **You must be on-site to create a job card.** The **Create Job Card** tile is hidden from the home screen when your on-site status is off-site. If you are physically on site but the tile is missing, open Settings and tap **Check Current Location** to refresh your on-site status.
+
 **Steps:**
 1. Open the CTP Job Cards app
-2. Tap **Create Job Card**
+2. Tap **Create Job Card** (visible only when on-site)
 3. Fill in all fields — department, area, machine, part, description, and priority
 4. Submit
 

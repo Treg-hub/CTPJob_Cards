@@ -76,9 +76,18 @@ class _WasteBeginCollectionScreenState
         .toList();
     final subtypes = types.isNotEmpty ? types.first.subtypes : <String>[];
 
-    final result = await showDialog<_ItemEntry>(
+    final result = await showModalBottomSheet<_ItemEntry>(
       context: context,
-      builder: (ctx) => _AddItemDialog(subtypes: subtypes),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: _AddItemSheet(subtypes: subtypes),
+          ),
+        );
+      },
     );
     if (result != null && mounted) {
       setState(() => _items.add(result));
@@ -116,6 +125,7 @@ class _WasteBeginCollectionScreenState
         driverName: _driverCtrl.text.trim(),
         vehicleReg: _regCtrl.text.trim(),
         collectedBy: currentEmployee?.clockNo ?? '',
+        collectedByName: currentEmployee?.name,
         itemsData: _items.map((i) => {
           'subtype': i.subtype,
           'weight_kg': i.weightKg,
@@ -400,18 +410,18 @@ class _ItemEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Add item dialog
+// Add item bottom sheet
 // ---------------------------------------------------------------------------
 
-class _AddItemDialog extends StatefulWidget {
-  const _AddItemDialog({required this.subtypes});
+class _AddItemSheet extends StatefulWidget {
+  const _AddItemSheet({required this.subtypes});
   final List<String> subtypes;
 
   @override
-  State<_AddItemDialog> createState() => _AddItemDialogState();
+  State<_AddItemSheet> createState() => _AddItemSheetState();
 }
 
-class _AddItemDialogState extends State<_AddItemDialog> {
+class _AddItemSheetState extends State<_AddItemSheet> {
   final WasteService _wasteService = WasteService();
   String? _subtype;
   final _weightCtrl = TextEditingController();
@@ -451,109 +461,145 @@ class _AddItemDialogState extends State<_AddItemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Waste Item'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.subtypes.isNotEmpty) ...[
-              const Text('Subtype', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
-              DropdownButton<String>(
-                value: _subtype,
-                isExpanded: true,
-                items: widget.subtypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                onChanged: (v) => setState(() => _subtype = v),
-              ),
-            ] else ...[
-              TextField(
-                decoration: const InputDecoration(labelText: 'Subtype *', isDense: true),
-                onChanged: (v) => setState(() => _subtype = v.isEmpty ? null : v),
-              ),
-            ],
-            const SizedBox(height: 10),
-            TextField(
-              controller: _weightCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
-              onChanged: (_) => setState(() {}),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Handle bar
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _qtyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _notesCtrl,
-              decoration: const InputDecoration(labelText: 'Notes (optional)', isDense: true),
-            ),
-            const SizedBox(height: 12),
-            Text('Photos (${_photos.length}) *',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                IconButton.outlined(
-                  onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt),
-                  tooltip: 'Camera',
+          ),
+        ),
+        // Title
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Add Waste Item',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Content
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.subtypes.isNotEmpty) ...[
+                const Text('Subtype', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
+                DropdownButton<String>(
+                  value: _subtype,
+                  isExpanded: true,
+                  items: widget.subtypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (v) => setState(() => _subtype = v),
                 ),
-                const SizedBox(width: 8),
-                IconButton.outlined(
-                  onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library),
-                  tooltip: 'Gallery',
+              ] else ...[
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Subtype *', isDense: true),
+                  onChanged: (v) => setState(() => _subtype = v.isEmpty ? null : v),
                 ),
-                if (_addingPhoto) ...[
-                  const SizedBox(width: 12),
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                ],
               ],
-            ),
-            if (_photos.isNotEmpty)
-              SizedBox(
-                height: 64,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _photos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 6),
-                  itemBuilder: (_, i) => Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Image.file(File(_photos[i]), width: 60, height: 60, fit: BoxFit.cover),
-                      ),
-                      Positioned(
-                        top: 0, right: 0,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _photos.removeAt(i)),
-                          child: const CircleAvatar(radius: 9, backgroundColor: Colors.red,
-                              child: Icon(Icons.close, size: 12, color: Colors.white)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _weightCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _qtyCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(labelText: 'Notes (optional)', isDense: true),
+              ),
+              const SizedBox(height: 12),
+              Text('Photos (${_photos.length}) *',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  IconButton.outlined(
+                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    tooltip: 'Camera',
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library),
+                    tooltip: 'Gallery',
+                  ),
+                  if (_addingPhoto) ...[
+                    const SizedBox(width: 12),
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  ],
+                ],
+              ),
+              if (_photos.isNotEmpty)
+                SizedBox(
+                  height: 64,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _photos.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    itemBuilder: (_, i) => Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.file(File(_photos[i]), width: 60, height: 60, fit: BoxFit.cover),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          top: 0, right: 0,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _photos.removeAt(i)),
+                            child: const CircleAvatar(radius: 9, backgroundColor: Colors.red,
+                                child: Icon(Icons.close, size: 12, color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _valid
+                      ? () => Navigator.pop(context, _ItemEntry(
+                          subtype: _subtype!,
+                          weightKg: double.parse(_weightCtrl.text),
+                          quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
+                          notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
+                          photoPaths: List.of(_photos),
+                        ))
+                      : null,
+                  child: const Text('Add'),
+                ),
               ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: _valid
-              ? () => Navigator.pop(context, _ItemEntry(
-                  subtype: _subtype!,
-                  weightKg: double.parse(_weightCtrl.text),
-                  quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
-                  notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
-                  photoPaths: List.of(_photos),
-                ))
-              : null,
-          child: const Text('Add Item'),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ],
     );

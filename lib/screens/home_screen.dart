@@ -13,6 +13,7 @@ import '../models/job_card.dart';
 
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee;
@@ -72,6 +73,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get isSuperManager => role_utils.isSuperManager(currentEmployee);
 
   bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
+
+  /// Returns true when the currently visible tab is the Waste tab.
+  /// The Waste tab index is dynamic — it shifts depending on whether the
+  /// Manager and Copper tabs are present for this user.
+  bool get _isOnWasteTab {
+    if (!role_utils.isWasteUser(currentEmployee) ||
+        !role_utils.isWasteTrackEnabledSync()) {
+      return false;
+    }
+    int idx = 2; // 0=Home, 1=MyWork
+    if (currentEmployee != null &&
+        currentEmployee!.position.toLowerCase().contains('manager')) {
+      idx++;
+    }
+    if (_isCopperAuthorized) { idx++; }
+    return _selectedIndex == idx;
+  }
 
   void _setupEmployeeStream(String clockNo) {
     _employeeSubscription = _firestoreService
@@ -220,6 +238,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     if (!kIsWeb) {
       _notificationService.refreshToken();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        try {
+          await UpdateService().checkForUpdate(context);
+        } catch (e) {
+          debugPrint('Update check error: $e');
+        }
+        try {
+          await NotificationService().checkPendingJobNavigation();
+        } catch (e) {
+          debugPrint('Pending job navigation error: $e');
+        }
+      });
     }
 
     try {
@@ -1555,12 +1586,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showFeedbackDialog,
-        backgroundColor: const Color(0xFFFF8C42),
-        tooltip: 'Give Feedback',
-        child: const Icon(Icons.feedback, color: Colors.black),
-      ),
+      floatingActionButton: _isOnWasteTab
+          ? null
+          : FloatingActionButton(
+              onPressed: _showFeedbackDialog,
+              backgroundColor: const Color(0xFFFF8C42),
+              tooltip: 'Give Feedback',
+              child: const Icon(Icons.feedback, color: Colors.black),
+            ),
     );
   }
 

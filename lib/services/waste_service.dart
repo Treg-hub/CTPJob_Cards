@@ -158,6 +158,7 @@ class WasteService {
   /// is assigned at scheduling time (number assigned when guard submits via [submitCollection]).
   Future<String> createScheduledLoad({
     required String contractorId,
+    String? contractorName,
     required String mainWasteType,
     required DateTime scheduledFor,
     required String scheduledBy,
@@ -167,6 +168,7 @@ class WasteService {
     final doc = await _firestore.collection(Collections.wasteLoads).add({
       'load_number': '',
       'contractor_id': contractorId,
+      if (contractorName != null) 'contractor_name': contractorName,
       'main_waste_type': mainWasteType,
       'date_time': Timestamp.fromDate(scheduledFor),
       'scheduled_for': Timestamp.fromDate(scheduledFor),
@@ -216,11 +218,18 @@ class WasteService {
   /// Uses a Firestore transaction to assert the load is still [scheduled] before
   /// writing, preventing double-collection. Then uploads photos/signature and
   /// writes items, using the same offline resilience pattern as [saveCompleteWasteLoad].
+  Future<WasteLoad?> getLoad(String loadId) async {
+    final doc = await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
+    if (!doc.exists) return null;
+    return WasteLoad.fromFirestore(doc);
+  }
+
   Future<void> submitCollection({
     required String loadId,
     required String driverName,
     required String vehicleReg,
     required String collectedBy,
+    String? collectedByName,
     required List<Map<String, dynamic>> itemsData,
     List<String> itemPhotoPaths = const [],
     String? signatureLocalPath,
@@ -239,6 +248,7 @@ class WasteService {
         'driver_name': driverName,
         'vehicle_reg': vehicleReg,
         'collected_by': collectedBy,
+        if (collectedByName != null) 'collected_by_name': collectedByName,
         'pending_weighbridge_at': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -253,6 +263,7 @@ class WasteService {
         'driver_name': driverName,
         'vehicle_reg': vehicleReg,
         'collected_by': collectedBy,
+        if (collectedByName != null) 'collected_by_name': collectedByName,
         'pending_weighbridge_at': DateTime.now().toIso8601String(),
       },
       documentId: loadId,

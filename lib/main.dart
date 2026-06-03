@@ -218,24 +218,6 @@ class CtpJobCardsApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeNotifierProvider);
 
-    if (!kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        try {
-          await UpdateService().checkForUpdate(context);
-        } catch (e) {
-          debugPrint('Update check error: $e');
-        }
-        // After the initial screen is mounted, check for a pending job-detail
-        // navigation request (set by the native side when a notification was
-        // tapped while the app was killed).
-        try {
-          await NotificationService().checkPendingJobNavigation();
-        } catch (e) {
-          debugPrint('Pending job navigation error: $e');
-        }
-      });
-    }
-
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'CTP Job Cards',

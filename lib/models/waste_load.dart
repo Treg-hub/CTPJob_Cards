@@ -47,6 +47,7 @@ class WasteLoad {
   final String mainWasteType;
   final DateTime dateTime;
   final String contractorId;
+  final String? contractorName;
   final String? collectionCompanyId;
   final String driverName;
   final String vehicleReg;
@@ -77,6 +78,7 @@ class WasteLoad {
   final DateTime? pendingWeighbridgeAt;
   /// clockNo of the guard who collected (filled on submitCollection).
   final String? collectedBy;
+  final String? collectedByName;
 
   const WasteLoad({
     this.id,
@@ -84,6 +86,7 @@ class WasteLoad {
     required this.mainWasteType,
     required this.dateTime,
     required this.contractorId,
+    this.contractorName,
     this.collectionCompanyId,
     required this.driverName,
     required this.vehicleReg,
@@ -106,6 +109,7 @@ class WasteLoad {
     this.scheduledNotes,
     this.pendingWeighbridgeAt,
     this.collectedBy,
+    this.collectedByName,
   });
 
   factory WasteLoad.fromFirestore(DocumentSnapshot doc) {
@@ -116,6 +120,7 @@ class WasteLoad {
       mainWasteType: data['main_waste_type'] as String? ?? '',
       dateTime: (data['date_time'] as Timestamp?)?.toDate() ?? DateTime.now(),
       contractorId: data['contractor_id'] as String? ?? '',
+      contractorName: data['contractor_name'] as String?,
       collectionCompanyId: data['collection_company_id'] as String?,
       driverName: data['driver_name'] as String? ?? '',
       vehicleReg: data['vehicle_reg'] as String? ?? '',
@@ -142,6 +147,7 @@ class WasteLoad {
       scheduledNotes: data['scheduled_notes'] as String?,
       pendingWeighbridgeAt: (data['pending_weighbridge_at'] as Timestamp?)?.toDate(),
       collectedBy: data['collected_by'] as String?,
+      collectedByName: data['collected_by_name'] as String?,
     );
   }
 
@@ -151,6 +157,7 @@ class WasteLoad {
       'main_waste_type': mainWasteType,
       'date_time': Timestamp.fromDate(dateTime),
       'contractor_id': contractorId,
+      if (contractorName != null) 'contractor_name': contractorName,
       'collection_company_id': collectionCompanyId,
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
@@ -174,6 +181,7 @@ class WasteLoad {
       if (scheduledNotes != null) 'scheduled_notes': scheduledNotes,
       if (pendingWeighbridgeAt != null) 'pending_weighbridge_at': Timestamp.fromDate(pendingWeighbridgeAt!),
       if (collectedBy != null) 'collected_by': collectedBy,
+      if (collectedByName != null) 'collected_by_name': collectedByName,
     };
   }
 
@@ -183,6 +191,7 @@ class WasteLoad {
     String? mainWasteType,
     DateTime? dateTime,
     String? contractorId,
+    String? contractorName,
     String? collectionCompanyId,
     String? driverName,
     String? vehicleReg,
@@ -205,6 +214,7 @@ class WasteLoad {
     String? scheduledNotes,
     DateTime? pendingWeighbridgeAt,
     String? collectedBy,
+    String? collectedByName,
   }) {
     return WasteLoad(
       id: id ?? this.id,
@@ -212,6 +222,7 @@ class WasteLoad {
       mainWasteType: mainWasteType ?? this.mainWasteType,
       dateTime: dateTime ?? this.dateTime,
       contractorId: contractorId ?? this.contractorId,
+      contractorName: contractorName ?? this.contractorName,
       collectionCompanyId: collectionCompanyId ?? this.collectionCompanyId,
       driverName: driverName ?? this.driverName,
       vehicleReg: vehicleReg ?? this.vehicleReg,
@@ -236,6 +247,7 @@ class WasteLoad {
       scheduledNotes: scheduledNotes ?? this.scheduledNotes,
       pendingWeighbridgeAt: pendingWeighbridgeAt ?? this.pendingWeighbridgeAt,
       collectedBy: collectedBy ?? this.collectedBy,
+      collectedByName: collectedByName ?? this.collectedByName,
     );
   }
 }

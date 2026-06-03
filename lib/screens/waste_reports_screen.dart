@@ -32,29 +32,10 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
   bool _isLoading = true;
   String? _error;
 
-  // Phase 7 flag defense + admin recovery (minimal mirror of home)
-  bool _effectiveWasteEnabled = true;
-  bool _pilotModeActive = false;
-  String? _userClock;
-
   @override
   void initState() {
     super.initState();
-    _loadFeatureStatus();
     _loadRealData();
-  }
-
-  Future<void> _loadFeatureStatus() async {
-    final clock = currentEmployee?.clockNo;
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
-    final pilot = await _wasteService.isPilotModeEnabled();
-    if (mounted) {
-      setState(() {
-        _effectiveWasteEnabled = enabled;
-        _pilotModeActive = pilot;
-        _userClock = clock;
-      });
-    }
   }
 
   Future<void> _loadRealData() async {
@@ -233,28 +214,6 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
   Widget build(BuildContext context) {
     final isAdmin = _isAdmin;
 
-    if (!_effectiveWasteEnabled) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Waste Reports'), backgroundColor: const Color(0xFF2E7D32)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.block, size: 64, color: Color(0xFF757575)),
-              const SizedBox(height: 16),
-              Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Reports disabled by feature flag.', style: const TextStyle(color: Color(0xFF616161)), textAlign: TextAlign.center),
-              if (isAdmin) ...[
-                const SizedBox(height: 16),
-                ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); _loadRealData(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
-              ],
-            ]),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -337,7 +296,7 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
                               const SizedBox(height: 8),
                               const Text(
                                 'Deviation calculated with shared util (same as weighbridge entry screen). Exports now include variance columns.',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                                style: TextStyle(fontSize: 12, color: Color(0xFF616161)),
                               ),
                             ],
                           ),
