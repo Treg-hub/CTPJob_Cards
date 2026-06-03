@@ -6,6 +6,32 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-03 — Job Card History screen, Firestore read cost fixes
+
+### User-facing changes
+
+**New: Job Card History screen**
+
+- A dedicated **Job History** quick-action tile is now on the Home screen for all roles.
+- The screen lets you search the full closed job card archive without streaming the entire collection — only the records matching your filter are downloaded.
+- **Server-side filters**: date preset (Last 7 / 30 / 90 days, custom range, or all time), department, area, and machine. Each change triggers a fresh Firestore fetch capped at 50 records per page. Use **Load More** for pagination.
+- **Client-side refinement** (no extra reads): Type chips (Mechanical / Electrical / Mech-Elec / Maintenance), Priority chips (P1–P5), and free-text search across description, machine, part, notes, and operator.
+- Tap any result to open the full Job Card Detail screen.
+
+**Create Job Card — similar jobs panel**
+
+- The "previous jobs for this machine" sidebar previously downloaded every job card in the system and filtered on-device. It now uses server-filtered indexed queries — only the records that match the current department → area → machine → part selection are fetched.
+
+### Developer / architecture changes
+
+- **`FirestoreService.getInProgressJobCards()`** — new server-filtered stream for `status == inProgress` jobs.
+- **`FirestoreService.searchClosedJobCards()`** — new one-shot fetch with server-side equality filters (department, area, machine) and an optional date range on `closedAt`, plus cursor-based pagination. Type and priority filtering applied client-side on the returned page.
+- **Home screen count badge** — the two `getAllJobCards()` live listeners used to count the open/in-progress badge and render the recent jobs panel have been replaced with `getOpenJobCards()` + `getInProgressJobCards()` streams. Closed documents are never downloaded to the home screen.
+- **`closed_jobs_screen.dart` removed** — superseded by `job_card_history_screen.dart`.
+- **3 new Firestore composite indexes** in `firestore.indexes.json`: `status + department + closedAt DESC`, `+ area`, `+ machine`. Required for the server-side history queries. Deploy with `firebase deploy --only firestore:indexes`.
+
+---
+
 ## 2026-06-02 — WasteTrack UX overhaul, notification inbox fixes
 
 ### User-facing changes

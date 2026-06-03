@@ -76,7 +76,7 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 - `Create Job Card` — **hidden when the employee is off-site** (`isOnSite: false`); off-site employees must be on-site to create new jobs
 - `My Assigned Jobs`
 - `View Job Cards`
-- `Closed Jobs`
+- `Job History` — server-filtered search of closed job cards (see [Job Card History](#job-card-history))
 - `Settings`
 
 #### Manager-Only Tiles
@@ -116,7 +116,7 @@ Form for raising a new job card. The factory structure (department → area → 
 
 #### Sidebar Widget
 
-- **Similar Job Cards** — wide-layout sidebar streams matching open cards as the form is filled, helping prevent duplicates
+- **Similar Job Cards** — wide-layout sidebar streams matching closed/monitor cards as the form is filled, server-filtered by department → area → machine → part to prevent duplicate jobs without downloading the full collection
 
 ### My Assigned Jobs
 
@@ -185,16 +185,32 @@ Gradient: orange → green (on-site) / red (off-site). Toggle buttons for filter
 - Filter and search across all factory structure levels
 - Wide-layout view with split master/detail on tablets
 
-### Closed Jobs
+### Job Card History
 
-`lib/screens/closed_jobs_screen.dart` — **Roles:** All
+`lib/screens/job_card_history_screen.dart` — **Roles:** All
 
-Lighter-weight read-only browser of completed and auto-closed jobs. Useful for technicians who want to look up past work without the full filter UI of **View Job Cards**.
+Searchable archive of all closed job cards with server-side filtering to minimise Firestore read costs. Accessible via the **Job History** quick-action tile on the Home screen.
 
-#### Capabilities
+#### Server-Side Filters (trigger a new Firestore fetch)
 
-- Date-range filter
-- Tap to open the detail view (read-only)
+| Filter | Options | Notes |
+|--------|---------|-------|
+| Date Range | Last 7 days / Last 30 days / Last 90 days / Custom / All time | Default: Last 30 days |
+| Department | All or specific department chip | Cascading — enables Area when selected |
+| Area | All or specific area chip | Cascading — enables Machine when selected |
+| Machine | All or specific machine chip | — |
+
+Each filter combination maps to a composite Firestore index. Fetches at most **50 documents per page** ordered by `closedAt` descending. Tap **Load More** for cursor-based pagination.
+
+#### Client-Side Refinement (applied to current page, zero additional reads)
+
+- **Type** — Mechanical / Electrical / Mech-Elec / Maintenance chips
+- **Priority** — P1–P5 chips, colour-coded
+- **Free-text search** — searches description, machine, part, notes, operator name, and job card number across the fetched result set
+
+#### Navigation
+
+Tap any result to open **Job Card Detail** in full read-only (or write-capable if the user has the right role).
 
 ### Daily Review
 
