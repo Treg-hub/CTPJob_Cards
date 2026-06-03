@@ -4,38 +4,38 @@ import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 
 // ---------------------------------------------------------------------------
-// PALLET SELECTION — ephemeral state used in WasteScheduleLoadScreen
+// STOCK ITEM SELECTION — ephemeral state used in WasteScheduleLoadScreen
 // ---------------------------------------------------------------------------
 
-class PalletSelectionState {
+class StockSelectionState {
   final Set<String> selectedIds;
-  const PalletSelectionState({this.selectedIds = const {}});
+  const StockSelectionState({this.selectedIds = const {}});
 
-  PalletSelectionState copyWith({Set<String>? selectedIds}) =>
-      PalletSelectionState(selectedIds: selectedIds ?? this.selectedIds);
+  StockSelectionState copyWith({Set<String>? selectedIds}) =>
+      StockSelectionState(selectedIds: selectedIds ?? this.selectedIds);
 
   bool isSelected(String id) => selectedIds.contains(id);
 
-  PalletSelectionState toggle(String id) {
+  StockSelectionState toggle(String id) {
     final next = Set<String>.from(selectedIds);
     next.contains(id) ? next.remove(id) : next.add(id);
     return copyWith(selectedIds: next);
   }
 }
 
-class PalletSelectionNotifier extends StateNotifier<PalletSelectionState> {
-  PalletSelectionNotifier() : super(const PalletSelectionState());
+class StockSelectionNotifier extends StateNotifier<StockSelectionState> {
+  StockSelectionNotifier() : super(const StockSelectionState());
 
-  void toggle(String palletId) => state = state.toggle(palletId);
-  void clear() => state = const PalletSelectionState();
+  void toggle(String stockId) => state = state.toggle(stockId);
+  void clear() => state = const StockSelectionState();
   void selectAll(List<String> ids) =>
-      state = PalletSelectionState(selectedIds: Set.from(ids));
+      state = StockSelectionState(selectedIds: Set.from(ids));
 }
 
 /// autoDispose so selection is cleared when WasteScheduleLoadScreen is popped.
-final palletSelectionProvider =
-    StateNotifierProvider.autoDispose<PalletSelectionNotifier, PalletSelectionState>(
-  (ref) => PalletSelectionNotifier(),
+final stockSelectionProvider =
+    StateNotifierProvider.autoDispose<StockSelectionNotifier, StockSelectionState>(
+  (ref) => StockSelectionNotifier(),
 );
 
 /// Simple state for the in-progress Waste Load being created/edited.

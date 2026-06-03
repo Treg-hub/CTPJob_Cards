@@ -14,7 +14,7 @@ import 'sync_service.dart';
 import '../models/contractor.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
-import '../models/waste_pallet.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
@@ -779,9 +779,9 @@ class WasteService {
         String coll;
         String docId;
         String field;
-        if (targetColl == Collections.wastePallets && itemId != null) {
-          refBase = 'waste_pallets/$itemId';
-          coll = Collections.wastePallets;
+        if (targetColl == Collections.wasteStock && itemId != null) {
+          refBase = 'waste_stock/$itemId';
+          coll = Collections.wasteStock;
           docId = itemId;
           field = 'photos';
         } else if (itemId != null) {
@@ -895,22 +895,22 @@ class WasteService {
   }
 
   // ---------------------------------------------------------------------------
-  // PALLET INVENTORY — pre-load pallet tracking (Paper Waste and future types)
+  // ON-SITE STOCK — pre-load stock tracking for any waste type
   // ---------------------------------------------------------------------------
 
-  /// Creates a new on-site pallet record and uploads its photos.
-  /// Returns the Firestore document ID of the created pallet.
-  Future<String> addPallet({
-    required WastePallet pallet,
+  /// Creates a new on-site waste stock item and uploads its photos.
+  /// Returns the Firestore document ID of the created stock item.
+  Future<String> addStockItem({
+    required WasteStockItem item,
     required List<String> localPhotoPaths,
   }) async {
-    final ref = _firestore.collection(Collections.wastePallets).doc();
+    final ref = _firestore.collection(Collections.wasteStock).doc();
     final List<String> photoUrls = [];
     for (final path in localPhotoPaths) {
       try {
         final url = await uploadWastePhoto(
           localPath: path,
-          wasteRef: 'waste_pallets/${ref.id}',
+          wasteRef: 'waste_stock/${ref.id}',
         );
         photoUrls.add(url);
       } catch (_) {
@@ -918,19 +918,19 @@ class WasteService {
           localPath: path,
           loadId: ref.id,
           itemId: ref.id,
-          targetCollection: Collections.wastePallets,
+          targetCollection: Collections.wasteStock,
         );
       }
     }
     final data = {
-      ...pallet.toFirestore(),
+      ...item.toFirestore(),
       'photos': photoUrls,
       'created_at': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),
     };
     await ref.set(data);
     await SyncService().addToQueue(
-      collection: Collections.wastePallets,
+      collection: Collections.wasteStock,
       operation: 'set',
       data: data,
       documentId: ref.id,
@@ -939,37 +939,37 @@ class WasteService {
     return ref.id;
   }
 
-  /// Streams all non-deleted on-site pallets for a given waste type, newest first.
-  Stream<List<WastePallet>> watchPalletsOnSite(String wasteType) {
+  /// Streams all non-deleted on-site stock items for a given waste type, newest first.
+  Stream<List<WasteStockItem>> watchStockOnSite(String wasteType) {
     return _firestore
-        .collection(Collections.wastePallets)
+        .collection(Collections.wasteStock)
         .where('is_deleted', isEqualTo: false)
         .where('waste_type', isEqualTo: wasteType)
-        .where('status', isEqualTo: WastePalletStatus.onSite.value)
+        .where('status', isEqualTo: WasteStockStatus.onSite.value)
         .orderBy('created_at', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(WastePallet.fromFirestore).toList())
-        .handleError((_) => <WastePallet>[]);
+        .map((snap) => snap.docs.map(WasteStockItem.fromFirestore).toList())
+        .handleError((_) => <WasteStockItem>[]);
   }
 
-  /// Links pallets to a load by updating their status to loaded in a single batch.
-  Future<void> markPalletsLoaded(List<String> palletIds, String loadId) async {
-    if (palletIds.isEmpty) return;
+  /// Links stock items to a load by updating their status to loaded in a single batch.
+  Future<void> markStockLoaded(List<String> stockIds, String loadId) async {
+    if (stockIds.isEmpty) return;
     final batch = _firestore.batch();
-    for (final id in palletIds) {
-      batch.update(_firestore.collection(Collections.wastePallets).doc(id), {
-        'status': WastePalletStatus.loaded.value,
+    for (final id in stockIds) {
+      batch.update(_firestore.collection(Collections.wasteStock).doc(id), {
+        'status': WasteStockStatus.loaded.value,
         'load_id': loadId,
         'updated_at': FieldValue.serverTimestamp(),
       });
     }
     await batch.commit();
-    for (final id in palletIds) {
+    for (final id in stockIds) {
       await SyncService().addToQueue(
-        collection: Collections.wastePallets,
+        collection: Collections.wasteStock,
         operation: 'update',
         data: {
-          'status': WastePalletStatus.loaded.value,
+          'status': WasteStockStatus.loaded.value,
           'load_id': loadId,
         },
         documentId: id,
@@ -978,19 +978,19 @@ class WasteService {
     await SyncService().processNow();
   }
 
-  /// Returns the count and total estimated weight of on-site pallets for a waste type.
-  Future<({int count, double totalEstimatedKg})> getPalletSummary(String wasteType) async {
+  /// Returns the count and total estimated weight of on-site stock for a waste type.
+  Future<({int count, double totalEstimatedKg})> getStockSummary(String wasteType) async {
     try {
       final snap = await _firestore
-          .collection(Collections.wastePallets)
+          .collection(Collections.wasteStock)
           .where('is_deleted', isEqualTo: false)
           .where('waste_type', isEqualTo: wasteType)
-          .where('status', isEqualTo: WastePalletStatus.onSite.value)
+          .where('status', isEqualTo: WasteStockStatus.onSite.value)
           .get();
-      final pallets = snap.docs.map(WastePallet.fromFirestore).toList();
-      final total = pallets.fold<double>(
-        0.0, (acc, p) => acc + (p.estimatedWeightKg ?? 0.0));
-      return (count: pallets.length, totalEstimatedKg: total);
+      final items = snap.docs.map(WasteStockItem.fromFirestore).toList();
+      final total = items.fold<double>(
+        0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
+      return (count: items.length, totalEstimatedKg: total);
     } catch (_) {
       return (count: 0, totalEstimatedKg: 0.0);
     }

@@ -17,7 +17,7 @@ import 'waste_admin_screen.dart';
 import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
-import 'waste_pallet_inventory_screen.dart';
+import 'waste_stock_inventory_screen.dart';
 import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
@@ -424,11 +424,11 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                 child: const Icon(Icons.layers, color: Colors.white),
               ),
               title: const Text('Paper Waste Stock'),
-              subtitle: const Text('View or record pallets accumulating on site'),
+              subtitle: const Text('View or record items accumulating on site'),
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WastePalletInventoryScreen()));
+                    MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()));
               },
             ),
             const SizedBox(height: 8),
@@ -800,7 +800,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
 // ---------------------------------------------------------------------------
 // Paper Waste Stock summary banner — tappable card shown in the loads tab.
-// Fetches the on-site pallet count + estimated weight once (not a stream).
+// Fetches the on-site stock count + total estimated weight (not a stream).
 // ---------------------------------------------------------------------------
 class _PaperWasteStockBanner extends StatefulWidget {
   const _PaperWasteStockBanner({required this.wasteService});
@@ -824,7 +824,7 @@ class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
 
   Future<void> _load() async {
     try {
-      final summary = await widget.wasteService.getPalletSummary('Paper Waste');
+      final summary = await widget.wasteService.getStockSummary('Paper Waste');
       if (mounted) {
         setState(() {
           _count = summary.count;
@@ -847,7 +847,7 @@ class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
     return InkWell(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const WastePalletInventoryScreen()),
+        MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()),
       ).then((_) => _load()),
       child: Container(
         margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
@@ -869,13 +869,44 @@ class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
                   Icon(Icons.inventory_2_outlined, color: appColors.wasteGreen, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      '$_count pallet${_count == 1 ? '' : 's'} on site'
-                      '${_totalKg > 0 ? ' · ~${formatSAWeight(_totalKg)} est.' : ''}',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: onSurface),
+                    child: Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$_count item${_count == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: onSurface),
+                            ),
+                            Text('on site',
+                                style: TextStyle(
+                                    fontSize: 10, color: onSurface.withAlpha(180))),
+                          ],
+                        ),
+                        Container(
+                          width: 1, height: 28,
+                          margin: const EdgeInsets.symmetric(horizontal: 10),
+                          color: onSurface.withAlpha(60),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '—',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: onSurface),
+                            ),
+                            Text('est. weight',
+                                style: TextStyle(
+                                    fontSize: 10, color: onSurface.withAlpha(180))),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                   Icon(Icons.chevron_right, color: onSurface.withAlpha(150), size: 18),

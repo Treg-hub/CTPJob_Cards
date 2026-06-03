@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../services/waste_service.dart';
 import '../models/contractor.dart';
-import '../models/waste_pallet.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart';
@@ -34,11 +34,11 @@ class _WasteScheduleLoadScreenState
   bool _isLoading = true;
   bool _isSaving = false;
 
-  // Pallet selection (shown when Paper Waste is selected, manager/admin only)
-  List<WastePallet> _onSitePallets = [];
-  final List<String> _selectedPalletIds = [];
-  bool _showPalletSection = false;
-  bool _loadingPallets = false;
+  // Stock item selection (shown when Paper Waste is selected, manager/admin only)
+  List<WasteStockItem> _onSiteStock = [];
+  final List<String> _selectedStockIds = [];
+  bool _showStockSection = false;
+  bool _loadingStock = false;
 
   @override
   void initState() {
@@ -106,18 +106,18 @@ class _WasteScheduleLoadScreenState
     }
   }
 
-  Future<void> _loadOnSitePallets(String wasteType) async {
-    setState(() { _loadingPallets = true; _onSitePallets = []; _selectedPalletIds.clear(); });
+  Future<void> _loadOnSiteStock(String wasteType) async {
+    setState(() { _loadingStock = true; _onSiteStock = []; _selectedStockIds.clear(); });
     try {
       final pallets = await _wasteService
-          .watchPalletsOnSite(wasteType)
+          .watchStockOnSite(wasteType)
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
-        setState(() { _onSitePallets = pallets; _showPalletSection = true; _loadingPallets = false; });
+        setState(() { _onSiteStock = pallets; _showStockSection = true; _loadingStock = false; });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingPallets = false);
+      if (mounted) setState(() => _loadingStock = false);
     }
   }
 
@@ -139,8 +139,8 @@ class _WasteScheduleLoadScreenState
             : _notesController.text.trim(),
       );
 
-      if (_selectedPalletIds.isNotEmpty) {
-        await _wasteService.markPalletsLoaded(_selectedPalletIds, loadId);
+      if (_selectedStockIds.isNotEmpty) {
+        await _wasteService.markStockLoaded(_selectedStockIds, loadId);
       }
 
       if (mounted) {
@@ -279,12 +279,12 @@ class _WasteScheduleLoadScreenState
                               isSecurityManager(currentEmployee) ||
                               isWasteAdmin(currentEmployee);
                           if (canSelectPallets && type.mainType == 'Paper Waste') {
-                            _loadOnSitePallets(type.mainType);
+                            _loadOnSiteStock(type.mainType);
                           } else {
                             setState(() {
-                              _showPalletSection = false;
-                              _onSitePallets = [];
-                              _selectedPalletIds.clear();
+                              _showStockSection = false;
+                              _onSiteStock = [];
+                              _selectedStockIds.clear();
                             });
                           }
                         },
@@ -293,55 +293,130 @@ class _WasteScheduleLoadScreenState
                   ),
 
                   // ── On-site pallet selection (Paper Waste, manager only) ──
-                  if (_showPalletSection) ...[
+                  if (_showStockSection) ...[
                     const SizedBox(height: 20),
-                    Text('On-Site Pallets (optional)',
+                    Text('On-Site Stock (optional)',
                         style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'Select which pallets go on this truck. You can skip and record later.',
+                      'Select which items go on this truck. You can skip and record later.',
                       style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 8),
-                    if (_loadingPallets)
+                    if (_loadingStock)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    else if (_onSitePallets.isEmpty)
+                    else if (_onSiteStock.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text('No pallets currently on site.',
+                        child: Text('No stock currently on site.',
                             style: TextStyle(
                                 fontSize: 13,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       )
                     else
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 280),
+                        constraints: const BoxConstraints(maxHeight: 340),
                         child: ListView.builder(
                           shrinkWrap: true,
-                          itemCount: _onSitePallets.length,
+                          itemCount: _onSiteStock.length,
                           itemBuilder: (_, i) {
-                            final p = _onSitePallets[i];
-                            final id = p.id!;
-                            return CheckboxListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                '${p.subtype}'
-                                '${p.estimatedWeightKg != null ? ' — ~${formatSAWeight(p.estimatedWeightKg!)}' : ''}',
-                                style: const TextStyle(fontSize: 13),
+                            final item = _onSiteStock[i];
+                            final id = item.id!;
+                            final selected = _selectedStockIds.contains(id);
+                            return GestureDetector(
+                              onTap: () => setState(() =>
+                                  selected ? _selectedStockIds.remove(id) : _selectedStockIds.add(id)),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: selected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).dividerColor,
+                                    width: selected ? 2 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: selected
+                                      ? Theme.of(context).colorScheme.primaryContainer.withAlpha(60)
+                                      : null,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Checkbox
+                                    Checkbox(
+                                      value: selected,
+                                      onChanged: (v) => setState(() =>
+                                          v! ? _selectedStockIds.add(id) : _selectedStockIds.remove(id)),
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // Photo thumbnails (up to 3)
+                                    if (item.photos.isNotEmpty) ...[
+                                      SizedBox(
+                                        width: item.photos.length == 1 ? 52 : (item.photos.length == 2 ? 96 : 136),
+                                        height: 52,
+                                        child: Stack(
+                                          children: [
+                                            for (int p = 0; p < item.photos.length && p < 3; p++)
+                                              Positioned(
+                                                left: p * 44.0,
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: Image.network(
+                                                    item.photos[p],
+                                                    width: 52,
+                                                    height: 52,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, __, ___) => Container(
+                                                      width: 52, height: 52,
+                                                      color: Colors.grey.shade200,
+                                                      child: const Icon(Icons.broken_image,
+                                                          size: 20, color: Colors.grey),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    // Text info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.subtype,
+                                            style: const TextStyle(
+                                                fontSize: 13, fontWeight: FontWeight.w600),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            [
+                                              if (item.estimatedWeightKg != null)
+                                                '~${formatSAWeight(item.estimatedWeightKg!)}',
+                                              formatSADate(item.createdAt),
+                                            ].join(' · '),
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              subtitle: Text(
-                                formatSADate(p.createdAt),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              value: _selectedPalletIds.contains(id),
-                              onChanged: (v) => setState(() =>
-                                  v! ? _selectedPalletIds.add(id) : _selectedPalletIds.remove(id)),
                             );
                           },
                         ),

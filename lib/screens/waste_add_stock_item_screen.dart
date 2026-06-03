@@ -3,22 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../models/waste_pallet.dart';
+import '../models/waste_stock_item.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 
-class WasteAddPalletScreen extends ConsumerStatefulWidget {
-  const WasteAddPalletScreen({super.key, this.wasteType = 'Paper Waste'});
+class WasteAddStockItemScreen extends ConsumerStatefulWidget {
+  const WasteAddStockItemScreen({super.key, this.wasteType = 'Paper Waste'});
 
   final String wasteType;
 
   @override
-  ConsumerState<WasteAddPalletScreen> createState() => _WasteAddPalletScreenState();
+  ConsumerState<WasteAddStockItemScreen> createState() =>
+      _WasteAddStockItemScreenState();
 }
 
-class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
+class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScreen> {
   final WasteService _wasteService = WasteService();
   final _weightCtrl = TextEditingController();
   final _notesCtrl  = TextEditingController();
@@ -77,7 +78,7 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
       final double? weight = _weightCtrl.text.isNotEmpty
           ? double.tryParse(_weightCtrl.text)
           : null;
-      final pallet = WastePallet(
+      final item = WasteStockItem(
         wasteType: widget.wasteType,
         subtype: _subtype!,
         estimatedWeightKg: weight,
@@ -86,12 +87,12 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
         createdByName: currentEmployee?.name ?? '',
         createdAt: DateTime.now(),
       );
-      await _wasteService.addPallet(pallet: pallet, localPhotoPaths: _photos);
+      await _wasteService.addStockItem(item: item, localPhotoPaths: _photos);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pallet recorded'),
+            content: Text('Stock item recorded'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -118,7 +119,7 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
 
     return Scaffold(
       appBar: WasteAppBar(
-        title: 'Record Pallet',
+        title: 'Record Stock Item',
         isOnSite: currentEmployee?.isOnSite,
         actions: [
           TextButton(
@@ -127,7 +128,8 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
                 ? const SizedBox(
                     width: 16, height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                : const Text('Save',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -183,10 +185,8 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
             const SizedBox(height: 20),
 
             // ── Photos ───────────────────────────────────────────
-            Text(
-              'Photos * (min 1)',
-              style: TextStyle(fontSize: 12, color: appColors.textMuted),
-            ),
+            Text('Photos * (min 1)',
+                style: TextStyle(fontSize: 12, color: appColors.textMuted)),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -204,8 +204,7 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
                 if (_addingPhoto) ...[
                   const SizedBox(width: 12),
                   const SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 16, height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ],
@@ -223,16 +222,11 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: Image.file(
-                          File(_photos[i]),
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.file(File(_photos[i]),
+                            width: 64, height: 64, fit: BoxFit.cover),
                       ),
                       Positioned(
-                        top: 0,
-                        right: 0,
+                        top: 0, right: 0,
                         child: GestureDetector(
                           onTap: () => setState(() => _photos.removeAt(i)),
                           child: const CircleAvatar(
@@ -250,10 +244,8 @@ class _WasteAddPalletScreenState extends ConsumerState<WasteAddPalletScreen> {
             if (_photos.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'At least 1 photo required',
-                  style: TextStyle(fontSize: 11, color: Colors.red.shade400),
-                ),
+                child: Text('At least 1 photo required',
+                    style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
               ),
           ],
         ),

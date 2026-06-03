@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/waste_pallet.dart';
+import '../models/waste_stock_item.dart';
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
-import 'waste_add_pallet_screen.dart';
-import 'waste_pallet_detail_screen.dart';
+import 'waste_add_stock_item_screen.dart';
+import 'waste_stock_item_detail_screen.dart';
 
-class WastePalletInventoryScreen extends ConsumerStatefulWidget {
-  const WastePalletInventoryScreen({super.key, this.wasteType = 'Paper Waste'});
+class WasteStockInventoryScreen extends ConsumerStatefulWidget {
+  const WasteStockInventoryScreen({super.key, this.wasteType = 'Paper Waste'});
 
   final String wasteType;
 
   @override
-  ConsumerState<WastePalletInventoryScreen> createState() =>
-      _WastePalletInventoryScreenState();
+  ConsumerState<WasteStockInventoryScreen> createState() =>
+      _WasteStockInventoryScreenState();
 }
 
-class _WastePalletInventoryScreenState
-    extends ConsumerState<WastePalletInventoryScreen> {
+class _WasteStockInventoryScreenState
+    extends ConsumerState<WasteStockInventoryScreen> {
   final WasteService _wasteService = WasteService();
 
   @override
@@ -40,40 +40,40 @@ class _WastePalletInventoryScreenState
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => WasteAddPalletScreen(wasteType: widget.wasteType),
+                  builder: (_) => WasteAddStockItemScreen(wasteType: widget.wasteType),
                 ),
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Record Pallet'),
+              label: const Text('Record Item'),
               backgroundColor: appColors.wasteGreen,
               foregroundColor: Colors.white,
             )
           : null,
       body: Column(
         children: [
-          _SummaryCard(wasteService: _wasteService, wasteType: widget.wasteType),
+          _StockSummaryCard(wasteService: _wasteService, wasteType: widget.wasteType),
           Expanded(
-            child: StreamBuilder<List<WastePallet>>(
-              stream: _wasteService.watchPalletsOnSite(widget.wasteType),
+            child: StreamBuilder<List<WasteStockItem>>(
+              stream: _wasteService.watchStockOnSite(widget.wasteType),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final pallets = snap.data ?? [];
-                if (pallets.isEmpty) {
+                final items = snap.data ?? [];
+                if (items.isEmpty) {
                   return _EmptyState(wasteType: widget.wasteType);
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                  itemCount: pallets.length,
+                  itemCount: items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 4),
-                  itemBuilder: (_, i) => _PalletCard(
-                    pallet: pallets[i],
+                  itemBuilder: (_, i) => _StockItemCard(
+                    item: items[i],
                     appColors: appColors,
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => WastePalletDetailScreen(pallet: pallets[i]),
+                        builder: (_) => WasteStockItemDetailScreen(item: items[i]),
                       ),
                     ),
                   ),
@@ -88,19 +88,19 @@ class _WastePalletInventoryScreenState
 }
 
 // ---------------------------------------------------------------------------
-// Summary card — total on-site count + estimated weight
+// Summary card — count + estimated weight
 // ---------------------------------------------------------------------------
 
-class _SummaryCard extends StatefulWidget {
-  const _SummaryCard({required this.wasteService, required this.wasteType});
+class _StockSummaryCard extends StatefulWidget {
+  const _StockSummaryCard({required this.wasteService, required this.wasteType});
   final WasteService wasteService;
   final String wasteType;
 
   @override
-  State<_SummaryCard> createState() => _SummaryCardState();
+  State<_StockSummaryCard> createState() => _StockSummaryCardState();
 }
 
-class _SummaryCardState extends State<_SummaryCard> {
+class _StockSummaryCardState extends State<_StockSummaryCard> {
   bool _loading = true;
   int _count = 0;
   double _totalKg = 0;
@@ -113,7 +113,7 @@ class _SummaryCardState extends State<_SummaryCard> {
 
   Future<void> _load() async {
     try {
-      final summary = await widget.wasteService.getPalletSummary(widget.wasteType);
+      final summary = await widget.wasteService.getStockSummary(widget.wasteType);
       if (mounted) {
         setState(() {
           _count = summary.count;
@@ -142,21 +142,33 @@ class _SummaryCardState extends State<_SummaryCard> {
         border: Border.all(color: appColors.wasteGreen, width: 1),
       ),
       child: _loading
-          ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+          ? const Center(
+              child: SizedBox(
+                  height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)))
           : Row(
               children: [
                 Icon(Icons.inventory_2_outlined, color: appColors.wasteGreen, size: 28),
                 const SizedBox(width: 12),
-                _StatPill(
-                  label: '$_count pallet${_count == 1 ? '' : 's'} on site',
-                  color: onSurface,
-                ),
-                const SizedBox(width: 16),
-                _StatPill(
-                  label: _totalKg > 0
-                      ? '~${formatSAWeight(_totalKg)} est.'
-                      : 'weight not recorded',
-                  color: onSurface.withAlpha(200),
+                Expanded(
+                  child: Row(
+                    children: [
+                      _Stat(
+                        value: '$_count',
+                        label: 'item${_count == 1 ? '' : 's'} on site',
+                        color: onSurface,
+                      ),
+                      Container(
+                        width: 1, height: 28,
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        color: onSurface.withAlpha(60),
+                      ),
+                      _Stat(
+                        value: _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '—',
+                        label: 'est. weight',
+                        color: onSurface,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -164,47 +176,63 @@ class _SummaryCardState extends State<_SummaryCard> {
   }
 }
 
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.color});
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label, required this.color});
+  final String value;
   final String label;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Text(label,
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value,
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(label,
+            style: TextStyle(fontSize: 11, color: color.withAlpha(180))),
+      ],
+    );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Individual pallet card in the list
+// Individual stock item card
 // ---------------------------------------------------------------------------
 
-class _PalletCard extends StatelessWidget {
-  const _PalletCard({
-    required this.pallet,
+class _StockItemCard extends StatelessWidget {
+  const _StockItemCard({
+    required this.item,
     required this.appColors,
     required this.onTap,
   });
-  final WastePallet pallet;
+  final WasteStockItem item;
   final AppColors appColors;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = formatSADate(pallet.createdAt);
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
         dense: true,
-        leading: CircleAvatar(
-          backgroundColor: appColors.wasteGreen.withAlpha(30),
-          child: Icon(Icons.layers, color: appColors.wasteGreen, size: 20),
-        ),
-        title: Text(pallet.subtype,
+        leading: item.photos.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  item.photos.first,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _DefaultLeadingIcon(appColors: appColors),
+                ),
+              )
+            : _DefaultLeadingIcon(appColors: appColors),
+        title: Text(item.subtype,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
         subtitle: Text(
-          '$dateStr · ${pallet.createdByName}',
+          '${formatSADate(item.createdAt)} · ${item.createdByName}',
           style: TextStyle(fontSize: 12, color: appColors.textMuted),
         ),
         trailing: Column(
@@ -212,13 +240,13 @@ class _PalletCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              pallet.estimatedWeightKg != null
-                  ? '~${formatSAWeight(pallet.estimatedWeightKg!)}'
+              item.estimatedWeightKg != null
+                  ? '~${formatSAWeight(item.estimatedWeightKg!)}'
                   : '—',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 2),
-            _StatusBadge(status: pallet.status, appColors: appColors),
+            _StatusBadge(status: item.status, appColors: appColors),
           ],
         ),
         onTap: onTap,
@@ -227,22 +255,35 @@ class _PalletCard extends StatelessWidget {
   }
 }
 
+class _DefaultLeadingIcon extends StatelessWidget {
+  const _DefaultLeadingIcon({required this.appColors});
+  final AppColors appColors;
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      backgroundColor: appColors.wasteGreen.withAlpha(30),
+      child: Icon(Icons.layers, color: appColors.wasteGreen, size: 20),
+    );
+  }
+}
+
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status, required this.appColors});
-  final WastePalletStatus status;
+  final WasteStockStatus status;
   final AppColors appColors;
 
   @override
   Widget build(BuildContext context) {
     final Color bg;
     switch (status) {
-      case WastePalletStatus.onSite:
+      case WasteStockStatus.onSite:
         bg = appColors.wasteGreen;
         break;
-      case WastePalletStatus.loaded:
+      case WasteStockStatus.loaded:
         bg = Colors.blue.shade600;
         break;
-      case WastePalletStatus.disposed:
+      case WasteStockStatus.disposed:
         bg = Colors.grey.shade500;
         break;
     }
@@ -274,10 +315,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(Icons.inventory_2_outlined, size: 56, color: appColors.textMuted),
             const SizedBox(height: 12),
-            Text('No pallets on site',
+            Text('No stock on site',
                 style: TextStyle(fontSize: 16, color: appColors.textMuted)),
             const SizedBox(height: 6),
-            Text('Tap + Record Pallet to add one.',
+            Text('Tap + Record Item to add one.',
                 style: TextStyle(fontSize: 13, color: appColors.textMuted)),
           ],
         ),

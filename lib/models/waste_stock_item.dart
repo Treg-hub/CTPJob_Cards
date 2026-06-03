@@ -1,44 +1,50 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum WastePalletStatus {
+/// Status of a waste stock item before and after it is dispatched on a load.
+enum WasteStockStatus {
   onSite('on_site'),
   loaded('loaded'),
   disposed('disposed');
 
-  const WastePalletStatus(this.value);
+  const WasteStockStatus(this.value);
   final String value;
 
-  static WastePalletStatus fromString(String? value) {
+  static WasteStockStatus fromString(String? value) {
     switch (value?.toLowerCase()) {
       case 'loaded':
-        return WastePalletStatus.loaded;
+        return WasteStockStatus.loaded;
       case 'disposed':
-        return WastePalletStatus.disposed;
+        return WasteStockStatus.disposed;
       case 'on_site':
       default:
-        return WastePalletStatus.onSite;
+        return WasteStockStatus.onSite;
     }
   }
 
   String get displayLabel {
     switch (this) {
-      case WastePalletStatus.onSite:    return 'On Site';
-      case WastePalletStatus.loaded:    return 'Loaded';
-      case WastePalletStatus.disposed:  return 'Disposed';
+      case WasteStockStatus.onSite:    return 'On Site';
+      case WasteStockStatus.loaded:    return 'Loaded';
+      case WasteStockStatus.disposed:  return 'Disposed';
     }
   }
 }
 
-/// A single pallet of waste recorded before a load is planned.
-/// Pallets accumulate on-site (status = onSite) until a manager links
-/// them to a scheduled load via markPalletsLoaded (status = loaded).
-class WastePallet {
+/// A single on-site waste item recorded before a load is planned.
+///
+/// Stock items accumulate on-site (status = onSite) until a manager links
+/// them to a scheduled load via markStockLoaded (status = loaded).
+///
+/// The [wasteType] field (e.g. "Paper Waste", "Copper Waste") determines
+/// which waste module owns the item, making this model extensible to any
+/// waste type without schema changes.
+class WasteStockItem {
   final String? id;
   final String wasteType;
   final String subtype;
   final List<String> photos;
   final double? estimatedWeightKg;
-  final WastePalletStatus status;
+  final WasteStockStatus status;
   final String? loadId;
   final String createdBy;
   final String createdByName;
@@ -47,13 +53,13 @@ class WastePallet {
   final String? notes;
   final bool isDeleted;
 
-  const WastePallet({
+  const WasteStockItem({
     this.id,
     required this.wasteType,
     required this.subtype,
     this.photos = const [],
     this.estimatedWeightKg,
-    this.status = WastePalletStatus.onSite,
+    this.status = WasteStockStatus.onSite,
     this.loadId,
     required this.createdBy,
     required this.createdByName,
@@ -63,9 +69,9 @@ class WastePallet {
     this.isDeleted = false,
   });
 
-  factory WastePallet.fromFirestore(DocumentSnapshot doc) {
+  factory WasteStockItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    return WastePallet(
+    return WasteStockItem(
       id: doc.id,
       wasteType: data['waste_type'] as String? ?? '',
       subtype: data['subtype'] as String? ?? '',
@@ -74,7 +80,7 @@ class WastePallet {
               .toList() ??
           const [],
       estimatedWeightKg: (data['estimated_weight_kg'] as num?)?.toDouble(),
-      status: WastePalletStatus.fromString(data['status'] as String?),
+      status: WasteStockStatus.fromString(data['status'] as String?),
       loadId: data['load_id'] as String?,
       createdBy: data['created_by'] as String? ?? '',
       createdByName: data['created_by_name'] as String? ?? '',
@@ -100,13 +106,13 @@ class WastePallet {
     };
   }
 
-  WastePallet copyWith({
+  WasteStockItem copyWith({
     String? id,
     String? wasteType,
     String? subtype,
     List<String>? photos,
     double? estimatedWeightKg,
-    WastePalletStatus? status,
+    WasteStockStatus? status,
     String? loadId,
     String? createdBy,
     String? createdByName,
@@ -115,7 +121,7 @@ class WastePallet {
     String? notes,
     bool? isDeleted,
   }) {
-    return WastePallet(
+    return WasteStockItem(
       id: id ?? this.id,
       wasteType: wasteType ?? this.wasteType,
       subtype: subtype ?? this.subtype,

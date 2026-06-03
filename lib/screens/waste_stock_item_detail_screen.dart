@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/waste_pallet.dart';
+import '../models/waste_stock_item.dart';
 import '../utils/formatters.dart';
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 
-class WastePalletDetailScreen extends ConsumerWidget {
-  const WastePalletDetailScreen({super.key, required this.pallet});
+class WasteStockItemDetailScreen extends ConsumerWidget {
+  const WasteStockItemDetailScreen({super.key, required this.item});
 
-  final WastePallet pallet;
+  final WasteStockItem item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -18,7 +18,7 @@ class WastePalletDetailScreen extends ConsumerWidget {
     final onSurface = onColor(surfaceBg);
 
     return Scaffold(
-      appBar: WasteAppBar(title: 'Pallet Detail'),
+      appBar: WasteAppBar(title: 'Stock Item Detail'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -40,21 +40,21 @@ class WastePalletDetailScreen extends ConsumerWidget {
                     children: [
                       Icon(Icons.layers, color: appColors.wasteGreen),
                       const SizedBox(width: 8),
-                      Text(pallet.subtype,
+                      Text(item.subtype,
                           style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                               color: onSurface)),
                       const Spacer(),
-                      _StatusBadge(status: pallet.status),
+                      _StatusBadge(status: item.status),
                     ],
                   ),
                   const SizedBox(height: 8),
                   _InfoRow(
                     icon: Icons.scale,
                     label: 'Estimated weight',
-                    value: pallet.estimatedWeightKg != null
-                        ? '~${formatSAWeight(pallet.estimatedWeightKg!)}'
+                    value: item.estimatedWeightKg != null
+                        ? '~${formatSAWeight(item.estimatedWeightKg!)}'
                         : 'Not recorded',
                     onSurface: onSurface,
                   ),
@@ -62,22 +62,22 @@ class WastePalletDetailScreen extends ConsumerWidget {
                   _InfoRow(
                     icon: Icons.person_outline,
                     label: 'Recorded by',
-                    value: '${pallet.createdByName} (${pallet.createdBy})',
+                    value: '${item.createdByName} (${item.createdBy})',
                     onSurface: onSurface,
                   ),
                   const SizedBox(height: 4),
                   _InfoRow(
                     icon: Icons.calendar_today,
                     label: 'Date',
-                    value: formatSADateTime(pallet.createdAt),
+                    value: formatSADateTime(item.createdAt),
                     onSurface: onSurface,
                   ),
-                  if (pallet.loadId != null) ...[
+                  if (item.loadId != null) ...[
                     const SizedBox(height: 4),
                     _InfoRow(
                       icon: Icons.link,
                       label: 'Assigned to load',
-                      value: pallet.loadId!,
+                      value: item.loadId!,
                       onSurface: onSurface,
                     ),
                   ],
@@ -86,22 +86,20 @@ class WastePalletDetailScreen extends ConsumerWidget {
             ),
 
             // ── Notes ────────────────────────────────────────────
-            if (pallet.notes != null && pallet.notes!.isNotEmpty) ...[
+            if (item.notes != null && item.notes!.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('Notes',
                   style: TextStyle(fontSize: 12, color: appColors.textMuted)),
               const SizedBox(height: 4),
-              Text(pallet.notes!, style: const TextStyle(fontSize: 14)),
+              Text(item.notes!, style: const TextStyle(fontSize: 14)),
             ],
 
             // ── Photos ───────────────────────────────────────────
             const SizedBox(height: 16),
-            Text(
-              'Photos (${pallet.photos.length})',
-              style: TextStyle(fontSize: 12, color: appColors.textMuted),
-            ),
+            Text('Photos (${item.photos.length})',
+                style: TextStyle(fontSize: 12, color: appColors.textMuted)),
             const SizedBox(height: 8),
-            pallet.photos.isEmpty
+            item.photos.isEmpty
                 ? Text('No photos',
                     style: TextStyle(color: appColors.textMuted, fontSize: 13))
                 : GridView.count(
@@ -110,7 +108,7 @@ class WastePalletDetailScreen extends ConsumerWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 8,
                     crossAxisSpacing: 8,
-                    children: pallet.photos
+                    children: item.photos
                         .map((url) => _PhotoTile(url: url))
                         .toList(),
                   ),
@@ -127,20 +125,20 @@ class WastePalletDetailScreen extends ConsumerWidget {
 
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
-  final WastePalletStatus status;
+  final WasteStockStatus status;
 
   @override
   Widget build(BuildContext context) {
     final appColors = Theme.of(context).appColors;
     final Color bg;
     switch (status) {
-      case WastePalletStatus.onSite:
+      case WasteStockStatus.onSite:
         bg = appColors.wasteGreen;
         break;
-      case WastePalletStatus.loaded:
+      case WasteStockStatus.loaded:
         bg = Colors.blue.shade600;
         break;
-      case WastePalletStatus.disposed:
+      case WasteStockStatus.disposed:
         bg = Colors.grey.shade500;
         break;
     }
@@ -148,7 +146,8 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
       child: Text(status.displayLabel,
-          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -171,10 +170,14 @@ class _InfoRow extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: onSurface.withAlpha(180)),
         const SizedBox(width: 6),
-        Text('$label: ', style: TextStyle(fontSize: 12, color: onSurface.withAlpha(180))),
+        Text('$label: ',
+            style: TextStyle(fontSize: 12, color: onSurface.withAlpha(180))),
         Expanded(
           child: Text(value,
-              style: TextStyle(fontSize: 12, color: onSurface, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: onSurface,
+                  fontWeight: FontWeight.w500),
               overflow: TextOverflow.ellipsis),
         ),
       ],
@@ -206,10 +209,11 @@ class _PhotoTile extends StatelessWidget {
           fit: BoxFit.cover,
           loadingBuilder: (_, child, progress) {
             if (progress == null) return child;
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+            return const Center(
+                child: CircularProgressIndicator(strokeWidth: 2));
           },
-          errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image, color: Colors.grey)),
+          errorBuilder: (_, __, ___) =>
+              const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
         ),
       ),
     );
