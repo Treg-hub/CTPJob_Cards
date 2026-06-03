@@ -213,7 +213,7 @@ class JobCardTile extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 8),
-              // Row 6: Assigned names + Created timestamp (relative)
+              // Row 6: Assigned names + photo indicator + Created timestamp (relative)
               Row(
                 children: [
                   Expanded(
@@ -224,6 +224,15 @@ class JobCardTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (job.photos.isNotEmpty) ...[
+                    Icon(Icons.photo_camera, size: 13, color: muted),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${job.photos.length}',
+                      style: TextStyle(color: muted, fontSize: 12),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Text(
                     job.createdAt != null ? _relativeTime(job.createdAt!) : '—',
                     style: const TextStyle(color: kBrandOrange, fontSize: 12),
