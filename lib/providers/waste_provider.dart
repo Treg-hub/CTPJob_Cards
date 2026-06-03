@@ -3,6 +3,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 
+// ---------------------------------------------------------------------------
+// STOCK ITEM SELECTION — ephemeral state used in WasteScheduleLoadScreen
+// ---------------------------------------------------------------------------
+
+class StockSelectionState {
+  final Set<String> selectedIds;
+  const StockSelectionState({this.selectedIds = const {}});
+
+  StockSelectionState copyWith({Set<String>? selectedIds}) =>
+      StockSelectionState(selectedIds: selectedIds ?? this.selectedIds);
+
+  bool isSelected(String id) => selectedIds.contains(id);
+
+  StockSelectionState toggle(String id) {
+    final next = Set<String>.from(selectedIds);
+    next.contains(id) ? next.remove(id) : next.add(id);
+    return copyWith(selectedIds: next);
+  }
+}
+
+class StockSelectionNotifier extends StateNotifier<StockSelectionState> {
+  StockSelectionNotifier() : super(const StockSelectionState());
+
+  void toggle(String stockId) => state = state.toggle(stockId);
+  void clear() => state = const StockSelectionState();
+  void selectAll(List<String> ids) =>
+      state = StockSelectionState(selectedIds: Set.from(ids));
+}
+
+/// autoDispose so selection is cleared when WasteScheduleLoadScreen is popped.
+final stockSelectionProvider =
+    StateNotifierProvider.autoDispose<StockSelectionNotifier, StockSelectionState>(
+  (ref) => StockSelectionNotifier(),
+);
+
 /// Simple state for the in-progress Waste Load being created/edited.
 /// This will grow as we add more screens (items, photos, signature, etc.).
 class CurrentWasteLoadState {

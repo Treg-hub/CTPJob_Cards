@@ -251,62 +251,66 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
 
   Widget _buildFilters() {
     return ExpansionTile(
-      initiallyExpanded: true,
-      leading: const Icon(Icons.filter_list),
-      title: const Text('Server Filters', style: TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(_filterSummary, style: const TextStyle(fontSize: 12)),
+      initiallyExpanded: false,
+      dense: true,
+      leading: const Icon(Icons.filter_list, size: 20),
+      title: const Text('Server Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      subtitle: Text(_filterSummary, style: const TextStyle(fontSize: 11)),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Date preset row
-              const Text('Date Range', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 6),
+              // Date preset row — no label, chips are self-explanatory
               Wrap(
-                spacing: 6,
-                runSpacing: 4,
+                spacing: 4,
+                runSpacing: 2,
                 children: _DatePreset.values.map((p) => ChoiceChip(
-                  label: Text(p.label, style: const TextStyle(fontSize: 12)),
+                  label: Text(p.label, style: const TextStyle(fontSize: 11)),
                   selected: _datePreset == p,
                   onSelected: (_) {
                     setState(() => _datePreset = p);
                     if (p != _DatePreset.custom) _search();
                   },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                   labelStyle: _datePreset == p ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                 )).toList(),
               ),
               if (_datePreset == _DatePreset.custom) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Expanded(child: _buildDateButton('From', _customFrom, (d) { setState(() => _customFrom = d); _search(); })),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(child: _buildDateButton('To', _customTo, (d) { setState(() => _customTo = d); _search(); })),
                   ],
                 ),
               ],
-              const SizedBox(height: 12),
-
-              // Department
-              const Text('Department', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 6),
+
+              // Department — inline label prefix
               Wrap(
-                spacing: 6,
-                runSpacing: 4,
+                spacing: 4,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  Text('Dept:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.chipUnselectedLabel)),
                   FilterChip(
-                    label: const Text('All', style: TextStyle(fontSize: 12)),
+                    label: const Text('All', style: TextStyle(fontSize: 11)),
                     selected: _selectedDepartment == null,
                     onSelected: (_) { _onDepartmentSelected(null); _search(); },
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                     labelStyle: _selectedDepartment == null ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   ),
                   ..._departments.map((dept) => FilterChip(
-                    label: Text(dept, style: const TextStyle(fontSize: 12)),
+                    label: Text(dept, style: const TextStyle(fontSize: 11)),
                     selected: _selectedDepartment == dept,
                     onSelected: (_) { _onDepartmentSelected(dept); _search(); },
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                     labelStyle: _selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )),
                 ],
@@ -314,23 +318,27 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
 
               // Area (only when dept selected)
               if (_selectedDepartment != null && _areas.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text('Area', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                  spacing: 4,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    Text('Area:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.chipUnselectedLabel)),
                     FilterChip(
-                      label: const Text('All', style: TextStyle(fontSize: 12)),
+                      label: const Text('All', style: TextStyle(fontSize: 11)),
                       selected: _selectedArea == null,
                       onSelected: (_) { _onAreaSelected(null); _search(); },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                       labelStyle: _selectedArea == null ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     ),
                     ..._areas.map((area) => FilterChip(
-                      label: Text(area, style: const TextStyle(fontSize: 12)),
+                      label: Text(area, style: const TextStyle(fontSize: 11)),
                       selected: _selectedArea == area,
                       onSelected: (_) { _onAreaSelected(area); _search(); },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                       labelStyle: _selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     )),
                   ],
@@ -339,39 +347,45 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
 
               // Machine (only when area selected)
               if (_selectedArea != null && _machines.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text('Machine', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                  spacing: 4,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    Text('Machine:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.chipUnselectedLabel)),
                     FilterChip(
-                      label: const Text('All', style: TextStyle(fontSize: 12)),
+                      label: const Text('All', style: TextStyle(fontSize: 11)),
                       selected: _selectedMachine == null,
                       onSelected: (_) { setState(() => _selectedMachine = null); _search(); },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                       labelStyle: _selectedMachine == null ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     ),
                     ..._machines.map((m) => FilterChip(
-                      label: Text(m, style: const TextStyle(fontSize: 12)),
+                      label: Text(m, style: const TextStyle(fontSize: 11)),
                       selected: _selectedMachine == m,
                       onSelected: (_) { setState(() => _selectedMachine = m); _search(); },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                       labelStyle: _selectedMachine == m ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                     )),
                   ],
                 ),
               ],
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _isLoading ? null : () => _search(),
-                  icon: const Icon(Icons.search, size: 18),
-                  label: Text(_isLoading ? 'Searching…' : 'Search History'),
+                  icon: const Icon(Icons.search, size: 16),
+                  label: Text(_isLoading ? 'Searching…' : 'Search History', style: const TextStyle(fontSize: 13)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF8C42),
                     foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    minimumSize: const Size(0, 36),
                   ),
                 ),
               ),
@@ -400,70 +414,65 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
 
   Widget _buildClientFilters() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Text search
+          // Search field
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
               hintText: 'Search description, machine, part, notes…',
-              prefixIcon: const Icon(Icons.search, size: 20),
+              hintStyle: const TextStyle(fontSize: 12),
+              prefixIcon: const Icon(Icons.search, size: 18),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
+                      icon: const Icon(Icons.clear, size: 16),
                       onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); },
                     )
                   : null,
               isDense: true,
               border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
             ),
+            style: const TextStyle(fontSize: 12),
             onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          // Type + Priority in one compact row with inline labels
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Text('Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        _typeChip(null, 'All'),
-                        ...JobType.values.map((t) => _typeChip(t, t.displayName)),
-                      ],
-                    ),
+                    Text('Type:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.chipUnselectedLabel)),
+                    _typeChip(null, 'All'),
+                    ...JobType.values.map((t) => _typeChip(t, t.displayName)),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Text('Priority', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    children: [
-                      _priorityChip(null, 'All'),
-                      ...List.generate(5, (i) => _priorityChip(i + 1, '${i + 1}')),
-                    ],
-                  ),
+                  Text('P:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.chipUnselectedLabel)),
+                  _priorityChip(null, 'All'),
+                  ...List.generate(5, (i) => _priorityChip(i + 1, '${i + 1}')),
                 ],
               ),
             ],
           ),
           if (_results.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 3),
               child: Text(
-                '${_filtered.length} of ${_results.length} fetched${_hasMore ? '+ (load more available)' : ''}',
+                '${_filtered.length} of ${_results.length}${_hasMore ? '+ more available' : ''}',
                 style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
@@ -478,6 +487,7 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
       label: Text(label, style: const TextStyle(fontSize: 11)),
       selected: selected,
       onSelected: (_) => setState(() => _selectedType = type),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
       labelStyle: selected ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
     );
@@ -490,6 +500,7 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
       selected: selected,
       backgroundColor: priority != null ? _priorityColor(priority).withValues(alpha: 0.3) : null,
       onSelected: (_) => setState(() => _selectedPriority = priority),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
       labelStyle: selected
           ? const TextStyle(color: Color(0xFFFF8C42))

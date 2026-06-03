@@ -6,6 +6,20 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-03 — CTP Pulse web dashboard: theme & contrast fixes
+
+Web-only update to CTP Pulse (factory board at port 3003). No mobile changes.
+
+### What changed
+
+- **Status badge contrast** — Overtime entry status badges (Pending, Workshop Approved, Approved, Cancelled) now use correctly contrasting colours in both light and dark modes. Previously the coloured text was too light to read in light mode.
+- **KPI trend colours** — Declining-trend indicators on KPI cards now correctly show in red (destructive colour). Previously they had no colour at all.
+- **Fleet severity labels** — Issue severity labels (Out of Service, High, Medium, Low) in the Fleet page open-issues table now render in legible colours in dark mode.
+- **Fleet cost chart** — The "Cost by Category per Asset" stacked bar chart now has correctly themed axis labels, gridlines, tooltip, and legend in dark mode. Previously axis text was near-invisible in dark mode.
+- **Native date/select inputs** — Date pickers and dropdown filter selects now follow the app's dark theme; previously the browser rendered them with a white background in dark mode.
+
+---
+
 ## 2026-06-03 — Fleet Maintenance module (Hyster forklifts & grabs)
 
 A new **Fleet** tab for tracking forklift and grab maintenance — separate from normal job cards. It appears once an admin enables it in Fleet Settings and you have a fleet role.

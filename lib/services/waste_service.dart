@@ -14,6 +14,7 @@ import 'sync_service.dart';
 import '../models/contractor.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
@@ -732,10 +733,13 @@ class WasteService {
   // ---------------------------------------------------------------------------
 
   /// Queues a waste photo for later upload when offline using the central SyncService + session queue.
+  /// [targetCollection] overrides the default routing in processOfflineWasteQueue; used by
+  /// pallet photos so the processor patches waste_pallets instead of waste_items.
   Future<void> queueOfflineWastePhoto({
     required String localPath,
     required String loadId,
     String? itemId,
+    String? targetCollection,
   }) async {
     // Central sync
     await SyncService().addToQueue(
@@ -745,6 +749,7 @@ class WasteService {
         'localPath': localPath,
         'loadId': loadId,
         'itemId': itemId,
+        if (targetCollection != null) 'targetCollection': targetCollection,
       },
       documentId: '${loadId}_${itemId ?? 'load'}_${DateTime.now().millisecondsSinceEpoch}',
     );
@@ -753,6 +758,7 @@ class WasteService {
       'localPath': localPath,
       'loadId': loadId,
       'itemId': itemId,
+      if (targetCollection != null) 'targetCollection': targetCollection,
     });
   }
 
@@ -765,17 +771,35 @@ class WasteService {
     final toProcess = List.from(_sessionOfflinePhotoQueue);
     for (final entry in toProcess) {
       try {
-        final refBase = entry['itemId'] != null
-            ? 'waste_items/${entry['itemId']}'
-            : 'waste_loads/${entry['loadId']}';
+        final String? targetColl = entry['targetCollection'] as String?;
+        final String? itemId = entry['itemId'] as String?;
+        final String loadId = entry['loadId'] as String;
+        // Determine storage ref and Firestore target
+        String refBase;
+        String coll;
+        String docId;
+        String field;
+        if (targetColl == Collections.wasteStock && itemId != null) {
+          refBase = 'waste_stock/$itemId';
+          coll = Collections.wasteStock;
+          docId = itemId;
+          field = 'photos';
+        } else if (itemId != null) {
+          refBase = 'waste_items/$itemId';
+          coll = Collections.wasteItems;
+          docId = itemId;
+          field = 'photos';
+        } else {
+          refBase = 'waste_loads/$loadId';
+          coll = Collections.wasteLoads;
+          docId = loadId;
+          field = 'load_photos';
+        }
         final url = await uploadWastePhoto(
-          localPath: entry['localPath'],
+          localPath: entry['localPath'] as String,
           wasteRef: refBase,
         );
         // Best-effort immediate patch for session items (central queue path also does this)
-        final coll = entry['itemId'] != null ? Collections.wasteItems : Collections.wasteLoads;
-        final docId = entry['itemId'] ?? entry['loadId'];
-        final field = entry['itemId'] != null ? 'photos' : 'load_photos';
         await _firestore.collection(coll).doc(docId).update({
           field: FieldValue.arrayUnion([url]),
         });
@@ -868,6 +892,108 @@ class WasteService {
     final c = (clockNo ?? '').trim();
     if (c.isEmpty) return false;
     return allowed.contains(c);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ON-SITE STOCK — pre-load stock tracking for any waste type
+  // ---------------------------------------------------------------------------
+
+  /// Creates a new on-site waste stock item and uploads its photos.
+  /// Returns the Firestore document ID of the created stock item.
+  Future<String> addStockItem({
+    required WasteStockItem item,
+    required List<String> localPhotoPaths,
+  }) async {
+    final ref = _firestore.collection(Collections.wasteStock).doc();
+    final List<String> photoUrls = [];
+    for (final path in localPhotoPaths) {
+      try {
+        final url = await uploadWastePhoto(
+          localPath: path,
+          wasteRef: 'waste_stock/${ref.id}',
+        );
+        photoUrls.add(url);
+      } catch (_) {
+        await queueOfflineWastePhoto(
+          localPath: path,
+          loadId: ref.id,
+          itemId: ref.id,
+          targetCollection: Collections.wasteStock,
+        );
+      }
+    }
+    final data = {
+      ...item.toFirestore(),
+      'photos': photoUrls,
+      'created_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+    await ref.set(data);
+    await SyncService().addToQueue(
+      collection: Collections.wasteStock,
+      operation: 'set',
+      data: data,
+      documentId: ref.id,
+    );
+    await SyncService().processNow();
+    return ref.id;
+  }
+
+  /// Streams all non-deleted on-site stock items for a given waste type, newest first.
+  Stream<List<WasteStockItem>> watchStockOnSite(String wasteType) {
+    return _firestore
+        .collection(Collections.wasteStock)
+        .where('is_deleted', isEqualTo: false)
+        .where('waste_type', isEqualTo: wasteType)
+        .where('status', isEqualTo: WasteStockStatus.onSite.value)
+        .orderBy('created_at', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(WasteStockItem.fromFirestore).toList())
+        .handleError((_) => <WasteStockItem>[]);
+  }
+
+  /// Links stock items to a load by updating their status to loaded in a single batch.
+  Future<void> markStockLoaded(List<String> stockIds, String loadId) async {
+    if (stockIds.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final id in stockIds) {
+      batch.update(_firestore.collection(Collections.wasteStock).doc(id), {
+        'status': WasteStockStatus.loaded.value,
+        'load_id': loadId,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    for (final id in stockIds) {
+      await SyncService().addToQueue(
+        collection: Collections.wasteStock,
+        operation: 'update',
+        data: {
+          'status': WasteStockStatus.loaded.value,
+          'load_id': loadId,
+        },
+        documentId: id,
+      );
+    }
+    await SyncService().processNow();
+  }
+
+  /// Returns the count and total estimated weight of on-site stock for a waste type.
+  Future<({int count, double totalEstimatedKg})> getStockSummary(String wasteType) async {
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteStock)
+          .where('is_deleted', isEqualTo: false)
+          .where('waste_type', isEqualTo: wasteType)
+          .where('status', isEqualTo: WasteStockStatus.onSite.value)
+          .get();
+      final items = snap.docs.map(WasteStockItem.fromFirestore).toList();
+      final total = items.fold<double>(
+        0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
+      return (count: items.length, totalEstimatedKg: total);
+    } catch (_) {
+      return (count: 0, totalEstimatedKg: 0.0);
+    }
   }
 
   /// Basic usage logging hooks for pilot monitoring (simple Firestore writes + console debug).

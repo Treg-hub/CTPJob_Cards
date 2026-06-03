@@ -4,7 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../services/waste_service.dart';
 import '../models/contractor.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
+import '../utils/formatters.dart';
+import '../utils/role.dart';
 import '../main.dart' show currentEmployee;
 
 /// Manager-facing screen: schedule an upcoming waste load before the truck arrives.
@@ -30,6 +33,12 @@ class _WasteScheduleLoadScreenState
   DateTime _scheduledFor = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
+
+  // Stock item selection (shown when Paper Waste is selected, manager/admin only)
+  List<WasteStockItem> _onSiteStock = [];
+  final List<String> _selectedStockIds = [];
+  bool _showStockSection = false;
+  bool _loadingStock = false;
 
   @override
   void initState() {
@@ -97,13 +106,28 @@ class _WasteScheduleLoadScreenState
     }
   }
 
+  Future<void> _loadOnSiteStock(String wasteType) async {
+    setState(() { _loadingStock = true; _onSiteStock = []; _selectedStockIds.clear(); });
+    try {
+      final pallets = await _wasteService
+          .watchStockOnSite(wasteType)
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      if (mounted) {
+        setState(() { _onSiteStock = pallets; _showStockSection = true; _loadingStock = false; });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingStock = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_isValid || _isSaving) return;
     setState(() => _isSaving = true);
 
     final employee = currentEmployee;
     try {
-      await _wasteService.createScheduledLoad(
+      final loadId = await _wasteService.createScheduledLoad(
         contractorId: _selectedContractor!.id!,
         contractorName: _selectedContractor!.name,
         mainWasteType: _selectedType!.mainType,
@@ -114,6 +138,10 @@ class _WasteScheduleLoadScreenState
             ? null
             : _notesController.text.trim(),
       );
+
+      if (_selectedStockIds.isNotEmpty) {
+        await _wasteService.markStockLoaded(_selectedStockIds, loadId);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -245,10 +273,155 @@ class _WasteScheduleLoadScreenState
                       return ChoiceChip(
                         label: Text(type.mainType),
                         selected: selected,
-                        onSelected: (_) => setState(() => _selectedType = type),
+                        onSelected: (_) {
+                          setState(() => _selectedType = type);
+                          final canSelectPallets =
+                              isSecurityManager(currentEmployee) ||
+                              isWasteAdmin(currentEmployee);
+                          if (canSelectPallets && type.mainType == 'Paper Waste') {
+                            _loadOnSiteStock(type.mainType);
+                          } else {
+                            setState(() {
+                              _showStockSection = false;
+                              _onSiteStock = [];
+                              _selectedStockIds.clear();
+                            });
+                          }
+                        },
                       );
                     }).toList(),
                   ),
+
+                  // ── On-site pallet selection (Paper Waste, manager only) ──
+                  if (_showStockSection) ...[
+                    const SizedBox(height: 20),
+                    Text('On-Site Stock (optional)',
+                        style: Theme.of(context).textTheme.labelLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Select which items go on this truck. You can skip and record later.',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_loadingStock)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_onSiteStock.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text('No stock currently on site.',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 340),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _onSiteStock.length,
+                          itemBuilder: (_, i) {
+                            final item = _onSiteStock[i];
+                            final id = item.id!;
+                            final selected = _selectedStockIds.contains(id);
+                            return GestureDetector(
+                              onTap: () => setState(() =>
+                                  selected ? _selectedStockIds.remove(id) : _selectedStockIds.add(id)),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: selected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).dividerColor,
+                                    width: selected ? 2 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: selected
+                                      ? Theme.of(context).colorScheme.primaryContainer.withAlpha(60)
+                                      : null,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Checkbox
+                                    Checkbox(
+                                      value: selected,
+                                      onChanged: (v) => setState(() =>
+                                          v! ? _selectedStockIds.add(id) : _selectedStockIds.remove(id)),
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // Photo thumbnails (up to 3)
+                                    if (item.photos.isNotEmpty) ...[
+                                      SizedBox(
+                                        width: item.photos.length == 1 ? 52 : (item.photos.length == 2 ? 96 : 136),
+                                        height: 52,
+                                        child: Stack(
+                                          children: [
+                                            for (int p = 0; p < item.photos.length && p < 3; p++)
+                                              Positioned(
+                                                left: p * 44.0,
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: Image.network(
+                                                    item.photos[p],
+                                                    width: 52,
+                                                    height: 52,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, __, ___) => Container(
+                                                      width: 52, height: 52,
+                                                      color: Colors.grey.shade200,
+                                                      child: const Icon(Icons.broken_image,
+                                                          size: 20, color: Colors.grey),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    // Text info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.subtype,
+                                            style: const TextStyle(
+                                                fontSize: 13, fontWeight: FontWeight.w600),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            [
+                                              if (item.estimatedWeightKg != null)
+                                                '~${formatSAWeight(item.estimatedWeightKg!)}',
+                                              formatSADate(item.createdAt),
+                                            ].join(' · '),
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
 
                   const SizedBox(height: 20),
 
