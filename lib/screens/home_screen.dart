@@ -780,9 +780,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               );
             }
 
-            final allJobs = [
-              ...(openSnap.data ?? []),
-              ...(inProgressSnap.data ?? []),
+            final allJobs = <JobCard>[
+              ...(openSnap.data ?? const <JobCard>[]),
+              ...(inProgressSnap.data ?? const <JobCard>[]),
             ];
 
             if (allJobs.isEmpty) {
