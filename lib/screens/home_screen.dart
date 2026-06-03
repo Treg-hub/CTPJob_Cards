@@ -28,6 +28,7 @@ import 'copper_dashboard_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
 import 'daily_review_screen.dart';
+import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -52,6 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int _openJobCount = 0;
   int _inProgressCount = 0;
   StreamSubscription<List<JobCard>>? _countSubscription;
+  StreamSubscription<List<JobCard>>? _inProgressSub;
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
   Timer? _testModeTimer;
@@ -201,13 +203,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   List<Map<String, dynamic>> get _quickActions {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
     final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+    final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': const Color(0xFF475569), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
 
     List<Map<String, dynamic>> result;
     if (isManager || isSuperManager) {
       final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-      result = [createAction, viewJobsFactory];
+      result = [createAction, viewJobsFactory, historyAction];
     } else {
-      result = [createAction, viewJobsAction];
+      result = [createAction, viewJobsAction, historyAction];
     }
 
     if (!_canCreateJobCard) {
@@ -240,21 +243,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     try {
-      _countSubscription = _firestoreService.getAllJobCards().listen((jobs) {
-        final filtered = jobs.where((j) => !j.isClosed && _isInManagerScope(j)).toList();
-        if (mounted) {
-          setState(() {
-            _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
-            _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
-          });
-        }
+      // Use open+inProgress streams (server-filtered) instead of getAllJobCards()
+      // to avoid downloading all closed/monitor docs just to count two statuses.
+      StreamSubscription<List<JobCard>>? openSub;
+      StreamSubscription<List<JobCard>>? inProgressSub;
+      List<JobCard> openJobs = [];
+      List<JobCard> inProgressJobs = [];
+
+      void recount() {
+        if (!mounted) return;
+        final allActive = [...openJobs, ...inProgressJobs];
+        final filtered = allActive.where(_isInManagerScope).toList();
+        setState(() {
+          _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
+          _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
+        });
+      }
+
+      openSub = _firestoreService.getOpenJobCards().listen((jobs) {
+        openJobs = jobs;
+        recount();
       });
+      inProgressSub = _firestoreService.getInProgressJobCards().listen((jobs) {
+        inProgressJobs = jobs;
+        recount();
+      });
+
+      // Merge both subscriptions under _countSubscription via a combined cancel
+      _countSubscription = openSub;
+      // Store inProgress sub separately so dispose() cancels it too
+      _inProgressSub = inProgressSub;
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
     }
 
     if (kIsWeb && isManager) {
-      _reviewCountSubscription = _firestoreService.getAllJobCards().listen((jobs) {
+      // Review count: open+inProgress only (closed jobs don't need review)
+      _reviewCountSubscription = _firestoreService.getOpenJobCards().listen((jobs) {
         if (!mounted) return;
         final manager = currentEmployee;
         if (manager == null) return;
@@ -282,6 +307,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _employeeSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
+    _inProgressSub?.cancel();
     _reviewCountSubscription?.cancel();
     _testModeTimer?.cancel();
     super.dispose();
@@ -703,58 +729,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildRecentJobCards() {
+    // Combine open + inProgress streams (server-filtered) and merge client-side.
+    // This avoids streaming the entire collection (including all closed jobs).
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red))),
-            ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Column(
-                  children: [
-                    SkeletonLoader(height: 80),
-                    SizedBox(height: 12),
-                    SkeletonLoader(height: 80),
-                    SizedBox(height: 12),
-                    SkeletonLoader(height: 80),
-                  ],
+      stream: _firestoreService.getOpenJobCards(),
+      builder: (context, openSnap) {
+        return StreamBuilder<List<JobCard>>(
+          stream: _firestoreService.getInProgressJobCards(),
+          builder: (context, inProgressSnap) {
+            if (openSnap.hasError || inProgressSnap.hasError) {
+              return Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(child: Text('Error: ${openSnap.error ?? inProgressSnap.error}', style: const TextStyle(color: Colors.red))),
                 ),
-              ),
-            ),
-          );
-        }
+              );
+            }
+            if (!openSnap.hasData && !inProgressSnap.hasData) {
+              return const Card(
+                elevation: 4,
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        SkeletonLoader(height: 80),
+                        SizedBox(height: 12),
+                        SkeletonLoader(height: 80),
+                        SizedBox(height: 12),
+                        SkeletonLoader(height: 80),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
 
-        final allJobs = snapshot.data!;
-        if (allJobs.isEmpty) {
-          return Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              ),
-            ),
-          );
-        }
+            final allJobs = [
+              ...(openSnap.data ?? []),
+              ...(inProgressSnap.data ?? []),
+            ];
 
-        var recentJobs = allJobs
-            .where((job) =>
-                job.status == JobStatus.open || job.status == JobStatus.inProgress)
-            .toList()
-          ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+            if (allJobs.isEmpty) {
+              return Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ),
+                ),
+              );
+            }
 
-        var topJobs = recentJobs.take(20).toList();
+            var recentJobs = allJobs
+                .toList()
+              ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+
+            var topJobs = recentJobs.take(20).toList();
 
         if ((isManager || isSuperManager) && _showDeptOnly) {
           topJobs = topJobs.where(_isInManagerScope).toList();
@@ -823,6 +856,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           );
         }
+          },
+        );
       },
     );
   }

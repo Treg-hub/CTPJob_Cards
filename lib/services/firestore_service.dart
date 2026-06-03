@@ -740,6 +740,72 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
   }
 
+  Stream<List<JobCard>> getInProgressJobCards() {
+    return _firestore
+        .collection(Collections.jobCards)
+        .where('status', isEqualTo: 'inProgress')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+  }
+
+  /// Server-side filtered one-shot fetch for job card history.
+  ///
+  /// Always filters by status=closed. Additional equality filters are applied
+  /// server-side before any date-range filter, minimising document reads.
+  /// [type] and [priority] are applied client-side to avoid a combinatorial
+  /// explosion of composite indexes.
+  ///
+  /// Required Firestore indexes (deploy with firebase deploy --only firestore):
+  ///   status ASC + closedAt DESC                                   (base)
+  ///   status ASC + department ASC + closedAt DESC
+  ///   status ASC + department ASC + area ASC + closedAt DESC
+  ///   status ASC + department ASC + area ASC + machine ASC + closedAt DESC
+  Future<List<JobCard>> searchClosedJobCards({
+    String? department,
+    String? area,
+    String? machine,
+    JobType? type,
+    int? priority,
+    DateTime? fromDate,
+    DateTime? toDate,
+    int limit = 50,
+    DocumentSnapshot? startAfter,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore
+          .collection(Collections.jobCards)
+          .where('status', isEqualTo: 'closed');
+
+      if (department != null) query = query.where('department', isEqualTo: department);
+      if (area != null && department != null) query = query.where('area', isEqualTo: area);
+      if (machine != null && area != null && department != null) {
+        query = query.where('machine', isEqualTo: machine);
+      }
+
+      // Date range must order by the same field
+      if (fromDate != null) {
+        query = query.where('closedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(fromDate));
+      }
+      if (toDate != null) {
+        query = query.where('closedAt', isLessThanOrEqualTo: Timestamp.fromDate(toDate));
+      }
+
+      query = query.orderBy('closedAt', descending: true).limit(limit);
+      if (startAfter != null) query = query.startAfterDocument(startAfter);
+
+      final snapshot = await query.get();
+      var results = snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+
+      // Client-side filters to avoid additional composite indexes
+      if (type != null) results = results.where((j) => j.type == type).toList();
+      if (priority != null) results = results.where((j) => j.priority == priority).toList();
+
+      return results;
+    } catch (e) {
+      throw Exception('Failed to search job card history: $e');
+    }
+  }
+
   // Copper transaction operations
   Future<void> createCopperTransaction(CopperTransaction transaction) async {
     try {
