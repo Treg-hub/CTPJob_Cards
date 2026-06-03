@@ -335,9 +335,67 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     );
   }
 
+  Stream<List<JobCard>>? _similarJobsStream() {
+    if (selectedDepartment == null) return null;
+
+    // Use the most specific indexed query available to minimise reads.
+    // Narrows server-side by dept+area+machine+part (when set), then type.
+    // Falls back to broader queries as selection gets less specific.
+    if (selectedMachine != null && part.isNotEmpty && jobType != null) {
+      return _firestoreService.getExactRelatedJobCardsStream(
+        department: selectedDepartment!,
+        area: selectedArea!,
+        machine: selectedMachine!,
+        part: part,
+        type: jobType!.name,
+      );
+    }
+    if (selectedMachine != null && part.isNotEmpty) {
+      return _firestoreService.getExactAllTypesStream(
+        department: selectedDepartment!,
+        area: selectedArea!,
+        machine: selectedMachine!,
+        part: part,
+      );
+    }
+    if (selectedMachine != null) {
+      return _firestoreService.getAllPartsStream(
+        department: selectedDepartment!,
+        area: selectedArea!,
+        machine: selectedMachine!,
+      );
+    }
+    if (selectedArea != null) {
+      return _firestoreService.getRelatedExcludingPartStream(
+        department: selectedDepartment!,
+        area: selectedArea!,
+        machine: '',
+        type: jobType?.name ?? 'mechanical',
+      );
+    }
+    return null;
+  }
+
   Widget _buildSimilarJobCards() {
+    final stream = _similarJobsStream();
+
+    if (stream == null) {
+      return Card(
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Text(
+              'Select department to see previous jobs',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+      );
+    }
+
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
+      stream: stream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Card(
@@ -361,25 +419,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
           );
         }
 
-        final allJobs = snapshot.data!;
-        final similarJobs = allJobs.where((j) {
-          if (selectedDepartment != null && j.department != selectedDepartment) return false;
-          if (selectedArea != null && j.area != selectedArea) return false;
-          if (selectedMachine != null && j.machine != selectedMachine) return false;
-          if (part.isNotEmpty && j.part != part) return false;
-          return true;
-        }).toList()
-          ..sort((a, b) {
-            final statusA = a.status == JobStatus.open ? 0 : 1;
-            final statusB = b.status == JobStatus.open ? 0 : 1;
-            if (statusA != statusB) return statusA.compareTo(statusB);
-            return (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0));
-          });
+        final topJobs = snapshot.data!;
 
-        final topJobs = similarJobs.take(20).toList();
-
-        String path = '';
-        if (selectedDepartment != null) path = selectedDepartment!;
+        String path = selectedDepartment ?? '';
         if (selectedArea != null) path += ' > $selectedArea';
         if (selectedMachine != null) path += ' > $selectedMachine';
         if (part.isNotEmpty) path += ' > $part';
@@ -391,7 +433,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: Text(
-                  path.isEmpty ? 'Select department to see previous jobs' : 'No matching jobs for current selection',
+                  'No matching jobs for current selection',
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ),
@@ -402,7 +444,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
         return Column(
           children: [
             Text(
-              path.isEmpty ? 'Select department to see previous jobs' : 'Previous jobs for $path',
+              'Previous jobs for $path',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
