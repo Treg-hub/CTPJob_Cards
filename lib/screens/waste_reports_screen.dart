@@ -9,10 +9,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../models/waste_load.dart';
 import '../utils/formatters.dart';
+import '../widgets/waste_app_bar.dart';
 import '../utils/deviation.dart';
 
 /// Waste Reports screen (Phase 3/6 enhanced).
@@ -215,29 +217,25 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
     final isAdmin = _isAdmin;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Waste Reports'),
-            if (SyncService().getQueuedWasteOperationCount() > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Tooltip(
-                  message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                      const SizedBox(width: 2),
-                      Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                    ],
-                  ),
+      appBar: WasteAppBar(
+        title: 'Waste Reports',
+        isOnSite: currentEmployee?.isOnSite,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                    const SizedBox(width: 2),
+                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+                  ],
                 ),
               ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF2E7D32),
-        actions: [
+            ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: _isLoading ? null : _exportPdf,
@@ -310,7 +308,7 @@ class _WasteReportsScreenState extends ConsumerState<WasteReportsScreen> {
                               onPressed: _exportPdf,
                               icon: const Icon(Icons.picture_as_pdf),
                               label: const Text('Export PDF'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+                              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreenDark),
                             ),
                           ),
                           const SizedBox(width: 12),

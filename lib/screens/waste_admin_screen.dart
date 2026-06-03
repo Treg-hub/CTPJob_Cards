@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 import '../utils/seed_waste_data.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../models/waste_type.dart';
 import '../models/contractor.dart';
 import '../utils/formatters.dart';
+import '../widgets/waste_app_bar.dart';
 
 /// Basic Waste Admin screen.
 /// Visible only to isWasteAdmin (currently clockNo == '22').
@@ -270,28 +272,26 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('WasteTrack Admin'),
-            if (SyncService().getQueuedWasteOperationCount() > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Tooltip(
-                  message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                      const SizedBox(width: 2),
-                      Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                    ],
-                  ),
+      appBar: WasteAppBar(
+        title: 'WasteTrack Admin',
+        isOnSite: null,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Tooltip(
+                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                    const SizedBox(width: 2),
+                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+                  ],
                 ),
               ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF1B5E20),
+            ),
+        ],
       ),
       body: _isProcessing
           ? const Center(child: CircularProgressIndicator())
@@ -337,7 +337,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.download),
                           label: Text(_seeding ? 'Seeding...' : 'Run WasteTrack Seed Data'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800]),
+                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreenDark),
                         ),
                       ],
                     ),
@@ -346,8 +346,12 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 const SizedBox(height: 16),
 
                 // ========== PHASE 3: MANAGE WASTE TYPES (now functional) ==========
-                Card(
-                  color: Colors.green.shade50,
+                Builder(builder: (context) {
+                  final appColors = Theme.of(context).appColors;
+                  final surfaceBg = appColors.wasteGreenSurface;
+                  final onSurface = onColor(surfaceBg);
+                  return Card(
+                  color: surfaceBg,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -356,16 +360,16 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Manage Waste Types & Subtypes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text('Manage Waste Types & Subtypes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: onSurface)),
                             IconButton(
-                              icon: const Icon(Icons.add_circle, color: Colors.green),
+                              icon: Icon(Icons.add_circle, color: appColors.wasteGreen),
                               onPressed: _addNewType,
                               tooltip: 'Add new main waste type',
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text('Live from Firestore. Tap + on a type to add subtypes (arrayUnion).'),
+                        Text('Live from Firestore. Tap + on a type to add subtypes (arrayUnion).', style: TextStyle(color: onSurface)),
                         const SizedBox(height: 12),
                         StreamBuilder<List<WasteType>>(
                           stream: _wasteService.watchWasteTypes(),
@@ -401,7 +405,8 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                       ],
                     ),
                   ),
-                ),
+                );
+                }),
                 const SizedBox(height: 16),
 
                 // ========== PHASE 3: MANAGE RATES (now functional) ==========

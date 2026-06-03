@@ -5,7 +5,9 @@ import 'dart:typed_data';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/waste_app_bar.dart';
 
 /// Signature capture screen for driver sign-off on Waste Loads.
 /// Uses the `signature` package (add to pubspec if not already present).
@@ -79,14 +81,14 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
   Widget build(BuildContext context) {
     if (!_effectiveWasteEnabled) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Driver Signature'), backgroundColor: const Color(0xFF2E7D32)),
+        appBar: WasteAppBar(title: 'Driver Signature', isOnSite: currentEmployee?.isOnSite),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.block, size: 64, color: Colors.grey),
+                Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Text(
                   _pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled',
@@ -97,7 +99,7 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
                   _pilotModeActive
                       ? 'Your clock number (${_userClock ?? 'unknown'}) is not included in the pilot list.'
                       : 'The feature flag has disabled WasteTrack (safety valve).',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
                 ),
                 if (_isAdmin) ...[
@@ -109,7 +111,7 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
                     },
                     icon: const Icon(Icons.toggle_on),
                     label: const Text('Re-enable Master Flag (Admin)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                   ),
                 ],
               ],
@@ -119,29 +121,25 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Text('Driver Signature - ${widget.loadNumber}'),
-            if (SyncService().getQueuedWasteOperationCount() > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Tooltip(
-                  message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                      const SizedBox(width: 2),
-                      Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                    ],
-                  ),
+      appBar: WasteAppBar(
+        title: 'Driver Signature - ${widget.loadNumber}',
+        isOnSite: currentEmployee?.isOnSite,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                    const SizedBox(width: 2),
+                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+                  ],
                 ),
               ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF2E7D32),
-        actions: [
+            ),
           TextButton(
             onPressed: () => _controller.clear(),
             child: const Text('Clear', style: TextStyle(color: Colors.white)),
@@ -158,7 +156,7 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
           ),
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             child: Row(
               children: [
                 Expanded(
@@ -171,7 +169,7 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _saveSignature,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                     child: const Text('Confirm Signature'),
                   ),
                 ),

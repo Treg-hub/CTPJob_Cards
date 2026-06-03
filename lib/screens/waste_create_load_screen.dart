@@ -10,6 +10,8 @@ import '../models/waste_load.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
+import '../widgets/waste_app_bar.dart';
 import 'waste_load_detail_screen.dart';
 
 /// First step of Waste Load creation per spec:
@@ -98,23 +100,20 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
   Widget build(BuildContext context) {
     if (!_effectiveWasteEnabled) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Create New Waste Load'),
-          backgroundColor: const Color(0xFF2E7D32),
-        ),
-        body: const Center(
+        appBar: WasteAppBar(title: 'Create New Waste Load', isOnSite: currentEmployee?.isOnSite),
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.block, size: 64, color: Color(0xFF757575)),
-                SizedBox(height: 16),
-                Text('WasteTrack is currently disabled or not available in pilot for your account.',
+                Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                const SizedBox(height: 16),
+                const Text('WasteTrack is currently disabled or not available in pilot for your account.',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
-                SizedBox(height: 8),
-                Text('Contact an administrator for access.', style: TextStyle(color: Color(0xFF616161))),
+                const SizedBox(height: 8),
+                Text('Contact an administrator for access.', style: TextStyle(color: Theme.of(context).appColors.textMuted)),
               ],
             ),
           ),
@@ -123,10 +122,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create New Waste Load'),
-        backgroundColor: const Color(0xFF2E7D32),
-      ),
+      appBar: WasteAppBar(title: 'Create New Waste Load', isOnSite: currentEmployee?.isOnSite),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -141,9 +137,9 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'This choice locks the entire load. One load = one main waste type only.',
-                    style: TextStyle(color: Color(0xFF616161)),
+                    style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   ),
                   const SizedBox(height: 24),
 
@@ -164,7 +160,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
 
                               return Card(
                                 elevation: isSelected ? 4 : 1,
-                                color: isSelected ? Colors.green.shade50 : null,
+                                color: isSelected ? Theme.of(context).appColors.wasteGreenSurface : null,
                                 child: InkWell(
                                   onTap: () => _selectMainType(type),
                                   child: Padding(
@@ -176,7 +172,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                                         Icon(
                                           _wasteTypeIcon(type.mainType),
                                           size: 40,
-                                          color: isSelected ? Colors.green : Colors.grey[700],
+                                          color: isSelected ? Theme.of(context).appColors.wasteGreen : Theme.of(context).colorScheme.onSurfaceVariant,
                                         ),
                                         const SizedBox(height: 12),
                                         Text(
@@ -192,7 +188,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                                             padding: const EdgeInsets.only(top: 4),
                                             child: Text(
                                               '${type.subtypes.length} subtypes',
-                                              style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                                              style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                                             ),
                                           ),
                                       ],
@@ -368,10 +364,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('New ${widget.wasteType.mainType} Load'),
-        backgroundColor: const Color(0xFF2E7D32),
-      ),
+      appBar: WasteAppBar(title: 'New ${widget.wasteType.mainType} Load', isOnSite: currentEmployee?.isOnSite),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -382,7 +375,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
             // Live total (per spec)
             Card(
-              color: Colors.green.shade100,
+              color: Theme.of(context).appColors.wasteGreenSurface,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -450,7 +443,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 6),
                   child: ListTile(
-                    leading: const Icon(Icons.delete_outline, color: Color(0xFF2E7D32)),
+                    leading: Icon(Icons.delete_outline, color: Theme.of(context).appColors.wasteGreen),
                     title: Text(item.subtype, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
                       '${item.weightKg} kg'
@@ -501,16 +494,16 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               // Change 2: updated button label
               label: Text(_isLoading ? 'Saving...' : 'Create Load'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
+                backgroundColor: Theme.of(context).appColors.wasteGreen,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
             const SizedBox(height: 8),
             // Change 2: updated footer hint text
-            const Text(
+            Text(
               'After saving: capture driver signature, then enter weighbridge weight to complete.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF616161)),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
               textAlign: TextAlign.center,
             ),
           ],
@@ -732,7 +725,7 @@ class _WasteStepBar extends StatelessWidget {
                   margin: EdgeInsets.only(right: i < totalSteps - 1 ? 4 : 0),
                   height: 4,
                   decoration: BoxDecoration(
-                    color: active ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+                    color: active ? Theme.of(context).appColors.wasteGreen : Theme.of(context).colorScheme.outlineVariant,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -742,7 +735,7 @@ class _WasteStepBar extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Step $currentStep of $totalSteps — $stepLabel',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
           ),
         ],
       ),

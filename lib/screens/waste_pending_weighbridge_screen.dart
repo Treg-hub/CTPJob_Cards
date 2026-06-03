@@ -7,6 +7,8 @@ import '../services/sync_service.dart';
 import '../models/waste_load.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
+import '../widgets/waste_app_bar.dart';
 import 'waste_load_detail_screen.dart';
 
 /// Pending Weighbridge screen (Phase 3/6 hardened).
@@ -91,19 +93,19 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
 
     if (!_effectiveWasteEnabled) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Pending Weighbridge'), backgroundColor: const Color(0xFF2E7D32)),
+        appBar: WasteAppBar(title: 'Pending Weighbridge', isOnSite: currentEmployee?.isOnSite),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.block, size: 64, color: Colors.grey),
+              Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(height: 16),
               Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled by safety flag.', style: const TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+              Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled by safety flag.', style: TextStyle(color: Theme.of(context).appColors.textMuted), textAlign: TextAlign.center),
               if (role_utils.isWasteAdmin(currentEmployee)) ...[
                 const SizedBox(height: 16),
-                ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); _loadPending(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
+                ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); _loadPending(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen)),
               ],
             ]),
           ),
@@ -112,29 +114,25 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Pending Weighbridge'),
-            if (SyncService().getQueuedWasteOperationCount() > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Tooltip(
-                  message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
-                      const SizedBox(width: 2),
-                      Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
-                    ],
-                  ),
+      appBar: WasteAppBar(
+        title: 'Pending Weighbridge',
+        isOnSite: currentEmployee?.isOnSite,
+        actions: [
+          if (SyncService().getQueuedWasteOperationCount() > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: 'Queued offline: waste loads/items, photos, signatures, weighbridge updates, audits etc.',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_upload, size: 16, color: Colors.orange),
+                    const SizedBox(width: 2),
+                    Text('${SyncService().getQueuedWasteOperationCount()}', style: const TextStyle(fontSize: 11, color: Colors.orange)),
+                  ],
                 ),
               ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF2E7D32),
-        actions: [
+            ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadPending, tooltip: 'Refresh'),
         ],
       ),
@@ -156,15 +154,15 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
               : RefreshIndicator(
                   onRefresh: _loadPending,
                   child: _pending.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Padding(
-                            padding: EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(24),
                             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.check_circle, size: 64, color: Colors.green),
-                              SizedBox(height: 16),
-                              Text('No outstanding weighbridge entries.', textAlign: TextAlign.center),
-                              SizedBox(height: 8),
-                              Text('Great job keeping weighbridge up to date!', style: TextStyle(color: Colors.grey)),
+                              Icon(Icons.check_circle, size: 64, color: Theme.of(context).appColors.wasteGreen),
+                              const SizedBox(height: 16),
+                              const Text('No outstanding weighbridge entries.', textAlign: TextAlign.center),
+                              const SizedBox(height: 8),
+                              Text('Great job keeping weighbridge up to date!', style: TextStyle(color: Theme.of(context).appColors.textMuted)),
                             ]),
                           ),
                         )
@@ -251,14 +249,14 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [
-                                          const Icon(Icons.person, size: 14, color: Colors.grey),
+                                          Icon(Icons.person, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                           const SizedBox(width: 4),
                                           Text(
                                             load.driverName.isNotEmpty ? load.driverName : 'No driver',
                                             style: const TextStyle(fontSize: 13),
                                           ),
                                           const SizedBox(width: 12),
-                                          const Icon(Icons.local_shipping, size: 14, color: Colors.grey),
+                                          Icon(Icons.local_shipping, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                           const SizedBox(width: 4),
                                           Text(
                                             load.vehicleReg.isNotEmpty ? load.vehicleReg : '—',
@@ -281,7 +279,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                                           icon: const Icon(Icons.scale, size: 16),
                                           label: const Text('Enter Weighbridge Weight'),
                                           style: FilledButton.styleFrom(
-                                            backgroundColor: const Color(0xFF2E7D32),
+                                            backgroundColor: Theme.of(context).appColors.wasteGreen,
                                             padding: const EdgeInsets.symmetric(vertical: 10),
                                           ),
                                         ),
