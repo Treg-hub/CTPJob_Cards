@@ -4,7 +4,9 @@ import '../services/sync_service.dart';
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/waste_app_bar.dart';
 
 /// Lightweight "Queued Operations" screen for pilots on WasteTrack.
 /// 
@@ -196,26 +198,23 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
     if (!_effectiveWasteEnabled) {
       final isAdminUser = role_utils.isWasteAdmin(currentEmployee); // reuse existing role helper
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Queued Operations'),
-          backgroundColor: const Color(0xFF2E7D32),
-        ),
+        appBar: WasteAppBar(title: 'Queued Operations', isOnSite: currentEmployee?.isOnSite),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.block, size: 64, color: Colors.grey),
+                Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 const Text(
                   'WasteTrack is currently disabled',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Contact an administrator to adjust access.',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
                 ),
                 if (isAdminUser) ...[
@@ -227,7 +226,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                     },
                     icon: const Icon(Icons.toggle_on),
                     label: const Text('Re-enable Master Flag (Admin)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                   ),
                 ],
               ],
@@ -238,9 +237,9 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(count > 0 ? 'Queued Operations ($count)' : 'Queued Operations'),
-        backgroundColor: const Color(0xFF2E7D32),
+      appBar: WasteAppBar(
+        title: count > 0 ? 'Queued Operations ($count)' : 'Queued Operations',
+        isOnSite: currentEmployee?.isOnSite,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -283,17 +282,17 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.check_circle_outline, size: 72, color: Colors.green),
+                              Icon(Icons.check_circle_outline, size: 72, color: Theme.of(context).appColors.wasteGreen),
                               const SizedBox(height: 16),
                               const Text(
                                 'All clear',
                                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'No queued waste operations.\nReturn to continue using WasteTrack.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey, fontSize: 14),
+                                style: TextStyle(color: Theme.of(context).appColors.textMuted, fontSize: 14),
                               ),
                               const SizedBox(height: 24),
                               ElevatedButton.icon(
@@ -301,7 +300,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                                 icon: const Icon(Icons.arrow_back),
                                 label: const Text('Back to WasteTrack Home'),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2E7D32),
+                                  backgroundColor: Theme.of(context).appColors.wasteGreen,
                                 ),
                               ),
                             ],

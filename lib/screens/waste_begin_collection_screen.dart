@@ -10,6 +10,8 @@ import '../models/waste_load.dart';
 import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
+import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 
 /// Guard-facing screen: complete a collection on a [scheduled] load.
@@ -170,10 +172,13 @@ class _WasteBeginCollectionScreenState
   Widget build(BuildContext context) {
     final scheduledDate = widget.load.scheduledFor ?? widget.load.dateTime;
 
+    final appColors = Theme.of(context).appColors;
+    final surfaceBg = appColors.wasteGreenSurface;
+    final onSurface = onColor(surfaceBg);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Begin Collection'),
-        backgroundColor: const Color(0xFF2E7D32),
+      appBar: WasteAppBar(
+        title: 'Begin Collection',
+        isOnSite: currentEmployee?.isOnSite,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -185,38 +190,38 @@ class _WasteBeginCollectionScreenState
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: surfaceBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF2E7D32), width: 1),
+                border: Border.all(color: appColors.wasteGreen, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.local_shipping, color: Color(0xFF2E7D32)),
+                      Icon(Icons.local_shipping, color: appColors.wasteGreen),
                       const SizedBox(width: 8),
                       Text(widget.load.mainWasteType,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: onSurface)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text('Contractor ID: ${widget.load.contractorId}',
-                      style: const TextStyle(fontSize: 13)),
+                      style: TextStyle(fontSize: 13, color: onSurface)),
                   Text(
                     'Expected: ${DateFormat('EEE d MMM, HH:mm').format(scheduledDate)}',
-                    style: const TextStyle(fontSize: 13),
+                    style: TextStyle(fontSize: 13, color: onSurface),
                   ),
                   if (widget.load.scheduledByName != null)
                     Text('Scheduled by: ${widget.load.scheduledByName}',
-                        style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        style: TextStyle(fontSize: 12, color: onSurface)),
                   if (widget.load.scheduledNotes != null &&
                       widget.load.scheduledNotes!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         'Manager note: ${widget.load.scheduledNotes}',
-                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: onSurface),
                       ),
                     ),
                 ],
@@ -274,14 +279,14 @@ class _WasteBeginCollectionScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline),
                 ),
-                child: const Text(
+                child: Text(
                   'At least one item with a photo is required.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF424242)),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               )
             else
@@ -301,7 +306,7 @@ class _WasteBeginCollectionScreenState
                               Text(item.subtype, style: const TextStyle(fontWeight: FontWeight.w600)),
                               Text('${item.weightKg} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
                               Text('${item.photoPaths.length} photo(s)',
-                                  style: const TextStyle(fontSize: 12, color: Colors.green)),
+                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.wasteGreen)),
                             ],
                           ),
                         ),
@@ -328,7 +333,7 @@ class _WasteBeginCollectionScreenState
                     height: 80,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green),
+                      border: Border.all(color: Theme.of(context).appColors.wasteGreen),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: ClipRRect(
@@ -364,7 +369,7 @@ class _WasteBeginCollectionScreenState
               child: FilledButton(
                 onPressed: _canSubmit ? _submit : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: Theme.of(context).appColors.wasteGreen,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: _isSubmitting
@@ -376,10 +381,10 @@ class _WasteBeginCollectionScreenState
 
             const SizedBox(height: 8),
             if (!_canSubmit && !_isSubmitting)
-              const Text(
+              Text(
                 'Complete all fields, add at least one item with photo, and capture signature to submit.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
               ),
             const SizedBox(height: 24),
           ],

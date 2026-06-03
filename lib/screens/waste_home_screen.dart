@@ -19,6 +19,7 @@ import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_queued_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/waste_app_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
@@ -147,14 +148,15 @@ class _IncomingLoadCard extends StatelessWidget {
     final isToday = DateUtils.isSameDay(scheduledDate, DateTime.now());
     final isPast = scheduledDate.isBefore(DateTime.now());
 
+    final appColors = Theme.of(context).appColors;
+    final cardBg = isToday || isPast ? appColors.wasteGreenSurface : Theme.of(context).cardColor;
+    final onCardColor = isToday || isPast ? onColor(appColors.wasteGreenSurface) : Theme.of(context).colorScheme.onSurface;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: isToday || isPast
-          ? const Color(0xFFE8F5E9)
-          : Theme.of(context).cardColor,
+      color: cardBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Color(0xFF2E7D32), width: 1),
+        side: BorderSide(color: appColors.wasteGreen, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -163,12 +165,12 @@ class _IncomingLoadCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.local_shipping, color: Color(0xFF2E7D32), size: 18),
+                Icon(Icons.local_shipping, color: appColors.wasteGreen, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     load.mainWasteType,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: onCardColor),
                   ),
                 ),
                 if (isManager)
@@ -212,19 +214,19 @@ class _IncomingLoadCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Contractor: ${load.contractorName?.isNotEmpty == true ? load.contractorName! : load.contractorId}',
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              style: TextStyle(fontSize: 13, color: onCardColor),
             ),
             if (load.scheduledNotes != null && load.scheduledNotes!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text('Note: ${load.scheduledNotes}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                    style: TextStyle(fontSize: 12, color: onCardColor)),
               ),
             const SizedBox(height: 4),
             Row(
               children: [
                 Icon(Icons.access_time, size: 14,
-                    color: isPast ? Colors.red : const Color(0xFF616161)),
+                    color: isPast ? Colors.red : appColors.textMuted),
                 const SizedBox(width: 4),
                 Text(
                   '${isToday ? 'Today' : isPast ? 'Overdue' : 'Expected'} — '
@@ -232,7 +234,7 @@ class _IncomingLoadCard extends StatelessWidget {
                   '${scheduledDate.hour.toString().padLeft(2, '0')}:${scheduledDate.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isPast ? Colors.red.shade700 : Colors.black87,
+                    color: isPast ? Colors.red.shade700 : onCardColor,
                     fontWeight: isPast ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
@@ -244,7 +246,7 @@ class _IncomingLoadCard extends StatelessWidget {
               child: FilledButton.icon(
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: const Text('Begin Collection'),
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                style: FilledButton.styleFrom(backgroundColor: appColors.wasteGreen),
                 onPressed: () async {
                   await Navigator.push(
                     context,
@@ -369,9 +371,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF2E7D32),
-                child: Icon(Icons.event_available, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: Theme.of(context).appColors.wasteGreen,
+                child: const Icon(Icons.event_available, color: Colors.white),
               ),
               title: const Text('Schedule Incoming Load'),
               subtitle: const Text('Arrange a collection before the truck arrives'),
@@ -411,12 +413,12 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
     }
   }
 
-  Color _statusColor(WasteLoadStatus s) {
+  Color _statusColor(WasteLoadStatus s, BuildContext context) {
     switch (s) {
       case WasteLoadStatus.completed:          return Colors.green;
-      case WasteLoadStatus.scheduled:          return const Color(0xFF2E7D32);
+      case WasteLoadStatus.scheduled:          return Theme.of(context).appColors.wasteGreen;
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
-      case WasteLoadStatus.cancelled:          return const Color(0xFF757575);
+      case WasteLoadStatus.cancelled:          return Theme.of(context).colorScheme.onSurfaceVariant;
       default:                                 return Colors.orange;
     }
   }
@@ -432,9 +434,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
     if (!wasteEnabled) {
       // Improved disabled state with pilot support + clear messages + admin graceful recovery (no lockout)
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('WasteTrack'),
-          backgroundColor: const Color(0xFF2E7D32),
+        appBar: WasteAppBar(
+          title: 'WasteTrack',
+          isOnSite: currentEmployee?.isOnSite,
         ),
         body: Center(
           child: Padding(
@@ -442,7 +444,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.block, size: 64, color: Color(0xFF757575)),
+                Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Text(
                   _pilotModeActive
@@ -455,13 +457,13 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                   _pilotModeActive
                       ? 'Your clock number (${_userClock ?? 'unknown'}) is not included in the pilot list.'
                       : 'The feature flag has disabled WasteTrack (safety valve).',
-                  style: const TextStyle(color: Color(0xFF616161)),
+                  style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Contact an administrator to adjust access or pilot configuration.',
-                  style: TextStyle(color: Color(0xFF424242), fontSize: 12),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                 ),
                 if (isAdmin) ...[
                   const SizedBox(height: 20),
@@ -472,7 +474,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                     },
                     icon: const Icon(Icons.toggle_on),
                     label: const Text('Re-enable Master Flag (Admin)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
@@ -496,7 +498,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
               onPressed: () => _showNewLoadMenu(context),
               icon: const Icon(Icons.add),
               label: const Text('New / Schedule'),
-              backgroundColor: const Color(0xFF2E7D32),
+              backgroundColor: Theme.of(context).appColors.wasteGreen,
             )
           : null,
       body: Column(
@@ -755,14 +757,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.local_shipping, color: Color(0xFF2E7D32), size: 18),
+                                      Icon(Icons.local_shipping, color: Theme.of(context).appColors.wasteGreen, size: 18),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Incoming (${filteredScheduled.length})',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
-                                          color: Color(0xFF2E7D32),
+                                          color: Theme.of(context).appColors.wasteGreen,
                                         ),
                                       ),
                                     ],
@@ -798,14 +800,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade400),
+                                          Icon(Icons.inbox_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                           const SizedBox(height: 12),
                                           Text(
                                             _filter == 'all'
                                                 ? 'No waste loads yet.\nTap + New / Schedule to get started.'
                                                 : 'No loads match "${_filter == "today" ? "Today" : "This Week"}".',
                                             textAlign: TextAlign.center,
-                                            style: TextStyle(color: Colors.grey.shade600),
+                                            style: TextStyle(color: Theme.of(context).appColors.textMuted),
                                           ),
                                           if (_filter != 'all') ...[
                                             const SizedBox(height: 12),
@@ -821,7 +823,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                 ];
                               }
                               return filtered.map((load) {
-                                final statusColor = _statusColor(load.status);
+                                final statusColor = _statusColor(load.status, context);
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                   shape: RoundedRectangleBorder(
@@ -862,7 +864,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                                 Text(
                                                   '${load.mainWasteType}'
                                                   '${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
-                                                  style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
                                               ],
@@ -873,7 +875,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                                             crossAxisAlignment: CrossAxisAlignment.end,
                                             children: [
                                               Text(formatSADate(load.dateTime),
-                                                  style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
                                               const SizedBox(height: 3),
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

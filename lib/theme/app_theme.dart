@@ -18,6 +18,9 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.chipUnselectedLabel,
     required this.cardSurface,
     required this.textMuted,
+    required this.wasteGreen,
+    required this.wasteGreenSurface,
+    required this.wasteGreenDark,
   });
 
   final Color priority1;
@@ -34,6 +37,9 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color chipUnselectedLabel;
   final Color cardSurface;
   final Color textMuted;
+  final Color wasteGreen;
+  final Color wasteGreenSurface;
+  final Color wasteGreenDark;
 
   @override
   ThemeExtension<AppColors> copyWith({
@@ -51,6 +57,9 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? chipUnselectedLabel,
     Color? cardSurface,
     Color? textMuted,
+    Color? wasteGreen,
+    Color? wasteGreenSurface,
+    Color? wasteGreenDark,
   }) {
     return AppColors(
       priority1: priority1 ?? this.priority1,
@@ -67,6 +76,9 @@ class AppColors extends ThemeExtension<AppColors> {
       chipUnselectedLabel: chipUnselectedLabel ?? this.chipUnselectedLabel,
       cardSurface: cardSurface ?? this.cardSurface,
       textMuted: textMuted ?? this.textMuted,
+      wasteGreen: wasteGreen ?? this.wasteGreen,
+      wasteGreenSurface: wasteGreenSurface ?? this.wasteGreenSurface,
+      wasteGreenDark: wasteGreenDark ?? this.wasteGreenDark,
     );
   }
 
@@ -88,6 +100,9 @@ class AppColors extends ThemeExtension<AppColors> {
       chipUnselectedLabel: Color.lerp(chipUnselectedLabel, other.chipUnselectedLabel, t)!,
       cardSurface: Color.lerp(cardSurface, other.cardSurface, t)!,
       textMuted: Color.lerp(textMuted, other.textMuted, t)!,
+      wasteGreen: Color.lerp(wasteGreen, other.wasteGreen, t)!,
+      wasteGreenSurface: Color.lerp(wasteGreenSurface, other.wasteGreenSurface, t)!,
+      wasteGreenDark: Color.lerp(wasteGreenDark, other.wasteGreenDark, t)!,
     );
   }
 }
@@ -109,6 +124,9 @@ const AppColors lightAppColors = AppColors(
   chipUnselectedLabel: Colors.black87,
   cardSurface: Colors.white,
   textMuted: Colors.black54,
+  wasteGreen: Color(0xFF2E7D32),
+  wasteGreenSurface: Color(0xFFE8F5E9),
+  wasteGreenDark: Color(0xFF1B5E20),
 );
 
 const AppColors darkAppColors = AppColors(
@@ -126,6 +144,9 @@ const AppColors darkAppColors = AppColors(
   chipUnselectedLabel: Colors.white,
   cardSurface: Color(0xFF1A1A1A),
   textMuted: Colors.white70,
+  wasteGreen: Color(0xFF4CAF50),
+  wasteGreenSurface: Color(0xFF1A2D1A),
+  wasteGreenDark: Color(0xFF388E3C),
 );
 
 extension AppThemeExtension on ThemeData {

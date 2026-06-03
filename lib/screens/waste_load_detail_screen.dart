@@ -8,6 +8,8 @@ import '../utils/deviation.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
+import '../theme/app_theme.dart';
+import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
@@ -77,7 +79,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             Text('Actual (weighbridge): ${formatSAWeight(result.actualWeightKg)}'),
             const SizedBox(height: 8),
             Text('Variance: ${formatSAWeight(result.varianceKg)}  (${result.variancePercent.toStringAsFixed(1)}%)'),
-            Text('Thresholds: ${result.thresholdPercent.toStringAsFixed(0)}% or ${result.thresholdKg.toStringAsFixed(0)} kg', style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+            Text('Thresholds: ${result.thresholdPercent.toStringAsFixed(0)}% or ${result.thresholdKg.toStringAsFixed(0)} kg', style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
             if (isDev)
               Container(
                 margin: const EdgeInsets.only(top: 12),
@@ -176,9 +178,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     final actual = _currentLoad.actualWeighbridgeWeightKg;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_currentLoad.loadNumber.isNotEmpty ? _currentLoad.loadNumber : 'Load Detail'),
-        backgroundColor: const Color(0xFF2E7D32),
+      appBar: WasteAppBar(
+        title: _currentLoad.loadNumber.isNotEmpty ? _currentLoad.loadNumber : 'Load Detail',
+        isOnSite: currentEmployee?.isOnSite,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -315,7 +317,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.delete_outline, size: 16, color: Color(0xFF2E7D32)),
+                              Icon(Icons.delete_outline, size: 16, color: Theme.of(context).appColors.wasteGreen),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -327,7 +329,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                                       '${item.weightKg.toStringAsFixed(1)} kg'
                                       '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
                                       '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
-                                      style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                                     ),
                                   ],
                                 ),
@@ -425,7 +427,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.scale),
                         label: Text(_isSaving ? 'Saving...' : 'Save Weighbridge Weight'),
-                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                        style: FilledButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                       ),
                     ),
                   ],
@@ -542,8 +544,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
           if (_isAdmin) ...[
             const SizedBox(height: 16),
-            const Text('Admin: Soft delete and full edit available in a future version.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
+            Text('Admin: Soft delete and full edit available in a future version.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
           ],
           const SizedBox(height: 24),
         ],
@@ -552,12 +554,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   }
 
   Widget _infoRow(IconData icon, String label, String value) {
+    final appColors = Theme.of(context).appColors;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF757575)),
+        Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 8),
-        Text('$label  ', style: const TextStyle(color: Color(0xFF616161), fontSize: 13)),
+        Text('$label  ', style: TextStyle(color: appColors.textMuted, fontSize: 13)),
         Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
       ],
     );
@@ -567,7 +570,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     final isGrey = color == Colors.grey;
     // When the box is grey (no data entered), use a dark text colour for
     // WCAG AA contrast on the light grey background.
-    final valueColor = isGrey ? const Color(0xFF424242) : null;
+    final valueColor = isGrey ? Theme.of(context).colorScheme.onSurface : null;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -578,7 +581,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+          Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
           const SizedBox(height: 4),
           Text(value,
               style: TextStyle(
@@ -605,7 +608,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       case WasteLoadStatus.completed:          return Colors.green;
       case WasteLoadStatus.scheduled:          return Colors.blue;
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
-      case WasteLoadStatus.cancelled:          return const Color(0xFF757575);
+      case WasteLoadStatus.cancelled:          return Theme.of(context).colorScheme.onSurfaceVariant;
       default:                                 return Colors.orange;
     }
   }
@@ -630,17 +633,18 @@ class _WasteStatusStepper extends StatelessWidget {
       WasteLoadStatus.cancelled          => -1,
     };
     if (status == WasteLoadStatus.cancelled) {
+      final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.cancel, size: 16, color: Color(0xFF757575)),
-            SizedBox(width: 8),
-            Text('Cancelled', style: TextStyle(color: Color(0xFF757575), fontWeight: FontWeight.w500)),
+            Icon(Icons.cancel, size: 16, color: mutedColor),
+            const SizedBox(width: 8),
+            Text('Cancelled', style: TextStyle(color: mutedColor, fontWeight: FontWeight.w500)),
           ],
         ),
       );
@@ -660,15 +664,15 @@ class _WasteStatusStepper extends StatelessWidget {
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: done ? const Color(0xFF2E7D32)
+                        color: done ? Theme.of(context).appColors.wasteGreen
                             : active ? Colors.orange
-                            : Colors.grey.shade200,
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
                         border: active ? Border.all(color: Colors.orange, width: 2) : null,
                       ),
                       child: Icon(
                         done ? Icons.check : Icons.circle,
                         size: done ? 16 : 8,
-                        color: done ? Colors.white : active ? Colors.orange : Colors.grey.shade400,
+                        color: done ? Colors.white : active ? Colors.orange : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -677,7 +681,7 @@ class _WasteStatusStepper extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                        color: active ? Colors.orange : done ? const Color(0xFF2E7D32) : Colors.grey,
+                        color: active ? Colors.orange : done ? Theme.of(context).appColors.wasteGreen : Theme.of(context).appColors.textMuted,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -689,7 +693,7 @@ class _WasteStatusStepper extends StatelessWidget {
                   child: Container(
                     height: 2,
                     margin: const EdgeInsets.only(bottom: 18),
-                    color: done ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+                    color: done ? Theme.of(context).appColors.wasteGreen : Theme.of(context).colorScheme.outlineVariant,
                   ),
                 ),
             ],
