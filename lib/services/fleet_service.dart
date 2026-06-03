@@ -47,13 +47,18 @@ class FleetService {
   // ---------------------------------------------------------------------------
 
   Stream<List<FleetType>> watchTypes({required String kind}) {
+    // Single-field filter only (auto-indexed). Active filtering + sort done
+    // in memory so no composite index is required.
     return _db
         .collection(Collections.fleetTypes)
         .where('kind', isEqualTo: kind)
-        .where('active', isEqualTo: true)
-        .orderBy('sort_order')
         .snapshots()
-        .map((s) => s.docs.map(FleetType.fromFirestore).toList());
+        .map((s) {
+          final all = s.docs.map(FleetType.fromFirestore).toList();
+          final active = all.where((t) => t.active).toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          return active;
+        });
   }
 
   Future<void> saveType(FleetType type) async {
@@ -79,13 +84,16 @@ class FleetService {
   // ---------------------------------------------------------------------------
 
   Stream<List<FleetAsset>> watchAssets({bool activeOnly = true}) {
-    Query<Map<String, dynamic>> query =
-        _db.collection(Collections.fleetAssets);
-    if (activeOnly) query = query.where('active', isEqualTo: true);
-    return query
-        .orderBy('name')
+    // Sort in memory to avoid composite index requirement.
+    return _db
+        .collection(Collections.fleetAssets)
         .snapshots()
-        .map((s) => s.docs.map(FleetAsset.fromFirestore).toList());
+        .map((s) {
+          final all = s.docs.map(FleetAsset.fromFirestore).toList();
+          final filtered = activeOnly ? all.where((a) => a.active).toList() : all;
+          filtered.sort((a, b) => a.name.compareTo(b.name));
+          return filtered;
+        });
   }
 
   Future<FleetAsset?> getAsset(String id) async {

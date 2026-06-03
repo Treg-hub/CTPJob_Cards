@@ -17,9 +17,7 @@ import 'waste_admin_screen.dart';
 import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
-import 'waste_queued_screen.dart';
 import '../theme/app_theme.dart';
-import '../widgets/waste_app_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
@@ -272,31 +270,42 @@ class WasteHomeScreen extends ConsumerStatefulWidget {
   ConsumerState<WasteHomeScreen> createState() => _WasteHomeScreenState();
 }
 
-class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
+class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
+    with TickerProviderStateMixin {
   final WasteService _wasteService = WasteService();
   List<WasteLoad> _recentLoads = [];
   List<WasteLoad> _scheduledLoads = [];
   bool _isLoading = true;
-  String _filter = 'all'; // all | today | pending
+  String _filter = 'all'; // all | today | week
 
   StreamSubscription<List<WasteLoad>>? _loadsSubscription;
   StreamSubscription<List<WasteLoad>>? _scheduledSubscription;
 
-  // Phase 7: enhanced flag state (master + simple pilot list of clock numbers)
+  // Phase 7: enhanced flag state
   bool _effectiveWasteEnabled = true;
   bool _pilotModeActive = false;
   String? _userClock;
 
-  // Lightweight last sync attempt for pilot UX (shown only when queued items exist)
-  DateTime? _lastSyncAttempt;
+  // ── Tab controller + pending weighbridge badge counter ──
+  late TabController _tabController;
+  int _pendingWeighbridgeCount = 0;
+  StreamSubscription<List<WasteLoad>>? _pendingCountSub;
+
+  int _tabCount() {
+    final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
+    final isManager = role_utils.isSecurityManager(currentEmployee);
+    return 1 + (isAdmin || isManager ? 2 : 0) + (isAdmin ? 1 : 0);
+  }
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _tabCount(), vsync: this)
+      ..addListener(() { if (mounted) setState(() {}); });
     _loadFeatureStatus();
-    // Process any offline queued waste data on entering the section (real resilience)
     _wasteService.processOfflineWasteQueue();
     _subscribeToLoads();
+    _subscribeToPendingCount();
   }
 
   void _subscribeToLoads() {
@@ -338,8 +347,20 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
     }
   }
 
+  void _subscribeToPendingCount() {
+    final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
+    final isManager = role_utils.isSecurityManager(currentEmployee);
+    if (!isAdmin && !isManager) return;
+    _pendingCountSub = _wasteService.watchPendingWeighbridge().listen(
+      (loads) { if (mounted) setState(() => _pendingWeighbridgeCount = loads.length); },
+      onError: (_) {},
+    );
+  }
+
   @override
   void dispose() {
+    _tabController.dispose();
+    _pendingCountSub?.cancel();
     _loadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
     super.dispose();
@@ -423,21 +444,233 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
     }
   }
 
+  // ── Loads tab body (the original main content) ────────────────────────────
+  Widget _buildLoadsTab(BuildContext context, bool isAdmin, bool isManager) {
+    return Column(
+      children: [
+        // Offline sync banner
+        if (SyncService().getQueuedWasteOperationCount() > 0)
+          InkWell(
+            onTap: () async => _handleRetrySync(context),
+            child: Container(
+              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_upload, color: Colors.orange, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${SyncService().getQueuedWasteOperationCount()} item(s) queued offline — tap to retry',
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // Quick filter chips
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('All'),
+                selected: _filter == 'all',
+                onSelected: (_) => setState(() => _filter = 'all'),
+              ),
+              ChoiceChip(
+                label: const Text('Today'),
+                selected: _filter == 'today',
+                onSelected: (_) => setState(() => _filter = 'today'),
+              ),
+              ChoiceChip(
+                label: const Text('This Week'),
+                selected: _filter == 'week',
+                onSelected: (_) => setState(() => _filter = 'week'),
+              ),
+            ],
+          ),
+        ),
+
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  children: [
+                    // ── Incoming (scheduled) ──────────────────────────────────
+                    ...() {
+                      final filteredScheduled = _scheduledLoads.where((load) {
+                        final date = load.scheduledFor ?? load.dateTime;
+                        if (_filter == 'today') return DateUtils.isSameDay(date, DateTime.now());
+                        if (_filter == 'week') return date.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+                        return true;
+                      }).toList();
+                      if (filteredScheduled.isEmpty) return <Widget>[];
+                      return <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: Row(
+                            children: [
+                              Icon(Icons.local_shipping, color: Theme.of(context).appColors.wasteGreen, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Incoming (${filteredScheduled.length})',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Theme.of(context).appColors.wasteGreen),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...filteredScheduled.map((load) => _IncomingLoadCard(
+                          load: load,
+                          isManager: isManager || isAdmin,
+                          wasteService: _wasteService,
+                          onRefresh: _subscribeToLoads,
+                        )),
+                        const Divider(height: 24, indent: 16, endIndent: 16),
+                      ];
+                    }(),
+
+                    // ── Recent loads ──────────────────────────────────────────
+                    ...() {
+                      final filtered = _recentLoads.where((load) {
+                        if (_filter == 'today') return DateUtils.isSameDay(load.dateTime, DateTime.now());
+                        if (_filter == 'week') return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+                        return true;
+                      }).toList();
+
+                      if (filtered.isEmpty) {
+                        return [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.inbox_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _filter == 'all'
+                                        ? 'No waste loads yet.\nTap + New / Schedule to get started.'
+                                        : 'No loads match "${_filter == "today" ? "Today" : "This Week"}".',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Theme.of(context).appColors.textMuted),
+                                  ),
+                                  if (_filter != 'all') ...[
+                                    const SizedBox(height: 12),
+                                    TextButton(onPressed: () => setState(() => _filter = 'all'), child: const Text('Clear filter')),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ];
+                      }
+                      return filtered.map((load) {
+                        final statusColor = _statusColor(load.status, context);
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: statusColor.withValues(alpha: 0.3)),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () async {
+                              await Navigator.push(context, MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)));
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36, height: 36,
+                                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), shape: BoxShape.circle),
+                                    child: Icon(_statusIcon(load.status), color: statusColor, size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${load.mainWasteType}${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
+                                          style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(formatSADate(load.dateTime), style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
+                                      const SizedBox(height: 3),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
+                                        child: Text(
+                                          load.status.displayLabel,
+                                          style: TextStyle(fontSize: 11, color: onColor(statusColor), fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    }(),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleRetrySync(BuildContext context) async {
+    final before = SyncService().getQueuedWasteOperationCount();
+    setState(() => _isLoading = true);
+    try {
+      await _wasteService.processOfflineWasteQueue();
+      await SyncService().processNow();
+      if (mounted) {
+        final after = SyncService().getQueuedWasteOperationCount();
+        final processed = before - after;
+        final msg = after == 0
+            ? (processed > 0 ? 'All $before queued items synced.' : 'Sync complete.')
+            : '$processed synced. $after remain queued.';
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: after == 0 ? Colors.green : Colors.orange));
+      }
+    } catch (e) {
+      if (mounted) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Retry failed: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = role_utils.isWasteAdmin(currentEmployee);
     final isManager = role_utils.isSecurityManager(currentEmployee);
-
-    // Phase 7: use the enhanced effective flag from service (master + pilot clock list)
     final wasteEnabled = _effectiveWasteEnabled;
 
     if (!wasteEnabled) {
-      // Improved disabled state with pilot support + clear messages + admin graceful recovery (no lockout)
       return Scaffold(
-        appBar: WasteAppBar(
-          title: 'WasteTrack',
-          isOnSite: currentEmployee?.isOnSite,
-        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -447,9 +680,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                 Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Text(
-                  _pilotModeActive
-                      ? 'WasteTrack is in pilot mode'
-                      : 'WasteTrack is currently disabled',
+                  _pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -459,11 +690,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                       : 'The feature flag has disabled WasteTrack (safety valve).',
                   style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Contact an administrator to adjust access or pilot configuration.',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                 ),
                 if (isAdmin) ...[
                   const SizedBox(height: 20),
@@ -478,11 +704,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WasteAdminScreen()));
-                    },
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WasteAdminScreen())),
                     icon: const Icon(Icons.settings),
-                    label: const Text('Open Waste Admin (pilot list / full controls)'),
+                    label: const Text('Open Waste Admin'),
                   ),
                 ],
               ],
@@ -492,8 +716,43 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
       );
     }
 
+    // ── Build role-based tabs ──────────────────────────────────────────────
+    final tabs = <Widget>[
+      const Tab(text: 'Loads'),
+      if (isAdmin || isManager)
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Weighbridge'),
+              if (_pendingWeighbridgeCount > 0) ...[
+                const SizedBox(width: 4),
+                _WasteBadge(_pendingWeighbridgeCount),
+              ],
+            ],
+          ),
+        ),
+      if (isAdmin || isManager) const Tab(text: 'Reports'),
+      if (isAdmin) const Tab(text: 'Admin'),
+    ];
+
+    final tabViews = <Widget>[
+      _buildLoadsTab(context, isAdmin, isManager),
+      if (isAdmin || isManager) const WastePendingWeighbridgeScreen(embedded: true),
+      if (isAdmin || isManager) const WasteReportsScreen(embedded: true),
+      if (isAdmin) const WasteAdminScreen(embedded: true),
+    ];
+
+    // Sync controller length if role changes (rare, but guards against assert)
+    if (_tabController.length != tabs.length) {
+      _tabController.dispose();
+      _tabController = TabController(length: tabs.length, vsync: this)
+        ..addListener(() { if (mounted) setState(() {}); });
+    }
+
     return Scaffold(
-      floatingActionButton: wasteEnabled
+      // FAB only visible on the Loads tab
+      floatingActionButton: _tabController.index == 0
           ? FloatingActionButton.extended(
               onPressed: () => _showNewLoadMenu(context),
               icon: const Icon(Icons.add),
@@ -502,412 +761,36 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
             )
           : null,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Action buttons row (moved here from AppBar — parent HomeScreen owns the top bar)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
-            child: Row(
-              children: [
-                // Cloud upload stays prominent (time-critical)
-                if (SyncService().getQueuedWasteOperationCount() > 0)
-                  IconButton(
-                    icon: const Icon(Icons.cloud_upload, color: Colors.orange),
-                    tooltip: 'Retry Offline Uploads',
-                    onPressed: () async {
-                      final before = SyncService().getQueuedWasteOperationCount();
-                      setState(() {
-                        _isLoading = true;
-                        _lastSyncAttempt = DateTime.now();
-                      });
-                      try {
-                        await _wasteService.processOfflineWasteQueue();
-                        await SyncService().processNow();
-                        if (mounted) {
-                          final after = SyncService().getQueuedWasteOperationCount();
-                          final processed = before - after;
-                          String msg;
-                          Color bg;
-                          if (after == 0) {
-                            msg = processed > 0
-                                ? 'All $before queued items synced successfully (loads, photos, signatures, etc.).'
-                                : 'Sync complete. No queued items remaining.';
-                            bg = Colors.green;
-                          } else if (processed > 0) {
-                            msg = '$processed items synced. $after remain queued — check connection or retry from Waste home.';
-                            bg = Colors.orange;
-                          } else {
-                            msg = 'Retry attempted. $after items still queued (check connection and try again).';
-                            bg = Colors.orange;
-                          }
-                          // ignore: use_build_context_synchronously
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(msg), backgroundColor: bg),
-                          );
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          final after = SyncService().getQueuedWasteOperationCount();
-                          // ignore: use_build_context_synchronously
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Retry failed: $e. $after items remain queued. Check connection and retry from Waste home.'), backgroundColor: Colors.red),
-                          );
-                        }
-                      } finally {
-                        if (mounted) setState(() => _isLoading = false);
-                      }
-                    },
-                  ),
-                const Spacer(),
-                // Overflow menu for admin/utility actions
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  tooltip: 'More actions',
-                  onSelected: (v) async {
-                    switch (v) {
-                      case 'toggle':
-                        await _wasteService.setWasteMasterEnabled(!wasteEnabled);
-                        await _loadFeatureStatus();
-                        break;
-                      case 'weighbridge':
-                        if (context.mounted) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const WastePendingWeighbridgeScreen()));
-                        }
-                        break;
-                      case 'reports':
-                        if (context.mounted) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const WasteReportsScreen()));
-                        }
-                        break;
-                      case 'admin':
-                        if (context.mounted) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const WasteAdminScreen()));
-                        }
-                        break;
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    if (isAdmin || isManager)
-                      const PopupMenuItem(
-                        value: 'weighbridge',
-                        child: ListTile(
-                          leading: Icon(Icons.scale),
-                          title: Text('Pending Weighbridge'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    if ((isAdmin || isManager) && wasteEnabled)
-                      const PopupMenuItem(
-                        value: 'reports',
-                        child: ListTile(
-                          leading: Icon(Icons.assessment),
-                          title: Text('Reports'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    if (isAdmin && wasteEnabled)
-                      const PopupMenuItem(
-                        value: 'admin',
-                        child: ListTile(
-                          leading: Icon(Icons.settings),
-                          title: Text('Waste Admin'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    if (isAdmin)
-                      PopupMenuItem(
-                        value: 'toggle',
-                        child: ListTile(
-                          leading: Icon(
-                            wasteEnabled ? Icons.toggle_on : Icons.toggle_off,
-                            color: wasteEnabled ? Colors.green : Colors.grey,
-                          ),
-                          title: Text(wasteEnabled ? 'Disable WasteTrack' : 'Enable WasteTrack'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+          TabBar(
+            controller: _tabController,
+            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            tabs: tabs,
           ),
-
-          // Quick filter chips (per spec)
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('All'),
-                  selected: _filter == 'all',
-                  onSelected: (_) => setState(() => _filter = 'all'),
-                ),
-                ChoiceChip(
-                  label: const Text('Today'),
-                  selected: _filter == 'today',
-                  onSelected: (_) => setState(() => _filter = 'today'),
-                ),
-                ChoiceChip(
-                  label: const Text('This Week'),
-                  selected: _filter == 'week',
-                  onSelected: (_) => setState(() => _filter = 'week'),
-                ),
-              ],
-            ),
-          ),
-
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
-                    children: [
-                      if (_wasteService.sessionQueuedPhotoCount > 0)
-                        Container(
-                          width: double.infinity,
-                          color: Colors.orange.shade100,
-                          padding: const EdgeInsets.all(8),
-                          child: Text(
-                            '${_wasteService.sessionQueuedPhotoCount} photo(s) queued for upload when online. Tap retry to attempt now.',
-                            style: const TextStyle(fontSize: 12, color: Colors.orange),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      // Lightweight last sync attempt indicator (pilot-friendly, only when central queue has items)
-                      if (SyncService().getQueuedWasteOperationCount() > 0)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: Text(
-                            _lastSyncAttempt != null
-                                ? 'Last sync attempt: ${formatSADateTime(_lastSyncAttempt!)}'
-                                : 'Queued operations pending — tap cloud retry icon to sync',
-                            style: TextStyle(fontSize: 11, color: Colors.orange.shade700),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-
-                      // NEW: Prominent but non-intrusive Queued Operations card (below banners, per spec).
-                      // Tappable → opens dedicated lightweight waste_queued_screen.dart for per-item list + retry.
-                      // Reuses exact same count getter (live). Updates on return via setState.
-                      // Orange theme accent, minimal card, no new heavy widgets.
-                      if (SyncService().getQueuedWasteOperationCount() > 0)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          child: Card(
-                            color: Colors.orange.shade50,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: Colors.orange.shade200, width: 1),
-                            ),
-                            child: InkWell(
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const WasteQueuedScreen()),
-                                );
-                                if (mounted) {
-                                  setState(() {}); // refresh appbar badge, last-sync text, and this card itself
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.cloud_queue, color: Colors.orange, size: 18),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Queued Operations (${SyncService().getQueuedWasteOperationCount()}) — tap to view details & retry',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.orange.shade800,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    const Icon(Icons.chevron_right, color: Colors.orange, size: 18),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            // ── Incoming section (scheduled loads awaiting guard) ──
-                            // Compute filtered scheduled loads using the same logic as recent loads
-                            ...() {
-                              final filteredScheduled = _scheduledLoads.where((load) {
-                                final date = load.scheduledFor ?? load.dateTime;
-                                if (_filter == 'today') return DateUtils.isSameDay(date, DateTime.now());
-                                if (_filter == 'week') return date.isAfter(DateTime.now().subtract(const Duration(days: 7)));
-                                return true;
-                              }).toList();
-
-                              if (filteredScheduled.isEmpty) return <Widget>[];
-                              return <Widget>[
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.local_shipping, color: Theme.of(context).appColors.wasteGreen, size: 18),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Incoming (${filteredScheduled.length})',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: Theme.of(context).appColors.wasteGreen,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ...filteredScheduled.map((load) => _IncomingLoadCard(
-                                  load: load,
-                                  isManager: isManager || isAdmin,
-                                  wasteService: _wasteService,
-                                  onRefresh: _subscribeToLoads,
-                                )),
-                                const Divider(height: 24, indent: 16, endIndent: 16),
-                              ];
-                            }(),
-
-                            // ── Recent loads list ─────────────────────────────────
-                            ...() {
-                              final filtered = _recentLoads.where((load) {
-                                if (_filter == 'today') {
-                                  return DateUtils.isSameDay(load.dateTime, DateTime.now());
-                                }
-                                if (_filter == 'week') {
-                                  return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
-                                }
-                                return true;
-                              }).toList();
-
-                              if (filtered.isEmpty) {
-                                return [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 40),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.inbox_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            _filter == 'all'
-                                                ? 'No waste loads yet.\nTap + New / Schedule to get started.'
-                                                : 'No loads match "${_filter == "today" ? "Today" : "This Week"}".',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(color: Theme.of(context).appColors.textMuted),
-                                          ),
-                                          if (_filter != 'all') ...[
-                                            const SizedBox(height: 12),
-                                            TextButton(
-                                              onPressed: () => setState(() => _filter = 'all'),
-                                              child: const Text('Clear filter'),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ];
-                              }
-                              return filtered.map((load) {
-                                final statusColor = _statusColor(load.status, context);
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    side: BorderSide(color: statusColor.withValues(alpha: 0.3)),
-                                  ),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(10),
-                                    onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)),
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 36,
-                                            height: 36,
-                                            decoration: BoxDecoration(
-                                              color: statusColor.withValues(alpha: 0.12),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(_statusIcon(load.status), color: statusColor, size: 20),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '${load.mainWasteType}'
-                                                  '${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
-                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: [
-                                              Text(formatSADate(load.dateTime),
-                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
-                                              const SizedBox(height: 3),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: statusColor,
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  load.status.displayLabel,
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: onColor(statusColor),
-                                                      fontWeight: FontWeight.w600),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList();
-                            }(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            child: TabBarView(
+              controller: _tabController,
+              children: tabViews,
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// Small amber counter badge for the Weighbridge tab.
+class _WasteBadge extends StatelessWidget {
+  final int count;
+  const _WasteBadge(this.count);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(color: Colors.amber.shade700, borderRadius: BorderRadius.circular(10)),
+      child: Text('$count', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 }
