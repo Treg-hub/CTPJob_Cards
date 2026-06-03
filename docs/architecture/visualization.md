@@ -1,6 +1,6 @@
 # CTP Job Cards — Architecture & Role-Based Access
 
-_Last updated: 2026-06-01 (reflects 001-scheduled-waste-handoff feature)_
+_Last updated: 2026-06-03 (adds Fleet Maintenance module)_
 
 ---
 
@@ -16,6 +16,12 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 | **Technician** | pos contains `mechanical`/`electrical`/`technician` | Job cards only |
 | **Manager** (job cards) | pos contains `manager` | Job card manager dashboard |
 | **Operator** | neither manager nor technician | Limited job card actions |
+| **Fleet Mechanic** | dept=`Workshop`, pos=`Hyster Mechanic` | Log work, acknowledge/resolve issues (no cost amounts) |
+| **Fleet Reporter** | dept ∈ `fleet_settings.reporter_departments` | Report fleet issues, view own issues |
+| **Fleet Cost Manager** | `clockNo` ∈ `fleet_settings.cost_manager_clock_nos` | Enter costs, cost reports, CSV export |
+| **Fleet Admin** | `clockNo == "22"` | Manage asset register + Fleet settings + all of the above |
+
+> Fleet **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), unlike all other roles which derive purely from the `Employee` record. Their `role.dart` helpers take a `FleetSettings` argument.
 
 ---
 
@@ -118,6 +124,110 @@ App entry (home_screen.dart)
 | `waste_contractors` | Contractor list. |
 | `waste_rates` | Cost per kg by contractor + subtype. |
 | `waste_config` | Feature flag (`enabled`) + pilot clock list. |
+
+---
+
+## Permission Matrix — Fleet Maintenance
+
+| Screen / Action | Fleet Admin | Cost Manager | Mechanic | Reporter | Others |
+|---|---|---|---|---|---|
+| FleetHomeScreen — view | ✅ | ✅ | ✅ | ✅ | ❌ |
+| FleetReportIssueScreen | ✅ | ✅ | ✅ | ✅ | ❌ |
+| FleetIssuesListScreen | ✅ | ✅ | ✅ | ❌ | ❌ |
+| FleetIssueDetail — acknowledge / resolve | ✅ | ❌ | ✅ | ❌ | ❌ |
+| FleetIssueDetail — cancel | ✅ | ✅ | ✅ | ❌ | ❌ |
+| FleetLogWorkScreen | ✅ | ❌ | ✅ | ❌ | ❌ |
+| FleetWorkRecordDetail — cost amounts | ✅ | ✅ | ❌ (label only) | ❌ | ❌ |
+| FleetAddCostScreen | ✅ | ✅ | ❌ | ❌ | ❌ |
+| FleetReportsScreen + CSV export | ✅ | ✅ | ❌ | ❌ | ❌ |
+| FleetAssetsScreen (manage register) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| FleetSettingsScreen | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+The whole module is also gated behind the `fleet_settings.fleet_enabled` flag — when off, the Fleet tab is hidden for everyone.
+
+---
+
+## Fleet Issue Status Flow
+
+```
+Reporter submits issue (FleetReportIssueScreen)
+          │
+          ▼
+    ┌──────────┐
+    │   open   │  ── (out_of_service) ──► push to mechanic + cost managers, asset flagged OOS
+    └────┬─────┘
+         │ Mechanic acknowledges (FleetIssueDetail)
+         ▼
+   ┌──────────────┐
+   │ acknowledged │
+   └──────┬───────┘
+          │ Mechanic resolves — two paths:
+          │   • "Log Work & Resolve" → FleetLogWorkScreen (creates work record, links issue)
+          │   • "Resolve with Note"  → quick close with a note
+          ▼
+    ┌───────────┐
+    │ resolved  │  ── clears asset OOS flag if no other open OOS issues
+    └───────────┘
+
+Any open/acknowledged issue → cancelled  (mechanic / cost manager / admin)
+```
+
+---
+
+## Navigation Flow (Fleet Maintenance)
+
+```
+App entry (home_screen.dart)
+  └─ [if fleet_enabled && isFleetUser] → Fleet tab → FleetHomeScreen
+        ├─ OOS alert banner (assets with has_open_oos_issue)
+        ├─ Open Issues [mechanic/cost mgr]   → FleetIssueDetail
+        ├─ Recent Work [mechanic]            → FleetWorkRecordDetail
+        ├─ My Reported Issues [reporter]     → FleetIssueDetail (read-only)
+        ├─ Costs Pending [cost mgr]          → FleetWorkRecordDetail
+        └─ Quick Actions (role-based):
+             ├─ Report Issue   → FleetReportIssueScreen
+             ├─ Log Work       → FleetLogWorkScreen           [mechanic/admin]
+             ├─ Open Issues    → FleetIssuesListScreen        [mechanic/admin]
+             ├─ Add Cost       → FleetAddCostScreen           [cost mgr/admin]
+             ├─ Reports        → FleetReportsScreen           [cost mgr/admin]
+             ├─ Manage Assets  → FleetAssetsScreen            [admin]
+             └─ Fleet Settings → FleetSettingsScreen          [admin]
+```
+
+---
+
+## Fleet Screens
+
+| File | Access | Purpose |
+|---|---|---|
+| `fleet_home_screen.dart` | all fleet roles | Role-based dashboard + quick actions |
+| `fleet_report_issue_screen.dart` | reporter+ | Asset picker, severity, shift, description, photos |
+| `fleet_issues_list_screen.dart` | mechanic, cost mgr, admin | Status-filtered issue queue (severity-sorted) |
+| `fleet_issue_detail_screen.dart` | role-aware | Acknowledge / resolve / cancel actions |
+| `fleet_log_work_screen.dart` | mechanic, admin | Work type, hours, parts rows, photos; calls `createFleetWorkRecord` |
+| `fleet_work_record_detail_screen.dart` | role-aware | Mechanic sees no costs; cost mgr/admin see + add cost lines |
+| `fleet_work_records_list_screen.dart` | mechanic, cost mgr, admin | Work record list with "Costed" badge |
+| `fleet_add_cost_screen.dart` | cost mgr, admin | Cost line entry (category, amount, invoice, supplier) |
+| `fleet_reports_screen.dart` | cost mgr, admin | Month/YTD KPIs, spend-per-asset, CSV export |
+| `fleet_assets_screen.dart` | admin | Manage forklift/grab register |
+| `fleet_settings_screen.dart` | admin | Reporter depts, cost-manager clock nos, asset/work types, feature flag |
+
+---
+
+## Firestore Collections (Fleet Maintenance)
+
+| Collection | Purpose |
+|---|---|
+| `fleet_assets` | Forklift/grab register. `has_open_oos_issue` denormalised for picker badges. |
+| `fleet_issues` | Reported problems (the mechanic's queue). |
+| `fleet_work_records` | Maintenance log. `fleet_work_parts` sub-collection holds part rows. |
+| `fleet_cost_lines` | Manager-entered costs (never shown to mechanic). |
+| `fleet_types` | Configurable asset types + work types. |
+| `fleet_settings` | `config` doc: reporter depts, cost-manager clock nos, feature flag. |
+| `fleet_counters` | Daily `FM-YYYYMMDD-NNN` sequence (Admin SDK only). |
+| `fleet_audit` | Immutable audit trail. |
+
+Cloud Functions (`createFleetWorkRecord`, `onFleetIssueCreated`, `onFleetIssueUpdated`) live in the **monorepo** `firebase/functions/src/index.ts`, not this repo. See `docs/COLLECTIONS.md` for full field schemas.
 
 ---
 
