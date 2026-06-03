@@ -414,16 +414,20 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 const SizedBox(height: 16),
 
                 // ========== PHASE 3: MANAGE RATES (now functional) ==========
-                Card(
-                  color: Colors.amber.shade50,
+                Builder(builder: (context) {
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final ratesBg = isDark ? const Color(0xFF2D2200) : Colors.amber.shade50;
+                  final ratesOn = onColor(ratesBg);
+                  return Card(
+                  color: ratesBg,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Manage Rates (cost per kg by contractor + subtype)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('Manage Rates (cost per kg by contractor + subtype)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: ratesOn)),
                         const SizedBox(height: 4),
-                        const Text('Admin-only. Used for future report costing. Data in waste_rates.'),
+                        Text('Admin-only. Used for future report costing. Data in waste_rates.', style: TextStyle(color: ratesOn)),
                         const SizedBox(height: 12),
                         StreamBuilder<List<Contractor>>(
                           stream: _wasteService.watchContractors(),
@@ -442,10 +446,10 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                                           : () => _showSetRateDialog(contractors, types),
                                       icon: const Icon(Icons.attach_money),
                                       label: const Text('Set New Rate'),
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[800]),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[800], foregroundColor: Colors.black),
                                     ),
                                     const SizedBox(height: 12),
-                                    const Text('Current Rates (live):', style: TextStyle(fontWeight: FontWeight.w500)),
+                                    Text('Current Rates (live):', style: TextStyle(fontWeight: FontWeight.w500, color: ratesOn)),
                                     StreamBuilder<List<Map<String, dynamic>>>(
                                       stream: _wasteService.watchRates(),
                                       builder: (context, rSnap) {
@@ -457,17 +461,17 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                                         }
                                         final rates = rSnap.data ?? [];
                                         if (rates.isEmpty) {
-                                          return const Text('No rates set. Use seed or form above.', style: TextStyle(fontSize: 12, color: Colors.grey));
+                                          return Text('No rates set. Use seed or form above.', style: TextStyle(fontSize: 12, color: ratesOn.withValues(alpha: 0.6)));
                                         }
                                         return Column(
                                           children: rates.take(10).map((r) {
                                             final cost = (r['cost_per_kg'] as num?)?.toDouble() ?? 0;
                                             return ListTile(
                                               dense: true,
-                                              leading: const Icon(Icons.local_atm, size: 18),
-                                              title: Text('${r['contractor_id'] ?? '?'} / ${r['subtype'] ?? '?'}'),
-                                              trailing: Text(formatSACurrency(cost), style: const TextStyle(fontFamily: 'monospace')),
-                                              subtitle: Text('by ${r['set_by'] ?? 'unknown'}'),
+                                              leading: Icon(Icons.local_atm, size: 18, color: ratesOn),
+                                              title: Text('${r['contractor_id'] ?? '?'} / ${r['subtype'] ?? '?'}', style: TextStyle(color: ratesOn)),
+                                              trailing: Text(formatSACurrency(cost), style: TextStyle(fontFamily: 'monospace', color: ratesOn)),
+                                              subtitle: Text('by ${r['set_by'] ?? 'unknown'}', style: TextStyle(color: ratesOn.withValues(alpha: 0.7))),
                                             );
                                           }).toList(),
                                         );
@@ -482,7 +486,8 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                       ],
                     ),
                   ),
-                ),
+                );
+                }),
                 const SizedBox(height: 16),
 
                 // Future / remaining (updated to reflect Phase 3 progress)
@@ -507,16 +512,21 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 const SizedBox(height: 16),
 
                 // Rollout Safety Flag + Pilot Mode (PROD-CRITICAL-3 Phase 7)
-                Card(
-                  color: Colors.amber.shade50,
+                Builder(builder: (context) {
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final pilotBg = isDark ? const Color(0xFF2D2200) : Colors.amber.shade50;
+                  final pilotOn = onColor(pilotBg);
+                  final pilotMuted = pilotOn.withValues(alpha: 0.6);
+                  return Card(
+                  color: pilotBg,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Rollout Safety Flag + Pilot Mode (Production Control)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text('Rollout Safety Flag + Pilot Mode (Production Control)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pilotOn)),
                         const SizedBox(height: 8),
-                        const Text('Master flag (safety valve) + optional pilot mode restricting access to a list of clock numbers only.'),
+                        Text('Master flag (safety valve) + optional pilot mode restricting access to a list of clock numbers only.', style: TextStyle(color: pilotOn)),
                         const SizedBox(height: 12),
 
                         // Master toggle (kept for safety valve)
@@ -550,8 +560,8 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
 
                         // Pilot mode
                         SwitchListTile(
-                          title: const Text('Enable Pilot Mode'),
-                          subtitle: const Text('When on, only listed clock numbers can access WasteTrack (master must also be ON)'),
+                          title: Text('Enable Pilot Mode', style: TextStyle(color: pilotOn)),
+                          subtitle: Text('When on, only listed clock numbers can access WasteTrack (master must also be ON)', style: TextStyle(color: pilotMuted)),
                           value: _pilotModeEnabled,
                           onChanged: (v) => setState(() => _pilotModeEnabled = v),
                           dense: true,
@@ -559,10 +569,15 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                         const SizedBox(height: 4),
                         TextField(
                           controller: _pilotCsvController,
-                          decoration: const InputDecoration(
+                          style: TextStyle(color: pilotOn),
+                          decoration: InputDecoration(
                             labelText: 'Allowed Clock Numbers (comma-separated)',
+                            labelStyle: TextStyle(color: pilotMuted),
                             hintText: 'e.g. 22,105,207,301',
-                            border: OutlineInputBorder(),
+                            hintStyle: TextStyle(color: pilotMuted),
+                            border: const OutlineInputBorder(),
+                            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: pilotMuted)),
+                            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: pilotOn)),
                           ),
                           onChanged: (v) => _pilotClockCsv = v,
                         ),
@@ -575,17 +590,18 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'Current pilot list: ${_pilotClockCsv.isEmpty ? '(none - all blocked in pilot mode)' : _pilotClockCsv}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style: TextStyle(fontSize: 12, color: pilotMuted),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           'Tip: Include admin clocks (e.g. 22) to ensure recovery access. Changes take effect on next screen load / action.',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                          style: TextStyle(fontSize: 11, color: pilotMuted),
                         ),
                       ],
                     ),
                   ),
-                ),
+                );
+                }),
               ],
             );
 
