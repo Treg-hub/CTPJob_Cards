@@ -121,6 +121,7 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 - Roles are **derived** from `Employee.position` + `department` (see `lib/utils/role.dart`)
 - Admin is currently gated by hardcoded `clockNo == "22"`
 - WasteTrack roles are derived from `department == "Security"` + `position` — `isSecurityManager()` and `isSecurityGuard()` are separate helpers in `role.dart`
+- Fleet roles: `isFleetMechanic()` (Workshop + Hyster Mechanic) is settings-free; `isFleetReporter(emp, settings)` and `isFleetCostManager(emp, settings)` read the `fleet_settings/config` allow-lists, so they take a `FleetSettings` argument. The Fleet tab is gated on `fleet_settings.fleet_enabled` + `isFleetUser()`
 - There is **no go_router** and **no centralized route guards**
 - Permission checks are scattered across multiple screens
 - Copper features are controlled by a hardcoded clock-number whitelist (`_copperAuthorizedClockNos` in `role.dart`)
@@ -146,6 +147,12 @@ Roles are **inferred from `Employee.position` and `Employee.department`** (see `
 | Admin | `clockNo == "22"` | Full access to AdminScreen and all admin features |
 | Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |
 | Security Guard | `department == "Security"` && `position == "Guard"` | WasteHome, WasteBeginCollection, WasteLoadDetail, WasteSignature, WastePendingWeighbridge |
+| Fleet Mechanic | `department == "Workshop"` && `position == "Hyster Mechanic"` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts) |
+| Fleet Reporter | `department` in `fleet_settings.reporter_departments` | FleetHome, FleetReportIssue, FleetIssueDetail (read-only) |
+| Fleet Cost Manager | `clockNo` in `fleet_settings.cost_manager_clock_nos` | FleetHome, FleetAddCost, FleetReports (+ CSV export), FleetWorkRecordDetail (with costs) |
+| Fleet Admin | `clockNo == "22"` (reuses Admin) | FleetAssets (manage register), FleetSettings, plus everything above |
+
+Fleet roles differ from other modules: **Mechanic** is a fixed department+position check, but **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), so their `role.dart` helpers take a `FleetSettings` argument. The mechanic never sees money — work records show only a "Costs pending / Costs entered" label.
 
 See `docs/architecture/visualization.md` for the complete and visual permission matrix.
 
@@ -174,6 +181,11 @@ All collection names are defined as constants in `lib/constants/collections.dart
 - `waste_collection_companies`, `waste_rates`, `waste_settings`
 - `waste_deleted_loads`, `waste_audit`, `waste_usage_logs`, `waste_counters`
 
+**Fleet Maintenance (`fleet_` prefix):**
+- `fleet_assets`, `fleet_issues`, `fleet_work_records` (with `fleet_work_parts` sub-collection)
+- `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`
+- Work numbers `FM-YYYYMMDD-NNN` via daily counter (Admin SDK only). See `docs/COLLECTIONS.md` for the full schema.
+
 ## Local Storage
 
 - **Hive**: `sync_queue`
@@ -198,6 +210,11 @@ Key functions:
 - `onCopperTransactionWrite` — copper sell alert; parks to inbox if recipient is off-site
 - `onJobCardTypeChanged` — re-fires notifications when job type changes
 - `createWasteLoad` *(callable, africa-south1)* — atomic load creation with daily sequence number (WT-YYYYMMDD-NNN)
+
+**Fleet Maintenance functions live in the monorepo codebase, NOT this repo's `/functions`.** They are in `firebase/functions/src/index.ts` (the `wastetrack-overtime` codebase) and deployed from `/firebase`:
+- `createFleetWorkRecord` *(callable, africa-south1)* — atomic work-record number (FM-YYYYMMDD-NNN). The mobile app **calls** this via `FleetService.createWorkRecord`.
+- `onFleetIssueCreated` *(Firestore trigger)* — out-of-service issues send a medium-high push (or park to inbox) to the mechanic + cost managers and set `fleet_assets.has_open_oos_issue`; high-severity issues park to the notification inbox only.
+- `onFleetIssueUpdated` *(Firestore trigger)* — clears `has_open_oos_issue` when the last open OOS issue on an asset is resolved/cancelled.
 
 ## Testing
 

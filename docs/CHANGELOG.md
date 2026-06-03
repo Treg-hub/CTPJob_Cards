@@ -6,6 +6,38 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-03 — Fleet Maintenance module (Hyster forklifts & grabs)
+
+A new **Fleet** tab for tracking forklift and grab maintenance — separate from normal job cards. It appears once an admin enables it in Fleet Settings and you have a fleet role.
+
+### User-facing changes
+
+**New: Fleet tab**
+
+- **Report a problem** — operators and shift leads in the configured departments can report an issue on a forklift or grab: pick the asset, choose severity (Low / Medium / High / Out of Service), confirm the shift (auto-detected), describe the fault, and attach up to 3 photos.
+- **Out of Service alerts** — when an asset is reported out of service, the Hyster mechanic and the cost manager(s) get an immediate push notification (or it waits in their notification inbox if they're off-site). The asset shows an orange **OOS** badge everywhere it appears. High-severity issues go to the notification inbox without a push.
+- **Mechanic queue & work logging** — the mechanic sees open issues sorted by severity, can **Acknowledge** an issue, then resolve it either by logging the work (work type, labour hours, machine-hour reading, parts used, photos) or with a quick resolution note. Each work record gets a number like `FM-20260603-001`.
+- **Costs (managers only)** — the overseeing manager records cost lines per asset (parts / labour / invoice / other, with amount, invoice ref and supplier), views month and year-to-date spend per machine, and exports a full CSV. **The mechanic never sees money** — work records only show a "Costs pending / Costs entered" label.
+- **Admin** — the asset register (add/edit forklifts and grabs), reporter departments, cost-manager list, asset/work types, and the module on/off switch all live in **Fleet Settings**.
+
+### Who sees what
+
+| Role | How you're recognised | What you can do |
+|------|----------------------|-----------------|
+| Fleet Mechanic | Workshop department + "Hyster Mechanic" position | Log work, acknowledge/resolve issues |
+| Fleet Reporter | Your department is enabled in Fleet Settings | Report issues, track your own |
+| Cost Manager | Your clock number is on the cost-manager list | Enter costs, view reports, export CSV |
+| Fleet Admin | System admin | Manage assets and all settings |
+
+### Developer / architecture changes
+
+- New `fleet_*` Firestore collections (`fleet_assets`, `fleet_issues`, `fleet_work_records` + `fleet_work_parts`, `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`). Same signed-in auth model as WasteTrack; role enforcement is client-side.
+- Cloud Functions in the monorepo `firebase/functions` codebase: `createFleetWorkRecord` (atomic FM-number), `onFleetIssueCreated` (OOS notifications + asset badge), `onFleetIssueUpdated` (clears badge on resolve).
+- CTP Pulse gains a **Fleet Maintenance** board module (open issues, work hours MTD, cost MTD, avg resolution time) plus a `/fleet` detail page with cost-by-asset and cost-by-category charts and a live open-issues table. Access via the `fleet` board module in `/admin/users`.
+- See `docs/architecture/visualization.md` for the full role/screen matrix and `docs/COLLECTIONS.md` for the schemas.
+
+---
+
 ## 2026-06-03 — Job Card History screen, Firestore read cost fixes
 
 ### User-facing changes

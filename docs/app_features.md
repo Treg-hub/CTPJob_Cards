@@ -55,6 +55,7 @@ Live:
 - Notification action buttons
 - Copper Inventory module (clock-number restricted)
 - WasteTrack module (Security department)
+- Fleet Maintenance module (Hyster forklifts & grabs)
 
 Planned:
 - Predictive maintenance AI
@@ -445,6 +446,35 @@ Admins have access to all data across all departments plus system configuration 
 | Local Storage | Hive + SharedPreferences | Offline queue, session persistence |
 
 > **No on-premises infrastructure required.** No server to maintain, no single point of hardware failure. All data is encrypted at rest and in transit. Backed by Google's 99.99% availability SLA with automatic scaling.
+
+---
+
+## Fleet Maintenance
+
+*Tracking maintenance, issues, and costs for Hyster forklifts and grabs — a separate module from production job cards.*
+
+Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is only visible once an admin turns it on in Fleet Settings and gives the relevant people a fleet role. It deliberately keeps forklift/grab work **separate** from plant breakdown job cards, with its own asset register and history.
+
+### What it does
+
+- **Issue reporting** — Operators and shift leads (in the departments an admin enables) report a problem on a specific forklift or grab: severity (Low / Medium / High / Out of Service), shift (auto-detected as day / night / weekend), a description, and up to three photos.
+- **Out-of-service alerts** — Reporting an asset *out of service* immediately push-notifies the Hyster mechanic and the cost manager(s) — or holds it in their notification inbox if they're off-site — and flags the asset with an orange **OOS** badge until the issue is resolved. High-severity issues go to the inbox without a push.
+- **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note. Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, and are numbered `FM-YYYYMMDD-NNN`.
+- **Cost tracking (managers only)** — The overseeing manager enters cost lines against an asset (parts / labour / invoice / other, with amount, invoice reference, and supplier), sees month and year-to-date spend per machine, and exports a full CSV. **The mechanic never sees cost amounts** — only a "Costs pending / Costs entered" label.
+- **Admin** — The forklift/grab register, the list of reporter departments, the cost-manager clock numbers, the asset and work types, and the module on/off switch are all managed in Fleet Settings.
+
+### Roles
+
+| Role | How you're recognised | What you can do |
+|------|----------------------|-----------------|
+| **Fleet Mechanic** | Workshop department + "Hyster Mechanic" position | Log work, acknowledge and resolve issues (no money shown) |
+| **Fleet Reporter** | Your department is enabled in Fleet Settings | Report issues and track the ones you raised |
+| **Cost Manager** | Your clock number is on the cost-manager list | Enter costs, view spend reports, export CSV |
+| **Fleet Admin** | System admin | Manage the asset register and all Fleet settings |
+
+### On the management dashboard (CTP Pulse)
+
+Managers with the Fleet module on the web board see a **Fleet Maintenance** section: open issues (live), maintenance hours this month, cost this month, and average issue resolution time — plus a dedicated Fleet page with cost-per-asset and cost-by-category charts and a live list of open issues.
 
 ---
 
