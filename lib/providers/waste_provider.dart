@@ -3,6 +3,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 
+// ---------------------------------------------------------------------------
+// PALLET SELECTION — ephemeral state used in WasteScheduleLoadScreen
+// ---------------------------------------------------------------------------
+
+class PalletSelectionState {
+  final Set<String> selectedIds;
+  const PalletSelectionState({this.selectedIds = const {}});
+
+  PalletSelectionState copyWith({Set<String>? selectedIds}) =>
+      PalletSelectionState(selectedIds: selectedIds ?? this.selectedIds);
+
+  bool isSelected(String id) => selectedIds.contains(id);
+
+  PalletSelectionState toggle(String id) {
+    final next = Set<String>.from(selectedIds);
+    next.contains(id) ? next.remove(id) : next.add(id);
+    return copyWith(selectedIds: next);
+  }
+}
+
+class PalletSelectionNotifier extends StateNotifier<PalletSelectionState> {
+  PalletSelectionNotifier() : super(const PalletSelectionState());
+
+  void toggle(String palletId) => state = state.toggle(palletId);
+  void clear() => state = const PalletSelectionState();
+  void selectAll(List<String> ids) =>
+      state = PalletSelectionState(selectedIds: Set.from(ids));
+}
+
+/// autoDispose so selection is cleared when WasteScheduleLoadScreen is popped.
+final palletSelectionProvider =
+    StateNotifierProvider.autoDispose<PalletSelectionNotifier, PalletSelectionState>(
+  (ref) => PalletSelectionNotifier(),
+);
+
 /// Simple state for the in-progress Waste Load being created/edited.
 /// This will grow as we add more screens (items, photos, signature, etc.).
 class CurrentWasteLoadState {

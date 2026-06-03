@@ -4,7 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../services/waste_service.dart';
 import '../models/contractor.dart';
+import '../models/waste_pallet.dart';
 import '../models/waste_type.dart';
+import '../utils/formatters.dart';
+import '../utils/role.dart';
 import '../main.dart' show currentEmployee;
 
 /// Manager-facing screen: schedule an upcoming waste load before the truck arrives.
@@ -30,6 +33,12 @@ class _WasteScheduleLoadScreenState
   DateTime _scheduledFor = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
+
+  // Pallet selection (shown when Paper Waste is selected, manager/admin only)
+  List<WastePallet> _onSitePallets = [];
+  final List<String> _selectedPalletIds = [];
+  bool _showPalletSection = false;
+  bool _loadingPallets = false;
 
   @override
   void initState() {
@@ -97,13 +106,28 @@ class _WasteScheduleLoadScreenState
     }
   }
 
+  Future<void> _loadOnSitePallets(String wasteType) async {
+    setState(() { _loadingPallets = true; _onSitePallets = []; _selectedPalletIds.clear(); });
+    try {
+      final pallets = await _wasteService
+          .watchPalletsOnSite(wasteType)
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      if (mounted) {
+        setState(() { _onSitePallets = pallets; _showPalletSection = true; _loadingPallets = false; });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPallets = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_isValid || _isSaving) return;
     setState(() => _isSaving = true);
 
     final employee = currentEmployee;
     try {
-      await _wasteService.createScheduledLoad(
+      final loadId = await _wasteService.createScheduledLoad(
         contractorId: _selectedContractor!.id!,
         contractorName: _selectedContractor!.name,
         mainWasteType: _selectedType!.mainType,
@@ -114,6 +138,10 @@ class _WasteScheduleLoadScreenState
             ? null
             : _notesController.text.trim(),
       );
+
+      if (_selectedPalletIds.isNotEmpty) {
+        await _wasteService.markPalletsLoaded(_selectedPalletIds, loadId);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -245,10 +273,80 @@ class _WasteScheduleLoadScreenState
                       return ChoiceChip(
                         label: Text(type.mainType),
                         selected: selected,
-                        onSelected: (_) => setState(() => _selectedType = type),
+                        onSelected: (_) {
+                          setState(() => _selectedType = type);
+                          final canSelectPallets =
+                              isSecurityManager(currentEmployee) ||
+                              isWasteAdmin(currentEmployee);
+                          if (canSelectPallets && type.mainType == 'Paper Waste') {
+                            _loadOnSitePallets(type.mainType);
+                          } else {
+                            setState(() {
+                              _showPalletSection = false;
+                              _onSitePallets = [];
+                              _selectedPalletIds.clear();
+                            });
+                          }
+                        },
                       );
                     }).toList(),
                   ),
+
+                  // ── On-site pallet selection (Paper Waste, manager only) ──
+                  if (_showPalletSection) ...[
+                    const SizedBox(height: 20),
+                    Text('On-Site Pallets (optional)',
+                        style: Theme.of(context).textTheme.labelLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Select which pallets go on this truck. You can skip and record later.',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_loadingPallets)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_onSitePallets.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text('No pallets currently on site.',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 280),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _onSitePallets.length,
+                          itemBuilder: (_, i) {
+                            final p = _onSitePallets[i];
+                            final id = p.id!;
+                            return CheckboxListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                '${p.subtype}'
+                                '${p.estimatedWeightKg != null ? ' — ~${formatSAWeight(p.estimatedWeightKg!)}' : ''}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              subtitle: Text(
+                                formatSADate(p.createdAt),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              value: _selectedPalletIds.contains(id),
+                              onChanged: (v) => setState(() =>
+                                  v! ? _selectedPalletIds.add(id) : _selectedPalletIds.remove(id)),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
 
                   const SizedBox(height: 20),
 

@@ -17,6 +17,7 @@ import 'waste_admin_screen.dart';
 import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
+import 'waste_pallet_inventory_screen.dart';
 import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
@@ -417,6 +418,19 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                     MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
               },
             ),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Theme.of(context).appColors.wasteGreen,
+                child: const Icon(Icons.layers, color: Colors.white),
+              ),
+              title: const Text('Paper Waste Stock'),
+              subtitle: const Text('View or record pallets accumulating on site'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const WastePalletInventoryScreen()));
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -469,6 +483,10 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
               ),
             ),
           ),
+
+        // Paper Waste Stock summary banner
+        if (role_utils.isWasteUser(currentEmployee))
+          _PaperWasteStockBanner(wasteService: _wasteService),
 
         // Quick filter chips
         Padding(
@@ -775,6 +793,94 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Paper Waste Stock summary banner — tappable card shown in the loads tab.
+// Fetches the on-site pallet count + estimated weight once (not a stream).
+// ---------------------------------------------------------------------------
+class _PaperWasteStockBanner extends StatefulWidget {
+  const _PaperWasteStockBanner({required this.wasteService});
+  final WasteService wasteService;
+
+  @override
+  State<_PaperWasteStockBanner> createState() => _PaperWasteStockBannerState();
+}
+
+class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
+  bool _loading = true;
+  bool _error = false;
+  int _count = 0;
+  double _totalKg = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final summary = await widget.wasteService.getPalletSummary('Paper Waste');
+      if (mounted) {
+        setState(() {
+          _count = summary.count;
+          _totalKg = summary.totalEstimatedKg;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _error = true; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error) return const SizedBox.shrink();
+    final appColors = Theme.of(context).appColors;
+    final surfaceBg = appColors.wasteGreenSurface;
+    final onSurface = onColor(surfaceBg);
+
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const WastePalletInventoryScreen()),
+      ).then((_) => _load()),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: surfaceBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: appColors.wasteGreen, width: 1),
+        ),
+        child: _loading
+            ? const Center(
+                child: SizedBox(
+                  height: 16, width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : Row(
+                children: [
+                  Icon(Icons.inventory_2_outlined, color: appColors.wasteGreen, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$_count pallet${_count == 1 ? '' : 's'} on site'
+                      '${_totalKg > 0 ? ' · ~${formatSAWeight(_totalKg)} est.' : ''}',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: onSurface),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: onSurface.withAlpha(150), size: 18),
+                ],
+              ),
       ),
     );
   }

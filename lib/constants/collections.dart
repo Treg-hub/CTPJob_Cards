@@ -54,4 +54,5 @@ class Collections {
   static const String wasteAudit = 'waste_audit';
   static const String wasteUsageLogs = 'waste_usage_logs';
   static const String wasteCounters = 'waste_counters';
+  static const String wastePallets = 'waste_pallets';
 }
