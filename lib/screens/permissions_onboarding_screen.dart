@@ -25,6 +25,44 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
   bool _isLoading = false;
   final PageController _pageController = PageController();
 
+  // Called when the user swipes or taps "Next" to a higher page index.
+  // Fires contextual permission requests immediately after the page lands so
+  // the dialog appears in the context of the explanation the user just read.
+  Future<void> _onPageForward(int page) async {
+    switch (page) {
+      case 5:
+        // User just read Priority Levels: P4 DND bypass, P5 full-screen alarm.
+        // Request the two permissions that make those behaviours possible.
+        await _requestNotificationPerms();
+      case 6:
+        // User just read Escalation: you only get alerted when you're on site.
+        // That's driven by geofencing — request location now.
+        await _requestLocationPerms();
+    }
+    ref.invalidate(permissionsProvider);
+  }
+
+  Future<void> _requestNotificationPerms() async {
+    if (kIsWeb) return;
+    if (!(await Permission.notification.status).isGranted) {
+      await Permission.notification.request();
+    }
+    if (!(await Permission.accessNotificationPolicy.status).isGranted) {
+      await Permission.accessNotificationPolicy.request();
+    }
+  }
+
+  Future<void> _requestLocationPerms() async {
+    if (kIsWeb) return;
+    // Android 10+: must grant when-in-use before always.
+    if (!(await Permission.locationWhenInUse.status).isGranted) {
+      await Permission.locationWhenInUse.request();
+    }
+    if (!(await Permission.locationAlways.status).isGranted) {
+      await Permission.locationAlways.request();
+    }
+  }
+
   // Rebuilt every frame from the latest employee value so the role page reflects
   // the right role even if the employee provider resolves after this screen mounts.
   List<Widget> _buildPages(Employee? emp) => [
@@ -84,7 +122,15 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
             Expanded(
               child: PageView(
                 controller: _pageController,
-                onPageChanged: (index) => setState(() => _currentPage = index),
+                onPageChanged: (index) {
+                  final goingForward = index > _currentPage;
+                  setState(() => _currentPage = index);
+                  if (goingForward && !kIsWeb) {
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _onPageForward(index),
+                    );
+                  }
+                },
                 children: pages,
               ),
             ),
@@ -600,27 +646,44 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
   void initState() {
     super.initState();
     if (kIsWeb) return;
-    // Auto-trigger the guided grant flow once the provider has loaded.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final statuses = await ref.read(permissionsProvider.future);
-      final allGranted = statuses.values.every((s) => s.isGranted);
-      if (!allGranted && mounted) {
-        _grantPermissions();
-      }
+    // Notification + location were already requested on pages 5 and 6.
+    // This page only needs to handle the remaining items: camera, SAW, battery.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _requestRemainingPerms();
     });
   }
 
-  /// Walks through every required permission in the right order:
-  /// - locationWhenInUse must be granted before locationAlways on Android 10+.
-  /// - The remaining critical permissions (SAW, notification-policy,
-  ///   battery-optimization) are requested via NotificationService so the
-  ///   same flow handles "opens settings page" cases.
+  // Requests only the permissions not already covered by earlier pages:
+  // camera (page 7 is the first mention of photo attachments), SAW
+  // (full-screen overlay for P5), and battery optimisation (keeps geofencing
+  // alive in the background). Notification + location were already asked.
+  Future<void> _requestRemainingPerms() async {
+    if (kIsWeb) return;
+    setState(() => _checking = true);
+    try {
+      if (!(await Permission.camera.status).isGranted) {
+        await Permission.camera.request();
+      }
+      if (!(await Permission.systemAlertWindow.status).isGranted) {
+        await Permission.systemAlertWindow.request();
+      }
+      if (await Permission.ignoreBatteryOptimizations.isDenied) {
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } finally {
+      ref.invalidate(permissionsProvider);
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  // Catch-all used by the "Grant Permissions" button — walks every required
+  // permission and requests anything still missing, then opens Settings for
+  // SAW if it remains denied after the system dialog.
   Future<void> _grantPermissions() async {
     if (kIsWeb) return;
     setState(() => _checking = true);
     try {
-      final whenInUse = await Permission.locationWhenInUse.status;
-      if (!whenInUse.isGranted) {
+      if (!(await Permission.locationWhenInUse.status).isGranted) {
         await Permission.locationWhenInUse.request();
       }
       if (!(await Permission.locationAlways.status).isGranted) {
@@ -632,10 +695,6 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
       if (!(await Permission.camera.status).isGranted) {
         await Permission.camera.request();
       }
-      // SAW + battery-optimization + notification-policy + opens-settings-page
-      // for SAW if still denied. This used to fire from NotificationService
-      // .initialize() at app launch — moved here so it only runs in the
-      // guided flow.
       await NotificationService().requestAllCriticalPermissions();
     } finally {
       ref.invalidate(permissionsProvider);
