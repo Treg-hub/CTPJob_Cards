@@ -10,6 +10,8 @@ import '../utils/role.dart';
 /// - `requiresWaste` — WasteTrack users only (Security Manager, Security Guard,
 ///   Admin). Non-waste employees cannot see this doc even if their base role
 ///   matches `roles`.
+/// - `requiresFleet` — Fleet Maintenance users only (Mechanic, Reporter, Cost
+///   Manager, Admin). Gated on the same condition as the Fleet tab.
 /// - `roles` — Set of base [UserRole]s allowed to see this doc.
 class DocEntry {
   final String id;
@@ -24,6 +26,11 @@ class DocEntry {
   /// general job-card users (technicians, operators from other departments).
   final bool requiresWaste;
 
+  /// When true, only Fleet users (mechanic, reporter, cost manager, admin) can
+  /// see this doc, and only when the Fleet module is enabled. Mirrors the
+  /// visibility of the Fleet tab itself.
+  final bool requiresFleet;
+
   const DocEntry({
     required this.id,
     required this.title,
@@ -32,6 +39,7 @@ class DocEntry {
     required this.roles,
     this.requiresAdmin = false,
     this.requiresWaste = false,
+    this.requiresFleet = false,
   });
 
   String get assetPath => 'docs/$id.md';

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main.dart' show currentEmployee;
 import '../models/doc_entry.dart';
+import '../providers/fleet_provider.dart';
 import '../utils/doc_catalog.dart';
 import 'doc_viewer_screen.dart';
 
-class DocumentationScreen extends StatelessWidget {
+class DocumentationScreen extends ConsumerWidget {
   const DocumentationScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final docs = docsForUser(currentEmployee);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fleetSettings = ref.watch(fleetSettingsProvider).asData?.value;
+    final docs = docsForUser(currentEmployee, fleetSettings);
 
     return Scaffold(
       appBar: AppBar(

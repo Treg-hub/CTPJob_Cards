@@ -159,6 +159,9 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
           _selectedCard = updatedSelected;
         }
       });
+    }, onError: (e) {
+      debugPrint('DailyReviewScreen: job cards stream error: $e');
+      if (mounted) setState(() => _isLoading = false);
     });
   }
 
