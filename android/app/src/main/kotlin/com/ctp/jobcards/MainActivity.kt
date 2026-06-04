@@ -34,18 +34,22 @@ class MainActivity : FlutterActivity() {
         handleDeepLink(intent)
         createUrgentNotificationChannel()
 
-        // Android 14+ requires the user to grant USE_FULL_SCREEN_INTENT via Settings.
-        // Only open Settings once per install — otherwise the page opens on every
-        // cold start and looks like a bug to the user.
+        // Android 14+ requires USE_FULL_SCREEN_INTENT to be granted via Settings.
+        // Only redirect after the user has completed the permissions onboarding screen
+        // (permissionsCompleted == true). First-time installs skip this entirely —
+        // the Flutter onboarding page calls requestAllCriticalPermissions() which
+        // handles this redirect in the guided flow after explaining why it's needed.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val prefs = getSharedPreferences("notification_prefs", MODE_PRIVATE)
-            val alreadyAsked = prefs.getBoolean("fullScreenIntentPromptShown", false)
-            if (!notificationManager.canUseFullScreenIntent() && !alreadyAsked) {
+            val notifPrefs = getSharedPreferences("notification_prefs", MODE_PRIVATE)
+            val alreadyAsked = notifPrefs.getBoolean("fullScreenIntentPromptShown", false)
+            val onboardingPrefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+            val onboardingDone = onboardingPrefs.getBoolean("flutter.permissionsCompleted", false)
+            if (!notificationManager.canUseFullScreenIntent() && !alreadyAsked && onboardingDone) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
                 intent.data = Uri.fromParts("package", packageName, null)
                 startActivity(intent)
-                prefs.edit().putBoolean("fullScreenIntentPromptShown", true).apply()
+                notifPrefs.edit().putBoolean("fullScreenIntentPromptShown", true).apply()
             }
         }
     }

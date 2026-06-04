@@ -14,9 +14,12 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Initialise the manager so delegate callbacks work when geofencing is
+    // registered later via the MethodChannel. Do NOT request authorisation here
+    // — that happens in the guided permissions onboarding screen so the user
+    // sees an explanation before any system dialog appears.
     locationManager = CLLocationManager()
     locationManager?.delegate = self
-    locationManager?.requestAlwaysAuthorization()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

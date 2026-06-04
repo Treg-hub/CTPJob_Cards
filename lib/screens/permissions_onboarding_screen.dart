@@ -25,11 +25,49 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
   bool _isLoading = false;
   final PageController _pageController = PageController();
 
+  // Called when the user swipes or taps "Next" to a higher page index.
+  // Fires contextual permission requests immediately after the page lands so
+  // the dialog appears in the context of the explanation the user just read.
+  Future<void> _onPageForward(int page) async {
+    switch (page) {
+      case 5:
+        // User just read Priority Levels: P4 DND bypass, P5 full-screen alarm.
+        // Request the two permissions that make those behaviours possible.
+        await _requestNotificationPerms();
+      case 6:
+        // User just read Escalation: you only get alerted when you're on site.
+        // That's driven by geofencing — request location now.
+        await _requestLocationPerms();
+    }
+    ref.invalidate(permissionsProvider);
+  }
+
+  Future<void> _requestNotificationPerms() async {
+    if (kIsWeb) return;
+    if (!(await Permission.notification.status).isGranted) {
+      await Permission.notification.request();
+    }
+    if (!(await Permission.accessNotificationPolicy.status).isGranted) {
+      await Permission.accessNotificationPolicy.request();
+    }
+  }
+
+  Future<void> _requestLocationPerms() async {
+    if (kIsWeb) return;
+    // Android 10+: must grant when-in-use before always.
+    if (!(await Permission.locationWhenInUse.status).isGranted) {
+      await Permission.locationWhenInUse.request();
+    }
+    if (!(await Permission.locationAlways.status).isGranted) {
+      await Permission.locationAlways.request();
+    }
+  }
+
   // Rebuilt every frame from the latest employee value so the role page reflects
   // the right role even if the employee provider resolves after this screen mounts.
   List<Widget> _buildPages(Employee? emp) => [
     const _WelcomePage(),
-    _YourRolePage(role: roleFromEmployee(emp)),
+    _YourRolePage(role: roleFromEmployee(emp), employee: emp),
     const _JobCardFlowPage(),
     const _JobStatusPage(),
     const _PriorityLevelsPage(),
@@ -84,7 +122,15 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
             Expanded(
               child: PageView(
                 controller: _pageController,
-                onPageChanged: (index) => setState(() => _currentPage = index),
+                onPageChanged: (index) {
+                  final goingForward = index > _currentPage;
+                  setState(() => _currentPage = index);
+                  if (goingForward && !kIsWeb) {
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _onPageForward(index),
+                    );
+                  }
+                },
                 children: pages,
               ),
             ),
@@ -148,65 +194,127 @@ class _WelcomePage extends StatelessWidget {
   }
 }
 
-// PAGE 2 - Your Role in CTP (role-aware)
+// PAGE 2 - Your Role in CTP (role-aware, including specialized roles)
 class _YourRolePage extends StatelessWidget {
   final UserRole role;
-  const _YourRolePage({required this.role});
+  final Employee? employee;
+  const _YourRolePage({required this.role, this.employee});
 
-  String get _title => switch (role) {
-        UserRole.technician => "You're a Technician",
-        UserRole.manager => "You're a Manager",
-        UserRole.admin => "You're an Admin",
-        UserRole.operator => "You're an Operator",
-      };
+  // Specialized role checks take priority over the base UserRole so that
+  // a Security Guard (maps to 'operator') or Hyster Mechanic (maps to
+  // 'technician') sees content relevant to their actual day-to-day module.
+  bool get _isSecurityManager => isSecurityManager(employee);
+  bool get _isSecurityGuard => isSecurityGuard(employee);
+  bool get _isFleetMechanic => isFleetMechanic(employee);
 
-  String get _subtitle => switch (role) {
-        UserRole.technician => "You receive jobs, attend to faults, and close them out.",
-        UserRole.manager => "You oversee jobs, enforce quality, and respond to escalations.",
-        UserRole.admin => "You configure the system — employees, geofences, escalation rules.",
-        UserRole.operator => "You report faults — the first link in the chain.",
-      };
+  String get _title {
+    if (_isSecurityManager) return "You're a Security Manager";
+    if (_isSecurityGuard)   return "You're a Security Guard";
+    if (_isFleetMechanic)   return "You're the Hyster Mechanic";
+    return switch (role) {
+      UserRole.technician => "You're a Technician",
+      UserRole.manager    => "You're a Manager",
+      UserRole.admin      => "You're an Admin",
+      UserRole.operator   => "You're an Operator",
+    };
+  }
 
-  IconData get _icon => switch (role) {
-        UserRole.technician => Icons.build,
-        UserRole.manager => Icons.dashboard,
-        UserRole.admin => Icons.admin_panel_settings,
-        UserRole.operator => Icons.report,
-      };
+  String get _subtitle {
+    if (_isSecurityManager) return "You oversee every waste load that leaves the factory — collections, weights, contractors, and reports.";
+    if (_isSecurityGuard)   return "You process waste collections at the gate — beginning the load, recording items, and signing off at the weighbridge.";
+    if (_isFleetMechanic)   return "You maintain the forklifts and grabs on site — your work queue lives in the Fleet tab.";
+    return switch (role) {
+      UserRole.technician => "You receive jobs, attend to faults, and close them out.",
+      UserRole.manager    => "You oversee jobs, enforce quality, and respond to escalations.",
+      UserRole.admin      => "You configure the system — employees, geofences, escalation rules.",
+      UserRole.operator   => "You report faults — the first link in the chain.",
+    };
+  }
 
-  List<_RoleBullet> get _bullets => switch (role) {
-        UserRole.technician => const [
-            _RoleBullet(Icons.notifications_active, "Receive job alerts the moment a fault is reported in your trade and you're on site"),
-            _RoleBullet(Icons.touch_app, "Tap 'Assign to Me' on the notification — the job moves to In-Progress and escalation stops"),
-            _RoleBullet(Icons.location_on, "Background location must be 'Allow All the Time' — without it you'll miss alerts when off-screen"),
-            _RoleBullet(Icons.check_circle_outline, "Close jobs with a clear note — what was done, parts used, root cause"),
-          ],
-        UserRole.manager => const [
-            _RoleBullet(Icons.dashboard, "Manager Dashboard shows live status of every job in your department"),
-            _RoleBullet(Icons.fact_check, "Daily Review (web) lets you scope jobs by department or type and add manager notes"),
-            _RoleBullet(Icons.notification_important, "If Stage 2 escalation fires, you're notified — that's your cue to act"),
-            _RoleBullet(Icons.history, "Notification History logs every alert sent and every response received"),
-          ],
-        UserRole.admin => const [
-            _RoleBullet(Icons.settings, "Open the gear icon and unlock Admin with your password"),
-            _RoleBullet(Icons.people_outline, "Employees / Structures / Escalation Config / Job Cards — all editable from the Admin screen"),
-            _RoleBullet(Icons.timer, "Escalation rule changes go live on the next 2-minute Cloud Function tick"),
-            _RoleBullet(Icons.map, "Geofence Editor configures on-site boundaries directly on the device"),
-          ],
-        UserRole.operator => const [
-            _RoleBullet(Icons.add_circle_outline, "When something breaks, create a job card immediately — no paper, no radio"),
-            _RoleBullet(Icons.edit_note, "Be specific: machine name, what you observed, accurate priority"),
-            _RoleBullet(Icons.schedule, "If no technician responds within 5 minutes, escalation kicks in automatically"),
-            _RoleBullet(Icons.notifications, "You'll receive 'no response yet' follow-ups so you know the system is chasing it"),
-          ],
-      };
+  IconData get _icon {
+    if (_isSecurityManager) return Icons.security;
+    if (_isSecurityGuard)   return Icons.badge;
+    if (_isFleetMechanic)   return Icons.precision_manufacturing;
+    return switch (role) {
+      UserRole.technician => Icons.build,
+      UserRole.manager    => Icons.dashboard,
+      UserRole.admin      => Icons.admin_panel_settings,
+      UserRole.operator   => Icons.report,
+    };
+  }
 
-  Color get _accent => switch (role) {
-        UserRole.technician => const Color(0xFF10B981),
-        UserRole.manager => const Color(0xFF3B82F6),
-        UserRole.admin => const Color(0xFF8B5CF6),
-        UserRole.operator => const Color(0xFFFF8C42),
-      };
+  List<_RoleBullet> get _bullets {
+    if (_isSecurityManager) {
+      return const [
+        _RoleBullet(Icons.add_box_outlined,      "Schedule waste collections: pick contractor, waste type, date and time"),
+        _RoleBullet(Icons.checklist,             "Review live load status in the Waste tab — Scheduled, In Progress, Pending Weighbridge, Completed"),
+        _RoleBullet(Icons.bar_chart,             "Open Reports to check weights, flag deviations, and export CSV or PDF"),
+        _RoleBullet(Icons.admin_panel_settings,  "Manage contractors, waste types, and rates from the Admin panel inside the Waste tab"),
+      ];
+    }
+    if (_isSecurityGuard) {
+      return const [
+        _RoleBullet(Icons.local_shipping,        "When a contractor arrives, find their scheduled load in the Waste tab and tap Begin Collection"),
+        _RoleBullet(Icons.photo_camera,          "Add each waste type with its recorded weight and a photo — at least one photo per load is required"),
+        _RoleBullet(Icons.draw,                  "Capture the contractor driver's signature before the truck leaves the gate"),
+        _RoleBullet(Icons.scale,                 "When the truck returns from the external weighbridge, enter the certified weight to complete the load"),
+      ];
+    }
+    if (_isFleetMechanic) {
+      return const [
+        _RoleBullet(Icons.list_alt,              "Your Fleet tab shows all open issues sorted by severity — Out of Service jobs appear first"),
+        _RoleBullet(Icons.touch_app,             "Acknowledge an issue when you start working on it, then resolve it by logging your work"),
+        _RoleBullet(Icons.engineering,           "Work records capture labour hours, machine hour-meter reading, parts used, and photos — numbered FM-YYYYMMDD-NNN"),
+        _RoleBullet(Icons.money_off,             "You never see cost amounts — a cost manager handles that separately"),
+      ];
+    }
+    return switch (role) {
+      UserRole.technician => const [
+          _RoleBullet(Icons.notifications_active, "Receive job alerts the moment a fault is reported in your trade and you're on site"),
+          _RoleBullet(Icons.touch_app, "Tap 'Assign to Me' on the notification — the job moves to In-Progress and escalation stops"),
+          _RoleBullet(Icons.location_on, "Background location must be 'Allow All the Time' — without it you'll miss alerts when off-screen"),
+          _RoleBullet(Icons.check_circle_outline, "Close jobs with a clear note — what was done, parts used, root cause"),
+        ],
+      UserRole.manager => const [
+          _RoleBullet(Icons.dashboard, "Manager Dashboard shows live status of every job in your department"),
+          _RoleBullet(Icons.fact_check, "Daily Review (web) lets you scope jobs by department or type and add manager notes"),
+          _RoleBullet(Icons.notification_important, "If Stage 2 escalation fires, you're notified — that's your cue to act"),
+          _RoleBullet(Icons.history, "Notification History logs every alert sent and every response received"),
+        ],
+      UserRole.admin => const [
+          _RoleBullet(Icons.settings, "Open the gear icon and unlock Admin with your password"),
+          _RoleBullet(Icons.people_outline, "Employees / Structures / Escalation Config / Job Cards — all editable from the Admin screen"),
+          _RoleBullet(Icons.timer, "Escalation rule changes go live on the next 2-minute Cloud Function tick"),
+          _RoleBullet(Icons.map, "Geofence Editor configures on-site boundaries directly on the device"),
+        ],
+      UserRole.operator => const [
+          _RoleBullet(Icons.add_circle_outline, "When something breaks, create a job card immediately — no paper, no radio"),
+          _RoleBullet(Icons.edit_note, "Be specific: machine name, what you observed, accurate priority"),
+          _RoleBullet(Icons.schedule, "If no technician responds within 5 minutes, escalation kicks in automatically"),
+          _RoleBullet(Icons.notifications, "You'll receive 'no response yet' follow-ups so you know the system is chasing it"),
+        ],
+    };
+  }
+
+  Color get _accent {
+    if (_isSecurityManager || _isSecurityGuard) return const Color(0xFF10B981); // green
+    if (_isFleetMechanic)                        return const Color(0xFF0EA5E9); // sky blue
+    return switch (role) {
+      UserRole.technician => const Color(0xFF10B981),
+      UserRole.manager    => const Color(0xFF3B82F6),
+      UserRole.admin      => const Color(0xFF8B5CF6),
+      UserRole.operator   => const Color(0xFFFF8C42),
+    };
+  }
+
+  // Closing note varies: specialized roles need a nudge that the job-card
+  // pages ahead still apply to them (they're on site, so they get alerts too).
+  String get _closingNote {
+    if (_isSecurityManager) return "The next few pages cover job cards, priorities, and escalation — you'll still receive on-site notifications and can report faults too.";
+    if (_isSecurityGuard)   return "The next few pages cover the job card system — you may still receive on-site notifications, so this context is useful.";
+    if (_isFleetMechanic)   return "The next few pages cover the standard job card system — you can still create and receive job cards for plant faults.";
+    return "The next few pages explain how job cards, priorities, and escalation work — everyone uses these the same way.";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -242,10 +350,10 @@ class _YourRolePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: _accent.withValues(alpha: 0.3)),
               ),
-              child: const Text(
-                "The next few pages explain how job cards, priorities, and escalation work — everyone uses these the same way.",
+              child: Text(
+                _closingNote,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+                style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
               ),
             ),
           ],
@@ -600,27 +708,44 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
   void initState() {
     super.initState();
     if (kIsWeb) return;
-    // Auto-trigger the guided grant flow once the provider has loaded.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final statuses = await ref.read(permissionsProvider.future);
-      final allGranted = statuses.values.every((s) => s.isGranted);
-      if (!allGranted && mounted) {
-        _grantPermissions();
-      }
+    // Notification + location were already requested on pages 5 and 6.
+    // This page only needs to handle the remaining items: camera, SAW, battery.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _requestRemainingPerms();
     });
   }
 
-  /// Walks through every required permission in the right order:
-  /// - locationWhenInUse must be granted before locationAlways on Android 10+.
-  /// - The remaining critical permissions (SAW, notification-policy,
-  ///   battery-optimization) are requested via NotificationService so the
-  ///   same flow handles "opens settings page" cases.
+  // Requests only the permissions not already covered by earlier pages:
+  // camera (page 7 is the first mention of photo attachments), SAW
+  // (full-screen overlay for P5), and battery optimisation (keeps geofencing
+  // alive in the background). Notification + location were already asked.
+  Future<void> _requestRemainingPerms() async {
+    if (kIsWeb) return;
+    setState(() => _checking = true);
+    try {
+      if (!(await Permission.camera.status).isGranted) {
+        await Permission.camera.request();
+      }
+      if (!(await Permission.systemAlertWindow.status).isGranted) {
+        await Permission.systemAlertWindow.request();
+      }
+      if (await Permission.ignoreBatteryOptimizations.isDenied) {
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } finally {
+      ref.invalidate(permissionsProvider);
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  // Catch-all used by the "Grant Permissions" button — walks every required
+  // permission and requests anything still missing, then opens Settings for
+  // SAW if it remains denied after the system dialog.
   Future<void> _grantPermissions() async {
     if (kIsWeb) return;
     setState(() => _checking = true);
     try {
-      final whenInUse = await Permission.locationWhenInUse.status;
-      if (!whenInUse.isGranted) {
+      if (!(await Permission.locationWhenInUse.status).isGranted) {
         await Permission.locationWhenInUse.request();
       }
       if (!(await Permission.locationAlways.status).isGranted) {
@@ -632,10 +757,6 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
       if (!(await Permission.camera.status).isGranted) {
         await Permission.camera.request();
       }
-      // SAW + battery-optimization + notification-policy + opens-settings-page
-      // for SAW if still denied. This used to fire from NotificationService
-      // .initialize() at app launch — moved here so it only runs in the
-      // guided flow.
       await NotificationService().requestAllCriticalPermissions();
     } finally {
       ref.invalidate(permissionsProvider);

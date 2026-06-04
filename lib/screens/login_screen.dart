@@ -125,8 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
 
       if (!kIsWeb) {
+        // Do not request notification permission here — it fires during the
+        // permissions onboarding screen after the user has read the explanation.
+        // Saving the FCM token is safe without the permission on Android.
         try {
-          await FirebaseMessaging.instance.requestPermission();
           await NotificationService()
               .refreshAndSaveToken(employee.clockNo)
               .timeout(const Duration(seconds: 5));
