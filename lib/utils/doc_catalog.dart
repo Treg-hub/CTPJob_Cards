@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/doc_entry.dart';
 import '../models/employee.dart';
+import '../models/fleet_settings.dart';
 import 'role.dart';
 
 const _allUserFacingRoles = <UserRole>{
@@ -79,25 +80,21 @@ const List<DocEntry> docCatalog = [
     requiresWaste: true,
   ),
   DocEntry(
-    id: 'cloud_functions_deployment',
-    title: 'Cloud Functions Deployment',
-    description: 'Function inventory, regions, deployment commands.',
-    icon: Icons.cloud,
-    roles: {UserRole.admin},
-    requiresAdmin: true,
-  ),
-  DocEntry(
-    id: 'firebase_security_rules',
-    title: 'Firebase Security Rules',
-    description: 'Access control — what rules enforce and what to tighten.',
-    icon: Icons.lock_outline,
-    roles: {UserRole.admin},
-    requiresAdmin: true,
+    id: 'fleet_user_guide',
+    title: 'Fleet Maintenance User Guide',
+    description: 'Reporting forklift/grab faults, logging work, costs, and reports.',
+    icon: Icons.forklift,
+    roles: _allUserFacingRoles,
+    requiresFleet: true,
   ),
 ];
 
 /// Returns the docs visible to [employee] given their inferred role,
-/// admin status, and waste access.
+/// admin status, waste access, and fleet access.
+///
+/// [fleetSettings] is needed to resolve the Fleet roles (reporter / cost
+/// manager are config-driven) and whether the module is enabled. Pass the
+/// session-cached settings; when null, Fleet docs are hidden for non-admins.
 ///
 /// Gate order:
 /// 1. `requiresAdmin` — immediately excluded if the user is not admin.
@@ -105,15 +102,20 @@ const List<DocEntry> docCatalog = [
 /// 3. `requiresWaste` — excluded if `isWasteUser()` is false, even if the
 ///    base role matches. This keeps WasteTrack-specific guides away from
 ///    general job-card users (mechanics, operators from other departments).
-/// 4. `roles` — standard role membership check.
-List<DocEntry> docsForUser(Employee? employee) {
+/// 4. `requiresFleet` — excluded unless the Fleet module is enabled and the
+///    user is a Fleet user. Mirrors the visibility of the Fleet tab.
+/// 5. `roles` — standard role membership check.
+List<DocEntry> docsForUser(Employee? employee, [FleetSettings? fleetSettings]) {
   final role = roleFromEmployee(employee);
   final admin = isAdmin(employee);
   final wasteUser = isWasteUser(employee);
+  final fleetUser = (fleetSettings?.fleetEnabled ?? false) &&
+      isFleetUser(employee, fleetSettings);
   return docCatalog.where((doc) {
     if (doc.requiresAdmin && !admin) return false;
     if (admin) return true;
     if (doc.requiresWaste && !wasteUser) return false;
+    if (doc.requiresFleet && !fleetUser) return false;
     return doc.roles.contains(role);
   }).toList(growable: false);
 }

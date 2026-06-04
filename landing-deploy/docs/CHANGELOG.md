@@ -6,6 +6,69 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-04 — Crash fix, in-app docs fixes, Fleet user guide
+
+### User-facing changes
+
+- **Crash fix** — A crash affecting some devices has been resolved. On certain devices, the home screen or daily review screen would crash silently after being opened from the background or after a network disruption. This has been fixed and will no longer occur.
+- **WasteTrack User Guide now opens correctly** — The in-app WasteTrack User Guide was showing raw page boilerplate instead of its content. The guide is now bundled correctly and displays as intended.
+- **New: Fleet Maintenance User Guide** — A full Fleet Maintenance guide is now available in Settings → Documentation for fleet users (reporters, the Hyster mechanic, cost managers, and admins). It covers reporting forklift/grab faults, logging work, recording costs, and reports. It only appears for users with Fleet access when the module is enabled.
+- **Documentation list cleaned up** — Two developer-only references (Cloud Functions Deployment, Firebase Security Rules) that could not open in-app have been removed from the documentation list. They remain available to developers outside the app.
+
+### Developer / maintenance changes
+
+- **Firestore stream `onError` handlers** — Added `onError` callbacks to all five Firestore `.snapshots()` stream subscriptions in `home_screen.dart` (employee stream, open jobs, in-progress jobs, review count) and `daily_review_screen.dart` (all job cards). Previously a `PlatformException(channel-error)` from the Firestore Pigeon transport propagated as an unhandled stream error and crashed the app. The error is now caught, logged to debug output, and the screen remains functional with its last known data.
+- **FCM subscription leak fixed** — `FirebaseMessaging.onMessageOpenedApp.listen()` in `HomeScreen` was never stored or cancelled on `dispose()`. Each login session added a permanent listener that accumulated in memory and could trigger `setState()` on disposed widgets. Now stored in `_messagingSubscription` and cancelled in `dispose()`.
+- **Landing page — Remote Config driven** — `ctp-job-cards-landing.web.app` now fetches `latest_version`, `latest_build`, `download_url`, and `release_notes` from Firebase Remote Config on every page load. Future releases only require a Remote Config update — no HTML edits or redeployment needed. Fallback values in the HTML ensure the page renders instantly even if Remote Config is unreachable.
+
+---
+
+## 2026-06-03 — CTP Pulse web dashboard: theme & contrast fixes
+
+Web-only update to CTP Pulse (factory board at port 3003). No mobile changes.
+
+### What changed
+
+- **Status badge contrast** — Overtime entry status badges (Pending, Workshop Approved, Approved, Cancelled) now use correctly contrasting colours in both light and dark modes. Previously the coloured text was too light to read in light mode.
+- **KPI trend colours** — Declining-trend indicators on KPI cards now correctly show in red (destructive colour). Previously they had no colour at all.
+- **Fleet severity labels** — Issue severity labels (Out of Service, High, Medium, Low) in the Fleet page open-issues table now render in legible colours in dark mode.
+- **Fleet cost chart** — The "Cost by Category per Asset" stacked bar chart now has correctly themed axis labels, gridlines, tooltip, and legend in dark mode. Previously axis text was near-invisible in dark mode.
+- **Native date/select inputs** — Date pickers and dropdown filter selects now follow the app's dark theme; previously the browser rendered them with a white background in dark mode.
+
+---
+
+## 2026-06-03 — Fleet Maintenance module (Hyster forklifts & grabs)
+
+A new **Fleet** tab for tracking forklift and grab maintenance — separate from normal job cards. It appears once an admin enables it in Fleet Settings and you have a fleet role.
+
+### User-facing changes
+
+**New: Fleet tab**
+
+- **Report a problem** — operators and shift leads in the configured departments can report an issue on a forklift or grab: pick the asset, choose severity (Low / Medium / High / Out of Service), confirm the shift (auto-detected), describe the fault, and attach up to 3 photos.
+- **Out of Service alerts** — when an asset is reported out of service, the Hyster mechanic and the cost manager(s) get an immediate push notification (or it waits in their notification inbox if they're off-site). The asset shows an orange **OOS** badge everywhere it appears. High-severity issues go to the notification inbox without a push.
+- **Mechanic queue & work logging** — the mechanic sees open issues sorted by severity, can **Acknowledge** an issue, then resolve it either by logging the work (work type, labour hours, machine-hour reading, parts used, photos) or with a quick resolution note. Each work record gets a number like `FM-20260603-001`.
+- **Costs (managers only)** — the overseeing manager records cost lines per asset (parts / labour / invoice / other, with amount, invoice ref and supplier), views month and year-to-date spend per machine, and exports a full CSV. **The mechanic never sees money** — work records only show a "Costs pending / Costs entered" label.
+- **Admin** — the asset register (add/edit forklifts and grabs), reporter departments, cost-manager list, asset/work types, and the module on/off switch all live in **Fleet Settings**.
+
+### Who sees what
+
+| Role | How you're recognised | What you can do |
+|------|----------------------|-----------------|
+| Fleet Mechanic | Workshop department + "Hyster Mechanic" position | Log work, acknowledge/resolve issues |
+| Fleet Reporter | Your department is enabled in Fleet Settings | Report issues, track your own |
+| Cost Manager | Your clock number is on the cost-manager list | Enter costs, view reports, export CSV |
+| Fleet Admin | System admin | Manage assets and all settings |
+
+### Developer / architecture changes
+
+- New `fleet_*` Firestore collections (`fleet_assets`, `fleet_issues`, `fleet_work_records` + `fleet_work_parts`, `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`). Same signed-in auth model as WasteTrack; role enforcement is client-side.
+- Cloud Functions in the monorepo `firebase/functions` codebase: `createFleetWorkRecord` (atomic FM-number), `onFleetIssueCreated` (OOS notifications + asset badge), `onFleetIssueUpdated` (clears badge on resolve).
+- CTP Pulse gains a **Fleet Maintenance** board module (open issues, work hours MTD, cost MTD, avg resolution time) plus a `/fleet` detail page with cost-by-asset and cost-by-category charts and a live open-issues table. Access via the `fleet` board module in `/admin/users`.
+- See `docs/architecture/visualization.md` for the full role/screen matrix and `docs/COLLECTIONS.md` for the schemas.
+
+---
+
 ## 2026-06-03 — Job Card History screen, Firestore read cost fixes
 
 ### User-facing changes

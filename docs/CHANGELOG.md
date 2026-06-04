@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-04 — Crash fix, in-app docs fixes, Fleet user guide
+
+### User-facing changes
+
+- **Crash fix** — A crash affecting some devices has been resolved. On certain devices, the home screen or daily review screen would crash silently after being opened from the background or after a network disruption. This has been fixed and will no longer occur.
+- **WasteTrack User Guide now opens correctly** — The in-app WasteTrack User Guide was showing raw page boilerplate instead of its content. The guide is now bundled correctly and displays as intended.
+- **New: Fleet Maintenance User Guide** — A full Fleet Maintenance guide is now available in Settings → Documentation for fleet users (reporters, the Hyster mechanic, cost managers, and admins). It covers reporting forklift/grab faults, logging work, recording costs, and reports. It only appears for users with Fleet access when the module is enabled.
+- **Documentation list cleaned up** — Two developer-only references (Cloud Functions Deployment, Firebase Security Rules) that could not open in-app have been removed from the documentation list. They remain available to developers outside the app.
+
+### Developer / maintenance changes
+
+- **Firestore stream `onError` handlers** — Added `onError` callbacks to all five Firestore `.snapshots()` stream subscriptions in `home_screen.dart` (employee stream, open jobs, in-progress jobs, review count) and `daily_review_screen.dart` (all job cards). Previously a `PlatformException(channel-error)` from the Firestore Pigeon transport propagated as an unhandled stream error and crashed the app. The error is now caught, logged to debug output, and the screen remains functional with its last known data.
+- **FCM subscription leak fixed** — `FirebaseMessaging.onMessageOpenedApp.listen()` in `HomeScreen` was never stored or cancelled on `dispose()`. Each login session added a permanent listener that accumulated in memory and could trigger `setState()` on disposed widgets. Now stored in `_messagingSubscription` and cancelled in `dispose()`.
+- **Landing page — Remote Config driven** — `ctp-job-cards-landing.web.app` now fetches `latest_version`, `latest_build`, `download_url`, and `release_notes` from Firebase Remote Config on every page load. Future releases only require a Remote Config update — no HTML edits or redeployment needed. Fallback values in the HTML ensure the page renders instantly even if Remote Config is unreachable.
+
+---
+
 ## 2026-06-03 — CTP Pulse web dashboard: theme & contrast fixes
 
 Web-only update to CTP Pulse (factory board at port 3003). No mobile changes.

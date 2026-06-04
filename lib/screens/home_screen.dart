@@ -63,6 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Timer? _testModeTimer;
   int _pendingReviewCount = 0;
   StreamSubscription<List<JobCard>>? _reviewCountSubscription;
+  StreamSubscription<RemoteMessage>? _messagingSubscription;
 
   String? _myWorkSelectedDepartment;
   String? _myWorkSelectedArea;
@@ -138,6 +139,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (wasOffsite && isNowOnsite) {
         _checkInboxOnReturn(clockNo);
       }
+    }, onError: (e) {
+      debugPrint('HomeScreen: employee stream error: $e');
     });
   }
 
@@ -317,10 +320,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       openSub = _firestoreService.getOpenJobCards().listen((jobs) {
         openJobs = jobs;
         recount();
+      }, onError: (e) {
+        debugPrint('HomeScreen: open jobs stream error: $e');
       });
       inProgressSub = _firestoreService.getInProgressJobCards().listen((jobs) {
         inProgressJobs = jobs;
         recount();
+      }, onError: (e) {
+        debugPrint('HomeScreen: in-progress jobs stream error: $e');
       });
 
       // Merge both subscriptions under _countSubscription via a combined cancel
@@ -350,6 +357,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           return inScope && !c.reviewedBy.containsKey(clockNo);
         }).length;
         setState(() => _pendingReviewCount = count);
+      }, onError: (e) {
+        debugPrint('HomeScreen: review count stream error: $e');
       });
     }
 
@@ -363,6 +372,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _countSubscription?.cancel();
     _inProgressSub?.cancel();
     _reviewCountSubscription?.cancel();
+    _messagingSubscription?.cancel();
     _testModeTimer?.cancel();
     super.dispose();
   }
@@ -376,7 +386,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Future<void> _setupFirebaseMessaging() async {
     try {
-      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _messagingSubscription = FirebaseMessaging.onMessageOpenedApp.listen((message) {
         if (!mounted) return;
         if (message.data['notificationType'] == 'assigned') {
           setState(() => _selectedIndex = 1);
