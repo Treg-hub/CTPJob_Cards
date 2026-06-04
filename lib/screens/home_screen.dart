@@ -202,11 +202,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         }
       }
 
+      // Start the real-time stream unconditionally so updates work even if
+      // the one-shot fetch below fails (network down, Firestore warming up).
+      _setupEmployeeStream(clockNo);
+
       // Phase 2: replace stub with canonical Firestore data
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && mounted) {
         setState(() => currentEmployee = emp);
-        _setupEmployeeStream(clockNo);
       }
     } catch (e) {
       debugPrint('HomeScreen: deferred employee load failed: $e');

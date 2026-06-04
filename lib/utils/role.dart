@@ -81,21 +81,25 @@ bool isWasteAdmin(Employee? employee) {
 }
 
 /// Returns true if the employee is a Security Manager
-/// (department "Security" + position "Manager").
+/// (department "Security" + position containing "manager").
+/// Uses contains-matching so "Security Manager", "Senior Manager", etc. all qualify.
 bool isSecurityManager(Employee? employee) {
   if (employee == null) return false;
-  final dept = employee.department.toLowerCase();
-  final pos = employee.position.toLowerCase();
-  return dept == 'security' && pos == 'manager';
+  final dept = employee.department.toLowerCase().trim();
+  final pos = employee.position.toLowerCase().trim();
+  return (dept == 'security' || dept.contains('security')) &&
+      (pos == 'manager' || pos.contains('manager'));
 }
 
 /// Returns true if the employee is a Security Guard
-/// (department "Security" + position "Guard").
+/// (department "Security" + position containing "guard").
+/// Uses contains-matching so "Security Guard", "Senior Guard", etc. all qualify.
 bool isSecurityGuard(Employee? employee) {
   if (employee == null) return false;
-  final dept = employee.department.toLowerCase();
-  final pos = employee.position.toLowerCase();
-  return dept == 'security' && pos == 'guard';
+  final dept = employee.department.toLowerCase().trim();
+  final pos = employee.position.toLowerCase().trim();
+  return (dept == 'security' || dept.contains('security')) &&
+      (pos == 'guard' || pos.contains('guard'));
 }
 
 /// Convenience: any WasteTrack user (Admin, Security Manager, or Security Guard).

@@ -49,11 +49,17 @@ void main() async {
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-      // Settings must be applied before any Firestore call, and only when we are
-      // the first to initialise Firebase in this process. If a background service
-      // (FCM, geofencing) already started Firestore, calling settings= here throws
-      // "already started" — so we guard it inside the isEmpty block.
-      FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: !kIsWeb);
+    }
+    // Settings are separated from the isEmpty guard: background services (FCM,
+    // WorkManager, geofencing) may have pre-initialised Firebase without starting
+    // Firestore. We always try to set settings, catching the "already started"
+    // exception if a background service beat us to it.
+    if (!kIsWeb) {
+      try {
+        FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+      } catch (_) {
+        // Firestore already started by a background isolate — existing settings apply.
+      }
     }
     if (!kIsWeb) {
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;

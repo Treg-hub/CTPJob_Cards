@@ -381,6 +381,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   }
 
   void _showNewLoadMenu(BuildContext context) {
+    final canManageLoads = role_utils.isWasteAdmin(currentEmployee) ||
+        role_utils.isSecurityManager(currentEmployee);
+
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -392,32 +395,34 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
               child: Text('What would you like to do?',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(context).appColors.wasteGreen,
-                child: const Icon(Icons.event_available, color: Colors.white),
+            if (canManageLoads) ...[
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).appColors.wasteGreen,
+                  child: const Icon(Icons.event_available, color: Colors.white),
+                ),
+                title: const Text('Schedule Incoming Load'),
+                subtitle: const Text('Arrange a collection before the truck arrives'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
+                },
               ),
-              title: const Text('Schedule Incoming Load'),
-              subtitle: const Text('Arrange a collection before the truck arrives'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
-              },
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.blueGrey,
-                child: Icon(Icons.add, color: Colors.white),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.blueGrey,
+                  child: Icon(Icons.add, color: Colors.white),
+                ),
+                title: const Text('New Load (on the spot)'),
+                subtitle: const Text('Create a load while the truck is here'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
+                },
               ),
-              title: const Text('New Load (on the spot)'),
-              subtitle: const Text('Create a load while the truck is here'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
-              },
-            ),
+            ],
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: Theme.of(context).appColors.wasteGreen,
