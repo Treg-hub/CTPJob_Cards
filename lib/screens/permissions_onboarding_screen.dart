@@ -67,7 +67,7 @@ class _PermissionsOnboardingScreenState extends ConsumerState<PermissionsOnboard
   // the right role even if the employee provider resolves after this screen mounts.
   List<Widget> _buildPages(Employee? emp) => [
     const _WelcomePage(),
-    _YourRolePage(role: roleFromEmployee(emp)),
+    _YourRolePage(role: roleFromEmployee(emp), employee: emp),
     const _JobCardFlowPage(),
     const _JobStatusPage(),
     const _PriorityLevelsPage(),
@@ -194,65 +194,127 @@ class _WelcomePage extends StatelessWidget {
   }
 }
 
-// PAGE 2 - Your Role in CTP (role-aware)
+// PAGE 2 - Your Role in CTP (role-aware, including specialized roles)
 class _YourRolePage extends StatelessWidget {
   final UserRole role;
-  const _YourRolePage({required this.role});
+  final Employee? employee;
+  const _YourRolePage({required this.role, this.employee});
 
-  String get _title => switch (role) {
-        UserRole.technician => "You're a Technician",
-        UserRole.manager => "You're a Manager",
-        UserRole.admin => "You're an Admin",
-        UserRole.operator => "You're an Operator",
-      };
+  // Specialized role checks take priority over the base UserRole so that
+  // a Security Guard (maps to 'operator') or Hyster Mechanic (maps to
+  // 'technician') sees content relevant to their actual day-to-day module.
+  bool get _isSecurityManager => isSecurityManager(employee);
+  bool get _isSecurityGuard => isSecurityGuard(employee);
+  bool get _isFleetMechanic => isFleetMechanic(employee);
 
-  String get _subtitle => switch (role) {
-        UserRole.technician => "You receive jobs, attend to faults, and close them out.",
-        UserRole.manager => "You oversee jobs, enforce quality, and respond to escalations.",
-        UserRole.admin => "You configure the system — employees, geofences, escalation rules.",
-        UserRole.operator => "You report faults — the first link in the chain.",
-      };
+  String get _title {
+    if (_isSecurityManager) return "You're a Security Manager";
+    if (_isSecurityGuard)   return "You're a Security Guard";
+    if (_isFleetMechanic)   return "You're the Hyster Mechanic";
+    return switch (role) {
+      UserRole.technician => "You're a Technician",
+      UserRole.manager    => "You're a Manager",
+      UserRole.admin      => "You're an Admin",
+      UserRole.operator   => "You're an Operator",
+    };
+  }
 
-  IconData get _icon => switch (role) {
-        UserRole.technician => Icons.build,
-        UserRole.manager => Icons.dashboard,
-        UserRole.admin => Icons.admin_panel_settings,
-        UserRole.operator => Icons.report,
-      };
+  String get _subtitle {
+    if (_isSecurityManager) return "You oversee every waste load that leaves the factory — collections, weights, contractors, and reports.";
+    if (_isSecurityGuard)   return "You process waste collections at the gate — beginning the load, recording items, and signing off at the weighbridge.";
+    if (_isFleetMechanic)   return "You maintain the forklifts and grabs on site — your work queue lives in the Fleet tab.";
+    return switch (role) {
+      UserRole.technician => "You receive jobs, attend to faults, and close them out.",
+      UserRole.manager    => "You oversee jobs, enforce quality, and respond to escalations.",
+      UserRole.admin      => "You configure the system — employees, geofences, escalation rules.",
+      UserRole.operator   => "You report faults — the first link in the chain.",
+    };
+  }
 
-  List<_RoleBullet> get _bullets => switch (role) {
-        UserRole.technician => const [
-            _RoleBullet(Icons.notifications_active, "Receive job alerts the moment a fault is reported in your trade and you're on site"),
-            _RoleBullet(Icons.touch_app, "Tap 'Assign to Me' on the notification — the job moves to In-Progress and escalation stops"),
-            _RoleBullet(Icons.location_on, "Background location must be 'Allow All the Time' — without it you'll miss alerts when off-screen"),
-            _RoleBullet(Icons.check_circle_outline, "Close jobs with a clear note — what was done, parts used, root cause"),
-          ],
-        UserRole.manager => const [
-            _RoleBullet(Icons.dashboard, "Manager Dashboard shows live status of every job in your department"),
-            _RoleBullet(Icons.fact_check, "Daily Review (web) lets you scope jobs by department or type and add manager notes"),
-            _RoleBullet(Icons.notification_important, "If Stage 2 escalation fires, you're notified — that's your cue to act"),
-            _RoleBullet(Icons.history, "Notification History logs every alert sent and every response received"),
-          ],
-        UserRole.admin => const [
-            _RoleBullet(Icons.settings, "Open the gear icon and unlock Admin with your password"),
-            _RoleBullet(Icons.people_outline, "Employees / Structures / Escalation Config / Job Cards — all editable from the Admin screen"),
-            _RoleBullet(Icons.timer, "Escalation rule changes go live on the next 2-minute Cloud Function tick"),
-            _RoleBullet(Icons.map, "Geofence Editor configures on-site boundaries directly on the device"),
-          ],
-        UserRole.operator => const [
-            _RoleBullet(Icons.add_circle_outline, "When something breaks, create a job card immediately — no paper, no radio"),
-            _RoleBullet(Icons.edit_note, "Be specific: machine name, what you observed, accurate priority"),
-            _RoleBullet(Icons.schedule, "If no technician responds within 5 minutes, escalation kicks in automatically"),
-            _RoleBullet(Icons.notifications, "You'll receive 'no response yet' follow-ups so you know the system is chasing it"),
-          ],
-      };
+  IconData get _icon {
+    if (_isSecurityManager) return Icons.security;
+    if (_isSecurityGuard)   return Icons.badge;
+    if (_isFleetMechanic)   return Icons.precision_manufacturing;
+    return switch (role) {
+      UserRole.technician => Icons.build,
+      UserRole.manager    => Icons.dashboard,
+      UserRole.admin      => Icons.admin_panel_settings,
+      UserRole.operator   => Icons.report,
+    };
+  }
 
-  Color get _accent => switch (role) {
-        UserRole.technician => const Color(0xFF10B981),
-        UserRole.manager => const Color(0xFF3B82F6),
-        UserRole.admin => const Color(0xFF8B5CF6),
-        UserRole.operator => const Color(0xFFFF8C42),
-      };
+  List<_RoleBullet> get _bullets {
+    if (_isSecurityManager) {
+      return const [
+        _RoleBullet(Icons.add_box_outlined,      "Schedule waste collections: pick contractor, waste type, date and time"),
+        _RoleBullet(Icons.checklist,             "Review live load status in the Waste tab — Scheduled, In Progress, Pending Weighbridge, Completed"),
+        _RoleBullet(Icons.bar_chart,             "Open Reports to check weights, flag deviations, and export CSV or PDF"),
+        _RoleBullet(Icons.admin_panel_settings,  "Manage contractors, waste types, and rates from the Admin panel inside the Waste tab"),
+      ];
+    }
+    if (_isSecurityGuard) {
+      return const [
+        _RoleBullet(Icons.local_shipping,        "When a contractor arrives, find their scheduled load in the Waste tab and tap Begin Collection"),
+        _RoleBullet(Icons.photo_camera,          "Add each waste type with its recorded weight and a photo — at least one photo per load is required"),
+        _RoleBullet(Icons.draw,                  "Capture the contractor driver's signature before the truck leaves the gate"),
+        _RoleBullet(Icons.scale,                 "When the truck returns from the external weighbridge, enter the certified weight to complete the load"),
+      ];
+    }
+    if (_isFleetMechanic) {
+      return const [
+        _RoleBullet(Icons.list_alt,              "Your Fleet tab shows all open issues sorted by severity — Out of Service jobs appear first"),
+        _RoleBullet(Icons.touch_app,             "Acknowledge an issue when you start working on it, then resolve it by logging your work"),
+        _RoleBullet(Icons.engineering,           "Work records capture labour hours, machine hour-meter reading, parts used, and photos — numbered FM-YYYYMMDD-NNN"),
+        _RoleBullet(Icons.money_off,             "You never see cost amounts — a cost manager handles that separately"),
+      ];
+    }
+    return switch (role) {
+      UserRole.technician => const [
+          _RoleBullet(Icons.notifications_active, "Receive job alerts the moment a fault is reported in your trade and you're on site"),
+          _RoleBullet(Icons.touch_app, "Tap 'Assign to Me' on the notification — the job moves to In-Progress and escalation stops"),
+          _RoleBullet(Icons.location_on, "Background location must be 'Allow All the Time' — without it you'll miss alerts when off-screen"),
+          _RoleBullet(Icons.check_circle_outline, "Close jobs with a clear note — what was done, parts used, root cause"),
+        ],
+      UserRole.manager => const [
+          _RoleBullet(Icons.dashboard, "Manager Dashboard shows live status of every job in your department"),
+          _RoleBullet(Icons.fact_check, "Daily Review (web) lets you scope jobs by department or type and add manager notes"),
+          _RoleBullet(Icons.notification_important, "If Stage 2 escalation fires, you're notified — that's your cue to act"),
+          _RoleBullet(Icons.history, "Notification History logs every alert sent and every response received"),
+        ],
+      UserRole.admin => const [
+          _RoleBullet(Icons.settings, "Open the gear icon and unlock Admin with your password"),
+          _RoleBullet(Icons.people_outline, "Employees / Structures / Escalation Config / Job Cards — all editable from the Admin screen"),
+          _RoleBullet(Icons.timer, "Escalation rule changes go live on the next 2-minute Cloud Function tick"),
+          _RoleBullet(Icons.map, "Geofence Editor configures on-site boundaries directly on the device"),
+        ],
+      UserRole.operator => const [
+          _RoleBullet(Icons.add_circle_outline, "When something breaks, create a job card immediately — no paper, no radio"),
+          _RoleBullet(Icons.edit_note, "Be specific: machine name, what you observed, accurate priority"),
+          _RoleBullet(Icons.schedule, "If no technician responds within 5 minutes, escalation kicks in automatically"),
+          _RoleBullet(Icons.notifications, "You'll receive 'no response yet' follow-ups so you know the system is chasing it"),
+        ],
+    };
+  }
+
+  Color get _accent {
+    if (_isSecurityManager || _isSecurityGuard) return const Color(0xFF10B981); // green
+    if (_isFleetMechanic)                        return const Color(0xFF0EA5E9); // sky blue
+    return switch (role) {
+      UserRole.technician => const Color(0xFF10B981),
+      UserRole.manager    => const Color(0xFF3B82F6),
+      UserRole.admin      => const Color(0xFF8B5CF6),
+      UserRole.operator   => const Color(0xFFFF8C42),
+    };
+  }
+
+  // Closing note varies: specialized roles need a nudge that the job-card
+  // pages ahead still apply to them (they're on site, so they get alerts too).
+  String get _closingNote {
+    if (_isSecurityManager) return "The next few pages cover job cards, priorities, and escalation — you'll still receive on-site notifications and can report faults too.";
+    if (_isSecurityGuard)   return "The next few pages cover the job card system — you may still receive on-site notifications, so this context is useful.";
+    if (_isFleetMechanic)   return "The next few pages cover the standard job card system — you can still create and receive job cards for plant faults.";
+    return "The next few pages explain how job cards, priorities, and escalation work — everyone uses these the same way.";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -288,10 +350,10 @@ class _YourRolePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: _accent.withValues(alpha: 0.3)),
               ),
-              child: const Text(
-                "The next few pages explain how job cards, priorities, and escalation work — everyone uses these the same way.",
+              child: Text(
+                _closingNote,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+                style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
               ),
             ),
           ],
