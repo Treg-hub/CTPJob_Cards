@@ -14,7 +14,11 @@ class UpdateService {
   UpdateService._internal();
 
   static const String _lastCheckKey = 'last_update_check';
-  static const Duration _checkInterval = Duration(hours: 24);
+  // Full check interval when Remote Config is properly configured.
+  static const Duration _checkInterval = Duration(hours: 4);
+  // Short retry when RC keys are missing/empty — so a misconfiguration
+  // doesn't silence update checks for a full day.
+  static const Duration _incompleteConfigRetry = Duration(hours: 1);
 
   bool _initialized = false;
 
@@ -38,8 +42,11 @@ class UpdateService {
     _initialized = true;
   }
 
-  /// Silent startup check (respects 24h cooldown). Shows the standard update
+  /// Silent startup check (respects cooldown). Shows the standard update
   /// dialog only when a newer version is available.
+  /// - Full 4-hour cooldown when RC is properly configured.
+  /// - 1-hour retry when RC keys are missing, so a setup mistake doesn't
+  ///   silence checks for a full day.
   Future<void> checkForUpdate(BuildContext context) async {
     if (kIsWeb) return;
 
@@ -49,12 +56,14 @@ class UpdateService {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       if (lastCheck != null && (now - lastCheck) < _checkInterval.inMilliseconds) {
-        debugPrint('Update check skipped - checked recently');
+        final remaining = Duration(milliseconds: _checkInterval.inMilliseconds - (now - lastCheck));
+        debugPrint('UpdateService: skipped — next check in ${remaining.inMinutes}m');
         return;
       }
 
       if (!context.mounted) return;
       final result = await _performUpdateCheck(prefs, now);
+      debugPrint('UpdateService: ${result.hasUpdate ? "UPDATE AVAILABLE ${result.latestVersion}" : result.configComplete ? "up to date" : "RC keys not configured"}');
       if (result.hasUpdate && context.mounted) {
         await _showUpdateDialog(
           context,
@@ -66,7 +75,7 @@ class UpdateService {
       }
     } catch (e, st) {
       if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'update_check_silent', fatal: false);
-      debugPrint('Error checking for updates: $e');
+      debugPrint('UpdateService: error — $e');
     }
   }
 
@@ -127,7 +136,16 @@ class UpdateService {
         _isNewerVersion(currentVersion, latestVersion, currentBuild, latestBuild);
 
     if (fetchSucceeded) {
-      await prefs.setInt(_lastCheckKey, now);
+      if (configComplete) {
+        // Full cooldown — config is set up correctly.
+        await prefs.setInt(_lastCheckKey, now);
+      } else {
+        // RC fetched OK but keys are empty. Use a short retry so a
+        // misconfiguration doesn't silence update prompts for 4 hours.
+        final shortRetry = now - (_checkInterval.inMilliseconds - _incompleteConfigRetry.inMilliseconds);
+        await prefs.setInt(_lastCheckKey, shortRetry);
+        debugPrint('UpdateService: RC keys incomplete — retrying in ${_incompleteConfigRetry.inMinutes}m');
+      }
     }
 
     return _UpdateCheckResult(
