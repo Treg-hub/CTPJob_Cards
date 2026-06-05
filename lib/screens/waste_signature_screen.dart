@@ -29,8 +29,6 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
 
   final WasteService _wasteService = WasteService();
   bool _effectiveWasteEnabled = true;
-  bool _pilotModeActive = false;
-  String? _userClock;
   bool get _isAdmin => role_utils.isWasteAdmin(currentEmployee);
 
   @override
@@ -41,16 +39,8 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
   }
 
   Future<void> _loadFeatureStatus() async {
-    final clock = currentEmployee?.clockNo;
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
-    final pilot = await _wasteService.isPilotModeEnabled();
-    if (mounted) {
-      setState(() {
-        _effectiveWasteEnabled = enabled;
-        _pilotModeActive = pilot;
-        _userClock = clock;
-      });
-    }
+    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
+    if (mounted) setState(() => _effectiveWasteEnabled = enabled);
   }
 
   @override
@@ -90,15 +80,13 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
               children: [
                 Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
-                Text(
-                  _pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const Text(
+                  'WasteTrack is currently disabled',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _pilotModeActive
-                      ? 'Your clock number (${_userClock ?? 'unknown'}) is not included in the pilot list.'
-                      : 'The feature flag has disabled WasteTrack (safety valve).',
+                  'Contact your administrator to re-enable.',
                   style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
                 ),

@@ -33,10 +33,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
   bool get _canAccess =>
       role_utils.isWasteAdmin(currentEmployee) || role_utils.isSecurityManager(currentEmployee);
 
-  // Phase 7 flag defense + admin recovery (minimal, mirrors home)
   bool _effectiveWasteEnabled = true;
-  bool _pilotModeActive = false;
-  String? _userClock;
 
   @override
   void initState() {
@@ -48,16 +45,8 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
   }
 
   Future<void> _loadFeatureStatus() async {
-    final clock = currentEmployee?.clockNo;
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
-    final pilot = await _wasteService.isPilotModeEnabled();
-    if (mounted) {
-      setState(() {
-        _effectiveWasteEnabled = enabled;
-        _pilotModeActive = pilot;
-        _userClock = clock;
-      });
-    }
+    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
+    if (mounted) setState(() => _effectiveWasteEnabled = enabled);
   }
 
   Future<void> _loadPending() async {
@@ -104,9 +93,9 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
-            Text(_pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('WasteTrack is currently disabled', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(_pilotModeActive ? 'Your clock number (${_userClock ?? 'unknown'}) is not in the pilot list.' : 'Feature disabled by safety flag.', style: TextStyle(color: Theme.of(context).appColors.textMuted), textAlign: TextAlign.center),
+            Text('Contact your administrator to re-enable.', style: TextStyle(color: Theme.of(context).appColors.textMuted), textAlign: TextAlign.center),
             if (role_utils.isWasteAdmin(currentEmployee)) ...[
               const SizedBox(height: 16),
               ElevatedButton.icon(onPressed: () async { await _wasteService.setWasteMasterEnabled(true); await _loadFeatureStatus(); _loadPending(); }, icon: const Icon(Icons.toggle_on), label: const Text('Re-enable (Admin)'), style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen)),
