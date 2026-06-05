@@ -282,10 +282,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   StreamSubscription<List<WasteLoad>>? _loadsSubscription;
   StreamSubscription<List<WasteLoad>>? _scheduledSubscription;
 
-  // Phase 7: enhanced flag state
   bool _effectiveWasteEnabled = true;
-  bool _pilotModeActive = false;
-  String? _userClock;
 
   // ── Tab controller + pending weighbridge badge counter ──
   late TabController _tabController;
@@ -368,19 +365,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   }
 
   Future<void> _loadFeatureStatus() async {
-    final clock = currentEmployee?.clockNo;
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
-    final pilot = await _wasteService.isPilotModeEnabled();
-    if (mounted) {
-      setState(() {
-        _effectiveWasteEnabled = enabled;
-        _pilotModeActive = pilot;
-        _userClock = clock;
-      });
-    }
+    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
+    if (mounted) setState(() => _effectiveWasteEnabled = enabled);
   }
 
   void _showNewLoadMenu(BuildContext context) {
+    final canManageLoads = role_utils.isWasteAdmin(currentEmployee) ||
+        role_utils.isSecurityManager(currentEmployee);
+
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -392,32 +384,34 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
               child: Text('What would you like to do?',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(context).appColors.wasteGreen,
-                child: const Icon(Icons.event_available, color: Colors.white),
+            if (canManageLoads) ...[
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).appColors.wasteGreen,
+                  child: const Icon(Icons.event_available, color: Colors.white),
+                ),
+                title: const Text('Schedule Incoming Load'),
+                subtitle: const Text('Arrange a collection before the truck arrives'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
+                },
               ),
-              title: const Text('Schedule Incoming Load'),
-              subtitle: const Text('Arrange a collection before the truck arrives'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
-              },
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.blueGrey,
-                child: Icon(Icons.add, color: Colors.white),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.blueGrey,
+                  child: Icon(Icons.add, color: Colors.white),
+                ),
+                title: const Text('New Load (on the spot)'),
+                subtitle: const Text('Create a load while the truck is here'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
+                },
               ),
-              title: const Text('New Load (on the spot)'),
-              subtitle: const Text('Create a load while the truck is here'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
-              },
-            ),
+            ],
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: Theme.of(context).appColors.wasteGreen,
@@ -697,15 +691,13 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
               children: [
                 Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
-                Text(
-                  _pilotModeActive ? 'WasteTrack is in pilot mode' : 'WasteTrack is currently disabled',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const Text(
+                  'Waste Management is disabled',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _pilotModeActive
-                      ? 'Your clock number (${_userClock ?? 'unknown'}) is not included in the pilot list.'
-                      : 'The feature flag has disabled WasteTrack (safety valve).',
+                  'Contact your administrator to re-enable the module.',
                   style: TextStyle(color: Theme.of(context).appColors.textMuted),
                   textAlign: TextAlign.center,
                 ),
@@ -717,14 +709,8 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                       await _loadFeatureStatus();
                     },
                     icon: const Icon(Icons.toggle_on),
-                    label: const Text('Re-enable Master Flag (Admin)'),
+                    label: const Text('Re-enable (Admin)'),
                     style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WasteAdminScreen())),
-                    icon: const Icon(Icons.settings),
-                    label: const Text('Open Waste Admin'),
                   ),
                 ],
               ],

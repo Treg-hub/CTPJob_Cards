@@ -19,8 +19,14 @@ class SyncService {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   Future<void> init() async {
-    _queueBox = Hive.box<SyncQueueItem>('sync_queue');   // ← FIXED
+    _queueBox = Hive.box<SyncQueueItem>('sync_queue');
     _startListening();
+    // Drain any items left from the previous session. Without this, queued
+    // uploads only process on the next connectivity *change*, so items queued
+    // while already online would sit indefinitely.
+    if (_queueBox.isNotEmpty) {
+      _processQueue();
+    }
   }
 
   void _startListening() {

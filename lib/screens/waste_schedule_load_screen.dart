@@ -249,7 +249,7 @@ class _WasteScheduleLoadScreenState
                   Text('Contractor *', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<Contractor>(
-                    value: _selectedContractor,
+                    initialValue: _selectedContractor,
                     hint: const Text('Select contractor'),
                     isExpanded: true,
                     decoration: const InputDecoration(border: OutlineInputBorder()),

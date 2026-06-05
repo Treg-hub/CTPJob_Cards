@@ -145,7 +145,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
             _subtypes.isEmpty
                 ? const LinearProgressIndicator()
                 : DropdownButtonFormField<String>(
-                    value: _subtype,
+                    initialValue: _subtype,
                     isExpanded: true,
                     decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
                     items: _subtypes

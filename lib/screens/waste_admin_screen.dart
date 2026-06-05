@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
-import '../utils/seed_waste_data.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../models/waste_type.dart';
@@ -13,7 +12,7 @@ import '../utils/formatters.dart';
 import '../widgets/waste_app_bar.dart';
 
 /// Basic Waste Admin screen.
-/// Visible only to isWasteAdmin (currently clockNo == '22').
+/// Visible only to isWasteAdmin (Employee.isAdmin == true).
 class WasteAdminScreen extends ConsumerStatefulWidget {
   /// When [embedded] is true the screen skips its own Scaffold/AppBar so it
   /// can live inside a TabBarView in WasteHomeScreen.
@@ -26,28 +25,14 @@ class WasteAdminScreen extends ConsumerStatefulWidget {
 
 class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
   final WasteService _wasteService = WasteService();
-  bool _seeding = false;
-  bool _isProcessing = false; // for rate/type mutations
-
-  // Phase 7: Pilot mode controls (simple clock list for controlled rollout)
-  bool _pilotModeEnabled = false;
-  String _pilotClockCsv = '';
-  final TextEditingController _pilotCsvController = TextEditingController();
+  bool _isProcessing = false;
   bool _wasteEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPilotConfig();
     _loadWasteEnabled();
-    // Consistency: drain any offline waste ops when admin opens controls (rates, types, flags)
     _wasteService.processOfflineWasteQueue();
-  }
-
-  @override
-  void dispose() {
-    _pilotCsvController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadWasteEnabled() async {
@@ -55,64 +40,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     if (mounted) setState(() => _wasteEnabled = enabled);
   }
 
-  Future<void> _loadPilotConfig() async {
-    final pilotOn = await _wasteService.isPilotModeEnabled();
-    final clocks = await _wasteService.getPilotClockNumbers();
-    if (mounted) {
-      setState(() {
-        _pilotModeEnabled = pilotOn;
-        _pilotClockCsv = clocks.join(',');
-        _pilotCsvController.text = _pilotClockCsv;
-      });
-    }
-  }
-
-  Future<void> _savePilotConfig() async {
-    setState(() => _isProcessing = true);
-    try {
-      await _wasteService.setPilotModeEnabled(_pilotModeEnabled);
-      await _wasteService.setPilotClockNumbers(_pilotCsvController.text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pilot configuration saved.'), backgroundColor: Colors.green),
-        );
-        await _loadPilotConfig();
-        // Also log for pilot monitoring
-        final actor = currentEmployee?.clockNo ?? 'admin';
-        await _wasteService.logWasteUsage('admin_update_pilot_config', clockNo: actor);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pilot save failed: $e'), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
-  Future<void> _runSeed() async {
-    setState(() => _seeding = true);
-    try {
-      await seedWasteData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('WasteTrack seed data inserted successfully!'), backgroundColor: Colors.green),
-        );
-        final actor = currentEmployee?.clockNo ?? 'admin';
-        await _wasteService.logWasteUsage('admin_seed_data', clockNo: actor);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Seeding failed: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _seeding = false);
-    }
-  }
-
-  // --- Manage Types helpers (Phase 3 functional) ---
+  // --- Manage Types helpers ---
   Future<void> _addNewType() async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -302,7 +230,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Thresholds (read-only for now; settings doc editable via console or future form)
+                // Deviation thresholds (read-only; editable via Firestore console)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -312,44 +240,13 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                         const Text('Deviation Alert Thresholds', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         const Text('Default: > 5% OR > 50 kg (from waste_settings/global)'),
-                        const Text('Used by deviation.dart in load detail & reports.'),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Data Seeding (existing, improved state)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Data Seeding', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        const Text('One-time seed for development / first production setup:'),
-                        const SizedBox(height: 8),
-                        const Text('• 4 Contractors (Glenpak, Mondi, Industrial Scrap Waste, Mauser)'),
-                        const Text('• 7 Main Waste Types + subtypes per spec'),
-                        const Text('• Default deviation thresholds + notification config'),
-                        const Text('• Sample rates for demo costing'),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: _seeding ? null : _runSeed,
-                          icon: _seeding
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.download),
-                          label: Text(_seeding ? 'Seeding...' : 'Run WasteTrack Seed Data'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreenDark),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ========== PHASE 3: MANAGE WASTE TYPES (now functional) ==========
+                // ── Manage Waste Types ─────────────────────────────────────────
                 Builder(builder: (context) {
                   final appColors = Theme.of(context).appColors;
                   final surfaceBg = appColors.wasteGreenSurface;
@@ -413,7 +310,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 }),
                 const SizedBox(height: 16),
 
-                // ========== PHASE 3: MANAGE RATES (now functional) ==========
+                // ── Manage Rates ───────────────────────────────────────────────
                 Builder(builder: (context) {
                   final isDark = Theme.of(context).brightness == Brightness.dark;
                   final ratesBg = isDark ? const Color(0xFF2D2200) : Colors.amber.shade50;
@@ -482,120 +379,6 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                               },
                             );
                           },
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-                }),
-                const SizedBox(height: 16),
-
-                // Future / remaining (updated to reflect Phase 3 progress)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Remaining Admin Features (future phases)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 8),
-                        Text('• Manage Contractors & Collection Companies (basic add already in service)'),
-                        Text('• Archived Loads recovery (waste_deleted_loads + soft delete flow)'),
-                        Text('• Notification configuration (waste_settings)'),
-                        Text('• Full rate override / edit / delete with confirmation dialogs'),
-                        Text('• Bulk import/export of master data'),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Rollout Safety Flag + Pilot Mode (PROD-CRITICAL-3 Phase 7)
-                Builder(builder: (context) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  final pilotBg = isDark ? const Color(0xFF2D2200) : Colors.amber.shade50;
-                  final pilotOn = onColor(pilotBg);
-                  final pilotMuted = pilotOn.withValues(alpha: 0.6);
-                  return Card(
-                  color: pilotBg,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Rollout Safety Flag + Pilot Mode (Production Control)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pilotOn)),
-                        const SizedBox(height: 8),
-                        Text('Master flag (safety valve) + optional pilot mode restricting access to a list of clock numbers only.', style: TextStyle(color: pilotOn)),
-                        const SizedBox(height: 12),
-
-                        // Master toggle (kept for safety valve)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _isProcessing
-                                    ? null
-                                    : () async {
-                                        setState(() => _isProcessing = true);
-                                        try {
-                                          final current = await _wasteService.getWasteMasterEnabled();
-                                          await _wasteService.setWasteMasterEnabled(!current);
-                                          if (mounted) {
-                                            // ignore: use_build_context_synchronously
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Master flag set to ${!current}')),
-                                            );
-                                          }
-                                        } finally {
-                                          if (mounted) setState(() => _isProcessing = false);
-                                        }
-                                      },
-                                child: const Text('Toggle Master WasteTrack Flag'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Pilot mode
-                        SwitchListTile(
-                          title: Text('Enable Pilot Mode', style: TextStyle(color: pilotOn)),
-                          subtitle: Text('When on, only listed clock numbers can access WasteTrack (master must also be ON)', style: TextStyle(color: pilotMuted)),
-                          value: _pilotModeEnabled,
-                          onChanged: (v) => setState(() => _pilotModeEnabled = v),
-                          dense: true,
-                        ),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _pilotCsvController,
-                          style: TextStyle(color: pilotOn),
-                          decoration: InputDecoration(
-                            labelText: 'Allowed Clock Numbers (comma-separated)',
-                            labelStyle: TextStyle(color: pilotMuted),
-                            hintText: 'e.g. 22,105,207,301',
-                            hintStyle: TextStyle(color: pilotMuted),
-                            border: const OutlineInputBorder(),
-                            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: pilotMuted)),
-                            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: pilotOn)),
-                          ),
-                          onChanged: (v) => _pilotClockCsv = v,
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _savePilotConfig,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Save Pilot Configuration'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Current pilot list: ${_pilotClockCsv.isEmpty ? '(none - all blocked in pilot mode)' : _pilotClockCsv}',
-                          style: TextStyle(fontSize: 12, color: pilotMuted),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Tip: Include admin clocks (e.g. 22) to ensure recovery access. Changes take effect on next screen load / action.',
-                          style: TextStyle(fontSize: 11, color: pilotMuted),
                         ),
                       ],
                     ),

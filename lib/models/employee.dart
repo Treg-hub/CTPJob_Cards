@@ -7,6 +7,7 @@ class Employee {
   final String department;
   final String? fcmToken;
   final bool isOnSite;
+  final bool isAdmin;
   final DateTime? fcmTokenUpdatedAt;
 
   const Employee({
@@ -16,6 +17,7 @@ class Employee {
     required this.department,
     this.fcmToken,
     this.isOnSite = true,
+    this.isAdmin = false,
     this.fcmTokenUpdatedAt,
   });
 
@@ -29,6 +31,7 @@ class Employee {
       department: data['department'] as String? ?? '',
       fcmToken: data['fcmToken'] as String?,
       isOnSite: data['isOnSite'] as bool? ?? true,
+      isAdmin: data['isAdmin'] as bool? ?? false,
       fcmTokenUpdatedAt: data['fcmTokenUpdatedAt'] != null
           ? (data['fcmTokenUpdatedAt'] as Timestamp).toDate()
           : null,
@@ -43,6 +46,7 @@ class Employee {
       'department': department,
       'fcmToken': fcmToken,
       'isOnSite': isOnSite,
+      'isAdmin': isAdmin,
       'fcmTokenUpdatedAt': fcmTokenUpdatedAt != null
           ? Timestamp.fromDate(fcmTokenUpdatedAt!)
           : null,
@@ -56,6 +60,7 @@ class Employee {
     String? department,
     String? fcmToken,
     bool? isOnSite,
+    bool? isAdmin,
     DateTime? fcmTokenUpdatedAt,
   }) {
     return Employee(
@@ -65,6 +70,7 @@ class Employee {
       department: department ?? this.department,
       fcmToken: fcmToken ?? this.fcmToken,
       isOnSite: isOnSite ?? this.isOnSite,
+      isAdmin: isAdmin ?? this.isAdmin,
       fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
     );
   }

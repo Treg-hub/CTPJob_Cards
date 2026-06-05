@@ -7,10 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
@@ -34,24 +32,12 @@ class MainActivity : FlutterActivity() {
         handleDeepLink(intent)
         createUrgentNotificationChannel()
 
-        // Android 14+ requires USE_FULL_SCREEN_INTENT to be granted via Settings.
-        // Only redirect after the user has completed the permissions onboarding screen
-        // (permissionsCompleted == true). First-time installs skip this entirely —
-        // the Flutter onboarding page calls requestAllCriticalPermissions() which
-        // handles this redirect in the guided flow after explaining why it's needed.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val notifPrefs = getSharedPreferences("notification_prefs", MODE_PRIVATE)
-            val alreadyAsked = notifPrefs.getBoolean("fullScreenIntentPromptShown", false)
-            val onboardingPrefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
-            val onboardingDone = onboardingPrefs.getBoolean("flutter.permissionsCompleted", false)
-            if (!notificationManager.canUseFullScreenIntent() && !alreadyAsked && onboardingDone) {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                intent.data = Uri.fromParts("package", packageName, null)
-                startActivity(intent)
-                notifPrefs.edit().putBoolean("fullScreenIntentPromptShown", true).apply()
-            }
-        }
+        // NOTE: USE_FULL_SCREEN_INTENT (Android 14+) is intentionally NOT requested
+        // here. Redirecting to the system settings page from onCreate launched the
+        // "full-screen takeover" settings screen before the app UI appeared on every
+        // cold start that lacked the grant. It is now requested user-initiated from
+        // the in-app permissions flow via flutter_local_notifications'
+        // requestFullScreenIntentPermission() — see NotificationService.requestAllCriticalPermissions().
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

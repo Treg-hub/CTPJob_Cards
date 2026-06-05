@@ -132,11 +132,13 @@ function defaultNotificationConfig() {
       },
     },
     creation_recipients_by_type: {
-      "mechanical": ["onsite_mechanics"],
-      "electrical": ["onsite_electricians"],
-      "mech/elec":  ["onsite_mechanics", "onsite_electricians"],
+      "mechanical":  ["onsite_mechanics"],
+      "electrical":  ["onsite_electricians"],
+      "mech/elec":   ["onsite_mechanics", "onsite_electricians"],
+      "building":    ["onsite_building_maintenance", "onsite_workshop_manager"],
+      "specialist":  ["onsite_prepress_specialist", "onsite_workshop_manager"],
     },
-    excluded_job_types: ["maintenance"],
+    excluded_job_types: ["maintenance", "building", "specialist"],
   };
 }
 
@@ -234,6 +236,10 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department, operat
     } else if (rule === "onsite_workshop_manager") {
       const wm = await getOnsiteWorkshopManager(allEmps);
       if (wm) allRecipients.push(wm);
+    } else if (rule === "onsite_building_maintenance") {
+      allRecipients.push(...(await getOnsiteBuildingMaintenance(allEmps)));
+    } else if (rule === "onsite_prepress_specialist") {
+      allRecipients.push(...(await getOnsitePrepressSpecialist(allEmps)));
     } else if (rule === "offsite_managers") {
       allRecipients.push(...(await getOffsiteRelevantManagers(jobType, allEmps)));
     } else if (rule === "offsite_dept_managers") {
@@ -540,6 +546,34 @@ async function getOnsiteElectricians(allEmps = null) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
+async function getOnsiteBuildingMaintenance(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) =>
+      e.isOnSite === true && (e.position || "").toLowerCase().includes("building maintenance")
+    );
+  }
+  const snaps = await db.collection("employees").where("isOnSite", "==", true).get();
+  return snaps.docs
+    .filter((doc) => (doc.data().position || "").toLowerCase().includes("building maintenance"))
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
+async function getOnsitePrepressSpecialist(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) =>
+      e.isOnSite === true && e.department === "Pre Press" &&
+      (e.position || "").toLowerCase().includes("specialist")
+    );
+  }
+  const snaps = await db.collection("employees")
+    .where("department", "==", "Pre Press")
+    .where("isOnSite", "==", true)
+    .get();
+  return snaps.docs
+    .filter((doc) => (doc.data().position || "").toLowerCase().includes("specialist"))
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
 async function getOnsiteDeptForemenShiftLeaders(dept, allEmps = null) {
   if (allEmps) {
     return allEmps.filter((e) => {
@@ -690,7 +724,42 @@ async function notifyCreationRecipients(jobId, job, { triggeredBy = "job_created
 
 // ==================== FIRESTORE TRIGGER: JOB CREATED ====================
 exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "job_cards/{jobId}" }, async (event) => {
-  await notifyCreationRecipients(event.params.jobId, event.data.data(), { triggeredBy: "job_created" });
+  const jobId = event.params.jobId;
+  const job = event.data.data();
+  await notifyCreationRecipients(jobId, job, { triggeredBy: "job_created" });
+
+  // Auto-assign Pre Press Specialist jobs to the on-site specialist.
+  // If the specialist is off-site the job remains open — the Workshop Manager
+  // was still notified via creation notification and can assign manually.
+  if (job.type === "specialist") {
+    try {
+      const allEmps = await getAllEmployeesCached();
+      const specialists = await getOnsitePrepressSpecialist(allEmps);
+      if (specialists.length === 0) {
+        console.log(`onJobCardCreated: specialist job ${jobId} — no on-site specialist found, skipping auto-assign`);
+      } else {
+        const specialist = specialists[0];
+        const now = admin.firestore.Timestamp.now();
+        await event.data.ref.update({
+          assignedClockNos:  [specialist.clockNo],
+          assignedNames:     [specialist.name || specialist.clockNo],
+          assignedAt:        now,
+          escalationStopped: true,
+          assignmentHistory: admin.firestore.FieldValue.arrayUnion({
+            clockNo:        specialist.clockNo,
+            name:           specialist.name || specialist.clockNo,
+            assignedAt:     now,
+            assignedBy:     "system",
+            assignedByName: "Auto-assigned (Pre Press Specialist)",
+          }),
+        });
+        console.log(`onJobCardCreated: specialist job ${jobId} auto-assigned to ${specialist.clockNo}`);
+      }
+    } catch (e) {
+      // Non-fatal — specialist was still notified via creation notification
+      console.error(`onJobCardCreated: auto-assign failed for specialist job ${jobId}:`, e);
+    }
+  }
 });
 
 // ==================== FIRESTORE TRIGGER: JOB TYPE CHANGED ====================

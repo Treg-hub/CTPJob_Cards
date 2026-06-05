@@ -150,7 +150,11 @@ const AppColors darkAppColors = AppColors(
 );
 
 extension AppThemeExtension on ThemeData {
-  AppColors get appColors => extension<AppColors>()!;
+  // Fall back to lightAppColors instead of `!` so a context that has lost the
+  // AppColors theme extension (e.g. a dialog/route or transient rebuild) never
+  // throws "Null check operator used on a null value". Fixes the
+  // _WasteAdminScreenState.build crash seen in Crashlytics (1.2.1).
+  AppColors get appColors => extension<AppColors>() ?? lightAppColors;
 }
 
 /// Returns Colors.black87 or Colors.white, whichever achieves better contrast
