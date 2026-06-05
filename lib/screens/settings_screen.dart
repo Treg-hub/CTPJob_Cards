@@ -9,11 +9,14 @@ import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee;
+import '../models/fleet_settings.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
+import '../services/fleet_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../services/location_service.dart';
+import '../services/waste_service.dart';
 import '../utils/role.dart' show isAdmin;
 import 'admin_screen.dart';
 import 'documentation_screen.dart';
@@ -34,8 +37,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
+  final WasteService _wasteService = WasteService();
+  final FleetService _fleetService = FleetService();
+
   bool isOnSite = true;
   Stream<QuerySnapshot>? _inboxStream;
+
+  // Module toggles (admin-only)
+  bool? _wasteEnabled;
+  bool? _fleetEnabled;
+  FleetSettings? _fleetSettings;
+  bool _moduleSaving = false;
 
   @override
   void initState() {
@@ -43,6 +55,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadOnSiteStatus();
     _initializeLocalNotifications();
     _setupInboxStream();
+    if (isAdmin(currentEmployee)) {
+      _loadModuleStates();
+    }
+  }
+
+  Future<void> _loadModuleStates() async {
+    final wasteOn = await _wasteService.getWasteMasterEnabled();
+    final fleetSettings = await _fleetService.getSettings();
+    if (mounted) {
+      setState(() {
+        _wasteEnabled = wasteOn;
+        _fleetSettings = fleetSettings;
+        _fleetEnabled = fleetSettings.fleetEnabled;
+      });
+    }
+  }
+
+  Future<void> _setWasteEnabled(bool value) async {
+    setState(() { _wasteEnabled = value; _moduleSaving = true; });
+    try {
+      await _wasteService.setWasteMasterEnabled(value);
+    } catch (_) {
+      if (mounted) setState(() => _wasteEnabled = !value);
+    } finally {
+      if (mounted) setState(() => _moduleSaving = false);
+    }
+  }
+
+  Future<void> _setFleetEnabled(bool value) async {
+    if (_fleetSettings == null) return;
+    setState(() { _fleetEnabled = value; _moduleSaving = true; });
+    try {
+      final updated = _fleetSettings!.copyWith(fleetEnabled: value);
+      await _fleetService.saveSettings(updated);
+      if (mounted) setState(() => _fleetSettings = updated);
+    } catch (_) {
+      if (mounted) setState(() => _fleetEnabled = !value);
+    } finally {
+      if (mounted) setState(() => _moduleSaving = false);
+    }
   }
 
   void _setupInboxStream() {
@@ -358,6 +410,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ],
                     );
                   },
+                ),
+              ],
+
+              // ── Modules ──────────────────────────────────────────
+              if (isAdminUser) ...[
+                const SizedBox(height: 16),
+                _SectionHeader('Modules'),
+                Card(
+                  elevation: 2,
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.delete_outline, color: Color(0xFF22863A)),
+                        title: const Text('Waste Management'),
+                        subtitle: Text(_wasteEnabled == null
+                            ? 'Loading…'
+                            : _wasteEnabled!
+                                ? 'Enabled — guards can submit loads'
+                                : 'Disabled — Waste tab hidden for all users'),
+                        value: _wasteEnabled ?? true,
+                        activeThumbColor: const Color(0xFF22863A),
+                        onChanged: _moduleSaving || _wasteEnabled == null
+                            ? null
+                            : _setWasteEnabled,
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.directions_car_outlined, color: Color(0xFFFF8C42)),
+                        title: const Text('Fleet Maintenance'),
+                        subtitle: Text(_fleetEnabled == null
+                            ? 'Loading…'
+                            : _fleetEnabled!
+                                ? 'Enabled — Fleet tab visible to eligible users'
+                                : 'Disabled — Fleet tab hidden for all users'),
+                        value: _fleetEnabled ?? false,
+                        activeThumbColor: const Color(0xFFFF8C42),
+                        onChanged: _moduleSaving || _fleetEnabled == null
+                            ? null
+                            : _setFleetEnabled,
+                      ),
+                    ],
+                  ),
                 ),
               ],
 
