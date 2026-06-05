@@ -382,6 +382,7 @@ Per-user preferences and self-service tooling. Organised into labelled sections:
 - **Notifications** — link to [Notification Inbox](#notification-inbox) with live unread count badge; link to [Notification Tests](#notification-tests)
 - **App & Connectivity** — Reset Permissions, Check for Update, Refresh FCM Token
 - **App Permissions** — live status for Notifications, System Alert Window, Notification Policy, Battery Optimisation. Tapping any row jumps to the OS settings page
+- **Modules** *(Admin only)* — enable/disable **Waste Management** (writes `wasteTrackEnabled` to SharedPreferences) and **Fleet Maintenance** (writes `fleet_enabled` to `fleet_settings/config` in Firestore). Turning a module off hides its tab from all users immediately.
 - **Admin** *(Admin only)* — amber-bordered card containing links to Admin Settings and Notification Diagnostics
 - **Account** — Log Out
 
