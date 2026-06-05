@@ -24,7 +24,9 @@ UserRole roleFromEmployee(Employee? employee) {
   // still resolves to manager.
   if (pos.contains('mechanic') ||
       pos.contains('electric') ||
-      pos.contains('technician')) {
+      pos.contains('technician') ||
+      pos.contains('building maintenance') ||
+      (employee.department == 'Pre Press' && pos.contains('specialist'))) {
     return UserRole.technician;
   }
   return UserRole.operator;
@@ -43,35 +45,18 @@ bool isCopperAuthorized(Employee? employee) {
   return _copperAuthorizedClockNos.contains(employee?.clockNo ?? '');
 }
 
-/// True when [employee] is the system admin. Admin is currently gated by a
-/// single hardcoded clock number — centralising the check here so we have one
-/// place to extend it (e.g. to a Firestore-backed admin list or custom claim).
+/// True when [employee] has the `isAdmin` flag set in their Firestore document.
 bool isAdmin(Employee? employee) {
-  return employee?.clockNo == '22';
+  return employee?.isAdmin ?? false;
 }
 
 // =============================================================================
 // WASTE TRACK (WasteTrack) role helpers
 // =============================================================================
-// Roles are derived from existing Employee fields only (no new schema columns).
-// This keeps changes to the live Job Cards app minimal and safe.
-//
-// Security team derivation (per spec + user decision):
-//   - Admin: reuses the existing isAdmin() check (clockNo == '22' for now)
-//   - Security Manager: department == "Security" && position == "Manager"
-//   - Security Guard:   department == "Security" && position == "Guard"
-//
-// These helpers are used for:
-//   - Showing/hiding the Waste navigation
-//   - Routing Security roles directly to a focused Waste home screen
-//   - Client-side enforcement of who can see costs, edit after complete,
-//     view deviation alerts, manage rates, recover soft-deletes, etc.
-//
-// Phase 3 (Admin Tools) & Phase 6 (Testing & Hardening) updates (2026-05):
-// WasteAdminScreen now has functional Manage Types (create + addSubtype) and
-// Manage Rates (setRate + live list) behind isWasteAdmin. Reports use real
-// loads + CSV export (pure Dart). Added error/loading states + new tests in
-// test/waste_*_test.dart. All edits limited to waste_* files + allowed utils.
+// Security team derivation:
+//   - Admin: reuses isAdmin() — Employee.isAdmin Firestore field
+//   - Security Manager: department == "Security" && position contains "manager"
+//   - Security Guard:   department == "Security" && position contains "guard"
 // =============================================================================
 
 /// Returns true if this user should have full WasteTrack Admin rights
@@ -138,11 +123,7 @@ bool isWasteTrackEnabledSync() {
 //   - Fleet Mechanic:     department == "Workshop" && position == "Hyster Mechanic"
 //   - Fleet Reporter:     employee.department in fleet_settings.reporterDepartments
 //   - Fleet Cost Manager: employee.clockNo in fleet_settings.costManagerClockNos
-//   - Fleet Admin:        reuses isAdmin() (clockNo == '22')
-//
-// Helpers that check reporter/cost-manager take FleetSettings as a parameter —
-// the caller is responsible for loading and caching the settings doc.
-// The home_screen loads settings in initState and stores the result in state.
+//   - Fleet Admin:        reuses isAdmin() — Employee.isAdmin Firestore field
 // =============================================================================
 
 /// True when the employee is the Hyster mechanic
@@ -173,4 +154,27 @@ bool isFleetUser(Employee? employee, FleetSettings? settings) {
       isFleetAdmin(employee) ||
       isFleetReporter(employee, settings) ||
       isFleetCostManager(employee, settings);
+}
+
+// =============================================================================
+// BUILDING MAINTENANCE role helpers
+// =============================================================================
+
+/// True when the employee is a Building Maintenance worker.
+/// Position must contain "building maintenance" (case-insensitive).
+bool isBuildingMaintenance(Employee? employee) {
+  if (employee == null) return false;
+  return employee.position.toLowerCase().contains('building maintenance');
+}
+
+// =============================================================================
+// PRE PRESS SPECIALIST role helpers
+// =============================================================================
+
+/// True when the employee is the Pre Press Specialist.
+/// Double-gated on department + position to avoid false matches.
+bool isPrepressSpecialist(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department == 'Pre Press' &&
+      employee.position.toLowerCase().contains('specialist');
 }

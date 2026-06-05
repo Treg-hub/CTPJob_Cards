@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
@@ -113,6 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
         name: empData['name'] ?? '',
         position: empData['position'] ?? '',
         department: empData['department'] ?? '',
+        isAdmin: empData['isAdmin'] as bool? ?? false,
       );
 
       final prefs = await SharedPreferences.getInstance();
@@ -120,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInClockNo', employee.clockNo);
       await prefs.setString('loggedInPosition', employee.position);
       await prefs.setString('loggedInDepartment', employee.department);
+      await prefs.setBool('loggedInAdmin', employee.isAdmin);
       currentEmployee = employee;
 
       if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);

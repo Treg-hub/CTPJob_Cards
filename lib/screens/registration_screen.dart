@@ -81,6 +81,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         name: empData['name'] ?? '',
         position: empData['position'] ?? '',
         department: empData['department'] ?? '',
+        isAdmin: empData['isAdmin'] as bool? ?? false,
       );
 
       final prefs = await SharedPreferences.getInstance();
@@ -88,6 +89,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       await prefs.setString('loggedInClockNo', clockNo);
       await prefs.setString('loggedInPosition', employee.position);
       await prefs.setString('loggedInDepartment', employee.department);
+      await prefs.setBool('loggedInAdmin', employee.isAdmin);
       currentEmployee = employee;
 
       if (mounted) {

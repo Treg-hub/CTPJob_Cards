@@ -185,11 +185,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final clockNo = prefs.getString('loggedInClockNo');
       if (clockNo == null) return;
 
-      // Phase 1: immediately show cached name while Firestore loads
+      // Immediately show cached employee while Firestore loads
       if (currentEmployee == null) {
         final name = prefs.getString('loggedInName') ?? '';
         final position = prefs.getString('loggedInPosition') ?? '';
         final department = prefs.getString('loggedInDepartment') ?? '';
+        final adminFlag = prefs.getBool('loggedInAdmin') ?? false;
         if (name.isNotEmpty && mounted) {
           setState(() {
             currentEmployee = Employee(
@@ -197,6 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               name: name,
               position: position,
               department: department,
+              isAdmin: adminFlag,
             );
           });
         }
@@ -232,7 +234,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       return job.type == JobType.electrical || job.type == JobType.mechanicalElectrical;
     }
     if (pos.contains('mechanical') && pos.contains('manager')) {
-      return job.type == JobType.mechanical || job.type == JobType.mechanicalElectrical;
+      return job.type == JobType.mechanical ||
+             job.type == JobType.mechanicalElectrical ||
+             job.type == JobType.building ||
+             job.type == JobType.specialist;
     }
     return job.department == emp.department;
   }

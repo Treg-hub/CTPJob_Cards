@@ -17,7 +17,6 @@ import 'screens/permissions_onboarding_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
 import 'services/sync_service.dart';
-import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -27,6 +26,27 @@ import 'package:permission_handler/permission_handler.dart';
 Employee? currentEmployee;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Returns true for async errors that are recoverable noise rather than real
+/// crashes (see PlatformDispatcher.onError below). The app keeps running, so
+/// these are recorded as non-fatal to keep the Crashlytics crash dashboard
+/// meaningful:
+///   • Firestore permission-denied — a snapshot listener still attached across
+///     sign-out; it re-subscribes once the user re-authenticates.
+///   • PlatformException(channel-error) — a Firestore/plugin platform call that
+///     lost its channel during early startup or teardown.
+bool _isRecoverableAsyncError(Object error) {
+  if (error is FirebaseException && error.code == 'permission-denied') {
+    return true;
+  }
+  if (error is PlatformException &&
+      (error.code == 'channel-error' ||
+          (error.message?.contains('Unable to establish connection on channel') ??
+              false))) {
+    return true;
+  }
+  return false;
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,7 +84,11 @@ void main() async {
     if (!kIsWeb) {
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
       PlatformDispatcher.instance.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        // We return true (error handled, app keeps running), so only record as
+        // a fatal crash when it isn't recoverable async noise. See
+        // _isRecoverableAsyncError for the two reclassified cases.
+        FirebaseCrashlytics.instance
+            .recordError(error, stack, fatal: !_isRecoverableAsyncError(error));
         return true;
       };
     }
@@ -166,12 +190,14 @@ void main() async {
       final name = prefs.getString('loggedInName') ?? '';
       final position = prefs.getString('loggedInPosition') ?? '';
       final department = prefs.getString('loggedInDepartment') ?? '';
+      final adminFlag = prefs.getBool('loggedInAdmin') ?? false;
       if (name.isNotEmpty) {
         currentEmployee = Employee(
           clockNo: clockNo,
           name: name,
           position: position,
           department: department,
+          isAdmin: adminFlag,
         );
         debugPrint('⚡ Employee stub built from SharedPreferences for $clockNo');
       }

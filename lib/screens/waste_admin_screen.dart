@@ -12,7 +12,7 @@ import '../utils/formatters.dart';
 import '../widgets/waste_app_bar.dart';
 
 /// Basic Waste Admin screen.
-/// Visible only to isWasteAdmin (currently clockNo == '22').
+/// Visible only to isWasteAdmin (Employee.isAdmin == true).
 class WasteAdminScreen extends ConsumerStatefulWidget {
   /// When [embedded] is true the screen skips its own Scaffold/AppBar so it
   /// can live inside a TabBarView in WasteHomeScreen.
