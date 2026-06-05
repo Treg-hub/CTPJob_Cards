@@ -52,6 +52,14 @@ class NotificationService {
     await Permission.accessNotificationPolicy.request();
     await Permission.ignoreBatteryOptimizations.request();
 
+    // Android 14+ requires USE_FULL_SCREEN_INTENT to be granted via a system
+    // settings page (used by P5 full-screen lock-screen alerts). Request it as
+    // part of this guided, user-initiated flow rather than redirecting on every
+    // cold start from MainActivity. No-op / returns true on older versions.
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.requestFullScreenIntentPermission();
+
     final status = await Permission.systemAlertWindow.status;
     if (!status.isGranted) await openAppSettings();
   }

@@ -77,6 +77,10 @@ class JobCardTile extends StatelessWidget {
         ];
       case JobType.maintenance:
         return [Icon(Icons.circle_outlined, size: size, color: color)];
+      case JobType.building:
+        return [Icon(Icons.home_repair_service, size: size, color: color)];
+      case JobType.specialist:
+        return [Icon(Icons.precision_manufacturing, size: size, color: color)];
     }
   }
 

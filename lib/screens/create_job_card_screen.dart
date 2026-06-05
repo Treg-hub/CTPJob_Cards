@@ -56,6 +56,14 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
+  /// Hides the Pre Press Spec type unless the selected department is Pre Press.
+  List<JobType> get _availableJobTypes {
+    if (selectedDepartment != 'Pre Press') {
+      return JobType.values.where((t) => t != JobType.specialist).toList();
+    }
+    return JobType.values;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -648,6 +656,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                            selectedArea = null;
                            selectedMachine = null;
                            part = '';
+                           if (jobType == JobType.specialist && dept != 'Pre Press') {
+                             jobType = null;
+                           }
                          }),
                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                          labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
@@ -732,7 +743,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 4,
-                  children: JobType.values.map((type) => ChoiceChip(
+                  children: _availableJobTypes.map((type) => ChoiceChip(
                     label: Text(type.displayName),
                     selected: jobType == type,
                     onSelected: (_) => setState(() => jobType = jobType == type ? null : type),
@@ -751,6 +762,36 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     ),
                     child: const Text(
                       'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                ],
+                if (jobType == JobType.building) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 30),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 120)),
+                    ),
+                    child: const Text(
+                      'Building Maintenance jobs go directly to the maintenance team. No escalation.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                ],
+                if (jobType == JobType.specialist) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 30),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 120)),
+                    ),
+                    child: const Text(
+                      'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
                       style: TextStyle(fontSize: 12.5),
                     ),
                   ),
@@ -937,6 +978,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                                selectedArea = null;
                                selectedMachine = null;
                                part = '';
+                               if (jobType == JobType.specialist && dept != 'Pre Press') {
+                                 jobType = null;
+                               }
                              }),
                              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                            )).toList(),
@@ -1018,7 +1062,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
-                        children: JobType.values.map((type) => ChoiceChip(
+                        children: _availableJobTypes.map((type) => ChoiceChip(
                           label: Text(type.displayName),
                           selected: jobType == type,
                           onSelected: (_) => setState(() => jobType = jobType == type ? null : type),
@@ -1036,6 +1080,36 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                           child: const Text(
                             'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
+                      if (jobType == JobType.building) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.withValues(alpha: 120)),
+                          ),
+                          child: const Text(
+                            'Building Maintenance jobs go directly to the maintenance team. No escalation.',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
+                      if (jobType == JobType.specialist) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withValues(alpha: 30),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.purple.withValues(alpha: 120)),
+                          ),
+                          child: const Text(
+                            'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
                             style: TextStyle(fontSize: 12.5),
                           ),
                         ),

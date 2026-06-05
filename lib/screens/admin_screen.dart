@@ -476,8 +476,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           'mechanical': ['onsite_mechanics'],
           'electrical': ['onsite_electricians'],
           'mech/elec': ['onsite_mechanics', 'onsite_electricians'],
+          'building': ['onsite_building_maintenance', 'onsite_workshop_manager'],
+          'specialist': ['onsite_prepress_specialist', 'onsite_workshop_manager'],
         },
-        'excluded_job_types': ['maintenance'],
+        'excluded_job_types': ['maintenance', 'building', 'specialist'],
         'last_updated': now.toIso8601String(),
         'updated_by_clock_no': _currentClockNo ?? '',
       });
