@@ -35,9 +35,11 @@ The list updates automatically in real time — there is no need to pull down to
 
 Use the **All / Today / This Week** chips at the top to narrow the list. When a filter is active and no loads match, the screen shows a "No loads match" message with a tap-to-clear button.
 
-### Screen actions (⋮ More actions menu)
+### Screen actions
 
-Reports, Pending Weighbridge, Waste Admin, and the enable/disable toggle are grouped under the **⋮** menu at the top right of the screen. If there are queued offline items, a cloud sync button appears next to it.
+The **Weighbridge**, **Reports**, and **Admin** tabs are available to managers and admins directly from the tab bar at the top of the Waste home screen. If there are queued offline items, a cloud sync banner appears at the top of the Loads tab — tap it to retry.
+
+> **Module on/off:** Admins can enable or disable the entire Waste Management module from **Settings → Modules**.
 
 ---
 

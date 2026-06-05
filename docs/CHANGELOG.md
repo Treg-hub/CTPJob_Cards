@@ -6,6 +6,37 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-05 — Production release: new job types, module toggles, admin improvements
+
+### User-facing changes
+
+**New job types**
+
+- **Building Maintenance** — a new job card type for building faults. Routes directly to the on-site Building Maintenance team and the Workshop Manager. No escalation timer fires — like Maintenance type, it is excluded from the escalation engine.
+- **Pre Press Specialist** — a new type visible only when the selected department is "Pre Press". Routes to the on-site Pre Press Specialist and the Workshop Manager. Also excluded from escalation.
+- Both new types show a contextual info banner in the Create Job Card form explaining how they are routed.
+
+**Module enable / disable now in Settings**
+
+- Admins can now enable or disable the **Waste Management** module and the **Fleet Maintenance** module directly from **Settings → Modules**. Previously this required navigating inside each module's own admin tab. Turning a module off hides its tab from all users immediately.
+
+**Admin access now Firestore-driven**
+
+- Admin status is now set per user in Firestore (`isAdmin: true` on the employee document) instead of being hardcoded to a single clock number. To grant or revoke admin access, edit the employee's Firestore record — no code change or app release required.
+
+**Waste Management — production release**
+
+- The pilot-mode controls have been removed from the Waste Admin screen. WasteTrack is now a full production module — no clock-number restriction or pilot list.
+- The disabled state for Waste now shows a plain "Waste Management is disabled — contact your administrator" message instead of pilot-mode wording.
+
+### Developer / maintenance changes
+
+- **Update service** — In-app update checks now run every 4 hours (was 24 hours). When Remote Config keys are not yet published, the service retries after 1 hour instead of waiting the full interval — prevents a misconfigured RC from silencing update prompts indefinitely.
+- **AppColors null crash fixed** — `Theme.of(context).appColors` now falls back to the light theme defaults instead of throwing a null check error when a dialog or route loses the theme extension context. Resolves a Crashlytics crash (1.2.1).
+- **USE_FULL_SCREEN_INTENT permission** — The Android 14+ full-screen intent settings redirect has been moved from `MainActivity.onCreate` (which fired on every cold start) to the user-initiated permissions flow inside the app. The system settings page no longer appears automatically on first launch.
+
+---
+
 ## 2026-06-04 — Crash fix, in-app docs fixes, Fleet user guide
 
 ### User-facing changes

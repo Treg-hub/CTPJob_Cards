@@ -67,7 +67,7 @@ Planned:
 
 *Four roles with distinct access scopes and responsibilities*
 
-Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is granted based on a hardcoded clock number whitelist, not the position string. To promote someone to Admin, the clock number must be added to the whitelist in the codebase.
+Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is controlled by the `isAdmin` boolean field on the employee's Firestore document. To grant or revoke Admin, edit that field directly — no code change or app release is needed.
 
 ### Operator
 
@@ -89,11 +89,11 @@ Oversees all job cards in their department. Enforces data quality for operators 
 
 ### Admin
 
-Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, and has access to all data across all departments.
+Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, enables/disables modules (Waste Management, Fleet Maintenance), and has access to all data across all departments.
 
-**Key Screens:** Admin Screen · Geofence Editor · Employee Management
+**Key Screens:** Admin Screen · Geofence Editor · Employee Management · Settings (Modules)
 
-> **Admin access is gated by clock number.** Only the clock number on the admin whitelist is granted Admin access — changing an employee's `position` string has no effect on Admin access.
+> **Admin access is controlled per user in Firestore.** Set `isAdmin: true` on an employee's Firestore document to grant Admin. No code change required — takes effect on next app launch by that user.
 
 ### Authentication
 
@@ -119,7 +119,7 @@ A job card is the formal digital record for every fault, breakdown, or maintenan
 | **Part / Component** | The specific component affected | Precise identification for ordering parts and recording repairs |
 | **Description** | What happened — symptoms, error codes, observations | Gives the technician context before arrival; feeds AI analysis |
 | **Priority** | P1–P5 reflecting production impact | Determines notification type and escalation urgency |
-| **Type** | Mechanical / Electrical / Mech-Elec | Routes to the correct trade of technician |
+| **Type** | Mechanical / Electrical / Mech-Elec / Maintenance / Building / Pre Press Spec | Routes to the correct trade or team; Building and Pre Press Spec bypass escalation |
 | **Closure Note** | What was done, parts used, root cause, follow-up | Creates a permanent repair record; feeds future AI insight |
 
 ### Priority Levels

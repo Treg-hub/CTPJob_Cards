@@ -1,25 +1,29 @@
 # CTP Job Cards — Architecture & Role-Based Access
 
-_Last updated: 2026-06-03 (adds Fleet Maintenance module)_
+_Last updated: 2026-06-05 (Firestore-based admin, Building/Spec job types)_
 
 ---
 
 ## Role System
 
-Roles are **derived** from `Employee.position` and `Employee.department` (see `lib/utils/role.dart`). There is no explicit role field in Firestore.
+Roles are **derived** from `Employee.position` and `Employee.department` (see `lib/utils/role.dart`). The **Admin** role is the only exception — it is controlled by the `isAdmin` boolean field on each employee's Firestore document rather than their position string.
 
 | Role | Derived from | Key capabilities |
 |---|---|---|
-| **Admin** | `clockNo == "22"` | Full access to all screens + admin controls |
+| **Admin** | `Employee.isAdmin == true` (Firestore field) | Full access to all screens + admin controls, module toggles |
 | **Security Manager** | dept=`security`, pos=`manager` | Schedule loads, view all loads, reports, pending weighbridge, cancel scheduled |
 | **Security Guard** | dept=`security`, pos=`guard` | View incoming (scheduled) loads, begin collection, view recent loads |
 | **Technician** | pos contains `mechanical`/`electrical`/`technician` | Job cards only |
 | **Manager** (job cards) | pos contains `manager` | Job card manager dashboard |
 | **Operator** | neither manager nor technician | Limited job card actions |
+| **Building Maintenance** | pos contains `building maintenance` | Receives Building Maintenance type job cards |
+| **Pre Press Specialist** | dept=`Pre Press`, pos contains `specialist` | Receives Pre Press Spec type job cards |
 | **Fleet Mechanic** | dept=`Workshop`, pos=`Hyster Mechanic` | Log work, acknowledge/resolve issues (no cost amounts) |
 | **Fleet Reporter** | dept ∈ `fleet_settings.reporter_departments` | Report fleet issues, view own issues |
 | **Fleet Cost Manager** | `clockNo` ∈ `fleet_settings.cost_manager_clock_nos` | Enter costs, cost reports, CSV export |
-| **Fleet Admin** | `clockNo == "22"` | Manage asset register + Fleet settings + all of the above |
+| **Fleet Admin** | `Employee.isAdmin == true` | Manage asset register + Fleet settings + all of the above |
+
+> **To grant Admin:** Set `isAdmin: true` on the employee's Firestore document. No code change or app release required.
 
 > Fleet **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), unlike all other roles which derive purely from the `Employee` record. Their `role.dart` helpers take a `FleetSettings` argument.
 
@@ -123,7 +127,7 @@ App entry (home_screen.dart)
 | `waste_types` | Master list of waste types + subtypes. |
 | `waste_contractors` | Contractor list. |
 | `waste_rates` | Cost per kg by contractor + subtype. |
-| `waste_config` | Feature flag (`enabled`) + pilot clock list. |
+| `waste_config` | Feature flag (`enabled`). Module enable/disable controlled via Settings → Modules (admin only). |
 
 ---
 
