@@ -33,8 +33,7 @@ class WasteService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
 
-  // Simple in-memory queue for session-level offline photo resilience (demo / pilot).
-  // Full production uses the central Hive queue via SyncService.
+  // Session-level offline photo resilience; central Hive queue via SyncService handles cross-session.
   final List<Map<String, dynamic>> _sessionOfflinePhotoQueue = [];
 
   int get sessionQueuedPhotoCount => _sessionOfflinePhotoQueue.length;
@@ -499,7 +498,6 @@ class WasteService {
     List<String> loadLevelPhotoPaths = const [],      // optional load overview photos
     String? actorClockNo,                             // for enhanced pilot flag check + usage logging
   }) async {
-    // Defense-in-depth: respect the *enhanced* feature flag (master + pilot list) even if UI bypassed
     final allowed = await isWasteTrackEnabledForCurrentUser(actorClockNo);
     if (!allowed) {
       throw Exception('WasteTrack is currently disabled by feature flag or your account is not in the active pilot group');
@@ -519,7 +517,6 @@ class WasteService {
       final String loadId = cfResult['id'];
       final String loadNumber = cfResult['load_number'];
 
-      // Pilot monitoring: log the create (behind flag)
       await logWasteUsage(
         'save_complete_waste_load',
         clockNo: actorClockNo,
@@ -841,9 +838,7 @@ class WasteService {
   }
 
   // ---------------------------------------------------------------------------
-  // ROLLOUT INFRA (PROD-CRITICAL-3 / Phase 7): Enhanced feature flag + pilot mode + logging
-  // All behind existing role checks in calling UI + the master flag.
-  // Pilot: simple CSV list of allowed clock numbers (no complex JSON to keep conservative).
+  // FEATURE FLAG
   // ---------------------------------------------------------------------------
 
   Future<bool> getWasteMasterEnabled() async {
@@ -856,43 +851,8 @@ class WasteService {
     await prefs.setBool('wasteTrackEnabled', enabled);
   }
 
-  Future<bool> isPilotModeEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('wastePilotModeEnabled') ?? false;
-  }
-
-  Future<void> setPilotModeEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('wastePilotModeEnabled', enabled);
-  }
-
-  Future<void> setPilotClockNumbers(String csvList) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('wastePilotClockNumbers', csvList);
-  }
-
-  Future<Set<String>> getPilotClockNumbers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('wastePilotClockNumbers') ?? '';
-    return raw
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toSet();
-  }
-
-  /// Core enhanced check supporting pilot mode (specific clock numbers or list).
-  /// Returns true only if master flag ON and (pilot off or clockNo in allowed list).
-  Future<bool> isWasteTrackEnabledForCurrentUser(String? clockNo) async {
-    final master = await getWasteMasterEnabled();
-    if (!master) return false;
-    final pilotMode = await isPilotModeEnabled();
-    if (!pilotMode) return true;
-    final allowed = await getPilotClockNumbers();
-    final c = (clockNo ?? '').trim();
-    if (c.isEmpty) return false;
-    return allowed.contains(c);
-  }
+  Future<bool> isWasteTrackEnabledForCurrentUser(String? clockNo) =>
+      getWasteMasterEnabled();
 
   // ---------------------------------------------------------------------------
   // ON-SITE STOCK — pre-load stock tracking for any waste type
@@ -996,8 +956,7 @@ class WasteService {
     }
   }
 
-  /// Basic usage logging hooks for pilot monitoring (simple Firestore writes + console debug).
-  /// Never throws; safe to call from any waste_* path that already passed role+flag.
+  /// Usage logging for audit/analytics. Never throws; safe to call from any waste path.
   Future<void> logWasteUsage(
     String action, {
     String? clockNo,
@@ -1019,11 +978,11 @@ class WasteService {
       await _firestore.collection('waste_usage_logs').add(data);
 
       if (kDebugMode) {
-        debugPrint('[WastePilotLog] action=$action clock=${clockNo ?? 'n/a'} load=${loadId ?? 'n/a'}');
+        debugPrint('[WasteLog] action=$action clock=${clockNo ?? 'n/a'} load=${loadId ?? 'n/a'}');
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[WastePilotLog] write failed (non-fatal): $e');
+        debugPrint('[WasteLog] write failed (non-fatal): $e');
       }
       // Swallow errors — logging must never impact user or critical flows
     }
