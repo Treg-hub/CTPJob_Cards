@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/contractor.dart';
 import '../models/waste_load.dart';
 import '../models/waste_type.dart';
 import '../services/waste_service.dart';
@@ -36,6 +37,7 @@ class _WasteBeginCollectionScreenState
   final _regCtrl = TextEditingController();
 
   List<WasteType> _wasteTypes = [];
+  List<Contractor> _contractors = [];
   final List<_ItemEntry> _items = [];
   Uint8List? _signatureBytes;
   String? _signatureTempPath;
@@ -60,7 +62,16 @@ class _WasteBeginCollectionScreenState
           .watchWasteTypes()
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
-      if (mounted) setState(() => _wasteTypes = types);
+      final contractors = await _wasteService
+          .watchContractors()
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      if (mounted) {
+        setState(() {
+          _wasteTypes = types;
+          _contractors = contractors;
+        });
+      }
     } catch (_) {}
   }
 
@@ -73,10 +84,14 @@ class _WasteBeginCollectionScreenState
       !_isSubmitting;
 
   Future<void> _addItem() async {
-    final types = _wasteTypes
-        .where((t) => t.mainType == widget.load.mainWasteType)
-        .toList();
-    final subtypes = types.isNotEmpty ? types.first.subtypes : <String>[];
+    final contractor = _contractors.firstWhere(
+      (c) => c.id == widget.load.contractorId,
+      orElse: () => const Contractor(name: ''),
+    );
+    final available = (contractor.id != null && contractor.wasteTypeIds.isNotEmpty)
+        ? _wasteTypes.where((t) => contractor.wasteTypeIds.contains(t.id)).toList()
+        : _wasteTypes;
+    final typeNames = available.map((t) => t.mainType).toList();
 
     final result = await showModalBottomSheet<_ItemEntry>(
       context: context,
@@ -86,7 +101,7 @@ class _WasteBeginCollectionScreenState
         return Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: SingleChildScrollView(
-            child: _AddItemSheet(subtypes: subtypes),
+            child: _AddItemSheet(types: typeNames),
           ),
         );
       },
@@ -419,8 +434,8 @@ class _ItemEntry {
 // ---------------------------------------------------------------------------
 
 class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet({required this.subtypes});
-  final List<String> subtypes;
+  const _AddItemSheet({required this.types});
+  final List<String> types;
 
   @override
   State<_AddItemSheet> createState() => _AddItemSheetState();
@@ -428,7 +443,7 @@ class _AddItemSheet extends StatefulWidget {
 
 class _AddItemSheetState extends State<_AddItemSheet> {
   final WasteService _wasteService = WasteService();
-  String? _subtype;
+  String? _wasteType;
   final _weightCtrl = TextEditingController();
   final _qtyCtrl    = TextEditingController();
   final _notesCtrl  = TextEditingController();
@@ -438,7 +453,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.subtypes.isNotEmpty) _subtype = widget.subtypes.first;
+    if (widget.types.isNotEmpty) _wasteType = widget.types.first;
   }
 
   @override
@@ -450,7 +465,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   }
 
   bool get _valid =>
-      _subtype != null &&
+      _wasteType != null &&
       double.tryParse(_weightCtrl.text) != null &&
       _photos.isNotEmpty;
 
@@ -498,18 +513,18 @@ class _AddItemSheetState extends State<_AddItemSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.subtypes.isNotEmpty) ...[
-                const Text('Subtype', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
+              if (widget.types.isNotEmpty) ...[
+                const Text('Waste Type', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
                 DropdownButton<String>(
-                  value: _subtype,
+                  value: _wasteType,
                   isExpanded: true,
-                  items: widget.subtypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                  onChanged: (v) => setState(() => _subtype = v),
+                  items: widget.types.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (v) => setState(() => _wasteType = v),
                 ),
               ] else ...[
                 TextField(
-                  decoration: const InputDecoration(labelText: 'Subtype *', isDense: true),
-                  onChanged: (v) => setState(() => _subtype = v.isEmpty ? null : v),
+                  decoration: const InputDecoration(labelText: 'Waste Type *', isDense: true),
+                  onChanged: (v) => setState(() => _wasteType = v.isEmpty ? null : v),
                 ),
               ],
               const SizedBox(height: 10),
@@ -584,7 +599,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                 child: FilledButton(
                   onPressed: _valid
                       ? () => Navigator.pop(context, _ItemEntry(
-                          subtype: _subtype!,
+                          subtype: _wasteType!,
                           weightKg: double.parse(_weightCtrl.text),
                           quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
                           notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
