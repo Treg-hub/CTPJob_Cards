@@ -322,10 +322,15 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                                         return Column(
                                           children: rates.take(10).map((r) {
                                             final cost = (r['cost_per_kg'] as num?)?.toDouble() ?? 0;
+                                            final cId = r['contractor_id'] as String? ?? '';
+                                            final cName = contractors.firstWhere(
+                                              (c) => c.id == cId,
+                                              orElse: () => Contractor(name: cId.isEmpty ? '?' : cId),
+                                            ).name;
                                             return ListTile(
                                               dense: true,
                                               leading: Icon(Icons.local_atm, size: 18, color: ratesOn),
-                                              title: Text('${r['contractor_id'] ?? '?'} / ${r['subtype'] ?? '?'}', style: TextStyle(color: ratesOn)),
+                                              title: Text('$cName / ${r['subtype'] ?? '?'}', style: TextStyle(color: ratesOn)),
                                               trailing: Text(formatSACurrency(cost), style: TextStyle(fontFamily: 'monospace', color: ratesOn)),
                                               subtitle: Text('by ${r['set_by'] ?? 'unknown'}', style: TextStyle(color: ratesOn.withValues(alpha: 0.7))),
                                             );
