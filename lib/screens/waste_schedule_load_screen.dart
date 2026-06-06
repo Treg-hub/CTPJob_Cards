@@ -257,7 +257,23 @@ class _WasteScheduleLoadScreenState
                       value: c,
                       child: Text(c.name),
                     )).toList(),
-                    onChanged: (c) => setState(() => _selectedContractor = c),
+                    onChanged: (c) {
+                      setState(() {
+                        _selectedContractor = c;
+                        _selectedType = null;
+                        _showStockSection = false;
+                        _onSiteStock = [];
+                        _selectedStockIds.clear();
+                      });
+                      if (c != null) {
+                        final available = c.wasteTypeIds.isEmpty
+                            ? _wasteTypes
+                            : _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+                        if (available.length == 1) {
+                          setState(() => _selectedType = available.first);
+                        }
+                      }
+                    },
                   ),
 
                   const SizedBox(height: 20),
@@ -265,10 +281,14 @@ class _WasteScheduleLoadScreenState
                   // ── Waste type ───────────────────────────────
                   Text('Main Waste Type *', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
-                  Wrap(
+                  Builder(builder: (context) {
+                    final available = _selectedContractor == null || _selectedContractor!.wasteTypeIds.isEmpty
+                        ? _wasteTypes
+                        : _wasteTypes.where((t) => _selectedContractor!.wasteTypeIds.contains(t.id)).toList();
+                    return Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _wasteTypes.map((type) {
+                    children: available.map((type) {
                       final selected = _selectedType?.mainType == type.mainType;
                       return ChoiceChip(
                         label: Text(type.mainType),
@@ -290,7 +310,8 @@ class _WasteScheduleLoadScreenState
                         },
                       );
                     }).toList(),
-                  ),
+                  );
+                  }),
 
                   // ── On-site pallet selection (Paper Waste, manager only) ──
                   if (_showStockSection) ...[

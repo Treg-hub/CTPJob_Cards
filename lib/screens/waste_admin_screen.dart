@@ -80,40 +80,6 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     }
   }
 
-  Future<void> _addSubtype(WasteType type) async {
-    final controller = TextEditingController();
-    final subtype = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Add Subtype to ${type.mainType}'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Subtype name'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Add')),
-        ],
-      ),
-    );
-    if (subtype == null || subtype.isEmpty || type.id == null) return;
-
-    setState(() => _isProcessing = true);
-    try {
-      await _wasteService.addSubtypeToType(type.id!, subtype);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added subtype "$subtype"'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
   // --- Manage Rates helpers (Phase 3 functional, simple map based) ---
   Future<void> _showSetRateDialog(List<Contractor> contractors, List<WasteType> types) async {
     String? contractorId;
@@ -121,8 +87,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     double cost = 0;
     final costCtrl = TextEditingController();
 
-    // Flatten subtypes for demo (in real: filter by selected main if wanted)
-    final allSubtypes = types.expand((t) => t.subtypes.isNotEmpty ? t.subtypes : ['default']).toSet().toList();
+    final allSubtypes = types.map((t) => t.mainType).toList();
 
     final ok = await showDialog<bool>(
       context: context,
@@ -144,7 +109,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                 value: subtype,
                 items: allSubtypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) => setDState(() => subtype = v),
-                decoration: const InputDecoration(labelText: 'Subtype (or "default") *'),
+                decoration: const InputDecoration(labelText: 'Waste Type *'),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -162,7 +127,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
             TextButton(
               onPressed: () {
                 if (contractorId == null || subtype == null || cost <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select contractor, subtype and valid cost')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select contractor, waste type and valid cost')));
                   return;
                 }
                 Navigator.pop(ctx, true);
@@ -261,16 +226,16 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Manage Waste Types & Subtypes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: onSurface)),
+                            Text('Manage Waste Types', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: onSurface)),
                             IconButton(
                               icon: Icon(Icons.add_circle, color: appColors.wasteGreen),
                               onPressed: _addNewType,
-                              tooltip: 'Add new main waste type',
+                              tooltip: 'Add new waste type',
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text('Live from Firestore. Tap + on a type to add subtypes (arrayUnion).', style: TextStyle(color: onSurface)),
+                        Text('Live from Firestore. Tap + to add a new type. Link types to contractors in the contractor settings.', style: TextStyle(color: onSurface)),
                         const SizedBox(height: 12),
                         StreamBuilder<List<WasteType>>(
                           stream: _wasteService.watchWasteTypes(),
@@ -291,12 +256,6 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
                                     title: Text(t.mainType, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    subtitle: Text(t.subtypes.isEmpty ? 'No subtypes' : t.subtypes.join(', ')),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.add),
-                                      onPressed: () => _addSubtype(t),
-                                      tooltip: 'Add subtype',
-                                    ),
                                   ),
                                 );
                               }).toList(),
