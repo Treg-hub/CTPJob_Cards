@@ -14,9 +14,8 @@ import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_load_detail_screen.dart';
 
-/// First step of Waste Load creation per spec:
-/// 1. Select main waste type → this locks the entire load to that type.
-/// 2. Then fill load-level fields + add waste items.
+/// Entry point for creating a new waste load.
+/// Checks the WasteTrack feature flag first, then hands off to [WasteLoadFormScreen].
 class WasteCreateLoadScreen extends ConsumerStatefulWidget {
   const WasteCreateLoadScreen({super.key});
 
@@ -26,12 +25,7 @@ class WasteCreateLoadScreen extends ConsumerStatefulWidget {
 
 class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
   final WasteService _wasteService = WasteService();
-
-  List<WasteType> _wasteTypes = [];
-  WasteType? _selectedMainType;
   bool _isLoading = true;
-
-  // Phase 7 pilot/flag support for disabled state on entry screen
   bool _effectiveWasteEnabled = true;
 
   @override
@@ -39,68 +33,31 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
     super.initState();
     _loadFeatureStatus();
     _wasteService.processOfflineWasteQueue();
-    _loadWasteTypes();
   }
 
   Future<void> _loadFeatureStatus() async {
     final clock = currentEmployee?.clockNo;
     final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
     if (mounted) {
-      setState(() => _effectiveWasteEnabled = enabled);
-    }
-  }
-
-  Future<void> _loadWasteTypes() async {
-    try {
-      // In production this would be a proper provider/stream
-      final types = await _wasteService.watchWasteTypes().first;
       setState(() {
-        _wasteTypes = types;
+        _effectiveWasteEnabled = enabled;
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load waste types: $e')),
-        );
-      }
     }
-  }
-
-  void _selectMainType(WasteType type) {
-    setState(() {
-      _selectedMainType = type;
-    });
-
-    // Per spec: once chosen, the load is locked to this main type.
-    // Next step would navigate to the full load form + item builder.
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WasteLoadFormScreen(wasteType: type),
-      ),
-    );
-  }
-
-  // Change 6: meaningful icon per main waste type name
-  IconData _wasteTypeIcon(String mainType) {
-    final t = mainType.toLowerCase();
-    if (t.contains('hazard') || t.contains('chemical') || t.contains('toxic')) return Icons.dangerous;
-    if (t.contains('recycl') || t.contains('plastic') || t.contains('glass')) return Icons.recycling;
-    if (t.contains('cardboard') || t.contains('paper')) return Icons.inventory_2;
-    if (t.contains('metal') || t.contains('scrap') || t.contains('steel') || t.contains('iron')) return Icons.hardware;
-    if (t.contains('electronic') || t.contains('e-waste') || t.contains('ewaste')) return Icons.devices;
-    if (t.contains('organic') || t.contains('food') || t.contains('green')) return Icons.eco;
-    if (t.contains('copper')) return Icons.electric_bolt;
-    return Icons.category;
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: WasteAppBar(title: 'New Waste Load', isOnSite: currentEmployee?.isOnSite),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (!_effectiveWasteEnabled) {
       return Scaffold(
-        appBar: WasteAppBar(title: 'Create New Waste Load', isOnSite: currentEmployee?.isOnSite),
+        appBar: WasteAppBar(title: 'New Waste Load', isOnSite: currentEmployee?.isOnSite),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -109,11 +66,16 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
               children: [
                 Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
-                const Text('WasteTrack is currently disabled or not available in pilot for your account.',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center),
+                const Text(
+                  'WasteTrack is currently disabled or not available for your account.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 8),
-                Text('Contact an administrator for access.', style: TextStyle(color: Theme.of(context).appColors.textMuted)),
+                Text(
+                  'Contact an administrator for access.',
+                  style: TextStyle(color: Theme.of(context).appColors.textMuted),
+                ),
               ],
             ),
           ),
@@ -121,99 +83,15 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: WasteAppBar(title: 'Create New Waste Load', isOnSite: currentEmployee?.isOnSite),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Change 5: step progress indicator
-                  const _WasteStepBar(currentStep: 1, totalSteps: 2, stepLabel: 'Select waste type'),
-                  const Text(
-                    'Step 1: Select Main Waste Type',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'This choice locks the entire load. One load = one main waste type only.',
-                    style: TextStyle(color: Theme.of(context).appColors.textMuted),
-                  ),
-                  const SizedBox(height: 24),
-
-                  Expanded(
-                    child: _wasteTypes.isEmpty
-                        ? const Center(child: Text('No waste types configured yet.'))
-                        : GridView.builder(
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 1.3,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                            ),
-                            itemCount: _wasteTypes.length,
-                            itemBuilder: (context, index) {
-                              final type = _wasteTypes[index];
-                              final isSelected = _selectedMainType?.mainType == type.mainType;
-
-                              return Card(
-                                elevation: isSelected ? 4 : 1,
-                                color: isSelected ? Theme.of(context).appColors.wasteGreenSurface : null,
-                                child: InkWell(
-                                  onTap: () => _selectMainType(type),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        // Change 6: meaningful icon
-                                        Icon(
-                                          _wasteTypeIcon(type.mainType),
-                                          size: 40,
-                                          color: isSelected ? Theme.of(context).appColors.wasteGreen : Theme.of(context).colorScheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          type.mainType,
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        if (type.subtypes.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 4),
-                                            child: Text(
-                                              '${type.subtypes.length} subtypes',
-                                              style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-    );
+    return const WasteLoadFormScreen();
   }
 }
 
-/// Full load form after main waste type is locked (per spec).
-/// Supports adding multiple WasteItems (with photos requirement), live total weight,
-/// and eventual "Mark Complete + Signature".
+/// Full load creation form.
+/// Contractor is selected first; available waste types are filtered to those linked
+/// to the selected contractor. Multiple items of different types can be added.
 class WasteLoadFormScreen extends ConsumerStatefulWidget {
-  // Change 1: accept the full WasteType object instead of a plain string
-  final WasteType wasteType;
-
-  const WasteLoadFormScreen({super.key, required this.wasteType});
+  const WasteLoadFormScreen({super.key});
 
   @override
   ConsumerState<WasteLoadFormScreen> createState() => _WasteLoadFormScreenState();
@@ -223,12 +101,16 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final WasteService _wasteService = WasteService();
 
-  // Load level fields
-  String? _contractorId;
+  // Load-level fields
   String _driverName = '';
   String _vehicleReg = '';
   String? _paperDocumentRef;
   String? _notes;
+
+  // Data
+  List<Contractor> _contractors = [];
+  List<WasteType> _wasteTypes = [];
+  Contractor? _selectedContractor;
 
   // Items for this load (in-memory until save)
   final List<WasteItem> _items = [];
@@ -236,27 +118,39 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
   bool _isLoading = false;
 
-  List<Contractor> _contractors = [];
-
-  // Change 1: derive subtypes from the passed WasteType
-  List<String> get _availableSubtypes =>
-      widget.wasteType.subtypes.isNotEmpty ? widget.wasteType.subtypes : ['Other'];
+  List<WasteType> get _availableTypes {
+    final c = _selectedContractor;
+    if (c == null || c.wasteTypeIds.isEmpty) return _wasteTypes;
+    return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+  }
 
   @override
   void initState() {
     super.initState();
-    _loadContractors();
+    _loadData();
   }
 
-  Future<void> _loadContractors() async {
+  Future<void> _loadData() async {
     try {
       final contractors = await _wasteService.watchContractors().first;
-      if (mounted) setState(() => _contractors = contractors);
+      final types = await _wasteService.watchWasteTypes().first;
+      if (mounted) {
+        setState(() {
+          _contractors = contractors;
+          _wasteTypes = types;
+        });
+      }
     } catch (_) {}
   }
 
   Future<void> _addItem() async {
-    // Change 3: use a bottom sheet instead of a dialog
+    final typeNames = _availableTypes.map((t) => t.mainType).toList();
+    if (typeNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a contractor first to see available waste types.')),
+      );
+      return;
+    }
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -264,7 +158,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddWasteItemSheet(availableSubtypes: _availableSubtypes),
+          child: _AddWasteItemSheet(availableTypes: typeNames),
         ),
       ),
     );
@@ -282,7 +176,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   }
 
   Future<void> _saveLoad() async {
-    if (_driverName.trim().isEmpty || _vehicleReg.trim().isEmpty || _contractorId == null) {
+    if (_driverName.trim().isEmpty || _vehicleReg.trim().isEmpty || _selectedContractor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Driver name, vehicle registration, and contractor are required.')),
       );
@@ -298,15 +192,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // PRODUCTION PATH - using the new orchestration method in WasteService
       final result = await _wasteService.saveCompleteWasteLoad(
         loadData: {
-          'main_waste_type': widget.wasteType.mainType,
-          'contractor_id': _contractorId,
-          'contractor_name': _contractors
-              .where((c) => c.id == _contractorId)
-              .map((c) => c.name)
-              .firstOrNull,
+          'contractor_id': _selectedContractor!.id,
+          'contractor_name': _selectedContractor!.name,
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
           'paper_document_ref': _paperDocumentRef,
@@ -319,23 +208,20 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           'quantity': item.quantity,
           'description': item.description,
           'notes': item.notes,
-          'localPhotos': item.photos, // the service will upload these
+          'localPhotos': item.photos,
         }).toList(),
-        // loadLevelPhotoPaths: [], // can add later
-        actorClockNo: currentEmployee?.clockNo, // Phase 7: pass for pilot enforcement + usage log
+        actorClockNo: currentEmployee?.clockNo,
       );
 
       if (mounted) {
         final loadId = result['id'] as String?;
         final loadNumber = result['load_number'] as String? ?? '';
-        // Fetch the full load so we can navigate straight to signature/detail.
         WasteLoad? newLoad;
         if (loadId != null) {
           newLoad = await _wasteService.getLoad(loadId);
         }
         if (!mounted) return;
         if (newLoad != null) {
-          // Replace the form screen with the detail screen so tapping back lands on type selection.
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: newLoad!)),
@@ -364,16 +250,13 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: WasteAppBar(title: 'New ${widget.wasteType.mainType} Load', isOnSite: currentEmployee?.isOnSite),
+      appBar: WasteAppBar(title: 'New Waste Load', isOnSite: currentEmployee?.isOnSite),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Change 5: step progress indicator at top
-            const _WasteStepBar(currentStep: 2, totalSteps: 2, stepLabel: 'Load details & items'),
-
-            // Live total (per spec)
+            // Live total
             Card(
               color: Theme.of(context).appColors.wasteGreenSurface,
               child: Padding(
@@ -392,31 +275,37 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Load level fields
+            // Contractor (first — determines available types)
+            DropdownButtonFormField<Contractor?>(
+              // ignore: deprecated_member_use
+              value: _selectedContractor,
+              hint: const Text('Select contractor *'),
+              isExpanded: true,
+              items: _contractors.isEmpty
+                  ? [const DropdownMenuItem<Contractor?>(value: null, child: Text('Loading...'))]
+                  : _contractors.map((c) => DropdownMenuItem<Contractor?>(value: c, child: Text(c.name))).toList(),
+              onChanged: _contractors.isEmpty
+                  ? null
+                  : (c) => setState(() => _selectedContractor = c),
+              decoration: const InputDecoration(labelText: 'Contractor *'),
+            ),
+            const SizedBox(height: 8),
+
             TextFormField(
               decoration: const InputDecoration(labelText: 'Driver Name *'),
               onChanged: (v) => _driverName = v,
             ),
+            const SizedBox(height: 8),
             TextFormField(
               decoration: const InputDecoration(labelText: 'Vehicle Registration *'),
               onChanged: (v) => _vehicleReg = v,
             ),
-            DropdownButtonFormField<String?>(
-              // ignore: deprecated_member_use
-              value: _contractorId,
-              items: _contractors.isEmpty
-                  ? [const DropdownMenuItem<String?>(value: null, child: Text('Loading contractors...'))]
-                  : [
-                      const DropdownMenuItem<String?>(value: null, child: Text('Select contractor *')),
-                      ..._contractors.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name))),
-                    ],
-              onChanged: _contractors.isEmpty ? null : (v) => setState(() => _contractorId = v),
-              decoration: const InputDecoration(labelText: 'Contractor *'),
-            ),
+            const SizedBox(height: 8),
             TextFormField(
               decoration: const InputDecoration(labelText: 'Paper Document Reference'),
               onChanged: (v) => _paperDocumentRef = v,
             ),
+            const SizedBox(height: 8),
             TextFormField(
               decoration: const InputDecoration(labelText: 'Notes'),
               maxLines: 2,
@@ -431,7 +320,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Items list
             if (_items.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
@@ -465,7 +353,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               label: const Text('Add Waste Item (with photo)'),
             ),
 
-            // Offline resilience indicator (PR2-3) — valid collection-if inside Column children
             if (_items.any((i) => i.photos.any((p) => p.startsWith('/'))))
               Container(
                 margin: const EdgeInsets.only(top: 8),
@@ -491,7 +378,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               icon: _isLoading
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
-              // Change 2: updated button label
               label: Text(_isLoading ? 'Saving...' : 'Create Load'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).appColors.wasteGreen,
@@ -500,7 +386,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            // Change 2: updated footer hint text
             Text(
               'After saving: capture driver signature, then enter weighbridge weight to complete.',
               style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
@@ -514,14 +399,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Add waste item bottom sheet — converted from dialog to avoid lifecycle crash
-// caused by camera intent firing mid-dialog and Flutter partially rebuilding
-// the subtree.
+// Add waste item bottom sheet
 // ---------------------------------------------------------------------------
 
 class _AddWasteItemSheet extends StatefulWidget {
-  const _AddWasteItemSheet({required this.availableSubtypes});
-  final List<String> availableSubtypes;
+  const _AddWasteItemSheet({required this.availableTypes});
+  final List<String> availableTypes;
 
   @override
   State<_AddWasteItemSheet> createState() => _AddWasteItemSheetState();
@@ -529,7 +412,7 @@ class _AddWasteItemSheet extends StatefulWidget {
 
 class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
   final WasteService _wasteService = WasteService();
-  late String _subtype;
+  late String _wasteType;
   final _weightCtrl = TextEditingController();
   final _qtyCtrl    = TextEditingController();
   final List<String> _photos = [];
@@ -538,7 +421,7 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
   @override
   void initState() {
     super.initState();
-    _subtype = widget.availableSubtypes.isNotEmpty ? widget.availableSubtypes.first : '';
+    _wasteType = widget.availableTypes.isNotEmpty ? widget.availableTypes.first : '';
   }
 
   @override
@@ -549,7 +432,7 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
   }
 
   bool get _valid =>
-      _subtype.isNotEmpty &&
+      _wasteType.isNotEmpty &&
       (double.tryParse(_weightCtrl.text) ?? 0) > 0 &&
       _photos.isNotEmpty;
 
@@ -565,12 +448,10 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Change 3: bottom sheet — no AlertDialog wrapper
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Handle bar
         Center(
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -595,12 +476,12 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 // ignore: deprecated_member_use
-                value: _subtype,
-                items: widget.availableSubtypes
+                value: _wasteType,
+                items: widget.availableTypes
                     .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                     .toList(),
-                onChanged: (v) => setState(() => _subtype = v!),
-                decoration: const InputDecoration(labelText: 'Subtype', isDense: true),
+                onChanged: (v) => setState(() => _wasteType = v!),
+                decoration: const InputDecoration(labelText: 'Waste Type', isDense: true),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -682,7 +563,7 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
                 child: FilledButton(
                   onPressed: _valid
                       ? () => Navigator.pop(context, {
-                            'subtype': _subtype,
+                            'subtype': _wasteType,
                             'weightKg': double.parse(_weightCtrl.text),
                             'quantity': _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
                             'photos': List.of(_photos),
@@ -696,49 +577,6 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Change 5: Step progress indicator widget
-// ---------------------------------------------------------------------------
-
-class _WasteStepBar extends StatelessWidget {
-  const _WasteStepBar({required this.currentStep, required this.totalSteps, required this.stepLabel});
-  final int currentStep;
-  final int totalSteps;
-  final String stepLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: List.generate(totalSteps, (i) {
-              final active = i < currentStep;
-              return Expanded(
-                child: Container(
-                  margin: EdgeInsets.only(right: i < totalSteps - 1 ? 4 : 0),
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: active ? Theme.of(context).appColors.wasteGreen : Theme.of(context).colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Step $currentStep of $totalSteps — $stepLabel',
-            style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-          ),
-        ],
-      ),
     );
   }
 }
