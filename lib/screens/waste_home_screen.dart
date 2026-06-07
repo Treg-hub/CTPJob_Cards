@@ -8,6 +8,7 @@ import '../main.dart' show currentEmployee;
 import '../services/sync_service.dart';
 import '../utils/role.dart' as role_utils;
 import '../services/waste_service.dart';
+import '../models/waste_settings.dart';
 import '../models/waste_load.dart';
 import '../utils/formatters.dart';
 import 'waste_create_load_screen.dart';
@@ -283,6 +284,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   StreamSubscription<List<WasteLoad>>? _scheduledSubscription;
 
   bool _effectiveWasteEnabled = true;
+  WasteSettings? _wasteSettings;
 
   // ── Tab controller + pending weighbridge badge counter ──
   late TabController _tabController;
@@ -291,7 +293,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
   int _tabCount() {
     final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
-    final isManager = role_utils.isSecurityManager(currentEmployee);
+    final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
     return 1 + (isAdmin || isManager ? 2 : 0) + (isAdmin ? 1 : 0);
   }
 
@@ -347,7 +349,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
   void _subscribeToPendingCount() {
     final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
-    final isManager = role_utils.isSecurityManager(currentEmployee);
+    final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
     if (!isAdmin && !isManager) return;
     _pendingCountSub = _wasteService.watchPendingWeighbridge().listen(
       (loads) { if (mounted) setState(() => _pendingWeighbridgeCount = loads.length); },
@@ -365,13 +367,18 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   }
 
   Future<void> _loadFeatureStatus() async {
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
-    if (mounted) setState(() => _effectiveWasteEnabled = enabled);
+    final settings = await _wasteService.getWasteSettings();
+    if (mounted) {
+      setState(() {
+        _wasteSettings = settings;
+        _effectiveWasteEnabled = settings.wasteEnabled;
+      });
+    }
   }
 
   void _showNewLoadMenu(BuildContext context) {
     final canManageLoads = role_utils.isWasteAdmin(currentEmployee) ||
-        role_utils.isSecurityManager(currentEmployee);
+        role_utils.isSecurityManager(currentEmployee, _wasteSettings);
 
     showModalBottomSheet<void>(
       context: context,
@@ -479,7 +486,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
           ),
 
         // Paper Waste Stock summary banner
-        if (role_utils.isWasteUser(currentEmployee))
+        if (role_utils.isWasteUser(currentEmployee, _wasteSettings))
           _PaperWasteStockBanner(wasteService: _wasteService),
 
         // Quick filter chips
@@ -678,7 +685,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   @override
   Widget build(BuildContext context) {
     final isAdmin = role_utils.isWasteAdmin(currentEmployee);
-    final isManager = role_utils.isSecurityManager(currentEmployee);
+    final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
     final wasteEnabled = _effectiveWasteEnabled;
 
     if (!wasteEnabled) {
@@ -705,7 +712,9 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
                     onPressed: () async {
-                      await _wasteService.setWasteMasterEnabled(true);
+                      final updated = (_wasteSettings ?? WasteSettings.defaults)
+                          .copyWith(wasteEnabled: true);
+                      await _wasteService.saveWasteSettings(updated);
                       await _loadFeatureStatus();
                     },
                     icon: const Icon(Icons.toggle_on),

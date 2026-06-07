@@ -40,12 +40,15 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     super.initState();
     _currentLoad = widget.load;
     _isAdmin = role_utils.isWasteAdmin(currentEmployee);
-    _isManager = role_utils.isSecurityManager(currentEmployee);
     if (_currentLoad.actualWeighbridgeWeightKg != null) {
       _weighbridgeController.text = _currentLoad.actualWeighbridgeWeightKg!.toString();
     }
-    // Offline resilience: drain queued updates/photos when opening a load (weighbridge entry flow)
     _wasteService.processOfflineWasteQueue();
+    _wasteService.getWasteSettings().then((s) {
+      if (mounted) {
+        setState(() => _isManager = role_utils.isSecurityManager(currentEmployee, s));
+      }
+    });
   }
 
   void _calculateAndShowDeviation() {

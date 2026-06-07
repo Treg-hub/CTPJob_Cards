@@ -255,9 +255,9 @@ class _YourRolePage extends StatelessWidget {
   // Specialized role checks take priority over the base UserRole so that
   // a Security Guard (maps to 'operator') or Hyster Mechanic (maps to
   // 'technician') sees content relevant to their actual day-to-day module.
-  bool get _isSecurityManager => isSecurityManager(employee);
-  bool get _isSecurityGuard => isSecurityGuard(employee);
-  bool get _isFleetMechanic => isFleetMechanic(employee);
+  bool get _isSecurityManager => isSecurityManager(employee, null);
+  bool get _isSecurityGuard => isSecurityGuard(employee, null);
+  bool get _isFleetMechanic => isFleetMechanic(employee, null);
 
   String get _title {
     if (_isSecurityManager) return "You're a Security Manager";

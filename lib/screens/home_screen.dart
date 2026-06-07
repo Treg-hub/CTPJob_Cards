@@ -33,7 +33,9 @@ import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
 import '../models/fleet_settings.dart';
+import '../models/waste_settings.dart';
 import '../services/fleet_service.dart';
+import '../services/waste_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -72,6 +74,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Fleet Maintenance — cached settings loaded once in initState
   FleetSettings? _cachedFleetSettings;
 
+  // Waste Track — cached settings loaded once in initState
+  WasteSettings? _cachedWasteSettings;
+
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -89,8 +94,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   /// Returns true when the currently visible tab is the Waste tab.
   bool get _isOnWasteTab {
-    if (!role_utils.isWasteUser(currentEmployee) ||
-        !role_utils.isWasteTrackEnabledSync()) {
+    if (!role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) ||
+        !(_cachedWasteSettings?.wasteEnabled ?? true)) {
       return false;
     }
     int idx = 2; // 0=Home, 1=MyWork
@@ -111,8 +116,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       idx++;
     }
     if (_isCopperAuthorized) idx++;
-    if (role_utils.isWasteUser(currentEmployee) &&
-        role_utils.isWasteTrackEnabledSync()) {
+    if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) &&
+        (_cachedWasteSettings?.wasteEnabled ?? true)) {
       idx++;
     }
     return _selectedIndex == idx;
@@ -275,6 +280,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  Future<void> _loadWasteSettings() async {
+    try {
+      final settings = await WasteService().getWasteSettings();
+      if (mounted) setState(() => _cachedWasteSettings = settings);
+    } catch (e) {
+      debugPrint('Waste settings load error: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -283,6 +297,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadOverrideOnSite();
     _loadTestMode();
     _loadFleetSettings();
+    _loadWasteSettings();
 
     if (currentEmployee != null) {
       _setupEmployeeStream(currentEmployee!.clockNo);
@@ -1549,7 +1564,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
-      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
         _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
@@ -1593,7 +1608,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
       if (_isCopperAuthorized)
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
-      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
       if (_isFleetUser)
         const BottomNavigationBarItem(icon: Icon(Icons.directions_car_outlined), label: 'Fleet'),
@@ -1606,7 +1621,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
-      if (role_utils.isWasteUser(currentEmployee) && role_utils.isWasteTrackEnabledSync())
+      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
         _buildWasteTab(),   // TODO: real focused Waste home for Security Manager/Guard
       if (_isFleetUser)
         _buildFleetTab(),

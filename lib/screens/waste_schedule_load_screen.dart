@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../services/waste_service.dart';
 import '../models/contractor.dart';
+import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
@@ -33,6 +34,7 @@ class _WasteScheduleLoadScreenState
   DateTime _scheduledFor = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
+  WasteSettings? _wasteSettings;
 
   // Stock item selection (shown when Paper Waste is selected, manager/admin only)
   List<WasteStockItem> _onSiteStock = [];
@@ -44,6 +46,9 @@ class _WasteScheduleLoadScreenState
   void initState() {
     super.initState();
     _loadData();
+    _wasteService.getWasteSettings().then((s) {
+      if (mounted) setState(() => _wasteSettings = s);
+    });
   }
 
   @override
@@ -296,7 +301,7 @@ class _WasteScheduleLoadScreenState
                         onSelected: (_) {
                           setState(() => _selectedType = type);
                           final canSelectPallets =
-                              isSecurityManager(currentEmployee) ||
+                              isSecurityManager(currentEmployee, _wasteSettings) ||
                               isWasteAdmin(currentEmployee);
                           if (canSelectPallets && type.mainType == 'Paper Waste') {
                             _loadOnSiteStock(type.mainType);

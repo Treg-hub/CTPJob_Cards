@@ -1,7 +1,6 @@
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/waste_settings.dart';
 
 enum UserRole { technician, manager, admin, operator }
 
@@ -53,84 +52,51 @@ bool isAdmin(Employee? employee) {
 // =============================================================================
 // WASTE TRACK (WasteTrack) role helpers
 // =============================================================================
-// Security team derivation:
-//   - Admin: reuses isAdmin() — Employee.isAdmin Firestore field
-//   - Security Manager: department == "Security" && position contains "manager"
-//   - Security Guard:   department == "Security" && position contains "guard"
+// All roles are config-driven via WasteSettings (waste_settings/config).
+//   - Admin:            reuses isAdmin() — Employee.isAdmin Firestore field
+//   - Security Manager: clockNo in WasteSettings.managerClockNos
+//   - Security Guard:   clockNo in WasteSettings.guardClockNos
 // =============================================================================
 
 /// Returns true if this user should have full WasteTrack Admin rights
-/// (currently reuses the global isAdmin check).
+/// (reuses the global isAdmin check).
 bool isWasteAdmin(Employee? employee) {
   return isAdmin(employee);
 }
 
-/// Returns true if the employee is a Security Manager
-/// (department "Security" + position containing "manager").
-/// Uses contains-matching so "Security Manager", "Senior Manager", etc. all qualify.
-bool isSecurityManager(Employee? employee) {
-  if (employee == null) return false;
-  final dept = employee.department.toLowerCase().trim();
-  final pos = employee.position.toLowerCase().trim();
-  return (dept == 'security' || dept.contains('security')) &&
-      (pos == 'manager' || pos.contains('manager'));
+/// Returns true if the employee's clock number is in the manager allow-list.
+bool isSecurityManager(Employee? employee, WasteSettings? settings) {
+  if (employee == null || settings == null) return false;
+  return settings.managerClockNos.contains(employee.clockNo);
 }
 
-/// Returns true if the employee is a Security Guard
-/// (department "Security" + position containing "guard").
-/// Uses contains-matching so "Security Guard", "Senior Guard", etc. all qualify.
-bool isSecurityGuard(Employee? employee) {
-  if (employee == null) return false;
-  final dept = employee.department.toLowerCase().trim();
-  final pos = employee.position.toLowerCase().trim();
-  return (dept == 'security' || dept.contains('security')) &&
-      (pos == 'guard' || pos.contains('guard'));
+/// Returns true if the employee's clock number is in the guard allow-list.
+bool isSecurityGuard(Employee? employee, WasteSettings? settings) {
+  if (employee == null || settings == null) return false;
+  return settings.guardClockNos.contains(employee.clockNo);
 }
 
 /// Convenience: any WasteTrack user (Admin, Security Manager, or Security Guard).
-bool isWasteUser(Employee? employee) {
-  return isWasteAdmin(employee) || isSecurityManager(employee) || isSecurityGuard(employee);
-}
-
-// -----------------------------------------------------------------------------
-// WasteTrack Feature Flag (Safety Net for Production Rollout)
-// -----------------------------------------------------------------------------
-
-/// Returns whether WasteTrack features should be visible/enabled for this user.
-/// 
-/// Uses SharedPreferences flag (key: 'wasteTrackEnabled') + role check.
-/// Default: enabled for users with waste role (for pilot).
-/// 
-/// This is the production safety valve. Can be toggled via future Remote Config or admin screen.
-/// Safety: All Waste UI remains gated behind isWasteUser() even if flag is true.
-Future<bool> isWasteTrackEnabled() async {
-  final prefs = await SharedPreferences.getInstance();
-  final flag = prefs.getBool('wasteTrackEnabled') ?? true; // Default on for pilot
-  return flag;
-}
-
-/// Synchronous version for navigation / quick checks (defaults to true until prefs loaded).
-/// The async version should be preferred for settings screens.
-bool isWasteTrackEnabledSync() {
-  // Safe default: on for users who have the role. Real value loaded async.
-  return true;
+bool isWasteUser(Employee? employee, WasteSettings? settings) {
+  return isWasteAdmin(employee) ||
+      isSecurityManager(employee, settings) ||
+      isSecurityGuard(employee, settings);
 }
 
 // =============================================================================
 // FLEET MAINTENANCE role helpers
 // =============================================================================
 // Fleet roles are derived from Employee fields + FleetSettings config:
-//   - Fleet Mechanic:     department == "Workshop" && position == "Hyster Mechanic"
+//   - Fleet Mechanic:     clockNo in fleet_settings.mechanicClockNos
 //   - Fleet Reporter:     employee.department in fleet_settings.reporterDepartments
 //   - Fleet Cost Manager: employee.clockNo in fleet_settings.costManagerClockNos
 //   - Fleet Admin:        reuses isAdmin() — Employee.isAdmin Firestore field
 // =============================================================================
 
-/// True when the employee is the Hyster mechanic
-/// (department "Workshop" + position "Hyster Mechanic"). Case-sensitive match.
-bool isFleetMechanic(Employee? employee) {
-  if (employee == null) return false;
-  return employee.department == 'Workshop' && employee.position == 'Hyster Mechanic';
+/// True when the employee's clock number is in the mechanic allow-list.
+bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
+  if (employee == null || settings == null) return false;
+  return settings.mechanicClockNos.contains(employee.clockNo);
 }
 
 /// True when the employee's department is in the configurable reporter allow-list.
@@ -150,7 +116,7 @@ bool isFleetAdmin(Employee? employee) => isAdmin(employee);
 
 /// Convenience: any Fleet user (shows Fleet tab when true).
 bool isFleetUser(Employee? employee, FleetSettings? settings) {
-  return isFleetMechanic(employee) ||
+  return isFleetMechanic(employee, settings) ||
       isFleetAdmin(employee) ||
       isFleetReporter(employee, settings) ||
       isFleetCostManager(employee, settings);
