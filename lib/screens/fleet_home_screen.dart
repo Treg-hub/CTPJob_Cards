@@ -54,7 +54,7 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     super.initState();
     final settingsVal = ref.read(fleetSettingsProvider).asData?.value ?? FleetSettings.defaults;
     final emp = currentEmployee;
-    final isMechanic = role_utils.isFleetMechanic(emp);
+    final isMechanic = role_utils.isFleetMechanic(emp, settingsVal);
     final isCostMgr  = role_utils.isFleetCostManager(emp, settingsVal);
     final isAdmin    = role_utils.isFleetAdmin(emp);
     _tabController = TabController(length: _tabCount(isMechanic, isCostMgr, isAdmin), vsync: this)
@@ -77,7 +77,7 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     final emp      = currentEmployee;
     final settings = ref.watch(fleetSettingsProvider).asData?.value ?? FleetSettings.defaults;
 
-    final isMechanic = role_utils.isFleetMechanic(emp);
+    final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isCostMgr  = role_utils.isFleetCostManager(emp, settings);
     final isAdmin    = role_utils.isFleetAdmin(emp);
     final isReporter = role_utils.isFleetReporter(emp, settings);

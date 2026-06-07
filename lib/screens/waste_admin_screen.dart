@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
+import '../models/waste_settings.dart';
 import '../theme/app_theme.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
@@ -27,17 +28,45 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
   final WasteService _wasteService = WasteService();
   bool _isProcessing = false;
   bool _wasteEnabled = true;
+  WasteSettings? _wasteSettings;
+  bool _settingsSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadWasteEnabled();
+    _loadSettings();
     _wasteService.processOfflineWasteQueue();
   }
 
-  Future<void> _loadWasteEnabled() async {
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
-    if (mounted) setState(() => _wasteEnabled = enabled);
+  Future<void> _loadSettings() async {
+    final settings = await _wasteService.getWasteSettings();
+    if (mounted) {
+      setState(() {
+        _wasteSettings = settings;
+        _wasteEnabled = settings.wasteEnabled;
+      });
+    }
+  }
+
+  Future<void> _savePermissions() async {
+    if (_wasteSettings == null) return;
+    setState(() => _settingsSaving = true);
+    try {
+      await _wasteService.saveWasteSettings(_wasteSettings!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permissions saved.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _settingsSaving = false);
+    }
   }
 
   // --- Manage Types helpers ---
@@ -188,8 +217,13 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                     value: _wasteEnabled,
                     activeThumbColor: Theme.of(context).appColors.wasteGreen,
                     onChanged: (v) async {
-                      setState(() => _wasteEnabled = v);
-                      await _wasteService.setWasteMasterEnabled(v);
+                      setState(() {
+                        _wasteEnabled = v;
+                        _wasteSettings = (_wasteSettings ?? WasteSettings.defaults)
+                            .copyWith(wasteEnabled: v);
+                      });
+                      await _wasteService.saveWasteSettings(
+                          _wasteSettings!);
                     },
                   ),
                 ),
@@ -209,6 +243,84 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // ── Permissions ───────────────────────────────────────────────
+                if (_wasteSettings != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Permissions',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold)),
+                              _settingsSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : TextButton(
+                                      onPressed: _savePermissions,
+                                      child: const Text('Save')),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Clock numbers that control access to each part of Waste. '
+                            'Add a clock number to give that person the role.',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Security Managers
+                          const Text('Security Managers',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
+                          Text(
+                            'Can schedule loads, access weighbridge, view reports',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 8),
+                          ..._ClockNumberChips(
+                            clockNos: _wasteSettings!.managerClockNos,
+                            hintText: 'Add manager clock no.',
+                            onChanged: (updated) => setState(() =>
+                                _wasteSettings = _wasteSettings!
+                                    .copyWith(managerClockNos: updated)),
+                          ).build(context),
+
+                          const SizedBox(height: 16),
+
+                          // Security Guards
+                          const Text('Security Guards',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
+                          Text(
+                            'Can begin collections, record items, capture signatures',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 8),
+                          ..._ClockNumberChips(
+                            clockNos: _wasteSettings!.guardClockNos,
+                            hintText: 'Add guard clock no.',
+                            onChanged: (updated) => setState(() =>
+                                _wasteSettings = _wasteSettings!
+                                    .copyWith(guardClockNos: updated)),
+                          ).build(context),
+                        ],
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 // ── Manage Waste Types ─────────────────────────────────────────
@@ -372,5 +484,70 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
       ),
       body: bodyContent,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Clock number chips with add / remove (mirrors _CostManagerChips in fleet)
+// ---------------------------------------------------------------------------
+
+class _ClockNumberChips {
+  _ClockNumberChips({
+    required this.clockNos,
+    required this.hintText,
+    required this.onChanged,
+  });
+
+  final List<String> clockNos;
+  final String hintText;
+  final ValueChanged<List<String>> onChanged;
+
+  List<Widget> build(BuildContext context) {
+    final addCtrl = TextEditingController();
+    final green = Theme.of(context).appColors.wasteGreen;
+    return [
+      Wrap(
+        spacing: 8,
+        children: [
+          ...clockNos.map((no) => Chip(
+                label: Text(no),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () {
+                  final updated = List<String>.from(clockNos)..remove(no);
+                  onChanged(updated);
+                },
+              )),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: addCtrl,
+              decoration: InputDecoration(
+                hintText: hintText,
+                isDense: true,
+                border: const OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: green, foregroundColor: Colors.white),
+            onPressed: () {
+              final no = addCtrl.text.trim();
+              if (no.isEmpty || clockNos.contains(no)) return;
+              final updated = [...clockNos, no];
+              onChanged(updated);
+              addCtrl.clear();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    ];
   }
 }

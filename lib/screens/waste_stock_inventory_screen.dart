@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
@@ -24,11 +25,20 @@ class WasteStockInventoryScreen extends ConsumerStatefulWidget {
 class _WasteStockInventoryScreenState
     extends ConsumerState<WasteStockInventoryScreen> {
   final WasteService _wasteService = WasteService();
+  WasteSettings? _wasteSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasteService.getWasteSettings().then((s) {
+      if (mounted) setState(() => _wasteSettings = s);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final appColors = Theme.of(context).appColors;
-    final canAdd = isWasteUser(currentEmployee);
+    final canAdd = isWasteUser(currentEmployee, _wasteSettings);
 
     return Scaffold(
       appBar: WasteAppBar(

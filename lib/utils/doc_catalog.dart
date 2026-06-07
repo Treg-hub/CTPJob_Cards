@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/doc_entry.dart';
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/waste_settings.dart';
 import 'role.dart';
 
 const _allUserFacingRoles = <UserRole>{
@@ -105,10 +106,11 @@ const List<DocEntry> docCatalog = [
 /// 4. `requiresFleet` — excluded unless the Fleet module is enabled and the
 ///    user is a Fleet user. Mirrors the visibility of the Fleet tab.
 /// 5. `roles` — standard role membership check.
-List<DocEntry> docsForUser(Employee? employee, [FleetSettings? fleetSettings]) {
+List<DocEntry> docsForUser(Employee? employee,
+    [FleetSettings? fleetSettings, WasteSettings? wasteSettings]) {
   final role = roleFromEmployee(employee);
   final admin = isAdmin(employee);
-  final wasteUser = isWasteUser(employee);
+  final wasteUser = isWasteUser(employee, wasteSettings);
   final fleetUser = (fleetSettings?.fleetEnabled ?? false) &&
       isFleetUser(employee, fleetSettings);
   return docCatalog.where((doc) {

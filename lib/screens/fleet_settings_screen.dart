@@ -147,6 +147,19 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
           ).build(context),
           const Divider(),
 
+          // ── Mechanics ─────────────────────────────────────────────────
+          _SectionHeader(
+            title: 'Mechanics',
+            icon: Icons.precision_manufacturing,
+            subtitle: 'Clock numbers with Mechanic access (log work, acknowledge/resolve issues)',
+          ),
+          ..._CostManagerChips(
+            clockNos: s.mechanicClockNos,
+            onChanged: (updated) =>
+                setState(() => _settings = s.copyWith(mechanicClockNos: updated)),
+          ).build(context),
+          const Divider(),
+
           // ── Asset types ────────────────────────────────────────────────
           _SectionHeader(title: 'Asset Types', icon: Icons.forklift),
           _TypeListSection(service: _service, kind: 'asset_type'),

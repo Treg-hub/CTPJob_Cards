@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../models/waste_load.dart';
+import '../models/waste_settings.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
@@ -29,9 +30,11 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
   List<WasteLoad> _pending = [];
   bool _isLoading = true;
   String? _error;
+  WasteSettings? _wasteSettings;
 
   bool get _canAccess =>
-      role_utils.isWasteAdmin(currentEmployee) || role_utils.isSecurityManager(currentEmployee);
+      role_utils.isWasteAdmin(currentEmployee) ||
+      role_utils.isSecurityManager(currentEmployee, _wasteSettings);
 
   bool _effectiveWasteEnabled = true;
 
@@ -39,14 +42,17 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
   void initState() {
     super.initState();
     _loadFeatureStatus();
-    if (_canAccess) {
-      _loadPending();
-    }
   }
 
   Future<void> _loadFeatureStatus() async {
-    final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(currentEmployee?.clockNo);
-    if (mounted) setState(() => _effectiveWasteEnabled = enabled);
+    final settings = await _wasteService.getWasteSettings();
+    if (mounted) {
+      setState(() {
+        _wasteSettings = settings;
+        _effectiveWasteEnabled = settings.wasteEnabled;
+      });
+      if (_canAccess) _loadPending();
+    }
   }
 
   Future<void> _loadPending() async {

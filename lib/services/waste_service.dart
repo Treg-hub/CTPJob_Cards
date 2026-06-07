@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import 'sync_service.dart';
 import '../models/contractor.dart';
+import '../models/waste_settings.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
@@ -853,6 +854,26 @@ class WasteService {
 
   Future<bool> isWasteTrackEnabledForCurrentUser(String? clockNo) =>
       getWasteMasterEnabled();
+
+  // ---------------------------------------------------------------------------
+  // WASTE SETTINGS (Firestore-backed, waste_settings/config)
+  // ---------------------------------------------------------------------------
+
+  Future<WasteSettings> getWasteSettings() async {
+    final snap = await _firestore
+        .collection(Collections.wasteSettings)
+        .doc('config')
+        .get();
+    if (!snap.exists) return WasteSettings.defaults;
+    return WasteSettings.fromFirestore(snap);
+  }
+
+  Future<void> saveWasteSettings(WasteSettings settings) async {
+    await _firestore
+        .collection(Collections.wasteSettings)
+        .doc('config')
+        .set(settings.toFirestore(), SetOptions(merge: true));
+  }
 
   // ---------------------------------------------------------------------------
   // ON-SITE STOCK — pre-load stock tracking for any waste type
