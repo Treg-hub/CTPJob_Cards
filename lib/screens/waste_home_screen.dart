@@ -380,6 +380,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     final canManageLoads = role_utils.isWasteAdmin(currentEmployee) ||
         role_utils.isSecurityManager(currentEmployee, _wasteSettings);
 
+    // Guards can schedule if the admin has enabled the toggle in CTP Pulse
+    // Waste Settings → Module → "Guards Can Schedule Loads".
+    final guardCanSchedule =
+        role_utils.isSecurityGuard(currentEmployee, _wasteSettings) &&
+        (_wasteSettings?.guardCanSchedule ?? false);
+
+    final canSchedule = canManageLoads || guardCanSchedule;
+
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -391,7 +399,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
               child: Text('What would you like to do?',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            if (canManageLoads) ...[
+            if (canSchedule)
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).appColors.wasteGreen,
@@ -405,6 +413,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                       MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
                 },
               ),
+            if (canManageLoads)
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Colors.blueGrey,
@@ -418,7 +427,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                       MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
                 },
               ),
-            ],
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: Theme.of(context).appColors.wasteGreen,
