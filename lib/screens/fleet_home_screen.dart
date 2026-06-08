@@ -6,21 +6,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
-import '../models/fleet_settings.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
-import '../widgets/fleet_issue_widgets.dart';
 import 'fleet_add_cost_screen.dart';
 import 'fleet_assets_screen.dart' show FleetAssetsScreen, FleetAssetFormScreen;
-import 'fleet_issue_detail_screen.dart';
 import 'fleet_issues_list_screen.dart';
 import 'fleet_log_work_screen.dart';
 import 'fleet_report_issue_screen.dart';
 import 'fleet_reports_screen.dart';
 import 'fleet_settings_screen.dart';
 import 'fleet_work_records_list_screen.dart';
+import 'doc_viewer_screen.dart';
+import '../models/doc_entry.dart';
+import '../utils/fleet_guides.dart';
 
 /// Fleet Maintenance home screen — tabbed entry point for the Fleet tab.
 /// Tabs are role-filtered: Issues (all) | Work (mechanic+admin) |
@@ -38,26 +38,15 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
   final _service = FleetService();
 
   late TabController _tabController;
+  int _lastTabCount = 0;
   int _openIssuesCount = 0;
   StreamSubscription<List<FleetIssue>>? _issueCountSub;
-
-  int _tabCount(bool isMechanic, bool isCostMgr, bool isAdmin) =>
-      1 +
-      (isMechanic || isAdmin ? 1 : 0) +
-      (isCostMgr || isAdmin ? 1 : 0) +
-      (isCostMgr || isAdmin ? 1 : 0) +
-      (isAdmin ? 1 : 0) +
-      (isAdmin ? 1 : 0);
 
   @override
   void initState() {
     super.initState();
-    final settingsVal = ref.read(fleetSettingsProvider).asData?.value ?? FleetSettings.defaults;
-    final emp = currentEmployee;
-    final isMechanic = role_utils.isFleetMechanic(emp, settingsVal);
-    final isCostMgr  = role_utils.isFleetCostManager(emp, settingsVal);
-    final isAdmin    = role_utils.isFleetAdmin(emp);
-    _tabController = TabController(length: _tabCount(isMechanic, isCostMgr, isAdmin), vsync: this)
+    _lastTabCount = 1;
+    _tabController = TabController(length: _lastTabCount, vsync: this)
       ..addListener(() { if (mounted) setState(() {}); });
     _issueCountSub = _service.watchOpenIssues(limit: 100).listen(
       (issues) { if (mounted) setState(() => _openIssuesCount = issues.length); },
@@ -74,13 +63,29 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final emp      = currentEmployee;
-    final settings = ref.watch(fleetSettingsProvider).asData?.value ?? FleetSettings.defaults;
+    final settingsAsync = ref.watch(fleetSettingsProvider);
+    if (!settingsAsync.hasValue) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final settings = settingsAsync.requireValue;
+    if (!settings.fleetEnabled) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Fleet Maintenance is not enabled.\nAsk an admin to turn it on in Settings.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
+    final emp      = currentEmployee;
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isCostMgr  = role_utils.isFleetCostManager(emp, settings);
     final isAdmin    = role_utils.isFleetAdmin(emp);
     final isReporter = role_utils.isFleetReporter(emp, settings);
+    final mechanicUx = isMechanic && !isAdmin;
 
     // ── Build role-based tab list ──────────────────────────────────────────
     final tabs = <Widget>[
@@ -88,7 +93,7 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Issues'),
+            Text(mechanicUx ? 'To Fix' : 'Issues'),
             if (_openIssuesCount > 0) ...[
               const SizedBox(width: 4),
               _FleetBadge(_openIssuesCount),
@@ -96,7 +101,8 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
           ],
         ),
       ),
-      if (isMechanic || isAdmin) const Tab(text: 'Work'),
+      if (isMechanic || isAdmin)
+        Tab(text: mechanicUx ? 'History' : 'Work'),
       if (isCostMgr  || isAdmin) const Tab(text: 'Costs'),
       if (isCostMgr  || isAdmin) const Tab(text: 'Reports'),
       if (isAdmin) const Tab(text: 'Assets'),
@@ -112,28 +118,26 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
         isReporter: isReporter,
         isCostMgr: isCostMgr,
       ),
-      if (isMechanic || isAdmin) const FleetWorkRecordsListScreen(embedded: true),
-      if (isCostMgr  || isAdmin) const FleetWorkRecordsListScreen(embedded: true, costsPendingOnly: true),
+      if (isMechanic || isAdmin)
+        FleetWorkRecordsListScreen(embedded: true, mechanicMode: mechanicUx),
+      if (isCostMgr  || isAdmin)
+        const FleetWorkRecordsListScreen(embedded: true, costManagerMode: true),
       if (isCostMgr  || isAdmin) const FleetReportsScreen(embedded: true),
       if (isAdmin) const FleetAssetsScreen(embedded: true),
       if (isAdmin) const FleetSettingsScreen(embedded: true),
     ];
 
-    // Rebuild controller if role changed (e.g. settings loaded after init)
-    if (_tabController.length != tabs.length) {
-      _tabController.dispose();
-      _tabController = TabController(length: tabs.length, vsync: this)
-        ..addListener(() { if (mounted) setState(() {}); });
-    }
+    _syncTabController(tabs.length);
 
     // Tab-aware FABs
     final int tabIdx = _tabController.index;
     Widget? fab;
-    if (tabIdx == 0 && (isReporter || isMechanic || isAdmin)) {
+    if (tabIdx == 0 && (isReporter || isAdmin)) {
+      final reporterFab = isReporter && !isAdmin;
       fab = FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetReportIssueScreen())),
         icon: const Icon(Icons.report_problem_outlined),
-        label: const Text('Report Issue'),
+        label: Text(reporterFab ? 'Report Problem' : 'Report Issue'),
         backgroundColor: kBrandOrange,
         foregroundColor: Colors.white,
       );
@@ -141,15 +145,16 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
       fab = FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetLogWorkScreen())),
         icon: const Icon(Icons.build_outlined),
-        label: const Text('Log Work'),
+        label: Text(mechanicUx ? 'Log other work' : 'Log Work'),
         backgroundColor: kBrandOrange,
         foregroundColor: Colors.white,
       );
     } else if ((isCostMgr || isAdmin) && _tabIndexOf('Costs', isMechanic, isCostMgr, isAdmin) == tabIdx) {
+      final costMgrFab = isCostMgr && !isAdmin;
       fab = FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetAddCostScreen())),
         icon: const Icon(Icons.attach_money),
-        label: const Text('Add Cost'),
+        label: Text(costMgrFab ? 'General cost' : 'Add Cost'),
         backgroundColor: kBrandOrange,
         foregroundColor: Colors.white,
       );
@@ -164,11 +169,24 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
       );
     }
 
+    final fleetGuides = fleetGuidesFor(emp, settings);
+
     return Scaffold(
       floatingActionButton: fab,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (fleetGuides.isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _openFleetGuides(context, fleetGuides),
+                icon: const Icon(Icons.menu_book_outlined, size: 18),
+                label: Text(
+                  fleetGuides.length == 1 ? 'Guide' : 'Guides',
+                ),
+              ),
+            ),
           TabBar(
             controller: _tabController,
             labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -181,6 +199,62 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _syncTabController(int tabCount) {
+    if (_lastTabCount == tabCount) return;
+    final oldIndex = _tabController.index;
+    _tabController.dispose();
+    _lastTabCount = tabCount;
+    _tabController = TabController(
+      length: tabCount,
+      vsync: this,
+      initialIndex: oldIndex.clamp(0, tabCount - 1),
+    )..addListener(() { if (mounted) setState(() {}); });
+  }
+
+  void _openFleetGuides(BuildContext context, List<DocEntry> guides) {
+    if (guides.length == 1) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => DocViewerScreen(entry: guides.first),
+        ),
+      );
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'Fleet guides',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ...guides.map(
+              (guide) => ListTile(
+                leading: Icon(guide.icon, color: kBrandOrange),
+                title: Text(guide.title),
+                subtitle: Text(guide.description),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DocViewerScreen(entry: guide),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -200,7 +274,7 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
   }
 }
 
-// ── Issues tab — OOS banner + issues list + reporter's own issues ────────────
+// ── Issues tab — OOS banner + shared open-issues list (all fleet roles) ───────
 class _IssuesTab extends ConsumerWidget {
   const _IssuesTab({
     required this.service,
@@ -217,73 +291,69 @@ class _IssuesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final showIssuesList =
+        isMechanic || isCostMgr || isAdmin || isReporter;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // OOS banner
-        StreamBuilder<List<FleetAsset>>(
-          stream: service.watchAssets(activeOnly: true),
-          builder: (context, snapshot) {
-            final oos = (snapshot.data ?? []).where((a) => a.hasOpenOosIssue).toList();
-            if (oos.isEmpty) return const SizedBox.shrink();
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                border: Border.all(color: Colors.red),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.warning, color: Colors.red, size: 18),
-                    const SizedBox(width: 8),
-                    Text('${oos.length} asset${oos.length == 1 ? '' : 's'} out of service',
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text(oos.map((a) => a.name).join(', '),
-                      style: const TextStyle(color: Colors.red, fontSize: 12)),
-                ],
-              ),
-            );
-          },
-        ),
-
-        // Open issues (mechanic / cost mgr / admin)
-        if (isMechanic || isCostMgr || isAdmin) ...[
-          const FleetIssuesListScreen(embedded: true),
-        ],
-
-        // My reported issues (reporter only)
-        if (isReporter && !isMechanic && !isAdmin) ...[
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('My Reported Issues', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          ),
-          StreamBuilder<List<FleetIssue>>(
-            stream: service.watchIssues(reportedByClockNo: emp?.clockNo, limit: 10),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: StreamBuilder<List<FleetAsset>>(
+            stream: service.watchAssets(activeOnly: true),
             builder: (context, snapshot) {
-              final issues = snapshot.data ?? [];
-              if (issues.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No issues reported yet. Tap "Report Issue" below.', style: TextStyle(color: Colors.grey)),
-                );
-              }
-              return Column(
-                children: issues.map((i) => FleetIssueTile(
-                  issue: i,
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => FleetIssueDetailScreen(issueId: i.id!),
-                  )),
-                )).toList(),
+              final oos =
+                  (snapshot.data ?? []).where((a) => a.hasOpenOosIssue).toList();
+              if (oos.isEmpty) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  border: Border.all(color: Colors.red),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.warning, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                          '${oos.length} asset${oos.length == 1 ? '' : 's'} out of service',
+                          style: const TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text(oos.map((a) => a.name).join(', '),
+                        style:
+                            const TextStyle(color: Colors.red, fontSize: 12)),
+                  ],
+                ),
               );
             },
           ),
-        ],
+        ),
+        if (showIssuesList)
+          Expanded(
+            child: FleetIssuesListScreen(
+              embedded: true,
+              mechanicMode: isMechanic,
+            ),
+          )
+        else
+          const Expanded(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Tap "Report Issue" below to log a problem on a forklift or grab.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

@@ -93,10 +93,18 @@ bool isWasteUser(Employee? employee, WasteSettings? settings) {
 //   - Fleet Admin:        reuses isAdmin() — Employee.isAdmin Firestore field
 // =============================================================================
 
+bool _clockNoInAllowList(String? clockNo, List<String> allowList) {
+  final normalized = FleetSettings.normalizeClockNo(clockNo);
+  if (normalized.isEmpty) return false;
+  return allowList.any(
+    (allowed) => FleetSettings.normalizeClockNo(allowed) == normalized,
+  );
+}
+
 /// True when the employee's clock number is in the mechanic allow-list.
 bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
   if (employee == null || settings == null) return false;
-  return settings.mechanicClockNos.contains(employee.clockNo);
+  return _clockNoInAllowList(employee.clockNo, settings.mechanicClockNos);
 }
 
 /// True when the employee's department is in the configurable reporter allow-list.
@@ -108,7 +116,7 @@ bool isFleetReporter(Employee? employee, FleetSettings? settings) {
 /// True when the employee's clock number is in the cost-manager allow-list.
 bool isFleetCostManager(Employee? employee, FleetSettings? settings) {
   if (employee == null || settings == null) return false;
-  return settings.costManagerClockNos.contains(employee.clockNo);
+  return _clockNoInAllowList(employee.clockNo, settings.costManagerClockNos);
 }
 
 /// True when the employee has full fleet admin rights (reuses global isAdmin).

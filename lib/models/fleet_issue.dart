@@ -128,7 +128,8 @@ class FleetIssue {
   final FleetIssueStatus status;
   final String reportedByClockNo;
   final String reportedByName;
-  final FleetIssueShift shift;
+  final FleetIssueShift? shift;
+  final List<String> parts;
   final List<String> photos;
   final DateTime? createdAt;
 
@@ -150,7 +151,8 @@ class FleetIssue {
     this.status = FleetIssueStatus.open,
     required this.reportedByClockNo,
     required this.reportedByName,
-    required this.shift,
+    this.shift,
+    this.parts = const [],
     this.photos = const [],
     this.createdAt,
     this.acknowledgedByClockNo,
@@ -173,7 +175,13 @@ class FleetIssue {
       status: FleetIssueStatus.fromString(data['status'] as String?),
       reportedByClockNo: data['reported_by_clock_no'] as String? ?? '',
       reportedByName: data['reported_by_name'] as String? ?? '',
-      shift: FleetIssueShift.fromString(data['shift'] as String?),
+      shift: data['shift'] != null
+          ? FleetIssueShift.fromString(data['shift'] as String?)
+          : null,
+      parts: (data['parts'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       photos: (data['photos'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       createdAt: (data['created_at'] as Timestamp?)?.toDate(),
       acknowledgedByClockNo: data['acknowledged_by_clock_no'] as String?,
@@ -195,7 +203,8 @@ class FleetIssue {
       'status': status.value,
       'reported_by_clock_no': reportedByClockNo,
       'reported_by_name': reportedByName,
-      'shift': shift.value,
+      if (shift != null) 'shift': shift!.value,
+      if (parts.isNotEmpty) 'parts': parts,
       'photos': photos,
       'created_at': FieldValue.serverTimestamp(),
       if (acknowledgedByClockNo != null) 'acknowledged_by_clock_no': acknowledgedByClockNo,
@@ -224,6 +233,7 @@ class FleetIssue {
     String? reportedByClockNo,
     String? reportedByName,
     FleetIssueShift? shift,
+    List<String>? parts,
     List<String>? photos,
     DateTime? createdAt,
     String? acknowledgedByClockNo,
@@ -244,6 +254,7 @@ class FleetIssue {
       reportedByClockNo: reportedByClockNo ?? this.reportedByClockNo,
       reportedByName: reportedByName ?? this.reportedByName,
       shift: shift ?? this.shift,
+      parts: parts ?? this.parts,
       photos: photos ?? this.photos,
       createdAt: createdAt ?? this.createdAt,
       acknowledgedByClockNo: acknowledgedByClockNo ?? this.acknowledgedByClockNo,

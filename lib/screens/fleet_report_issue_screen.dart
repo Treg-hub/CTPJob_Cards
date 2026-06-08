@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,14 +7,19 @@ import 'package:image_picker/image_picker.dart';
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
+import '../models/fleet_settings.dart';
+import '../models/fleet_type.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
+import '../widgets/fleet_asset_selector.dart';
+import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_reporter_widgets.dart';
 
-/// Reporters, mechanic, and admin can submit a new fleet issue.
-/// Steps: pick asset → severity + shift + description → optional photos → submit.
+/// Reporters, mechanics, and admins can report a problem on a forklift or grab.
 class FleetReportIssueScreen extends ConsumerStatefulWidget {
-  /// Pre-select an asset (e.g. launched from a specific asset card).
   final FleetAsset? preSelectedAsset;
 
   const FleetReportIssueScreen({super.key, this.preSelectedAsset});
@@ -26,54 +33,31 @@ class _FleetReportIssueScreenState
     extends ConsumerState<FleetReportIssueScreen> {
   final _service = FleetService();
   final _descCtrl = TextEditingController();
+  final _partCtrl = TextEditingController();
 
   FleetAsset? _selectedAsset;
   FleetIssueSeverity _severity = FleetIssueSeverity.medium;
-  FleetIssueShift _shift = FleetIssueShift.detectFromNow();
-  final List<String> _photoUrls = [];
+  final List<String> _selectedParts = [];
+  final List<String> _pendingPhotoPaths = [];
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedAsset = widget.preSelectedAsset ??
-        ref.read(selectedFleetAssetProvider);
+    _selectedAsset =
+        widget.preSelectedAsset ?? ref.read(selectedFleetAssetProvider);
   }
 
   @override
   void dispose() {
     _descCtrl.dispose();
+    _partCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _addPhoto() async {
-    if (_photoUrls.length >= 3) return;
-    final source = await _showPhotoSourceDialog();
-    if (source == null) return;
-
-    final localPath = await _service.pickAndCompressPhoto(source);
-    if (localPath == null) return;
-
-    setState(() => _submitting = true);
-    try {
-      final url = await _service.uploadFleetPhoto(
-        localPath: localPath,
-        fleetRef: 'fleet_issues/_temp',
-      );
-      if (mounted) setState(() => _photoUrls.add(url));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo upload failed. Try again.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<ImageSource?> _showPhotoSourceDialog() async {
-    return showModalBottomSheet<ImageSource>(
+    if (_pendingPhotoPaths.length >= 3) return;
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (_) => SafeArea(
         child: Column(
@@ -93,6 +77,35 @@ class _FleetReportIssueScreenState
         ),
       ),
     );
+    if (source == null) return;
+
+    final localPath = await _service.pickAndCompressPhoto(source);
+    if (localPath == null) return;
+    if (mounted) setState(() => _pendingPhotoPaths.add(localPath));
+  }
+
+  void _togglePart(String part) {
+    setState(() {
+      if (_selectedParts.contains(part)) {
+        _selectedParts.remove(part);
+      } else {
+        _selectedParts.add(part);
+      }
+    });
+  }
+
+  Future<void> _addCustomPart() async {
+    final part = _partCtrl.text.trim();
+    if (part.isEmpty) return;
+    if (_selectedParts.any((p) => p.toLowerCase() == part.toLowerCase())) {
+      _partCtrl.clear();
+      return;
+    }
+    setState(() => _selectedParts.add(part));
+    _partCtrl.clear();
+    try {
+      await _service.ensureIssuePartType(part);
+    } catch (_) {}
   }
 
   Future<void> _submit() async {
@@ -100,17 +113,16 @@ class _FleetReportIssueScreenState
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an asset.')),
-      );
+      _showError('Please pick which forklift or grab has the problem.');
       return;
     }
     final desc = _descCtrl.text.trim();
     if (desc.length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter a description (at least 10 characters).')),
-      );
+      _showError('Please describe the problem (at least 10 characters).');
+      return;
+    }
+    if (_selectedParts.isEmpty) {
+      _showError('Please pick or type at least one affected part.');
       return;
     }
 
@@ -123,14 +135,26 @@ class _FleetReportIssueScreenState
         severity: _severity,
         reportedByClockNo: emp.clockNo,
         reportedByName: emp.name,
-        shift: _shift,
-        photos: List.from(_photoUrls),
+        parts: List.from(_selectedParts),
+        photos: const [],
       );
-      await _service.createIssue(issue);
+      final issueId = await _service.createIssue(issue);
+      if (_pendingPhotoPaths.isNotEmpty) {
+        final urls =
+            await _service.uploadPhotosForIssue(issueId, _pendingPhotoPaths);
+        await _service.updateIssuePhotos(issueId, urls);
+      }
       if (mounted) {
+        final oos = _severity == FleetIssueSeverity.outOfService;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Issue reported.'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              oos
+                  ? 'Report sent. Mechanic notified — machine marked out of service.'
+                  : 'Report sent. The mechanic will see it under To Fix.',
+            ),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.of(context).pop();
       }
@@ -138,8 +162,9 @@ class _FleetReportIssueScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Failed to submit: $e'),
-              backgroundColor: Colors.red),
+            content: Text('Could not send report: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -147,139 +172,250 @@ class _FleetReportIssueScreenState
     }
   }
 
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.appColors;
+    final primary = theme.colorScheme.primary;
+
+    final settingsAsync = ref.watch(fleetSettingsProvider);
+    final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
+    final emp = currentEmployee;
+    final reporterUx = role_utils.isFleetReporter(emp, settings) &&
+        !role_utils.isFleetAdmin(emp);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Report an Issue'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: reporterUx ? 'Report a Problem' : 'Report an Issue',
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _submitting ? null : _submit,
+            icon: _submitting
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.send_outlined),
+            label: Text(_submitting ? 'Sending…' : 'Send report'),
+            style: FilledButton.styleFrom(
+              backgroundColor: kBrandOrange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Asset picker ──────────────────────────────────────────────
-          _buildSectionLabel('Asset *'),
-          _AssetPickerTile(
-            selected: _selectedAsset,
-            onTap: () async {
-              final asset = await Navigator.of(context).push<FleetAsset>(
-                MaterialPageRoute(
-                    builder: (_) => const FleetAssetPickerScreen()),
-              );
-              if (asset != null) setState(() => _selectedAsset = asset);
-            },
+          if (reporterUx) ...[
+            const FleetReporterGuideBanner(),
+            const SizedBox(height: 20),
+          ],
+
+          const FleetSectionLabel('Which forklift or grab? *'),
+          FleetAssetSelector(
+            value: _selectedAsset,
+            onChanged: (asset) => setState(() => _selectedAsset = asset),
           ),
           const SizedBox(height: 20),
 
-          // ── Severity ──────────────────────────────────────────────────
-          _buildSectionLabel('Severity *'),
+          const FleetSectionLabel('How urgent is it? *'),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: FleetIssueSeverity.values.map((s) {
               final isSelected = _severity == s;
+              final chipColor = s == FleetIssueSeverity.outOfService
+                  ? theme.colorScheme.error
+                  : primary;
               return ChoiceChip(
-                label: Text(s.displayLabel),
+                label: Text(reporterSeverityLabel(s)),
                 selected: isSelected,
-                selectedColor: s == FleetIssueSeverity.outOfService
-                    ? Colors.red
-                    : kBrandOrange,
+                selectedColor: chipColor,
                 labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : null,
-                    fontWeight: FontWeight.w500),
+                  color: isSelected
+                      ? onColor(chipColor)
+                      : colors.chipUnselectedLabel,
+                  fontWeight: FontWeight.w500,
+                ),
                 onSelected: (_) => setState(() => _severity = s),
               );
             }).toList(),
           ),
+          const SizedBox(height: 10),
+          FleetReporterSeverityHint(severity: _severity),
           const SizedBox(height: 20),
 
-          // ── Shift ─────────────────────────────────────────────────────
-          _buildSectionLabel('Shift'),
-          Wrap(
-            spacing: 8,
-            children: FleetIssueShift.values.map((s) {
-              return ChoiceChip(
-                label: Text(s.displayLabel),
-                selected: _shift == s,
-                selectedColor: kBrandOrange,
-                labelStyle: TextStyle(
-                    color: _shift == s ? Colors.white : null),
-                onSelected: (_) => setState(() => _shift = s),
-              );
-            }).toList(),
+          const FleetSectionLabel('What\'s wrong? *'),
+          Text(
+            'Be specific — what happened, what you heard or saw, and whether the machine is safe to use.',
+            style: TextStyle(fontSize: 12, color: colors.textMuted),
           ),
-          const SizedBox(height: 20),
-
-          // ── Description ───────────────────────────────────────────────
-          _buildSectionLabel('Description *'),
+          const SizedBox(height: 8),
           TextField(
             controller: _descCtrl,
             maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Describe the problem clearly. Minimum 10 characters.',
-              border: OutlineInputBorder(),
+            decoration: fleetDropdownDecoration(
+              hintText: 'e.g. Loud grinding from mast when lifting pallets',
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Photos ────────────────────────────────────────────────────
-          _buildSectionLabel('Photos (optional, max 3)'),
-          _buildPhotoRow(),
-          const SizedBox(height: 32),
-
-          // ── Submit ────────────────────────────────────────────────────
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: kBrandOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14)),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Submit Issue',
-                      style: TextStyle(fontSize: 16)),
-            ),
+          const FleetSectionLabel('Which part is affected? *'),
+          Text(
+            'Tap a saved part or type a new one below.',
+            style: TextStyle(fontSize: 12, color: colors.textMuted),
           ),
+          const SizedBox(height: 8),
+          StreamBuilder<List<FleetType>>(
+            stream: _service.watchTypes(kind: 'issue_part'),
+            builder: (context, snapshot) {
+              final savedParts =
+                  (snapshot.data ?? []).map((t) => t.label).toList();
+              if (savedParts.isEmpty) {
+                return Text(
+                  'No saved parts yet — type the affected part below.',
+                  style: TextStyle(fontSize: 12, color: colors.textMuted),
+                );
+              }
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: savedParts.map((part) {
+                  final selected = _selectedParts.contains(part);
+                  return FilterChip(
+                    label: Text(part),
+                    selected: selected,
+                    selectedColor: primary.withValues(alpha: 0.2),
+                    checkmarkColor: primary,
+                    labelStyle: TextStyle(
+                      color:
+                          selected ? primary : colors.chipUnselectedLabel,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                    onSelected: (_) => _togglePart(part),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          if (_selectedParts.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedParts.map((part) {
+                return InputChip(
+                  label: Text(part),
+                  deleteIconColor: primary,
+                  onDeleted: () => setState(() => _selectedParts.remove(part)),
+                  backgroundColor: primary.withValues(alpha: 0.12),
+                  labelStyle: TextStyle(
+                    color: colors.chipUnselectedLabel,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _partCtrl,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addCustomPart(),
+                  decoration: fleetDropdownDecoration(
+                    hintText: 'e.g. Hydraulic hose, Mast chain',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _addCustomPart,
+                child: const Text('Add'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          const FleetSectionLabel('Photos (optional, max 3)'),
+          Text(
+            'A photo helps the mechanic see the problem before they arrive.',
+            style: TextStyle(fontSize: 12, color: colors.textMuted),
+          ),
+          const SizedBox(height: 8),
+          _PhotoRow(
+            pendingPaths: _pendingPhotoPaths,
+            outlineColor: theme.colorScheme.outline,
+            mutedColor: colors.textMuted,
+            onAdd: _addPhoto,
+            onRemove: (path) =>
+                setState(() => _pendingPhotoPaths.remove(path)),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Report time is saved automatically when you send.',
+            style: TextStyle(fontSize: 11, color: colors.textMuted),
+          ),
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-    );
-  }
+class _PhotoRow extends StatelessWidget {
+  const _PhotoRow({
+    required this.pendingPaths,
+    required this.outlineColor,
+    required this.mutedColor,
+    required this.onAdd,
+    required this.onRemove,
+  });
 
-  Widget _buildPhotoRow() {
+  final List<String> pendingPaths;
+  final Color outlineColor;
+  final Color mutedColor;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
     return Wrap(
       spacing: 8,
+      runSpacing: 8,
       children: [
-        ..._photoUrls.map((url) => Stack(
+        ...pendingPaths.map((path) => Stack(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(url,
+                  child: Image.file(File(path),
                       width: 80, height: 80, fit: BoxFit.cover),
                 ),
                 Positioned(
                   top: 2,
                   right: 2,
                   child: GestureDetector(
-                    onTap: () =>
-                        setState(() => _photoUrls.remove(url)),
+                    onTap: () => onRemove(path),
                     child: Container(
                       decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle),
+                          color: Colors.black54, shape: BoxShape.circle),
                       padding: const EdgeInsets.all(4),
                       child: const Icon(Icons.close,
                           color: Colors.white, size: 14),
@@ -288,175 +424,20 @@ class _FleetReportIssueScreenState
                 ),
               ],
             )),
-        if (_photoUrls.length < 3)
+        if (pendingPaths.length < 3)
           GestureDetector(
-            onTap: _addPhoto,
+            onTap: onAdd,
             child: Container(
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
+                border: Border.all(color: outlineColor),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.add_a_photo, color: Colors.grey),
+              child: Icon(Icons.add_a_photo, color: mutedColor),
             ),
           ),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Asset picker tile
-// ---------------------------------------------------------------------------
-
-class _AssetPickerTile extends StatelessWidget {
-  const _AssetPickerTile({required this.selected, required this.onTap});
-  final FleetAsset? selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.forklift,
-                color: selected != null ? kBrandOrange : Colors.grey),
-            const SizedBox(width: 12),
-            Expanded(
-              child: selected == null
-                  ? Text('Tap to select an asset',
-                      style: TextStyle(color: Colors.grey[600]))
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(selected!.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            if (selected!.hasOpenOosIssue) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                    color: Colors.orange,
-                                    borderRadius: BorderRadius.circular(4)),
-                                child: const Text('OOS',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ],
-                        ),
-                        Text(
-                            '${selected!.typeName}  •  ${selected!.assetTag}',
-                            style: TextStyle(
-                                color: Colors.grey[600], fontSize: 12)),
-                      ],
-                    ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Exported asset picker screen for use by other fleet screens.
-class FleetAssetPickerScreen extends ConsumerStatefulWidget {
-  const FleetAssetPickerScreen({super.key});
-
-  @override
-  ConsumerState<FleetAssetPickerScreen> createState() =>
-      _FleetAssetPickerScreenState();
-}
-
-class _FleetAssetPickerScreenState
-    extends ConsumerState<FleetAssetPickerScreen> {
-  final _service = FleetService();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Asset'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
-      body: StreamBuilder<List<FleetAsset>>(
-        stream: _service.watchAssets(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final assets = snapshot.data ?? [];
-          if (assets.isEmpty) {
-            return const Center(
-                child: Text('No assets found. Ask admin to add assets.'));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: assets.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final asset = assets[index];
-              return Card(
-                child: ListTile(
-                  onTap: () => Navigator.of(context).pop(asset),
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        asset.hasOpenOosIssue ? Colors.orange : kBrandOrange,
-                    foregroundColor: Colors.white,
-                    child: Icon(
-                      asset.typeName.toLowerCase().contains('grab')
-                          ? Icons.precision_manufacturing
-                          : Icons.forklift,
-                      size: 20,
-                    ),
-                  ),
-                  title: Row(
-                    children: [
-                      Text(asset.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (asset.hasOpenOosIssue) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                              color: Colors.orange,
-                              borderRadius: BorderRadius.circular(4)),
-                          child: const Text('OOS',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                      '${asset.typeName}  •  ${asset.assetTag}',
-                      style: const TextStyle(fontSize: 12)),
-                ),
-              );
-            },
-          );
-        },
-      ),
     );
   }
 }

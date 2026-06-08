@@ -5,9 +5,17 @@ import 'package:intl/intl.dart';
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_cost_line.dart';
+import '../models/fleet_settings.dart';
 import '../models/fleet_work_record.dart';
+import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
+import '../widgets/fleet_asset_selector.dart';
+import '../widgets/fleet_cost_widgets.dart';
+import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_work_record_selector.dart';
 
 /// Cost entry form for fleet cost managers and admins.
 class FleetAddCostScreen extends ConsumerStatefulWidget {
@@ -40,19 +48,18 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
   bool _saving = false;
 
   FleetAsset? _selectedAsset;
-  List<FleetAsset> _assets = [];
   FleetWorkRecord? _selectedWorkRecord;
-  List<FleetWorkRecord> _workRecords = [];
+
+  bool get _linkedFromJob =>
+      widget.preSelectedWorkRecordId != null && _selectedWorkRecord != null;
 
   @override
   void initState() {
     super.initState();
-    _loadAssets();
     if (widget.preSelectedAssetId != null) {
       _service.getAsset(widget.preSelectedAssetId!).then((a) {
         if (a != null && mounted) {
           setState(() => _selectedAsset = a);
-          _loadWorkRecordsForAsset(a.id!);
         }
       });
     }
@@ -72,26 +79,6 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
     super.dispose();
   }
 
-  Future<void> _loadAssets() async {
-    final assets = await _service.watchAssets().first;
-    if (mounted) setState(() => _assets = assets);
-  }
-
-  Future<void> _loadWorkRecordsForAsset(String assetId) async {
-    final records =
-        await _service.watchWorkRecords(assetId: assetId).first;
-    if (mounted) {
-      setState(() {
-        _workRecords = records;
-        // If pre-selected work record belongs to this asset, keep it; otherwise clear.
-        if (_selectedWorkRecord != null &&
-            _selectedWorkRecord!.assetId != assetId) {
-          _selectedWorkRecord = null;
-        }
-      });
-    }
-  }
-
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -107,12 +94,12 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _snack('Please select an asset.');
+      _snack('Please pick which forklift this cost is for.');
       return;
     }
     final desc = _descCtrl.text.trim();
     if (desc.isEmpty) {
-      _snack('Please enter a description.');
+      _snack('Please describe what was purchased or paid for.');
       return;
     }
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
@@ -144,14 +131,19 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
       await _service.createCostLine(line);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Cost line saved.'),
-              backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              _selectedWorkRecord != null
+                  ? 'Cost saved and linked to the mechanic job.'
+                  : 'Cost saved.',
+            ),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) _snack('Save failed: $e', isError: true);
+      if (mounted) _snack('Could not save cost: $e', isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -160,141 +152,210 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
   void _snack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(msg),
-          backgroundColor: isError ? Colors.red : null),
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : null,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('d MMM yyyy');
+    final settingsAsync = ref.watch(fleetSettingsProvider);
+    final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
+    final costMgrUx = role_utils.isFleetCostManager(currentEmployee, settings) &&
+        !role_utils.isFleetAdmin(currentEmployee);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Cost'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: costMgrUx ? 'Add a Cost' : 'Add Cost',
         actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
+          if (!costMgrUx)
+            if (_saving)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child:
-                  const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              TextButton(
+                onPressed: _save,
+                child: const Text('Save'),
+              ),
         ],
       ),
+      bottomNavigationBar: costMgrUx
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_saving ? 'Saving…' : 'Save cost'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Asset ─────────────────────────────────────────────────────
-          _Label('Asset *'),
-          DropdownButtonFormField<FleetAsset>(
-            key: ValueKey(_selectedAsset?.id),
-            initialValue: _selectedAsset,
-            decoration:
-                const InputDecoration(border: OutlineInputBorder()),
-            hint: const Text('Select asset'),
-            items: _assets
-                .map((a) => DropdownMenuItem(
-                      value: a,
-                      child: Text(a.name),
-                    ))
-                .toList(),
-            onChanged: (a) {
+          if (costMgrUx) ...[
+            FleetCostGuideBanner(linkedToJob: _linkedFromJob),
+            const SizedBox(height: 16),
+          ],
+
+          FleetSectionLabel(
+            costMgrUx ? 'Which forklift? *' : 'Asset *',
+          ),
+          FleetAssetSelector(
+            value: _selectedAsset,
+            onChanged: (asset) {
               setState(() {
-                _selectedAsset = a;
-                _selectedWorkRecord = null;
-                _workRecords = [];
+                _selectedAsset = asset;
+                if (_selectedWorkRecord != null &&
+                    _selectedWorkRecord!.assetId != asset?.id) {
+                  _selectedWorkRecord = null;
+                }
               });
-              if (a != null) _loadWorkRecordsForAsset(a.id!);
             },
           ),
           const SizedBox(height: 16),
 
-          // ── Work record (optional) ─────────────────────────────────────
-          _Label('Work Record (optional)'),
-          DropdownButtonFormField<FleetWorkRecord?>(
-            key: ValueKey(_selectedWorkRecord?.id),
-            initialValue: _selectedWorkRecord,
-            decoration:
-                const InputDecoration(border: OutlineInputBorder()),
-            hint: const Text('Link to a work record (optional)'),
-            items: [
-              const DropdownMenuItem(value: null, child: Text('None')),
-              ..._workRecords.map((r) => DropdownMenuItem(
-                    value: r,
-                    child: Text(
-                        '${r.workNumber}  ${r.title.length > 25 ? r.title.substring(0, 25) : r.title}',
-                        style: const TextStyle(fontSize: 13)),
-                  )),
-            ],
-            onChanged: (r) =>
-                setState(() => _selectedWorkRecord = r),
+          FleetSectionLabel(
+            costMgrUx
+                ? 'Link to mechanic\'s job (optional)'
+                : 'Work Record (optional)',
           ),
+          if (_linkedFromJob && _selectedWorkRecord != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _selectedWorkRecord!.title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_selectedWorkRecord!.assetName} · ${_selectedWorkRecord!.workTypeName}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else
+            FleetWorkRecordSelector(
+              assetId: _selectedAsset?.id,
+              value: _selectedWorkRecord,
+              hintText: costMgrUx
+                  ? 'Pick a job from History (optional)'
+                  : 'Link to a work record (optional)',
+              showCostStatus: costMgrUx,
+              onChanged: (record) =>
+                  setState(() => _selectedWorkRecord = record),
+            ),
+          if (costMgrUx)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Linking helps track spend against a specific repair or service.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).appColors.textMuted,
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
 
-          // ── Category ──────────────────────────────────────────────────
-          _Label('Category *'),
+          FleetSectionLabel(
+            costMgrUx ? 'What type of cost? *' : 'Category *',
+          ),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: FleetCostCategory.values.map((c) {
               return ChoiceChip(
                 label: Text(c.displayLabel),
                 selected: _category == c,
                 selectedColor: kBrandOrange,
                 labelStyle: TextStyle(
-                    color: _category == c ? Colors.white : null),
+                  color: _category == c ? Colors.white : null,
+                ),
                 onSelected: (_) => setState(() => _category = c),
               );
             }).toList(),
           ),
+          if (costMgrUx) ...[
+            const SizedBox(height: 10),
+            FleetCostCategoryHint(category: _category),
+          ],
           const SizedBox(height: 16),
 
-          // ── Description ───────────────────────────────────────────────
-          _Label('Description *'),
+          FleetSectionLabel(
+            costMgrUx ? 'What was purchased / paid for? *' : 'Description *',
+          ),
           TextField(
             controller: _descCtrl,
-            decoration: const InputDecoration(
-                hintText: 'e.g. Oil filter replacement',
-                border: OutlineInputBorder()),
+            decoration: fleetDropdownDecoration(
+              hintText: costMgrUx
+                  ? 'e.g. Transmission oil filter kit'
+                  : 'e.g. Oil filter replacement',
+            ),
           ),
           const SizedBox(height: 16),
 
-          // ── Amount ────────────────────────────────────────────────────
-          _Label('Amount (ZAR) *'),
+          FleetSectionLabel(
+            costMgrUx ? 'Amount (Rands) *' : 'Amount (ZAR) *',
+          ),
           TextField(
             controller: _amountCtrl,
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-                prefixText: 'R ',
-                hintText: '0.00',
-                border: OutlineInputBorder()),
+            decoration: fleetDropdownDecoration(
+              hintText: '0.00',
+            ).copyWith(prefixText: 'R '),
           ),
           const SizedBox(height: 16),
 
-          // ── Invoice ref + Supplier (side by side) ─────────────────────
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Label('Invoice Ref'),
+                    FleetSectionLabel(
+                      costMgrUx ? 'Invoice number' : 'Invoice Ref',
+                    ),
                     TextField(
                       controller: _invoiceRefCtrl,
-                      decoration: const InputDecoration(
-                          hintText: 'optional',
-                          border: OutlineInputBorder()),
+                      decoration: fleetDropdownDecoration(
+                        hintText: 'optional',
+                      ),
                     ),
                   ],
                 ),
@@ -304,12 +365,12 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Label('Supplier'),
+                    const FleetSectionLabel('Supplier'),
                     TextField(
                       controller: _supplierCtrl,
-                      decoration: const InputDecoration(
-                          hintText: 'optional',
-                          border: OutlineInputBorder()),
+                      decoration: fleetDropdownDecoration(
+                        hintText: 'optional',
+                      ),
                     ),
                   ],
                 ),
@@ -318,46 +379,30 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Date ──────────────────────────────────────────────────────
-          _Label('Date *'),
+          FleetSectionLabel(
+            costMgrUx ? 'Invoice / payment date *' : 'Date *',
+          ),
           InkWell(
             onTap: _pickDate,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
-              ),
+            borderRadius: BorderRadius.circular(4),
+            child: InputDecorator(
+              decoration: fleetDropdownDecoration(),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_today,
-                      size: 16, color: Colors.grey),
+                  Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: Theme.of(context).appColors.textMuted,
+                  ),
                   const SizedBox(width: 8),
                   Text(dateFmt.format(_costDate)),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 80),
+          SizedBox(height: costMgrUx ? 100 : 80),
         ],
       ),
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text,
-          style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 13)),
     );
   }
 }

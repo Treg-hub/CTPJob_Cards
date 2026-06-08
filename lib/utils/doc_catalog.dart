@@ -88,6 +88,30 @@ const List<DocEntry> docCatalog = [
     roles: _allUserFacingRoles,
     requiresFleet: true,
   ),
+  DocEntry(
+    id: 'fleet_mechanic_guide',
+    title: 'Mechanic Guide',
+    description: 'To Fix, Start job, Finish the fix, History, and Log other work.',
+    icon: Icons.build_circle_outlined,
+    roles: _allUserFacingRoles,
+    requiresFleet: true,
+  ),
+  DocEntry(
+    id: 'fleet_reporter_guide',
+    title: 'Reporter Guide',
+    description: 'How to report a problem and pick the right urgency.',
+    icon: Icons.report_problem_outlined,
+    roles: _allUserFacingRoles,
+    requiresFleet: true,
+  ),
+  DocEntry(
+    id: 'fleet_cost_manager_guide',
+    title: 'Cost Manager Guide',
+    description: 'Costs tab job queue, general cost, and spend reports.',
+    icon: Icons.receipt_long_outlined,
+    roles: _allUserFacingRoles,
+    requiresFleet: true,
+  ),
 ];
 
 /// Returns the docs visible to [employee] given their inferred role,
@@ -118,6 +142,27 @@ List<DocEntry> docsForUser(Employee? employee,
     if (admin) return true;
     if (doc.requiresWaste && !wasteUser) return false;
     if (doc.requiresFleet && !fleetUser) return false;
+    if (fleetUser && !_canSeeFleetRoleGuide(doc.id, employee, fleetSettings, admin)) {
+      return false;
+    }
     return doc.roles.contains(role);
   }).toList(growable: false);
+}
+
+bool _canSeeFleetRoleGuide(
+  String docId,
+  Employee? employee,
+  FleetSettings? settings,
+  bool admin,
+) {
+  switch (docId) {
+    case 'fleet_mechanic_guide':
+      return admin || isFleetMechanic(employee, settings);
+    case 'fleet_reporter_guide':
+      return admin || isFleetReporter(employee, settings);
+    case 'fleet_cost_manager_guide':
+      return admin || isFleetCostManager(employee, settings);
+    default:
+      return true;
+  }
 }

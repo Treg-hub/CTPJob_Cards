@@ -35,6 +35,17 @@ class FleetService {
     return FleetSettings.fromFirestore(snap);
   }
 
+  Stream<FleetSettings> watchSettings() {
+    return _db
+        .collection(Collections.fleetSettings)
+        .doc('config')
+        .snapshots()
+        .map((snap) {
+      if (!snap.exists) return FleetSettings.defaults;
+      return FleetSettings.fromFirestore(snap);
+    });
+  }
+
   Future<void> saveSettings(FleetSettings settings) async {
     await _db
         .collection(Collections.fleetSettings)
@@ -59,6 +70,24 @@ class FleetService {
             ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
           return active;
         });
+  }
+
+  /// Saves a new issue-part label if no active type with the same label exists.
+  Future<void> ensureIssuePartType(String label) async {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return;
+    final existing = await _db
+        .collection(Collections.fleetTypes)
+        .where('kind', isEqualTo: 'issue_part')
+        .get();
+    final normalised = trimmed.toLowerCase();
+    final duplicate = existing.docs.any((doc) {
+      final data = doc.data();
+      final existingLabel = (data['label'] as String? ?? '').trim().toLowerCase();
+      return existingLabel == normalised;
+    });
+    if (duplicate) return;
+    await saveType(FleetType(kind: 'issue_part', label: trimmed, sortOrder: 99));
   }
 
   Future<void> saveType(FleetType type) async {
@@ -125,6 +154,13 @@ class FleetService {
     return ref.id;
   }
 
+  Future<void> updateIssuePhotos(String issueId, List<String> photos) async {
+    await _db
+        .collection(Collections.fleetIssues)
+        .doc(issueId)
+        .update({'photos': photos});
+  }
+
   Stream<List<FleetIssue>> watchIssues({
     String? status,
     String? assetId,
@@ -166,6 +202,15 @@ class FleetService {
         await _db.collection(Collections.fleetIssues).doc(id).get();
     if (!snap.exists) return null;
     return FleetIssue.fromFirestore(snap);
+  }
+
+  Stream<FleetIssue?> watchIssue(String id) {
+    return _db
+        .collection(Collections.fleetIssues)
+        .doc(id)
+        .snapshots()
+        .map((snap) =>
+            snap.exists ? FleetIssue.fromFirestore(snap) : null);
   }
 
   Future<void> acknowledgeIssue(String issueId, String clockNo, String name) async {
@@ -290,6 +335,49 @@ class FleetService {
         .collection(Collections.fleetWorkParts)
         .doc(partId)
         .delete();
+  }
+
+  Future<void> replaceParts(
+      String workRecordId, List<FleetWorkPart> parts) async {
+    final partsRef = _db
+        .collection(Collections.fleetWorkRecords)
+        .doc(workRecordId)
+        .collection(Collections.fleetWorkParts);
+    final existing = await partsRef.get();
+    final batch = _db.batch();
+    for (final doc in existing.docs) {
+      batch.delete(doc.reference);
+    }
+    for (final part in parts) {
+      batch.set(partsRef.doc(), part.toFirestore());
+    }
+    await batch.commit();
+  }
+
+  Future<List<String>> uploadPhotosForRecord(
+      String recordId, List<String> localPaths) async {
+    final urls = <String>[];
+    for (final path in localPaths) {
+      final url = await uploadFleetPhoto(
+        localPath: path,
+        fleetRef: 'fleet_work_records/$recordId',
+      );
+      urls.add(url);
+    }
+    return urls;
+  }
+
+  Future<List<String>> uploadPhotosForIssue(
+      String issueId, List<String> localPaths) async {
+    final urls = <String>[];
+    for (final path in localPaths) {
+      final url = await uploadFleetPhoto(
+        localPath: path,
+        fleetRef: 'fleet_issues/$issueId',
+      );
+      urls.add(url);
+    }
+    return urls;
   }
 
   // ---------------------------------------------------------------------------

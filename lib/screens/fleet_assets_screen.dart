@@ -7,6 +7,9 @@ import '../models/fleet_type.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
+import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_type_selector.dart';
 
 /// Admin-only screen: manage the fleet asset register (forklifts, grabs, etc.).
 class FleetAssetsScreen extends ConsumerStatefulWidget {
@@ -63,11 +66,7 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
     // Just return the body filling the full available space.
     if (widget.embedded) return body;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fleet Assets'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
+      appBar: const FleetAppBar(title: 'Fleet Assets'),
       floatingActionButton: FloatingActionButton(
         backgroundColor: kBrandOrange,
         foregroundColor: Colors.white,
@@ -173,7 +172,6 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
   final _tagCtrl = TextEditingController();
   final _serialCtrl = TextEditingController();
 
-  List<FleetType> _assetTypes = [];
   FleetType? _selectedType;
   bool _active = true;
   bool _saving = false;
@@ -205,13 +203,12 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
         .first;
     if (mounted) {
       setState(() {
-        _assetTypes = snap;
         if (widget.asset != null) {
-          _selectedType = _assetTypes
+          _selectedType = snap
               .where((t) => t.id == widget.asset!.typeId)
               .firstOrNull;
         }
-        _selectedType ??= _assetTypes.firstOrNull;
+        _selectedType ??= snap.firstOrNull;
       });
     }
   }
@@ -253,24 +250,22 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
   Widget build(BuildContext context) {
     final isEdit = widget.asset != null;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEdit ? 'Edit Asset' : 'Add Asset'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: isEdit ? 'Edit Asset' : 'Add Asset',
         actions: [
           if (_saving)
             const Padding(
               padding: EdgeInsets.all(16),
               child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             )
           else
             TextButton(
               onPressed: _save,
-              child: const Text('Save', style: TextStyle(color: Colors.white)),
+              child: const Text('Save'),
             ),
         ],
       ),
@@ -279,39 +274,40 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Asset type
-            DropdownButtonFormField<FleetType>(
-              key: ValueKey(_selectedType?.id),
-              initialValue: _selectedType,
-              decoration: const InputDecoration(labelText: 'Asset Type *'),
-              items: _assetTypes
-                  .map((t) =>
-                      DropdownMenuItem(value: t, child: Text(t.label)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedType = v),
+            FleetTypeSelector(
+              kind: 'asset_type',
+              value: _selectedType,
+              hintText: 'Select asset type',
+              decoration: fleetDropdownDecoration(labelText: 'Asset Type *'),
+              onChanged: (type) => setState(() => _selectedType = type),
               validator: (v) => v == null ? 'Required' : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Name *', hintText: 'e.g. Forklift 01'),
+              decoration: fleetDropdownDecoration(
+                labelText: 'Name *',
+                hintText: 'e.g. Forklift 01',
+              ),
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _tagCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Asset Tag *', hintText: 'e.g. FL-001'),
+              decoration: fleetDropdownDecoration(
+                labelText: 'Asset Tag *',
+                hintText: 'e.g. FL-001',
+              ),
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _serialCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Serial Number (optional)'),
+              decoration: fleetDropdownDecoration(
+                labelText: 'Serial Number (optional)',
+              ),
             ),
             const SizedBox(height: 24),
             SwitchListTile(

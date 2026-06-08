@@ -82,6 +82,9 @@ flutter:
     - docs/troubleshooting.md
     - docs/waste_user_guide.md
     - docs/fleet_user_guide.md
+    - docs/fleet_mechanic_guide.md
+    - docs/fleet_reporter_guide.md
+    - docs/fleet_cost_manager_guide.md
 
 flutter_launcher_icons:
   image_path: "assets/images/logo.png"

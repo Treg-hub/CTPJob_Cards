@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,11 +8,19 @@ import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
+import '../models/fleet_issue.dart';
+import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
 import '../models/fleet_work_part.dart';
+import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
-import 'fleet_report_issue_screen.dart' show FleetAssetPickerScreen;
+import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
+import '../widgets/fleet_asset_selector.dart';
+import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_mechanic_widgets.dart';
+import '../widgets/fleet_type_selector.dart';
 import 'fleet_work_record_detail_screen.dart';
 
 /// Mechanic (and admin) work logging screen.
@@ -18,12 +29,14 @@ class FleetLogWorkScreen extends ConsumerStatefulWidget {
   final String? preSelectedAssetId;
   final String? preSelectedAssetName;
   final String? linkedIssueId;
+  final String? workRecordId;
 
   const FleetLogWorkScreen({
     super.key,
     this.preSelectedAssetId,
     this.preSelectedAssetName,
     this.linkedIssueId,
+    this.workRecordId,
   });
 
   @override
@@ -39,12 +52,16 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
   FleetAsset? _selectedAsset;
   FleetType? _selectedWorkType;
-  List<FleetType> _workTypes = [];
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now();
-  final List<String> _photoUrls = [];
+  FleetIssue? _linkedIssue;
+  final List<String> _savedPhotoUrls = [];
+  final List<String> _pendingPhotoPaths = [];
   List<String> _linkedIssueIds = [];
   bool _saving = false;
+  bool _loading = false;
+  DateTime _jobStartedAt = DateTime.now();
+
+  bool get _isEditing => widget.workRecordId != null;
+  bool get _isLogOtherWork => !_isEditing && !_isFixingIssue;
 
   // In-progress parts
   final List<_PartRow> _parts = [];
@@ -53,13 +70,117 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   void initState() {
     super.initState();
     _loadWorkTypes();
-    if (widget.preSelectedAssetId != null) {
-      _service.getAsset(widget.preSelectedAssetId!).then((a) {
-        if (a != null && mounted) setState(() => _selectedAsset = a);
-      });
+    if (widget.workRecordId != null) {
+      _loadExistingRecord(widget.workRecordId!);
+    } else {
+      if (widget.preSelectedAssetId != null) {
+        _service.getAsset(widget.preSelectedAssetId!).then((a) {
+          if (a != null && mounted) setState(() => _selectedAsset = a);
+        });
+      }
+      if (widget.linkedIssueId != null) {
+        _linkedIssueIds = [widget.linkedIssueId!];
+        _loadLinkedIssue(widget.linkedIssueId!);
+      }
     }
-    if (widget.linkedIssueId != null) {
-      _linkedIssueIds = [widget.linkedIssueId!];
+  }
+
+  Future<void> _loadLinkedIssue(String issueId) async {
+    final issue = await _service.watchIssue(issueId).first;
+    if (!mounted || issue == null) return;
+    setState(() {
+      _linkedIssue = issue;
+      if (!_isEditing && _titleCtrl.text.trim().isEmpty) {
+        _titleCtrl.text = 'Fix: ${issue.assetName}';
+      }
+      if (!_isEditing && _descCtrl.text.trim().isEmpty) {
+        _descCtrl.text = issue.description;
+      }
+    });
+  }
+
+  bool get _isFixingIssue =>
+      !_isEditing && widget.linkedIssueId != null;
+
+  DateTime _workStartDate() {
+    if (_isEditing) return _loadedStartDate ?? DateTime.now();
+    if (_isFixingIssue) {
+      final acknowledged = _linkedIssue?.acknowledgedAt;
+      if (acknowledged != null) return acknowledged;
+    }
+    if (_isLogOtherWork) return _jobStartedAt;
+    return DateTime.now();
+  }
+
+  Future<void> _pickJobStarted() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _jobStartedAt,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_jobStartedAt),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _jobStartedAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  DateTime? _loadedStartDate;
+  DateTime? _loadedEndDate;
+
+  Future<void> _loadExistingRecord(String id) async {
+    setState(() => _loading = true);
+    try {
+      final record = await _service.getWorkRecord(id);
+      if (record == null) return;
+      final parts = await _service.watchParts(id).first;
+      final asset = await _service.getAsset(record.assetId);
+      if (!mounted) return;
+      setState(() {
+        _selectedAsset = asset;
+        _titleCtrl.text = record.title;
+        _descCtrl.text = record.description;
+        _labourHoursCtrl.text = record.labourHours.toString();
+        if (record.machineHoursReading != null) {
+          _machineHoursCtrl.text = record.machineHoursReading.toString();
+        }
+        _loadedStartDate = record.startDate;
+        _loadedEndDate = record.endDate;
+        _savedPhotoUrls
+          ..clear()
+          ..addAll(record.photos);
+        _linkedIssueIds = List.from(record.linkedIssueIds);
+        _parts
+          ..clear()
+          ..addAll(parts.map((p) {
+            final row = _PartRow();
+            row.nameCtrl.text = p.partName;
+            if (p.quantity != null) row.qtyCtrl.text = p.quantity.toString();
+            return row;
+          }));
+      });
+      final types = await _service.watchTypes(kind: 'work_type').first;
+      if (mounted) {
+        setState(() {
+          _selectedWorkType = types
+                  .where((t) => t.id == record.workTypeId)
+                  .firstOrNull ??
+              types.firstOrNull;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -72,36 +193,28 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     super.dispose();
   }
 
+  FleetType? _pickDefaultWorkType(List<FleetType> types) {
+    if (types.isEmpty) return null;
+    final repair = types.where(
+      (t) => t.label.toLowerCase().contains('repair'),
+    );
+    return repair.isNotEmpty ? repair.first : types.first;
+  }
+
   Future<void> _loadWorkTypes() async {
+    if (_isEditing) return;
     final types = await _service.watchTypes(kind: 'work_type').first;
-    if (mounted) {
+    if (mounted && _selectedWorkType == null) {
       setState(() {
-        _workTypes = types;
-        _selectedWorkType = types.firstOrNull;
+        _selectedWorkType = _isFixingIssue
+            ? _pickDefaultWorkType(types)
+            : types.firstOrNull;
       });
     }
   }
 
-  Future<void> _pickDate(bool isStart) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isStart ? _startDate : _endDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (picked == null) return;
-    setState(() {
-      if (isStart) {
-        _startDate = picked;
-        if (_endDate.isBefore(_startDate)) _endDate = _startDate;
-      } else {
-        _endDate = picked;
-      }
-    });
-  }
-
   Future<void> _addPhoto() async {
-    if (_photoUrls.length >= 5) return;
+    if (_savedPhotoUrls.length + _pendingPhotoPaths.length >= 5) return;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (_) => SafeArea(
@@ -126,20 +239,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
     final localPath = await _service.pickAndCompressPhoto(source);
     if (localPath == null) return;
-
-    try {
-      final url = await _service.uploadFleetPhoto(
-        localPath: localPath,
-        fleetRef: 'fleet_work_records/_temp',
-      );
-      if (mounted) setState(() => _photoUrls.add(url));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo upload failed.')),
-        );
-      }
-    }
+    if (mounted) setState(() => _pendingPhotoPaths.add(localPath));
   }
 
   Future<void> _save() async {
@@ -147,24 +247,32 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _showError('Please select an asset.');
+      _showError('Please pick which forklift or grab you worked on.');
       return;
     }
     if (_selectedWorkType == null) {
-      _showError('Please select a work type.');
+      _showError('Please pick a job type.');
       return;
     }
     if (_titleCtrl.text.trim().isEmpty) {
-      _showError('Please enter a title.');
+      _showError('Please enter a short title for the work.');
       return;
     }
     if (_descCtrl.text.trim().isEmpty) {
-      _showError('Please enter a description.');
+      _showError('Please describe what was done.');
       return;
     }
-    final labourHours = double.tryParse(_labourHoursCtrl.text);
-    if (labourHours == null || labourHours <= 0) {
-      _showError('Please enter valid labour hours (e.g. 2.5).');
+    final labourHours = _labourHoursCtrl.text.trim().isEmpty
+        ? 0.0
+        : double.tryParse(_labourHoursCtrl.text.replaceAll(',', '.'));
+    if (labourHours == null || labourHours < 0) {
+      _showError('Labour hours must be a valid number (or leave blank).');
+      return;
+    }
+    final machineHours =
+        double.tryParse(_machineHoursCtrl.text.replaceAll(',', '.'));
+    if (machineHours == null) {
+      _showError('Please enter the machine hour-meter reading.');
       return;
     }
     if (_parts.any((p) => p.nameCtrl.text.trim().isEmpty)) {
@@ -174,49 +282,108 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
     setState(() => _saving = true);
     try {
-      final data = {
-        'asset_id': _selectedAsset!.id,
-        'asset_name': _selectedAsset!.name,
-        'work_type_id': _selectedWorkType!.id,
-        'work_type_name': _selectedWorkType!.label,
-        'title': _titleCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
-        'labour_hours': labourHours,
-        if (_machineHoursCtrl.text.trim().isNotEmpty)
-          'machine_hours_reading':
-              double.tryParse(_machineHoursCtrl.text),
-        'photos': _photoUrls,
-        'start_date': _startDate.toIso8601String(),
-        'end_date': _endDate.toIso8601String(),
-        'logged_by_clock_no': emp.clockNo,
-        'logged_by_name': emp.name,
-        'linked_issue_ids': _linkedIssueIds,
-      };
+      final startDate = _isEditing
+          ? (_loadedStartDate ?? DateTime.now())
+          : _workStartDate();
+      final endDate =
+          _isEditing ? (_loadedEndDate ?? DateTime.now()) : DateTime.now();
+      final parts = _parts
+          .map((row) {
+            final name = row.nameCtrl.text.trim();
+            if (name.isEmpty) return null;
+            return FleetWorkPart(
+              partName: name,
+              quantity: int.tryParse(row.qtyCtrl.text.trim()),
+            );
+          })
+          .whereType<FleetWorkPart>()
+          .toList();
 
-      final result = await _service.createWorkRecord(data);
-      final recordId = result['id'] as String;
+      String recordId;
+      if (_isEditing) {
+        recordId = widget.workRecordId!;
+        final uploaded = await _service.uploadPhotosForRecord(
+            recordId, _pendingPhotoPaths);
+        final allPhotos = [..._savedPhotoUrls, ...uploaded];
+        await _service.updateWorkRecord(recordId, {
+          'asset_id': _selectedAsset!.id,
+          'asset_name': _selectedAsset!.name,
+          'work_type_id': _selectedWorkType!.id,
+          'work_type_name': _selectedWorkType!.label,
+          'title': _titleCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'labour_hours': labourHours,
+          'machine_hours_reading': machineHours,
+          'photos': allPhotos,
+          'start_date': Timestamp.fromDate(startDate),
+          'end_date': Timestamp.fromDate(endDate),
+          'linked_issue_ids': _linkedIssueIds,
+        });
+        await _service.replaceParts(recordId, parts);
+      } else {
+        final data = {
+          'asset_id': _selectedAsset!.id,
+          'asset_name': _selectedAsset!.name,
+          'work_type_id': _selectedWorkType!.id,
+          'work_type_name': _selectedWorkType!.label,
+          'title': _titleCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'labour_hours': labourHours,
+          'machine_hours_reading': machineHours,
+          'photos': <String>[],
+          'start_date': startDate.toIso8601String(),
+          'end_date': endDate.toIso8601String(),
+          'logged_by_clock_no': emp.clockNo,
+          'logged_by_name': emp.name,
+          'linked_issue_ids': _linkedIssueIds,
+        };
 
-      // Save parts as sub-collection
-      for (final row in _parts) {
-        final name = row.nameCtrl.text.trim();
-        if (name.isEmpty) continue;
-        final qty = int.tryParse(row.qtyCtrl.text.trim());
-        await _service.addPart(
-            recordId, FleetWorkPart(partName: name, quantity: qty));
-      }
+        final result = await _service.createWorkRecord(data);
+        recordId = result['id'] as String;
 
-      // Resolve linked issues
-      for (final issueId in _linkedIssueIds) {
-        await _service.resolveIssueWithWorkRecord(
-            issueId, recordId, emp.clockNo, emp.name);
+        final uploaded = await _service.uploadPhotosForRecord(
+            recordId, _pendingPhotoPaths);
+        final allPhotos = [..._savedPhotoUrls, ...uploaded];
+        if (allPhotos.isNotEmpty) {
+          await _service.updateWorkRecord(recordId, {'photos': allPhotos});
+        }
+        await _service.replaceParts(recordId, parts);
+
+        for (final issueId in _linkedIssueIds) {
+          await _service.resolveIssueWithWorkRecord(
+              issueId, recordId, emp.clockNo, emp.name);
+        }
       }
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-              builder: (_) =>
-                  FleetWorkRecordDetailScreen(workRecordId: recordId)),
-        );
+        if (_isEditing) {
+          Navigator.of(context).pop();
+        } else if (_isFixingIssue) {
+          Navigator.of(context).pop(true);
+        } else {
+          final settings = ref.read(fleetSettingsProvider).asData?.value ??
+              FleetSettings.defaults;
+          final mechanicUx = role_utils.isFleetMechanic(
+                  currentEmployee, settings) &&
+              !role_utils.isFleetAdmin(currentEmployee);
+          if (mechanicUx) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Job saved. See it in History.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => FleetWorkRecordDetailScreen(
+                  workRecordId: recordId,
+                ),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -238,37 +405,195 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = DateFormat('d MMM yyyy');
+    final dateFmt = DateFormat('d MMM yyyy, HH:mm');
+    final settingsAsync = ref.watch(fleetSettingsProvider);
+    final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
+    final mechanicUx = role_utils.isFleetMechanic(currentEmployee, settings) &&
+        !role_utils.isFleetAdmin(currentEmployee);
+    final useMechanicLabels = mechanicUx && !_isFixingIssue;
+
+    if (_loading) {
+      return Scaffold(
+        appBar: FleetAppBar(
+          title: _isEditing
+              ? (mechanicUx ? 'Edit job' : 'Edit Work')
+              : (mechanicUx ? 'Log other work' : 'Log Work'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final showBottomSave = _isFixingIssue || (_isLogOtherWork && mechanicUx);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Log Work'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: _isFixingIssue
+            ? 'Mark as Fixed'
+            : (_isEditing
+                ? (mechanicUx ? 'Edit job' : 'Edit Work')
+                : (mechanicUx ? 'Log other work' : 'Log Work')),
         actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
+          if (!showBottomSave)
+            if (_saving)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child:
-                  const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              TextButton(
+                onPressed: _save,
+                child: const Text('Save'),
+              ),
         ],
       ),
+      bottomNavigationBar: showBottomSave
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: ElevatedButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(_isFixingIssue
+                          ? Icons.check_circle_outline
+                          : Icons.save_outlined),
+                  label: Text(
+                    _saving
+                        ? 'Saving…'
+                        : (_isFixingIssue ? 'Mark as Fixed' : 'Save job'),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_isLogOtherWork && mechanicUx) ...[
+            const FleetMechanicGuideBanner.logOtherWork(),
+            const SizedBox(height: 16),
+          ],
+          if (_isFixingIssue && _linkedIssue != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kBrandOrange.withValues(alpha: 0.08),
+                border: Border.all(color: kBrandOrange.withValues(alpha: 0.4)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Closing a reported issue',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _linkedIssue!.description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                  if (_linkedIssue!.acknowledgedAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Work started: ${dateFmt.format(_linkedIssue!.acknowledgedAt!)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'Saving will record the fix and set the resolved time to now.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (_isEditing &&
+              _loadedStartDate != null &&
+              _loadedEndDate != null) ...[
+            _TimelineRow(
+              label: 'Work started',
+              value: dateFmt.format(_loadedStartDate!),
+            ),
+            _TimelineRow(
+              label: 'Work completed',
+              value: dateFmt.format(_loadedEndDate!),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (_isLogOtherWork && mechanicUx) ...[
+            FleetSectionLabel('When did you start? *'),
+            InkWell(
+              onTap: _pickJobStarted,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.schedule, color: kBrandOrange, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dateFmt.format(_jobStartedAt),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            'Finish time is recorded when you save.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).appColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // ── Asset ──────────────────────────────────────────────────────
-          _Label('Asset *'),
-          if (widget.preSelectedAssetId != null && _selectedAsset != null)
-            // Pre-selected from issue — not editable
+          FleetSectionLabel(
+            useMechanicLabels ? 'Which forklift or grab? *' : 'Asset *',
+          ),
+          if (widget.linkedIssueId != null &&
+              !_isEditing &&
+              _selectedAsset != null)
+            // Pre-selected from issue — not editable on create
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -285,268 +610,295 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
               ),
             )
           else
-            InkWell(
-              onTap: () async {
-                final asset =
-                    await Navigator.of(context).push<FleetAsset>(
-                  MaterialPageRoute(
-                      builder: (_) => const FleetAssetPickerScreen()),
-                );
-                if (asset != null) setState(() => _selectedAsset = asset);
-              },
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Row(
-                  children: [
-                    Icon(Icons.forklift,
-                        color: _selectedAsset != null
-                            ? kBrandOrange
-                            : Colors.grey),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _selectedAsset == null
-                          ? Text('Tap to select asset',
-                              style:
-                                  TextStyle(color: Colors.grey[600]))
-                          : Text(_selectedAsset!.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.grey),
-                  ],
-                ),
-              ),
+            FleetAssetSelector(
+              value: _selectedAsset,
+              onChanged: (asset) => setState(() => _selectedAsset = asset),
             ),
           const SizedBox(height: 16),
 
-          // ── Work type ─────────────────────────────────────────────────
-          _Label('Work Type *'),
-          DropdownButtonFormField<FleetType>(
-            key: ValueKey(_selectedWorkType?.id),
-            initialValue: _selectedWorkType,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-            items: _workTypes
-                .map((t) =>
-                    DropdownMenuItem(value: t, child: Text(t.label)))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedWorkType = v),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Title ─────────────────────────────────────────────────────
-          _Label('Title *'),
-          TextField(
-            controller: _titleCtrl,
-            decoration: const InputDecoration(
-                hintText: 'e.g. Engine oil change + filter',
-                border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Description ───────────────────────────────────────────────
-          _Label('Description *'),
-          TextField(
-            controller: _descCtrl,
-            maxLines: 4,
-            decoration: const InputDecoration(
-                hintText: 'Describe what was done.',
-                border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Hours ─────────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Label('Labour Hours *'),
-                    TextField(
-                      controller: _labourHoursCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration: const InputDecoration(
-                          hintText: '2.5',
-                          border: OutlineInputBorder()),
-                    ),
-                  ],
+          if (!_isFixingIssue) ...[
+            FleetSectionLabel(useMechanicLabels ? 'Job type *' : 'Work Type *'),
+            if (useMechanicLabels)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'e.g. Routine service, Repair, Overhaul, Inspection',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).appColors.textMuted,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Label('Machine Hours Reading'),
-                    TextField(
-                      controller: _machineHoursCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration: const InputDecoration(
-                          hintText: 'optional',
-                          border: OutlineInputBorder()),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // ── Dates ─────────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: _DateButton(
-                  label: 'Start Date',
-                  date: _startDate,
-                  fmt: fmt,
-                  onTap: () => _pickDate(true),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _DateButton(
-                  label: 'End Date',
-                  date: _endDate,
-                  fmt: fmt,
-                  onTap: () => _pickDate(false),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // ── Linked issues ─────────────────────────────────────────────
-          if (_linkedIssueIds.isNotEmpty) ...[
-            _Label('Linked Issues'),
-            Wrap(
-              spacing: 8,
-              children: _linkedIssueIds
-                  .map((id) => Chip(
-                        label: Text(id.substring(0, 8),
-                            style: const TextStyle(fontSize: 11)),
-                      ))
-                  .toList(),
+            FleetTypeSelector(
+              kind: 'work_type',
+              value: _selectedWorkType,
+              hintText: useMechanicLabels ? 'Pick job type' : 'Select work type',
+              onChanged: (type) => setState(() => _selectedWorkType = type),
             ),
             const SizedBox(height: 16),
           ],
 
-          // ── Parts ─────────────────────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _Label('Parts Used'),
-              TextButton.icon(
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Part'),
-                onPressed: () {
-                  setState(() => _parts.add(_PartRow()));
-                },
-              ),
-            ],
+          // ── Title ─────────────────────────────────────────────────────
+          FleetSectionLabel(
+            _isFixingIssue
+                ? 'What you did (short title) *'
+                : (useMechanicLabels
+                    ? 'What you did (short title) *'
+                    : 'Title *'),
           ),
-          ..._parts.asMap().entries.map((entry) {
-            final i = entry.key;
-            final row = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: TextField(
-                      controller: row.nameCtrl,
-                      decoration: const InputDecoration(
-                          hintText: 'Part name',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: row.qtyCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          hintText: 'Qty',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.red, size: 20),
-                    onPressed: () {
-                      setState(() {
-                        row.nameCtrl.dispose();
-                        row.qtyCtrl.dispose();
-                        _parts.removeAt(i);
-                      });
-                    },
-                  ),
-                ],
-              ),
-            );
-          }),
+          TextField(
+            controller: _titleCtrl,
+            decoration: fleetDropdownDecoration(
+              hintText: _isFixingIssue
+                  ? 'e.g. Replaced hydraulic hose'
+                  : (useMechanicLabels
+                      ? 'e.g. Transmission replacement'
+                      : 'e.g. Engine oil change + filter'),
+            ),
+          ),
           const SizedBox(height: 16),
 
-          // ── Photos ────────────────────────────────────────────────────
-          _Label('Photos (optional, max 5)'),
-          Wrap(
-            spacing: 8,
-            children: [
-              ..._photoUrls.map((url) => Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(url,
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover),
-                      ),
-                      Positioned(
-                        top: 2,
-                        right: 2,
-                        child: GestureDetector(
-                          onTap: () =>
-                              setState(() => _photoUrls.remove(url)),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle),
-                            padding: const EdgeInsets.all(4),
-                            child: const Icon(Icons.close,
-                                color: Colors.white, size: 14),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )),
-              if (_photoUrls.length < 5)
-                GestureDetector(
-                  onTap: _addPhoto,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.add_a_photo,
-                        color: Colors.grey),
-                  ),
-                ),
-            ],
+          // ── Description ───────────────────────────────────────────────
+          FleetSectionLabel(
+            _isFixingIssue
+                ? 'What was wrong / what you fixed *'
+                : (useMechanicLabels
+                    ? 'Details of the work *'
+                    : 'Description *'),
           ),
-          const SizedBox(height: 80),
+          TextField(
+            controller: _descCtrl,
+            maxLines: 4,
+            decoration: fleetDropdownDecoration(
+              hintText: _isFixingIssue
+                  ? 'Describe the fault and what you did to fix it.'
+                  : (useMechanicLabels
+                      ? 'Describe the work carried out.'
+                      : 'Describe what was done.'),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Machine hours (required) ──────────────────────────────────
+          const FleetSectionLabel('Machine hour-meter reading *'),
+          TextField(
+            controller: _machineHoursCtrl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: fleetDropdownDecoration(
+              hintText: 'Reading on the forklift hour meter',
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Labour hours (optional) ───────────────────────────────────
+          const FleetSectionLabel('Labour hours (optional)'),
+          TextField(
+            controller: _labourHoursCtrl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
+          ),
+          const SizedBox(height: 16),
+
+          _PartsSection(
+            parts: _parts,
+            optional: useMechanicLabels || _isFixingIssue,
+            onAdd: () => setState(() => _parts.add(_PartRow())),
+            onRemove: (i) {
+              setState(() {
+                _parts[i].nameCtrl.dispose();
+                _parts[i].qtyCtrl.dispose();
+                _parts.removeAt(i);
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          _PhotosSection(
+            savedPhotoUrls: _savedPhotoUrls,
+            pendingPhotoPaths: _pendingPhotoPaths,
+            onAddPhoto: _addPhoto,
+            onRemoveSaved: (url) =>
+                setState(() => _savedPhotoUrls.remove(url)),
+            onRemovePending: (path) =>
+                setState(() => _pendingPhotoPaths.remove(path)),
+            hint: useMechanicLabels || _isFixingIssue
+                ? 'Photos of the finished work (optional, max 5).'
+                : null,
+          ),
+          SizedBox(height: showBottomSave ? 100 : 80),
         ],
       ),
+    );
+  }
+}
+
+class _PartsSection extends StatelessWidget {
+  const _PartsSection({
+    required this.parts,
+    required this.onAdd,
+    required this.onRemove,
+    this.optional = false,
+  });
+
+  final List<_PartRow> parts;
+  final VoidCallback onAdd;
+  final void Function(int index) onRemove;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            FleetSectionLabel(
+              optional ? 'Parts used (optional)' : 'Parts Used',
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add Part'),
+              onPressed: onAdd,
+            ),
+          ],
+        ),
+        ...parts.asMap().entries.map((entry) {
+          final i = entry.key;
+          final row = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: row.nameCtrl,
+                    decoration: fleetDropdownDecoration(
+                      hintText: 'Part name',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: row.qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: fleetDropdownDecoration(
+                      hintText: 'Qty',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                  onPressed: () => onRemove(i),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _PhotosSection extends StatelessWidget {
+  const _PhotosSection({
+    required this.savedPhotoUrls,
+    required this.pendingPhotoPaths,
+    required this.onAddPhoto,
+    required this.onRemoveSaved,
+    required this.onRemovePending,
+    this.hint,
+  });
+
+  final List<String> savedPhotoUrls;
+  final List<String> pendingPhotoPaths;
+  final Future<void> Function() onAddPhoto;
+  final void Function(String url) onRemoveSaved;
+  final void Function(String path) onRemovePending;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const FleetSectionLabel('Photos (optional, max 5)'),
+        if (hint != null) ...[
+          Text(
+            hint!,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).appColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Wrap(
+          spacing: 8,
+          children: [
+            ...savedPhotoUrls.map((url) => _PhotoThumb(
+                  image: Image.network(url,
+                      width: 80, height: 80, fit: BoxFit.cover),
+                  onRemove: () => onRemoveSaved(url),
+                )),
+            ...pendingPhotoPaths.map((path) => _PhotoThumb(
+                  image: Image.file(File(path),
+                      width: 80, height: 80, fit: BoxFit.cover),
+                  onRemove: () => onRemovePending(path),
+                )),
+            if (savedPhotoUrls.length + pendingPhotoPaths.length < 5)
+              GestureDetector(
+                onTap: onAddPhoto,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add_a_photo, color: Colors.grey),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PhotoThumb extends StatelessWidget {
+  const _PhotoThumb({required this.image, required this.onRemove});
+  final Widget image;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: image,
+        ),
+        Positioned(
+          top: 2,
+          right: 2,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              decoration: const BoxDecoration(
+                  color: Colors.black54, shape: BoxShape.circle),
+              padding: const EdgeInsets.all(4),
+              child:
+                  const Icon(Icons.close, color: Colors.white, size: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -556,60 +908,34 @@ class _PartRow {
   final qtyCtrl = TextEditingController();
 }
 
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-  final String text;
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.label, required this.value});
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text,
-          style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 13)),
-    );
-  }
-}
-
-class _DateButton extends StatelessWidget {
-  const _DateButton(
-      {required this.label,
-      required this.date,
-      required this.fmt,
-      required this.onTap});
   final String label;
-  final DateTime date;
-  final DateFormat fmt;
-  final VoidCallback onTap;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Label(label),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today,
-                    size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text(fmt.format(date),
-                    style: const TextStyle(fontSize: 14)),
-              ],
+    final muted = Theme.of(context).appColors.textMuted;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: muted,
+              ),
             ),
           ),
-        ),
-      ],
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
     );
   }
 }

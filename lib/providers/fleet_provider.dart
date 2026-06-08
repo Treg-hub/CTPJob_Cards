@@ -11,8 +11,8 @@ final _fleetService = FleetService();
 // Settings (loaded once per session, used for role derivation in home_screen)
 // ---------------------------------------------------------------------------
 
-final fleetSettingsProvider = FutureProvider<FleetSettings>((ref) async {
-  return _fleetService.getSettings();
+final fleetSettingsProvider = StreamProvider<FleetSettings>((ref) {
+  return _fleetService.watchSettings();
 });
 
 // ---------------------------------------------------------------------------

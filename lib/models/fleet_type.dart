@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// A configurable asset type or work type (stored in fleet_types).
 /// kind == 'asset_type'  → e.g. "Forklift", "Grab"
 /// kind == 'work_type'   → e.g. "Routine", "Repair", "Overhaul", "Inspection"
+/// kind == 'issue_part'  → reporter issue vocabulary, e.g. "Hydraulic leak", "Flat tyre"
 class FleetType {
   final String? id;
   final String kind; // 'asset_type' | 'work_type'

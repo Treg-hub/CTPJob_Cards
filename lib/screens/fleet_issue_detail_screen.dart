@@ -9,7 +9,9 @@ import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
+import '../widgets/fleet_mechanic_widgets.dart';
 import 'fleet_log_work_screen.dart';
 
 /// Detailed view of a single fleet issue.
@@ -19,7 +21,12 @@ import 'fleet_log_work_screen.dart';
 /// - Admin/manager: all actions including cancel
 class FleetIssueDetailScreen extends ConsumerStatefulWidget {
   final String issueId;
-  const FleetIssueDetailScreen({super.key, required this.issueId});
+  final bool mechanicMode;
+  const FleetIssueDetailScreen({
+    super.key,
+    required this.issueId,
+    this.mechanicMode = false,
+  });
 
   @override
   ConsumerState<FleetIssueDetailScreen> createState() =>
@@ -31,18 +38,50 @@ class _FleetIssueDetailScreenState
   final _service = FleetService();
   bool _actionInProgress = false;
 
-  Future<void> _acknowledge(FleetIssue issue) async {
+  Future<void> _startJob(FleetIssue issue) async {
     final emp = currentEmployee;
-    if (emp == null) return;
+    if (emp == null || issue.status != FleetIssueStatus.open) return;
     setState(() => _actionInProgress = true);
     try {
       await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Issue acknowledged.'),
-              backgroundColor: Colors.green),
+            content: Text(
+              'Job started. Come back and tap "Finish the fix" when done.',
+            ),
+            backgroundColor: Colors.green,
+          ),
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _actionInProgress = false);
+    }
+  }
+
+  Future<void> _finishFix(FleetIssue issue) async {
+    final emp = currentEmployee;
+    if (emp == null || issue.status != FleetIssueStatus.acknowledged) return;
+    setState(() => _actionInProgress = true);
+    try {
+      if (!mounted) return;
+      final fixed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => FleetLogWorkScreen(
+            preSelectedAssetId: issue.assetId,
+            preSelectedAssetName: issue.assetName,
+            linkedIssueId: issue.id,
+          ),
+        ),
+      );
+      if (fixed == true && mounted) {
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -60,16 +99,21 @@ class _FleetIssueDetailScreenState
     if (emp == null) return;
 
     final noteCtrl = TextEditingController();
+    final mechanicClose = widget.mechanicMode;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Resolve with Note'),
+        title: Text(
+          mechanicClose ? 'Close without a work log' : 'Resolve with Note',
+        ),
         content: TextField(
           controller: noteCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Enter resolution note (required)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: mechanicClose
+                ? 'Brief note (e.g. duplicate report, not a fault)'
+                : 'Enter resolution note (required)',
+            border: const OutlineInputBorder(),
           ),
           autofocus: true,
         ),
@@ -79,14 +123,17 @@ class _FleetIssueDetailScreenState
               child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Resolve')),
+              child: Text(mechanicClose ? 'Close problem' : 'Resolve')),
         ],
       ),
     );
 
-    noteCtrl.dispose();
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      noteCtrl.dispose();
+      return;
+    }
     final note = noteCtrl.text.trim();
+    noteCtrl.dispose();
     if (note.isEmpty) return;
 
     setState(() => _actionInProgress = true);
@@ -95,10 +142,16 @@ class _FleetIssueDetailScreenState
           issue.id!, note, emp.clockNo, emp.name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Issue resolved.'),
-              backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              widget.mechanicMode ? 'Problem closed.' : 'Issue resolved.',
+            ),
+            backgroundColor: Colors.green,
+          ),
         );
+        if (widget.mechanicMode) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -109,16 +162,6 @@ class _FleetIssueDetailScreenState
     } finally {
       if (mounted) setState(() => _actionInProgress = false);
     }
-  }
-
-  void _logWorkAndResolve(FleetIssue issue) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FleetLogWorkScreen(
-        preSelectedAssetId: issue.assetId,
-        preSelectedAssetName: issue.assetName,
-        linkedIssueId: issue.id,
-      ),
-    ));
   }
 
   Future<void> _cancel(FleetIssue issue) async {
@@ -156,15 +199,17 @@ class _FleetIssueDetailScreenState
       ),
     );
 
+    if (confirmed != true) {
+      reasonCtrl.dispose();
+      return;
+    }
+    final reason = reasonCtrl.text.trim();
     reasonCtrl.dispose();
-    if (confirmed != true) return;
 
     setState(() => _actionInProgress = true);
     try {
       await _service.cancelIssue(issue.id!, emp.clockNo, emp.name,
-          reason: reasonCtrl.text.trim().isEmpty
-              ? null
-              : reasonCtrl.text.trim());
+          reason: reason.isEmpty ? null : reason);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Issue cancelled.')),
@@ -190,58 +235,39 @@ class _FleetIssueDetailScreenState
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isCostMgr = role_utils.isFleetCostManager(emp, settings);
     final isAdmin = role_utils.isFleetAdmin(emp);
+    final isReporter = role_utils.isFleetReporter(emp, settings);
     final canCancel = isMechanic || isCostMgr || isAdmin;
 
+    final mechanicView = widget.mechanicMode || isMechanic;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Issue Detail'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: mechanicView ? 'Problem' : 'Issue Detail',
       ),
       body: StreamBuilder<FleetIssue?>(
-        stream: _service
-            .watchIssues(limit: 1)
-            .map((list) =>
-                list.where((i) => i.id == widget.issueId).firstOrNull),
+        stream: _service.watchIssue(widget.issueId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final issue = snapshot.data;
           if (issue == null) {
-            // Fetch once as fallback
-            return FutureBuilder<FleetIssue?>(
-              future: _service.getIssue(widget.issueId),
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.data == null) {
-                  return const Center(child: Text('Issue not found.'));
-                }
-                return _IssueBody(
-                  issue: snap.data!,
-                  isMechanic: isMechanic,
-                  isCostMgr: isCostMgr,
-                  canCancel: canCancel,
-                  actionInProgress: _actionInProgress,
-                  onAcknowledge: () => _acknowledge(snap.data!),
-                  onResolveWithNote: () => _resolveWithNote(snap.data!),
-                  onLogWork: () => _logWorkAndResolve(snap.data!),
-                  onCancel: () => _cancel(snap.data!),
-                );
-              },
-            );
+            return const Center(child: Text('Issue not found.'));
           }
+          final isOwnReport =
+              emp != null && issue.reportedByClockNo == emp.clockNo;
           return _IssueBody(
             issue: issue,
             isMechanic: isMechanic,
-            isCostMgr: isCostMgr,
+            mechanicView: mechanicView,
+            isReporter: isReporter,
+            isOwnReport: isOwnReport,
             canCancel: canCancel,
             actionInProgress: _actionInProgress,
-            onAcknowledge: () => _acknowledge(issue),
+            onStartJob: () => _startJob(issue),
+            onFinishFix: () => _finishFix(issue),
             onResolveWithNote: () => _resolveWithNote(issue),
-            onLogWork: () => _logWorkAndResolve(issue),
             onCancel: () => _cancel(issue),
           );
         },
@@ -258,23 +284,27 @@ class _IssueBody extends StatelessWidget {
   const _IssueBody({
     required this.issue,
     required this.isMechanic,
-    required this.isCostMgr,
+    required this.mechanicView,
+    required this.isReporter,
+    required this.isOwnReport,
     required this.canCancel,
     required this.actionInProgress,
-    required this.onAcknowledge,
+    required this.onStartJob,
+    required this.onFinishFix,
     required this.onResolveWithNote,
-    required this.onLogWork,
     required this.onCancel,
   });
 
   final FleetIssue issue;
   final bool isMechanic;
-  final bool isCostMgr;
+  final bool mechanicView;
+  final bool isReporter;
+  final bool isOwnReport;
   final bool canCancel;
   final bool actionInProgress;
-  final VoidCallback onAcknowledge;
+  final VoidCallback onStartJob;
+  final VoidCallback onFinishFix;
   final VoidCallback onResolveWithNote;
-  final VoidCallback onLogWork;
   final VoidCallback onCancel;
 
   @override
@@ -294,34 +324,132 @@ class _IssueBody extends StatelessWidget {
           children: [
             FleetSeverityBadge(severity: issue.severity),
             const SizedBox(width: 8),
-            FleetStatusBadge(status: issue.status),
-            const SizedBox(width: 8),
-            Chip(
-              label: Text(issue.shift.displayLabel,
-                  style: const TextStyle(fontSize: 11)),
-              padding: EdgeInsets.zero,
-            ),
+            if (mechanicView)
+              FleetMechanicStatusBadge(status: issue.status)
+            else
+              FleetStatusBadge(status: issue.status),
+            if (isOwnReport) ...[
+              const SizedBox(width: 8),
+              Chip(
+                label: const Text('Your report'),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                backgroundColor: kBrandOrange.withValues(alpha: 0.15),
+                labelStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ),
+        if (mechanicView && issue.status.isOpen) ...[
+          const SizedBox(height: 16),
+          if (issue.status == FleetIssueStatus.open) ...[
+            _ActionButton(
+              label: 'Start job',
+              icon: Icons.play_circle_outline,
+              color: Colors.blue,
+              loading: actionInProgress,
+              onPressed: onStartJob,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use this when the repair will take time (e.g. transmission). '
+              'The job clock starts now — finish and log the work when complete.',
+              style: TextStyle(fontSize: 12, color: colors?.textMuted),
+            ),
+          ] else ...[
+            if (issue.acknowledgedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Job started ${fmt.format(issue.acknowledgedAt!)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: colors?.textMuted,
+                  ),
+                ),
+              ),
+            _ActionButton(
+              label: 'Finish the fix',
+              icon: Icons.build_circle_outlined,
+              color: kBrandOrange,
+              loading: actionInProgress,
+              onPressed: onFinishFix,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Record the hour-meter reading and what you did to close this problem.',
+              style: TextStyle(fontSize: 12, color: colors?.textMuted),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton(
+              onPressed: actionInProgress ? null : onResolveWithNote,
+              child: const Text('Close with a note only (no work log)'),
+            ),
+          ),
+          const Divider(height: 32),
+        ],
+        if (isReporter && !isMechanic) ...[
+          const SizedBox(height: 12),
+          Text(
+            isOwnReport
+                ? 'Your report is visible to the maintenance team and other reporters.'
+                : 'Reported by ${issue.reportedByName} — visible to all reporters for transparency.',
+            style: TextStyle(fontSize: 12, color: colors?.textMuted),
+          ),
+        ],
         const SizedBox(height: 16),
 
-        // ── Description ──────────────────────────────────────────────────
+        // ── Report ───────────────────────────────────────────────────────
+        Text(
+          'Report',
+          style: TextStyle(
+            color: colors?.textMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _DetailRow(
+          label: 'Reported at',
+          child: Text(
+              issue.createdAt != null ? fmt.format(issue.createdAt!) : '—'),
+        ),
+        _DetailRow(
+          label: 'Reported by',
+          child: Text(
+            mechanicView
+                ? issue.reportedByName
+                : '${issue.reportedByName} (${issue.reportedByClockNo})',
+          ),
+        ),
+        const SizedBox(height: 8),
         _DetailRow(
           label: 'Description',
           child: Text(issue.description),
         ),
+        if (issue.parts.isNotEmpty)
+          _DetailRow(
+            label: 'Parts affected',
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: issue.parts
+                  .map((p) => Chip(
+                        label: Text(p, style: const TextStyle(fontSize: 12)),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ))
+                  .toList(),
+            ),
+          ),
         const Divider(),
-
-        // ── Meta ─────────────────────────────────────────────────────────
-        _DetailRow(
-          label: 'Reported by',
-          child: Text('${issue.reportedByName} (${issue.reportedByClockNo})'),
-        ),
-        _DetailRow(
-          label: 'Reported at',
-          child: Text(issue.createdAt != null ? fmt.format(issue.createdAt!) : '—'),
-        ),
-        if (issue.acknowledgedByClockNo != null) ...[
+        if (!mechanicView && issue.acknowledgedByClockNo != null) ...[
           _DetailRow(
             label: 'Acknowledged by',
             child: Text(issue.acknowledgedByClockNo!),
@@ -333,32 +461,53 @@ class _IssueBody extends StatelessWidget {
                 : '—'),
           ),
         ],
+        if (mechanicView && issue.acknowledgedAt != null) ...[
+          _DetailRow(
+            label: 'Started fixing',
+            child: Text(fmt.format(issue.acknowledgedAt!)),
+          ),
+        ],
         if (issue.status == FleetIssueStatus.resolved) ...[
           const Divider(),
-          _DetailRow(
-            label: 'Resolved by',
-            child: Text(issue.resolvedByClockNo ?? '—'),
-          ),
-          _DetailRow(
-            label: 'Resolved at',
-            child: Text(issue.resolvedAt != null
-                ? fmt.format(issue.resolvedAt!)
-                : '—'),
-          ),
-          if (issue.resolutionType == FleetIssueResolutionType.note &&
-              issue.resolutionNote != null)
+          if (mechanicView) ...[
             _DetailRow(
-              label: 'Resolution note',
-              child: Text(issue.resolutionNote!),
+              label: 'Fixed at',
+              child: Text(issue.resolvedAt != null
+                  ? fmt.format(issue.resolvedAt!)
+                  : '—'),
             ),
-          if (issue.linkedWorkRecordId != null)
+            if (issue.resolutionType == FleetIssueResolutionType.note &&
+                issue.resolutionNote != null)
+              _DetailRow(
+                label: 'Note',
+                child: Text(issue.resolutionNote!),
+              ),
+          ] else ...[
             _DetailRow(
-              label: 'Work record',
-              child: Text(issue.linkedWorkRecordId!,
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      color: Colors.blue)),
+              label: 'Resolved by',
+              child: Text(issue.resolvedByClockNo ?? '—'),
             ),
+            _DetailRow(
+              label: 'Resolved at',
+              child: Text(issue.resolvedAt != null
+                  ? fmt.format(issue.resolvedAt!)
+                  : '—'),
+            ),
+            if (issue.resolutionType == FleetIssueResolutionType.note &&
+                issue.resolutionNote != null)
+              _DetailRow(
+                label: 'Resolution note',
+                child: Text(issue.resolutionNote!),
+              ),
+            if (issue.linkedWorkRecordId != null)
+              _DetailRow(
+                label: 'Work record',
+                child: Text(issue.linkedWorkRecordId!,
+                    style: const TextStyle(
+                        fontFamily: 'monospace',
+                        color: Colors.blue)),
+              ),
+          ],
         ],
         const Divider(),
 
@@ -383,39 +532,8 @@ class _IssueBody extends StatelessWidget {
           const Divider(),
         ],
 
-        // ── Mechanic actions ──────────────────────────────────────────────
-        if (isMechanic && issue.status.isOpen) ...[
-          const SizedBox(height: 8),
-          if (issue.status == FleetIssueStatus.open)
-            _ActionButton(
-              label: 'Acknowledge',
-              icon: Icons.thumb_up_outlined,
-              color: Colors.blue,
-              loading: actionInProgress,
-              onPressed: onAcknowledge,
-            ),
-          if (issue.status == FleetIssueStatus.acknowledged) ...[
-            _ActionButton(
-              label: 'Log Work & Resolve',
-              icon: Icons.build,
-              color: kBrandOrange,
-              loading: actionInProgress,
-              onPressed: onLogWork,
-            ),
-            const SizedBox(height: 8),
-            _ActionButton(
-              label: 'Resolve with Note',
-              icon: Icons.check_circle_outline,
-              color: Colors.green,
-              loading: actionInProgress,
-              onPressed: onResolveWithNote,
-            ),
-          ],
-          const SizedBox(height: 8),
-        ],
-
-        // ── Cancel (admin/manager/mechanic) ───────────────────────────────
-        if (canCancel && issue.status.isOpen) ...[
+        // ── Cancel (admin/manager; hidden in simplified mechanic view) ───
+        if (canCancel && issue.status.isOpen && !mechanicView) ...[
           OutlinedButton.icon(
             onPressed: actionInProgress ? null : onCancel,
             icon: const Icon(Icons.cancel_outlined, color: Colors.red),

@@ -42,6 +42,16 @@ class FleetWorkRecord {
     this.hasCostLines = false,
   });
 
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) {
+      final parsed = DateTime.tryParse(
+          value.length == 10 ? '${value}T00:00:00' : value);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
+  }
+
   factory FleetWorkRecord.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return FleetWorkRecord(
@@ -56,8 +66,8 @@ class FleetWorkRecord {
       labourHours: (data['labour_hours'] as num?)?.toDouble() ?? 0.0,
       machineHoursReading: (data['machine_hours_reading'] as num?)?.toDouble(),
       photos: (data['photos'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
-      startDate: (data['start_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      endDate: (data['end_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      startDate: _parseDate(data['start_date']),
+      endDate: _parseDate(data['end_date']),
       loggedByClockNo: data['logged_by_clock_no'] as String? ?? '',
       loggedByName: data['logged_by_name'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),

@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main.dart' show currentEmployee;
 import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
+import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
 
 /// Admin-only screen: fleet configuration (reporter departments, cost managers,
 /// asset/work types, feature flag).
@@ -58,6 +60,7 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
     setState(() => _saving = true);
     try {
       await _service.saveSettings(_settings!);
+      ref.invalidate(fleetSettingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -140,11 +143,11 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
             icon: Icons.attach_money,
             subtitle: 'Clock numbers allowed to enter and view cost lines',
           ),
-          ..._CostManagerChips(
+          _ClockNoChipEditor(
             clockNos: s.costManagerClockNos,
             onChanged: (updated) =>
                 setState(() => _settings = s.copyWith(costManagerClockNos: updated)),
-          ).build(context),
+          ),
           const Divider(),
 
           // ── Mechanics ─────────────────────────────────────────────────
@@ -153,11 +156,11 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
             icon: Icons.precision_manufacturing,
             subtitle: 'Clock numbers with Mechanic access (log work, acknowledge/resolve issues)',
           ),
-          ..._CostManagerChips(
+          _ClockNoChipEditor(
             clockNos: s.mechanicClockNos,
             onChanged: (updated) =>
                 setState(() => _settings = s.copyWith(mechanicClockNos: updated)),
-          ).build(context),
+          ),
           const Divider(),
 
           // ── Asset types ────────────────────────────────────────────────
@@ -188,10 +191,8 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fleet Settings'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
+      appBar: FleetAppBar(
+        title: 'Fleet Settings',
         actions: [saveAction],
       ),
       body: body,
@@ -238,60 +239,80 @@ class _SectionHeader extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Cost manager chips with add/remove
+// Clock-number chip editor with add/remove
 // ---------------------------------------------------------------------------
 
-class _CostManagerChips {
-  _CostManagerChips({required this.clockNos, required this.onChanged});
+class _ClockNoChipEditor extends StatefulWidget {
+  const _ClockNoChipEditor({
+    required this.clockNos,
+    required this.onChanged,
+  });
   final List<String> clockNos;
   final ValueChanged<List<String>> onChanged;
 
-  List<Widget> build(BuildContext context) {
-    final addCtrl = TextEditingController();
-    return [
-      Wrap(
-        spacing: 8,
-        children: [
-          ...clockNos.map((no) => Chip(
-                label: Text(no),
-                deleteIcon: const Icon(Icons.close, size: 16),
-                onDeleted: () {
-                  final updated = List<String>.from(clockNos)..remove(no);
-                  onChanged(updated);
-                },
-              )),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: addCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Add clock number',
-                isDense: true,
-                border: OutlineInputBorder(),
+  @override
+  State<_ClockNoChipEditor> createState() => _ClockNoChipEditorState();
+}
+
+class _ClockNoChipEditorState extends State<_ClockNoChipEditor> {
+  final _addCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _addCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          children: [
+            ...widget.clockNos.map((no) => Chip(
+                  label: Text(no),
+                  deleteIcon: const Icon(Icons.close, size: 16),
+                  onDeleted: () {
+                    final updated = List<String>.from(widget.clockNos)
+                      ..remove(no);
+                    widget.onChanged(updated);
+                  },
+                )),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _addCtrl,
+                decoration: const InputDecoration(
+                  hintText: 'Add clock number',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
               ),
-              keyboardType: TextInputType.number,
             ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: kBrandOrange, foregroundColor: Colors.white),
-            onPressed: () {
-              final no = addCtrl.text.trim();
-              if (no.isEmpty || clockNos.contains(no)) return;
-              final updated = [...clockNos, no];
-              onChanged(updated);
-              addCtrl.clear();
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    ];
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: kBrandOrange,
+                  foregroundColor: Colors.white),
+              onPressed: () {
+                final no = _addCtrl.text.trim();
+                if (no.isEmpty || widget.clockNos.contains(no)) return;
+                widget.onChanged([...widget.clockNos, no]);
+                _addCtrl.clear();
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

@@ -32,8 +32,10 @@ import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
+import 'fleet_report_issue_screen.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
+import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/waste_service.dart';
 
@@ -91,6 +93,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get _isFleetUser =>
       (_cachedFleetSettings?.fleetEnabled ?? false) &&
       role_utils.isFleetUser(currentEmployee, _cachedFleetSettings);
+
+  bool get _canReportFleetIssue =>
+      (_cachedFleetSettings?.fleetEnabled ?? false) &&
+      role_utils.isFleetReporter(currentEmployee, _cachedFleetSettings);
 
   /// Returns true when the currently visible tab is the Waste tab.
   bool get _isOnWasteTab {
@@ -263,6 +269,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!_canCreateJobCard) {
       result = result.where((a) => a['title'] != 'Create Job Card').toList();
     }
+    if (_canReportFleetIssue) {
+      result = [
+        ...result,
+        {
+          'title': 'Report Hyster Problem',
+          'icon': Icons.forklift,
+          'color': kBrandOrange,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const FleetReportIssueScreen()),
+              ),
+        },
+      ];
+    }
     return result;
   }
 
@@ -402,8 +423,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_overrideOnSite && !_testMode) {
-      _locationService.checkCurrentLocation();
+    if (state == AppLifecycleState.resumed) {
+      _loadFleetSettings();
+      if (!_overrideOnSite && !_testMode) {
+        _locationService.checkCurrentLocation();
+      }
     }
   }
 
@@ -1594,6 +1618,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<FleetSettings>>(fleetSettingsProvider, (_, next) {
+      next.whenData((settings) {
+        if (mounted && _cachedFleetSettings != settings) {
+          setState(() => _cachedFleetSettings = settings);
+        }
+      });
+    });
+
     if (_pendingJobId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleJobDeepLink(_pendingJobId!);
@@ -1611,7 +1643,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
       if (_isFleetUser)
-        const BottomNavigationBarItem(icon: Icon(Icons.directions_car_outlined), label: 'Fleet'),
+        const BottomNavigationBarItem(icon: Icon(Icons.precision_manufacturing_outlined), label: 'Fleet'),
     ];
 
     final List<Widget> children = [

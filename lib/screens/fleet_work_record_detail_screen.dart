@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_cost_line.dart';
+import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
@@ -11,6 +12,7 @@ import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
 import 'fleet_add_cost_screen.dart';
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_log_work_screen.dart';
@@ -20,7 +22,12 @@ import 'fleet_log_work_screen.dart';
 /// - Cost manager/admin: sees full detail including costs; can add cost lines.
 class FleetWorkRecordDetailScreen extends ConsumerStatefulWidget {
   final String workRecordId;
-  const FleetWorkRecordDetailScreen({super.key, required this.workRecordId});
+  final bool mechanicMode;
+  const FleetWorkRecordDetailScreen({
+    super.key,
+    required this.workRecordId,
+    this.mechanicMode = false,
+  });
 
   @override
   ConsumerState<FleetWorkRecordDetailScreen> createState() =>
@@ -42,12 +49,10 @@ class _FleetWorkRecordDetailScreenState
     final isAdmin = role_utils.isFleetAdmin(emp);
     final canSeeCosts = isCostMgr || isAdmin;
 
+    final mechanicView = widget.mechanicMode || (isMechanic && !canSeeCosts);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Work Record'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
+      appBar: FleetAppBar(title: mechanicView ? 'Job Details' : 'Work Record'),
       body: FutureBuilder<FleetWorkRecord?>(
         future: _service.getWorkRecord(widget.workRecordId),
         builder: (context, snapshot) {
@@ -61,12 +66,12 @@ class _FleetWorkRecordDetailScreenState
           return _RecordBody(
             record: record,
             isMechanic: isMechanic,
+            mechanicView: mechanicView,
             canSeeCosts: canSeeCosts,
             service: _service,
             onEdit: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => FleetLogWorkScreen(
-                preSelectedAssetId: record.assetId,
-                preSelectedAssetName: record.assetName,
+                workRecordId: record.id,
               ),
             )),
             onAddCost: () => Navigator.of(context).push(MaterialPageRoute(
@@ -88,6 +93,7 @@ class _RecordBody extends ConsumerWidget {
   const _RecordBody({
     required this.record,
     required this.isMechanic,
+    required this.mechanicView,
     required this.canSeeCosts,
     required this.service,
     required this.onEdit,
@@ -96,6 +102,7 @@ class _RecordBody extends ConsumerWidget {
 
   final FleetWorkRecord record;
   final bool isMechanic;
+  final bool mechanicView;
   final bool canSeeCosts;
   final FleetService service;
   final VoidCallback onEdit;
@@ -110,12 +117,13 @@ class _RecordBody extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       children: [
         // ── Work number + title ──────────────────────────────────────────
-        Text(record.workNumber,
-            style: TextStyle(
-                fontFamily: 'monospace',
-                color: colors?.textMuted,
-                fontSize: 12)),
-        const SizedBox(height: 4),
+        if (!mechanicView)
+          Text(record.workNumber,
+              style: TextStyle(
+                  fontFamily: 'monospace',
+                  color: colors?.textMuted,
+                  fontSize: 12)),
+        if (!mechanicView) const SizedBox(height: 4),
         Text(record.title,
             style: const TextStyle(
                 fontSize: 20, fontWeight: FontWeight.bold)),
@@ -141,25 +149,42 @@ class _RecordBody extends ConsumerWidget {
         const Divider(),
 
         // ── Details ──────────────────────────────────────────────────────
-        _Row(label: 'Description', child: Text(record.description)),
         _Row(
-          label: 'Labour Hours',
-          child: Text('${record.labourHours} h'),
+          label: mechanicView ? 'What you did' : 'Description',
+          child: Text(record.description),
         ),
+        if (!mechanicView || record.labourHours > 0)
+          _Row(
+            label: 'Labour Hours',
+            child: Text('${record.labourHours} h'),
+          ),
         if (record.machineHoursReading != null)
           _Row(
-            label: 'Machine Hours Reading',
+            label: mechanicView ? 'Hour meter reading' : 'Machine Hours Reading',
             child: Text('${record.machineHoursReading} h'),
           ),
+        if (mechanicView) ...[
+          _Row(
+            label: 'Started',
+            child: Text(dateFmt.format(record.startDate)),
+          ),
+          _Row(
+            label: 'Finished',
+            child: Text(dateFmt.format(record.endDate)),
+          ),
+        ] else
+          _Row(
+            label: 'Date Range',
+            child: Text(
+                '${dateFmt.format(record.startDate)} → ${dateFmt.format(record.endDate)}'),
+          ),
         _Row(
-          label: 'Date Range',
+          label: mechanicView ? 'Logged by' : 'Logged by',
           child: Text(
-              '${dateFmt.format(record.startDate)} → ${dateFmt.format(record.endDate)}'),
-        ),
-        _Row(
-          label: 'Logged by',
-          child: Text(
-              '${record.loggedByName} (${record.loggedByClockNo})'),
+            mechanicView
+                ? record.loggedByName
+                : '${record.loggedByName} (${record.loggedByClockNo})',
+          ),
         ),
         const Divider(),
 
@@ -211,22 +236,15 @@ class _RecordBody extends ConsumerWidget {
         // ── Linked issues ────────────────────────────────────────────────
         if (record.linkedIssueIds.isNotEmpty) ...[
           const Divider(),
-          const Text('Linked Issues',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            mechanicView ? 'Problem fixed' : 'Linked Issues',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: record.linkedIssueIds
-                .map((id) => ActionChip(
-                      label: Text(id.substring(0, 8),
-                          style: const TextStyle(fontSize: 11)),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                FleetIssueDetailScreen(issueId: id)),
-                      ),
-                    ))
-                .toList(),
+          _LinkedIssueList(
+            issueIds: record.linkedIssueIds,
+            service: service,
+            mechanicView: mechanicView,
           ),
         ],
 
@@ -307,12 +325,72 @@ class _RecordBody extends ConsumerWidget {
           const SizedBox(height: 16),
           OutlinedButton.icon(
             icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit Work Record'),
+            label: Text(mechanicView ? 'Edit this job' : 'Edit Work Record'),
             onPressed: onEdit,
           ),
         ],
         const SizedBox(height: 80),
       ],
+    );
+  }
+}
+
+class _LinkedIssueList extends StatelessWidget {
+  const _LinkedIssueList({
+    required this.issueIds,
+    required this.service,
+    this.mechanicView = false,
+  });
+  final List<String> issueIds;
+  final FleetService service;
+  final bool mechanicView;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<FleetIssue>>(
+      future: Future.wait(issueIds.map(service.getIssue)).then(
+        (issues) => issues.whereType<FleetIssue>().toList(),
+      ),
+      builder: (context, snapshot) {
+        final issues = snapshot.data ?? [];
+        if (issues.isEmpty) {
+          return Text('Loading linked issues…',
+              style: TextStyle(
+                  color: Theme.of(context)
+                      .extension<AppColors>()
+                      ?.textMuted));
+        }
+        return Column(
+          children: issues
+              .map((issue) => Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(issue.assetName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                      subtitle: Text(
+                        issue.description.length > 60
+                            ? '${issue.description.substring(0, 60)}…'
+                            : issue.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, size: 18),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FleetIssueDetailScreen(
+                            issueId: issue.id!,
+                            mechanicMode: mechanicView,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ))
+              .toList(),
+        );
+      },
     );
   }
 }

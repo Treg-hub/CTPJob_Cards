@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/fleet_issue.dart';
 import '../theme/app_theme.dart';
+import 'fleet_mechanic_widgets.dart';
 
 /// Shared badge and tile widgets used across fleet issue screens.
 
@@ -91,9 +92,11 @@ class FleetIssueTile extends StatelessWidget {
     super.key,
     required this.issue,
     required this.onTap,
+    this.mechanicMode = false,
   });
   final FleetIssue issue;
   final VoidCallback onTap;
+  final bool mechanicMode;
 
   @override
   Widget build(BuildContext context) {
@@ -121,13 +124,27 @@ class FleetIssueTile extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                FleetStatusBadge(status: issue.status),
+                if (mechanicMode)
+                  FleetMechanicStatusBadge(status: issue.status)
+                else
+                  FleetStatusBadge(status: issue.status),
                 const SizedBox(width: 8),
                 FleetSeverityBadge(severity: issue.severity),
                 const Spacer(),
-                Text(_formatAge(issue.createdAt),
-                    style:
-                        TextStyle(color: colors?.textMuted, fontSize: 11)),
+                if (mechanicMode && issue.status.isOpen)
+                  Text(
+                    mechanicIssueActionHint(issue.status),
+                    style: TextStyle(
+                      color: kBrandOrange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else
+                  Text(
+                    _formatAge(issue.createdAt),
+                    style: TextStyle(color: colors?.textMuted, fontSize: 11),
+                  ),
               ],
             ),
           ],
