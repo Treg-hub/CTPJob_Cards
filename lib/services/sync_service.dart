@@ -50,12 +50,40 @@ class SyncService {
       id: id,
       collection: collection,
       operation: operation,
-      data: data,
+      data: _sanitizeForHive(data),
       createdAt: DateTime.now(),
     );
 
     await _queueBox.add(item);
     debugPrint('✅ Added to sync queue: $operation $collection');
+  }
+
+  /// Strips Firestore sentinel types that Hive cannot serialize.
+  /// - FieldValue (serverTimestamp, arrayUnion, increment, delete) → ISO-8601 string of now.
+  /// - Timestamp → ISO-8601 string of the equivalent DateTime.
+  /// Nested maps are recursed; lists are walked for the same types.
+  static Map<String, dynamic> _sanitizeForHive(Map<String, dynamic> data) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      result[entry.key] = _sanitizeValue(entry.value);
+    }
+    return result;
+  }
+
+  static dynamic _sanitizeValue(dynamic value) {
+    if (value is FieldValue) {
+      return DateTime.now().toIso8601String();
+    }
+    if (value is Timestamp) {
+      return value.toDate().toIso8601String();
+    }
+    if (value is Map<String, dynamic>) {
+      return _sanitizeForHive(value);
+    }
+    if (value is List) {
+      return value.map(_sanitizeValue).toList();
+    }
+    return value;
   }
 
   Future<void> _processQueue() async {

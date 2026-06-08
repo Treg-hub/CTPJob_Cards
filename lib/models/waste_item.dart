@@ -7,10 +7,15 @@ class WasteItem {
   final String loadId;
   final String subtype;
   final String? description;
-  final int? quantity; // optional, label is dynamic based on subtype
-  final double weightKg; // required
+  final int? quantity;
+  final double weightKg;
   final String? notes;
-  final List<String> photos; // min 1 required
+  final List<String> photos;
+  /// Set when this item was created from a waste_stock pre-loaded item.
+  /// Used to revert the stock item to on_site if this item is deleted.
+  final String? sourceStockId;
+  /// Soft-delete flag. Deleted items are filtered out of all queries.
+  final bool isDeleted;
 
   const WasteItem({
     this.id,
@@ -21,6 +26,8 @@ class WasteItem {
     required this.weightKg,
     this.notes,
     this.photos = const [],
+    this.sourceStockId,
+    this.isDeleted = false,
   });
 
   factory WasteItem.fromFirestore(DocumentSnapshot doc) {
@@ -37,6 +44,8 @@ class WasteItem {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+      sourceStockId: data['source_stock_id'] as String?,
+      isDeleted: data['is_deleted'] as bool? ?? false,
     );
   }
 
@@ -49,6 +58,8 @@ class WasteItem {
       'weight_kg': weightKg,
       'notes': notes,
       'photos': photos,
+      if (sourceStockId != null) 'source_stock_id': sourceStockId,
+      'is_deleted': isDeleted,
     };
   }
 
@@ -61,6 +72,8 @@ class WasteItem {
     double? weightKg,
     String? notes,
     List<String>? photos,
+    String? sourceStockId,
+    bool? isDeleted,
   }) {
     return WasteItem(
       id: id ?? this.id,
@@ -71,6 +84,8 @@ class WasteItem {
       weightKg: weightKg ?? this.weightKg,
       notes: notes ?? this.notes,
       photos: photos ?? this.photos,
+      sourceStockId: sourceStockId ?? this.sourceStockId,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

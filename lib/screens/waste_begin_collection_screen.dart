@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/contractor.dart';
 import '../models/waste_load.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
@@ -16,13 +17,14 @@ import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 
 /// Guard-facing screen: complete a collection on a [scheduled] load.
-/// The guard fills in driver name, vehicle reg, waste items (with photos),
-/// and captures the driver signature, then submits.
-/// Calls [WasteService.submitCollection] which transitions the load to [pending_weighbridge].
+///
+/// Pre-linked stock items (from the manager's scheduling) are pre-populated and
+/// can be confirmed or removed. The guard can also add fresh items.
+/// Confirmed stock items are marked loaded in waste_stock on submit; all items
+/// (stock + fresh) become waste_items on the load.
 class WasteBeginCollectionScreen extends ConsumerStatefulWidget {
   const WasteBeginCollectionScreen({super.key, required this.load});
 
-  /// The scheduled load to collect against.
   final WasteLoad load;
 
   @override
@@ -38,7 +40,11 @@ class _WasteBeginCollectionScreenState
 
   List<WasteType> _wasteTypes = [];
   List<Contractor> _contractors = [];
+
+  // _ItemEntry list covers both pre-linked stock items and fresh items.
   final List<_ItemEntry> _items = [];
+  bool _loadingPrelinked = false;
+
   Uint8List? _signatureBytes;
   String? _signatureTempPath;
   bool _isSubmitting = false;
@@ -47,6 +53,9 @@ class _WasteBeginCollectionScreenState
   void initState() {
     super.initState();
     _loadWasteTypes();
+    if (widget.load.selectedStockIds.isNotEmpty) {
+      _loadPrelinkedStock();
+    }
   }
 
   @override
@@ -75,6 +84,27 @@ class _WasteBeginCollectionScreenState
     } catch (_) {}
   }
 
+  Future<void> _loadPrelinkedStock() async {
+    setState(() => _loadingPrelinked = true);
+    try {
+      final items = await _wasteService
+          .getStockItemsByIds(widget.load.selectedStockIds);
+      if (mounted) {
+        setState(() {
+          for (final stock in items) {
+            // Only add if on_site (not already loaded onto another load)
+            if (stock.status == WasteStockStatus.onSite) {
+              _items.add(_ItemEntry.fromStock(stock));
+            }
+          }
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingPrelinked = false);
+    }
+  }
+
   bool get _canSubmit =>
       _driverCtrl.text.trim().isNotEmpty &&
       _regCtrl.text.trim().isNotEmpty &&
@@ -97,14 +127,12 @@ class _WasteBeginCollectionScreenState
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: SingleChildScrollView(
-            child: _AddItemSheet(types: typeNames),
-          ),
-        );
-      },
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: _AddItemSheet(types: typeNames),
+        ),
+      ),
     );
     if (result != null && mounted) {
       setState(() => _items.add(result));
@@ -115,13 +143,14 @@ class _WasteBeginCollectionScreenState
     final bytes = await Navigator.push<Uint8List?>(
       context,
       MaterialPageRoute(
-        builder: (_) => WasteSignatureScreen(loadNumber: widget.load.loadNumber.isNotEmpty
-            ? widget.load.loadNumber
-            : widget.load.mainWasteType),
+        builder: (_) => WasteSignatureScreen(
+          loadNumber: widget.load.loadNumber.isNotEmpty
+              ? widget.load.loadNumber
+              : widget.load.mainWasteType,
+        ),
       ),
     );
     if (bytes != null && mounted) {
-      // Save to temp file for submitCollection (which needs a file path)
       final tmp = await getTemporaryDirectory();
       final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(bytes);
@@ -137,21 +166,36 @@ class _WasteBeginCollectionScreenState
     setState(() => _isSubmitting = true);
 
     try {
+      // Build itemsData for submitCollection — includes both stock-sourced and fresh items
+      final itemsData = _items.map((i) => {
+        'subtype': i.subtype,
+        'weight_kg': i.weightKg,
+        'quantity': i.quantity,
+        'notes': i.notes,
+        'localPhotoPaths': i.photoPaths,
+        if (i.stockId != null) 'source_stock_id': i.stockId,
+      }).toList();
+
+      // IDs of confirmed stock items to mark as loaded
+      final confirmedStockIds = _items
+          .where((i) => i.stockId != null)
+          .map((i) => i.stockId!)
+          .toList();
+
       await _wasteService.submitCollection(
         loadId: widget.load.id!,
         driverName: _driverCtrl.text.trim(),
         vehicleReg: _regCtrl.text.trim(),
         collectedBy: currentEmployee?.clockNo ?? '',
         collectedByName: currentEmployee?.name,
-        itemsData: _items.map((i) => {
-          'subtype': i.subtype,
-          'weight_kg': i.weightKg,
-          'quantity': i.quantity,
-          'notes': i.notes,
-          'localPhotoPaths': i.photoPaths,
-        }).toList(),
+        itemsData: itemsData,
         signatureLocalPath: _signatureTempPath,
       );
+
+      // Mark confirmed stock items as loaded now that the guard has confirmed them
+      if (confirmedStockIds.isNotEmpty) {
+        await _wasteService.markStockLoaded(confirmedStockIds, widget.load.id!);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -186,10 +230,10 @@ class _WasteBeginCollectionScreenState
   @override
   Widget build(BuildContext context) {
     final scheduledDate = widget.load.scheduledFor ?? widget.load.dateTime;
-
     final appColors = Theme.of(context).appColors;
     final surfaceBg = appColors.wasteGreenSurface;
     final onSurface = onColor(surfaceBg);
+
     return Scaffold(
       appBar: WasteAppBar(
         title: 'Begin Collection',
@@ -200,7 +244,7 @@ class _WasteBeginCollectionScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Load header (read-only) ──────────────────────
+            // ── Load header ──────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -247,7 +291,6 @@ class _WasteBeginCollectionScreenState
             const Text('Driver Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
 
-            // ── Driver name ──────────────────────────────────
             TextField(
               controller: _driverCtrl,
               textCapitalization: TextCapitalization.words,
@@ -261,7 +304,6 @@ class _WasteBeginCollectionScreenState
 
             const SizedBox(height: 14),
 
-            // ── Vehicle registration ─────────────────────────
             TextField(
               controller: _regCtrl,
               textCapitalization: TextCapitalization.characters,
@@ -289,7 +331,13 @@ class _WasteBeginCollectionScreenState
               ],
             ),
 
-            if (_items.isEmpty)
+            if (_loadingPrelinked)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+
+            if (_items.isEmpty && !_loadingPrelinked)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -308,8 +356,15 @@ class _WasteBeginCollectionScreenState
               ..._items.asMap().entries.map((entry) {
                 final i = entry.key;
                 final item = entry.value;
+                final isStock = item.stockId != null;
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: isStock
+                        ? BorderSide(color: appColors.wasteGreen, width: 1.5)
+                        : BorderSide.none,
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
@@ -318,16 +373,40 @@ class _WasteBeginCollectionScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item.subtype, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              Row(
+                                children: [
+                                  Text(item.subtype,
+                                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  if (isStock) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: appColors.wasteGreenSurface,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: appColors.wasteGreen),
+                                      ),
+                                      child: Text('Pre-loaded',
+                                          style: TextStyle(fontSize: 10, color: appColors.wasteGreen, fontWeight: FontWeight.w600)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
                               Text('${item.weightKg} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
-                              Text('${item.photoPaths.length} photo(s)',
-                                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.wasteGreen)),
+                              if (item.photoPaths.isNotEmpty)
+                                Text('${item.photoPaths.length} photo(s)',
+                                    style: TextStyle(fontSize: 12, color: appColors.wasteGreen))
+                              else
+                                Text('⚠ Photo required',
+                                    style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
                             ],
                           ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () => setState(() => _items.removeAt(i)),
+                          tooltip: 'Remove item',
+                          onPressed: () => _confirmRemoveItem(i, item),
                         ),
                       ],
                     ),
@@ -348,7 +427,7 @@ class _WasteBeginCollectionScreenState
                     height: 80,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).appColors.wasteGreen),
+                      border: Border.all(color: appColors.wasteGreen),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: ClipRRect(
@@ -378,34 +457,62 @@ class _WasteBeginCollectionScreenState
 
             const SizedBox(height: 32),
 
-            // ── Submit ───────────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: _canSubmit ? _submit : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).appColors.wasteGreen,
+                  backgroundColor: appColors.wasteGreen,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(width: 22, height: 22,
+                    ? const SizedBox(
+                        width: 22, height: 22,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Text('Submit Collection', style: TextStyle(fontSize: 16)),
               ),
             ),
 
-            const SizedBox(height: 8),
             if (!_canSubmit && !_isSubmitting)
-              Text(
-                'Complete all fields, add at least one item with photo, and capture signature to submit.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Complete all fields, add at least one item with photo, and capture signature to submit.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: appColors.textMuted),
+                ),
               ),
             const SizedBox(height: 24),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmRemoveItem(int index, _ItemEntry item) async {
+    final isStock = item.stockId != null;
+    if (isStock) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Remove Pre-loaded Item?'),
+          content: Text(
+            'Remove "${item.subtype}" from this collection?\n\n'
+            'The item will remain in on-site stock and can be included in a future load.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    setState(() => _items.removeAt(index));
   }
 }
 
@@ -419,6 +526,8 @@ class _ItemEntry {
   final int? quantity;
   final String? notes;
   final List<String> photoPaths;
+  /// Non-null when this entry was pre-populated from a waste_stock item.
+  final String? stockId;
 
   const _ItemEntry({
     required this.subtype,
@@ -426,11 +535,24 @@ class _ItemEntry {
     this.quantity,
     this.notes,
     required this.photoPaths,
+    this.stockId,
   });
+
+  /// Create an entry from a pre-loaded stock item.
+  /// Photos are the stock item's existing URLs (stored as paths for display).
+  factory _ItemEntry.fromStock(WasteStockItem stock) {
+    return _ItemEntry(
+      subtype: stock.subtype,
+      weightKg: stock.estimatedWeightKg ?? 0.0,
+      notes: stock.notes,
+      photoPaths: stock.photos, // existing URLs from stock record
+      stockId: stock.id,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Add item bottom sheet
+// Add item bottom sheet (fresh items only — stock comes from pre-populated list)
 // ---------------------------------------------------------------------------
 
 class _AddItemSheet extends StatefulWidget {
@@ -485,28 +607,19 @@ class _AddItemSheetState extends State<_AddItemSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Handle bar
         Center(
           child: Container(
-            width: 40,
-            height: 4,
+            width: 40, height: 4,
             margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
           ),
         ),
-        // Title
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Add Waste Item',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+          child: Text('Add Waste Item',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
         const SizedBox(height: 12),
-        // Content
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
@@ -521,12 +634,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   items: widget.types.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                   onChanged: (v) => setState(() => _wasteType = v),
                 ),
-              ] else ...[
+              ] else
                 TextField(
                   decoration: const InputDecoration(labelText: 'Waste Type *', isDense: true),
                   onChanged: (v) => setState(() => _wasteType = v.isEmpty ? null : v),
                 ),
-              ],
               const SizedBox(height: 10),
               TextField(
                 controller: _weightCtrl,
@@ -585,8 +697,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                           top: 0, right: 0,
                           child: GestureDetector(
                             onTap: () => setState(() => _photos.removeAt(i)),
-                            child: const CircleAvatar(radius: 9, backgroundColor: Colors.red,
-                                child: Icon(Icons.close, size: 12, color: Colors.white)),
+                            child: const CircleAvatar(
+                              radius: 9,
+                              backgroundColor: Colors.red,
+                              child: Icon(Icons.close, size: 12, color: Colors.white),
+                            ),
                           ),
                         ),
                       ],

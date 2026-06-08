@@ -79,6 +79,10 @@ class WasteLoad {
   /// clockNo of the guard who collected (filled on submitCollection).
   final String? collectedBy;
   final String? collectedByName;
+  /// IDs of waste_stock items the manager pre-linked at scheduling time.
+  /// Used by WasteBeginCollectionScreen to pre-populate the item list.
+  /// Stock items are only marked loaded when the guard confirms collection.
+  final List<String> selectedStockIds;
 
   const WasteLoad({
     this.id,
@@ -110,6 +114,7 @@ class WasteLoad {
     this.pendingWeighbridgeAt,
     this.collectedBy,
     this.collectedByName,
+    this.selectedStockIds = const [],
   });
 
   factory WasteLoad.fromFirestore(DocumentSnapshot doc) {
@@ -148,6 +153,10 @@ class WasteLoad {
       pendingWeighbridgeAt: (data['pending_weighbridge_at'] as Timestamp?)?.toDate(),
       collectedBy: data['collected_by'] as String?,
       collectedByName: data['collected_by_name'] as String?,
+      selectedStockIds: (data['selected_stock_ids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 
@@ -182,6 +191,7 @@ class WasteLoad {
       if (pendingWeighbridgeAt != null) 'pending_weighbridge_at': Timestamp.fromDate(pendingWeighbridgeAt!),
       if (collectedBy != null) 'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
+      if (selectedStockIds.isNotEmpty) 'selected_stock_ids': selectedStockIds,
     };
   }
 
@@ -215,6 +225,7 @@ class WasteLoad {
     DateTime? pendingWeighbridgeAt,
     String? collectedBy,
     String? collectedByName,
+    List<String>? selectedStockIds,
   }) {
     return WasteLoad(
       id: id ?? this.id,
@@ -248,6 +259,7 @@ class WasteLoad {
       pendingWeighbridgeAt: pendingWeighbridgeAt ?? this.pendingWeighbridgeAt,
       collectedBy: collectedBy ?? this.collectedBy,
       collectedByName: collectedByName ?? this.collectedByName,
+      selectedStockIds: selectedStockIds ?? this.selectedStockIds,
     );
   }
 }

@@ -115,12 +115,12 @@ class WasteService {
   }
 
   Future<void> markLoadComplete(String loadId, {
-    required String driverSignatureUrl,
+    String? driverSignatureUrl,
     required String completedBy,
   }) async {
     await _firestore.collection(Collections.wasteLoads).doc(loadId).update({
       'status': 'completed',
-      'driver_signature_url': driverSignatureUrl,
+      if (driverSignatureUrl != null) 'driver_signature_url': driverSignatureUrl,
       'completed_by': completedBy,
       'completed_at': FieldValue.serverTimestamp(),
     });
@@ -157,6 +157,8 @@ class WasteService {
 
   /// Manager creates a shell load. No Cloud Function needed — no load number
   /// is assigned at scheduling time (number assigned when guard submits via [submitCollection]).
+  /// [selectedStockIds] are stored on the load doc; stock items are NOT marked loaded
+  /// here — that happens in [submitCollection] when the guard confirms them.
   Future<String> createScheduledLoad({
     required String contractorId,
     String? contractorName,
@@ -165,6 +167,7 @@ class WasteService {
     required String scheduledBy,
     required String scheduledByName,
     String? scheduledNotes,
+    List<String> selectedStockIds = const [],
   }) async {
     final doc = await _firestore.collection(Collections.wasteLoads).add({
       'load_number': '',
@@ -184,6 +187,7 @@ class WasteService {
       'is_deleted': false,
       'created_by': scheduledBy,
       'recorded_weight_kg': 0.0,
+      if (selectedStockIds.isNotEmpty) 'selected_stock_ids': selectedStockIds,
     });
     return doc.id;
   }
@@ -345,9 +349,103 @@ class WasteService {
     return _firestore
         .collection(Collections.wasteItems)
         .where('load_id', isEqualTo: loadId)
-        .orderBy('createdAt', descending: false) // or add createdAt on write
+        .orderBy('createdAt', descending: false)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => WasteItem.fromFirestore(d)).toList());
+        .map((snap) => snap.docs
+            .map((d) => WasteItem.fromFirestore(d))
+            .where((i) => !i.isDeleted)
+            .toList());
+  }
+
+  /// Fetches waste_stock items by their IDs (up to 30 via whereIn).
+  /// Used by WasteBeginCollectionScreen to pre-populate pre-linked stock.
+  Future<List<WasteStockItem>> getStockItemsByIds(List<String> ids) async {
+    if (ids.isEmpty) return [];
+    // Firestore whereIn supports up to 30 values; chunk if needed
+    final results = <WasteStockItem>[];
+    for (var i = 0; i < ids.length; i += 30) {
+      final chunk = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+      final snap = await _firestore
+          .collection(Collections.wasteStock)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      results.addAll(snap.docs.map(WasteStockItem.fromFirestore));
+    }
+    return results;
+  }
+
+  /// Soft-deletes a waste_item. If the item originated from a stock item
+  /// (sourceStockId set), the corresponding waste_stock item is reverted to on_site.
+  Future<void> deleteWasteItem(String itemId, {String? sourceStockId}) async {
+    await _firestore
+        .collection(Collections.wasteItems)
+        .doc(itemId)
+        .update({'is_deleted': true, 'updatedAt': FieldValue.serverTimestamp()});
+
+    if (sourceStockId != null) {
+      await _firestore
+          .collection(Collections.wasteStock)
+          .doc(sourceStockId)
+          .update({
+        'status': WasteStockStatus.onSite.value,
+        'load_id': FieldValue.delete(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  /// Adds a new waste_item to an already-existing load (post-submission editing).
+  /// Photos are uploaded live; failures are queued to the offline queue.
+  Future<void> addItemToExistingLoad({
+    required String loadId,
+    required String subtype,
+    required double weightKg,
+    int? quantity,
+    String? notes,
+    required List<String> localPhotoPaths,
+    String? sourceStockId,
+  }) async {
+    final itemRef = _firestore.collection(Collections.wasteItems).doc();
+    final photoUrls = <String>[];
+
+    for (final path in localPhotoPaths) {
+      try {
+        final url = await uploadWastePhoto(
+          localPath: path,
+          wasteRef: 'waste_items/${itemRef.id}',
+        );
+        photoUrls.add(url);
+      } catch (_) {
+        await queueOfflineWastePhoto(localPath: path, loadId: loadId, itemId: itemRef.id);
+      }
+    }
+
+    final data = {
+      'load_id': loadId,
+      'subtype': subtype,
+      'weight_kg': weightKg,
+      if (quantity != null) 'quantity': quantity,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'photos': photoUrls,
+      if (sourceStockId != null) 'source_stock_id': sourceStockId,
+      'is_deleted': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+
+    await itemRef.set(data);
+
+    // Keep load's recorded_weight_kg in sync
+    final loadSnap = await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
+    final currentRecorded = (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
+    await updateLoad(loadId, {'recorded_weight_kg': currentRecorded + weightKg});
+
+    await SyncService().addToQueue(
+      collection: Collections.wasteItems,
+      operation: 'set',
+      data: data,
+      documentId: itemRef.id,
+    );
+    await SyncService().processNow();
   }
 
   // ---------------------------------------------------------------------------

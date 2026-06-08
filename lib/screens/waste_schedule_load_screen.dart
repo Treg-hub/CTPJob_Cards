@@ -132,7 +132,7 @@ class _WasteScheduleLoadScreenState
 
     final employee = currentEmployee;
     try {
-      final loadId = await _wasteService.createScheduledLoad(
+      await _wasteService.createScheduledLoad(
         contractorId: _selectedContractor!.id!,
         contractorName: _selectedContractor!.name,
         mainWasteType: _selectedType!.mainType,
@@ -142,11 +142,9 @@ class _WasteScheduleLoadScreenState
         scheduledNotes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        // Store IDs on the load — stock is NOT marked loaded until the guard confirms
+        selectedStockIds: List.of(_selectedStockIds),
       );
-
-      if (_selectedStockIds.isNotEmpty) {
-        await _wasteService.markStockLoaded(_selectedStockIds, loadId);
-      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
