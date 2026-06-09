@@ -182,7 +182,7 @@ class _WasteBeginCollectionScreenState
           .map((i) => i.stockId!)
           .toList();
 
-      await _wasteService.submitCollection(
+      final result = await _wasteService.submitCollection(
         loadId: widget.load.id!,
         driverName: _driverCtrl.text.trim(),
         vehicleReg: _regCtrl.text.trim(),
@@ -199,10 +199,14 @@ class _WasteBeginCollectionScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Collection submitted — manager will enter weighbridge weight'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
+          SnackBar(
+            content: Text(
+              result.queuedOffline
+                  ? 'Collection saved offline — will sync when connection returns'
+                  : 'Collection submitted — manager will enter weighbridge weight',
+            ),
+            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
+            duration: const Duration(seconds: 4),
           ),
         );
         Navigator.of(context).pop();

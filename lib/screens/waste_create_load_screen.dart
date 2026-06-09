@@ -216,8 +216,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       if (mounted) {
         final loadId = result['id'] as String?;
         final loadNumber = result['load_number'] as String? ?? '';
+        final queuedOffline = result['queuedOffline'] == true;
         WasteLoad? newLoad;
-        if (loadId != null) {
+        if (loadId != null && !queuedOffline) {
           newLoad = await _wasteService.getLoad(loadId);
         }
         if (!mounted) return;
@@ -229,8 +230,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Load $loadNumber saved — find it on the WasteTrack home screen.'),
-              backgroundColor: Colors.green,
+              content: Text(
+                queuedOffline
+                    ? 'Load saved offline — will sync when connection returns'
+                    : 'Load $loadNumber saved — find it on the WasteTrack home screen.',
+              ),
+              backgroundColor: queuedOffline ? Colors.orange : Colors.green,
             ),
           );
           Navigator.pop(context);

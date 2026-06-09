@@ -299,7 +299,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await _wasteService.addItemToExistingLoad(
+      final addResult = await _wasteService.addItemToExistingLoad(
         loadId: _currentLoad.id!,
         subtype: result.subtype,
         weightKg: result.weightKg,
@@ -309,7 +309,14 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item added'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              addResult.queuedOffline
+                  ? 'Item saved offline — will sync when connection returns'
+                  : 'Item added',
+            ),
+            backgroundColor: addResult.queuedOffline ? Colors.orange : Colors.green,
+          ),
         );
       }
     } catch (e) {
