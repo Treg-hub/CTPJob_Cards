@@ -190,7 +190,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
   void _refreshStockForSelection() {
     if (_showStockSection) {
-      _loadOnSiteStock(kPaperWasteStockParent);
+      _loadOnSiteStock();
     } else {
       _resetStockSelection();
     }
@@ -223,7 +223,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     _loadingStock = false;
   }
 
-  Future<void> _loadOnSiteStock(String wasteType) async {
+  Future<void> _loadOnSiteStock() async {
     setState(() {
       _loadingStock = true;
       _onSiteStock = [];
@@ -231,7 +231,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     });
     try {
       final stock = await _wasteService
-          .watchStockOnSite(wasteType)
+          .watchAllStockOnSite()
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
@@ -395,16 +395,35 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         final loadNumber = result['load_number'] as String? ?? '';
         final queuedOffline = result['queuedOffline'] == true;
         WasteLoad? newLoad;
+        String? stockLinkWarning;
         if (loadId != null && !queuedOffline) {
-          if (_usesPaperStock && _selectedStockIds.isNotEmpty) {
-            await _wasteService.addStockItemsToLoad(
-              loadId: loadId,
-              stockIds: _selectedStockIds,
-            );
+          if (_selectedStockIds.isNotEmpty) {
+            try {
+              final linked = await _wasteService.addStockItemsToLoad(
+                loadId: loadId,
+                stockIds: _selectedStockIds,
+              );
+              if (linked < _selectedStockIds.length) {
+                stockLinkWarning =
+                    'Load saved but only $linked of ${_selectedStockIds.length} stock item(s) were linked.';
+              }
+            } catch (e) {
+              stockLinkWarning =
+                  'Load saved but on-site stock could not be linked: $e';
+            }
           }
           newLoad = await _wasteService.getLoad(loadId);
         }
         if (!mounted) return;
+        if (stockLinkWarning != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(stockLinkWarning),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
         if (newLoad != null) {
           Navigator.pushReplacement(
             context,

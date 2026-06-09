@@ -13,9 +13,7 @@ import 'waste_add_stock_item_screen.dart';
 import 'waste_stock_item_detail_screen.dart';
 
 class WasteStockInventoryScreen extends ConsumerStatefulWidget {
-  const WasteStockInventoryScreen({super.key, this.wasteType = 'Paper Waste'});
-
-  final String wasteType;
+  const WasteStockInventoryScreen({super.key});
 
   @override
   ConsumerState<WasteStockInventoryScreen> createState() =>
@@ -42,7 +40,7 @@ class _WasteStockInventoryScreenState
 
     return Scaffold(
       appBar: WasteAppBar(
-        title: '${widget.wasteType} Stock',
+        title: 'On-site Stock',
         isOnSite: currentEmployee?.isOnSite,
       ),
       floatingActionButton: canAdd
@@ -50,7 +48,7 @@ class _WasteStockInventoryScreenState
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => WasteAddStockItemScreen(wasteType: widget.wasteType),
+                  builder: (_) => const WasteAddStockItemScreen(),
                 ),
               ),
               icon: const Icon(Icons.add),
@@ -71,15 +69,15 @@ class _WasteStockInventoryScreenState
               border: Border.all(color: Colors.blue.shade200),
             ),
             child: Text(
-              'To use stock on a load: Schedule a Paper Waste load and link items, '
-              'or open an existing scheduled/active load → On-Site Stock.',
+              'To use stock on a load: schedule or open a load with matching waste types, '
+              'then link on-site stock from the load screen.',
               style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
             ),
           ),
-          _StockSummaryCard(wasteService: _wasteService, wasteType: widget.wasteType),
+          _StockSummaryCard(wasteService: _wasteService),
           Expanded(
             child: StreamBuilder<List<WasteStockItem>>(
-              stream: _wasteService.watchStockOnSite(widget.wasteType),
+              stream: _wasteService.watchAllStockOnSite(),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return _QueryErrorState(
@@ -92,7 +90,7 @@ class _WasteStockInventoryScreenState
                 }
                 final items = snap.data ?? [];
                 if (items.isEmpty) {
-                  return _EmptyState(wasteType: widget.wasteType);
+                  return const _EmptyState();
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
@@ -123,9 +121,8 @@ class _WasteStockInventoryScreenState
 // ---------------------------------------------------------------------------
 
 class _StockSummaryCard extends StatefulWidget {
-  const _StockSummaryCard({required this.wasteService, required this.wasteType});
+  const _StockSummaryCard({required this.wasteService});
   final WasteService wasteService;
-  final String wasteType;
 
   @override
   State<_StockSummaryCard> createState() => _StockSummaryCardState();
@@ -144,7 +141,7 @@ class _StockSummaryCardState extends State<_StockSummaryCard> {
 
   Future<void> _load() async {
     try {
-      final summary = await widget.wasteService.getStockSummary(widget.wasteType);
+      final summary = await widget.wasteService.getAllStockSummary();
       if (mounted) {
         setState(() {
           _count = summary.count;
@@ -260,7 +257,8 @@ class _StockItemCard extends StatelessWidget {
                 ),
               )
             : _DefaultLeadingIcon(appColors: appColors),
-        title: Text(item.subtype,
+        title: Text(
+            item.subtype.isNotEmpty ? item.subtype : item.wasteType,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
         subtitle: Text(
           '${formatSADate(item.createdAt)} · ${item.createdByName}',
@@ -360,8 +358,7 @@ class _QueryErrorState extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.wasteType});
-  final String wasteType;
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {

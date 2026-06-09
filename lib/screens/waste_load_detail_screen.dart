@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,7 +20,7 @@ import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
 import '../services/sync_service.dart';
-import '../services/connectivity_service.dart';
+
 import '../constants/collections.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 
@@ -38,10 +40,17 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   final WasteService _wasteService = WasteService();
   late WasteLoad _currentLoad;
   final _weighbridgeController = TextEditingController();
+  final _weighbridgeRefController = TextEditingController();
+  String? _ticketPhotoPath;
+  bool _noWeighbridgeTicket = false;
+  final List<String> _finishLoadPhotoPaths = [];
+  bool _addingFinishPhoto = false;
+  bool _wasteItemsExpanded = false;
   bool _isAdmin = false;
   bool _isManager = false;
   bool _isSaving = false;
   List<WasteType> _wasteTypes = [];
+  StreamSubscription<WasteLoad?>? _loadSubscription;
 
   @override
   void initState() {
@@ -50,6 +59,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     _isAdmin = role_utils.isWasteAdmin(currentEmployee);
     if (_currentLoad.actualWeighbridgeWeightKg != null) {
       _weighbridgeController.text = _currentLoad.actualWeighbridgeWeightKg!.toString();
+    }
+    if (_currentLoad.weighbridgeNumber != null) {
+      _weighbridgeRefController.text = _currentLoad.weighbridgeNumber!;
     }
     _wasteService.processOfflineWasteQueue();
     _wasteService.getWasteSettings().then((s) {
@@ -60,11 +72,21 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     _wasteService.watchWasteTypes().first.then((types) {
       if (mounted) setState(() => _wasteTypes = types);
     }).catchError((_) {});
+    final loadId = _currentLoad.id;
+    if (loadId != null) {
+      _loadSubscription = _wasteService.watchLoad(loadId).listen((load) {
+        if (load != null && mounted) {
+          setState(() => _currentLoad = load);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _loadSubscription?.cancel();
     _weighbridgeController.dispose();
+    _weighbridgeRefController.dispose();
     super.dispose();
   }
 
@@ -155,23 +177,55 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       return;
     }
 
+    final ref = _weighbridgeRefController.text.trim();
+    final clock = currentEmployee?.clockNo ?? '';
+
     setState(() => _isSaving = true);
     try {
-      await _wasteService.saveWeighbridgeWeight(
+      final result = await _wasteService.saveWeighbridgeWeight(
         loadId: _currentLoad.id!,
         actualWeightKg: weight,
-        updatedBy: currentEmployee?.clockNo,
+        weighbridgeNumber: _noWeighbridgeTicket || ref.isEmpty ? null : ref,
+        ticketPhotoLocalPath: _noWeighbridgeTicket ? null : _ticketPhotoPath,
+        updatedBy: clock,
+        ticketWaived: _noWeighbridgeTicket,
+        ticketWaivedBy: _noWeighbridgeTicket ? clock : null,
+        ticketWaivedByName: _noWeighbridgeTicket ? currentEmployee?.name : null,
+      );
+
+      final suggested = await _wasteService.suggestLoadCost(
+        loadId: _currentLoad.id!,
+        load: _currentLoad,
+        weightKg: weight,
       );
 
       setState(() {
-        _currentLoad = _currentLoad.copyWith(actualWeighbridgeWeightKg: weight);
+        _currentLoad = _currentLoad.copyWith(
+          actualWeighbridgeWeightKg: weight,
+          weighbridgeNumber: _noWeighbridgeTicket ? null : (ref.isEmpty ? null : ref),
+          weighbridgeTicketWaived: _noWeighbridgeTicket,
+          weighbridgeTicketWaivedBy: _noWeighbridgeTicket ? clock : null,
+          weighbridgeTicketWaivedByName: _noWeighbridgeTicket ? currentEmployee?.name : null,
+          weighbridgeTicketWaivedAt: _noWeighbridgeTicket ? DateTime.now() : null,
+          status: WasteLoadStatus.pendingCostReview,
+          pendingCostReviewAt: DateTime.now(),
+          weighbridgeReceivedAt: DateTime.now(),
+          rate: suggested?.rate,
+          randValueExVat: suggested?.randValueExVat,
+        );
+        _ticketPhotoPath = null;
+        _noWeighbridgeTicket = false;
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Weighbridge weight saved'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(
+              result.queuedOffline
+                  ? 'Weighbridge saved offline — sent to admin review when synced'
+                  : 'Weighbridge captured — load moved to admin cost review',
+            ),
+            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
           ),
         );
         _calculateAndShowDeviation();
@@ -180,22 +234,35 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         final recorded = _currentLoad.recordedWeightKg > 0 ? _currentLoad.recordedWeightKg : actual;
         final dev = calculateDeviation(recordedWeightKg: recorded, actualWeightKg: actual);
         if (dev.isDeviation) {
-          await SyncService().addToQueue(
-            collection: Collections.wasteAudit,
-            operation: 'create',
-            data: {
-              'load_id': _currentLoad.id,
-              'load_number': _currentLoad.loadNumber,
-              'action': 'weighbridge_deviation',
-              'recorded_weight_kg': recorded,
-              'actual_weight_kg': actual,
-              'variance_kg': dev.varianceKg,
-              'variance_percent': dev.variancePercent,
-              'triggered_by': currentEmployee?.clockNo ?? 'unknown',
-              'created_at': DateTime.now().toIso8601String(),
-            },
-          );
-          await SyncService().processNow();
+          final auditData = {
+            'load_id': _currentLoad.id,
+            'load_number': _currentLoad.loadNumber,
+            'action': 'weighbridge_deviation',
+            'recorded_weight_kg': recorded,
+            'actual_weight_kg': actual,
+            'variance_kg': dev.varianceKg,
+            'variance_percent': dev.variancePercent,
+            'triggered_by': currentEmployee?.clockNo ?? 'unknown',
+            'created_at': FieldValue.serverTimestamp(),
+          };
+          try {
+            await FirebaseFirestore.instance
+                .collection(Collections.wasteAudit)
+                .add(auditData);
+          } catch (_) {
+            await SyncService().addToQueue(
+              collection: Collections.wasteAudit,
+              operation: 'create',
+              data: {
+                ...auditData.map(
+                  (k, v) => MapEntry(
+                    k,
+                    v is FieldValue ? DateTime.now().toIso8601String() : v,
+                  ),
+                ),
+              },
+            );
+          }
         }
       }
     } catch (e) {
@@ -403,34 +470,19 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     }
   }
 
-  Future<void> _markComplete() async {
-    setState(() => _isSaving = true);
+  Future<void> _addFinishPhoto(ImageSource source) async {
+    setState(() => _addingFinishPhoto = true);
     try {
-      await _wasteService.markLoadComplete(
-        _currentLoad.id!,
-        completedBy: currentEmployee?.clockNo ?? 'unknown',
-      );
-      setState(() {
-        _currentLoad = _currentLoad.copyWith(
-          status: WasteLoadStatus.completed,
-          completedBy: currentEmployee?.clockNo,
-          completedAt: DateTime.now(),
-        );
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Load marked complete'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
-      }
+      final path = await _wasteService.pickAndCompressPhotoFromSource(source);
+      if (path != null && mounted) setState(() => _finishLoadPhotoPaths.add(path));
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) setState(() => _addingFinishPhoto = false);
     }
+  }
+
+  Future<void> _captureTicketPhoto() async {
+    final path = await _wasteService.pickAndCompressPhotoFromSource(ImageSource.camera);
+    if (path != null && mounted) setState(() => _ticketPhotoPath = path);
   }
 
   @override
@@ -629,29 +681,73 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Waste Items (${items.length})',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            if (canAdd)
-                              TextButton.icon(
-                                onPressed: _isSaving ? null : _addItem,
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Add'),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                        InkWell(
+                          onTap: items.isEmpty
+                              ? null
+                              : () => setState(
+                                    () => _wasteItemsExpanded = !_wasteItemsExpanded,
+                                  ),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Waste Items (${items.length})',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                          ],
+                                if (canAdd)
+                                  TextButton.icon(
+                                    onPressed: _isSaving ? null : _addItem,
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text('Add'),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                    ),
+                                  ),
+                                if (items.isNotEmpty)
+                                  Icon(
+                                    _wasteItemsExpanded
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                         if (items.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text('No items recorded.',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                            child: Text(
+                              'No items recorded.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                        else if (!_wasteItemsExpanded)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, bottom: 4),
+                            child: Text(
+                              'Tap header to show ${items.length} item${items.length == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).appColors.textMuted,
+                              ),
+                            ),
                           )
                         else ...[
                           const SizedBox(height: 8),
@@ -725,8 +821,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
           // ── Weighbridge entry ─────────────────────────────
           if (canEditWeighbridge &&
-              _currentLoad.status != WasteLoadStatus.completed &&
-              _currentLoad.status != WasteLoadStatus.cancelled) ...[
+              _currentLoad.status == WasteLoadStatus.pendingWeighbridge) ...[
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -734,17 +829,82 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Weighbridge Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const Text('Off-site Weighbridge Document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Enter the certified weight. Ticket reference and photo are optional — check below if no ticket will be received.',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+                    ),
+                    const SizedBox(height: 10),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _noWeighbridgeTicket,
+                      onChanged: _isSaving
+                          ? null
+                          : (v) => setState(() {
+                                _noWeighbridgeTicket = v ?? false;
+                                if (_noWeighbridgeTicket) {
+                                  _ticketPhotoPath = null;
+                                }
+                              }),
+                      title: const Text(
+                        'No weighbridge ticket received',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                      subtitle: Text(
+                        'Records that no off-site ticket is expected (${currentEmployee?.name ?? currentEmployee?.clockNo ?? 'you'}).',
+                        style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _weighbridgeRefController,
+                      enabled: !_noWeighbridgeTicket,
+                      decoration: const InputDecoration(
+                        labelText: 'Ticket / reference number (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _weighbridgeController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
-                        labelText: 'Actual Weight (kg)',
+                        labelText: 'Certified weight (kg) *',
                         border: OutlineInputBorder(),
                         suffixText: 'kg',
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    if (_currentLoad.weighbridgeTicketPhotoUrl != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: _currentLoad.weighbridgeTicketPhotoUrl!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    if (_ticketPhotoPath != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(File(_ticketPhotoPath!), height: 120, width: double.infinity, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    if (!_noWeighbridgeTicket)
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _isSaving ? null : _captureTicketPhoto,
+                            icon: const Icon(Icons.document_scanner, size: 18),
+                            label: Text(_ticketPhotoPath == null && _currentLoad.weighbridgeTicketPhotoUrl == null
+                                ? 'Photo ticket (optional)' : 'Retake ticket photo'),
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
@@ -753,7 +913,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                         icon: _isSaving
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.scale),
-                        label: Text(_isSaving ? 'Saving...' : 'Save Weighbridge Weight'),
+                        label: Text(_isSaving ? 'Saving...' : 'Submit Weighbridge Document'),
                         style: FilledButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
                       ),
                     ),
@@ -763,48 +923,89 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
           ],
 
-          const SizedBox(height: 12),
-
-          // ── Signature & completion ─────────────────────────
-          // draft: capture new signature + mark complete
-          if (_currentLoad.status == WasteLoadStatus.draft) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isSaving ? null : _completeDraft,
-                icon: const Icon(Icons.draw),
-                label: const Text('Mark Complete & Capture Driver Signature'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+          if (_currentLoad.status == WasteLoadStatus.pendingCostReview) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.purple.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.rate_review, color: Colors.purple.shade700),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Awaiting admin cost review'
+                            '${_currentLoad.randValueExVat != null ? ' — suggested R ${_currentLoad.randValueExVat!.toStringAsFixed(2)}' : ''}',
+                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.purple.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_currentLoad.weighbridgeTicketWaived) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'No weighbridge ticket — waived by '
+                        '${_currentLoad.weighbridgeTicketWaivedByName ?? _currentLoad.weighbridgeTicketWaivedBy ?? 'unknown'}',
+                        style: TextStyle(fontSize: 12, color: Colors.purple.shade800),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
           ],
 
-          // pending_weighbridge: signature already on file — manager just marks complete
-          if (_currentLoad.status == WasteLoadStatus.pendingWeighbridge && canEditWeighbridge) ...[
-            const SizedBox(height: 4),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _isSaving ? null : () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Mark Load Complete?'),
-                      content: const Text('This will finalise the load. Ensure the weighbridge weight has been saved first.'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Complete')),
+          const SizedBox(height: 12),
+
+          // ── Finish loading (draft on-the-spot loads) ───────
+          if (_currentLoad.status == WasteLoadStatus.draft) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Finish Loading', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Truck is loaded — capture the driver signature before it leaves. Truck photos are optional.',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ..._finishLoadPhotoPaths.map((path) => ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(File(path), width: 72, height: 72, fit: BoxFit.cover),
+                        )),
+                        if (!_addingFinishPhoto) ...[
+                          OutlinedButton.icon(
+                            onPressed: () => _addFinishPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt, size: 18),
+                            label: const Text('Truck photo (optional)'),
+                          ),
+                        ] else
+                          const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
                       ],
                     ),
-                  );
-                  if (ok == true) await _markComplete();
-                },
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Mark Load Complete'),
-                style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _isSaving ? null : _finishLoading,
+                        icon: const Icon(Icons.local_shipping),
+                        label: const Text('Finish Loading & Capture Signature'),
+                        style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -820,8 +1021,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     );
   }
 
-  /// Draft-load completion: capture signature then mark complete (original flow).
-  Future<void> _completeDraft() async {
+  /// Draft load: truck photos + signature → pending weighbridge (off-site document later).
+  Future<void> _finishLoading() async {
     final signatureBytes = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
@@ -831,74 +1032,70 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (signatureBytes == null || !mounted) return;
 
     setState(() => _isSaving = true);
-    String? signatureUrl;
+    String? signatureTempPath;
     try {
-      final online = await ConnectivityService().isOnline().catchError((_) => false);
-      if (!online) {
-        await WasteService().queueOfflineWasteSignatureBytes(
-          signatureBytes: signatureBytes,
-          loadId: _currentLoad.id!,
-        );
-        await SyncService().addToQueue(
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: {
-            'status': 'completed',
-            'completed_by': currentEmployee?.clockNo ?? 'unknown',
-            'completed_at': DateTime.now().toIso8601String(),
-          },
-          documentId: _currentLoad.id!,
-        );
-        await SyncService().processNow();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Queued offline — will upload on reconnect'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
+      final tmp = await Directory.systemTemp.createTemp('waste_sig');
+      final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(signatureBytes);
+      signatureTempPath = file.path;
 
-      signatureUrl = await WasteService().uploadSignature(
-        signatureBytes: signatureBytes,
+      final result = await _wasteService.finishLoading(
         loadId: _currentLoad.id!,
+        loadPhotoPaths: _finishLoadPhotoPaths,
+        signatureLocalPath: signatureTempPath,
+        finishedBy: currentEmployee?.clockNo ?? '',
+        finishedByName: currentEmployee?.name,
       );
-      await WasteService().markLoadComplete(
-        _currentLoad.id!,
-        driverSignatureUrl: signatureUrl,
-        completedBy: currentEmployee?.clockNo ?? 'unknown',
-      );
+
       setState(() {
         _currentLoad = _currentLoad.copyWith(
-          status: WasteLoadStatus.completed,
-          driverSignatureUrl: signatureUrl,
-          completedBy: currentEmployee?.clockNo,
-          completedAt: DateTime.now(),
+          status: WasteLoadStatus.pendingWeighbridge,
+          pendingWeighbridgeAt: DateTime.now(),
+          collectedBy: currentEmployee?.clockNo,
+          collectedByName: currentEmployee?.name,
         );
+        _finishLoadPhotoPaths.clear();
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Load marked complete'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              result.queuedOffline
+                  ? 'Finish loading saved offline — weighbridge document can be entered when synced'
+                  : 'Loading finished — enter off-site weighbridge document when it arrives',
+            ),
+            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
+          ),
         );
       }
     } catch (e) {
-      await SyncService().addToQueue(
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: {
-          'status': 'completed',
-          if (signatureUrl != null) 'driver_signature_url': signatureUrl,
-          'completed_by': currentEmployee?.clockNo ?? 'unknown',
-          'completed_at': DateTime.now().toIso8601String(),
-        },
-        documentId: _currentLoad.id!,
-      );
-      await SyncService().processNow();
-      if (mounted) {
+      final refreshed = _currentLoad.id != null
+          ? await _wasteService.getLoad(_currentLoad.id!)
+          : null;
+      if (!mounted) return;
+      if (refreshed != null &&
+          refreshed.status == WasteLoadStatus.pendingWeighbridge) {
+        setState(() {
+          _currentLoad = refreshed;
+          _finishLoadPhotoPaths.clear();
+        });
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Queued for retry: $e'), backgroundColor: Colors.orange),
+          const SnackBar(
+            content: Text(
+              'Loading already finished — signature and photos saved where possible. Enter weighbridge document below.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Finish failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -918,22 +1115,43 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     );
   }
 
-  Widget _weightBox(String label, String value, Color color) {
-    final isGrey = color == Colors.grey;
-    final valueColor = isGrey ? Theme.of(context).colorScheme.onSurface : null;
+  Widget _weightBox(String label, String value, Color accent) {
+    final theme = Theme.of(context);
+    final isEmpty = value == '—';
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isGrey ? Colors.grey.shade100 : color.withValues(alpha: 0.08),
+        color: isEmpty
+            ? theme.colorScheme.surfaceContainerHighest
+            : accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isGrey ? Colors.grey.shade400 : color.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: isEmpty
+              ? theme.dividerColor
+              : accent.withValues(alpha: 0.35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.appColors.textMuted,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: valueColor)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: isEmpty
+                  ? theme.colorScheme.onSurfaceVariant
+                  : accent,
+            ),
+          ),
         ],
       ),
     );
@@ -944,6 +1162,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       case WasteLoadStatus.completed:          return Icons.check_circle;
       case WasteLoadStatus.scheduled:          return Icons.event_available;
       case WasteLoadStatus.pendingWeighbridge: return Icons.scale;
+      case WasteLoadStatus.pendingCostReview: return Icons.rate_review;
       case WasteLoadStatus.cancelled:          return Icons.cancel;
       default:                                 return Icons.hourglass_bottom;
     }
@@ -954,6 +1173,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       case WasteLoadStatus.completed:          return Colors.green;
       case WasteLoadStatus.scheduled:          return Colors.blue;
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
+      case WasteLoadStatus.pendingCostReview: return Colors.purple;
       case WasteLoadStatus.cancelled:          return Theme.of(context).colorScheme.onSurfaceVariant;
       default:                                 return Colors.orange;
     }
@@ -1326,13 +1546,14 @@ class _WasteStatusStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = status == WasteLoadStatus.scheduled
-        ? ['Scheduled', 'Collecting', 'Weighbridge', 'Complete']
-        : ['Created', 'Signature', 'Weighbridge', 'Complete'];
+        ? ['Scheduled', 'Loaded', 'Weighbridge', 'Review', 'Done']
+        : ['Created', 'Loaded', 'Weighbridge', 'Review', 'Done'];
     final currentIdx = switch (status) {
       WasteLoadStatus.scheduled          => 0,
       WasteLoadStatus.draft              => 1,
       WasteLoadStatus.pendingWeighbridge => 2,
-      WasteLoadStatus.completed          => 3,
+      WasteLoadStatus.pendingCostReview  => 3,
+      WasteLoadStatus.completed          => 4,
       WasteLoadStatus.cancelled          => -1,
     };
     if (status == WasteLoadStatus.cancelled) {

@@ -75,8 +75,8 @@ const List<DocEntry> docCatalog = [
   ),
   DocEntry(
     id: 'waste_user_guide',
-    title: 'WasteTrack User Guide',
-    description: 'Scheduling loads, collecting waste, weighbridge sign-off, reports.',
+    title: 'Waste Recovery Guide',
+    description: 'Full load lifecycle: stock, schedule, collection, signature, weighbridge.',
     icon: Icons.recycling,
     roles: _allUserFacingRoles,
     requiresWaste: true,

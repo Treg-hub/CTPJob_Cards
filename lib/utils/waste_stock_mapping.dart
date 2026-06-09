@@ -1,28 +1,53 @@
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 
-/// Parent [waste_type] field on stock records for paper subtypes.
+/// Parent [waste_type] on legacy stock records for paper-family material.
 const kPaperWasteStockParent = 'Paper Waste';
 
-/// Fallback when the Paper Waste type record has no subtypes configured.
 const kDefaultPaperStockSubtypes = {
   'Slab Waste',
   'Reelends',
   'Scrap Reels',
 };
 
+const kPaperFamilyNames = {
+  kPaperWasteStockParent,
+  'Slab Waste',
+  'Reelends',
+  'Scrap Reels',
+  'Reels',
+};
+
+const kStockNameAliases = <String, List<String>>{
+  'Scrap Reels': ['Scrap Reels', 'Reels'],
+  'Reels': ['Scrap Reels', 'Reels'],
+};
+
+Set<String> flatWasteTypeNames(List<WasteType> allTypes) {
+  return allTypes
+      .map((t) => t.mainType)
+      .where((name) => name.isNotEmpty && name != kPaperWasteStockParent)
+      .toSet();
+}
+
+bool chipIsPaperFamily(String name) => kPaperFamilyNames.contains(name);
+
+bool chipCanLinkStock(WasteType chip, List<WasteType> allTypes) {
+  if (chip.mainType == kPaperWasteStockParent) return true;
+  if (flatWasteTypeNames(allTypes).contains(chip.mainType)) return true;
+  return kPaperFamilyNames.contains(chip.mainType);
+}
+
 Set<String> paperStockSubtypes(List<WasteType> allTypes) {
-  for (final type in allTypes) {
-    if (type.mainType == kPaperWasteStockParent && type.subtypes.isNotEmpty) {
-      return type.subtypes.toSet();
-    }
-  }
+  final flatPaper = flatWasteTypeNames(allTypes)
+      .where(chipIsPaperFamily)
+      .toList();
+  if (flatPaper.isNotEmpty) return flatPaper.toSet();
   return kDefaultPaperStockSubtypes;
 }
 
 bool chipMapsToPaperStock(WasteType chip, List<WasteType> allTypes) {
-  if (chip.mainType == kPaperWasteStockParent) return true;
-  return paperStockSubtypes(allTypes).contains(chip.mainType);
+  return chipCanLinkStock(chip, allTypes);
 }
 
 bool selectedChipsUsePaperStock(
@@ -30,16 +55,15 @@ bool selectedChipsUsePaperStock(
   List<WasteType> allTypes,
 ) {
   return selected.isNotEmpty &&
-      selected.every((chip) => chipMapsToPaperStock(chip, allTypes));
+      selected.every((chip) => chipCanLinkStock(chip, allTypes));
 }
 
-/// Resolves the load's [main_waste_type] from selected contractor chips.
 String resolveLoadMainWasteType(
   List<WasteType> selected,
   List<WasteType> allTypes,
 ) {
   if (selected.isEmpty) return '';
-  if (selectedChipsUsePaperStock(selected, allTypes)) {
+  if (selected.every((chip) => chipIsPaperFamily(chip.mainType))) {
     return kPaperWasteStockParent;
   }
   return selected.first.mainType;
@@ -48,10 +72,21 @@ String resolveLoadMainWasteType(
 bool loadUsesPaperStock(String? mainWasteType, List<WasteType> allTypes) {
   if (mainWasteType == null || mainWasteType.isEmpty) return false;
   if (mainWasteType == kPaperWasteStockParent) return true;
-  return paperStockSubtypes(allTypes).contains(mainWasteType);
+  return chipIsPaperFamily(mainWasteType) ||
+      flatWasteTypeNames(allTypes).contains(mainWasteType);
 }
 
-/// Subtype names allowed for fresh items / stock pickers based on selected chips.
+Set<String> expandStockFilter(Iterable<String> names) {
+  final filter = <String>{};
+  for (final name in names) {
+    filter.add(name);
+    for (final alias in kStockNameAliases[name] ?? const []) {
+      filter.add(alias);
+    }
+  }
+  return filter;
+}
+
 List<String> itemSubtypeOptionsForChips(
   List<WasteType> selectedChips,
   List<WasteType> allTypes,
@@ -71,7 +106,27 @@ Set<String> stockSubtypeFilterForChips(
   List<WasteType> selectedChips,
   List<WasteType> allTypes,
 ) {
-  return itemSubtypeOptionsForChips(selectedChips, allTypes).toSet();
+  if (selectedChips.isEmpty) return {};
+
+  final onlyPaperChip = selectedChips.length == 1 &&
+      selectedChips.first.mainType == kPaperWasteStockParent;
+  if (onlyPaperChip) return paperStockSubtypes(allTypes);
+
+  return expandStockFilter(selectedChips.map((c) => c.mainType));
+}
+
+bool stockItemMatchesFilter(WasteStockItem item, Set<String> filter) {
+  if (filter.isEmpty) return true;
+  final subtype = item.subtype.isNotEmpty ? item.subtype : item.wasteType;
+  if (filter.contains(subtype) || filter.contains(item.wasteType)) {
+    return true;
+  }
+  for (final name in filter) {
+    for (final alias in kStockNameAliases[name] ?? const []) {
+      if (alias == subtype || alias == item.wasteType) return true;
+    }
+  }
+  return false;
 }
 
 List<WasteStockItem> filterStockByChipSubtypes(
@@ -84,7 +139,11 @@ List<WasteStockItem> filterStockByChipSubtypes(
   final filter = stockSubtypeFilterForChips(selectedChips, allTypes);
   final onlyPaperChip = selectedChips.length == 1 &&
       selectedChips.first.mainType == kPaperWasteStockParent;
-  if (onlyPaperChip) return stock;
+  if (onlyPaperChip) {
+    return stock.where((item) => stockItemMatchesFilter(item, filter)).toList();
+  }
 
-  return stock.where((item) => filter.contains(item.subtype)).toList();
+  return stock
+      .where((item) => stockItemMatchesFilter(item, filter))
+      .toList();
 }

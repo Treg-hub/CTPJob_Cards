@@ -34,7 +34,41 @@ class SyncService {
     // uploads only process on the next connectivity *change*, so items queued
     // while already online would sit indefinitely.
     if (_queueBox.isNotEmpty) {
+      _dedupeWasteQueue();
       _processQueue();
+    }
+  }
+
+  /// Drops older duplicate Firestore queue entries (same collection/doc/op).
+  /// Photo/signature uploads are kept — each file path is unique.
+  void _dedupeWasteQueue() {
+    try {
+      if (!_queueBox.isOpen) return;
+      final seen = <String, SyncQueueItem>{};
+      final toDelete = <SyncQueueItem>[];
+      for (final item in _queueBox.values.toList()) {
+        if (!item.collection.startsWith('waste_')) continue;
+        if (item.collection == 'waste_photos' ||
+            item.collection == 'waste_signatures') {
+          continue;
+        }
+        final key = '${item.collection}:${item.id}:${item.operation}';
+        final existing = seen[key];
+        if (existing == null) {
+          seen[key] = item;
+        } else if (item.createdAt.isAfter(existing.createdAt)) {
+          toDelete.add(existing);
+          seen[key] = item;
+        } else {
+          toDelete.add(item);
+        }
+      }
+      for (final item in toDelete) {
+        item.delete();
+        debugPrint('🗑️ Pruned duplicate queue entry: ${item.collection}/${item.id}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ _dedupeWasteQueue error (safe no-op): $e');
     }
   }
 
@@ -120,9 +154,13 @@ class SyncService {
             if (item.operation == 'create' ||
                 item.operation == 'update' ||
                 item.operation == 'set') {
+              final merge = item.operation == 'update' ||
+                  item.operation == 'set' ||
+                  (item.collection == Collections.wasteLoads &&
+                      (item.operation == 'create' || item.operation == 'set'));
               await docRef.set(
                 payload,
-                SetOptions(merge: item.operation == 'update'),
+                SetOptions(merge: merge),
               );
               if (item.collection == Collections.wasteLoads &&
                   (item.operation == 'set' || item.operation == 'create')) {
@@ -519,8 +557,13 @@ class SyncService {
                 succeeded = true;
               } else {
                 final docRef = FirebaseFirestore.instance.collection(item.collection).doc(item.id);
-                if (item.operation == 'create' || item.operation == 'update') {
-                  await docRef.set(item.data, SetOptions(merge: true));
+                final payload = item.collection == Collections.wasteStock
+                    ? _restoreFirestoreTimestamps(item.data)
+                    : item.data;
+                if (item.operation == 'create' ||
+                    item.operation == 'update' ||
+                    item.operation == 'set') {
+                  await docRef.set(payload, SetOptions(merge: true));
                 } else if (item.operation == 'delete') {
                   await docRef.delete();
                 }
@@ -528,7 +571,9 @@ class SyncService {
               }
             } else {
               final docRef = FirebaseFirestore.instance.collection(item.collection).doc(item.id);
-              if (item.operation == 'create' || item.operation == 'update') {
+              if (item.operation == 'create' ||
+                  item.operation == 'update' ||
+                  item.operation == 'set') {
                 await docRef.set(item.data, SetOptions(merge: true));
               } else if (item.operation == 'delete') {
                 await docRef.delete();

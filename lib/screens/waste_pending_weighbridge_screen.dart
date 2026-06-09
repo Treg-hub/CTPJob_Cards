@@ -140,9 +140,13 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                             Icon(Icons.check_circle, size: 64, color: Theme.of(context).appColors.wasteGreen),
                             const SizedBox(height: 16),
-                            const Text('No outstanding weighbridge entries.', textAlign: TextAlign.center),
+                            const Text('No loads awaiting weighbridge documents.', textAlign: TextAlign.center),
                             const SizedBox(height: 8),
-                            Text('Great job keeping weighbridge up to date!', style: TextStyle(color: Theme.of(context).appColors.textMuted)),
+                            Text(
+                              'Trucks leave site after loading. Enter the mailed off-site weighbridge ticket when it arrives.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Theme.of(context).appColors.textMuted),
+                            ),
                           ]),
                         ),
                       )
@@ -257,7 +261,7 @@ class _WastePendingWeighbridgeScreenState extends ConsumerState<WastePendingWeig
                                           if (mounted) _loadPending();
                                         },
                                         icon: const Icon(Icons.scale, size: 16),
-                                        label: const Text('Enter Weighbridge Weight'),
+                                        label: const Text('Enter Weighbridge Document'),
                                         style: FilledButton.styleFrom(
                                           backgroundColor: Theme.of(context).appColors.wasteGreen,
                                           padding: const EdgeInsets.symmetric(vertical: 10),
