@@ -314,7 +314,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
     setState(() => _isLoading = true);
 
-    _loadsSubscription = _wasteService.watchLoads(limit: 20).listen(
+    _loadsSubscription = _wasteService.watchLoads(limit: 50).listen(
       (loads) {
         if (mounted) {
           setState(() {
@@ -326,8 +326,16 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
           });
         }
       },
-      onError: (_) {
-        if (mounted) setState(() => _isLoading = false);
+      onError: (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not load waste loads: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       },
     );
 

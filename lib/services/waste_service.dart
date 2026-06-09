@@ -136,10 +136,13 @@ class WasteService {
     });
   }
 
+  /// Live load list. Orders by [createdAt] so Pulse-created loads (which always
+  /// have that field) appear alongside mobile loads. [date_time] is used only for
+  /// display/filtering via [WasteLoad.fromFirestore] fallbacks.
   Stream<List<WasteLoad>> watchLoads({String? status, int limit = 50}) {
     Query query = _firestore
         .collection(Collections.wasteLoads)
-        .orderBy('date_time', descending: true)
+        .orderBy('createdAt', descending: true)
         .limit(limit);
 
     if (status != null) {
@@ -176,6 +179,7 @@ class WasteService {
       if (contractorName != null) 'contractor_name': contractorName,
       'main_waste_type': mainWasteType,
       'date_time': Timestamp.fromDate(scheduledFor),
+      'createdAt': FieldValue.serverTimestamp(),
       'scheduled_for': Timestamp.fromDate(scheduledFor),
       'scheduled_by': scheduledBy,
       'scheduled_by_name': scheduledByName,

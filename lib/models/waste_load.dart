@@ -123,7 +123,9 @@ class WasteLoad {
       id: doc.id,
       loadNumber: data['load_number'] as String? ?? '',
       mainWasteType: data['main_waste_type'] as String? ?? '',
-      dateTime: (data['date_time'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dateTime: (data['date_time'] as Timestamp?)?.toDate()
+          ?? (data['createdAt'] as Timestamp?)?.toDate()
+          ?? DateTime.now(),
       contractorId: data['contractor_id'] as String? ?? '',
       contractorName: data['contractor_name'] as String?,
       collectionCompanyId: data['collection_company_id'] as String?,
