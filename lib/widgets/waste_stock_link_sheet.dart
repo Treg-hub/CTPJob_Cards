@@ -9,6 +9,7 @@ class WasteStockLinkSheet extends StatefulWidget {
   const WasteStockLinkSheet({
     super.key,
     this.wasteType = 'Paper Waste',
+    this.subtypeFilter,
     this.initialSelectedIds = const [],
     this.title = 'Link on-site stock',
     this.subtitle =
@@ -16,6 +17,7 @@ class WasteStockLinkSheet extends StatefulWidget {
   });
 
   final String wasteType;
+  final Set<String>? subtypeFilter;
   final List<String> initialSelectedIds;
   final String title;
   final String subtitle;
@@ -23,6 +25,7 @@ class WasteStockLinkSheet extends StatefulWidget {
   static Future<List<String>?> show(
     BuildContext context, {
     String wasteType = 'Paper Waste',
+    Set<String>? subtypeFilter,
     List<String> initialSelectedIds = const [],
     String title = 'Link on-site stock',
     String? subtitle,
@@ -37,6 +40,7 @@ class WasteStockLinkSheet extends StatefulWidget {
         ),
         child: WasteStockLinkSheet(
           wasteType: wasteType,
+          subtypeFilter: subtypeFilter,
           initialSelectedIds: initialSelectedIds,
           title: title,
           subtitle: subtitle ??
@@ -70,8 +74,11 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
           .first
           .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
+        final filter = widget.subtypeFilter;
         setState(() {
-          _stock = items;
+          _stock = filter == null || filter.isEmpty
+              ? items
+              : items.where((i) => filter.contains(i.subtype)).toList();
           _loading = false;
         });
       }

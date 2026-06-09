@@ -12,6 +12,8 @@ import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/waste_stock_mapping.dart';
+import '../widgets/waste_stock_link_sheet.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
@@ -114,7 +116,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   List<Contractor> _contractors = [];
   List<WasteType> _wasteTypes = [];
   Contractor? _selectedContractor;
-  WasteType? _selectedType;
+  final Set<String> _selectedTypeIds = {};
   WasteSettings? _wasteSettings;
 
   // Items for this load (in-memory until save)
@@ -127,11 +129,17 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   bool _loadingStock = false;
 
   bool _isLoading = false;
-  bool get _isPaperWaste => _selectedType?.mainType == 'Paper Waste';
+  List<WasteType> get _selectedTypes => _availableTypes
+      .where((t) => t.id != null && _selectedTypeIds.contains(t.id))
+      .toList();
+  bool get _usesPaperStock =>
+      selectedChipsUsePaperStock(_selectedTypes, _wasteTypes);
   bool get _canSelectStock =>
       role_utils.isWasteAdmin(currentEmployee) ||
       role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-  bool get _showStockSection => _isPaperWaste && _canSelectStock;
+  bool get _showStockSection => _usesPaperStock && _canSelectStock;
+  List<WasteStockItem> get _filteredOnSiteStock =>
+      filterStockByChipSubtypes(_onSiteStock, _selectedTypes, _wasteTypes);
 
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
@@ -142,7 +150,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   void _onContractorChanged(Contractor? contractor) {
     setState(() {
       _selectedContractor = contractor;
-      _selectedType = null;
+      _selectedTypeIds.clear();
       _resetStockSelection();
       if (contractor == null) {
         _items.clear();
@@ -153,14 +161,38 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           .map((t) => t.mainType)
           .toSet();
       _items.removeWhere((item) => !allowed.contains(item.subtype));
-    });
-
-    final available = _availableTypes;
-    if (available.length == 1) {
-      setState(() => _selectedType = available.first);
-      if (available.first.mainType == 'Paper Waste') {
-        _loadOnSiteStock('Paper Waste');
+      for (final type in _availableTypes) {
+        if (type.id != null) _selectedTypeIds.add(type.id!);
       }
+    });
+    _refreshStockForSelection();
+  }
+
+  void _toggleWasteType(WasteType type) {
+    if (type.id == null) return;
+    setState(() {
+      if (_selectedTypeIds.contains(type.id)) {
+        _selectedTypeIds.remove(type.id);
+        _items.removeWhere((item) => item.subtype == type.mainType);
+        _pruneStockSelection();
+      } else {
+        _selectedTypeIds.add(type.id!);
+      }
+    });
+    _refreshStockForSelection();
+  }
+
+  void _pruneStockSelection() {
+    final visibleIds =
+        _filteredOnSiteStock.map((item) => item.id).whereType<String>().toSet();
+    _selectedStockIds.removeWhere((id) => !visibleIds.contains(id));
+  }
+
+  void _refreshStockForSelection() {
+    if (_showStockSection) {
+      _loadOnSiteStock(kPaperWasteStockParent);
+    } else {
+      _resetStockSelection();
     }
   }
 
@@ -206,6 +238,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         setState(() {
           _onSiteStock = stock;
           _loadingStock = false;
+          _pruneStockSelection();
         });
       }
     } catch (_) {
@@ -213,14 +246,76 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     }
   }
 
-  Future<void> _addItem() async {
-    final typeNames = _availableTypes.map((t) => t.mainType).toList();
-    if (typeNames.isEmpty) {
+  Future<void> _showAddItemOptions() async {
+    if (_selectedTypes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a contractor first to see available waste types.')),
+        const SnackBar(
+          content: Text('Select at least one waste type chip first.'),
+        ),
       );
       return;
     }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.layers_outlined),
+              title: const Text('Add from on-site stock'),
+              subtitle: Text(
+                _usesPaperStock
+                    ? 'Pick saved stock matching your selected types'
+                    : 'Not available for the selected waste types',
+              ),
+              enabled: _usesPaperStock,
+              onTap: _usesPaperStock
+                  ? () => Navigator.pop(ctx, 'stock')
+                  : null,
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Capture new item'),
+              subtitle: const Text('Take photos and enter weight for fresh material'),
+              onTap: () => Navigator.pop(ctx, 'new'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'stock') {
+      await _addItemsFromStock();
+    } else {
+      await _addNewItem();
+    }
+  }
+
+  Future<void> _addItemsFromStock() async {
+    final picked = await WasteStockLinkSheet.show(
+      context,
+      wasteType: kPaperWasteStockParent,
+      subtypeFilter: stockSubtypeFilterForChips(_selectedTypes, _wasteTypes),
+      initialSelectedIds: _selectedStockIds,
+      title: 'Add from on-site stock',
+      subtitle:
+          'Select saved stock for this load. Items already ticked above stay selected.',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedStockIds
+        ..clear()
+        ..addAll(picked);
+    });
+  }
+
+  Future<void> _addNewItem() async {
+    final typeNames =
+        itemSubtypeOptionsForChips(_selectedTypes, _wasteTypes);
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -252,9 +347,11 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       );
       return;
     }
-    if (_selectedType == null) {
+    if (_selectedTypes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a main waste type before saving.')),
+        const SnackBar(
+          content: Text('Select at least one waste type before saving.'),
+        ),
       );
       return;
     }
@@ -274,7 +371,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         loadData: {
           'contractor_id': _selectedContractor!.id,
           'contractor_name': _selectedContractor!.name,
-          'main_waste_type': _selectedType!.mainType,
+          'main_waste_type':
+              resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
           'paper_document_ref': _paperDocumentRef,
@@ -298,7 +396,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         final queuedOffline = result['queuedOffline'] == true;
         WasteLoad? newLoad;
         if (loadId != null && !queuedOffline) {
-          if (_isPaperWaste && _selectedStockIds.isNotEmpty) {
+          if (_usesPaperStock && _selectedStockIds.isNotEmpty) {
             await _wasteService.addStockItemsToLoad(
               loadId: loadId,
               stockIds: _selectedStockIds,
@@ -356,11 +454,13 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Center(child: CircularProgressIndicator()),
         )
-      else if (_onSiteStock.isEmpty)
+      else if (_filteredOnSiteStock.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Text(
-            'No stock currently on site.',
+            _onSiteStock.isEmpty
+                ? 'No stock currently on site.'
+                : 'No on-site stock matches the selected waste types.',
             style: TextStyle(
               fontSize: 13,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -372,9 +472,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           constraints: const BoxConstraints(maxHeight: 340),
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: _onSiteStock.length,
+            itemCount: _filteredOnSiteStock.length,
             itemBuilder: (_, i) {
-              final item = _onSiteStock[i];
+              final item = _filteredOnSiteStock[i];
               final id = item.id!;
               final selected = _selectedStockIds.contains(id);
               return GestureDetector(
@@ -526,11 +626,11 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             const SizedBox(height: 16),
 
             if (_selectedContractor != null) ...[
-              const Text('Main Waste Type *',
+              const Text('Waste Types *',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(
-                'Only waste types linked to this contractor are shown.',
+                'Select one or more types for this load. Stock and new items are filtered to your selection.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -554,21 +654,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _availableTypes.map((type) {
-                  final selected = _selectedType?.mainType == type.mainType;
-                  return ChoiceChip(
+                  final selected =
+                      type.id != null && _selectedTypeIds.contains(type.id);
+                  return FilterChip(
                     label: Text(type.mainType),
                     selected: selected,
-                    onSelected: (_) {
-                      setState(() {
-                        _selectedType = type;
-                        if (type.mainType != 'Paper Waste') {
-                          _resetStockSelection();
-                        }
-                      });
-                      if (type.mainType == 'Paper Waste') {
-                        _loadOnSiteStock(type.mainType);
-                      }
-                    },
+                    onSelected: (_) => _toggleWasteType(type),
                   );
                 }).toList(),
               ),
@@ -633,9 +724,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: _addItem,
+              onPressed: _showAddItemOptions,
               icon: const Icon(Icons.add),
-              label: const Text('Add Waste Item (with photo)'),
+              label: const Text('Add Waste Item'),
             ),
 
             if (_items.any((i) => i.photos.any((p) => p.startsWith('/'))))

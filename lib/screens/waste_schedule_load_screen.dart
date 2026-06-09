@@ -9,6 +9,7 @@ import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart';
+import '../utils/waste_stock_mapping.dart';
 import '../main.dart' show currentEmployee;
 
 /// Manager-facing screen: schedule an upcoming waste load before the truck arrives.
@@ -30,7 +31,7 @@ class _WasteScheduleLoadScreenState
   List<Contractor> _contractors = [];
   List<WasteType> _wasteTypes = [];
   Contractor? _selectedContractor;
-  WasteType? _selectedType;
+  final Set<String> _selectedTypeIds = {};
   DateTime _scheduledFor = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
@@ -91,33 +92,64 @@ class _WasteScheduleLoadScreenState
     return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
   }
 
+  List<WasteType> get _selectedTypes => _availableTypes
+      .where((t) => t.id != null && _selectedTypeIds.contains(t.id))
+      .toList();
+  bool get _usesPaperStock =>
+      selectedChipsUsePaperStock(_selectedTypes, _wasteTypes);
+  bool get _canSelectStock =>
+      isSecurityManager(currentEmployee, _wasteSettings) ||
+      isWasteAdmin(currentEmployee);
+  List<WasteStockItem> get _filteredOnSiteStock =>
+      filterStockByChipSubtypes(_onSiteStock, _selectedTypes, _wasteTypes);
+
   bool get _isValid =>
-      _selectedContractor != null &&
-      _selectedType != null;
+      _selectedContractor != null && _selectedTypes.isNotEmpty;
 
   void _onContractorChanged(Contractor? contractor) {
     setState(() {
       _selectedContractor = contractor;
-      _selectedType = null;
+      _selectedTypeIds.clear();
       _showStockSection = false;
       _onSiteStock = [];
       _selectedStockIds.clear();
-    });
-
-    final available = contractor == null
-        ? const <WasteType>[]
-        : _wasteTypes
-            .where((t) => contractor.wasteTypeIds.contains(t.id))
-            .toList();
-    if (available.length == 1) {
-      final only = available.first;
-      setState(() => _selectedType = only);
-      final canSelectStock =
-          isSecurityManager(currentEmployee, _wasteSettings) ||
-          isWasteAdmin(currentEmployee);
-      if (canSelectStock && only.mainType == 'Paper Waste') {
-        _loadOnSiteStock(only.mainType);
+      if (contractor != null) {
+        for (final type in _availableTypes) {
+          if (type.id != null) _selectedTypeIds.add(type.id!);
+        }
       }
+    });
+    _refreshStockForSelection();
+  }
+
+  void _toggleWasteType(WasteType type) {
+    if (type.id == null) return;
+    setState(() {
+      if (_selectedTypeIds.contains(type.id)) {
+        _selectedTypeIds.remove(type.id);
+        _pruneStockSelection();
+      } else {
+        _selectedTypeIds.add(type.id!);
+      }
+    });
+    _refreshStockForSelection();
+  }
+
+  void _pruneStockSelection() {
+    final visibleIds =
+        _filteredOnSiteStock.map((item) => item.id).whereType<String>().toSet();
+    _selectedStockIds.removeWhere((id) => !visibleIds.contains(id));
+  }
+
+  void _refreshStockForSelection() {
+    if (_canSelectStock && _usesPaperStock) {
+      _loadOnSiteStock(kPaperWasteStockParent);
+    } else {
+      setState(() {
+        _showStockSection = false;
+        _onSiteStock = [];
+        _selectedStockIds.clear();
+      });
     }
   }
 
@@ -151,7 +183,12 @@ class _WasteScheduleLoadScreenState
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
-        setState(() { _onSiteStock = pallets; _showStockSection = true; _loadingStock = false; });
+        setState(() {
+          _onSiteStock = pallets;
+          _showStockSection = true;
+          _loadingStock = false;
+          _pruneStockSelection();
+        });
       }
     } catch (_) {
       if (mounted) setState(() => _loadingStock = false);
@@ -167,7 +204,7 @@ class _WasteScheduleLoadScreenState
       await _wasteService.createScheduledLoad(
         contractorId: _selectedContractor!.id!,
         contractorName: _selectedContractor!.name,
-        mainWasteType: _selectedType!.mainType,
+        mainWasteType: resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
         scheduledFor: _scheduledFor,
         scheduledBy: employee?.clockNo ?? '',
         scheduledByName: employee?.name ?? '',
@@ -299,10 +336,10 @@ class _WasteScheduleLoadScreenState
                   const SizedBox(height: 20),
 
                   // ── Waste type (contractor-linked only) ───────
-                  Text('Main Waste Type *', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Waste Types *', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 4),
                   Text(
-                    'Only waste types linked to this contractor are shown.',
+                    'Select one or more types for this load. On-site stock is filtered to your selection.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -326,25 +363,12 @@ class _WasteScheduleLoadScreenState
                     spacing: 8,
                     runSpacing: 8,
                     children: _availableTypes.map((type) {
-                      final selected = _selectedType?.mainType == type.mainType;
-                      return ChoiceChip(
+                      final selected =
+                          type.id != null && _selectedTypeIds.contains(type.id);
+                      return FilterChip(
                         label: Text(type.mainType),
                         selected: selected,
-                        onSelected: (_) {
-                          setState(() => _selectedType = type);
-                          final canSelectPallets =
-                              isSecurityManager(currentEmployee, _wasteSettings) ||
-                              isWasteAdmin(currentEmployee);
-                          if (canSelectPallets && type.mainType == 'Paper Waste') {
-                            _loadOnSiteStock(type.mainType);
-                          } else {
-                            setState(() {
-                              _showStockSection = false;
-                              _onSiteStock = [];
-                              _selectedStockIds.clear();
-                            });
-                          }
-                        },
+                        onSelected: (_) => _toggleWasteType(type),
                       );
                     }).toList(),
                   ),
@@ -367,22 +391,26 @@ class _WasteScheduleLoadScreenState
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    else if (_onSiteStock.isEmpty)
+                    else if (_filteredOnSiteStock.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text('No stock currently on site.',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        child: Text(
+                          _onSiteStock.isEmpty
+                              ? 'No stock currently on site.'
+                              : 'No on-site stock matches the selected waste types.',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
                       )
                     else
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 340),
                         child: ListView.builder(
                           shrinkWrap: true,
-                          itemCount: _onSiteStock.length,
+                          itemCount: _filteredOnSiteStock.length,
                           itemBuilder: (_, i) {
-                            final item = _onSiteStock[i];
+                            final item = _filteredOnSiteStock[i];
                             final id = item.id!;
                             final selected = _selectedStockIds.contains(id);
                             return GestureDetector(

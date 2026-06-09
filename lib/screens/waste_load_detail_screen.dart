@@ -13,6 +13,7 @@ import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
@@ -69,7 +70,14 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
   bool get _isCompleted => _currentLoad.status == WasteLoadStatus.completed;
   bool get _canManageItems => _isAdmin || _isManager;
-  bool get _isPaperWaste => _currentLoad.mainWasteType == 'Paper Waste';
+  bool get _usesPaperStock =>
+      loadUsesPaperStock(_currentLoad.mainWasteType, _wasteTypes);
+
+  Set<String>? get _stockSubtypeFilter {
+    if (_currentLoad.mainWasteType == kPaperWasteStockParent) return null;
+    if (_usesPaperStock) return {_currentLoad.mainWasteType};
+    return null;
+  }
   bool get _isScheduled => _currentLoad.status == WasteLoadStatus.scheduled;
 
   /// Can a user delete a specific item?
@@ -286,6 +294,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (_currentLoad.id == null) return;
     final picked = await WasteStockLinkSheet.show(
       context,
+      wasteType: kPaperWasteStockParent,
+      subtypeFilter: _stockSubtypeFilter,
       initialSelectedIds: _currentLoad.selectedStockIds,
       title: _isScheduled ? 'Link stock for collection' : 'Select on-site stock',
       subtitle: _isScheduled
@@ -559,7 +569,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
           ),
 
-          if (_isPaperWaste && _canManageItems && !_isCompleted) ...[
+          if (_usesPaperStock && _canManageItems && !_isCompleted) ...[
             const SizedBox(height: 12),
             Card(
               child: Padding(

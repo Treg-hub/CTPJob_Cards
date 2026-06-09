@@ -19,6 +19,7 @@ import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_stock_inventory_screen.dart';
+import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../theme/app_theme.dart';
 
@@ -43,7 +44,7 @@ class _IncomingLoadCard extends StatelessWidget {
     DateTime editedDate = load.scheduledFor ?? load.dateTime;
     final notesCtrl = TextEditingController(text: load.scheduledNotes ?? '');
     var selectedStockIds = List<String>.from(load.selectedStockIds);
-    final isPaperWaste = load.mainWasteType == 'Paper Waste';
+    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, const []);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -106,7 +107,7 @@ class _IncomingLoadCard extends StatelessWidget {
                 ),
               ),
 
-              if (isPaperWaste && isManager) ...[
+              if (usesPaperStock && isManager) ...[
                 const SizedBox(height: 14),
                 const Text('On-site stock',
                     style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
@@ -115,6 +116,10 @@ class _IncomingLoadCard extends StatelessWidget {
                   onPressed: () async {
                     final picked = await WasteStockLinkSheet.show(
                       ctx,
+                      wasteType: kPaperWasteStockParent,
+                      subtypeFilter: load.mainWasteType == kPaperWasteStockParent
+                          ? null
+                          : {load.mainWasteType},
                       initialSelectedIds: selectedStockIds,
                     );
                     if (picked != null) {
@@ -151,7 +156,7 @@ class _IncomingLoadCard extends StatelessWidget {
                           'scheduled_notes': notesCtrl.text.trim().isEmpty
                               ? null
                               : notesCtrl.text.trim(),
-                          if (isPaperWaste && isManager)
+                          if (usesPaperStock && isManager)
                             'selected_stock_ids': selectedStockIds,
                         });
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -181,7 +186,7 @@ class _IncomingLoadCard extends StatelessWidget {
     final scheduledDate = load.scheduledFor ?? load.dateTime;
     final isToday = DateUtils.isSameDay(scheduledDate, DateTime.now());
     final isPast = scheduledDate.isBefore(DateTime.now());
-    final isPaperWaste = load.mainWasteType == 'Paper Waste';
+    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, const []);
 
     final appColors = Theme.of(context).appColors;
     final cardBg = isToday || isPast ? appColors.wasteGreenSurface : Theme.of(context).cardColor;
@@ -257,7 +262,7 @@ class _IncomingLoadCard extends StatelessWidget {
                 child: Text('Note: ${load.scheduledNotes}',
                     style: TextStyle(fontSize: 12, color: onCardColor)),
               ),
-            if (isPaperWaste && isManager) ...[
+            if (usesPaperStock && isManager) ...[
               const SizedBox(height: 4),
               Text(
                 load.selectedStockIds.isEmpty
@@ -293,7 +298,7 @@ class _IncomingLoadCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            if (isPaperWaste && isManager)
+            if (usesPaperStock && isManager)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: SizedBox(

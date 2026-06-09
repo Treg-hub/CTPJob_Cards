@@ -13,6 +13,7 @@ import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_app_bar.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import 'waste_signature_screen.dart';
@@ -114,12 +115,31 @@ class _WasteBeginCollectionScreenState
       _signatureBytes != null &&
       !_isSubmitting;
 
+  List<WasteType> get _contractorLinkedTypes {
+    final contractor = _contractors.firstWhere(
+      (c) => c.id == widget.load.contractorId,
+      orElse: () => const Contractor(name: ''),
+    );
+    if (contractor.id == null || contractor.wasteTypeIds.isEmpty) {
+      return _wasteTypes;
+    }
+    return _wasteTypes
+        .where((t) => contractor.wasteTypeIds.contains(t.id))
+        .toList();
+  }
+
+  bool get _usesPaperStock =>
+      loadUsesPaperStock(widget.load.mainWasteType, _wasteTypes);
+
   Future<void> _addFromStock() async {
-    if (widget.load.mainWasteType != 'Paper Waste') return;
+    if (!_usesPaperStock) return;
     final alreadyOnLoad =
         _items.where((i) => i.stockId != null).map((i) => i.stockId!).toSet();
     final picked = await WasteStockLinkSheet.show(
       context,
+      wasteType: kPaperWasteStockParent,
+      subtypeFilter:
+          stockSubtypeFilterForChips(_contractorLinkedTypes, _wasteTypes),
       initialSelectedIds: alreadyOnLoad.toList(),
       title: 'Add saved stock',
       subtitle:
@@ -158,7 +178,8 @@ class _WasteBeginCollectionScreenState
     final available = (contractor.id != null && contractor.wasteTypeIds.isNotEmpty)
         ? _wasteTypes.where((t) => contractor.wasteTypeIds.contains(t.id)).toList()
         : _wasteTypes;
-    final typeNames = available.map((t) => t.mainType).toList();
+    final typeNames =
+        itemSubtypeOptionsForChips(available, _wasteTypes);
 
     final result = await showModalBottomSheet<_ItemEntry>(
       context: context,
@@ -367,7 +388,7 @@ class _WasteBeginCollectionScreenState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (widget.load.mainWasteType == 'Paper Waste')
+                    if (_usesPaperStock)
                       TextButton.icon(
                         onPressed: _addFromStock,
                         icon: const Icon(Icons.layers_outlined, size: 18),
@@ -382,11 +403,11 @@ class _WasteBeginCollectionScreenState
                 ),
               ],
             ),
-            if (widget.load.mainWasteType == 'Paper Waste')
+            if (_usesPaperStock)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Saved stock from Paper Stock appears automatically when pre-linked. '
+                  'Saved stock appears automatically when pre-linked. '
                   'Add more saved stock or capture fresh items with new photos.',
                   style: TextStyle(
                     fontSize: 12,
