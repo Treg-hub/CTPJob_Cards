@@ -376,21 +376,56 @@ class WasteService {
 
   /// Soft-deletes a waste_item. If the item originated from a stock item
   /// (sourceStockId set), the corresponding waste_stock item is reverted to on_site.
+  /// Also subtracts the item weight from the parent load's recorded_weight_kg.
   Future<void> deleteWasteItem(String itemId, {String? sourceStockId}) async {
-    await _firestore
-        .collection(Collections.wasteItems)
-        .doc(itemId)
-        .update({'is_deleted': true, 'updatedAt': FieldValue.serverTimestamp()});
+    final itemSnap =
+        await _firestore.collection(Collections.wasteItems).doc(itemId).get();
+    final data = itemSnap.data();
+    if (data == null) return;
 
-    if (sourceStockId != null) {
-      await _firestore
-          .collection(Collections.wasteStock)
-          .doc(sourceStockId)
-          .update({
+    final loadId = data['load_id'] as String?;
+    final weightKg = (data['weight_kg'] as num?)?.toDouble() ?? 0.0;
+    final stockId = sourceStockId ?? data['source_stock_id'] as String?;
+
+    await _firestore.collection(Collections.wasteItems).doc(itemId).update({
+      'is_deleted': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (loadId != null && weightKg > 0) {
+      final loadSnap =
+          await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
+      final currentRecorded =
+          (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final nextRecorded = (currentRecorded - weightKg).clamp(0.0, double.infinity);
+      await updateLoad(loadId, {'recorded_weight_kg': nextRecorded});
+    }
+
+    if (stockId != null) {
+      await _firestore.collection(Collections.wasteStock).doc(stockId).update({
         'status': WasteStockStatus.onSite.value,
         'load_id': FieldValue.delete(),
         'updated_at': FieldValue.serverTimestamp(),
       });
+    }
+  }
+
+  /// Removes a single photo URL from a waste_item and best-effort deletes the Storage object.
+  Future<void> removePhotoFromWasteItem({
+    required String itemId,
+    required String photoUrl,
+  }) async {
+    await _firestore.collection(Collections.wasteItems).doc(itemId).update({
+      'photos': FieldValue.arrayRemove([photoUrl]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (_isRemotePhotoUrl(photoUrl)) {
+      try {
+        await _storage.refFromURL(photoUrl).delete();
+      } catch (_) {
+        // Storage file may already be gone; Firestore update is authoritative.
+      }
     }
   }
 

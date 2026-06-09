@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/waste_load.dart';
 import '../models/waste_item.dart';
@@ -194,6 +195,48 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _removePhoto(WasteItem item, String photoUrl) async {
+    if (item.id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Photo?'),
+        content: Text(
+          'Remove this photo from "${item.subtype}"? '
+          'The image will be deleted from storage.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _wasteService.removePhotoFromWasteItem(
+        itemId: item.id!,
+        photoUrl: photoUrl,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo removed'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove photo: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -497,7 +540,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                           ...items.map((item) => _ItemRow(
                             item: item,
                             canDelete: _canDelete(item),
+                            canRemovePhotos: _canDelete(item),
                             onDelete: () => _deleteItem(item),
+                            onRemovePhoto: (url) => _removePhoto(item, url),
                           )),
                         ],
                       ],
@@ -802,64 +847,139 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 // ---------------------------------------------------------------------------
 
 class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item, required this.canDelete, required this.onDelete});
+  const _ItemRow({
+    required this.item,
+    required this.canDelete,
+    required this.canRemovePhotos,
+    required this.onDelete,
+    required this.onRemovePhoto,
+  });
 
   final WasteItem item;
   final bool canDelete;
+  final bool canRemovePhotos;
   final VoidCallback onDelete;
+  final void Function(String photoUrl) onRemovePhoto;
 
   @override
   Widget build(BuildContext context) {
+    final remotePhotos = item.photos
+        .where((p) => p.startsWith('http://') || p.startsWith('https://'))
+        .toList();
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.delete_outline, size: 16, color: Theme.of(context).appColors.wasteGreen),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.delete_outline, size: 16, color: Theme.of(context).appColors.wasteGreen),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(item.subtype,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    ),
-                    if (item.sourceStockId != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).appColors.wasteGreenSurface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Theme.of(context).appColors.wasteGreen),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(item.subtype,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
-                        child: Text('Stock',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(context).appColors.wasteGreen,
-                                fontWeight: FontWeight.w600)),
-                      ),
+                        if (item.sourceStockId != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).appColors.wasteGreenSurface,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Theme.of(context).appColors.wasteGreen),
+                            ),
+                            child: Text('Stock',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: Theme.of(context).appColors.wasteGreen,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      '${item.weightKg.toStringAsFixed(1)} kg'
+                      '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
+                      '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+                    ),
                   ],
                 ),
-                Text(
-                  '${item.weightKg.toStringAsFixed(1)} kg'
-                  '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
-                  '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+              ),
+              if (canDelete)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  tooltip: 'Delete item',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: onDelete,
                 ),
-              ],
-            ),
+            ],
           ),
-          if (canDelete)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-              tooltip: 'Delete item',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: onDelete,
+          if (remotePhotos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: remotePhotos.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final url = remotePhotos[i];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: url,
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            width: 72,
+                            height: 72,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            width: 72,
+                            height: 72,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image, size: 20),
+                          ),
+                        ),
+                      ),
+                      if (canRemovePhotos)
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: GestureDetector(
+                            onTap: () => onRemovePhoto(url),
+                            child: const CircleAvatar(
+                              radius: 10,
+                              backgroundColor: Colors.red,
+                              child: Icon(Icons.close, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
+          ],
         ],
       ),
     );
