@@ -323,7 +323,7 @@ class _WasteScheduleLoadScreenState
                         style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'Select which items go on this truck. You can skip and record later.',
+                      'Select saved stock now. The guard can add more saved stock or fresh items when the truck arrives.',
                       style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant),

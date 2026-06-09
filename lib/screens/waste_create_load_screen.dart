@@ -7,8 +7,11 @@ import '../services/waste_service.dart';
 import '../models/contractor.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
+import '../models/waste_settings.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
+import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
@@ -111,12 +114,24 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   List<Contractor> _contractors = [];
   List<WasteType> _wasteTypes = [];
   Contractor? _selectedContractor;
+  WasteType? _selectedType;
+  WasteSettings? _wasteSettings;
 
   // Items for this load (in-memory until save)
   final List<WasteItem> _items = [];
   double get _totalWeight => _items.fold(0.0, (sum, item) => sum + item.weightKg);
 
+  // On-site stock (Paper Waste — same UX as Schedule Load)
+  List<WasteStockItem> _onSiteStock = [];
+  final List<String> _selectedStockIds = [];
+  bool _showStockSection = false;
+  bool _loadingStock = false;
+
   bool _isLoading = false;
+  bool get _isPaperWaste => _selectedType?.mainType == 'Paper Waste';
+  bool get _canSelectStock =>
+      role_utils.isSecurityManager(currentEmployee, _wasteSettings) ||
+      role_utils.isWasteAdmin(currentEmployee);
 
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
@@ -128,6 +143,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _wasteService.getWasteSettings().then((s) {
+      if (mounted) setState(() => _wasteSettings = s);
+    });
   }
 
   Future<void> _loadData() async {
@@ -141,6 +159,35 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  void _resetStockSelection() {
+    _showStockSection = false;
+    _onSiteStock = [];
+    _selectedStockIds.clear();
+  }
+
+  Future<void> _loadOnSiteStock(String wasteType) async {
+    setState(() {
+      _loadingStock = true;
+      _onSiteStock = [];
+      _selectedStockIds.clear();
+    });
+    try {
+      final stock = await _wasteService
+          .watchStockOnSite(wasteType)
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      if (mounted) {
+        setState(() {
+          _onSiteStock = stock;
+          _showStockSection = true;
+          _loadingStock = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingStock = false);
+    }
   }
 
   Future<void> _addItem() async {
@@ -182,9 +229,17 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       );
       return;
     }
-    if (_items.isEmpty) {
+    if (_selectedType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one waste item before saving.')),
+        const SnackBar(content: Text('Select a main waste type before saving.')),
+      );
+      return;
+    }
+    if (_items.isEmpty && _selectedStockIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add at least one waste item or select on-site stock.'),
+        ),
       );
       return;
     }
@@ -196,6 +251,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         loadData: {
           'contractor_id': _selectedContractor!.id,
           'contractor_name': _selectedContractor!.name,
+          'main_waste_type': _selectedType!.mainType,
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
           'paper_document_ref': _paperDocumentRef,
@@ -219,6 +275,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         final queuedOffline = result['queuedOffline'] == true;
         WasteLoad? newLoad;
         if (loadId != null && !queuedOffline) {
+          if (_isPaperWaste && _selectedStockIds.isNotEmpty) {
+            await _wasteService.addStockItemsToLoad(
+              loadId: loadId,
+              stockIds: _selectedStockIds,
+            );
+          }
           newLoad = await _wasteService.getLoad(loadId);
         }
         if (!mounted) return;
@@ -291,10 +353,43 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                   : _contractors.map((c) => DropdownMenuItem<Contractor?>(value: c, child: Text(c.name))).toList(),
               onChanged: _contractors.isEmpty
                   ? null
-                  : (c) => setState(() => _selectedContractor = c),
+                  : (c) => setState(() {
+                      _selectedContractor = c;
+                      _selectedType = null;
+                      _resetStockSelection();
+                    }),
               decoration: const InputDecoration(labelText: 'Contractor *'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+
+            if (_selectedContractor != null) ...[
+              const Text('Main Waste Type *',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableTypes.map((type) {
+                  final selected = _selectedType?.mainType == type.mainType;
+                  return ChoiceChip(
+                    label: Text(type.mainType),
+                    selected: selected,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedType = type;
+                        if (!(_canSelectStock && type.mainType == 'Paper Waste')) {
+                          _resetStockSelection();
+                        }
+                      });
+                      if (_canSelectStock && type.mainType == 'Paper Waste') {
+                        _loadOnSiteStock(type.mainType);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             TextFormField(
               decoration: const InputDecoration(labelText: 'Driver Name *'),
@@ -357,6 +452,116 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Add Waste Item (with photo)'),
             ),
+
+            if (_showStockSection) ...[
+              const SizedBox(height: 20),
+              const Text('On-Site Stock (optional)',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Tick saved stock from Paper Stock. Use “Add Waste Item” above for extra material captured on the spot (new photos).',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_loadingStock)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_onSiteStock.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'No stock currently on site.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 340),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _onSiteStock.length,
+                    itemBuilder: (_, i) {
+                      final item = _onSiteStock[i];
+                      final id = item.id!;
+                      final selected = _selectedStockIds.contains(id);
+                      return GestureDetector(
+                        onTap: () => setState(() => selected
+                            ? _selectedStockIds.remove(id)
+                            : _selectedStockIds.add(id)),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).dividerColor,
+                              width: selected ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            color: selected
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer
+                                    .withAlpha(60)
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: selected,
+                                onChanged: (v) => setState(() => v!
+                                    ? _selectedStockIds.add(id)
+                                    : _selectedStockIds.remove(id)),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.subtype,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        if (item.estimatedWeightKg != null)
+                                          '~${formatSAWeight(item.estimatedWeightKg!)}',
+                                        formatSADate(item.createdAt),
+                                      ].join(' · '),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
 
             if (_items.any((i) => i.photos.any((p) => p.startsWith('/'))))
               Container(

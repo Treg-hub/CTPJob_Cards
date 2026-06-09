@@ -20,6 +20,10 @@ class SyncService {
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
+  /// Public Hive-safe sanitizer for offline queue payloads.
+  static Map<String, dynamic> sanitizeForHive(Map<String, dynamic> data) =>
+      _sanitizeForHive(data);
+
   late final Box<SyncQueueItem> _queueBox;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
@@ -110,17 +114,40 @@ class SyncService {
             await _processWasteSignatureUpload(item);
           } else {
             final docRef = firestore.collection(item.collection).doc(item.id);
+            final payload = item.collection == Collections.wasteStock
+                ? _restoreFirestoreTimestamps(item.data)
+                : item.data;
             if (item.operation == 'create' ||
                 item.operation == 'update' ||
                 item.operation == 'set') {
               await docRef.set(
-                item.data,
+                payload,
                 SetOptions(merge: item.operation == 'update'),
               );
               if (item.collection == Collections.wasteLoads &&
                   (item.operation == 'set' || item.operation == 'create')) {
                 await _assignWasteLoadNumberIfNeeded(item.id, item.data);
               }
+            } else if (item.operation == 'delete') {
+              await docRef.delete();
+            }
+          }
+        } else if (item.collection.startsWith('fleet_')) {
+          if (item.collection == 'fleet_photos' && item.operation == 'upload') {
+            await _processFleetPhotoUpload(item);
+          } else if (item.collection == Collections.fleetWorkRecords &&
+              item.operation == 'create_cf') {
+            await _processFleetWorkRecordCreate(item);
+          } else {
+            final docRef = firestore.collection(item.collection).doc(item.id);
+            final payload = _restoreFirestoreTimestamps(item.data);
+            if (item.operation == 'create' ||
+                item.operation == 'update' ||
+                item.operation == 'set') {
+              await docRef.set(
+                payload,
+                SetOptions(merge: item.operation == 'update'),
+              );
             } else if (item.operation == 'delete') {
               await docRef.delete();
             }
@@ -527,5 +554,164 @@ class SyncService {
       debugPrint('⚠️ retrySpecificQueuedWasteItem error: $e');
       return false;
     }
+  }
+
+  int getQueuedFleetOperationCount() {
+    try {
+      if (!_queueBox.isOpen) return 0;
+      return _queueBox.values
+          .where((item) => item.collection.startsWith('fleet_'))
+          .length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> removeQueuedItem({
+    required String collection,
+    required String documentId,
+  }) async {
+    try {
+      if (!_queueBox.isOpen) return;
+      for (final item in _queueBox.values.toList()) {
+        if (item.collection == collection && item.id == documentId) {
+          await item.delete();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ removeQueuedItem error: $e');
+    }
+  }
+
+  static Map<String, dynamic> _restoreFirestoreTimestamps(
+    Map<String, dynamic> data,
+  ) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key == 'created_at' ||
+          key == 'createdAt' ||
+          key == 'updated_at' ||
+          key == 'updatedAt') {
+        if (value is String) {
+          result[key] = FieldValue.serverTimestamp();
+        } else {
+          result[key] = value;
+        }
+      } else if (value is Map<String, dynamic>) {
+        result[key] = _restoreFirestoreTimestamps(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  Future<void> _processFleetPhotoUpload(SyncQueueItem item) async {
+    final data = item.data;
+    final localPath = data['localPath'] as String?;
+    final targetKind = data['targetKind'] as String?;
+    final targetId = data['targetId'] as String?;
+
+    if (localPath == null || targetKind == null || targetId == null) {
+      debugPrint('⚠️ Invalid fleet_photos queue entry, skipping: ${item.id}');
+      return;
+    }
+
+    final file = File(localPath);
+    if (!file.existsSync()) {
+      debugPrint('⚠️ Fleet photo missing for queue item ${item.id}: $localPath');
+      return;
+    }
+
+    final collection = targetKind == 'work_record'
+        ? Collections.fleetWorkRecords
+        : Collections.fleetIssues;
+    final storageFolder = targetKind == 'work_record'
+        ? 'fleet_work_records/$targetId'
+        : 'fleet_issues/$targetId';
+    final fileName = '${const Uuid().v4()}.jpg';
+    final ref = FirebaseStorage.instance.ref('$storageFolder/photos/$fileName');
+    final snapshot = await ref.putFile(file);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    await FirebaseFirestore.instance.collection(collection).doc(targetId).update({
+      'photos': FieldValue.arrayUnion([downloadUrl]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    debugPrint('✅ Fleet photo synced → $collection/$targetId');
+  }
+
+  Future<void> _processFleetWorkRecordCreate(SyncQueueItem item) async {
+    final raw = Map<String, dynamic>.from(item.data);
+    final photoPaths =
+        (raw.remove('_pending_photo_paths') as List?)?.cast<String>() ?? [];
+    final partsRaw = raw.remove('_parts');
+    final linkedIssueIds =
+        (raw.remove('_linked_issue_ids') as List?)?.cast<String>() ?? [];
+    final resolverClock = raw.remove('_resolver_clock_no') as String? ?? '';
+    final resolverName = raw.remove('_resolver_name') as String? ?? '';
+
+    final callable = _functions.httpsCallable('createFleetWorkRecord');
+    final result = await callable.call(raw);
+    final resultData = Map<String, dynamic>.from(result.data as Map);
+    if (resultData['success'] != true) {
+      throw Exception(resultData['error'] ?? 'createFleetWorkRecord failed');
+    }
+    final recordId = resultData['id'] as String;
+
+    for (final path in photoPaths) {
+      final file = File(path);
+      if (!file.existsSync()) continue;
+      final fileName = '${const Uuid().v4()}.jpg';
+      final ref = FirebaseStorage.instance
+          .ref('fleet_work_records/$recordId/photos/$fileName');
+      final snapshot = await ref.putFile(file);
+      final url = await snapshot.ref.getDownloadURL();
+      await FirebaseFirestore.instance
+          .collection(Collections.fleetWorkRecords)
+          .doc(recordId)
+          .update({
+        'photos': FieldValue.arrayUnion([url]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (partsRaw is List && partsRaw.isNotEmpty) {
+      final partsRef = FirebaseFirestore.instance
+          .collection(Collections.fleetWorkRecords)
+          .doc(recordId)
+          .collection(Collections.fleetWorkParts);
+      final batch = FirebaseFirestore.instance.batch();
+      for (final part in partsRaw) {
+        if (part is Map) {
+          batch.set(partsRef.doc(), {
+            'part_name': part['part_name'],
+            if (part['quantity'] != null) 'quantity': part['quantity'],
+            'created_at': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      await batch.commit();
+    }
+
+    for (final issueId in linkedIssueIds) {
+      await FirebaseFirestore.instance
+          .collection(Collections.fleetIssues)
+          .doc(issueId)
+          .update({
+        'status': 'resolved',
+        'resolution_type': 'work_record',
+        'linked_work_record_id': recordId,
+        'resolved_by_clock_no': resolverClock,
+        'resolved_by_name': resolverName,
+        'resolved_at': FieldValue.serverTimestamp(),
+      });
+    }
+
+    debugPrint('✅ Fleet work record synced via CF → $recordId');
   }
 }

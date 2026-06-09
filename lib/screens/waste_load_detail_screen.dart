@@ -19,6 +19,7 @@ import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 import '../services/connectivity_service.dart';
 import '../constants/collections.dart';
+import '../widgets/waste_stock_link_sheet.dart';
 
 /// View / edit a single Waste Load.
 /// Supports weighbridge entry, deviation display, item deletion (role-gated),
@@ -68,6 +69,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
   bool get _isCompleted => _currentLoad.status == WasteLoadStatus.completed;
   bool get _canManageItems => _isAdmin || _isManager;
+  bool get _isPaperWaste => _currentLoad.mainWasteType == 'Paper Waste';
+  bool get _isScheduled => _currentLoad.status == WasteLoadStatus.scheduled;
 
   /// Can a user delete a specific item?
   bool _canDelete(WasteItem item) {
@@ -276,6 +279,66 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
         );
       }
+    }
+  }
+
+  Future<void> _linkStockToLoad() async {
+    if (_currentLoad.id == null) return;
+    final picked = await WasteStockLinkSheet.show(
+      context,
+      initialSelectedIds: _currentLoad.selectedStockIds,
+      title: _isScheduled ? 'Link stock for collection' : 'Select on-site stock',
+      subtitle: _isScheduled
+          ? 'The guard will see these items when they start collection.'
+          : 'Choose stock items to add to this load.',
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _isSaving = true);
+    try {
+      if (_isScheduled) {
+        await _wasteService.updateLoadSelectedStock(_currentLoad.id!, picked);
+        setState(() {
+          _currentLoad = _currentLoad.copyWith(selectedStockIds: picked);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                picked.isEmpty
+                    ? 'Stock links cleared'
+                    : '${picked.length} stock item${picked.length == 1 ? '' : 's'} linked',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        final added = await _wasteService.addStockItemsToLoad(
+          loadId: _currentLoad.id!,
+          stockIds: picked,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                added > 0
+                    ? '$added stock item${added == 1 ? '' : 's'} added to load'
+                    : 'No on-site stock items were added',
+              ),
+              backgroundColor: added > 0 ? Colors.green : Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -495,6 +558,44 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
               ),
             ),
           ),
+
+          if (_isPaperWaste && _canManageItems && !_isCompleted) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('On-Site Stock',
+                        style:
+                            TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isScheduled
+                          ? '${_currentLoad.selectedStockIds.length} item${_currentLoad.selectedStockIds.length == 1 ? '' : 's'} linked for guard collection.'
+                          : 'Add recorded Paper Waste stock directly to this load.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _isSaving ? null : _linkStockToLoad,
+                        icon: const Icon(Icons.layers_outlined, size: 18),
+                        label: Text(_isScheduled
+                            ? 'Manage linked stock'
+                            : 'Add from on-site stock'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           // ── Items section ─────────────────────────────────
           const SizedBox(height: 12),

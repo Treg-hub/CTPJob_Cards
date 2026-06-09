@@ -61,12 +61,33 @@ class _WasteStockInventoryScreenState
           : null,
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Text(
+              'To use stock on a load: Schedule a Paper Waste load and link items, '
+              'or open an existing scheduled/active load → On-Site Stock.',
+              style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+            ),
+          ),
           _StockSummaryCard(wasteService: _wasteService, wasteType: widget.wasteType),
           Expanded(
             child: StreamBuilder<List<WasteStockItem>>(
               stream: _wasteService.watchStockOnSite(widget.wasteType),
               builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
+                if (snap.hasError) {
+                  return _QueryErrorState(
+                    onRetry: () => setState(() {}),
+                  );
+                }
+                if (snap.connectionState == ConnectionState.waiting &&
+                    !snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final items = snap.data ?? [];
@@ -309,6 +330,34 @@ class _StatusBadge extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Empty state
 // ---------------------------------------------------------------------------
+
+class _QueryErrorState extends StatelessWidget {
+  const _QueryErrorState({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final appColors = Theme.of(context).appColors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 48, color: appColors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load stock items',
+              style: TextStyle(fontSize: 15, color: appColors.textMuted),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.wasteType});

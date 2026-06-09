@@ -14,6 +14,7 @@ import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
+import '../widgets/waste_stock_link_sheet.dart';
 import 'waste_signature_screen.dart';
 
 /// Guard-facing screen: complete a collection on a [scheduled] load.
@@ -112,6 +113,42 @@ class _WasteBeginCollectionScreenState
       _items.every((i) => i.photoPaths.isNotEmpty) &&
       _signatureBytes != null &&
       !_isSubmitting;
+
+  Future<void> _addFromStock() async {
+    if (widget.load.mainWasteType != 'Paper Waste') return;
+    final alreadyOnLoad =
+        _items.where((i) => i.stockId != null).map((i) => i.stockId!).toSet();
+    final picked = await WasteStockLinkSheet.show(
+      context,
+      initialSelectedIds: alreadyOnLoad.toList(),
+      title: 'Add saved stock',
+      subtitle:
+          'Select on-site stock to include. Pre-linked items are already listed — add any extra stock found at the gate.',
+    );
+    if (picked == null || !mounted) return;
+
+    final newIds =
+        picked.where((id) => !alreadyOnLoad.contains(id)).toList();
+    if (newIds.isEmpty) return;
+
+    try {
+      final stocks = await _wasteService.getStockItemsByIds(newIds);
+      if (!mounted) return;
+      setState(() {
+        for (final stock in stocks) {
+          if (stock.id != null && stock.status == WasteStockStatus.onSite) {
+            _items.add(_ItemEntry.fromStock(stock));
+          }
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load stock: $e')),
+        );
+      }
+    }
+  }
 
   Future<void> _addItem() async {
     final contractor = _contractors.firstWhere(
@@ -327,13 +364,36 @@ class _WasteBeginCollectionScreenState
               children: [
                 Text('Waste Items (${_items.length})',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                TextButton.icon(
-                  onPressed: _addItem,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Item'),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.load.mainWasteType == 'Paper Waste')
+                      TextButton.icon(
+                        onPressed: _addFromStock,
+                        icon: const Icon(Icons.layers_outlined, size: 18),
+                        label: const Text('From stock'),
+                      ),
+                    TextButton.icon(
+                      onPressed: _addItem,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Fresh item'),
+                    ),
+                  ],
                 ),
               ],
             ),
+            if (widget.load.mainWasteType == 'Paper Waste')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Saved stock from Paper Stock appears automatically when pre-linked. '
+                  'Add more saved stock or capture fresh items with new photos.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
 
             if (_loadingPrelinked)
               const Padding(

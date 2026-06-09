@@ -1271,20 +1271,188 @@ class WasteService {
     return (id: stockId, queuedOffline: queuedOffline);
   }
 
+  /// Updates an on-site stock item (subtype, weight, notes, photos). Offline-first.
+  Future<({bool queuedOffline})> updateStockItem({
+    required String stockId,
+    required String subtype,
+    double? estimatedWeightKg,
+    String? notes,
+    required List<String> keptPhotoUrls,
+    required List<String> newLocalPhotoPaths,
+    List<String> removedPhotoUrls = const [],
+  }) async {
+    final online = await _checkOnline();
+    final photoUrls = List<String>.from(keptPhotoUrls);
+
+    if (online) {
+      for (final path in newLocalPhotoPaths) {
+        try {
+          final url = await uploadWastePhoto(
+            localPath: path,
+            wasteRef: 'waste_stock/$stockId',
+          ).timeout(_photoUploadTimeout);
+          photoUrls.add(url);
+        } catch (_) {
+          await queueOfflineWastePhoto(
+            localPath: path,
+            loadId: stockId,
+            itemId: stockId,
+            targetCollection: Collections.wasteStock,
+          );
+        }
+      }
+    } else {
+      await _queueStockPhotos(
+        stockId: stockId,
+        localPhotoPaths: newLocalPhotoPaths,
+      );
+    }
+
+    for (final url in removedPhotoUrls) {
+      if (_isRemotePhotoUrl(url)) {
+        try {
+          await _storage.refFromURL(url).delete();
+        } catch (_) {}
+      }
+    }
+
+    final now = DateTime.now();
+    final patch = {
+      'subtype': subtype,
+      'estimated_weight_kg': estimatedWeightKg,
+      'notes': notes,
+      'photos': photoUrls,
+      'updated_at': online ? FieldValue.serverTimestamp() : Timestamp.fromDate(now),
+    };
+
+    final queueData = {
+      'subtype': subtype,
+      if (estimatedWeightKg != null) 'estimated_weight_kg': estimatedWeightKg,
+      if (notes != null) 'notes': notes,
+      'photos': photoUrls,
+      'updated_at': now.toIso8601String(),
+    };
+
+    await SyncService().addToQueue(
+      collection: Collections.wasteStock,
+      operation: 'update',
+      data: queueData,
+      documentId: stockId,
+    );
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        await _firestore
+            .collection(Collections.wasteStock)
+            .doc(stockId)
+            .update(patch)
+            .timeout(_firestoreWriteTimeout);
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (queuedOffline: queuedOffline);
+  }
+
+  /// Soft-deletes an on-site stock item (admin only in UI). Best-effort Storage cleanup.
+  Future<void> softDeleteStockItem({
+    required String stockId,
+    List<String> photoUrls = const [],
+  }) async {
+    await _firestore.collection(Collections.wasteStock).doc(stockId).update({
+      'is_deleted': true,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+    for (final url in photoUrls) {
+      if (_isRemotePhotoUrl(url)) {
+        try {
+          await _storage.refFromURL(url).delete();
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Streams all non-deleted on-site stock items for a given waste type, newest first.
+  ///
+  /// Uses a single-field Firestore filter (`waste_type`) and applies
+  /// `is_deleted` / `status` / sort client-side so we don't depend on a
+  /// 4-field composite index that may not be deployed yet.
   Stream<List<WasteStockItem>> watchStockOnSite(String wasteType) {
     return _firestore
         .collection(Collections.wasteStock)
-        .where('is_deleted', isEqualTo: false)
         .where('waste_type', isEqualTo: wasteType)
-        .where('status', isEqualTo: WasteStockStatus.onSite.value)
-        .orderBy('created_at', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(WasteStockItem.fromFirestore).toList())
-        .handleError((_) => <WasteStockItem>[]);
+        .map(_filterOnSiteStockDocs)
+        .transform(
+          StreamTransformer<List<WasteStockItem>, List<WasteStockItem>>.fromHandlers(
+            handleData: (data, sink) => sink.add(data),
+            handleError: (error, stackTrace, sink) {
+              debugPrint('watchStockOnSite error: $error');
+              sink.add(<WasteStockItem>[]);
+            },
+          ),
+        );
+  }
+
+  List<WasteStockItem> _filterOnSiteStockDocs(QuerySnapshot<Map<String, dynamic>> snap) {
+    final items = <WasteStockItem>[];
+    for (final doc in snap.docs) {
+      try {
+        final item = WasteStockItem.fromFirestore(doc);
+        if (!item.isDeleted && item.status == WasteStockStatus.onSite) {
+          items.add(item);
+        }
+      } catch (e, st) {
+        debugPrint('Skipping waste_stock ${doc.id}: $e\n$st');
+      }
+    }
+    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items;
   }
 
   /// Links stock items to a load by updating their status to loaded in a single batch.
+  /// Persists pre-linked stock IDs on a load (guard sees them at collection).
+  Future<void> updateLoadSelectedStock(
+    String loadId,
+    List<String> stockIds,
+  ) async {
+    await updateLoad(loadId, {'selected_stock_ids': stockIds});
+  }
+
+  /// Adds on-site stock items to a load as waste_items and marks stock loaded.
+  Future<int> addStockItemsToLoad({
+    required String loadId,
+    required List<String> stockIds,
+  }) async {
+    if (stockIds.isEmpty) return 0;
+    final stocks = await getStockItemsByIds(stockIds);
+    final loadedIds = <String>[];
+    for (final stock in stocks) {
+      if (stock.id == null ||
+          stock.isDeleted ||
+          stock.status != WasteStockStatus.onSite) {
+        continue;
+      }
+      final weight = stock.estimatedWeightKg ?? 0;
+      await addItemToExistingLoad(
+        loadId: loadId,
+        subtype: stock.subtype,
+        weightKg: weight > 0 ? weight : 0,
+        notes: stock.notes,
+        localPhotoPaths: stock.photos,
+        sourceStockId: stock.id,
+      );
+      loadedIds.add(stock.id!);
+    }
+    if (loadedIds.isNotEmpty) {
+      await markStockLoaded(loadedIds, loadId);
+    }
+    return loadedIds.length;
+  }
+
   Future<void> markStockLoaded(List<String> stockIds, String loadId) async {
     if (stockIds.isEmpty) return;
     final online = await _checkOnline();
@@ -1324,15 +1492,14 @@ class WasteService {
     try {
       final snap = await _firestore
           .collection(Collections.wasteStock)
-          .where('is_deleted', isEqualTo: false)
           .where('waste_type', isEqualTo: wasteType)
-          .where('status', isEqualTo: WasteStockStatus.onSite.value)
           .get();
-      final items = snap.docs.map(WasteStockItem.fromFirestore).toList();
+      final items = _filterOnSiteStockDocs(snap);
       final total = items.fold<double>(
         0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
       return (count: items.length, totalEstimatedKg: total);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('getStockSummary error: $e');
       return (count: 0, totalEstimatedKg: 0.0);
     }
   }

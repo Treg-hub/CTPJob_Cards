@@ -19,6 +19,7 @@ import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_stock_inventory_screen.dart';
+import '../widgets/waste_stock_link_sheet.dart';
 import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,8 @@ class _IncomingLoadCard extends StatelessWidget {
   Future<void> _showEditScheduleSheet(BuildContext context) async {
     DateTime editedDate = load.scheduledFor ?? load.dateTime;
     final notesCtrl = TextEditingController(text: load.scheduledNotes ?? '');
+    var selectedStockIds = List<String>.from(load.selectedStockIds);
+    final isPaperWaste = load.mainWasteType == 'Paper Waste';
 
     await showModalBottomSheet<void>(
       context: context,
@@ -103,6 +106,35 @@ class _IncomingLoadCard extends StatelessWidget {
                 ),
               ),
 
+              if (isPaperWaste && isManager) ...[
+                const SizedBox(height: 14),
+                const Text('On-site stock',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await WasteStockLinkSheet.show(
+                      ctx,
+                      initialSelectedIds: selectedStockIds,
+                    );
+                    if (picked != null) {
+                      setSheet(() => selectedStockIds = picked);
+                    }
+                  },
+                  icon: const Icon(Icons.layers_outlined, size: 18),
+                  label: Text(
+                    selectedStockIds.isEmpty
+                        ? 'Link stock items'
+                        : '${selectedStockIds.length} stock item${selectedStockIds.length == 1 ? '' : 's'} linked',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Linked items appear when the guard starts collection.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF757575)),
+                ),
+              ],
+
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -119,6 +151,8 @@ class _IncomingLoadCard extends StatelessWidget {
                           'scheduled_notes': notesCtrl.text.trim().isEmpty
                               ? null
                               : notesCtrl.text.trim(),
+                          if (isPaperWaste && isManager)
+                            'selected_stock_ids': selectedStockIds,
                         });
                         if (ctx.mounted) Navigator.pop(ctx);
                         onRefresh();
@@ -147,6 +181,7 @@ class _IncomingLoadCard extends StatelessWidget {
     final scheduledDate = load.scheduledFor ?? load.dateTime;
     final isToday = DateUtils.isSameDay(scheduledDate, DateTime.now());
     final isPast = scheduledDate.isBefore(DateTime.now());
+    final isPaperWaste = load.mainWasteType == 'Paper Waste';
 
     final appColors = Theme.of(context).appColors;
     final cardBg = isToday || isPast ? appColors.wasteGreenSurface : Theme.of(context).cardColor;
@@ -205,7 +240,7 @@ class _IncomingLoadCard extends StatelessWidget {
                       }
                     },
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit',   child: Text('Edit date & notes')),
+                      PopupMenuItem(value: 'edit',   child: Text('Edit schedule & stock')),
                       PopupMenuItem(value: 'cancel', child: Text('Cancel load')),
                     ],
                   ),
@@ -222,6 +257,23 @@ class _IncomingLoadCard extends StatelessWidget {
                 child: Text('Note: ${load.scheduledNotes}',
                     style: TextStyle(fontSize: 12, color: onCardColor)),
               ),
+            if (isPaperWaste && isManager) ...[
+              const SizedBox(height: 4),
+              Text(
+                load.selectedStockIds.isEmpty
+                    ? 'No on-site stock linked yet'
+                    : '${load.selectedStockIds.length} stock item${load.selectedStockIds.length == 1 ? '' : 's'} linked for collection',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: load.selectedStockIds.isEmpty
+                      ? appColors.textMuted
+                      : appColors.wasteGreen,
+                  fontWeight: load.selectedStockIds.isEmpty
+                      ? FontWeight.normal
+                      : FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             Row(
               children: [
@@ -241,6 +293,24 @@ class _IncomingLoadCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
+            if (isPaperWaste && isManager)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.layers_outlined, size: 18),
+                    label: Text(
+                      load.selectedStockIds.isEmpty
+                          ? 'Link on-site stock'
+                          : 'Manage linked stock (${load.selectedStockIds.length})',
+                    ),
+                    onPressed: () async {
+                      if (context.mounted) await _showEditScheduleSheet(context);
+                    },
+                  ),
+                ),
+              ),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(

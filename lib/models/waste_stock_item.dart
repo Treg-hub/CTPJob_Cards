@@ -69,25 +69,59 @@ class WasteStockItem {
     this.isDeleted = false,
   });
 
+  static DateTime _parseDate(dynamic value, {DateTime? fallback}) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) {
+      final parsed = DateTime.tryParse(
+        value.length == 10 ? '${value}T00:00:00' : value,
+      );
+      if (parsed != null) return parsed;
+    }
+    return fallback ?? DateTime.now();
+  }
+
+  static DateTime? _parseOptionalDate(dynamic value) {
+    if (value == null) return null;
+    return _parseDate(value, fallback: DateTime.now());
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static bool _parseBool(dynamic value, {bool defaultValue = false}) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is String) return value.toLowerCase() == 'true';
+    return defaultValue;
+  }
+
   factory WasteStockItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return WasteStockItem(
       id: doc.id,
-      wasteType: data['waste_type'] as String? ?? '',
+      wasteType: (data['waste_type'] ?? data['wasteType'] ?? '') as String,
       subtype: data['subtype'] as String? ?? '',
       photos: (data['photos'] as List<dynamic>?)
               ?.map((e) => e.toString())
+              .where((url) => url.isNotEmpty)
               .toList() ??
           const [],
-      estimatedWeightKg: (data['estimated_weight_kg'] as num?)?.toDouble(),
+      estimatedWeightKg: _parseDouble(
+        data['estimated_weight_kg'] ?? data['estimatedWeightKg'],
+      ),
       status: WasteStockStatus.fromString(data['status'] as String?),
-      loadId: data['load_id'] as String?,
-      createdBy: data['created_by'] as String? ?? '',
-      createdByName: data['created_by_name'] as String? ?? '',
-      createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (data['updated_at'] as Timestamp?)?.toDate(),
+      loadId: (data['load_id'] ?? data['loadId']) as String?,
+      createdBy: (data['created_by'] ?? data['createdBy'] ?? '') as String,
+      createdByName:
+          (data['created_by_name'] ?? data['createdByName'] ?? '') as String,
+      createdAt: _parseDate(data['created_at'] ?? data['createdAt']),
+      updatedAt: _parseOptionalDate(data['updated_at'] ?? data['updatedAt']),
       notes: data['notes'] as String?,
-      isDeleted: data['is_deleted'] as bool? ?? false,
+      isDeleted: _parseBool(data['is_deleted'] ?? data['isDeleted']),
     );
   }
 

@@ -29,7 +29,7 @@ class Collections {
   static const String feedback = 'feedback';
 
   // ----- Fleet Maintenance (fleet_ prefix) -----
-  // Hyster forklift & grab maintenance — integrated inside this app.
+  // Hyster machine maintenance (forks or grab attachments) — integrated inside this app.
   // See docs/COLLECTIONS.md for full schema.
   static const String fleetAssets = 'fleet_assets';
   static const String fleetIssues = 'fleet_issues';
