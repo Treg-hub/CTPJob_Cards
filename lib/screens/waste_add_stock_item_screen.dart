@@ -87,14 +87,21 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
         createdByName: currentEmployee?.name ?? '',
         createdAt: DateTime.now(),
       );
-      await _wasteService.addStockItem(item: item, localPhotoPaths: _photos);
+      final result = await _wasteService.addStockItem(
+        item: item,
+        localPhotoPaths: _photos,
+      );
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Stock item recorded'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(
+              result.queuedOffline
+                  ? 'Saved offline — will sync when connection returns'
+                  : 'Stock item recorded',
+            ),
+            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

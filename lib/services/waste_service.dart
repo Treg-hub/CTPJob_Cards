@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
+import 'connectivity_service.dart';
 import 'sync_service.dart';
 import '../models/contractor.dart';
 import '../models/waste_settings.dart';
@@ -1040,45 +1042,99 @@ class WasteService {
   // ON-SITE STOCK — pre-load stock tracking for any waste type
   // ---------------------------------------------------------------------------
 
-  /// Creates a new on-site waste stock item and uploads its photos.
-  /// Returns the Firestore document ID of the created stock item.
-  Future<String> addStockItem({
+  static const Duration _photoUploadTimeout = Duration(seconds: 12);
+  static const Duration _firestoreWriteTimeout = Duration(seconds: 8);
+
+  Future<void> _queueStockPhotos({
+    required String stockId,
+    required List<String> localPhotoPaths,
+  }) async {
+    for (final path in localPhotoPaths) {
+      await queueOfflineWastePhoto(
+        localPath: path,
+        loadId: stockId,
+        itemId: stockId,
+        targetCollection: Collections.wasteStock,
+      );
+    }
+  }
+
+  /// Creates a new on-site waste stock item.
+  ///
+  /// Offline-first: when there is no connectivity, photos and the stock doc are
+  /// queued immediately (no Storage/Firestore blocking). When online, uploads
+  /// use short timeouts so weak signal falls back to the queue instead of hanging.
+  ///
+  /// Returns the stock document ID and whether the save was queued for background sync.
+  Future<({String id, bool queuedOffline})> addStockItem({
     required WasteStockItem item,
     required List<String> localPhotoPaths,
   }) async {
-    final ref = _firestore.collection(Collections.wasteStock).doc();
-    final List<String> photoUrls = [];
-    for (final path in localPhotoPaths) {
-      try {
-        final url = await uploadWastePhoto(
-          localPath: path,
-          wasteRef: 'waste_stock/${ref.id}',
-        );
-        photoUrls.add(url);
-      } catch (_) {
-        await queueOfflineWastePhoto(
-          localPath: path,
-          loadId: ref.id,
-          itemId: ref.id,
-          targetCollection: Collections.wasteStock,
-        );
+    final stockId = _firestore.collection(Collections.wasteStock).doc().id;
+    final online = await ConnectivityService().isOnline().catchError((_) => false);
+    final photoUrls = <String>[];
+
+    if (online) {
+      for (final path in localPhotoPaths) {
+        try {
+          final url = await uploadWastePhoto(
+            localPath: path,
+            wasteRef: 'waste_stock/$stockId',
+          ).timeout(_photoUploadTimeout);
+          photoUrls.add(url);
+        } catch (_) {
+          await queueOfflineWastePhoto(
+            localPath: path,
+            loadId: stockId,
+            itemId: stockId,
+            targetCollection: Collections.wasteStock,
+          );
+        }
       }
+    } else {
+      await _queueStockPhotos(stockId: stockId, localPhotoPaths: localPhotoPaths);
     }
+
+    final now = DateTime.now();
     final data = {
       ...item.toFirestore(),
       'photos': photoUrls,
-      'created_at': FieldValue.serverTimestamp(),
-      'updated_at': FieldValue.serverTimestamp(),
+      'is_deleted': false,
+      'created_at': online ? FieldValue.serverTimestamp() : Timestamp.fromDate(now),
+      'updated_at': online ? FieldValue.serverTimestamp() : Timestamp.fromDate(now),
     };
-    await ref.set(data);
+
+    final queueData = {
+      ...item.toFirestore(),
+      'photos': photoUrls,
+      'is_deleted': false,
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    };
+
     await SyncService().addToQueue(
       collection: Collections.wasteStock,
       operation: 'set',
-      data: data,
-      documentId: ref.id,
+      data: queueData,
+      documentId: stockId,
     );
-    await SyncService().processNow();
-    return ref.id;
+
+    var queuedOffline = !online;
+
+    if (online) {
+      try {
+        await _firestore
+            .collection(Collections.wasteStock)
+            .doc(stockId)
+            .set(data)
+            .timeout(_firestoreWriteTimeout);
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (id: stockId, queuedOffline: queuedOffline);
   }
 
   /// Streams all non-deleted on-site stock items for a given waste type, newest first.
