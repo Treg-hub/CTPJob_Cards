@@ -1,188 +1,257 @@
-# CTP WasteTrack — User Guide
+# Waste Recovery — Full Load Guide
 
-*For Security Managers and Security Guards*
+*For Security Managers, Security Guards, and Admins*
 
----
+This guide walks through the **complete waste load lifecycle** in WasteTrack — from recording stock on site, through scheduling or creating a load, loading capture (items + loaded-truck photos + driver signature), **off-site weighbridge document** entry, and **admin cost review**.
 
-## What Is WasteTrack?
-
-WasteTrack is the module in the CTP Job Cards app used to manage all outgoing waste loads from the factory. It tracks what waste leaves the site, who collected it, how much it weighed, and whether the recorded weight matched the actual weighbridge weight.
-
-This guide is for the two roles that operate WasteTrack day-to-day:
-
-| Role | Responsibilities |
-|------|-----------------|
-| **Security Manager** | Schedule waste loads; approve or reject loads; review reports and deviation alerts; manage contractors and waste types |
-| **Security Guard** | Receive scheduled loads; begin the collection with the contractor; record waste items and photographs; sign off at the weighbridge |
-
-> **Admin** users have full access to all WasteTrack screens plus the admin configuration panel.
+> **There is no on-site weighbridge.** The truck leaves after loading. The certified weight arrives later on a mailed/email weighbridge document.
 
 ---
 
-## Section 1: Accessing WasteTrack
+## Who does what?
 
-WasteTrack is reached from the bottom navigation bar in the main app. You will see a **Waste** tab. If you do not see it, your account has not been granted a WasteTrack role — contact an admin.
+| Role | Typical tasks |
+|------|----------------|
+| **Security Manager** | Record paper stock; schedule loads; create on-the-spot loads; link stock; capture loaded-truck photos; enter off-site weighbridge documents |
+| **Security Guard** | Begin scheduled collections; confirm or add waste items; loaded-truck photos; driver signature; submit collection |
+| **Admin** | Everything above, plus **Review** (approve costs), **Settings** (contractors, types, rates). Reports are on **CTP Pulse** only. |
 
-From the WasteTrack home screen you can see:
-- Loads that have been scheduled and are waiting for collection
-- Loads currently in progress (collection started)
-- Loads pending weighbridge sign-off
-- A summary of completed and queued loads
-
-The list updates automatically in real time — there is no need to pull down to refresh.
-
-### Filtering loads
-
-Use the **All / Today / This Week** chips at the top to narrow the list. When a filter is active and no loads match, the screen shows a "No loads match" message with a tap-to-clear button.
-
-### Screen actions
-
-The **Weighbridge**, **Reports**, and **Admin** tabs are available to managers and admins directly from the tab bar at the top of the Waste home screen. If there are queued offline items, a cloud sync banner appears at the top of the Loads tab — tap it to retry.
-
-> **Module on/off:** Admins can enable or disable the entire Waste Management module from **Settings → Modules**.
+> **Guards can schedule loads** only when an admin has enabled *Guards Can Schedule Loads* in CTP Pulse → Waste Settings.
 
 ---
 
-## Section 2: For Security Managers — Scheduling a Load
+## The big picture
 
-### Creating a New Schedule
+There are **two ways** a load starts, but both follow the same path after loading: **Pending Weighbridge** → weighbridge document → **Pending Cost Review** → admin **Completed**.
 
-1. Tap **Schedule Load** from the WasteTrack home screen.
-2. Select the **contractor** who will collect the load.
-3. Select the **main waste type** (e.g. general, hazardous, recyclables).
-4. Set a **scheduled date and time** for the collection.
-5. Add a **note** if any special instructions apply.
-6. Tap **Schedule** to save.
-
-The load will appear on the home screen under "Scheduled" and will be visible to security guards on duty. The home screen updates live — guards will see the new load without needing to refresh.
-
-### Managing Existing Loads
-
-From the **Loads** screen you can:
-- View the full details of any load
-- Edit a scheduled load before collection begins
-- Cancel a load that is no longer needed (enter a reason)
-- See the status of in-progress and completed loads
-
-### Reviewing Reports
-
-Open **Reports & Export** from the WasteTrack home screen.
-
-1. Set a **date range** and optionally filter by contractor or waste type.
-2. Tap **Run Report** to load results.
-3. Tap **Export CSV** or **Export PDF** to download the report.
-
-The report shows: load number, date, contractor, waste type, recorded weight, actual weighbridge weight, and any deviation flags.
-
----
-
-## Section 3: For Security Guards — Processing a Collected Load
-
-### Step 1: Begin Collection
-
-When a contractor arrives to collect waste:
-
-1. On the WasteTrack home screen, find the scheduled load for this contractor. Tap **Begin Collection**.
-2. Confirm the contractor and load details are correct.
-3. Tap **Begin** to start the collection. The load status changes to **In Progress**.
-
-### Step 2: Add Waste Items
-
-During collection, add each type of waste being loaded:
-
-1. Tap **Add Item**. A slide-up panel will appear.
-2. Select the **waste category** (e.g. cardboard, scrap metal, e-waste).
-3. Enter the **recorded weight** in kg (the weight as measured on site before the truck leaves).
-4. Take a **photo** of the waste. At least one item must have a photo.
-5. Tap **Add Item** to save the entry.
-
-Repeat for each waste type in the load.
-
-> **Why photos are required:** Photographs provide a record that waste left the site and confirm what was collected. They are part of the legal audit trail.
-
-### Step 3: Capture Contractor Signature
-
-Once all items are added:
-
-1. Tap **Capture Signature**.
-2. Pass the phone to the contractor driver.
-3. The driver signs in the signature box.
-4. Tap **Accept Signature**.
-
-### Step 4: Weighbridge Sign-Off
-
-After the truck returns from the weighbridge:
-
-1. On the load detail screen, an amber **"Weighbridge entry required"** banner appears at the top of the screen when the load is waiting for this step.
-2. Scroll to the **Weighbridge Entry** section and enter the **actual weighbridge weight** in kg (the certified weight from the external weighbridge).
-3. Tap **Save Weighbridge Weight**.
-
-The system automatically compares the recorded weight to the actual weight. If the difference exceeds **5% or 50 kg**, a **deviation flag** is set. The security manager will see this highlighted in reports.
-
-> A deviation is not automatically an error — it can result from differences in how waste was measured. The flag exists so management can review it and decide if investigation is needed.
-
-### Step 5: Complete the Load
-
-Once the weighbridge weight is confirmed, tap **Complete Load**. The load status changes to **Completed** and the record is locked.
+```
+  ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+  │ 1. Stock (opt.) │ ──► │ 2. Create load   │ ──► │ 3. Items + photos   │
+  │  Paper Waste    │     │  Schedule OR     │     │  On-site stock or   │
+  │  Stock screen   │     │  New on the spot │     │  fresh capture      │
+  └─────────────────┘     └──────────────────┘     └──────────┬──────────┘
+                                                              │
+                    ┌─────────────────────────────────────────┴────────────────────────┐
+                    │                                                                   │
+           ┌────────▼────────┐                                            ┌───────────▼──────────┐
+           │ SCHEDULED PATH  │                                            │ ON-THE-SPOT PATH     │
+           │ Guard: Begin    │                                            │ Manager: New Load    │
+           │ Collection      │                                            │ (Draft status)       │
+           └────────┬────────┘                                            └───────────┬──────────┘
+                    │                                                                   │
+           ┌────────▼────────┐                                            ┌───────────▼──────────┐
+           │ Truck photos +  │                                            │ Finish Loading:      │
+           │ driver sign →   │                                            │ truck photos + sign  │
+           │ Pending         │                                            │ → Pending Weighbridge│
+           │ Weighbridge     │                                            └───────────┬──────────┘
+           └────────┬────────┘                                                        │
+                    └────────────────────────────┬───────────────────────────────────┘
+                                                 │
+                                    ┌────────────▼────────────┐
+                                    │ Off-site weighbridge    │
+                                    │ ticket photo + weight   │
+                                    │ → Pending Cost Review   │
+                                    └────────────┬────────────┘
+                                                 │
+                                    ┌────────────▼────────────┐
+                                    │ Admin Review tab        │
+                                    │ Approve cost → Completed│
+                                    └─────────────────────────┘
+```
 
 ---
 
-## Section 4: Load Statuses
+## Step 0 — Record stock on site (optional but recommended)
 
-| Status | Meaning |
-|--------|---------|
-| **Scheduled** | A manager has created the load and it is waiting for the contractor to arrive |
-| **In Progress** | A guard has started the collection — items are being added |
-| **Pending Weighbridge** | Collection is done; waiting for the actual weighbridge weight to be entered |
-| **Completed** | Weighbridge weight confirmed; load record is finalised |
-| **Cancelled** | Load was cancelled before or during collection |
+Use this when waste is **already sitting on site** before the truck arrives (e.g. slab waste, reelends, scrap reels).
 
----
+1. On the **Loads** tab, tap **+ New / Schedule** → **Paper Waste Stock**.
+2. Tap **+** to record a new stock item: choose subtype, take photos, enter estimated weight.
+3. The item stays **On Site** until it is linked to a load and the collection is confirmed.
 
-## Section 5: Deviation Alerts
-
-A deviation is flagged when the difference between the **recorded weight** (measured on site) and the **actual weighbridge weight** (certified by external scale) exceeds the threshold.
-
-**Thresholds:**
-- More than **5%** difference relative to the recorded weight, OR
-- More than **50 kg** difference in absolute terms
-
-Either condition alone is enough to trigger the flag.
-
-If a load has a deviation, it appears with an amber warning in the load detail and in reports. Managers should review flagged loads and note any explanation in the load record.
+Stock is stored under **Paper Waste** with a **subtype** (e.g. *Slab Waste*, *Reelends*, *Scrap Reels*) — even when the contractor's waste types are listed as separate chips.
 
 ---
 
-## Section 6: Notification Inbox
+## Step 1 — Create the load
 
-If you are **off site** when a notification is generated (for example, a manager schedules a load while you are not yet on shift), the notification is held in your **Notification Inbox** rather than sent as a push alert.
+Tap **+ New / Schedule** on the Loads tab.
 
-When you arrive on site and open the app, a banner will appear at the bottom of the screen if notifications are waiting. Tap **Open** to see them.
+### Option A — Schedule Incoming Load (before the truck arrives)
 
-You can also reach your inbox at any time from the bell icon in the top bar.
+*Managers, admins, and guards (if enabled).*
+
+1. **Contractor** — select who is collecting (e.g. Glenpak).
+2. **Waste types** — tap one or more chips. All contractor types are pre-selected; deselect any you do not need. Stock and new items are **filtered to your selection**.
+3. **On-site stock (optional)** — tick saved stock items to pre-link. The guard will see these when collection starts.
+4. **Expected date & time** — when the truck is due.
+5. **Notes** — optional instructions for the guard.
+6. Tap **Schedule Load**.
+
+The load appears under **Incoming** on the Loads tab with status **Scheduled**.
+
+### Option B — New Load on the spot (truck is here now)
+
+*Managers and admins only.*
+
+1. **Contractor** — select the collecting company.
+2. **Waste types** — select one or more chips (same multi-select behaviour as scheduling).
+3. **On-site stock (optional)** — tick stock to include, or use **Add Waste Item → Add from on-site stock** later.
+4. Enter **driver name**, **vehicle registration**, and optional notes.
+5. **Waste items** — tap **Add Waste Item**:
+   - **Add from on-site stock** — pick already-captured stock items.
+   - **Capture new item** — take photos, enter weight (and optional quantity). At least one photo per fresh item is required.
+6. Tap **Create Load**.
+
+The load is saved as **Draft**. Open it from Recent loads to continue with weighbridge and signature (see Path B below).
 
 ---
 
-## Section 7: Troubleshooting
+## Step 2 — Multi-type loads (e.g. Glenpak)
 
-**I cannot see the Waste tab in the app.**
-Your account has not been assigned a WasteTrack role. Contact your admin — they can set this in Admin Settings → Employees.
+Some contractors collect **several paper subtypes on one truck** (slab waste + reelends + scrap reels).
 
-**A scheduled load is not appearing on my home screen.**
-Check the scheduled date on the load. Loads only appear as "ready for collection" on or after the scheduled date. Also confirm the load has not been cancelled.
-
-**I cannot begin a collection.**
-The load may already be in progress from another guard, or it may have been cancelled. Check the load status in the Loads screen.
-
-**The signature screen is not working / accepting input.**
-Ensure the device screen is clean and dry. The driver must sign with a single finger or stylus. If the signature is not accepted, try again on a clean area of the glass.
-
-**The photo requirement is blocking me from proceeding.**
-At least one waste item must have a photo before the collection can be completed. Tap **Add Item**, take the photo, and add the item to proceed.
-
-**A deviation flag was set but the weights look correct.**
-Check that both weights were entered in **kilograms**. If one was entered in tonnes accidentally, correct the weighbridge weight entry. If the weights are genuinely correct, add an explanatory note to the load record and escalate to the manager for review.
+- Select **all relevant chips** when creating or scheduling the load.
+- On-site stock list shows only items matching your selected types.
+- **Add Waste Item** only offers subtypes you have selected.
+- The load saves as **Paper Waste** in the system so stock linking works correctly.
 
 ---
 
-*CTP WasteTrack · Security Staff Guide*
+## Step 3 — Guard collects a scheduled load
+
+When the contractor arrives:
+
+1. On the **Loads** tab, find the load under **Incoming**.
+2. Tap **Begin Collection**.
+3. Enter **driver name** and **vehicle registration**.
+4. **Waste items:**
+   - Pre-linked stock appears automatically (marked *Pre-loaded*).
+   - Tap **From stock** to add more saved items found at the gate.
+   - Tap **Fresh item** to capture new material with photos.
+   - Every item on the list must have at least one photo before you can submit.
+5. **Loaded truck photos** — photograph the fully loaded truck before it leaves.
+6. Tap **Capture Driver Signature** — pass the phone to the driver to sign.
+7. Tap **Submit Collection**.
+
+Status changes to **Pending Weighbridge**. The truck does not return — wait for the off-site weighbridge document.
+
+---
+
+## Step 4 — Off-site weighbridge document (Manager / Admin)
+
+When the weighbridge ticket arrives (email/photo/PDF — truck does not return):
+
+### From the Weighbridge tab
+
+1. Open the **Weighbridge** tab (badge shows how many are waiting).
+2. Tap a load to open its detail.
+3. Scroll to **Off-site Weighbridge Document**.
+4. Enter the **ticket/reference number**.
+5. Photograph the **weighbridge document**.
+6. Enter the **certified weight in kg**.
+7. Tap **Submit Weighbridge Document**.
+
+The load moves to **Pending Cost Review** for admin approval.
+
+### From load detail
+
+Same steps — open any **Pending Weighbridge** load from Recent loads.
+
+---
+
+## Step 5 — Admin cost review
+
+1. Open the **Review** tab (admin only; badge shows pending count).
+2. Confirm or edit the **cost (R ex VAT)** — a suggested value is calculated from contractor rates when available.
+3. Tap **Approve** to mark the load **Completed**.
+
+Reports and exports are available on **CTP Pulse → Waste → Reports**.
+
+---
+
+## Path B — On-the-spot load (Draft) finish loading
+
+When a manager creates a **New Load on the spot**:
+
+1. Open the **Draft** load from Recent loads.
+2. Add or edit items / stock if needed.
+3. Tap **Finish Loading** — add **loaded-truck photos** and capture **driver signature**.
+4. Load becomes **Pending Weighbridge** — enter the off-site document when it arrives (Step 4).
+
+---
+
+## Load statuses explained
+
+| Status | Meaning | What to do next |
+|--------|---------|-----------------|
+| **Scheduled** | Manager scheduled the collection; truck not yet processed | Guard taps **Begin Collection** when contractor arrives |
+| **Draft** | On-the-spot load created; truck still loading | Manager: **Finish Loading** (truck photos + signature) |
+| **Pending Weighbridge** | Loading finished; awaiting off-site document | Manager: photograph ticket + enter certified weight |
+| **Pending Cost Review** | Weighbridge document captured | Admin: approve cost in **Review** tab |
+| **Completed** | Admin approved cost | Record is locked |
+| **Cancelled** | Load was cancelled before collection | No further action |
+
+---
+
+## Deviation alerts
+
+When the weighbridge weight is saved, the app compares:
+
+- **Recorded weight** — sum of item weights on the load
+- **Actual weight** — certified weighbridge reading
+
+A **deviation** is flagged if the difference exceeds **5%** or **50 kg** (whichever applies first). Flagged loads show an amber warning in detail view and in **Reports**. This is for management review — not an automatic rejection.
+
+---
+
+## Paper Waste Stock banner
+
+On the Loads tab, the green **Paper Waste Stock** banner shows how many items are on site and the total estimated weight. Tap it to open the stock inventory.
+
+---
+
+## Tips & troubleshooting
+
+**Stock not showing when I select waste types**
+- Stock lives under Paper Waste subtypes. Make sure the matching chips are selected (e.g. *Reelends*, *Slab Waste*).
+- Only **on-site** stock appears — items already loaded on another truck are excluded.
+
+**Cannot submit collection**
+- Need driver name, vehicle reg, at least one item, every item must have a photo, at least one **loaded-truck photo**, and a driver signature.
+
+**Weighbridge tab is empty**
+- Only loads in **Pending Weighbridge** appear. Guard must submit collection first.
+
+**Offline**
+- Photos, signatures, and load data queue locally. Tap the orange **cloud sync** banner to retry when back online.
+
+**I cannot see the Waste tab**
+- Your account needs a WasteTrack role. Contact an admin.
+
+---
+
+## Quick checklist
+
+### Manager — scheduled load
+- [ ] Record stock (optional)
+- [ ] Schedule load: contractor, waste types, stock, date
+- [ ] After guard submits: enter off-site weighbridge document when received
+
+### Guard — collection
+- [ ] Begin Collection on incoming load
+- [ ] Driver details + confirm items (stock + fresh photos)
+- [ ] Loaded-truck photos + driver signature
+- [ ] Submit Collection
+
+### Manager — truck already here
+- [ ] New Load on the spot: contractor, types, items/stock
+- [ ] Finish loading: truck photos + signature
+- [ ] Enter weighbridge document when it arrives
+
+### Admin
+- [ ] Review tab: approve cost → Completed
+
+---
+
+*CTP WasteTrack · Waste Recovery Load Guide*

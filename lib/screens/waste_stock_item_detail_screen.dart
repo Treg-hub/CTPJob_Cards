@@ -103,7 +103,6 @@ class _WasteStockItemDetailScreenState
       context,
       MaterialPageRoute(
         builder: (_) => WasteAddStockItemScreen(
-          wasteType: widget.item.wasteType,
           existingItem: widget.item,
         ),
       ),

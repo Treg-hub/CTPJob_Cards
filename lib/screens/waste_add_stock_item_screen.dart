@@ -12,11 +12,9 @@ import '../widgets/waste_app_bar.dart';
 class WasteAddStockItemScreen extends ConsumerStatefulWidget {
   const WasteAddStockItemScreen({
     super.key,
-    this.wasteType = 'Paper Waste',
     this.existingItem,
   });
 
-  final String wasteType;
   final WasteStockItem? existingItem;
 
   @override
@@ -29,8 +27,8 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   final _weightCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
-  List<String> _subtypes = [];
-  String? _subtype;
+  List<String> _wasteTypeOptions = [];
+  String? _selectedWasteType;
   final List<String> _savedPhotoUrls = [];
   final List<String> _newLocalPhotos = [];
   final List<String> _removedPhotoUrls = [];
@@ -44,7 +42,9 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
     super.initState();
     final existing = widget.existingItem;
     if (existing != null) {
-      _subtype = existing.subtype;
+      _selectedWasteType = existing.subtype.isNotEmpty
+          ? existing.subtype
+          : existing.wasteType;
       if (existing.estimatedWeightKg != null) {
         _weightCtrl.text = existing.estimatedWeightKg!.toString();
       }
@@ -53,7 +53,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
       }
       _savedPhotoUrls.addAll(existing.photos);
     }
-    _loadSubtypes();
+    _loadWasteTypes();
   }
 
   @override
@@ -63,21 +63,25 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
     super.dispose();
   }
 
-  Future<void> _loadSubtypes() async {
+  Future<void> _loadWasteTypes() async {
     try {
       final types = await _wasteService
           .watchWasteTypes()
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
-      final match =
-          types.where((t) => t.mainType == widget.wasteType).toList();
-      if (mounted && match.isNotEmpty) {
+      if (mounted) {
         setState(() {
-          _subtypes = match.first.subtypes;
-          if (_subtype == null && _subtypes.isNotEmpty) {
-            _subtype = _subtypes.first;
-          } else if (_subtype != null && !_subtypes.contains(_subtype)) {
-            _subtypes = [..._subtypes, _subtype!];
+          _wasteTypeOptions = types
+              .map((t) => t.mainType)
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+          if (_selectedWasteType == null && _wasteTypeOptions.isNotEmpty) {
+            _selectedWasteType = _wasteTypeOptions.first;
+          } else if (_selectedWasteType != null &&
+              !_wasteTypeOptions.contains(_selectedWasteType)) {
+            _wasteTypeOptions = [..._wasteTypeOptions, _selectedWasteType!];
           }
         });
       }
@@ -87,7 +91,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   int get _totalPhotoCount =>
       _savedPhotoUrls.length + _newLocalPhotos.length;
 
-  bool get _isValid => _subtype != null && _totalPhotoCount >= 1;
+  bool get _isValid => _selectedWasteType != null && _totalPhotoCount >= 1;
 
   Future<void> _addPhoto(ImageSource source) async {
     setState(() => _addingPhoto = true);
@@ -123,7 +127,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
         if (id == null) throw Exception('Stock item has no id');
         final result = await _wasteService.updateStockItem(
           stockId: id,
-          subtype: _subtype!,
+          subtype: _selectedWasteType!,
           estimatedWeightKg: weight,
           notes: notes,
           keptPhotoUrls: List.from(_savedPhotoUrls),
@@ -147,8 +151,8 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
         }
       } else {
         final item = WasteStockItem(
-          wasteType: widget.wasteType,
-          subtype: _subtype!,
+          wasteType: _selectedWasteType!,
+          subtype: _selectedWasteType!,
           estimatedWeightKg: weight,
           notes: notes,
           createdBy: currentEmployee?.clockNo ?? '',
@@ -226,23 +230,23 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Subtype *',
+              'Waste type *',
               style: TextStyle(fontSize: 12, color: appColors.textMuted),
             ),
             const SizedBox(height: 4),
-            _subtypes.isEmpty && _subtype == null
+            _wasteTypeOptions.isEmpty && _selectedWasteType == null
                 ? const LinearProgressIndicator()
                 : DropdownButtonFormField<String>(
-                    initialValue: _subtype,
+                    initialValue: _selectedWasteType,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       isDense: true,
                       border: OutlineInputBorder(),
                     ),
-                    items: _subtypes
+                    items: _wasteTypeOptions
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setState(() => _subtype = v),
+                    onChanged: (v) => setState(() => _selectedWasteType = v),
                   ),
             const SizedBox(height: 16),
             TextField(

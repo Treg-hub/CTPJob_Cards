@@ -49,6 +49,8 @@ class _WasteBeginCollectionScreenState
 
   Uint8List? _signatureBytes;
   String? _signatureTempPath;
+  final List<String> _loadPhotoPaths = [];
+  bool _addingLoadPhoto = false;
   bool _isSubmitting = false;
 
   @override
@@ -112,8 +114,19 @@ class _WasteBeginCollectionScreenState
       _regCtrl.text.trim().isNotEmpty &&
       _items.isNotEmpty &&
       _items.every((i) => i.photoPaths.isNotEmpty) &&
+      _loadPhotoPaths.isNotEmpty &&
       _signatureBytes != null &&
       !_isSubmitting;
+
+  Future<void> _addLoadPhoto(ImageSource source) async {
+    setState(() => _addingLoadPhoto = true);
+    try {
+      final path = await _wasteService.pickAndCompressPhotoFromSource(source);
+      if (path != null && mounted) setState(() => _loadPhotoPaths.add(path));
+    } finally {
+      if (mounted) setState(() => _addingLoadPhoto = false);
+    }
+  }
 
   List<WasteType> get _contractorLinkedTypes {
     final contractor = _contractors.firstWhere(
@@ -247,6 +260,7 @@ class _WasteBeginCollectionScreenState
         collectedBy: currentEmployee?.clockNo ?? '',
         collectedByName: currentEmployee?.name,
         itemsData: itemsData,
+        loadPhotoPaths: _loadPhotoPaths,
         signatureLocalPath: _signatureTempPath,
       );
 
@@ -501,6 +515,62 @@ class _WasteBeginCollectionScreenState
 
             const SizedBox(height: 24),
 
+            // ── Loaded truck photos ──────────────────────────
+            const Text('Loaded Truck Photos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(
+              'Photograph the fully loaded truck before it leaves site.',
+              style: TextStyle(fontSize: 12, color: appColors.textMuted),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ..._loadPhotoPaths.map((path) => Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(path), width: 72, height: 72, fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _loadPhotoPaths.remove(path)),
+                        child: Container(
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                )),
+                if (_addingLoadPhoto)
+                  const SizedBox(width: 72, height: 72, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                else ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _addLoadPhoto(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt, size: 18),
+                    label: const Text('Camera'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _addLoadPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library, size: 18),
+                    label: const Text('Gallery'),
+                  ),
+                ],
+              ],
+            ),
+            if (_loadPhotoPaths.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('⚠ At least one loaded-truck photo required',
+                    style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+              ),
+
+            const SizedBox(height: 24),
+
             // ── Signature ────────────────────────────────────
             const Text('Driver Signature', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
@@ -562,7 +632,7 @@ class _WasteBeginCollectionScreenState
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Complete all fields, add at least one item with photo, and capture signature to submit.',
+                  'Complete all fields, add items with photos, capture loaded-truck photos, and driver signature.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: appColors.textMuted),
                 ),

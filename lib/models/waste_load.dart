@@ -4,9 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 enum WasteLoadStatus {
   draft('draft'),
   completed('completed'),
-  // Two-phase handoff statuses (manager schedules → guard collects → manager weighbridges)
+  // Two-phase handoff statuses (manager schedules → guard collects → off-site weighbridge → admin review)
   scheduled('scheduled'),
   pendingWeighbridge('pending_weighbridge'),
+  pendingCostReview('pending_cost_review'),
   cancelled('cancelled');
 
   const WasteLoadStatus(this.value);
@@ -20,6 +21,8 @@ enum WasteLoadStatus {
         return WasteLoadStatus.scheduled;
       case 'pending_weighbridge':
         return WasteLoadStatus.pendingWeighbridge;
+      case 'pending_cost_review':
+        return WasteLoadStatus.pendingCostReview;
       case 'cancelled':
         return WasteLoadStatus.cancelled;
       case 'draft':
@@ -30,10 +33,11 @@ enum WasteLoadStatus {
 
   String get displayLabel {
     switch (this) {
-      case WasteLoadStatus.draft:            return 'Draft';
+      case WasteLoadStatus.draft:            return 'Draft (finish loading)';
       case WasteLoadStatus.completed:        return 'Completed';
       case WasteLoadStatus.scheduled:        return 'Scheduled';
       case WasteLoadStatus.pendingWeighbridge: return 'Pending Weighbridge';
+      case WasteLoadStatus.pendingCostReview: return 'Pending Cost Review';
       case WasteLoadStatus.cancelled:        return 'Cancelled';
     }
   }
@@ -55,6 +59,11 @@ class WasteLoad {
   final String? weighbridgeNumber;
   final double? actualWeighbridgeWeightKg;
   final String? weighbridgeTicketPhotoUrl;
+  /// When true, no off-site ticket was received — [weighbridgeTicketWaivedBy] records who confirmed.
+  final bool weighbridgeTicketWaived;
+  final String? weighbridgeTicketWaivedBy;
+  final String? weighbridgeTicketWaivedByName;
+  final DateTime? weighbridgeTicketWaivedAt;
   final String? notes;
   final WasteLoadStatus status;
   final String? driverSignatureUrl;
@@ -64,6 +73,14 @@ class WasteLoad {
   final DateTime? completedAt;
   final bool isDeleted;
   final double recordedWeightKg;
+
+  // ── Cost review fields (admin approves after off-site weighbridge) ────────
+  final double? rate;
+  final double? randValueExVat;
+  final DateTime? costReviewedAt;
+  final String? costReviewedBy;
+  final DateTime? weighbridgeReceivedAt;
+  final DateTime? pendingCostReviewAt;
 
   // ── Two-phase handoff fields ──────────────────────────────────────────────
   /// When the contractor is expected (set by manager at scheduling time).
@@ -98,6 +115,10 @@ class WasteLoad {
     this.weighbridgeNumber,
     this.actualWeighbridgeWeightKg,
     this.weighbridgeTicketPhotoUrl,
+    this.weighbridgeTicketWaived = false,
+    this.weighbridgeTicketWaivedBy,
+    this.weighbridgeTicketWaivedByName,
+    this.weighbridgeTicketWaivedAt,
     this.notes,
     this.status = WasteLoadStatus.draft,
     this.driverSignatureUrl,
@@ -107,6 +128,12 @@ class WasteLoad {
     this.completedAt,
     this.isDeleted = false,
     this.recordedWeightKg = 0.0,
+    this.rate,
+    this.randValueExVat,
+    this.costReviewedAt,
+    this.costReviewedBy,
+    this.weighbridgeReceivedAt,
+    this.pendingCostReviewAt,
     this.scheduledFor,
     this.scheduledBy,
     this.scheduledByName,
@@ -117,15 +144,31 @@ class WasteLoad {
     this.selectedStockIds = const [],
   });
 
+  static DateTime _parseDate(dynamic value, {DateTime? fallback}) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) {
+      final parsed = DateTime.tryParse(
+        value.length == 10 ? '${value}T00:00:00' : value,
+      );
+      if (parsed != null) return parsed;
+    }
+    return fallback ?? DateTime.now();
+  }
+
+  static DateTime? _parseOptionalDate(dynamic value) {
+    if (value == null) return null;
+    return _parseDate(value);
+  }
+
   factory WasteLoad.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return WasteLoad(
       id: doc.id,
       loadNumber: data['load_number'] as String? ?? '',
       mainWasteType: data['main_waste_type'] as String? ?? '',
-      dateTime: (data['date_time'] as Timestamp?)?.toDate()
-          ?? (data['createdAt'] as Timestamp?)?.toDate()
-          ?? DateTime.now(),
+      dateTime: _parseDate(
+        data['date_time'] ?? data['createdAt'],
+      ),
       contractorId: data['contractor_id'] as String? ?? '',
       contractorName: data['contractor_name'] as String?,
       collectionCompanyId: data['collection_company_id'] as String?,
@@ -136,6 +179,10 @@ class WasteLoad {
       actualWeighbridgeWeightKg:
           (data['actual_weighbridge_weight_kg'] as num?)?.toDouble(),
       weighbridgeTicketPhotoUrl: data['weighbridge_ticket_photo_url'] as String?,
+      weighbridgeTicketWaived: data['weighbridge_ticket_waived'] as bool? ?? false,
+      weighbridgeTicketWaivedBy: data['weighbridge_ticket_waived_by'] as String?,
+      weighbridgeTicketWaivedByName: data['weighbridge_ticket_waived_by_name'] as String?,
+      weighbridgeTicketWaivedAt: _parseOptionalDate(data['weighbridge_ticket_waived_at']),
       notes: data['notes'] as String?,
       status: WasteLoadStatus.fromString(data['status'] as String?),
       driverSignatureUrl: data['driver_signature_url'] as String?,
@@ -145,14 +192,20 @@ class WasteLoad {
           const [],
       createdBy: data['created_by'] as String?,
       completedBy: data['completed_by'] as String?,
-      completedAt: (data['completed_at'] as Timestamp?)?.toDate(),
+      completedAt: _parseOptionalDate(data['completed_at']),
       isDeleted: data['is_deleted'] as bool? ?? false,
       recordedWeightKg: (data['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0,
-      scheduledFor: (data['scheduled_for'] as Timestamp?)?.toDate(),
+      rate: (data['rate'] as num?)?.toDouble(),
+      randValueExVat: (data['rand_value_exvat'] as num?)?.toDouble(),
+      costReviewedAt: _parseOptionalDate(data['cost_reviewed_at']),
+      costReviewedBy: data['cost_reviewed_by'] as String?,
+      weighbridgeReceivedAt: _parseOptionalDate(data['weighbridge_received_at']),
+      pendingCostReviewAt: _parseOptionalDate(data['pending_cost_review_at']),
+      scheduledFor: _parseOptionalDate(data['scheduled_for']),
       scheduledBy: data['scheduled_by'] as String?,
       scheduledByName: data['scheduled_by_name'] as String?,
       scheduledNotes: data['scheduled_notes'] as String?,
-      pendingWeighbridgeAt: (data['pending_weighbridge_at'] as Timestamp?)?.toDate(),
+      pendingWeighbridgeAt: _parseOptionalDate(data['pending_weighbridge_at']),
       collectedBy: data['collected_by'] as String?,
       collectedByName: data['collected_by_name'] as String?,
       selectedStockIds: (data['selected_stock_ids'] as List<dynamic>?)
@@ -176,6 +229,10 @@ class WasteLoad {
       'weighbridge_number': weighbridgeNumber,
       'actual_weighbridge_weight_kg': actualWeighbridgeWeightKg,
       'weighbridge_ticket_photo_url': weighbridgeTicketPhotoUrl,
+      'weighbridge_ticket_waived': weighbridgeTicketWaived,
+      if (weighbridgeTicketWaivedBy != null) 'weighbridge_ticket_waived_by': weighbridgeTicketWaivedBy,
+      if (weighbridgeTicketWaivedByName != null) 'weighbridge_ticket_waived_by_name': weighbridgeTicketWaivedByName,
+      if (weighbridgeTicketWaivedAt != null) 'weighbridge_ticket_waived_at': Timestamp.fromDate(weighbridgeTicketWaivedAt!),
       'notes': notes,
       'status': status.value,
       'driver_signature_url': driverSignatureUrl,
@@ -186,6 +243,12 @@ class WasteLoad {
           completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'is_deleted': isDeleted,
       'recorded_weight_kg': recordedWeightKg,
+      if (rate != null) 'rate': rate,
+      if (randValueExVat != null) 'rand_value_exvat': randValueExVat,
+      if (costReviewedAt != null) 'cost_reviewed_at': Timestamp.fromDate(costReviewedAt!),
+      if (costReviewedBy != null) 'cost_reviewed_by': costReviewedBy,
+      if (weighbridgeReceivedAt != null) 'weighbridge_received_at': Timestamp.fromDate(weighbridgeReceivedAt!),
+      if (pendingCostReviewAt != null) 'pending_cost_review_at': Timestamp.fromDate(pendingCostReviewAt!),
       if (scheduledFor != null) 'scheduled_for': Timestamp.fromDate(scheduledFor!),
       if (scheduledBy != null) 'scheduled_by': scheduledBy,
       if (scheduledByName != null) 'scheduled_by_name': scheduledByName,
@@ -211,6 +274,10 @@ class WasteLoad {
     String? weighbridgeNumber,
     double? actualWeighbridgeWeightKg,
     String? weighbridgeTicketPhotoUrl,
+    bool? weighbridgeTicketWaived,
+    String? weighbridgeTicketWaivedBy,
+    String? weighbridgeTicketWaivedByName,
+    DateTime? weighbridgeTicketWaivedAt,
     String? notes,
     WasteLoadStatus? status,
     String? driverSignatureUrl,
@@ -220,6 +287,12 @@ class WasteLoad {
     DateTime? completedAt,
     bool? isDeleted,
     double? recordedWeightKg,
+    double? rate,
+    double? randValueExVat,
+    DateTime? costReviewedAt,
+    String? costReviewedBy,
+    DateTime? weighbridgeReceivedAt,
+    DateTime? pendingCostReviewAt,
     DateTime? scheduledFor,
     String? scheduledBy,
     String? scheduledByName,
@@ -245,6 +318,12 @@ class WasteLoad {
           actualWeighbridgeWeightKg ?? this.actualWeighbridgeWeightKg,
       weighbridgeTicketPhotoUrl:
           weighbridgeTicketPhotoUrl ?? this.weighbridgeTicketPhotoUrl,
+      weighbridgeTicketWaived: weighbridgeTicketWaived ?? this.weighbridgeTicketWaived,
+      weighbridgeTicketWaivedBy: weighbridgeTicketWaivedBy ?? this.weighbridgeTicketWaivedBy,
+      weighbridgeTicketWaivedByName:
+          weighbridgeTicketWaivedByName ?? this.weighbridgeTicketWaivedByName,
+      weighbridgeTicketWaivedAt:
+          weighbridgeTicketWaivedAt ?? this.weighbridgeTicketWaivedAt,
       notes: notes ?? this.notes,
       status: status ?? this.status,
       driverSignatureUrl: driverSignatureUrl ?? this.driverSignatureUrl,
@@ -254,6 +333,12 @@ class WasteLoad {
       completedAt: completedAt ?? this.completedAt,
       isDeleted: isDeleted ?? this.isDeleted,
       recordedWeightKg: recordedWeightKg ?? this.recordedWeightKg,
+      rate: rate ?? this.rate,
+      randValueExVat: randValueExVat ?? this.randValueExVat,
+      costReviewedAt: costReviewedAt ?? this.costReviewedAt,
+      costReviewedBy: costReviewedBy ?? this.costReviewedBy,
+      weighbridgeReceivedAt: weighbridgeReceivedAt ?? this.weighbridgeReceivedAt,
+      pendingCostReviewAt: pendingCostReviewAt ?? this.pendingCostReviewAt,
       scheduledFor: scheduledFor ?? this.scheduledFor,
       scheduledBy: scheduledBy ?? this.scheduledBy,
       scheduledByName: scheduledByName ?? this.scheduledByName,

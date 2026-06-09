@@ -15,10 +15,12 @@ import 'waste_create_load_screen.dart';
 import 'waste_schedule_load_screen.dart';
 import 'waste_begin_collection_screen.dart';
 import 'waste_admin_screen.dart';
-import 'waste_reports_screen.dart';
 import 'waste_pending_weighbridge_screen.dart';
+import 'waste_review_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_stock_inventory_screen.dart';
+import 'waste_guide_screen.dart';
+import 'waste_queued_screen.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../theme/app_theme.dart';
@@ -364,12 +366,15 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   // ── Tab controller + pending weighbridge badge counter ──
   late TabController _tabController;
   int _pendingWeighbridgeCount = 0;
+  int _pendingReviewCount = 0;
   StreamSubscription<List<WasteLoad>>? _pendingCountSub;
+  StreamSubscription<List<WasteLoad>>? _pendingReviewSub;
 
   int _tabCount() {
     final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
     final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-    return 1 + (isAdmin || isManager ? 2 : 0) + (isAdmin ? 1 : 0);
+    // Loads + Weighbridge (manager/admin) + Review + Settings (admin only)
+    return 1 + (isAdmin || isManager ? 1 : 0) + (isAdmin ? 2 : 0);
   }
 
   @override
@@ -438,12 +443,19 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
       (loads) { if (mounted) setState(() => _pendingWeighbridgeCount = loads.length); },
       onError: (_) {},
     );
+    if (isAdmin) {
+      _pendingReviewSub = _wasteService.watchPendingCostReview().listen(
+        (loads) { if (mounted) setState(() => _pendingReviewCount = loads.length); },
+        onError: (_) {},
+      );
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _pendingCountSub?.cancel();
+    _pendingReviewSub?.cancel();
     _loadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
     super.dispose();
@@ -515,7 +527,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                 backgroundColor: Theme.of(context).appColors.wasteGreen,
                 child: const Icon(Icons.layers, color: Colors.white),
               ),
-              title: const Text('Paper Waste Stock'),
+              title: const Text('On-site Stock'),
               subtitle: const Text('View or record items accumulating on site'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -535,6 +547,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
       case WasteLoadStatus.completed:          return Icons.check_circle;
       case WasteLoadStatus.scheduled:          return Icons.event_available;
       case WasteLoadStatus.pendingWeighbridge: return Icons.scale;
+      case WasteLoadStatus.pendingCostReview: return Icons.rate_review;
       case WasteLoadStatus.cancelled:          return Icons.cancel;
       default:                                 return Icons.hourglass_bottom;
     }
@@ -545,6 +558,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
       case WasteLoadStatus.completed:          return Colors.green;
       case WasteLoadStatus.scheduled:          return Theme.of(context).appColors.wasteGreen;
       case WasteLoadStatus.pendingWeighbridge: return Colors.amber.shade700;
+      case WasteLoadStatus.pendingCostReview: return Colors.purple;
       case WasteLoadStatus.cancelled:          return Theme.of(context).colorScheme.onSurfaceVariant;
       default:                                 return Colors.orange;
     }
@@ -557,7 +571,10 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
         // Offline sync banner
         if (SyncService().getQueuedWasteOperationCount() > 0)
           InkWell(
-            onTap: () async => _handleRetrySync(context),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WasteQueuedScreen()),
+            ),
             child: Container(
               color: Colors.orange.shade50,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -567,22 +584,39 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '${SyncService().getQueuedWasteOperationCount()} item(s) queued offline — tap to retry',
+                      '${SyncService().getQueuedWasteOperationCount()} item(s) waiting to sync — tap to view',
                       style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
                     ),
                   ),
+                  Icon(Icons.chevron_right, size: 18, color: Colors.orange.shade800),
                 ],
               ),
             ),
           ),
 
-        // Paper Waste Stock summary banner
+        // On-site stock summary banner
         if (role_utils.isWasteUser(currentEmployee, _wasteSettings))
-          _PaperWasteStockBanner(wasteService: _wasteService),
+          _OnSiteStockBanner(wasteService: _wasteService),
 
-        // Quick filter chips
+        // Help + quick filter chips
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Load lifecycle guide',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WasteGuideScreen()),
+                ),
+                icon: const Icon(Icons.help_outline),
+              ),
+              const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
           child: Wrap(
             spacing: 8,
             children: [
@@ -748,31 +782,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     );
   }
 
-  Future<void> _handleRetrySync(BuildContext context) async {
-    final before = SyncService().getQueuedWasteOperationCount();
-    setState(() => _isLoading = true);
-    try {
-      await _wasteService.processOfflineWasteQueue();
-      await SyncService().processNow();
-      if (mounted) {
-        final after = SyncService().getQueuedWasteOperationCount();
-        final processed = before - after;
-        final msg = after == 0
-            ? (processed > 0 ? 'All $before queued items synced.' : 'Sync complete.')
-            : '$processed synced. $after remain queued.';
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: after == 0 ? Colors.green : Colors.orange));
-      }
-    } catch (e) {
-      if (mounted) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Retry failed: $e'), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isAdmin = role_utils.isWasteAdmin(currentEmployee);
@@ -836,14 +845,26 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
             ],
           ),
         ),
-      if (isAdmin || isManager) const Tab(text: 'Reports'),
-      if (isAdmin) const Tab(text: 'Admin'),
+      if (isAdmin)
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Review'),
+              if (_pendingReviewCount > 0) ...[
+                const SizedBox(width: 4),
+                _WasteBadge(_pendingReviewCount),
+              ],
+            ],
+          ),
+        ),
+      if (isAdmin) const Tab(text: 'Settings'),
     ];
 
     final tabViews = <Widget>[
       _buildLoadsTab(context, isAdmin, isManager),
       if (isAdmin || isManager) const WastePendingWeighbridgeScreen(embedded: true),
-      if (isAdmin || isManager) const WasteReportsScreen(embedded: true),
+      if (isAdmin) const WasteReviewScreen(embedded: true),
       if (isAdmin) const WasteAdminScreen(embedded: true),
     ];
 
@@ -885,18 +906,18 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 }
 
 // ---------------------------------------------------------------------------
-// Paper Waste Stock summary banner — tappable card shown in the loads tab.
+// On-site stock summary banner — tappable card shown in the loads tab.
 // Fetches the on-site stock count + total estimated weight (not a stream).
 // ---------------------------------------------------------------------------
-class _PaperWasteStockBanner extends StatefulWidget {
-  const _PaperWasteStockBanner({required this.wasteService});
+class _OnSiteStockBanner extends StatefulWidget {
+  const _OnSiteStockBanner({required this.wasteService});
   final WasteService wasteService;
 
   @override
-  State<_PaperWasteStockBanner> createState() => _PaperWasteStockBannerState();
+  State<_OnSiteStockBanner> createState() => _OnSiteStockBannerState();
 }
 
-class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
+class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   bool _loading = true;
   bool _error = false;
   int _count = 0;
@@ -910,7 +931,7 @@ class _PaperWasteStockBannerState extends State<_PaperWasteStockBanner> {
 
   Future<void> _load() async {
     try {
-      final summary = await widget.wasteService.getStockSummary('Paper Waste');
+      final summary = await widget.wasteService.getAllStockSummary();
       if (mounted) {
         setState(() {
           _count = summary.count;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/waste_stock_item.dart';
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
+import '../utils/waste_stock_mapping.dart';
 
 /// Bottom sheet to pick on-site stock items for linking to a load.
 class WasteStockLinkSheet extends StatefulWidget {
@@ -70,7 +71,7 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
   Future<void> _load() async {
     try {
       final items = await _wasteService
-          .watchStockOnSite(widget.wasteType)
+          .watchAllStockOnSite()
           .first
           .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
@@ -78,7 +79,9 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
         setState(() {
           _stock = filter == null || filter.isEmpty
               ? items
-              : items.where((i) => filter.contains(i.subtype)).toList();
+              : items
+                  .where((i) => stockItemMatchesFilter(i, filter))
+                  .toList();
           _loading = false;
         });
       }

@@ -53,6 +53,23 @@ class WasteService {
   Future<bool> _checkOnline() =>
       ConnectivityService().isOnline().catchError((_) => false);
 
+  /// Only enqueue when offline or a direct Firestore write failed.
+  Future<void> _enqueueWasteOp({
+    required bool shouldQueue,
+    required String collection,
+    required String operation,
+    required Map<String, dynamic> data,
+    String? documentId,
+  }) async {
+    if (!shouldQueue) return;
+    await SyncService().addToQueue(
+      collection: collection,
+      operation: operation,
+      data: data,
+      documentId: documentId,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // LOAD NUMBERING (via Cloud Function)
   // ---------------------------------------------------------------------------
@@ -82,47 +99,106 @@ class WasteService {
     });
   }
 
-  /// Resilient weighbridge entry (core security flow + deviation trigger).
-  /// Attempts direct Firestore update; on any failure (offline etc) queues via central SyncService
-  /// so the actual weight + deviation audit can land later. Always processes queue after attempt.
-  /// Updates local model caller side on optimistic success.
-  Future<void> saveWeighbridgeWeight({
+  /// Off-site weighbridge document capture. Transitions load to [pendingCostReview]
+  /// (not completed — admin approves cost in Review tab).
+  Future<({bool queuedOffline})> saveWeighbridgeWeight({
     required String loadId,
     required double actualWeightKg,
+    String? weighbridgeNumber,
+    String? ticketPhotoLocalPath,
     String? updatedBy,
+    bool ticketWaived = false,
+    String? ticketWaivedBy,
+    String? ticketWaivedByName,
   }) async {
+    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
+    final online = await _checkOnline();
+    var queuedOffline = !online;
+    final now = DateTime.now();
+
+    String? ticketPhotoUrl;
+    if (ticketPhotoLocalPath != null) {
+      if (queuedOffline) {
+        await queueOfflineWastePhoto(localPath: ticketPhotoLocalPath, loadId: loadId);
+      } else {
+        try {
+          ticketPhotoUrl = await uploadWastePhoto(
+            localPath: ticketPhotoLocalPath,
+            wasteRef: 'waste_loads/$loadId',
+            subfolder: 'weighbridge_ticket',
+          ).timeout(_photoUploadTimeout);
+        } catch (_) {
+          await queueOfflineWastePhoto(localPath: ticketPhotoLocalPath, loadId: loadId);
+          queuedOffline = true;
+        }
+      }
+    }
+
+    final load = await getLoad(loadId);
+    final suggested = load != null
+        ? await suggestLoadCost(loadId: loadId, load: load, weightKg: actualWeightKg)
+        : null;
+
     final updateData = {
       'actual_weighbridge_weight_kg': actualWeightKg,
+      if (weighbridgeNumber != null && weighbridgeNumber.isNotEmpty)
+        'weighbridge_number': weighbridgeNumber,
+      if (ticketPhotoUrl != null) 'weighbridge_ticket_photo_url': ticketPhotoUrl,
+      'weighbridge_ticket_waived': ticketWaived,
+      if (ticketWaived) ...{
+        'weighbridge_ticket_waived_by': ticketWaivedBy ?? updatedBy,
+        if (ticketWaivedByName != null && ticketWaivedByName.isNotEmpty)
+          'weighbridge_ticket_waived_by_name': ticketWaivedByName,
+        'weighbridge_ticket_waived_at': now.toIso8601String(),
+      },
+      'status': WasteLoadStatus.pendingCostReview.value,
+      'weighbridge_received_at': now.toIso8601String(),
+      'pending_cost_review_at': now.toIso8601String(),
       if (updatedBy != null) 'weighbridge_updated_by': updatedBy,
+      if (suggested != null) ...{
+        'rate': suggested.rate,
+        'rand_value_exvat': suggested.randValueExVat,
+      },
     };
 
-    try {
-      await updateLoad(loadId, updateData);
-      // Success path - still queue for audit trail / extra resilience (idempotent)
-      await SyncService().addToQueue(
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: {
-          ...updateData,
-          'updatedAt': DateTime.now().toIso8601String(), // client time; server will correct on apply
-        },
-        documentId: loadId,
-      );
-    } catch (e) {
-      // Offline or transient failure: queue for later processing by central handler
-      await SyncService().addToQueue(
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: {
-          ...updateData,
-          'updatedAt': DateTime.now().toIso8601String(),
-        },
-        documentId: loadId,
-      );
-    } finally {
-      // Always attempt to drain queue (covers reconnect edge cases)
-      await SyncService().processNow();
+    var statusAlreadyInReview = false;
+    if (online && !queuedOffline) {
+      try {
+        await _firestore.runTransaction((tx) async {
+          final snap = await tx.get(ref);
+          final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+          if (current == WasteLoadStatus.pendingCostReview) {
+            statusAlreadyInReview = true;
+            return;
+          }
+          if (current != WasteLoadStatus.pendingWeighbridge) {
+            throw StateError(
+              'Weighbridge cannot be submitted from status: ${current.value}',
+            );
+          }
+          tx.update(ref, {
+            ...updateData,
+            'weighbridge_received_at': FieldValue.serverTimestamp(),
+            'pending_cost_review_at': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }).timeout(_firestoreWriteTimeout);
+      } on StateError {
+        rethrow;
+      } catch (_) {
+        queuedOffline = true;
+      }
     }
+
+    await _enqueueWasteOp(
+      shouldQueue: queuedOffline && !statusAlreadyInReview,
+      collection: Collections.wasteLoads,
+      operation: 'update',
+      data: updateData,
+      documentId: loadId,
+    );
+
+    return (queuedOffline: queuedOffline);
   }
 
   Future<void> markLoadComplete(String loadId, {
@@ -247,6 +323,14 @@ class WasteService {
     return WasteLoad.fromFirestore(doc);
   }
 
+  Stream<WasteLoad?> watchLoad(String loadId) {
+    return _firestore
+        .collection(Collections.wasteLoads)
+        .doc(loadId)
+        .snapshots()
+        .map((doc) => doc.exists ? WasteLoad.fromFirestore(doc) : null);
+  }
+
   Future<({bool queuedOffline})> submitCollection({
     required String loadId,
     required String driverName,
@@ -255,6 +339,7 @@ class WasteService {
     String? collectedByName,
     required List<Map<String, dynamic>> itemsData,
     List<String> itemPhotoPaths = const [],
+    List<String> loadPhotoPaths = const [],
     String? signatureLocalPath,
   }) async {
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
@@ -271,11 +356,16 @@ class WasteService {
       'pending_weighbridge_at': now.toIso8601String(),
     };
 
+    var statusAlreadyPending = false;
     if (online) {
       try {
         await _firestore.runTransaction((tx) async {
           final snap = await tx.get(ref);
           final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+          if (current == WasteLoadStatus.pendingWeighbridge) {
+            statusAlreadyPending = true;
+            return;
+          }
           if (current != WasteLoadStatus.scheduled) {
             throw StateError('Load already started or completed (current: ${current.value})');
           }
@@ -292,7 +382,8 @@ class WasteService {
       }
     }
 
-    await SyncService().addToQueue(
+    await _enqueueWasteOp(
+      shouldQueue: queuedOffline && !statusAlreadyPending,
       collection: Collections.wasteLoads,
       operation: 'update',
       data: statusPayload,
@@ -341,14 +432,15 @@ class WasteService {
           'createdAt': queuedOffline ? now.toIso8601String() : FieldValue.serverTimestamp(),
         });
 
-      await SyncService().addToQueue(
-        collection: Collections.wasteItems,
-        operation: 'set',
-        data: itemData,
-        documentId: itemRef.id,
-      );
-
-      if (!queuedOffline) {
+      if (queuedOffline) {
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteItems,
+          operation: 'set',
+          data: itemData,
+          documentId: itemRef.id,
+        );
+      } else {
         try {
           await itemRef.set({
             ...itemData,
@@ -356,25 +448,185 @@ class WasteService {
           }).timeout(_firestoreWriteTimeout);
         } catch (_) {
           queuedOffline = true;
+          await _enqueueWasteOp(
+            shouldQueue: true,
+            collection: Collections.wasteItems,
+            operation: 'set',
+            data: itemData,
+            documentId: itemRef.id,
+          );
         }
       }
     }
 
-    final photoCountPayload = {'photo_count': totalPhotoCount};
-    await SyncService().addToQueue(
-      collection: Collections.wasteLoads,
-      operation: 'update',
-      data: photoCountPayload,
-      documentId: loadId,
-    );
+    final loadPhotoUrls = <String>[];
+    for (final path in loadPhotoPaths) {
+      if (queuedOffline) {
+        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
+        continue;
+      }
+      try {
+        final url = await uploadWastePhoto(
+          localPath: path,
+          wasteRef: 'waste_loads/$loadId',
+        ).timeout(_photoUploadTimeout);
+        loadPhotoUrls.add(url);
+      } catch (_) {
+        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
+        queuedOffline = true;
+      }
+    }
 
-    if (!queuedOffline) {
+    final photoCountPayload = {
+      'photo_count': totalPhotoCount + loadPhotoUrls.length,
+      if (loadPhotoUrls.isNotEmpty) 'load_photos': loadPhotoUrls,
+    };
+    if (queuedOffline) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteLoads,
+        operation: 'update',
+        data: photoCountPayload,
+        documentId: loadId,
+      );
+    } else {
       try {
         await ref.update(photoCountPayload).timeout(_firestoreWriteTimeout);
       } catch (_) {
         queuedOffline = true;
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: photoCountPayload,
+          documentId: loadId,
+        );
       }
-      unawaited(SyncService().processNow());
+    }
+
+    return (queuedOffline: queuedOffline);
+  }
+
+  /// Guard/manager finishes loading on an on-the-spot [draft] load.
+  /// Requires loaded-truck photos + driver signature → [pendingWeighbridge].
+  Future<({bool queuedOffline})> finishLoading({
+    required String loadId,
+    required List<String> loadPhotoPaths,
+    String? signatureLocalPath,
+    required String finishedBy,
+    String? finishedByName,
+  }) async {
+    if (signatureLocalPath == null) {
+      throw ArgumentError('Driver signature is required');
+    }
+
+    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
+    final online = await _checkOnline();
+    var queuedOffline = !online;
+    final now = DateTime.now();
+
+    final statusPayload = {
+      'status': WasteLoadStatus.pendingWeighbridge.value,
+      'pending_weighbridge_at': now.toIso8601String(),
+      'collected_by': finishedBy,
+      if (finishedByName != null) 'collected_by_name': finishedByName,
+    };
+
+    var statusAlreadyPending = false;
+    if (online) {
+      try {
+        await _firestore.runTransaction((tx) async {
+          final snap = await tx.get(ref);
+          final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+          if (current == WasteLoadStatus.pendingWeighbridge) {
+            statusAlreadyPending = true;
+            return;
+          }
+          if (current != WasteLoadStatus.draft) {
+            throw StateError(
+              'Load cannot be finished from status: ${current.value}',
+            );
+          }
+          tx.update(ref, {
+            ...statusPayload,
+            'pending_weighbridge_at': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }).timeout(_firestoreWriteTimeout);
+      } on StateError {
+        rethrow;
+      } catch (_) {
+        queuedOffline = true;
+      }
+    }
+
+    await _enqueueWasteOp(
+      shouldQueue: queuedOffline && !statusAlreadyPending,
+      collection: Collections.wasteLoads,
+      operation: 'update',
+      data: statusPayload,
+      documentId: loadId,
+    );
+
+    final loadPhotoUrls = <String>[];
+    for (final path in loadPhotoPaths) {
+      if (queuedOffline) {
+        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
+        continue;
+      }
+      try {
+        final url = await uploadWastePhoto(
+          localPath: path,
+          wasteRef: 'waste_loads/$loadId',
+        ).timeout(_photoUploadTimeout);
+        loadPhotoUrls.add(url);
+      } catch (_) {
+        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
+        queuedOffline = true;
+      }
+    }
+
+    if (signatureLocalPath.isNotEmpty) {
+      if (queuedOffline) {
+        await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
+      } else {
+        try {
+          final sigUrl = await _uploadSignatureBytesDirect(
+            await File(signatureLocalPath).readAsBytes(),
+            loadId,
+          ).timeout(_photoUploadTimeout);
+          await ref.update({'driver_signature_url': sigUrl}).timeout(_firestoreWriteTimeout);
+        } catch (_) {
+          await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
+          queuedOffline = true;
+        }
+      }
+    }
+
+    if (loadPhotoUrls.isNotEmpty) {
+      final photoPayload = {'load_photos': loadPhotoUrls};
+      if (queuedOffline) {
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: photoPayload,
+          documentId: loadId,
+        );
+      } else {
+        try {
+          await ref.update(photoPayload).timeout(_firestoreWriteTimeout);
+        } catch (_) {
+          queuedOffline = true;
+          await _enqueueWasteOp(
+            shouldQueue: true,
+            collection: Collections.wasteLoads,
+            operation: 'update',
+            data: photoPayload,
+            documentId: loadId,
+          );
+        }
+      }
     }
 
     return (queuedOffline: queuedOffline);
@@ -520,13 +772,6 @@ class WasteService {
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    await SyncService().addToQueue(
-      collection: Collections.wasteItems,
-      operation: 'set',
-      data: queueData,
-      documentId: itemRef.id,
-    );
-
     var nextRecorded = weightKg;
     try {
       final loadSnap = await _firestore
@@ -539,21 +784,43 @@ class WasteService {
     } catch (_) {}
 
     final weightUpdate = {'recorded_weight_kg': nextRecorded};
-    await SyncService().addToQueue(
-      collection: Collections.wasteLoads,
-      operation: 'update',
-      data: weightUpdate,
-      documentId: loadId,
-    );
 
-    if (!queuedOffline) {
+    if (queuedOffline) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteItems,
+        operation: 'set',
+        data: queueData,
+        documentId: itemRef.id,
+      );
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteLoads,
+        operation: 'update',
+        data: weightUpdate,
+        documentId: loadId,
+      );
+    } else {
       try {
         await itemRef.set(liveData).timeout(_firestoreWriteTimeout);
         await updateLoad(loadId, weightUpdate).timeout(_firestoreWriteTimeout);
       } catch (_) {
         queuedOffline = true;
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteItems,
+          operation: 'set',
+          data: queueData,
+          documentId: itemRef.id,
+        );
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: weightUpdate,
+          documentId: loadId,
+        );
       }
-      unawaited(SyncService().processNow());
     }
 
     return (queuedOffline: queuedOffline);
@@ -814,36 +1081,33 @@ class WasteService {
     };
 
     if (queuedOffline) {
-      await SyncService().addToQueue(
+      await _enqueueWasteOp(
+        shouldQueue: true,
         collection: Collections.wasteLoads,
         operation: 'set',
         data: loadQueueData,
         documentId: loadId,
       );
-    } else {
-      await SyncService().addToQueue(
-        collection: Collections.wasteLoads,
-        operation: 'create',
-        data: {
-          ...serializedLoadData,
-          'load_number': loadNumber,
-          'id': loadId,
-          'recorded_weight_kg': recordedTotal,
-        },
-        documentId: loadId,
-      );
-      if (loadPhotoUrls.isNotEmpty) {
-        try {
-          await updateLoad(loadId, {'load_photos': loadPhotoUrls})
-              .timeout(_firestoreWriteTimeout);
-        } catch (_) {
-          queuedOffline = true;
-        }
+    } else if (loadPhotoUrls.isNotEmpty) {
+      // Load doc already exists from Cloud Function — only patch load-level photos.
+      try {
+        await updateLoad(loadId, {'load_photos': loadPhotoUrls})
+            .timeout(_firestoreWriteTimeout);
+      } catch (_) {
+        queuedOffline = true;
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: {'load_photos': loadPhotoUrls},
+          documentId: loadId,
+        );
       }
     }
 
     final batch = queuedOffline ? null : _firestore.batch();
     var totalPhotoCount = loadPhotoUrls.length;
+    final pendingQueueItems = <({String id, Map<String, dynamic> data})>[];
 
     for (final rawItem in itemsData) {
       final itemRef = _firestore.collection(Collections.wasteItems).doc();
@@ -873,19 +1137,21 @@ class WasteService {
         'createdAt': now.toIso8601String(),
       };
 
-      await SyncService().addToQueue(
-        collection: Collections.wasteItems,
-        operation: 'set',
-        data: queueItemData,
-        documentId: itemRef.id,
-      );
-
-      if (!queuedOffline && batch != null) {
+      if (queuedOffline) {
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteItems,
+          operation: 'set',
+          data: queueItemData,
+          documentId: itemRef.id,
+        );
+      } else if (batch != null) {
         batch.set(itemRef, {
           ...itemBase,
           'photos': photoUrls,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        pendingQueueItems.add((id: itemRef.id, data: queueItemData));
       }
     }
 
@@ -896,10 +1162,26 @@ class WasteService {
             .timeout(_firestoreWriteTimeout);
       } catch (_) {
         queuedOffline = true;
+        for (final pending in pendingQueueItems) {
+          await _enqueueWasteOp(
+            shouldQueue: true,
+            collection: Collections.wasteItems,
+            operation: 'set',
+            data: pending.data,
+            documentId: pending.id,
+          );
+        }
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: {'photo_count': totalPhotoCount},
+          documentId: loadId,
+        );
       }
-      unawaited(SyncService().processNow());
-    } else {
-      await SyncService().addToQueue(
+    } else if (queuedOffline) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
         collection: Collections.wasteLoads,
         operation: 'update',
         data: {'photo_count': totalPhotoCount},
@@ -1024,6 +1306,104 @@ class WasteService {
             .map((d) => WasteLoad.fromFirestore(d))
             .where((l) => !l.isDeleted)
             .toList());
+  }
+
+  /// Streams loads awaiting admin cost approval after weighbridge document entry.
+  Stream<List<WasteLoad>> watchPendingCostReview() {
+    return _firestore
+        .collection(Collections.wasteLoads)
+        .where('status', isEqualTo: WasteLoadStatus.pendingCostReview.value)
+        .orderBy('pending_cost_review_at', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => WasteLoad.fromFirestore(d))
+            .where((l) => !l.isDeleted)
+            .toList());
+  }
+
+  /// Suggests cost from [waste_rates] using item subtypes × weighbridge weight.
+  Future<({double rate, double randValueExVat})?> suggestLoadCost({
+    required String loadId,
+    WasteLoad? load,
+    required double weightKg,
+  }) async {
+    final resolvedLoad = load ?? await getLoad(loadId);
+    if (resolvedLoad == null || weightKg <= 0) return null;
+
+    final rates = await watchRates().first;
+    double? costPerKgFor(String subtype) {
+      for (final r in rates) {
+        if (r['contractor_id'] == resolvedLoad.contractorId && r['subtype'] == subtype) {
+          return (r['cost_per_kg'] as num?)?.toDouble();
+        }
+      }
+      for (final r in rates) {
+        if (r['contractor_id'] == resolvedLoad.contractorId && r['subtype'] == 'default') {
+          return (r['cost_per_kg'] as num?)?.toDouble();
+        }
+      }
+      return null;
+    }
+
+    final items = await watchItemsForLoad(loadId).first;
+    if (items.isEmpty) {
+      final rate = costPerKgFor(resolvedLoad.mainWasteType);
+      if (rate == null || rate <= 0) return null;
+      return (rate: rate, randValueExVat: weightKg * rate);
+    }
+
+    double totalWeight = 0;
+    double weightedCost = 0;
+    for (final item in items) {
+      final w = item.weightKg;
+      if (w <= 0) continue;
+      final rate = costPerKgFor(item.subtype);
+      if (rate == null || rate <= 0) continue;
+      totalWeight += w;
+      weightedCost += w * rate;
+    }
+    if (totalWeight <= 0 || weightedCost <= 0) return null;
+    final avgRate = weightedCost / totalWeight;
+    return (rate: avgRate, randValueExVat: weightKg * avgRate);
+  }
+
+  /// Admin confirms cost and marks load [completed].
+  Future<void> approveCostReview({
+    required String loadId,
+    required double randValueExVat,
+    double? rate,
+    required String reviewedBy,
+  }) async {
+    final updateData = {
+      'status': WasteLoadStatus.completed.value,
+      'rand_value_exvat': randValueExVat,
+      if (rate != null) 'rate': rate,
+      'cost_reviewed_by': reviewedBy,
+      'completed_by': reviewedBy,
+      'completed_at': FieldValue.serverTimestamp(),
+      'cost_reviewed_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    var queued = false;
+    try {
+      await updateLoad(loadId, updateData);
+    } catch (_) {
+      queued = true;
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteLoads,
+        operation: 'update',
+        data: {
+          ...updateData.map((k, v) => MapEntry(k, v is FieldValue ? DateTime.now().toIso8601String() : v)),
+        },
+        documentId: loadId,
+      );
+    }
+    if (queued) {
+      unawaited(SyncService().processNow());
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1246,13 +1626,6 @@ class WasteService {
       'updated_at': now.toIso8601String(),
     };
 
-    await SyncService().addToQueue(
-      collection: Collections.wasteStock,
-      operation: 'set',
-      data: queueData,
-      documentId: stockId,
-    );
-
     var queuedOffline = !online;
 
     if (online) {
@@ -1265,7 +1638,16 @@ class WasteService {
       } catch (_) {
         queuedOffline = true;
       }
-      unawaited(SyncService().processNow());
+    }
+
+    if (queuedOffline) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteStock,
+        operation: 'set',
+        data: queueData,
+        documentId: stockId,
+      );
     }
 
     return (id: stockId, queuedOffline: queuedOffline);
@@ -1319,6 +1701,7 @@ class WasteService {
     final now = DateTime.now();
     final patch = {
       'subtype': subtype,
+      'waste_type': subtype,
       'estimated_weight_kg': estimatedWeightKg,
       'notes': notes,
       'photos': photoUrls,
@@ -1327,18 +1710,12 @@ class WasteService {
 
     final queueData = {
       'subtype': subtype,
+      'waste_type': subtype,
       if (estimatedWeightKg != null) 'estimated_weight_kg': estimatedWeightKg,
       if (notes != null) 'notes': notes,
       'photos': photoUrls,
       'updated_at': now.toIso8601String(),
     };
-
-    await SyncService().addToQueue(
-      collection: Collections.wasteStock,
-      operation: 'update',
-      data: queueData,
-      documentId: stockId,
-    );
 
     var queuedOffline = !online;
     if (online) {
@@ -1351,7 +1728,16 @@ class WasteService {
       } catch (_) {
         queuedOffline = true;
       }
-      unawaited(SyncService().processNow());
+    }
+
+    if (queuedOffline) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteStock,
+        operation: 'update',
+        data: queueData,
+        documentId: stockId,
+      );
     }
 
     return (queuedOffline: queuedOffline);
@@ -1380,6 +1766,23 @@ class WasteService {
   /// Uses a single-field Firestore filter (`waste_type`) and applies
   /// `is_deleted` / `status` / sort client-side so we don't depend on a
   /// 4-field composite index that may not be deployed yet.
+  /// All on-site stock across every waste type (newest first).
+  Stream<List<WasteStockItem>> watchAllStockOnSite() {
+    return _firestore
+        .collection(Collections.wasteStock)
+        .snapshots()
+        .map(_filterOnSiteStockDocs)
+        .transform(
+          StreamTransformer<List<WasteStockItem>, List<WasteStockItem>>.fromHandlers(
+            handleData: (data, sink) => sink.add(data),
+            handleError: (error, stackTrace, sink) {
+              debugPrint('watchAllStockOnSite error: $error');
+              sink.add(<WasteStockItem>[]);
+            },
+          ),
+        );
+  }
+
   Stream<List<WasteStockItem>> watchStockOnSite(String wasteType) {
     return _firestore
         .collection(Collections.wasteStock)
@@ -1436,10 +1839,12 @@ class WasteService {
           stock.status != WasteStockStatus.onSite) {
         continue;
       }
+      final label = stock.subtype.isNotEmpty ? stock.subtype : stock.wasteType;
+      if (label.isEmpty) continue;
       final weight = stock.estimatedWeightKg ?? 0;
       await addItemToExistingLoad(
         loadId: loadId,
-        subtype: stock.subtype,
+        subtype: label,
         weightKg: weight > 0 ? weight : 0,
         notes: stock.notes,
         localPhotoPaths: stock.photos,
@@ -1461,15 +1866,6 @@ class WasteService {
       'load_id': loadId,
     };
 
-    for (final id in stockIds) {
-      await SyncService().addToQueue(
-        collection: Collections.wasteStock,
-        operation: 'update',
-        data: payload,
-        documentId: id,
-      );
-    }
-
     if (online) {
       try {
         final batch = _firestore.batch();
@@ -1480,26 +1876,33 @@ class WasteService {
           });
         }
         await batch.commit().timeout(_firestoreWriteTimeout);
-        unawaited(SyncService().processNow());
+        return;
       } catch (_) {
-        // Queue entries will sync when connectivity returns.
+        // Fall through to queue below.
       }
+    }
+
+    for (final id in stockIds) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteStock,
+        operation: 'update',
+        data: payload,
+        documentId: id,
+      );
     }
   }
 
-  /// Returns the count and total estimated weight of on-site stock for a waste type.
-  Future<({int count, double totalEstimatedKg})> getStockSummary(String wasteType) async {
+  /// Returns the count and total estimated weight of all on-site stock.
+  Future<({int count, double totalEstimatedKg})> getAllStockSummary() async {
     try {
-      final snap = await _firestore
-          .collection(Collections.wasteStock)
-          .where('waste_type', isEqualTo: wasteType)
-          .get();
+      final snap = await _firestore.collection(Collections.wasteStock).get();
       final items = _filterOnSiteStockDocs(snap);
       final total = items.fold<double>(
         0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
       return (count: items.length, totalEstimatedKg: total);
     } catch (e) {
-      debugPrint('getStockSummary error: $e');
+      debugPrint('getAllStockSummary error: $e');
       return (count: 0, totalEstimatedKg: 0.0);
     }
   }

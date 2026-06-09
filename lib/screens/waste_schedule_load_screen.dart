@@ -143,7 +143,7 @@ class _WasteScheduleLoadScreenState
 
   void _refreshStockForSelection() {
     if (_canSelectStock && _usesPaperStock) {
-      _loadOnSiteStock(kPaperWasteStockParent);
+      _loadOnSiteStock();
     } else {
       setState(() {
         _showStockSection = false;
@@ -175,11 +175,11 @@ class _WasteScheduleLoadScreenState
     }
   }
 
-  Future<void> _loadOnSiteStock(String wasteType) async {
+  Future<void> _loadOnSiteStock() async {
     setState(() { _loadingStock = true; _onSiteStock = []; _selectedStockIds.clear(); });
     try {
       final pallets = await _wasteService
-          .watchStockOnSite(wasteType)
+          .watchAllStockOnSite()
           .first
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
