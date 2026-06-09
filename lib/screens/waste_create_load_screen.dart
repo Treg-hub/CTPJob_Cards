@@ -124,14 +124,14 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   // On-site stock (Paper Waste — same UX as Schedule Load)
   List<WasteStockItem> _onSiteStock = [];
   final List<String> _selectedStockIds = [];
-  bool _showStockSection = false;
   bool _loadingStock = false;
 
   bool _isLoading = false;
   bool get _isPaperWaste => _selectedType?.mainType == 'Paper Waste';
   bool get _canSelectStock =>
-      role_utils.isSecurityManager(currentEmployee, _wasteSettings) ||
-      role_utils.isWasteAdmin(currentEmployee);
+      role_utils.isWasteAdmin(currentEmployee) ||
+      role_utils.isSecurityManager(currentEmployee, _wasteSettings);
+  bool get _showStockSection => _isPaperWaste && _canSelectStock;
 
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
@@ -143,28 +143,27 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _wasteService.getWasteSettings().then((s) {
-      if (mounted) setState(() => _wasteSettings = s);
-    });
   }
 
   Future<void> _loadData() async {
     try {
       final contractors = await _wasteService.watchContractors().first;
       final types = await _wasteService.watchWasteTypes().first;
+      final settings = await _wasteService.getWasteSettings();
       if (mounted) {
         setState(() {
           _contractors = contractors;
           _wasteTypes = types;
+          _wasteSettings = settings;
         });
       }
     } catch (_) {}
   }
 
   void _resetStockSelection() {
-    _showStockSection = false;
     _onSiteStock = [];
     _selectedStockIds.clear();
+    _loadingStock = false;
   }
 
   Future<void> _loadOnSiteStock(String wasteType) async {
@@ -181,7 +180,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       if (mounted) {
         setState(() {
           _onSiteStock = stock;
-          _showStockSection = true;
           _loadingStock = false;
         });
       }
@@ -314,6 +312,152 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     }
   }
 
+  List<Widget> _buildOnSiteStockSection(BuildContext context) {
+    return [
+      const SizedBox(height: 20),
+      Text('On-Site Stock (optional)',
+          style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: 4),
+      Text(
+        'Select saved stock now. Add fresh items with photos below if needed.',
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 8),
+      if (_loadingStock)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (_onSiteStock.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            'No stock currently on site.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        )
+      else
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 340),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _onSiteStock.length,
+            itemBuilder: (_, i) {
+              final item = _onSiteStock[i];
+              final id = item.id!;
+              final selected = _selectedStockIds.contains(id);
+              return GestureDetector(
+                onTap: () => setState(() => selected
+                    ? _selectedStockIds.remove(id)
+                    : _selectedStockIds.add(id)),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).dividerColor,
+                      width: selected ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    color: selected
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withAlpha(60)
+                        : null,
+                  ),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: selected,
+                        onChanged: (v) => setState(() => v!
+                            ? _selectedStockIds.add(id)
+                            : _selectedStockIds.remove(id)),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      const SizedBox(width: 4),
+                      if (item.photos.isNotEmpty) ...[
+                        SizedBox(
+                          width: item.photos.length == 1
+                              ? 52
+                              : (item.photos.length == 2 ? 96 : 136),
+                          height: 52,
+                          child: Stack(
+                            children: [
+                              for (int p = 0;
+                                  p < item.photos.length && p < 3;
+                                  p++)
+                                Positioned(
+                                  left: p * 44.0,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.network(
+                                      item.photos[p],
+                                      width: 52,
+                                      height: 52,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 52,
+                                        height: 52,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.broken_image,
+                                            size: 20, color: Colors.grey),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.subtype,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [
+                                if (item.estimatedWeightKg != null)
+                                  '~${formatSAWeight(item.estimatedWeightKg!)}',
+                                formatSADate(item.createdAt),
+                              ].join(' · '),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -377,17 +521,18 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                     onSelected: (_) {
                       setState(() {
                         _selectedType = type;
-                        if (!(_canSelectStock && type.mainType == 'Paper Waste')) {
+                        if (type.mainType != 'Paper Waste') {
                           _resetStockSelection();
                         }
                       });
-                      if (_canSelectStock && type.mainType == 'Paper Waste') {
+                      if (type.mainType == 'Paper Waste') {
                         _loadOnSiteStock(type.mainType);
                       }
                     },
                   );
                 }).toList(),
               ),
+              if (_showStockSection) ..._buildOnSiteStockSection(context),
               const SizedBox(height: 16),
             ],
 
@@ -452,116 +597,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Add Waste Item (with photo)'),
             ),
-
-            if (_showStockSection) ...[
-              const SizedBox(height: 20),
-              const Text('On-Site Stock (optional)',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(
-                'Tick saved stock from Paper Stock. Use “Add Waste Item” above for extra material captured on the spot (new photos).',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_loadingStock)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_onSiteStock.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    'No stock currently on site.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 340),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _onSiteStock.length,
-                    itemBuilder: (_, i) {
-                      final item = _onSiteStock[i];
-                      final id = item.id!;
-                      final selected = _selectedStockIds.contains(id);
-                      return GestureDetector(
-                        onTap: () => setState(() => selected
-                            ? _selectedStockIds.remove(id)
-                            : _selectedStockIds.add(id)),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: selected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).dividerColor,
-                              width: selected ? 2 : 1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            color: selected
-                                ? Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer
-                                    .withAlpha(60)
-                                : null,
-                          ),
-                          child: Row(
-                            children: [
-                              Checkbox(
-                                value: selected,
-                                onChanged: (v) => setState(() => v!
-                                    ? _selectedStockIds.add(id)
-                                    : _selectedStockIds.remove(id)),
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.subtype,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      [
-                                        if (item.estimatedWeightKg != null)
-                                          '~${formatSAWeight(item.estimatedWeightKg!)}',
-                                        formatSADate(item.createdAt),
-                                      ].join(' · '),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
 
             if (_items.any((i) => i.photos.any((p) => p.startsWith('/'))))
               Container(
