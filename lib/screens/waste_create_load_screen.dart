@@ -135,8 +135,33 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
-    if (c == null || c.wasteTypeIds.isEmpty) return _wasteTypes;
+    if (c == null || c.wasteTypeIds.isEmpty) return const [];
     return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+  }
+
+  void _onContractorChanged(Contractor? contractor) {
+    setState(() {
+      _selectedContractor = contractor;
+      _selectedType = null;
+      _resetStockSelection();
+      if (contractor == null) {
+        _items.clear();
+        return;
+      }
+      final allowed = _wasteTypes
+          .where((t) => contractor.wasteTypeIds.contains(t.id))
+          .map((t) => t.mainType)
+          .toSet();
+      _items.removeWhere((item) => !allowed.contains(item.subtype));
+    });
+
+    final available = _availableTypes;
+    if (available.length == 1) {
+      setState(() => _selectedType = available.first);
+      if (available.first.mainType == 'Paper Waste') {
+        _loadOnSiteStock('Paper Waste');
+      }
+    }
   }
 
   @override
@@ -495,13 +520,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               items: _contractors.isEmpty
                   ? [const DropdownMenuItem<Contractor?>(value: null, child: Text('Loading...'))]
                   : _contractors.map((c) => DropdownMenuItem<Contractor?>(value: c, child: Text(c.name))).toList(),
-              onChanged: _contractors.isEmpty
-                  ? null
-                  : (c) => setState(() {
-                      _selectedContractor = c;
-                      _selectedType = null;
-                      _resetStockSelection();
-                    }),
+              onChanged: _contractors.isEmpty ? null : _onContractorChanged,
               decoration: const InputDecoration(labelText: 'Contractor *'),
             ),
             const SizedBox(height: 16),
@@ -509,7 +528,28 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             if (_selectedContractor != null) ...[
               const Text('Main Waste Type *',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Only waste types linked to this contractor are shown.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
               const SizedBox(height: 8),
+              if (_availableTypes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No waste types linked to this contractor. '
+                    'Ask an admin to link types in Waste Admin.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,

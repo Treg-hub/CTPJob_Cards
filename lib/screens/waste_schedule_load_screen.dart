@@ -85,9 +85,41 @@ class _WasteScheduleLoadScreenState
     }
   }
 
+  List<WasteType> get _availableTypes {
+    final c = _selectedContractor;
+    if (c == null || c.wasteTypeIds.isEmpty) return const [];
+    return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+  }
+
   bool get _isValid =>
       _selectedContractor != null &&
       _selectedType != null;
+
+  void _onContractorChanged(Contractor? contractor) {
+    setState(() {
+      _selectedContractor = contractor;
+      _selectedType = null;
+      _showStockSection = false;
+      _onSiteStock = [];
+      _selectedStockIds.clear();
+    });
+
+    final available = contractor == null
+        ? const <WasteType>[]
+        : _wasteTypes
+            .where((t) => contractor.wasteTypeIds.contains(t.id))
+            .toList();
+    if (available.length == 1) {
+      final only = available.first;
+      setState(() => _selectedType = only);
+      final canSelectStock =
+          isSecurityManager(currentEmployee, _wasteSettings) ||
+          isWasteAdmin(currentEmployee);
+      if (canSelectStock && only.mainType == 'Paper Waste') {
+        _loadOnSiteStock(only.mainType);
+      }
+    }
+  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -260,38 +292,40 @@ class _WasteScheduleLoadScreenState
                       value: c,
                       child: Text(c.name),
                     )).toList(),
-                    onChanged: (c) {
-                      setState(() {
-                        _selectedContractor = c;
-                        _selectedType = null;
-                        _showStockSection = false;
-                        _onSiteStock = [];
-                        _selectedStockIds.clear();
-                      });
-                      if (c != null) {
-                        final available = c.wasteTypeIds.isEmpty
-                            ? _wasteTypes
-                            : _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
-                        if (available.length == 1) {
-                          setState(() => _selectedType = available.first);
-                        }
-                      }
-                    },
+                    onChanged: _onContractorChanged,
                   ),
 
+                  if (_selectedContractor != null) ...[
                   const SizedBox(height: 20),
 
-                  // ── Waste type ───────────────────────────────
+                  // ── Waste type (contractor-linked only) ───────
                   Text('Main Waste Type *', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Only waste types linked to this contractor are shown.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Builder(builder: (context) {
-                    final available = _selectedContractor == null || _selectedContractor!.wasteTypeIds.isEmpty
-                        ? _wasteTypes
-                        : _wasteTypes.where((t) => _selectedContractor!.wasteTypeIds.contains(t.id)).toList();
-                    return Wrap(
+                  if (_availableTypes.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'No waste types linked to this contractor. '
+                        'Ask an admin to link types in Waste Admin.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                  Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: available.map((type) {
+                    children: _availableTypes.map((type) {
                       final selected = _selectedType?.mainType == type.mainType;
                       return ChoiceChip(
                         label: Text(type.mainType),
@@ -313,8 +347,7 @@ class _WasteScheduleLoadScreenState
                         },
                       );
                     }).toList(),
-                  );
-                  }),
+                  ),
 
                   // ── On-site pallet selection (Paper Waste, manager only) ──
                   if (_showStockSection) ...[
@@ -445,6 +478,8 @@ class _WasteScheduleLoadScreenState
                           },
                         ),
                       ),
+                  ],
+
                   ],
 
                   const SizedBox(height: 20),
