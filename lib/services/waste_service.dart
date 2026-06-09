@@ -139,7 +139,6 @@ class WasteService {
   Stream<List<WasteLoad>> watchLoads({String? status, int limit = 50}) {
     Query query = _firestore
         .collection(Collections.wasteLoads)
-        .where('is_deleted', isEqualTo: false)
         .orderBy('date_time', descending: true)
         .limit(limit);
 
@@ -147,8 +146,10 @@ class WasteService {
       query = query.where('status', isEqualTo: status);
     }
 
-    return query.snapshots().map((snap) =>
-        snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+    return query.snapshots().map((snap) => snap.docs
+        .map((d) => WasteLoad.fromFirestore(d))
+        .where((l) => !l.isDeleted)
+        .toList());
   }
 
   // ---------------------------------------------------------------------------
@@ -197,12 +198,14 @@ class WasteService {
   Stream<List<WasteLoad>> watchScheduledLoads({int limit = 50}) {
     return _firestore
         .collection(Collections.wasteLoads)
-        .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.scheduled.value)
         .orderBy('scheduled_for', descending: false)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+        .map((snap) => snap.docs
+            .map((d) => WasteLoad.fromFirestore(d))
+            .where((l) => !l.isDeleted)
+            .toList());
   }
 
   /// Manager cancels a scheduled load before the guard begins collection.
@@ -299,15 +302,12 @@ class WasteService {
       final photoUrls = <String>[];
 
       for (final path in (item['localPhotoPaths'] as List<String>? ?? [])) {
-        try {
-          final url = await uploadWastePhoto(
-            localPath: path,
-            wasteRef: 'waste_items/${itemRef.id}',
-          );
-          photoUrls.add(url);
-        } catch (_) {
-          await queueOfflineWastePhoto(localPath: path, loadId: loadId, itemId: itemRef.id);
-        }
+        final url = await _resolveItemPhotoUrl(
+          path: path,
+          loadId: loadId,
+          itemId: itemRef.id,
+        );
+        if (url != null) photoUrls.add(url);
       }
 
       totalPhotoCount += photoUrls.length;
@@ -409,15 +409,12 @@ class WasteService {
     final photoUrls = <String>[];
 
     for (final path in localPhotoPaths) {
-      try {
-        final url = await uploadWastePhoto(
-          localPath: path,
-          wasteRef: 'waste_items/${itemRef.id}',
-        );
-        photoUrls.add(url);
-      } catch (_) {
-        await queueOfflineWastePhoto(localPath: path, loadId: loadId, itemId: itemRef.id);
-      }
+      final url = await _resolveItemPhotoUrl(
+        path: path,
+        loadId: loadId,
+        itemId: itemRef.id,
+      );
+      if (url != null) photoUrls.add(url);
     }
 
     final data = {
@@ -451,6 +448,31 @@ class WasteService {
   // ---------------------------------------------------------------------------
   // PHOTO HANDLING (reused & adapted from Job Cards patterns)
   // ---------------------------------------------------------------------------
+
+  bool _isRemotePhotoUrl(String path) =>
+      path.startsWith('http://') || path.startsWith('https://');
+
+  /// Upload a local file, or pass through an existing Firebase URL (pre-loaded stock).
+  Future<String?> _resolveItemPhotoUrl({
+    required String path,
+    required String loadId,
+    required String itemId,
+  }) async {
+    if (_isRemotePhotoUrl(path)) return path;
+    try {
+      return await uploadWastePhoto(
+        localPath: path,
+        wasteRef: 'waste_items/$itemId',
+      );
+    } catch (_) {
+      await queueOfflineWastePhoto(
+        localPath: path,
+        loadId: loadId,
+        itemId: itemId,
+      );
+      return null;
+    }
+  }
 
   Future<String?> pickAndCompressPhotoFromSource(ImageSource source) async {
     final picker = ImagePicker();
@@ -816,12 +838,14 @@ class WasteService {
   Stream<List<WasteLoad>> watchPendingWeighbridge() {
     return _firestore
         .collection(Collections.wasteLoads)
-        .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.pendingWeighbridge.value)
         .orderBy('pending_weighbridge_at', descending: true)
         .limit(100)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+        .map((snap) => snap.docs
+            .map((d) => WasteLoad.fromFirestore(d))
+            .where((l) => !l.isDeleted)
+            .toList());
   }
 
   // ---------------------------------------------------------------------------

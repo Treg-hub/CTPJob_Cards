@@ -105,8 +105,13 @@ class SyncService {
             await _processWasteSignatureUpload(item);
           } else {
             final docRef = firestore.collection(item.collection).doc(item.id);
-            if (item.operation == 'create' || item.operation == 'update') {
-              await docRef.set(item.data, SetOptions(merge: true));
+            if (item.operation == 'create' ||
+                item.operation == 'update' ||
+                item.operation == 'set') {
+              await docRef.set(
+                item.data,
+                SetOptions(merge: item.operation == 'update'),
+              );
             } else if (item.operation == 'delete') {
               await docRef.delete();
             }
@@ -114,8 +119,13 @@ class SyncService {
         } else {
           final docRef = firestore.collection(item.collection).doc(item.id);
 
-          if (item.operation == 'create' || item.operation == 'update') {
-            await docRef.set(item.data, SetOptions(merge: true));
+          if (item.operation == 'create' ||
+              item.operation == 'update' ||
+              item.operation == 'set') {
+            await docRef.set(
+              item.data,
+              SetOptions(merge: item.operation == 'update'),
+            );
           } else if (item.operation == 'delete') {
             await docRef.delete();
           }
@@ -270,6 +280,7 @@ class SyncService {
     final String? localPath = data['localPath'] as String?;
     final String? loadId = data['loadId'] as String?;
     final String? itemId = data['itemId'] as String?;
+    final String? targetCollectionOverride = data['targetCollection'] as String?;
 
     if (localPath == null || loadId == null) {
       debugPrint('⚠️ Invalid waste_photos queue entry, skipping: ${item.id}');
@@ -285,7 +296,26 @@ class SyncService {
 
     // Upload to Storage (mirrors WasteService.uploadWastePhoto path convention)
     final fileName = '${const Uuid().v4()}.jpg';
-    final storageFolder = itemId != null ? 'waste_items/$itemId' : 'waste_loads/$loadId';
+    final String storageFolder;
+    final String targetCollection;
+    final String targetDocId;
+    final String photoField;
+    if (targetCollectionOverride == Collections.wasteStock && itemId != null) {
+      storageFolder = 'waste_stock/$itemId';
+      targetCollection = Collections.wasteStock;
+      targetDocId = itemId;
+      photoField = 'photos';
+    } else if (itemId != null) {
+      storageFolder = 'waste_items/$itemId';
+      targetCollection = Collections.wasteItems;
+      targetDocId = itemId;
+      photoField = 'photos';
+    } else {
+      storageFolder = 'waste_loads/$loadId';
+      targetCollection = Collections.wasteLoads;
+      targetDocId = loadId;
+      photoField = 'load_photos';
+    }
     final storagePath = '$storageFolder/photos/$fileName';
 
     final ref = FirebaseStorage.instance.ref().child(storagePath);
@@ -293,9 +323,6 @@ class SyncService {
     final downloadUrl = await snapshot.ref.getDownloadURL();
 
     // Patch the target document (load or item) - arrayUnion is idempotent-friendly
-    final targetCollection = itemId != null ? Collections.wasteItems : Collections.wasteLoads;
-    final targetDocId = itemId ?? loadId;
-    final photoField = itemId != null ? 'photos' : 'load_photos';
 
     await FirebaseFirestore.instance
         .collection(targetCollection)
