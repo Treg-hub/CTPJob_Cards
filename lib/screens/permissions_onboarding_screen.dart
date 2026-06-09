@@ -279,7 +279,7 @@ class _YourRolePage extends StatelessWidget {
       return "You process waste collections at the gate — beginning the load, recording items, and signing off at the weighbridge.";
     }
     if (_isFleetMechanic) {
-      return "You maintain the forklifts and grabs on site — your work queue lives in the Fleet tab.";
+      return "You maintain the Hyster machines on site — your work queue lives in the Fleet tab.";
     }
     return switch (role) {
       UserRole.technician =>
@@ -295,7 +295,7 @@ class _YourRolePage extends StatelessWidget {
   IconData get _icon {
     if (_isSecurityManager) return Icons.security;
     if (_isSecurityGuard) return Icons.badge;
-    if (_isFleetMechanic) return Icons.precision_manufacturing;
+    if (_isFleetMechanic) return Icons.forklift;
     return switch (role) {
       UserRole.technician => Icons.build,
       UserRole.manager => Icons.dashboard,

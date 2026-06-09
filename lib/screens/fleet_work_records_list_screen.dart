@@ -127,10 +127,10 @@ class _FleetWorkRecordsListScreenState
                 Expanded(
                   child: FleetFilterDropdown<String>(
                     labelText: widget.mechanicMode || _isCostTab
-                        ? 'Forklift'
+                        ? 'Hyster'
                         : 'Asset',
                     allLabel: widget.mechanicMode || _isCostTab
-                        ? 'All forklifts'
+                        ? 'All Hyster'
                         : 'All assets',
                     value: _assetFilterId,
                     options: _assets

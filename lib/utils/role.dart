@@ -130,6 +130,12 @@ bool isFleetUser(Employee? employee, FleetSettings? settings) {
       isFleetCostManager(employee, settings);
 }
 
+/// Any fleet role can report faults (reporters, mechanics, cost managers, admins).
+bool canReportFleetIssue(Employee? employee, FleetSettings? settings) {
+  if (settings == null || !settings.fleetEnabled) return false;
+  return isFleetUser(employee, settings);
+}
+
 // =============================================================================
 // BUILDING MAINTENANCE role helpers
 // =============================================================================

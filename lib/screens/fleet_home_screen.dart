@@ -21,6 +21,7 @@ import 'fleet_work_records_list_screen.dart';
 import 'doc_viewer_screen.dart';
 import '../models/doc_entry.dart';
 import '../utils/fleet_guides.dart';
+import '../services/sync_service.dart';
 
 /// Fleet Maintenance home screen — tabbed entry point for the Fleet tab.
 /// Tabs are role-filtered: Issues (all) | Work (mechanic+admin) |
@@ -132,8 +133,8 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     // Tab-aware FABs
     final int tabIdx = _tabController.index;
     Widget? fab;
-    if (tabIdx == 0 && (isReporter || isAdmin)) {
-      final reporterFab = isReporter && !isAdmin;
+    if (tabIdx == 0 && role_utils.canReportFleetIssue(emp, settings)) {
+      final reporterFab = isReporter && !isAdmin && !isCostMgr && !isMechanic;
       fab = FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetReportIssueScreen())),
         icon: const Icon(Icons.report_problem_outlined),
@@ -170,12 +171,36 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     }
 
     final fleetGuides = fleetGuidesFor(emp, settings);
+    final queuedFleet = SyncService().getQueuedFleetOperationCount();
 
     return Scaffold(
       floatingActionButton: fab,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (queuedFleet > 0)
+            Material(
+              color: kBrandOrange.withValues(alpha: 0.12),
+              child: InkWell(
+                onTap: () => SyncService().processNow(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_upload_outlined,
+                          color: kBrandOrange, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '$queuedFleet fleet item(s) queued offline — tap to retry sync',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (fleetGuides.isNotEmpty)
             Align(
               alignment: Alignment.centerRight,
@@ -347,7 +372,7 @@ class _IssuesTab extends ConsumerWidget {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Tap "Report Issue" below to log a problem on a forklift or grab.',
+                  'Tap "Report Issue" below to log a problem on a Hyster (forks or grab).',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
                 ),

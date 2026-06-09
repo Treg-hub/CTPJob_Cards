@@ -49,7 +49,7 @@ class FleetReporterGuideBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Pick the forklift, say how urgent it is, and describe what is wrong. '
+              'Pick the Hyster, say how urgent it is, and describe what is wrong. '
               'The mechanic will see it under To Fix.',
               style: TextStyle(fontSize: 13, height: 1.35),
             ),

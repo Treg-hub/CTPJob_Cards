@@ -43,7 +43,7 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
           if (assets.isEmpty) {
             return const Center(
               child: Text(
-                'No assets yet.\nTap + to add a forklift or grab.',
+                'No assets yet.\nTap + to add a Hyster (forks or grab).',
                 textAlign: TextAlign.center,
               ),
             );
@@ -287,7 +287,7 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
               controller: _nameCtrl,
               decoration: fleetDropdownDecoration(
                 labelText: 'Name *',
-                hintText: 'e.g. Forklift 01',
+                hintText: 'e.g. Hyster 01',
               ),
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Required' : null,

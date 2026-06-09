@@ -6,7 +6,7 @@ import '../theme/app_theme.dart';
 String costCategoryHint(FleetCostCategory category) {
   switch (category) {
     case FleetCostCategory.parts:
-      return 'Parts or materials bought for this forklift.';
+      return 'Parts or materials bought for this Hyster.';
     case FleetCostCategory.labour:
       return 'External labour, contractor, or workshop invoice.';
     case FleetCostCategory.invoice:
@@ -132,7 +132,7 @@ class FleetCostGuideBanner extends StatelessWidget {
               linkedToJob
                   ? 'Enter what was spent on this mechanic job. '
                       'Amounts are only visible to cost managers — not mechanics.'
-                  : 'Record spend against a forklift. Link to a mechanic job when '
+                  : 'Record spend against a Hyster. Link to a mechanic job when '
                       'the cost relates to work they logged.',
               style: const TextStyle(fontSize: 13, height: 1.35),
             ),

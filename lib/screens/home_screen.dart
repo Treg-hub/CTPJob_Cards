@@ -38,6 +38,7 @@ import '../models/waste_settings.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/waste_service.dart';
+import '../utils/fleet_labels.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -95,8 +96,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       role_utils.isFleetUser(currentEmployee, _cachedFleetSettings);
 
   bool get _canReportFleetIssue =>
-      (_cachedFleetSettings?.fleetEnabled ?? false) &&
-      role_utils.isFleetReporter(currentEmployee, _cachedFleetSettings);
+      role_utils.canReportFleetIssue(currentEmployee, _cachedFleetSettings);
+
+  bool _fleetMechanicNavDone = false;
 
   /// Returns true when the currently visible tab is the Waste tab.
   bool get _isOnWasteTab {
@@ -113,9 +115,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return _selectedIndex == idx;
   }
 
-  /// Returns true when the currently visible tab is the Fleet tab.
-  bool get _isOnFleetTab {
-    if (!_isFleetUser) return false;
+  int _fleetTabIndex() {
+    if (!_isFleetUser) return -1;
     int idx = 2; // 0=Home, 1=MyWork
     if (currentEmployee != null &&
         currentEmployee!.position.toLowerCase().contains('manager')) {
@@ -126,7 +127,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         (_cachedWasteSettings?.wasteEnabled ?? true)) {
       idx++;
     }
-    return _selectedIndex == idx;
+    return idx;
+  }
+
+  /// Returns true when the currently visible tab is the Fleet tab.
+  bool get _isOnFleetTab {
+    final idx = _fleetTabIndex();
+    return idx >= 0 && _selectedIndex == idx;
+  }
+
+  void _maybeOpenFleetTabForMechanic() {
+    if (_fleetMechanicNavDone || !mounted || _pendingJobId != null) return;
+    final settings = _cachedFleetSettings;
+    if (settings == null || !settings.fleetEnabled) return;
+    if (!role_utils.isFleetMechanic(currentEmployee, settings)) return;
+    final idx = _fleetTabIndex();
+    if (idx < 0) return;
+    _fleetMechanicNavDone = true;
+    setState(() => _selectedIndex = idx);
   }
 
   String get _appBarTitle {
@@ -273,7 +291,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       result = [
         ...result,
         {
-          'title': 'Report Hyster Problem',
+          'title': FleetLabels.reportHysterProblem,
           'icon': Icons.forklift,
           'color': kBrandOrange,
           'onTap': () => Navigator.push(
@@ -295,7 +313,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _loadFleetSettings() async {
     try {
       final settings = await FleetService().getSettings();
-      if (mounted) setState(() => _cachedFleetSettings = settings);
+      if (mounted) {
+        setState(() => _cachedFleetSettings = settings);
+        _maybeOpenFleetTabForMechanic();
+      }
     } catch (e) {
       debugPrint('Fleet settings load error: $e');
     }
@@ -1622,6 +1643,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       next.whenData((settings) {
         if (mounted && _cachedFleetSettings != settings) {
           setState(() => _cachedFleetSettings = settings);
+          _maybeOpenFleetTabForMechanic();
         }
       });
     });
@@ -1643,7 +1665,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
       if (_isFleetUser)
-        const BottomNavigationBarItem(icon: Icon(Icons.precision_manufacturing_outlined), label: 'Fleet'),
+        const BottomNavigationBarItem(icon: Icon(Icons.forklift), label: 'Fleet'),
     ];
 
     final List<Widget> children = [

@@ -247,7 +247,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _showError('Please pick which forklift or grab you worked on.');
+      _showError('Please pick which Hyster you worked on.');
       return;
     }
     if (_selectedWorkType == null) {
@@ -300,6 +300,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           .toList();
 
       String recordId;
+      var queuedOffline = false;
       if (_isEditing) {
         recordId = widget.workRecordId!;
         final uploaded = await _service.uploadPhotosForRecord(
@@ -338,21 +339,16 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           'linked_issue_ids': _linkedIssueIds,
         };
 
-        final result = await _service.createWorkRecord(data);
-        recordId = result['id'] as String;
-
-        final uploaded = await _service.uploadPhotosForRecord(
-            recordId, _pendingPhotoPaths);
-        final allPhotos = [..._savedPhotoUrls, ...uploaded];
-        if (allPhotos.isNotEmpty) {
-          await _service.updateWorkRecord(recordId, {'photos': allPhotos});
-        }
-        await _service.replaceParts(recordId, parts);
-
-        for (final issueId in _linkedIssueIds) {
-          await _service.resolveIssueWithWorkRecord(
-              issueId, recordId, emp.clockNo, emp.name);
-        }
+        final result = await _service.createWorkRecordResilient(
+          data,
+          photoPaths: _pendingPhotoPaths,
+          parts: parts,
+          linkedIssueIds: _linkedIssueIds,
+          loggedByClockNo: emp.clockNo,
+          loggedByName: emp.name,
+        );
+        recordId = result.id;
+        queuedOffline = result.queuedOffline;
       }
 
       if (mounted) {
@@ -360,6 +356,16 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           Navigator.of(context).pop();
         } else if (_isFixingIssue) {
           Navigator.of(context).pop(true);
+        } else if (queuedOffline) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Work saved offline — will sync when connection returns.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
         } else {
           final settings = ref.read(fleetSettingsProvider).asData?.value ??
               FleetSettings.defaults;
@@ -588,7 +594,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
           // ── Asset ──────────────────────────────────────────────────────
           FleetSectionLabel(
-            useMechanicLabels ? 'Which forklift or grab? *' : 'Asset *',
+            useMechanicLabels ? 'Which Hyster? (forks or grab) *' : 'Asset *',
           ),
           if (widget.linkedIssueId != null &&
               !_isEditing &&
@@ -686,7 +692,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
             decoration: fleetDropdownDecoration(
-              hintText: 'Reading on the forklift hour meter',
+              hintText: 'Reading on the hour meter',
             ),
           ),
           const SizedBox(height: 16),

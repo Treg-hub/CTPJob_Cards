@@ -94,7 +94,7 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _snack('Please pick which forklift this cost is for.');
+      _snack('Please pick which Hyster this cost is for.');
       return;
     }
     final desc = _descCtrl.text.trim();
@@ -222,7 +222,7 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
           ],
 
           FleetSectionLabel(
-            costMgrUx ? 'Which forklift? *' : 'Asset *',
+            costMgrUx ? 'Which Hyster? *' : 'Asset *',
           ),
           FleetAssetSelector(
             value: _selectedAsset,

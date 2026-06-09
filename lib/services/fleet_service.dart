@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -15,6 +16,8 @@ import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
+import 'connectivity_service.dart';
+import 'sync_service.dart';
 
 /// All Fleet Maintenance Firestore and Storage operations.
 /// Follows the WasteService singleton pattern.
@@ -484,5 +487,183 @@ class FleetService {
       SettableMetadata(contentType: 'image/jpeg'),
     );
     return await task.ref.getDownloadURL();
+  }
+
+  // ---------------------------------------------------------------------------
+  // OFFLINE-FIRST — mirrors WasteService resilience pattern
+  // ---------------------------------------------------------------------------
+
+  static const Duration _photoUploadTimeout = Duration(seconds: 12);
+  static const Duration _firestoreWriteTimeout = Duration(seconds: 8);
+  static const Duration _callableTimeout = Duration(seconds: 15);
+
+  Future<bool> _checkOnline() =>
+      ConnectivityService().isOnline().catchError((_) => false);
+
+  Future<void> queueOfflineFleetPhoto({
+    required String localPath,
+    required String targetKind,
+    required String targetId,
+  }) async {
+    await SyncService().addToQueue(
+      collection: 'fleet_photos',
+      operation: 'upload',
+      data: {
+        'localPath': localPath,
+        'targetKind': targetKind,
+        'targetId': targetId,
+      },
+      documentId:
+          '${targetKind}_${targetId}_${DateTime.now().millisecondsSinceEpoch}',
+    );
+  }
+
+  /// Creates an issue offline-first; photos queue when upload fails or offline.
+  Future<({String id, bool queuedOffline})> createIssueResilient(
+    FleetIssue issue, {
+    List<String> photoPaths = const [],
+  }) async {
+    final issueId = _db.collection(Collections.fleetIssues).doc().id;
+    final online = await _checkOnline();
+    final base = issue.toFirestore()
+      ..['status'] = 'open'
+      ..['photos'] = <String>[];
+
+    final queueData = {
+      ...base,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    await SyncService().addToQueue(
+      collection: Collections.fleetIssues,
+      operation: 'create',
+      data: queueData,
+      documentId: issueId,
+    );
+
+    for (final path in photoPaths) {
+      await queueOfflineFleetPhoto(
+        localPath: path,
+        targetKind: 'issue',
+        targetId: issueId,
+      );
+    }
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        await _db.collection(Collections.fleetIssues).doc(issueId).set({
+          ...base,
+          'created_at': FieldValue.serverTimestamp(),
+        }).timeout(_firestoreWriteTimeout);
+
+        final urls = <String>[];
+        for (final path in photoPaths) {
+          try {
+            urls.add(await uploadFleetPhoto(
+              localPath: path,
+              fleetRef: 'fleet_issues/$issueId',
+            ).timeout(_photoUploadTimeout));
+          } catch (_) {
+            await queueOfflineFleetPhoto(
+              localPath: path,
+              targetKind: 'issue',
+              targetId: issueId,
+            );
+          }
+        }
+        if (urls.isNotEmpty) {
+          await _db
+              .collection(Collections.fleetIssues)
+              .doc(issueId)
+              .update({'photos': urls});
+        }
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (id: issueId, queuedOffline: queuedOffline);
+  }
+
+  /// Creates a work record via CF when online; queues create_cf when offline/slow.
+  Future<({String id, String? workNumber, bool queuedOffline})>
+      createWorkRecordResilient(
+    Map<String, dynamic> data, {
+    List<String> photoPaths = const [],
+    List<FleetWorkPart> parts = const [],
+    List<String> linkedIssueIds = const [],
+    required String loggedByClockNo,
+    required String loggedByName,
+  }) async {
+    final online = await _checkOnline();
+    final queuePayload = Map<String, dynamic>.from(data);
+    if (photoPaths.isNotEmpty) {
+      queuePayload['_pending_photo_paths'] = photoPaths;
+    }
+    if (parts.isNotEmpty) {
+      queuePayload['_parts'] = parts
+          .map((p) => {
+                'part_name': p.partName,
+                if (p.quantity != null) 'quantity': p.quantity,
+              })
+          .toList();
+    }
+    if (linkedIssueIds.isNotEmpty) {
+      queuePayload['_linked_issue_ids'] = linkedIssueIds;
+      queuePayload['_resolver_clock_no'] = loggedByClockNo;
+      queuePayload['_resolver_name'] = loggedByName;
+    }
+
+    final queueId = const Uuid().v4();
+    await SyncService().addToQueue(
+      collection: Collections.fleetWorkRecords,
+      operation: 'create_cf',
+      data: SyncService.sanitizeForHive(queuePayload),
+      documentId: queueId,
+    );
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        final result = await createWorkRecord(data).timeout(_callableTimeout);
+        final recordId = result['id'] as String;
+
+        if (photoPaths.isNotEmpty) {
+          final uploaded =
+              await uploadPhotosForRecord(recordId, photoPaths);
+          if (uploaded.isNotEmpty) {
+            await updateWorkRecord(recordId, {'photos': uploaded});
+          }
+        }
+        if (parts.isNotEmpty) {
+          await replaceParts(recordId, parts);
+        }
+        for (final issueId in linkedIssueIds) {
+          await resolveIssueWithWorkRecord(
+            issueId,
+            recordId,
+            loggedByClockNo,
+            loggedByName,
+          );
+        }
+
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetWorkRecords,
+          documentId: queueId,
+        );
+        return (
+          id: recordId,
+          workNumber: result['work_number'] as String?,
+          queuedOffline: false,
+        );
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (id: queueId, workNumber: null, queuedOffline: queuedOffline);
   }
 }

@@ -6,7 +6,7 @@
 
 ## What you use this for
 
-Fleet Maintenance tracks problems on **forklifts and grabs** — who reported them, what you did to fix them, and when. You do **not** enter costs; a manager handles that later.
+Fleet Maintenance tracks problems on **Hyster machines (forks or grab attachments)** — who reported them, what you did to fix them, and when. You do **not** enter costs; a manager handles that later.
 
 Your main tabs:
 
@@ -38,7 +38,7 @@ Use the filter chips at the top of **To Fix** to switch between these lists.
 3. Tap **Start job** (moves it to *In progress*)
 4. Tap **Finish the fix**
 5. Fill in:
-   - **Hour-meter reading** (required) — number on the forklift hour meter
+   - **Hour-meter reading** (required) — number on the hour meter on the machine
    - **What you did** — short title and description
    - **Labour hours** — optional
    - **Parts** and **photos** — optional
@@ -73,7 +73,7 @@ Use **Log other work** on the **History** tab for planned jobs with no fault rep
 
 1. **History** → **Log other work**
 2. **When did you start?** — tap to set the start date/time (defaults to now). For multi-day jobs, set the day you began.
-3. Pick the forklift, job type, title, and description
+3. Pick the Hyster, job type, title, and description
 4. Enter hour-meter reading (required)
 5. Add labour hours, parts, and photos if needed
 6. Tap **Save job**
@@ -89,7 +89,7 @@ This does not close a problem in **To Fix** — it only adds a record to **Histo
 
 On the **History** tab you can filter by:
 
-- **Forklift** — show jobs for one machine only
+- **Hyster** — show jobs for one machine only
 - **Job type** — e.g. Repair, Routine, Inspection
 
 Leave both on “All” to see everything.
@@ -114,7 +114,7 @@ Sometimes a report is wrong (duplicate, not a real fault). On the problem screen
 
 ## Out-of-service machines
 
-When a problem is marked **Out of Service**, the forklift cannot be used until it is fixed. These appear at the top of the list and may trigger notifications. Fix them the same way: **Start job** → **Finish the fix**.
+When a problem is marked **Out of Service**, the Hyster cannot be used until it is fixed. These appear at the top of the list and may trigger notifications. Fix them the same way: **Start job** → **Finish the fix**.
 
 When the last open out-of-service problem on a machine is fixed, the red warning clears automatically.
 
@@ -128,7 +128,7 @@ When the last open out-of-service problem on a machine is fixed, the red warning
 | Complete a repair | **Finish the fix** → **Mark as Fixed** |
 | See open problems | **To Fix** tab |
 | See finished jobs | **History** tab |
-| Filter by forklift | **History** → Forklift dropdown |
+| Filter by Hyster | **History** → Hyster dropdown |
 | Log planned work (no fault) | **Log other work** |
 | Dismiss a false alarm | **Close with a note only** |
 

@@ -1,12 +1,12 @@
 # CTP Fleet Maintenance — Reporter Guide
 
-*A plain-language guide for reporting problems on forklifts and grabs*
+*A plain-language guide for reporting problems on Hyster machines (forks or grab attachments)*
 
 ---
 
 ## What you use this for
 
-When a **forklift or grab** has a fault, you report it here so the **Hyster mechanic** knows what to fix. You do not log repairs or costs — you only describe the problem.
+When a **Hyster (forks or grab)** has a fault, you report it here so the **Hyster mechanic** knows what to fix. You do not log repairs or costs — you only describe the problem.
 
 Your main tab:
 
@@ -21,7 +21,7 @@ Tap **Report Problem** to submit a new fault.
 ## Reporting a problem — step by step
 
 1. Open **Fleet** → tap **Report Problem**
-2. **Which forklift or grab?** — pick the machine from the list
+2. **Which Hyster (forks or grab)?** — pick the machine from the list
 3. **How urgent is it?** — pick one level (see table below)
 4. **What's wrong?** — describe clearly what happened (at least a short sentence)
 5. **Which part is affected?** — tap a saved part or type a new one (required)

@@ -283,7 +283,7 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
 
                   if (sortedAssets.isNotEmpty) ...[
                     Text(
-                      costMgrUx ? 'Spend per forklift' : 'Spend per Asset',
+                      costMgrUx ? 'Spend per Hyster' : 'Spend per Asset',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,

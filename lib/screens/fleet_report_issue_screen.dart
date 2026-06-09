@@ -113,7 +113,7 @@ class _FleetReportIssueScreenState
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _showError('Please pick which forklift or grab has the problem.');
+      _showError('Please pick which Hyster has the problem.');
       return;
     }
     final desc = _descCtrl.text.trim();
@@ -138,20 +138,21 @@ class _FleetReportIssueScreenState
         parts: List.from(_selectedParts),
         photos: const [],
       );
-      final issueId = await _service.createIssue(issue);
-      if (_pendingPhotoPaths.isNotEmpty) {
-        final urls =
-            await _service.uploadPhotosForIssue(issueId, _pendingPhotoPaths);
-        await _service.updateIssuePhotos(issueId, urls);
-      }
+      final result = await _service.createIssueResilient(
+        issue,
+        photoPaths: _pendingPhotoPaths,
+      );
       if (mounted) {
         final oos = _severity == FleetIssueSeverity.outOfService;
+        final queued = result.queuedOffline;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              oos
-                  ? 'Report sent. Mechanic notified — machine marked out of service.'
-                  : 'Report sent. The mechanic will see it under To Fix.',
+              queued
+                  ? 'Report saved offline — will sync when connection returns.'
+                  : oos
+                      ? 'Report sent. Mechanic notified — machine marked out of service.'
+                      : 'Report sent. The mechanic will see it under To Fix.',
             ),
             backgroundColor: Colors.green,
           ),
@@ -224,7 +225,7 @@ class _FleetReportIssueScreenState
             const SizedBox(height: 20),
           ],
 
-          const FleetSectionLabel('Which forklift or grab? *'),
+          const FleetSectionLabel('Which Hyster? (forks or grab) *'),
           FleetAssetSelector(
             value: _selectedAsset,
             onChanged: (asset) => setState(() => _selectedAsset = asset),

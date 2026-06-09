@@ -6,13 +6,13 @@
 
 ## What Is Fleet Maintenance?
 
-Fleet Maintenance is the module in the CTP Job Cards app used to track the upkeep of the **Hyster forklifts and grabs** — separate from normal production job cards. It records faults reported on each machine, the work the mechanic does to fix them, and the costs the manager records against each asset.
+Fleet Maintenance is the module in the CTP Job Cards app used to track the upkeep of the **Hyster machines (forks or grab attachments)** — separate from normal production job cards. It records faults reported on each machine, the work the mechanic does to fix them, and the costs the manager records against each asset.
 
 This guide covers the four roles that operate Fleet Maintenance day-to-day:
 
 | Role | Responsibilities |
 |------|-----------------|
-| **Fleet Reporter** | Report a problem on a forklift or grab; track the issues you raised |
+| **Fleet Reporter** | Report a problem on a Hyster (forks or grab); track the issues you raised |
 | **Hyster Mechanic** | Acknowledge issues, log the work done, resolve issues |
 | **Cost Manager** | Record costs per asset, view spend reports, export CSV |
 | **Fleet Admin** | Manage the asset register and all Fleet settings |
@@ -45,10 +45,10 @@ The **Issues** tab shows a live count badge of currently open issues.
 
 ## Section 2: For Fleet Reporters — Reporting a Problem
 
-When a forklift or grab develops a fault:
+When a Hyster (forks or grab) develops a fault:
 
 1. On the Fleet home screen, tap **Report a Problem**.
-2. **Pick the asset** — choose the forklift or grab from the register.
+2. **Pick the asset** — choose the Hyster (forks or grab) from the register.
 3. **Choose the severity:**
    - **Low** — minor, non-urgent
    - **Medium** — needs attention soon
@@ -127,7 +127,7 @@ The **Reports** tab shows:
 
 Everything that configures the module lives in **Fleet Settings** (Admin only):
 
-- **Asset register** — add and edit the forklifts and grabs (name, type, identifier).
+- **Asset register** — add and edit the Hyster machines (forks or grab attachments) (name, type, identifier).
 - **Reporter departments** — which departments are allowed to report issues.
 - **Cost-manager clock numbers** — who can enter and view costs.
 - **Asset & work types** — the pick-lists used elsewhere in the module.
@@ -175,4 +175,4 @@ The badge clears only when *every* open Out-of-Service issue on that asset is re
 
 ---
 
-*CTP Fleet Maintenance · Forklift & Grab Upkeep Guide*
+*CTP Fleet Maintenance · Hyster — Forks & Grab Upkeep Guide*
