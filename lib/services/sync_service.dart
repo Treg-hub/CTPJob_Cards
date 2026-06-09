@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -14,6 +15,10 @@ class SyncService {
   static final SyncService _instance = SyncService._internal();
   factory SyncService() => _instance;
   SyncService._internal();
+
+  static final RegExp _properLoadNumber = RegExp(r'^WT-\d{8}-\d{3}$');
+  final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'africa-south1');
 
   late final Box<SyncQueueItem> _queueBox;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
@@ -112,6 +117,10 @@ class SyncService {
                 item.data,
                 SetOptions(merge: item.operation == 'update'),
               );
+              if (item.collection == Collections.wasteLoads &&
+                  (item.operation == 'set' || item.operation == 'create')) {
+                await _assignWasteLoadNumberIfNeeded(item.id, item.data);
+              }
             } else if (item.operation == 'delete') {
               await docRef.delete();
             }
@@ -269,6 +278,44 @@ class SyncService {
   /// Forces an immediate pass over the Hive queue (including any waste photos/docs).
   Future<void> processNow() async {
     await _processQueue();
+  }
+
+  bool _needsWasteLoadNumber(String? loadNumber) {
+    if (loadNumber == null || loadNumber.isEmpty) return false;
+    if (_properLoadNumber.hasMatch(loadNumber)) return false;
+    return loadNumber.startsWith('OFFLINE-');
+  }
+
+  String? _loadDateForNumbering(Map<String, dynamic> data) {
+    final dateTime = data['date_time'];
+    if (dateTime is String && dateTime.isNotEmpty) return dateTime;
+    final createdAt = data['createdAt'];
+    if (createdAt is String && createdAt.isNotEmpty) return createdAt;
+    final date = data['date'];
+    if (date is String && date.isNotEmpty) return date;
+    return null;
+  }
+
+  /// Replaces provisional OFFLINE-* numbers with atomic WT-YYYYMMDD-NNN via CF.
+  Future<void> _assignWasteLoadNumberIfNeeded(
+    String loadId,
+    Map<String, dynamic> data,
+  ) async {
+    final loadNumber = data['load_number'] as String?;
+    if (!_needsWasteLoadNumber(loadNumber)) return;
+
+    final callable = _functions.httpsCallable('assignWasteLoadNumber');
+    final payload = <String, dynamic>{'loadId': loadId};
+    final date = _loadDateForNumbering(data);
+    if (date != null) payload['date'] = date;
+
+    final result = await callable.call(payload);
+    final assigned = (result.data as Map?)?['load_number'] as String?;
+    debugPrint(
+      assigned != null
+          ? '✅ Assigned waste load number $assigned for $loadId'
+          : '✅ Waste load number confirmed for $loadId',
+    );
   }
 
   /// Handles a queued waste photo upload from the central Hive queue.
