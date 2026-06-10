@@ -1676,7 +1676,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (_isCopperAuthorized)
         _buildCopperTab(),
       if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
-        _buildWasteTab(),   // TODO: real focused Waste home for Security Manager/Guard
+        _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
     ];
