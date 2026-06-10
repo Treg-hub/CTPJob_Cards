@@ -300,6 +300,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           .toList();
 
       String recordId;
+      String? workNumber;
       var queuedOffline = false;
       if (_isEditing) {
         recordId = widget.workRecordId!;
@@ -348,6 +349,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           loggedByName: emp.name,
         );
         recordId = result.id;
+        workNumber = result.workNumber;
         queuedOffline = result.queuedOffline;
       }
 
@@ -359,9 +361,13 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
         } else if (queuedOffline) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Work saved offline — will sync when connection returns.',
+                // workNumber present = record created, only attachments
+                // (photos/parts) are still queued.
+                workNumber != null
+                    ? 'Job $workNumber saved — photos/parts will finish syncing.'
+                    : 'Work saved offline — will sync when connection returns.',
               ),
               backgroundColor: Colors.orange,
             ),
