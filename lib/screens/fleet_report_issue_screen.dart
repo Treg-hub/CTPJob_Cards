@@ -135,7 +135,6 @@ class _FleetReportIssueScreenState
         severity: _severity,
         reportedByClockNo: emp.clockNo,
         reportedByName: emp.name,
-        shift: FleetIssueShift.detectFromNow(),
         parts: List.from(_selectedParts),
         photos: const [],
       );

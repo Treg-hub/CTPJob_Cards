@@ -67,40 +67,9 @@ enum FleetIssueStatus {
   bool get isOpen => this == FleetIssueStatus.open || this == FleetIssueStatus.acknowledged;
 }
 
-enum FleetIssueShift {
-  day('day'),
-  night('night'),
-  weekend('weekend');
-
-  const FleetIssueShift(this.value);
-  final String value;
-
-  static FleetIssueShift fromString(String? value) {
-    switch (value) {
-      case 'night':   return FleetIssueShift.night;
-      case 'weekend': return FleetIssueShift.weekend;
-      default:        return FleetIssueShift.day;
-    }
-  }
-
-  String get displayLabel {
-    switch (this) {
-      case FleetIssueShift.day:     return 'Day';
-      case FleetIssueShift.night:   return 'Night';
-      case FleetIssueShift.weekend: return 'Weekend';
-    }
-  }
-
-  /// Auto-detects shift from current wall-clock time.
-  static FleetIssueShift detectFromNow() {
-    final now = DateTime.now();
-    if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) {
-      return FleetIssueShift.weekend;
-    }
-    if (now.hour >= 6 && now.hour < 18) return FleetIssueShift.day;
-    return FleetIssueShift.night;
-  }
-}
+// NOTE: shift capture was removed 2026-06-10 — created_at records the exact
+// report time, and a shift bucket is derivable from it whenever reporting
+// needs one. Legacy docs may still carry a 'shift' field; it is ignored.
 
 enum FleetIssueResolutionType {
   workRecord('work_record'),
@@ -128,7 +97,6 @@ class FleetIssue {
   final FleetIssueStatus status;
   final String reportedByClockNo;
   final String reportedByName;
-  final FleetIssueShift? shift;
   final List<String> parts;
   final List<String> photos;
   final DateTime? createdAt;
@@ -158,7 +126,6 @@ class FleetIssue {
     this.status = FleetIssueStatus.open,
     required this.reportedByClockNo,
     required this.reportedByName,
-    this.shift,
     this.parts = const [],
     this.photos = const [],
     this.createdAt,
@@ -202,9 +169,6 @@ class FleetIssue {
       status: FleetIssueStatus.fromString(data['status'] as String?),
       reportedByClockNo: data['reported_by_clock_no'] as String? ?? '',
       reportedByName: data['reported_by_name'] as String? ?? '',
-      shift: data['shift'] != null
-          ? FleetIssueShift.fromString(data['shift'] as String?)
-          : null,
       parts: (data['parts'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -236,7 +200,6 @@ class FleetIssue {
       'status': status.value,
       'reported_by_clock_no': reportedByClockNo,
       'reported_by_name': reportedByName,
-      if (shift != null) 'shift': shift!.value,
       if (parts.isNotEmpty) 'parts': parts,
       'photos': photos,
       'created_at': FieldValue.serverTimestamp(),
@@ -265,7 +228,6 @@ class FleetIssue {
     FleetIssueStatus? status,
     String? reportedByClockNo,
     String? reportedByName,
-    FleetIssueShift? shift,
     List<String>? parts,
     List<String>? photos,
     DateTime? createdAt,
@@ -292,7 +254,6 @@ class FleetIssue {
       status: status ?? this.status,
       reportedByClockNo: reportedByClockNo ?? this.reportedByClockNo,
       reportedByName: reportedByName ?? this.reportedByName,
-      shift: shift ?? this.shift,
       parts: parts ?? this.parts,
       photos: photos ?? this.photos,
       createdAt: createdAt ?? this.createdAt,

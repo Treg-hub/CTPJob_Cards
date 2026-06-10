@@ -186,7 +186,15 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
             else
               TextButton(
                 onPressed: _save,
-                child: const Text('Save'),
+                // Explicit colour: the default TextButton foreground is the
+                // primary (orange) — invisible on the orange FleetAppBar.
+                child: const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
         ],
       ),

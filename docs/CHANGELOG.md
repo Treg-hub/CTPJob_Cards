@@ -26,6 +26,10 @@ A work record can be edited for **14 days** after it is created (and only until 
 
 The reading entered when logging work is saved onto the machine itself, so the form shows **"Last recorded: X h"** next time. If a new reading is *lower* than the last recorded one, the app asks for confirmation before saving (meters only count up — this catches typos).
 
+**Asset form save button fixed (admin)**
+
+The Save action on Add/Edit Asset was rendering orange-on-orange in the app bar and was effectively invisible — edits silently went nowhere when backing out. The form now has a clear **Save asset** button at the bottom.
+
 **Photos open fullscreen**
 
 Tap any photo on a problem report or work record to view it fullscreen, pinch-to-zoom, and swipe between photos. Broken images now show a clear placeholder instead of an error icon.

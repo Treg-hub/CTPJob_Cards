@@ -252,22 +252,34 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
     return Scaffold(
       appBar: FleetAppBar(
         title: isEdit ? 'Edit Asset' : 'Add Asset',
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child: const Text('Save'),
+      ),
+      // Bottom bar instead of an app-bar action: a default TextButton on the
+      // orange FleetAppBar renders primary-on-primary and is invisible.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(
+              _saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Save asset'),
             ),
-        ],
+            style: FilledButton.styleFrom(
+              backgroundColor: kBrandOrange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
