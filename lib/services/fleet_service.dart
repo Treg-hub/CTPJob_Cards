@@ -19,6 +19,15 @@ import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
 import 'sync_service.dart';
 
+/// Thrown when a status change loses a race — the issue moved on while this
+/// screen showed a stale snapshot. toString is the user-facing message.
+class FleetConflictException implements Exception {
+  final String message;
+  FleetConflictException(this.message);
+  @override
+  String toString() => message;
+}
+
 /// All Fleet Maintenance Firestore and Storage operations.
 /// Follows the WasteService singleton pattern.
 class FleetService {
@@ -216,7 +225,38 @@ class FleetService {
             snap.exists ? FleetIssue.fromFirestore(snap) : null);
   }
 
+  /// Throws [FleetConflictException] when the issue's live status is not in
+  /// [allowed] — i.e. someone else changed it while this screen showed a
+  /// stale snapshot. When the server can't be reached (offline) the check is
+  /// skipped and the buffered write proceeds; the single-mechanic workflow
+  /// makes an offline conflict effectively impossible.
+  Future<void> _guardIssueStatus(
+      String issueId, Set<FleetIssueStatus> allowed) async {
+    DocumentSnapshot<Map<String, dynamic>> snap;
+    try {
+      snap = await _db
+          .collection(Collections.fleetIssues)
+          .doc(issueId)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return;
+    }
+    if (!snap.exists) {
+      throw FleetConflictException('This problem no longer exists.');
+    }
+    final status =
+        FleetIssueStatus.fromString(snap.data()?['status'] as String?);
+    if (!allowed.contains(status)) {
+      throw FleetConflictException(
+        'This problem is already ${status.displayLabel.toLowerCase()} — '
+        'go back and reopen it to see the latest.',
+      );
+    }
+  }
+
   Future<void> acknowledgeIssue(String issueId, String clockNo, String name) async {
+    await _guardIssueStatus(issueId, {FleetIssueStatus.open});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'acknowledged',
       'acknowledged_by_clock_no': clockNo,
@@ -227,6 +267,8 @@ class FleetService {
 
   Future<void> resolveIssueWithNote(
       String issueId, String note, String clockNo, String name) async {
+    await _guardIssueStatus(
+        issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'resolved',
       'resolution_type': 'note',
@@ -237,6 +279,9 @@ class FleetService {
     });
   }
 
+  /// Deliberately unguarded: a logged work record is the strongest form of
+  /// resolution and may overwrite a note-resolution that raced it. Also
+  /// called from the offline replay path, which must never throw conflicts.
   Future<void> resolveIssueWithWorkRecord(
       String issueId, String workRecordId, String clockNo, String name) async {
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
@@ -251,6 +296,8 @@ class FleetService {
 
   Future<void> cancelIssue(
       String issueId, String clockNo, String name, {String? reason}) async {
+    await _guardIssueStatus(
+        issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'cancelled',
       'cancelled_by_clock_no': clockNo,
@@ -299,6 +346,15 @@ class FleetService {
         await _db.collection(Collections.fleetWorkRecords).doc(id).get();
     if (!snap.exists) return null;
     return FleetWorkRecord.fromFirestore(snap);
+  }
+
+  Stream<FleetWorkRecord?> watchWorkRecord(String id) {
+    return _db
+        .collection(Collections.fleetWorkRecords)
+        .doc(id)
+        .snapshots()
+        .map((snap) =>
+            snap.exists ? FleetWorkRecord.fromFirestore(snap) : null);
   }
 
   Future<void> updateWorkRecord(
@@ -400,6 +456,62 @@ class FleetService {
       batch.update(wrRef, {'has_cost_lines': true});
     }
     await batch.commit();
+  }
+
+  /// Creates a cost line offline-first — same queue-first pattern as issues.
+  /// The linked work record's has_cost_lines flag is queued as a separate
+  /// merge-update so it replays safely too.
+  Future<({String id, bool queuedOffline})> createCostLineResilient(
+      FleetCostLine line) async {
+    final lineId = _db.collection(Collections.fleetCostLines).doc().id;
+    final online = await _checkOnline();
+    final data = line.toFirestore();
+
+    await SyncService().addToQueue(
+      collection: Collections.fleetCostLines,
+      operation: 'create',
+      data: SyncService.sanitizeForHive(data),
+      documentId: lineId,
+    );
+    if (line.workRecordId != null) {
+      await SyncService().addToQueue(
+        collection: Collections.fleetWorkRecords,
+        operation: 'update',
+        data: {'has_cost_lines': true},
+        documentId: line.workRecordId!,
+      );
+    }
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        final batch = _db.batch();
+        batch.set(_db.collection(Collections.fleetCostLines).doc(lineId), data);
+        if (line.workRecordId != null) {
+          batch.update(
+            _db.collection(Collections.fleetWorkRecords).doc(line.workRecordId),
+            {'has_cost_lines': true},
+          );
+        }
+        await batch.commit().timeout(_firestoreWriteTimeout);
+        queuedOffline = false;
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetCostLines,
+          documentId: lineId,
+        );
+        if (line.workRecordId != null) {
+          await SyncService().removeQueuedItem(
+            collection: Collections.fleetWorkRecords,
+            documentId: line.workRecordId!,
+          );
+        }
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (id: lineId, queuedOffline: queuedOffline);
   }
 
   Stream<List<FleetCostLine>> watchCostLines({

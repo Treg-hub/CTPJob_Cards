@@ -367,6 +367,106 @@ void main() {
     });
   });
 
+  group('Cost line offline bookkeeping', () {
+    test('cost line + linked work-record flag queue as two removable entries', () async {
+      // Mirrors createCostLineResilient: line create + has_cost_lines update.
+      await SyncService().addToQueue(
+        collection: Collections.fleetCostLines,
+        operation: 'create',
+        data: {
+          'asset_id': 'a1',
+          'description': 'Hydraulic hose',
+          'amount_zar': 1500.0,
+          'cost_date': DateTime(2026, 6, 10).toIso8601String(),
+        },
+        documentId: 'cost-1',
+      );
+      await SyncService().addToQueue(
+        collection: Collections.fleetWorkRecords,
+        operation: 'update',
+        data: {'has_cost_lines': true},
+        documentId: 'wr-77',
+      );
+      expect(SyncService().getQueuedFleetOperationCount(), 2);
+
+      // Direct write succeeded → both entries removed, nothing to replay.
+      await SyncService().removeQueuedItem(
+          collection: Collections.fleetCostLines, documentId: 'cost-1');
+      await SyncService().removeQueuedItem(
+          collection: Collections.fleetWorkRecords, documentId: 'wr-77');
+      expect(SyncService().getQueuedFleetOperationCount(), 0);
+    });
+
+    test('cost line entries are retained on processing failure', () async {
+      await SyncService().addToQueue(
+        collection: Collections.fleetCostLines,
+        operation: 'create',
+        data: {'description': 'kept'},
+        documentId: 'cost-retain',
+      );
+      try {
+        await SyncService().processNow();
+      } catch (_) {}
+      expect(SyncService().getQueuedFleetOperationCount(), 1);
+    });
+  });
+
+  group('getQueuedFleetDetails', () {
+    test('empty queue yields empty details (robust empty state)', () {
+      expect(SyncService().getQueuedFleetDetails(), isEmpty);
+    });
+
+    test('categorises issue / photo / work record / cost entries with age', () async {
+      await SyncService().addToQueue(
+        collection: Collections.fleetIssues,
+        operation: 'create',
+        data: {'asset_name': 'Hyster 01', 'description': 'grinding'},
+        documentId: 'det-issue',
+      );
+      await SyncService().addToQueue(
+        collection: 'fleet_photos',
+        operation: 'upload',
+        data: {'localPath': 'p.jpg', 'targetKind': 'issue', 'targetId': 'det-issue'},
+        documentId: 'det-photo',
+      );
+      await SyncService().addToQueue(
+        collection: Collections.fleetWorkRecords,
+        operation: 'create_cf',
+        data: {'title': 'Replaced hose', 'asset_name': 'Hyster 01'},
+        documentId: 'det-wr',
+      );
+      await SyncService().addToQueue(
+        collection: Collections.fleetCostLines,
+        operation: 'create',
+        data: {'description': 'Hose kit'},
+        documentId: 'det-cost',
+      );
+      // Non-fleet must be excluded.
+      await SyncService().addToQueue(
+        collection: 'waste_loads',
+        operation: 'update',
+        data: {},
+        documentId: 'det-non-fleet',
+      );
+
+      final details = SyncService().getQueuedFleetDetails();
+      expect(details.length, 4);
+
+      final types = details.map((d) => d['type'] as String).toSet();
+      expect(types, contains('Problem report'));
+      expect(types, contains('Photo upload'));
+      expect(types, contains('Work record'));
+      expect(types, contains('Cost entry'));
+
+      final wr = details.firstWhere((d) => d['id'] == 'det-wr');
+      expect(wr['ref'], 'Replaced hose');
+      expect(wr['age'], isNotNull);
+
+      final photo = details.firstWhere((d) => d['id'] == 'det-photo');
+      expect(photo['ref'], 'for a problem report');
+    });
+  });
+
   group('sanitizeForHive for fleet payloads', () {
     test('Timestamps and nested structures become Hive-safe', () {
       final ts = Timestamp.fromDate(DateTime(2026, 6, 10, 8, 30));

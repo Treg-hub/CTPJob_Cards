@@ -12,6 +12,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
+import '../widgets/fleet_photo_viewer.dart';
 import 'fleet_log_work_screen.dart';
 
 /// Detailed view of a single fleet issue.
@@ -475,7 +476,7 @@ class _IssueBody extends StatelessWidget {
         if (!mechanicView && issue.acknowledgedByClockNo != null) ...[
           _DetailRow(
             label: 'Acknowledged by',
-            child: Text(issue.acknowledgedByClockNo!),
+            child: Text(issue.acknowledgedByLabel ?? '—'),
           ),
           _DetailRow(
             label: 'Acknowledged at',
@@ -508,7 +509,7 @@ class _IssueBody extends StatelessWidget {
           ] else ...[
             _DetailRow(
               label: 'Resolved by',
-              child: Text(issue.resolvedByClockNo ?? '—'),
+              child: Text(issue.resolvedByLabel ?? '—'),
             ),
             _DetailRow(
               label: 'Resolved at',
@@ -532,6 +533,24 @@ class _IssueBody extends StatelessWidget {
               ),
           ],
         ],
+        if (issue.status == FleetIssueStatus.cancelled) ...[
+          const Divider(),
+          _DetailRow(
+            label: 'Cancelled by',
+            child: Text(issue.cancelledByLabel ?? '—'),
+          ),
+          _DetailRow(
+            label: 'Cancelled at',
+            child: Text(issue.cancelledAt != null
+                ? fmt.format(issue.cancelledAt!)
+                : '—'),
+          ),
+          if (issue.cancelReason != null)
+            _DetailRow(
+              label: 'Reason',
+              child: Text(issue.cancelReason!),
+            ),
+        ],
         const Divider(),
 
         // ── Photos ────────────────────────────────────────────────────────
@@ -544,13 +563,11 @@ class _IssueBody extends StatelessWidget {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
-            children: issue.photos
-                .map((url) => ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(url,
-                          width: 100, height: 100, fit: BoxFit.cover),
-                    ))
-                .toList(),
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < issue.photos.length; i++)
+                FleetPhotoThumb(urls: issue.photos, index: i),
+            ],
           ),
           const Divider(),
         ],

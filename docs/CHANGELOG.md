@@ -26,6 +26,14 @@ A work record can be edited for **14 days** after it is created (and only until 
 
 The reading entered when logging work is saved onto the machine itself, so the form shows **"Last recorded: X h"** next time. If a new reading is *lower* than the last recorded one, the app asks for confirmation before saving (meters only count up — this catches typos).
 
+**Photos open fullscreen**
+
+Tap any photo on a problem report or work record to view it fullscreen, pinch-to-zoom, and swipe between photos. Broken images now show a clear placeholder instead of an error icon.
+
+**"Waiting to Sync" screen**
+
+Tapping the orange offline banner on the Fleet tab now opens a list of everything still waiting to reach the server (reports, jobs, photos, costs) with a Retry button — instead of a blind retry. Cost entries now also save offline and sync later, like reports and jobs.
+
 ### Under the hood
 
 - Offline-sync integrity: saving a work record can no longer create duplicate FM numbers if photos fail to upload or the app is closed mid-save; queued issue reports can no longer overwrite later status changes when they replay.

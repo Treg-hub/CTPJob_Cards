@@ -14,6 +14,7 @@ import 'fleet_add_cost_screen.dart';
 import 'fleet_assets_screen.dart' show FleetAssetsScreen, FleetAssetFormScreen;
 import 'fleet_issues_list_screen.dart';
 import 'fleet_log_work_screen.dart';
+import 'fleet_queued_screen.dart';
 import 'fleet_report_issue_screen.dart';
 import 'fleet_reports_screen.dart';
 import 'fleet_settings_screen.dart';
@@ -182,7 +183,13 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
             Material(
               color: kBrandOrange.withValues(alpha: 0.12),
               child: InkWell(
-                onTap: () => SyncService().processNow(),
+                onTap: () async {
+                  unawaited(SyncService().processNow());
+                  await Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const FleetQueuedScreen(),
+                  ));
+                  if (mounted) setState(() {});
+                },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
@@ -192,10 +199,12 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          '$queuedFleet fleet item(s) queued offline — tap to retry sync',
+                          '$queuedFleet fleet item(s) waiting to sync — tap to view',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
+                      const Icon(Icons.chevron_right,
+                          color: kBrandOrange, size: 18),
                     ],
                   ),
                 ),

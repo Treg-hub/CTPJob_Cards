@@ -134,13 +134,20 @@ class FleetIssue {
   final DateTime? createdAt;
 
   final String? acknowledgedByClockNo;
+  final String? acknowledgedByName;
   final DateTime? acknowledgedAt;
 
   final String? resolvedByClockNo;
+  final String? resolvedByName;
   final DateTime? resolvedAt;
   final FleetIssueResolutionType? resolutionType;
   final String? resolutionNote;
   final String? linkedWorkRecordId;
+
+  final String? cancelledByClockNo;
+  final String? cancelledByName;
+  final DateTime? cancelledAt;
+  final String? cancelReason;
 
   const FleetIssue({
     this.id,
@@ -156,13 +163,33 @@ class FleetIssue {
     this.photos = const [],
     this.createdAt,
     this.acknowledgedByClockNo,
+    this.acknowledgedByName,
     this.acknowledgedAt,
     this.resolvedByClockNo,
+    this.resolvedByName,
     this.resolvedAt,
     this.resolutionType,
     this.resolutionNote,
     this.linkedWorkRecordId,
+    this.cancelledByClockNo,
+    this.cancelledByName,
+    this.cancelledAt,
+    this.cancelReason,
   });
+
+  /// "Name (clock)" when both are known, otherwise whichever exists.
+  static String? _whoLabel(String? name, String? clockNo) {
+    if (name != null && name.isNotEmpty) {
+      return clockNo != null && clockNo.isNotEmpty ? '$name ($clockNo)' : name;
+    }
+    return clockNo;
+  }
+
+  String? get acknowledgedByLabel =>
+      _whoLabel(acknowledgedByName, acknowledgedByClockNo);
+  String? get resolvedByLabel => _whoLabel(resolvedByName, resolvedByClockNo);
+  String? get cancelledByLabel =>
+      _whoLabel(cancelledByName, cancelledByClockNo);
 
   factory FleetIssue.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -185,12 +212,18 @@ class FleetIssue {
       photos: (data['photos'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       createdAt: (data['created_at'] as Timestamp?)?.toDate(),
       acknowledgedByClockNo: data['acknowledged_by_clock_no'] as String?,
+      acknowledgedByName: data['acknowledged_by_name'] as String?,
       acknowledgedAt: (data['acknowledged_at'] as Timestamp?)?.toDate(),
       resolvedByClockNo: data['resolved_by_clock_no'] as String?,
+      resolvedByName: data['resolved_by_name'] as String?,
       resolvedAt: (data['resolved_at'] as Timestamp?)?.toDate(),
       resolutionType: FleetIssueResolutionType.fromString(data['resolution_type'] as String?),
       resolutionNote: data['resolution_note'] as String?,
       linkedWorkRecordId: data['linked_work_record_id'] as String?,
+      cancelledByClockNo: data['cancelled_by_clock_no'] as String?,
+      cancelledByName: data['cancelled_by_name'] as String?,
+      cancelledAt: (data['cancelled_at'] as Timestamp?)?.toDate(),
+      cancelReason: data['cancel_reason'] as String?,
     );
   }
 
@@ -237,12 +270,18 @@ class FleetIssue {
     List<String>? photos,
     DateTime? createdAt,
     String? acknowledgedByClockNo,
+    String? acknowledgedByName,
     DateTime? acknowledgedAt,
     String? resolvedByClockNo,
+    String? resolvedByName,
     DateTime? resolvedAt,
     FleetIssueResolutionType? resolutionType,
     String? resolutionNote,
     String? linkedWorkRecordId,
+    String? cancelledByClockNo,
+    String? cancelledByName,
+    DateTime? cancelledAt,
+    String? cancelReason,
   }) {
     return FleetIssue(
       id: id ?? this.id,
@@ -258,12 +297,18 @@ class FleetIssue {
       photos: photos ?? this.photos,
       createdAt: createdAt ?? this.createdAt,
       acknowledgedByClockNo: acknowledgedByClockNo ?? this.acknowledgedByClockNo,
+      acknowledgedByName: acknowledgedByName ?? this.acknowledgedByName,
       acknowledgedAt: acknowledgedAt ?? this.acknowledgedAt,
       resolvedByClockNo: resolvedByClockNo ?? this.resolvedByClockNo,
+      resolvedByName: resolvedByName ?? this.resolvedByName,
       resolvedAt: resolvedAt ?? this.resolvedAt,
       resolutionType: resolutionType ?? this.resolutionType,
       resolutionNote: resolutionNote ?? this.resolutionNote,
       linkedWorkRecordId: linkedWorkRecordId ?? this.linkedWorkRecordId,
+      cancelledByClockNo: cancelledByClockNo ?? this.cancelledByClockNo,
+      cancelledByName: cancelledByName ?? this.cancelledByName,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancelReason: cancelReason ?? this.cancelReason,
     );
   }
 }
