@@ -228,7 +228,7 @@ App entry (home_screen.dart)
 | `fleet_cost_lines` | Manager-entered costs (never shown to mechanic). |
 | `fleet_types` | Configurable asset types + work types. |
 | `fleet_settings` | `config` doc: reporter depts, cost-manager clock nos, feature flag. |
-| `fleet_counters` | Daily `FM-YYYYMMDD-NNN` sequence (Admin SDK only). |
+| `fleet_counters` | Global `FM-NNNN` sequence at `fleet_counters/global`, never resets (Admin SDK only). |
 | `fleet_audit` | Immutable audit trail. |
 
 Cloud Functions (`createFleetWorkRecord`, `onFleetIssueCreated`, `onFleetIssueUpdated`) live in the **monorepo** `firebase/functions/src/index.ts`, not this repo. See `docs/COLLECTIONS.md` for full field schemas.

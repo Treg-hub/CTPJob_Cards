@@ -320,13 +320,28 @@ class _RecordBody extends ConsumerWidget {
           ),
         ],
 
-        // ── Edit button (mechanic, only if no cost lines) ─────────────────
-        if (isMechanic && !record.hasCostLines) ...[
+        // ── Edit button (mechanic, only if uncosted and within 14 days) ───
+        if (isMechanic && !record.hasCostLines && !record.isEditLocked) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(
             icon: const Icon(Icons.edit_outlined),
             label: Text(mechanicView ? 'Edit this job' : 'Edit Work Record'),
             onPressed: onEdit,
+          ),
+        ] else if (isMechanic && !record.hasCostLines && record.isEditLocked) ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.lock_outline, size: 16, color: colors?.textMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Locked — ${mechanicView ? 'jobs' : 'work records'} can\'t be '
+                  'edited after ${FleetWorkRecord.editLockDays} days.',
+                  style: TextStyle(fontSize: 12, color: colors?.textMuted),
+                ),
+              ),
+            ],
           ),
         ],
         const SizedBox(height: 80),

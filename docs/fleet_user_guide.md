@@ -88,11 +88,15 @@ You can close an issue in one of two ways:
 4. Enter the current **machine-hour reading** from the machine's hour meter.
 5. Add **parts used** — for each part: description, quantity, and (optionally) a part number.
 6. Attach **photos** of the completed work.
-7. Tap **Save**. The work record gets a number like **FM-20260604-001**.
+7. Tap **Save**. The work record gets a short number like **FM-0001**.
+
+> **Editing window:** a work record can be edited for **14 days** after it is created (and only until costs are entered). After that it is locked for record-keeping.
 
 **Option B — Quick resolution note**
 
 For an issue that needs no formal work record (e.g. a false alarm or a trivial fix), tap **Resolve** and enter a short note.
+
+> **Out-of-service issues are the exception:** they can only be closed by logging the repair as a work record — a note alone is not accepted.
 
 > **You never see costs.** Work records you create show only a "Costs pending / Costs entered" label — the actual money is entered and seen only by the cost manager.
 

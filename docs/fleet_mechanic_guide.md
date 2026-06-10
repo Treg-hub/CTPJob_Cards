@@ -102,6 +102,8 @@ Tap any job to see details: what you did, hour-meter reading, started/finished d
 
 Sometimes a report is wrong (duplicate, not a real fault). On the problem screen, use **Close with a note only** and write a short explanation. No hour-meter or work record is needed.
 
+> **Exception — Out of service problems:** if the machine was reported **out of service**, you must close it by logging the repair (**Finish the fix**). The note-only option is not available for these.
+
 ---
 
 ## What you never need to worry about
@@ -130,7 +132,7 @@ When the last open out-of-service problem on a machine is fixed, the red warning
 | See finished jobs | **History** tab |
 | Filter by Hyster | **History** → Hyster dropdown |
 | Log planned work (no fault) | **Log other work** |
-| Dismiss a false alarm | **Close with a note only** |
+| Dismiss a false alarm | **Close with a note only** (not available for out-of-service problems) |
 
 ---
 

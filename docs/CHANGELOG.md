@@ -6,6 +6,33 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-10 — Fleet Maintenance hardening (FM-NNNN, OOS policy, edit lock)
+
+### User-facing changes
+
+**New work number format — FM-NNNN**
+
+Fleet work records now use a **global sequential** number: `FM-0001`, `FM-0042` — same style as WasteTrack's `W-NNNN`. Numbers never reset and are unique forever. Existing records keep their old `FM-YYYYMMDD-NNN` numbers.
+
+**Out-of-service problems must be closed with a work log**
+
+A problem reported as **Out of service** can no longer be closed with a note only — the mechanic must log the repair (**Finish the fix**), which records the hour-meter reading and what was done. Notes remain available for all other severities (false alarms, duplicates).
+
+**14-day edit window on work records**
+
+A work record can be edited for **14 days** after it is created (and only until costs are entered). After that it locks for record-keeping. Cost managers can still add cost lines to locked records.
+
+**Hour-meter reading now updates the machine**
+
+The reading entered when logging work is saved onto the machine itself, so the form shows **"Last recorded: X h"** next time. If a new reading is *lower* than the last recorded one, the app asks for confirmation before saving (meters only count up — this catches typos).
+
+### Under the hood
+
+- Offline-sync integrity: saving a work record can no longer create duplicate FM numbers if photos fail to upload or the app is closed mid-save; queued issue reports can no longer overwrite later status changes when they replay.
+- Out-of-service push notifications now go to the mechanics configured in **Fleet → Settings → Mechanics** (same list that controls app access), instead of a fixed department/position lookup.
+
+---
+
 ## 2026-06-10 — WasteTrack production-grade overhaul
 
 ### User-facing changes

@@ -2,6 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
+  /// Records lock from editing this many days after creation, regardless of
+  /// costing status (decided 2026-06-10). Cost lines stay open.
+  static const int editLockDays = 14;
+
   final String? id;
   final String workNumber;
   final String assetId;
@@ -41,6 +45,14 @@ class FleetWorkRecord {
     this.linkedIssueIds = const [],
     this.hasCostLines = false,
   });
+
+  /// True once the record is past the edit window. Records without a
+  /// createdAt (still syncing) are not locked.
+  bool get isEditLocked {
+    final created = createdAt;
+    if (created == null) return false;
+    return DateTime.now().difference(created).inDays >= editLockDays;
+  }
 
   static DateTime _parseDate(dynamic value) {
     if (value is Timestamp) return value.toDate();
