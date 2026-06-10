@@ -10,6 +10,8 @@ import '../utils/role.dart' as role_utils;
 import '../services/waste_service.dart';
 import '../models/waste_settings.dart';
 import '../models/waste_load.dart';
+import '../models/waste_stock_item.dart';
+import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import 'waste_create_load_screen.dart';
 import 'waste_schedule_load_screen.dart';
@@ -35,18 +37,20 @@ class _IncomingLoadCard extends StatelessWidget {
     required this.isManager,
     required this.wasteService,
     required this.onRefresh,
+    this.wasteTypes = const [],
   });
 
   final WasteLoad load;
   final bool isManager;
   final WasteService wasteService;
   final VoidCallback onRefresh;
+  final List<WasteType> wasteTypes;
 
   Future<void> _showEditScheduleSheet(BuildContext context) async {
     DateTime editedDate = load.scheduledFor ?? load.dateTime;
     final notesCtrl = TextEditingController(text: load.scheduledNotes ?? '');
     var selectedStockIds = List<String>.from(load.selectedStockIds);
-    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, const []);
+    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, wasteTypes);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -153,7 +157,7 @@ class _IncomingLoadCard extends StatelessWidget {
                   FilledButton(
                     onPressed: () async {
                       try {
-                        await wasteService.updateLoad(load.id!, {
+                        final result = await wasteService.updateLoad(load.id!, {
                           'scheduled_for': Timestamp.fromDate(editedDate),
                           'scheduled_notes': notesCtrl.text.trim().isEmpty
                               ? null
@@ -161,7 +165,17 @@ class _IncomingLoadCard extends StatelessWidget {
                           if (usesPaperStock && isManager)
                             'selected_stock_ids': selectedStockIds,
                         });
-                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          if (result.queuedOffline) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text('Saved offline — will sync when connection returns'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                        }
                         onRefresh();
                       } catch (e) {
                         if (ctx.mounted) {
@@ -188,7 +202,7 @@ class _IncomingLoadCard extends StatelessWidget {
     final scheduledDate = load.scheduledFor ?? load.dateTime;
     final isToday = DateUtils.isSameDay(scheduledDate, DateTime.now());
     final isPast = scheduledDate.isBefore(DateTime.now());
-    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, const []);
+    final usesPaperStock = loadUsesPaperStock(load.mainWasteType, wasteTypes);
 
     final appColors = Theme.of(context).appColors;
     final cardBg = isToday || isPast ? appColors.wasteGreenSurface : Theme.of(context).cardColor;
@@ -352,13 +366,17 @@ class WasteHomeScreen extends ConsumerStatefulWidget {
 class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     with TickerProviderStateMixin {
   final WasteService _wasteService = WasteService();
-  List<WasteLoad> _recentLoads = [];
+  List<WasteLoad> _activeLoads = [];
+  List<WasteLoad> _completedLoads = [];
   List<WasteLoad> _scheduledLoads = [];
+  List<WasteType> _wasteTypes = [];
   bool _isLoading = true;
   String _filter = 'all'; // all | today | week
 
-  StreamSubscription<List<WasteLoad>>? _loadsSubscription;
+  StreamSubscription<List<WasteLoad>>? _activeLoadsSubscription;
+  StreamSubscription<List<WasteLoad>>? _completedLoadsSubscription;
   StreamSubscription<List<WasteLoad>>? _scheduledSubscription;
+  StreamSubscription<List<WasteType>>? _wasteTypesSubscription;
 
   bool _effectiveWasteEnabled = true;
   WasteSettings? _wasteSettings;
@@ -380,31 +398,39 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabCount(), vsync: this)
-      ..addListener(() { if (mounted) setState(() {}); });
-    _loadFeatureStatus();
+    // Placeholder single-tab controller until settings load and we know the real count.
+    _tabController = TabController(length: 1, vsync: this);
     _wasteService.processOfflineWasteQueue();
     _subscribeToLoads();
-    _subscribeToPendingCount();
+    _loadFeatureStatus().then((_) {
+      if (!mounted) return;
+      final newLength = _tabCount();
+      if (_tabController.length != newLength) {
+        _tabController.dispose();
+        _tabController = TabController(length: newLength, vsync: this)
+          ..addListener(() { if (mounted) setState(() {}); });
+      }
+      _subscribeToPendingCount();
+      setState(() {});
+    });
   }
 
   void _subscribeToLoads() {
-    _loadsSubscription?.cancel();
+    _activeLoadsSubscription?.cancel();
+    _completedLoadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
+    _wasteTypesSubscription?.cancel();
+
+    _wasteTypesSubscription = _wasteService.watchWasteTypes().listen(
+      (types) { if (mounted) setState(() => _wasteTypes = types); },
+      onError: (_) {},
+    );
 
     setState(() => _isLoading = true);
 
-    _loadsSubscription = _wasteService.watchLoads(limit: 50).listen(
+    _activeLoadsSubscription = _wasteService.watchActiveLoads().listen(
       (loads) {
-        if (mounted) {
-          setState(() {
-            _recentLoads = loads.where((l) =>
-              l.status != WasteLoadStatus.scheduled &&
-              l.status != WasteLoadStatus.cancelled
-            ).toList();
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() { _activeLoads = loads; _isLoading = false; });
       },
       onError: (e) {
         if (mounted) {
@@ -419,20 +445,21 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
       },
     );
 
-    try {
-      _scheduledSubscription = _wasteService.watchScheduledLoads().listen(
-        (loads) {
-          if (mounted) {
-            setState(() => _scheduledLoads = loads);
-          }
-        },
-        onError: (_) {
-          if (mounted) setState(() => _scheduledLoads = []);
-        },
-      );
-    } catch (_) {
-      if (mounted) setState(() => _scheduledLoads = []);
-    }
+    _completedLoadsSubscription = _wasteService.watchRecentCompleted().listen(
+      (loads) {
+        if (mounted) setState(() => _completedLoads = loads);
+      },
+      onError: (_) { if (mounted) setState(() => _completedLoads = []); },
+    );
+
+    _scheduledSubscription = _wasteService.watchScheduledLoads().listen(
+      (loads) {
+        if (mounted) setState(() => _scheduledLoads = loads);
+      },
+      onError: (_) {
+        if (mounted) setState(() => _scheduledLoads = []);
+      },
+    );
   }
 
   void _subscribeToPendingCount() {
@@ -456,8 +483,10 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     _tabController.dispose();
     _pendingCountSub?.cancel();
     _pendingReviewSub?.cancel();
-    _loadsSubscription?.cancel();
+    _activeLoadsSubscription?.cancel();
+    _completedLoadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
+    _wasteTypesSubscription?.cancel();
     super.dispose();
   }
 
@@ -672,20 +701,21 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                           isManager: isManager || isAdmin,
                           wasteService: _wasteService,
                           onRefresh: _subscribeToLoads,
+                          wasteTypes: _wasteTypes,
                         )),
                         const Divider(height: 24, indent: 16, endIndent: 16),
                       ];
                     }(),
 
-                    // ── Recent loads ──────────────────────────────────────────
+                    // ── Active loads (in-progress) ────────────────────────────
                     ...() {
-                      final filtered = _recentLoads.where((load) {
+                      final filtered = _activeLoads.where((load) {
                         if (_filter == 'today') return DateUtils.isSameDay(load.dateTime, DateTime.now());
                         if (_filter == 'week') return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
                         return true;
                       }).toList();
 
-                      if (filtered.isEmpty) {
+                      if (filtered.isEmpty && _completedLoads.isEmpty) {
                         return [
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 40),
@@ -712,73 +742,106 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                           ),
                         ];
                       }
-                      return filtered.map((load) {
-                        final statusColor = _statusColor(load.status, context);
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(color: statusColor.withValues(alpha: 0.3)),
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () async {
-                              await Navigator.push(context, MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)));
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 36, height: 36,
-                                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), shape: BoxShape.circle),
-                                    child: Icon(_statusIcon(load.status), color: statusColor, size: 20),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType,
-                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '${load.mainWasteType}${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
-                                          style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(formatSADate(load.dateTime), style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
-                                      const SizedBox(height: 3),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
-                                        child: Text(
-                                          load.status.displayLabel,
-                                          style: TextStyle(fontSize: 11, color: onColor(statusColor), fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
+                      return filtered.map((load) => _loadCard(load, context)).toList();
+                    }(),
+
+                    // ── Recent completed (last 10) ────────────────────────────
+                    ...() {
+                      final filtered = _completedLoads.where((load) {
+                        if (_filter == 'today') return DateUtils.isSameDay(load.dateTime, DateTime.now());
+                        if (_filter == 'week') return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+                        return true;
                       }).toList();
+                      if (filtered.isEmpty) return <Widget>[];
+                      return <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_outline, size: 16,
+                                  color: Theme.of(context).appColors.textMuted),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Recent completed',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).appColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...filtered.map((load) => Opacity(opacity: 0.65, child: _loadCard(load, context))),
+                      ];
                     }(),
                   ],
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _loadCard(WasteLoad load, BuildContext context) {
+    final statusColor = _statusColor(load.status, context);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: statusColor.withValues(alpha: 0.3)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: load)));
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: Icon(_statusIcon(load.status), color: statusColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${load.mainWasteType}${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(formatSADate(load.dateTime), style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
+                  const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      load.status.displayLabel,
+                      style: TextStyle(fontSize: 11, color: onColor(statusColor), fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -922,26 +985,32 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   bool _error = false;
   int _count = 0;
   double _totalKg = 0;
+  StreamSubscription<List<WasteStockItem>>? _stockSub;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _stockSub = widget.wasteService.watchAllStockOnSite().listen(
+      (items) {
+        if (!mounted) return;
+        final total = items.fold<double>(0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
+        setState(() {
+          _count = items.length;
+          _totalKg = total;
+          _loading = false;
+          _error = false;
+        });
+      },
+      onError: (_) {
+        if (mounted) setState(() { _loading = false; _error = true; });
+      },
+    );
   }
 
-  Future<void> _load() async {
-    try {
-      final summary = await widget.wasteService.getAllStockSummary();
-      if (mounted) {
-        setState(() {
-          _count = summary.count;
-          _totalKg = summary.totalEstimatedKg;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = true; });
-    }
+  @override
+  void dispose() {
+    _stockSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -955,7 +1024,7 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()),
-      ).then((_) => _load()),
+      ),
       child: Container(
         margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

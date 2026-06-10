@@ -21,17 +21,15 @@ import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
-/// Designed to be used from Riverpod providers and screens.
 ///
-/// Photo strategy (reuses patterns from create_job_card_screen & job_card_detail_screen):
-/// - Pick + heavy compress (camera or gallery)
-/// - Local temp file until upload
-/// - Upload to Storage under `waste/{loadId or itemId}/photos/...`
-/// - Store download URLs in Firestore documents
-///
-/// Load numbering is handled server-side via the `createWasteLoad` Cloud Function
-/// for atomic daily sequence (WT-YYYYMMDD-001).
+/// Singleton: all callers share one instance so in-memory session queues
+/// (_sessionOfflinePhotoQueue, _sessionOfflineSignatureQueue) stay consistent
+/// across screens during a single app session.
 class WasteService {
+  static final WasteService _instance = WasteService._internal();
+  factory WasteService() => _instance;
+  WasteService._internal();
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
@@ -92,11 +90,38 @@ class WasteService {
   // CRUD - LOADS
   // ---------------------------------------------------------------------------
 
-  Future<void> updateLoad(String loadId, Map<String, dynamic> data) async {
-    await _firestore.collection(Collections.wasteLoads).doc(loadId).update({
-      ...data,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+  Future<({bool queuedOffline})> updateLoad(
+      String loadId, Map<String, dynamic> data) async {
+    final online = await _checkOnline();
+
+    if (online) {
+      try {
+        await _firestore
+            .collection(Collections.wasteLoads)
+            .doc(loadId)
+            .update({...data, 'updatedAt': FieldValue.serverTimestamp()})
+            .timeout(_firestoreWriteTimeout);
+        return (queuedOffline: false);
+      } catch (_) {
+        // Fall through to queue.
+      }
+    }
+
+    // Queue path always uses a serializable timestamp — FieldValue.serverTimestamp()
+    // cannot be written to Hive and would corrupt the queue entry.
+    final now = DateTime.now();
+    final serialized = _serializeLoadDataForQueue(
+      {...data, 'updatedAt': now.toIso8601String()},
+      now,
+    );
+    await _enqueueWasteOp(
+      shouldQueue: true,
+      collection: Collections.wasteLoads,
+      operation: 'update',
+      data: serialized,
+      documentId: loadId,
+    );
+    return (queuedOffline: true);
   }
 
   /// Off-site weighbridge document capture. Transitions load to [pendingCostReview]
@@ -134,11 +159,6 @@ class WasteService {
       }
     }
 
-    final load = await getLoad(loadId);
-    final suggested = load != null
-        ? await suggestLoadCost(loadId: loadId, load: load, weightKg: actualWeightKg)
-        : null;
-
     final updateData = {
       'actual_weighbridge_weight_kg': actualWeightKg,
       if (weighbridgeNumber != null && weighbridgeNumber.isNotEmpty)
@@ -155,10 +175,6 @@ class WasteService {
       'weighbridge_received_at': now.toIso8601String(),
       'pending_cost_review_at': now.toIso8601String(),
       if (updatedBy != null) 'weighbridge_updated_by': updatedBy,
-      if (suggested != null) ...{
-        'rate': suggested.rate,
-        'rand_value_exvat': suggested.randValueExVat,
-      },
     };
 
     var statusAlreadyInReview = false;
@@ -223,23 +239,53 @@ class WasteService {
     });
   }
 
-  /// Live load list. Orders by [createdAt] so Pulse-created loads (which always
-  /// have that field) appear alongside mobile loads. [date_time] is used only for
-  /// display/filtering via [WasteLoad.fromFirestore] fallbacks.
-  Stream<List<WasteLoad>> watchLoads({String? status, int limit = 50}) {
-    Query query = _firestore
+  /// All non-deleted loads ordered newest-first. Used by the reports screen.
+  /// [is_deleted] filtered at the server — does not consume limit on deleted docs.
+  Stream<List<WasteLoad>> watchLoads({int limit = 200}) {
+    return _firestore
         .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
         .orderBy('createdAt', descending: true)
-        .limit(limit);
+        .limit(limit)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+  }
 
-    if (status != null) {
-      query = query.where('status', isEqualTo: status);
-    }
+  /// Active (in-flight) loads: draft, pendingWeighbridge, pendingCostReview.
+  /// No limit — there are never many active loads at once.
+  /// Used by [WasteHomeScreen] together with [watchRecentCompleted].
+  Stream<List<WasteLoad>> watchActiveLoads() {
+    return _firestore
+        .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
+        .where('status', whereIn: [
+          WasteLoadStatus.draft.value,
+          WasteLoadStatus.pendingWeighbridge.value,
+          WasteLoadStatus.pendingCostReview.value,
+          'in_progress', // future-proofing — set by web/Pulse, no mobile enum yet
+        ])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+  }
 
-    return query.snapshots().map((snap) => snap.docs
-        .map((d) => WasteLoad.fromFirestore(d))
-        .where((l) => !l.isDeleted)
-        .toList());
+  /// The [limit] most-recently completed or cancelled loads.
+  /// Used by [WasteHomeScreen] to show a "Recent" section below active loads.
+  Stream<List<WasteLoad>> watchRecentCompleted({int limit = 10}) {
+    return _firestore
+        .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
+        .where('status', whereIn: [
+          WasteLoadStatus.completed.value,
+          WasteLoadStatus.cancelled.value,
+        ])
+        .orderBy('completed_at', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
   // ---------------------------------------------------------------------------
@@ -250,6 +296,7 @@ class WasteService {
   /// is assigned at scheduling time (number assigned when guard submits via [submitCollection]).
   /// [selectedStockIds] are stored on the load doc; stock items are NOT marked loaded
   /// here — that happens in [submitCollection] when the guard confirms them.
+  /// Works offline: a local document ID is used and the write is queued in Hive.
   Future<String> createScheduledLoad({
     required String contractorId,
     String? contractorName,
@@ -260,7 +307,7 @@ class WasteService {
     String? scheduledNotes,
     List<String> selectedStockIds = const [],
   }) async {
-    final doc = await _firestore.collection(Collections.wasteLoads).add({
+    final payload = {
       'load_number': '',
       'contractor_id': contractorId,
       if (contractorName != null) 'contractor_name': contractorName,
@@ -280,37 +327,87 @@ class WasteService {
       'created_by': scheduledBy,
       'recorded_weight_kg': 0.0,
       if (selectedStockIds.isNotEmpty) 'selected_stock_ids': selectedStockIds,
-    });
-    return doc.id;
+    };
+
+    final online = await _checkOnline();
+    if (online) {
+      try {
+        final doc = await _firestore
+            .collection(Collections.wasteLoads)
+            .add(payload)
+            .timeout(_firestoreWriteTimeout);
+        return doc.id;
+      } catch (_) {
+        // Fall through to offline queue.
+      }
+    }
+
+    // Offline path: use a local placeholder ID so the caller can navigate to
+    // the new load immediately; the real Firestore write replays on reconnect.
+    final localId = 'offline_sched_${DateTime.now().millisecondsSinceEpoch}';
+    final serialized = _serializeLoadDataForQueue(payload, DateTime.now());
+    await _enqueueWasteOp(
+      shouldQueue: true,
+      collection: Collections.wasteLoads,
+      operation: 'set',
+      data: serialized,
+      documentId: localId,
+    );
+    return localId;
   }
 
   /// Stream of all scheduled (not yet collected) loads, ordered by expected date ascending.
-  /// Used by guard home screen "Incoming" section.
+  /// Used by [WasteHomeScreen] "Incoming" section.
   Stream<List<WasteLoad>> watchScheduledLoads({int limit = 50}) {
     return _firestore
         .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.scheduled.value)
         .orderBy('scheduled_for', descending: false)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WasteLoad.fromFirestore(d))
-            .where((l) => !l.isDeleted)
-            .toList());
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
   /// Manager cancels a scheduled load before the guard begins collection.
-  /// Throws [StateError] if the load is no longer in [scheduled] status.
+  /// Throws [StateError] if the load is no longer in [scheduled] status (online only).
+  /// When offline the cancel is queued; status will be applied on next sync.
   Future<void> cancelScheduledLoad(String loadId) async {
-    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
-    await _firestore.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
-      if (current != WasteLoadStatus.scheduled) {
-        throw StateError('Load is no longer scheduled — cannot cancel (current: ${current.value})');
+    final online = await _checkOnline();
+
+    if (online) {
+      final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
+      try {
+        await _firestore.runTransaction((tx) async {
+          final snap = await tx.get(ref);
+          final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+          if (current != WasteLoadStatus.scheduled) {
+            throw StateError(
+                'Load is no longer scheduled — cannot cancel (current: ${current.value})');
+          }
+          tx.update(ref, {
+            'status': WasteLoadStatus.cancelled.value,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        });
+        return;
+      } catch (e) {
+        if (e is StateError) rethrow;
+        // Network error — fall through to queue.
       }
-      tx.update(ref, {'status': WasteLoadStatus.cancelled.value, 'updatedAt': FieldValue.serverTimestamp()});
-    });
+    }
+
+    await _enqueueWasteOp(
+      shouldQueue: true,
+      collection: Collections.wasteLoads,
+      operation: 'update',
+      data: {
+        'status': WasteLoadStatus.cancelled.value,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      documentId: loadId,
+    );
   }
 
   /// Guard submits a completed collection on a scheduled load.
@@ -341,6 +438,7 @@ class WasteService {
     List<String> itemPhotoPaths = const [],
     List<String> loadPhotoPaths = const [],
     String? signatureLocalPath,
+    String? contractorId,
   }) async {
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
     final online = await _checkOnline();
@@ -406,6 +504,17 @@ class WasteService {
       }
     }
 
+    // Fetch rates once for the whole batch — avoids opening N Firestore listeners
+    // (one per item) when each item would otherwise call lookupItemRate() in a loop.
+    List<Map<String, dynamic>> ratesList = const [];
+    if (contractorId != null) {
+      try {
+        ratesList = await watchRates()
+            .first
+            .timeout(const Duration(seconds: 6), onTimeout: () => []);
+      } catch (_) {}
+    }
+
     var totalPhotoCount = 0;
     for (final item in itemsData) {
       final itemRef = _firestore.collection(Collections.wasteItems).doc();
@@ -423,6 +532,12 @@ class WasteService {
 
       totalPhotoCount += photoUrls.length;
 
+      // Prefill rate from the pre-fetched rates list (synchronous, no extra I/O).
+      final itemSubtype = item['subtype'] as String? ?? '';
+      final itemRate = contractorId != null && itemSubtype.isNotEmpty
+          ? _rateFromList(ratesList, contractorId: contractorId, subtype: itemSubtype)
+          : null;
+
       final itemData = Map<String, dynamic>.from(item)
         ..remove('localPhotoPaths')
         ..addAll({
@@ -430,6 +545,7 @@ class WasteService {
           'photos': photoUrls,
           'is_deleted': false,
           'createdAt': queuedOffline ? now.toIso8601String() : FieldValue.serverTimestamp(),
+          if (itemRate != null) 'rate_per_kg': itemRate,
         });
 
       if (queuedOffline) {
@@ -674,40 +790,62 @@ class WasteService {
     return results;
   }
 
-  /// Soft-deletes a waste_item. If the item originated from a stock item
-  /// (sourceStockId set), the corresponding waste_stock item is reverted to on_site.
-  /// Also subtracts the item weight from the parent load's recorded_weight_kg.
+  /// Soft-deletes a waste_item atomically. Reverts the parent load's
+  /// recorded_weight_kg and, if the item came from a stock record, reverts
+  /// that stock item back to on_site — all in a single Firestore transaction.
+  /// Throws [StateError] when offline; item deletion is a supervised action
+  /// and partial offline state is worse than a clear "reconnect first" error.
   Future<void> deleteWasteItem(String itemId, {String? sourceStockId}) async {
-    final itemSnap =
-        await _firestore.collection(Collections.wasteItems).doc(itemId).get();
-    final data = itemSnap.data();
-    if (data == null) return;
-
-    final loadId = data['load_id'] as String?;
-    final weightKg = (data['weight_kg'] as num?)?.toDouble() ?? 0.0;
-    final stockId = sourceStockId ?? data['source_stock_id'] as String?;
-
-    await _firestore.collection(Collections.wasteItems).doc(itemId).update({
-      'is_deleted': true,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    if (loadId != null && weightKg > 0) {
-      final loadSnap =
-          await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
-      final currentRecorded =
-          (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
-      final nextRecorded = (currentRecorded - weightKg).clamp(0.0, double.infinity);
-      await updateLoad(loadId, {'recorded_weight_kg': nextRecorded});
+    final online = await _checkOnline();
+    if (!online) {
+      throw StateError('Cannot delete items while offline — reconnect and try again');
     }
 
-    if (stockId != null) {
-      await _firestore.collection(Collections.wasteStock).doc(stockId).update({
-        'status': WasteStockStatus.onSite.value,
-        'load_id': FieldValue.delete(),
-        'updated_at': FieldValue.serverTimestamp(),
+    final itemRef = _firestore.collection(Collections.wasteItems).doc(itemId);
+
+    await _firestore.runTransaction((tx) async {
+      // ── All reads first — Firestore transactions require reads before writes ──
+      final itemSnap = await tx.get(itemRef);
+      final data = itemSnap.data();
+      if (data == null) return;
+
+      final loadId = data['load_id'] as String?;
+      final weightKg = (data['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final stockId = sourceStockId ?? data['source_stock_id'] as String?;
+
+      DocumentReference<Map<String, dynamic>>? loadRef;
+      DocumentSnapshot<Map<String, dynamic>>? loadSnap;
+      if (loadId != null && weightKg > 0) {
+        loadRef = _firestore.collection(Collections.wasteLoads).doc(loadId);
+        loadSnap = await tx.get(loadRef);
+      }
+
+      // ── All writes after reads ──
+
+      // 1. Soft-delete the item
+      tx.update(itemRef, {
+        'is_deleted': true,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-    }
+
+      // 2. Decrement the parent load's recorded weight
+      if (loadRef != null && loadSnap != null) {
+        final currentRecorded =
+            (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
+        final nextRecorded = (currentRecorded - weightKg).clamp(0.0, double.infinity);
+        tx.update(loadRef, {'recorded_weight_kg': nextRecorded});
+      }
+
+      // 3. Revert the source stock item back to on_site
+      if (stockId != null) {
+        final stockRef = _firestore.collection(Collections.wasteStock).doc(stockId);
+        tx.update(stockRef, {
+          'status': WasteStockStatus.onSite.value,
+          'load_id': FieldValue.delete(),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+    });
   }
 
   /// Removes a single photo URL from a waste_item and best-effort deletes the Storage object.
@@ -738,12 +876,18 @@ class WasteService {
     String? notes,
     required List<String> localPhotoPaths,
     String? sourceStockId,
+    String? contractorId,
   }) async {
     final online = await _checkOnline();
     var queuedOffline = !online;
     final itemRef = _firestore.collection(Collections.wasteItems).doc();
     final photoUrls = <String>[];
     final now = DateTime.now();
+
+    // Prefill rate from waste_rates for per-item cost tracking.
+    final rate = contractorId != null
+        ? await lookupItemRate(contractorId: contractorId, subtype: subtype)
+        : null;
 
     for (final path in localPhotoPaths) {
       final url = await _resolveItemPhotoUrl(
@@ -765,6 +909,7 @@ class WasteService {
       if (sourceStockId != null) 'source_stock_id': sourceStockId,
       'is_deleted': false,
       'createdAt': now.toIso8601String(),
+      if (rate != null) 'rate_per_kg': rate,
     };
 
     final liveData = {
@@ -898,6 +1043,12 @@ class WasteService {
 
     final snapshot = await ref.putFile(file);
     final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    // Delete the local compressed temp file after successful upload.
+    try {
+      await file.delete();
+    } catch (_) {}
+
     return downloadUrl;
   }
 
@@ -1288,6 +1439,74 @@ class WasteService {
     }
   }
 
+  /// Synchronous rate lookup from a pre-fetched rates list.
+  /// Used by [submitCollection] which fetches once for the whole batch.
+  double? _rateFromList(
+    List<Map<String, dynamic>> rates, {
+    required String contractorId,
+    required String subtype,
+  }) {
+    for (final r in rates) {
+      if (r['contractor_id'] == contractorId && r['subtype'] == subtype) {
+        return (r['cost_per_kg'] as num?)?.toDouble();
+      }
+    }
+    for (final r in rates) {
+      if (r['contractor_id'] == contractorId && r['subtype'] == 'default') {
+        return (r['cost_per_kg'] as num?)?.toDouble();
+      }
+    }
+    return null;
+  }
+
+  /// Looks up the rate per kg for a (contractorId, subtype) pair from waste_rates.
+  /// Falls back to a 'default' subtype for the contractor if no exact match.
+  /// Returns null if no rate exists — caller should leave the field blank.
+  Future<double?> lookupItemRate({
+    required String contractorId,
+    required String subtype,
+  }) async {
+    try {
+      final rates = await watchRates()
+          .first
+          .timeout(const Duration(seconds: 6), onTimeout: () => []);
+      return _rateFromList(rates, contractorId: contractorId, subtype: subtype);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Upserts a rate into waste_rates for (contractorId, subtype).
+  /// If a rate already exists for this pair, updates it; otherwise creates a new doc.
+  /// Called from the cost review screen when admin confirms or corrects an item rate.
+  Future<void> upsertItemRate({
+    required String contractorId,
+    required String subtype,
+    required double costPerKg,
+    required String setBy,
+  }) async {
+    final existing = await _firestore
+        .collection(Collections.wasteRates)
+        .where('contractor_id', isEqualTo: contractorId)
+        .where('subtype', isEqualTo: subtype)
+        .limit(1)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      await existing.docs.first.reference.update({
+        'cost_per_kg': costPerKg,
+        'set_by': setBy,
+        'set_at': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await setRate(
+        contractorId: contractorId,
+        subtype: subtype,
+        costPerKg: costPerKg,
+        setBy: setBy,
+      );
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // PENDING WEIGHBRIDGE QUERY (used by WastePendingWeighbridgeScreen + reports)
   // Client-side post-filter for weighbridge nulls (Firestore null/absent handling varies).
@@ -1298,28 +1517,26 @@ class WasteService {
   Stream<List<WasteLoad>> watchPendingWeighbridge() {
     return _firestore
         .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.pendingWeighbridge.value)
         .orderBy('pending_weighbridge_at', descending: true)
         .limit(100)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WasteLoad.fromFirestore(d))
-            .where((l) => !l.isDeleted)
-            .toList());
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
   /// Streams loads awaiting admin cost approval after weighbridge document entry.
   Stream<List<WasteLoad>> watchPendingCostReview() {
     return _firestore
         .collection(Collections.wasteLoads)
+        .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.pendingCostReview.value)
         .orderBy('pending_cost_review_at', descending: true)
         .limit(100)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WasteLoad.fromFirestore(d))
-            .where((l) => !l.isDeleted)
-            .toList());
+        .map((snap) =>
+            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
   /// Suggests cost from [waste_rates] using item subtypes × weighbridge weight.
@@ -1374,11 +1591,36 @@ class WasteService {
     required double randValueExVat,
     double? rate,
     required String reviewedBy,
+    double? calculatedCost,
+    /// Per-item rate confirmations. For each entry: updates item doc with confirmed
+    /// rate_per_kg and upserts the rate back into waste_rates (self-healing registry).
+    List<({String itemId, String subtype, double ratePerKg, String contractorId})>
+        itemRateUpdates = const [],
   }) async {
+    // 1. Update each item's confirmed rate_per_kg in Firestore.
+    for (final update in itemRateUpdates) {
+      try {
+        await _firestore
+            .collection(Collections.wasteItems)
+            .doc(update.itemId)
+            .update({'rate_per_kg': update.ratePerKg});
+        // Upsert back to waste_rates so future collections are pre-filled.
+        await upsertItemRate(
+          contractorId: update.contractorId,
+          subtype: update.subtype,
+          costPerKg: update.ratePerKg,
+          setBy: reviewedBy,
+        );
+      } catch (_) {
+        // Non-fatal: rate registry update fails gracefully.
+      }
+    }
+
     final updateData = {
       'status': WasteLoadStatus.completed.value,
       'rand_value_exvat': randValueExVat,
       if (rate != null) 'rate': rate,
+      if (calculatedCost != null) 'calculated_cost': calculatedCost,
       'cost_reviewed_by': reviewedBy,
       'completed_by': reviewedBy,
       'completed_at': FieldValue.serverTimestamp(),
@@ -1440,10 +1682,18 @@ class WasteService {
     });
   }
 
+  DateTime? _lastQueueProcess;
+
   /// Processes queued waste photos using the central SyncService queue + session queue.
-  /// Now delegates the heavy lifting to SyncService.processNow() which handles Hive waste_photos entries
-  /// with real Storage upload + document patching (arrayUnion to photos/load_photos).
+  /// Debounced to 30 seconds so multiple screens calling this simultaneously don't
+  /// each trigger a full queue drain.
   Future<int> processOfflineWasteQueue() async {
+    final now = DateTime.now();
+    if (_lastQueueProcess != null &&
+        now.difference(_lastQueueProcess!) < const Duration(seconds: 30)) {
+      return 0;
+    }
+    _lastQueueProcess = now;
     int uploaded = 0;
     // Legacy session queue (lightweight, same-session recovery)
     final toProcess = List.from(_sessionOfflinePhotoQueue);
@@ -1515,6 +1765,28 @@ class WasteService {
     }
     // Central Hive queue (the real production path for cross-session / full offline resilience)
     await SyncService().processNow();
+
+    // Heal any loads that were written offline and still carry an OFFLINE-* placeholder number.
+    // After the Hive queue replays their set/update, they exist in Firestore but need a real W-NNNN.
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteLoads)
+          .where('load_number', isGreaterThanOrEqualTo: 'OFFLINE-')
+          .where('load_number', isLessThan: 'OFFLINE-￿')
+          .limit(20)
+          .get()
+          .timeout(const Duration(seconds: 8));
+      for (final doc in snap.docs) {
+        try {
+          await _functions.httpsCallable('assignWasteLoadNumber').call({'loadId': doc.id});
+        } catch (_) {
+          // Non-fatal: will retry on next processOfflineWasteQueue call.
+        }
+      }
+    } catch (_) {
+      // Device still offline or quota error — ignore; next queue drain will retry.
+    }
+
     return uploaded;
   }
 
@@ -1532,8 +1804,18 @@ class WasteService {
     await prefs.setBool('wasteTrackEnabled', enabled);
   }
 
-  Future<bool> isWasteTrackEnabledForCurrentUser(String? clockNo) =>
-      getWasteMasterEnabled();
+  WasteSettings? _cachedWasteSettings;
+
+  Future<bool> isWasteTrackEnabledForCurrentUser(String? clockNo) async {
+    final localEnabled = await getWasteMasterEnabled();
+    if (!localEnabled) return false;
+    try {
+      _cachedWasteSettings ??= await getWasteSettings();
+      return _cachedWasteSettings!.wasteEnabled;
+    } catch (_) {
+      return true; // Firestore unavailable; trust the local flag.
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // WASTE SETTINGS (Firestore-backed, waste_settings/config)
@@ -1882,6 +2164,28 @@ class WasteService {
       }
     }
 
+    for (final id in stockIds) {
+      await _enqueueWasteOp(
+        shouldQueue: true,
+        collection: Collections.wasteStock,
+        operation: 'update',
+        data: payload,
+        documentId: id,
+      );
+    }
+  }
+
+  /// Force-queues stock-loaded updates without a connectivity check.
+  /// Use when the parent load submission was itself queued offline — both
+  /// operations must replay together so stock is never marked loaded against
+  /// a load that isn't in Firestore yet.
+  Future<void> queueMarkStockLoaded(List<String> stockIds, String loadId) async {
+    if (stockIds.isEmpty) return;
+    final payload = {
+      'status': WasteStockStatus.loaded.value,
+      'load_id': loadId,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
     for (final id in stockIds) {
       await _enqueueWasteOp(
         shouldQueue: true,

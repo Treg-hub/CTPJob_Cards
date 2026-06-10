@@ -16,6 +16,9 @@ class WasteItem {
   final String? sourceStockId;
   /// Soft-delete flag. Deleted items are filtered out of all queries.
   final bool isDeleted;
+  /// Rate snapshot captured from waste_rates at collection time (R/kg).
+  /// Null means no rate was found; admin must enter it on cost review.
+  final double? ratePerKg;
 
   const WasteItem({
     this.id,
@@ -28,7 +31,11 @@ class WasteItem {
     this.photos = const [],
     this.sourceStockId,
     this.isDeleted = false,
+    this.ratePerKg,
   });
+
+  /// Line value computed on the fly; never stored separately.
+  double? get lineValue => ratePerKg != null ? weightKg * ratePerKg! : null;
 
   factory WasteItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -46,6 +53,7 @@ class WasteItem {
           const [],
       sourceStockId: data['source_stock_id'] as String?,
       isDeleted: data['is_deleted'] as bool? ?? false,
+      ratePerKg: (data['rate_per_kg'] as num?)?.toDouble(),
     );
   }
 
@@ -60,6 +68,7 @@ class WasteItem {
       'photos': photos,
       if (sourceStockId != null) 'source_stock_id': sourceStockId,
       'is_deleted': isDeleted,
+      if (ratePerKg != null) 'rate_per_kg': ratePerKg,
     };
   }
 
@@ -74,6 +83,8 @@ class WasteItem {
     List<String>? photos,
     String? sourceStockId,
     bool? isDeleted,
+    double? ratePerKg,
+    bool clearRatePerKg = false,
   }) {
     return WasteItem(
       id: id ?? this.id,
@@ -86,6 +97,7 @@ class WasteItem {
       photos: photos ?? this.photos,
       sourceStockId: sourceStockId ?? this.sourceStockId,
       isDeleted: isDeleted ?? this.isDeleted,
+      ratePerKg: clearRatePerKg ? null : (ratePerKg ?? this.ratePerKg),
     );
   }
 }

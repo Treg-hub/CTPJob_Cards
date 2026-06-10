@@ -6,6 +6,54 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-10 — WasteTrack production-grade overhaul
+
+### User-facing changes
+
+**New load number format — W-NNNN**
+
+Load numbers are now **global sequential**: `W-0001`, `W-0042`, `W-1500`. They never reset and are unique forever. The old date-bucketed format (`WT-YYYYMMDD-NNN`) has been retired. All new loads receive a `W-NNNN` number automatically; existing loads keep their old number until they are reassigned on next sync.
+
+**Home screen — active loads + last 10 completed**
+
+The Loads tab now shows:
+- **All active loads** (Scheduled, Draft, Pending Weighbridge, Pending Cost Review) — no page limit, every in-flight load is always visible.
+- **Last 10 completed/cancelled** loads below a divider, ordered by completion date (most recent first).
+
+Previously, a 50-load page limit could silently hide active loads when many completed loads existed.
+
+**Admin cost review — itemized per-item table**
+
+The Review tab now shows a **line-by-line cost breakdown** for each waste item on the load:
+
+| Subtype | Weight | R/kg | Value |
+|---------|--------|------|-------|
+| Reelends | 320 kg | 0.90 | R 288.00 |
+| Slab Waste | 180 kg | 0.85 | R 153.00 |
+
+- **R/kg** is pre-filled from the contractor's rate register when available; leave it blank if unknown and the system will warn with ⚠.
+- **Calculated total** (sum of line values) is shown read-only.
+- **Approved amount** defaults to the calculated total but can be edited to match the physical accounts document.
+- Rates entered or corrected during review are saved back to the rate register automatically for future loads.
+- Both the **calculated** and **approved** amounts are stored separately for audit — any discrepancy is visible in CTP Pulse Reports.
+
+**PDF share on completed loads**
+
+On any completed load, tap the **share icon** (↑) in the load detail app bar to generate and share a PDF summary: load number, contractor, driver, itemized weights and costs, weighbridge details, and approval record.
+
+**Offline schedule improvements**
+
+- Loads scheduled while offline are queued and sync automatically when connectivity returns. The load number (`W-NNNN`) is assigned on sync.
+- Stock items linked to an offline-submitted collection are also queued — they will not be permanently stuck as *Loaded* if the parent load never reached Firestore.
+
+### Under the hood (no UI change but affects data reliability)
+
+- Deleting a waste item is now a **single atomic transaction** — the load weight and stock status can no longer end up inconsistent if the network drops mid-delete.
+- The `updateLoad` operation now correctly queues its payload when offline without leaking `FieldValue.serverTimestamp()` into the local Hive store.
+- `deleteWasteItem` blocks with a clear error if offline — supervised admin action, not a field worker action.
+
+---
+
 ## 2026-06-05 — Production release: new job types, module toggles, admin improvements
 
 ### User-facing changes
