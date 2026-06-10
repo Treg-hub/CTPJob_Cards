@@ -4,7 +4,6 @@ import '../models/employee.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
 import 'role.dart';
-import 'fleet_labels.dart';
 
 const _allUserFacingRoles = <UserRole>{
   UserRole.operator,

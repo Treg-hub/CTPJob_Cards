@@ -24,9 +24,13 @@ class FleetSettingsScreen extends ConsumerStatefulWidget {
 
 class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
   final _service = FleetService();
+  final _spendAlertCtrl = TextEditingController();
 
   FleetSettings? _settings;
   List<String> _allDepartments = [];
+
+  /// clockNo → employee name, for validating the allow-list chips.
+  Map<String, String> _employeeNames = {};
   bool _loading = true;
   bool _saving = false;
 
@@ -34,6 +38,12 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _spendAlertCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -46,10 +56,19 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
         .toSet()
         .toList()
       ..sort();
+    final names = <String, String>{
+      for (final d in empSnap.docs)
+        d.id: (d.data()['name'] as String? ?? '').trim(),
+    };
     if (mounted) {
       setState(() {
         _settings = settings;
         _allDepartments = departments;
+        _employeeNames = names;
+        if (settings.assetSpendAlertZar > 0) {
+          _spendAlertCtrl.text =
+              settings.assetSpendAlertZar.toStringAsFixed(0);
+        }
         _loading = false;
       });
     }
@@ -57,9 +76,24 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
 
   Future<void> _save() async {
     if (_settings == null) return;
+    final alertText = _spendAlertCtrl.text.trim();
+    final alert = alertText.isEmpty
+        ? 0.0
+        : double.tryParse(alertText.replaceAll(',', '.'));
+    if (alert == null || alert < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Spend alert must be a positive amount (or blank for off).')));
+      return;
+    }
     setState(() => _saving = true);
     try {
-      await _service.saveSettings(_settings!);
+      final emp = currentEmployee;
+      await _service.saveSettings(
+        _settings!.copyWith(assetSpendAlertZar: alert),
+        actorClockNo: emp?.clockNo,
+        actorName: emp?.name,
+      );
       ref.invalidate(fleetSettingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -145,6 +179,7 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
           ),
           _ClockNoChipEditor(
             clockNos: s.costManagerClockNos,
+            employeeNames: _employeeNames,
             onChanged: (updated) =>
                 setState(() => _settings = s.copyWith(costManagerClockNos: updated)),
           ),
@@ -158,8 +193,32 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
           ),
           _ClockNoChipEditor(
             clockNos: s.mechanicClockNos,
+            employeeNames: _employeeNames,
             onChanged: (updated) =>
                 setState(() => _settings = s.copyWith(mechanicClockNos: updated)),
+          ),
+          const Divider(),
+
+          // ── Spend alert ───────────────────────────────────────────────
+          _SectionHeader(
+            title: 'Spend Alert',
+            icon: Icons.warning_amber,
+            subtitle:
+                'Flag an asset on Reports when its monthly spend reaches this amount (blank = off)',
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: TextField(
+              controller: _spendAlertCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                prefixText: 'R ',
+                hintText: 'e.g. 15000',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
           ),
           const Divider(),
 
@@ -246,9 +305,14 @@ class _ClockNoChipEditor extends StatefulWidget {
   const _ClockNoChipEditor({
     required this.clockNos,
     required this.onChanged,
+    this.employeeNames = const {},
   });
   final List<String> clockNos;
   final ValueChanged<List<String>> onChanged;
+
+  /// clockNo → name; chips show the resolved name, or a warning when the
+  /// clock number matches no employee (a typo grants nobody access).
+  final Map<String, String> employeeNames;
 
   @override
   State<_ClockNoChipEditor> createState() => _ClockNoChipEditorState();
@@ -263,6 +327,25 @@ class _ClockNoChipEditorState extends State<_ClockNoChipEditor> {
     super.dispose();
   }
 
+  void _add() {
+    final no = _addCtrl.text.trim();
+    if (no.isEmpty || widget.clockNos.contains(no)) return;
+    if (widget.employeeNames.isNotEmpty &&
+        !widget.employeeNames.containsKey(no)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No employee found with clock number $no — added anyway, '
+            'but check for a typo.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    widget.onChanged([...widget.clockNos, no]);
+    _addCtrl.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -270,16 +353,35 @@ class _ClockNoChipEditorState extends State<_ClockNoChipEditor> {
       children: [
         Wrap(
           spacing: 8,
+          runSpacing: 4,
           children: [
-            ...widget.clockNos.map((no) => Chip(
-                  label: Text(no),
-                  deleteIcon: const Icon(Icons.close, size: 16),
-                  onDeleted: () {
-                    final updated = List<String>.from(widget.clockNos)
-                      ..remove(no);
-                    widget.onChanged(updated);
-                  },
-                )),
+            ...widget.clockNos.map((no) {
+              final name = widget.employeeNames[no];
+              final unknown =
+                  widget.employeeNames.isNotEmpty && name == null;
+              return Chip(
+                avatar: unknown
+                    ? Icon(Icons.warning_amber,
+                        size: 16, color: Colors.orange.shade800)
+                    : null,
+                label: Text(
+                  unknown
+                      ? '$no — no employee found'
+                      : (name == null || name.isEmpty
+                          ? no
+                          : '$no — $name'),
+                ),
+                backgroundColor: unknown
+                    ? Colors.orange.withValues(alpha: 0.15)
+                    : null,
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () {
+                  final updated = List<String>.from(widget.clockNos)
+                    ..remove(no);
+                  widget.onChanged(updated);
+                },
+              );
+            }),
           ],
         ),
         const SizedBox(height: 8),
@@ -294,6 +396,7 @@ class _ClockNoChipEditorState extends State<_ClockNoChipEditor> {
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
+                onSubmitted: (_) => _add(),
               ),
             ),
             const SizedBox(width: 8),
@@ -301,12 +404,7 @@ class _ClockNoChipEditorState extends State<_ClockNoChipEditor> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: kBrandOrange,
                   foregroundColor: Colors.white),
-              onPressed: () {
-                final no = _addCtrl.text.trim();
-                if (no.isEmpty || widget.clockNos.contains(no)) return;
-                widget.onChanged([...widget.clockNos, no]);
-                _addCtrl.clear();
-              },
+              onPressed: _add,
               child: const Text('Add'),
             ),
           ],

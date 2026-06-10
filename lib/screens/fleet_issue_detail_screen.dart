@@ -13,6 +13,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_photo_viewer.dart';
+import 'fleet_asset_detail_screen.dart';
 import 'fleet_log_work_screen.dart';
 
 /// Detailed view of a single fleet issue.
@@ -358,6 +359,10 @@ class _IssueBody extends StatelessWidget {
             ],
           ],
         ),
+        _RepeatOffenderHint(
+          assetId: issue.assetId,
+          assetName: issue.assetName,
+        ),
         if (mechanicView && issue.status.isOpen) ...[
           const SizedBox(height: 16),
           if (issue.status == FleetIssueStatus.open) ...[
@@ -583,6 +588,78 @@ class _IssueBody extends StatelessWidget {
           const SizedBox(height: 16),
         ],
       ],
+    );
+  }
+}
+
+/// Surfaces chronic machines: when this asset has had 2+ non-cancelled
+/// problems in the last 30 days, show a tappable hint into its history.
+class _RepeatOffenderHint extends StatelessWidget {
+  const _RepeatOffenderHint({
+    required this.assetId,
+    required this.assetName,
+  });
+
+  final String assetId;
+  final String assetName;
+
+  static String _ordinal(int n) {
+    if (n == 2) return '2nd';
+    if (n == 3) return '3rd';
+    return '${n}th';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (assetId.isEmpty) return const SizedBox.shrink();
+    return FutureBuilder<int>(
+      future: FleetService().watchAssetIssues(assetId).first.then((issues) {
+        final cutoff = DateTime.now().subtract(const Duration(days: 30));
+        return issues
+            .where((i) =>
+                i.status != FleetIssueStatus.cancelled &&
+                (i.createdAt?.isAfter(cutoff) ?? false))
+            .length;
+      }),
+      builder: (context, snapshot) {
+        final count = snapshot.data;
+        if (count == null || count < 2) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => FleetAssetDetailScreen(assetId: assetId),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.15),
+                border: Border.all(color: Colors.amber.shade700),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.history,
+                      size: 18, color: Colors.amber.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${_ordinal(count)} problem on $assetName in 30 days — '
+                      'tap to view history.',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 18),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

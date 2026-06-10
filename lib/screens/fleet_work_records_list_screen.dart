@@ -66,11 +66,14 @@ class _FleetWorkRecordsListScreenState
 
   List<FleetWorkRecord> _applyFilters(List<FleetWorkRecord> records) {
     var filtered = records;
+    var pendingFilter = false;
 
     if (widget.costsPendingOnly && !widget.costManagerMode) {
       filtered = filtered.where((r) => !r.hasCostLines).toList();
+      pendingFilter = true;
     } else if (_isCostTab && _costStatusFilter == 'pending') {
       filtered = filtered.where((r) => !r.hasCostLines).toList();
+      pendingFilter = true;
     } else if (_isCostTab && _costStatusFilter == 'costed') {
       filtered = filtered.where((r) => r.hasCostLines).toList();
     }
@@ -83,6 +86,16 @@ class _FleetWorkRecordsListScreenState
       filtered = filtered
           .where((r) => r.workTypeId == _workTypeFilterId)
           .toList();
+    }
+
+    if (pendingFilter) {
+      // The costing backlog is worked FIFO — oldest job first.
+      filtered = List.of(filtered)
+        ..sort((a, b) {
+          final ad = a.createdAt ?? a.startDate;
+          final bd = b.createdAt ?? b.startDate;
+          return ad.compareTo(bd);
+        });
     }
     return filtered;
   }

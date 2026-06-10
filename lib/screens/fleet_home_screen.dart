@@ -336,34 +336,82 @@ class _IssuesTab extends ConsumerWidget {
           child: StreamBuilder<List<FleetAsset>>(
             stream: service.watchAssets(activeOnly: true),
             builder: (context, snapshot) {
-              final oos =
-                  (snapshot.data ?? []).where((a) => a.hasOpenOosIssue).toList();
-              if (oos.isEmpty) return const SizedBox.shrink();
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  border: Border.all(color: Colors.red),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      const Icon(Icons.warning, color: Colors.red, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                          '${oos.length} asset${oos.length == 1 ? '' : 's'} out of service',
-                          style: const TextStyle(
-                              color: Colors.red, fontWeight: FontWeight.bold)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Text(oos.map((a) => a.name).join(', '),
-                        style:
-                            const TextStyle(color: Colors.red, fontSize: 12)),
-                  ],
-                ),
+              final assets = snapshot.data ?? [];
+              final oos = assets.where((a) => a.hasOpenOosIssue).toList();
+              final due = assets
+                  .where((a) => a.serviceDue && !a.hasOpenOosIssue)
+                  .toList();
+              if (oos.isEmpty && due.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (oos.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(Icons.warning,
+                                color: Colors.red, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                                '${oos.length} asset${oos.length == 1 ? '' : 's'} out of service',
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold)),
+                          ]),
+                          const SizedBox(height: 4),
+                          Text(oos.map((a) => a.name).join(', '),
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  if (due.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.amber.shade700),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.build_circle_outlined,
+                                color: Colors.amber.shade800, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${due.length} Hyster${due.length == 1 ? '' : 's'} due for service',
+                              style: TextStyle(
+                                  color: Colors.amber.shade800,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ]),
+                          const SizedBox(height: 4),
+                          Text(
+                            due
+                                .map((a) =>
+                                    '${a.name} (${a.serviceDueReason})')
+                                .join('\n'),
+                            style: TextStyle(
+                                color: Colors.amber.shade900, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               );
             },
           ),

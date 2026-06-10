@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../main.dart' show currentEmployee;
 import '../models/fleet_issue.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
@@ -8,6 +9,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import 'fleet_issue_detail_screen.dart';
+import 'fleet_log_work_screen.dart';
 
 /// Full list of fleet issues with status filter chips.
 /// Visible to reporters (transparency), mechanics, cost managers, and admins.
@@ -27,8 +29,106 @@ class FleetIssuesListScreen extends ConsumerStatefulWidget {
 
 class _FleetIssuesListScreenState
     extends ConsumerState<FleetIssuesListScreen> {
+  /// Sentinel filter value: show only the current user's own reports
+  /// (any status) — the reporter's feedback loop.
+  static const String _kMineFilter = '_mine';
+
   final _service = FleetService();
   String? _statusFilter; // null = all open statuses
+
+  void _snack(String msg, {Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
+  }
+
+  /// Swipe action for an OPEN issue: acknowledge it ("Start job").
+  Future<void> _quickStartJob(FleetIssue issue) async {
+    final emp = currentEmployee;
+    if (emp == null || issue.id == null) return;
+    try {
+      await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
+      if (mounted) {
+        _snack(
+          'Job started on ${issue.assetName}. Swipe again when done to finish the fix.',
+          color: Colors.green,
+        );
+      }
+    } catch (e) {
+      if (mounted) _snack('$e', color: Colors.red);
+    }
+  }
+
+  /// Swipe action for an ACKNOWLEDGED issue: straight into Mark as Fixed.
+  Future<void> _quickFinishFix(FleetIssue issue) async {
+    if (issue.id == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FleetLogWorkScreen(
+          preSelectedAssetId: issue.assetId,
+          preSelectedAssetName: issue.assetName,
+          linkedIssueId: issue.id,
+        ),
+      ),
+    );
+  }
+
+  /// Mechanic tiles get a swipe-right shortcut matching the issue's next step.
+  Widget _buildTile(FleetIssue issue) {
+    final tile = FleetIssueTile(
+      issue: issue,
+      mechanicMode: widget.mechanicMode,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => FleetIssueDetailScreen(
+          issueId: issue.id!,
+          mechanicMode: widget.mechanicMode,
+        ),
+      )),
+    );
+    if (!widget.mechanicMode || !issue.status.isOpen) return tile;
+
+    final isOpen = issue.status == FleetIssueStatus.open;
+    return Dismissible(
+      key: ValueKey('fleet_issue_swipe_${issue.id}'),
+      direction: DismissDirection.startToEnd,
+      // The swipe triggers the action and snaps back — never dismisses.
+      confirmDismiss: (_) async {
+        if (isOpen) {
+          await _quickStartJob(issue);
+        } else {
+          await _quickFinishFix(issue);
+        }
+        return false;
+      },
+      background: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        padding: const EdgeInsets.only(left: 20),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: isOpen ? Colors.blue : kBrandOrange,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isOpen ? Icons.play_circle_outline : Icons.build_circle_outlined,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isOpen ? 'Start job' : 'Finish the fix',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: tile,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +170,13 @@ class _FleetIssuesListScreenState
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
+                        label: 'My reports',
+                        selected: _statusFilter == _kMineFilter,
+                        onTap: () =>
+                            setState(() => _statusFilter = _kMineFilter),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
                         label: 'Acknowledged',
                         selected: _statusFilter == 'acknowledged',
                         onTap: () =>
@@ -96,8 +203,12 @@ class _FleetIssuesListScreenState
             child: StreamBuilder<List<FleetIssue>>(
               stream: _statusFilter == null
                   ? _service.watchOpenIssues(limit: 100)
-                  : _service.watchIssues(
-                      status: _statusFilter, limit: 100),
+                  : _statusFilter == _kMineFilter
+                      ? _service.watchIssues(
+                          reportedByClockNo: currentEmployee?.clockNo,
+                          limit: 100)
+                      : _service.watchIssues(
+                          status: _statusFilter, limit: 100),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -116,7 +227,9 @@ class _FleetIssuesListScreenState
                                     : 'Nothing in progress.')
                             : (_statusFilter == null
                                 ? 'No open issues. All clear!'
-                                : 'No issues with this status.'),
+                                : _statusFilter == _kMineFilter
+                                    ? 'You haven\'t reported any problems yet.'
+                                    : 'No issues with this status.'),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -126,16 +239,8 @@ class _FleetIssuesListScreenState
                   padding: const EdgeInsets.all(12),
                   itemCount: issues.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 6),
-                  itemBuilder: (context, index) => FleetIssueTile(
-                    issue: issues[index],
-                    mechanicMode: widget.mechanicMode,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => FleetIssueDetailScreen(
-                        issueId: issues[index].id!,
-                        mechanicMode: widget.mechanicMode,
-                      ),
-                    )),
-                  ),
+                  itemBuilder: (context, index) =>
+                      _buildTile(issues[index]),
                 );
               },
             ),

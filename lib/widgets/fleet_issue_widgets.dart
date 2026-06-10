@@ -7,18 +7,19 @@ import 'fleet_mechanic_widgets.dart';
 
 /// Shared badge and tile widgets used across fleet issue screens.
 
+/// Single source for severity colours (dot, badge, tile strip).
+Color fleetSeverityColor(FleetIssueSeverity severity) {
+  switch (severity) {
+    case FleetIssueSeverity.outOfService: return Colors.red;
+    case FleetIssueSeverity.high:         return Colors.orange;
+    case FleetIssueSeverity.medium:       return Colors.yellow[700]!;
+    case FleetIssueSeverity.low:          return Colors.green;
+  }
+}
+
 class FleetSeverityDot extends StatelessWidget {
   const FleetSeverityDot({super.key, required this.severity});
   final FleetIssueSeverity severity;
-
-  Color get _color {
-    switch (severity) {
-      case FleetIssueSeverity.outOfService: return Colors.red;
-      case FleetIssueSeverity.high:         return Colors.orange;
-      case FleetIssueSeverity.medium:       return Colors.yellow[700]!;
-      case FleetIssueSeverity.low:          return Colors.green;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +27,10 @@ class FleetSeverityDot extends StatelessWidget {
       width: 14,
       height: 14,
       margin: const EdgeInsets.only(top: 4),
-      decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: fleetSeverityColor(severity),
+        shape: BoxShape.circle,
+      ),
     );
   }
 }
@@ -61,21 +65,13 @@ class FleetSeverityBadge extends StatelessWidget {
   const FleetSeverityBadge({super.key, required this.severity});
   final FleetIssueSeverity severity;
 
-  Color get _color {
-    switch (severity) {
-      case FleetIssueSeverity.outOfService: return Colors.red;
-      case FleetIssueSeverity.high:         return Colors.orange;
-      case FleetIssueSeverity.medium:       return Colors.yellow[700]!;
-      case FleetIssueSeverity.low:          return Colors.green;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-          color: _color, borderRadius: BorderRadius.circular(4)),
+          color: fleetSeverityColor(severity),
+          borderRadius: BorderRadius.circular(4)),
       child: Text(severity.displayLabel,
           style: const TextStyle(
               color: Colors.white,
@@ -103,7 +99,18 @@ class FleetIssueTile extends StatelessWidget {
     final colors = Theme.of(context).extension<AppColors>();
     return Card(
       color: colors?.cardSurface,
-      child: ListTile(
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        // Severity strip — scannable from a distance, unlike text badges.
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: fleetSeverityColor(issue.severity),
+              width: 4,
+            ),
+          ),
+        ),
+        child: ListTile(
         onTap: onTap,
         leading: FleetSeverityDot(severity: issue.severity),
         title: Text(
@@ -150,6 +157,7 @@ class FleetIssueTile extends StatelessWidget {
           ],
         ),
         trailing: const Icon(Icons.chevron_right),
+        ),
       ),
     );
   }

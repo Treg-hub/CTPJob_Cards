@@ -9,6 +9,10 @@ class FleetSettings {
   final bool oosNotifyMechanic;
   final bool oosNotifyCostManagers;
 
+  /// Monthly per-asset spend above which the Reports screen flags the asset.
+  /// 0 (or unset) disables the flag.
+  final double assetSpendAlertZar;
+
   const FleetSettings({
     this.reporterDepartments = const [],
     this.costManagerClockNos = const [],
@@ -16,6 +20,7 @@ class FleetSettings {
     this.fleetEnabled = false,
     this.oosNotifyMechanic = true,
     this.oosNotifyCostManagers = true,
+    this.assetSpendAlertZar = 0,
   });
 
   static const FleetSettings defaults = FleetSettings();
@@ -56,6 +61,8 @@ class FleetSettings {
       fleetEnabled: data['fleet_enabled'] as bool? ?? false,
       oosNotifyMechanic: data['oos_notify_mechanic'] as bool? ?? true,
       oosNotifyCostManagers: data['oos_notify_cost_managers'] as bool? ?? true,
+      assetSpendAlertZar:
+          (data['asset_spend_alert_zar'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -67,6 +74,7 @@ class FleetSettings {
       'fleet_enabled': fleetEnabled,
       'oos_notify_mechanic': oosNotifyMechanic,
       'oos_notify_cost_managers': oosNotifyCostManagers,
+      'asset_spend_alert_zar': assetSpendAlertZar,
     };
   }
 
@@ -77,6 +85,7 @@ class FleetSettings {
     bool? fleetEnabled,
     bool? oosNotifyMechanic,
     bool? oosNotifyCostManagers,
+    double? assetSpendAlertZar,
   }) {
     return FleetSettings(
       reporterDepartments: reporterDepartments ?? this.reporterDepartments,
@@ -85,6 +94,7 @@ class FleetSettings {
       fleetEnabled: fleetEnabled ?? this.fleetEnabled,
       oosNotifyMechanic: oosNotifyMechanic ?? this.oosNotifyMechanic,
       oosNotifyCostManagers: oosNotifyCostManagers ?? this.oosNotifyCostManagers,
+      assetSpendAlertZar: assetSpendAlertZar ?? this.assetSpendAlertZar,
     );
   }
 }

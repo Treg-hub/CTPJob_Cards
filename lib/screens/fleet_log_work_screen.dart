@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -67,10 +68,19 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   // In-progress parts
   final List<_PartRow> _parts = [];
 
+  /// Previously used part names (the shared issue_part pool) for autocomplete.
+  List<String> _partSuggestions = [];
+
   @override
   void initState() {
     super.initState();
     _loadWorkTypes();
+    _service.watchTypes(kind: 'issue_part').first.then((types) {
+      if (mounted) {
+        setState(() =>
+            _partSuggestions = types.map((t) => t.label).toList());
+      }
+    }).catchError((_) {});
     if (widget.workRecordId != null) {
       _loadExistingRecord(widget.workRecordId!);
     } else {
@@ -191,6 +201,9 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     _descCtrl.dispose();
     _labourHoursCtrl.dispose();
     _machineHoursCtrl.dispose();
+    for (final row in _parts) {
+      row.dispose();
+    }
     super.dispose();
   }
 
@@ -331,6 +344,11 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           .whereType<FleetWorkPart>()
           .toList();
 
+      // Grow the shared part-name pool so autocomplete learns new names.
+      for (final p in parts) {
+        unawaited(_service.ensureIssuePartType(p.partName).catchError((_) {}));
+      }
+
       String recordId;
       String? workNumber;
       var queuedOffline = false;
@@ -370,7 +388,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           'start_date': Timestamp.fromDate(startDate),
           'end_date': Timestamp.fromDate(endDate),
           'linked_issue_ids': _linkedIssueIds,
-        });
+        }, actorClockNo: emp.clockNo, actorName: emp.name);
         await _service.replaceParts(recordId, parts);
       } else {
         final data = {
@@ -788,12 +806,12 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
           _PartsSection(
             parts: _parts,
+            suggestions: _partSuggestions,
             optional: useMechanicLabels || _isFixingIssue,
             onAdd: () => setState(() => _parts.add(_PartRow())),
             onRemove: (i) {
               setState(() {
-                _parts[i].nameCtrl.dispose();
-                _parts[i].qtyCtrl.dispose();
+                _parts[i].dispose();
                 _parts.removeAt(i);
               });
             },
@@ -823,12 +841,14 @@ class _PartsSection extends StatelessWidget {
     required this.parts,
     required this.onAdd,
     required this.onRemove,
+    this.suggestions = const [],
     this.optional = false,
   });
 
   final List<_PartRow> parts;
   final VoidCallback onAdd;
   final void Function(int index) onRemove;
+  final List<String> suggestions;
   final bool optional;
 
   @override
@@ -858,11 +878,53 @@ class _PartsSection extends StatelessWidget {
               children: [
                 Expanded(
                   flex: 3,
-                  child: TextField(
-                    controller: row.nameCtrl,
-                    decoration: fleetDropdownDecoration(
-                      hintText: 'Part name',
-                      isDense: true,
+                  // Autocomplete over previously used part names — faster
+                  // than typing and keeps spelling consistent for analysis.
+                  child: RawAutocomplete<String>(
+                    textEditingController: row.nameCtrl,
+                    focusNode: row.nameFocus,
+                    optionsBuilder: (value) {
+                      final q = value.text.trim().toLowerCase();
+                      if (q.isEmpty) return const Iterable<String>.empty();
+                      return suggestions
+                          .where((s) =>
+                              s.toLowerCase().contains(q) &&
+                              s.toLowerCase() != q)
+                          .take(6);
+                    },
+                    optionsViewBuilder: (context, onSelected, options) =>
+                        Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                              maxHeight: 200, maxWidth: 280),
+                          child: ListView(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            children: [
+                              for (final option in options)
+                                ListTile(
+                                  dense: true,
+                                  title: Text(option),
+                                  onTap: () => onSelected(option),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onSubmitted) =>
+                            TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: fleetDropdownDecoration(
+                        hintText: 'Part name',
+                        isDense: true,
+                      ),
                     ),
                   ),
                 ),
@@ -991,6 +1053,13 @@ class _PhotoThumb extends StatelessWidget {
 class _PartRow {
   final nameCtrl = TextEditingController();
   final qtyCtrl = TextEditingController();
+  final nameFocus = FocusNode();
+
+  void dispose() {
+    nameCtrl.dispose();
+    qtyCtrl.dispose();
+    nameFocus.dispose();
+  }
 }
 
 class _TimelineRow extends StatelessWidget {

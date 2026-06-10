@@ -6,6 +6,39 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-10 — Fleet per-role usability batch
+
+### For reporters
+
+- **"My reports" filter** on the Issues tab — see only your own reports with their current status (open / mechanic busy / fixed).
+- **You get told when it's fixed** — a notification (or inbox message when off-site) arrives when the mechanic resolves your report: "Hyster 02 is back in service."
+
+### For the mechanic
+
+- **Swipe a problem to act on it** — swipe right on an open problem to start the job; swipe an in-progress one to go straight to Mark as Fixed.
+- **Colour strips on problem tiles** — red (out of service), orange, yellow, green down the left edge, readable from a distance.
+- **Repeat-offender warning** — when a Hyster has had 2+ problems in 30 days, the problem screen shows a tappable hint into the machine's full history.
+- **Part names autocomplete** — the parts list on Log Work suggests previously used part names as you type.
+
+### For the cost manager
+
+- **"Needs costing" is now oldest-first** — work the backlog in order.
+- **Month-on-month comparison** on Spend Reports ("▲ 22% vs May").
+- **Spend alert** — set a monthly per-Hyster threshold in Fleet Settings; machines over it are flagged in red on Reports.
+
+### For the admin / fleet manager
+
+- **Hyster detail page** — tap any machine in Assets for everything in one place: hour meter, service status, open problems, work history, and total spend. Edit lives here too.
+- **Service intervals (preventive maintenance)** — set "every X hours" and/or "every X days" per machine plus the last-service baseline; the Issues tab shows an amber "due for service" banner when a machine crosses either interval.
+- **Clock numbers show names** — Fleet Settings now resolves each mechanic/cost-manager clock number to the employee's name and warns on numbers that match nobody (typo protection).
+- **Audit trail wired** — reports, status changes, work records, cost entries, asset and settings changes are now written to the immutable fleet_audit collection.
+
+### Under the hood
+
+- Fixed the fleet work-record database indexes (created_at → createdAt mismatch) — the Hyster filter on the Work tab and the job selector in Add Cost silently returned nothing.
+
+---
+
 ## 2026-06-10 — Fleet Maintenance hardening (FM-NNNN, OOS policy, edit lock)
 
 ### User-facing changes

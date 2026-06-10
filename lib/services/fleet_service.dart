@@ -37,6 +37,29 @@ class FleetService {
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
   // ---------------------------------------------------------------------------
+  // AUDIT TRAIL — append-only fleet_audit (rules block update/delete).
+  // Fire-and-forget: auditing must never block or fail the action it records.
+  // Offline writes are buffered by the Firestore SDK and flush on reconnect.
+  // ---------------------------------------------------------------------------
+
+  void logAudit(
+    String action, {
+    required String actorClockNo,
+    String? actorName,
+    Map<String, dynamic>? details,
+  }) {
+    try {
+      unawaited(_db.collection(Collections.fleetAudit).add({
+        'action': action,
+        'actor_clock_no': actorClockNo,
+        if (actorName != null) 'actor_name': actorName,
+        if (details != null && details.isNotEmpty) 'details': details,
+        'created_at': FieldValue.serverTimestamp(),
+      }).then<void>((_) {}).catchError((_) {}));
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
   // SETTINGS
   // ---------------------------------------------------------------------------
 
@@ -58,11 +81,19 @@ class FleetService {
     });
   }
 
-  Future<void> saveSettings(FleetSettings settings) async {
+  Future<void> saveSettings(
+    FleetSettings settings, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     await _db
         .collection(Collections.fleetSettings)
         .doc('config')
         .set(settings.toFirestore(), SetOptions(merge: true));
+    if (actorClockNo != null) {
+      logAudit('settings_saved',
+          actorClockNo: actorClockNo, actorName: actorName);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -144,7 +175,19 @@ class FleetService {
     return FleetAsset.fromFirestore(snap);
   }
 
-  Future<void> saveAsset(FleetAsset asset) async {
+  Stream<FleetAsset?> watchAsset(String id) {
+    return _db
+        .collection(Collections.fleetAssets)
+        .doc(id)
+        .snapshots()
+        .map((snap) => snap.exists ? FleetAsset.fromFirestore(snap) : null);
+  }
+
+  Future<void> saveAsset(
+    FleetAsset asset, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     if (asset.id == null) {
       await _db.collection(Collections.fleetAssets).add(asset.toFirestore());
     } else {
@@ -153,6 +196,35 @@ class FleetService {
           .doc(asset.id)
           .set(asset.toFirestore(), SetOptions(merge: true));
     }
+    if (actorClockNo != null) {
+      logAudit('asset_saved',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          details: {
+            'asset_name': asset.name,
+            'asset_tag': asset.assetTag,
+            'active': asset.active,
+          });
+    }
+  }
+
+  /// All issues for one asset, newest first. Uses an equality-only query
+  /// (auto-indexed) with a client-side sort, so no composite index is
+  /// needed — at ~12 assets the per-asset issue count stays small.
+  Stream<List<FleetIssue>> watchAssetIssues(String assetId) {
+    return _db
+        .collection(Collections.fleetIssues)
+        .where('asset_id', isEqualTo: assetId)
+        .snapshots()
+        .map((s) {
+      final issues = s.docs.map(FleetIssue.fromFirestore).toList()
+        ..sort((a, b) {
+          final ad = a.createdAt ?? DateTime(2000);
+          final bd = b.createdAt ?? DateTime(2000);
+          return bd.compareTo(ad);
+        });
+      return issues;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -263,6 +335,8 @@ class FleetService {
       'acknowledged_by_name': name,
       'acknowledged_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_acknowledged',
+        actorClockNo: clockNo, actorName: name, details: {'issue_id': issueId});
   }
 
   Future<void> resolveIssueWithNote(
@@ -277,6 +351,8 @@ class FleetService {
       'resolved_by_name': name,
       'resolved_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_resolved_note',
+        actorClockNo: clockNo, actorName: name, details: {'issue_id': issueId});
   }
 
   /// Deliberately unguarded: a logged work record is the strongest form of
@@ -292,6 +368,10 @@ class FleetService {
       'resolved_by_name': name,
       'resolved_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_resolved_work_record',
+        actorClockNo: clockNo,
+        actorName: name,
+        details: {'issue_id': issueId, 'work_record_id': workRecordId});
   }
 
   Future<void> cancelIssue(
@@ -305,6 +385,10 @@ class FleetService {
       if (reason != null) 'cancel_reason': reason,
       'cancelled_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_cancelled',
+        actorClockNo: clockNo,
+        actorName: name,
+        details: {'issue_id': issueId, if (reason != null) 'reason': reason});
   }
 
   // ---------------------------------------------------------------------------
@@ -358,11 +442,21 @@ class FleetService {
   }
 
   Future<void> updateWorkRecord(
-      String id, Map<String, dynamic> data) async {
+    String id,
+    Map<String, dynamic> data, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(id)
         .update({...data, 'updatedAt': FieldValue.serverTimestamp()});
+    if (actorClockNo != null) {
+      logAudit('work_record_edited',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          details: {'work_record_id': id});
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -481,6 +575,15 @@ class FleetService {
         documentId: line.workRecordId!,
       );
     }
+
+    logAudit('cost_line_added',
+        actorClockNo: line.enteredByClockNo,
+        actorName: line.enteredByName,
+        details: {
+          'asset_name': line.assetName,
+          'amount_zar': line.amountZar,
+          if (line.workNumber != null) 'work_number': line.workNumber,
+        });
 
     var queuedOffline = !online;
     if (online) {
@@ -679,6 +782,15 @@ class FleetService {
       );
     }
 
+    logAudit('issue_reported',
+        actorClockNo: issue.reportedByClockNo,
+        actorName: issue.reportedByName,
+        details: {
+          'issue_id': issueId,
+          'asset_name': issue.assetName,
+          'severity': issue.severity.value,
+        });
+
     var queuedOffline = !online;
     if (online) {
       var docCreated = false;
@@ -773,6 +885,17 @@ class FleetService {
       data: SyncService.sanitizeForHive(queuePayload),
       documentId: queueId,
     );
+
+    // Logged at queue time (the record is guaranteed to exist via replay);
+    // client_ref ties the audit entry to the eventual document.
+    logAudit('work_record_created',
+        actorClockNo: loggedByClockNo,
+        actorName: loggedByName,
+        details: {
+          'client_ref': queueId,
+          'asset_name': data['asset_name'],
+          'title': data['title'],
+        });
 
     if (!online) {
       return (id: queueId, workNumber: null, queuedOffline: true);
