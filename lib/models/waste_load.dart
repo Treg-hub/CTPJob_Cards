@@ -76,7 +76,11 @@ class WasteLoad {
 
   // ── Cost review fields (admin approves after off-site weighbridge) ────────
   final double? rate;
+  /// Approved cost entered/confirmed by admin during cost review (for accounts).
   final double? randValueExVat;
+  /// System-calculated cost = sum of (item.weightKg × item.ratePerKg) at review time.
+  /// Stored separately so any discrepancy with [randValueExVat] is auditable.
+  final double? calculatedCost;
   final DateTime? costReviewedAt;
   final String? costReviewedBy;
   final DateTime? weighbridgeReceivedAt;
@@ -130,6 +134,7 @@ class WasteLoad {
     this.recordedWeightKg = 0.0,
     this.rate,
     this.randValueExVat,
+    this.calculatedCost,
     this.costReviewedAt,
     this.costReviewedBy,
     this.weighbridgeReceivedAt,
@@ -197,6 +202,7 @@ class WasteLoad {
       recordedWeightKg: (data['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0,
       rate: (data['rate'] as num?)?.toDouble(),
       randValueExVat: (data['rand_value_exvat'] as num?)?.toDouble(),
+      calculatedCost: (data['calculated_cost'] as num?)?.toDouble(),
       costReviewedAt: _parseOptionalDate(data['cost_reviewed_at']),
       costReviewedBy: data['cost_reviewed_by'] as String?,
       weighbridgeReceivedAt: _parseOptionalDate(data['weighbridge_received_at']),
@@ -245,6 +251,7 @@ class WasteLoad {
       'recorded_weight_kg': recordedWeightKg,
       if (rate != null) 'rate': rate,
       if (randValueExVat != null) 'rand_value_exvat': randValueExVat,
+      if (calculatedCost != null) 'calculated_cost': calculatedCost,
       if (costReviewedAt != null) 'cost_reviewed_at': Timestamp.fromDate(costReviewedAt!),
       if (costReviewedBy != null) 'cost_reviewed_by': costReviewedBy,
       if (weighbridgeReceivedAt != null) 'weighbridge_received_at': Timestamp.fromDate(weighbridgeReceivedAt!),
@@ -289,6 +296,7 @@ class WasteLoad {
     double? recordedWeightKg,
     double? rate,
     double? randValueExVat,
+    double? calculatedCost,
     DateTime? costReviewedAt,
     String? costReviewedBy,
     DateTime? weighbridgeReceivedAt,
@@ -335,6 +343,7 @@ class WasteLoad {
       recordedWeightKg: recordedWeightKg ?? this.recordedWeightKg,
       rate: rate ?? this.rate,
       randValueExVat: randValueExVat ?? this.randValueExVat,
+      calculatedCost: calculatedCost ?? this.calculatedCost,
       costReviewedAt: costReviewedAt ?? this.costReviewedAt,
       costReviewedBy: costReviewedBy ?? this.costReviewedBy,
       weighbridgeReceivedAt: weighbridgeReceivedAt ?? this.weighbridgeReceivedAt,

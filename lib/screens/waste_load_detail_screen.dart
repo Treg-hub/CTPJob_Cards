@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/waste_load.dart';
 import '../models/waste_item.dart';
@@ -193,12 +197,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         ticketWaivedByName: _noWeighbridgeTicket ? currentEmployee?.name : null,
       );
 
-      final suggested = await _wasteService.suggestLoadCost(
-        loadId: _currentLoad.id!,
-        load: _currentLoad,
-        weightKg: weight,
-      );
-
       setState(() {
         _currentLoad = _currentLoad.copyWith(
           actualWeighbridgeWeightKg: weight,
@@ -210,8 +208,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           status: WasteLoadStatus.pendingCostReview,
           pendingCostReviewAt: DateTime.now(),
           weighbridgeReceivedAt: DateTime.now(),
-          rate: suggested?.rate,
-          randValueExVat: suggested?.randValueExVat,
         );
         _ticketPhotoPath = null;
         _noWeighbridgeTicket = false;
@@ -485,6 +481,290 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (path != null && mounted) setState(() => _ticketPhotoPath = path);
   }
 
+  bool get _canShare => _isCompleted || _isAdmin || _isManager;
+
+  Future<void> _shareLoadSummary() async {
+    final load = _currentLoad;
+    List<WasteItem> items = [];
+    try {
+      items = await _wasteService
+          .watchItemsForLoad(load.id!)
+          .first
+          .timeout(const Duration(seconds: 8), onTimeout: () => []);
+    } catch (_) {}
+
+    final pdf = pw.Document();
+    final wasteGreen = PdfColor.fromHex('#2e7d32');
+    const borderColor = PdfColor.fromInt(0xFF9E9E9E);
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context ctx) {
+          final double calcTotal = items.fold(
+            0.0,
+            (acc, i) => acc + i.weightKg * (i.ratePerKg ?? 0),
+          );
+          final approvedCost = load.randValueExVat;
+          final calculatedCost = load.calculatedCost ?? calcTotal;
+
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // ── Header ──
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: pw.BoxDecoration(
+                  color: wasteGreen,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'CTP — Waste Load Summary',
+                      style: pw.TextStyle(
+                        color: PdfColors.white,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    pw.Text(
+                      load.loadNumber.isNotEmpty ? load.loadNumber : '—',
+                      style: pw.TextStyle(
+                        color: PdfColors.white,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 16),
+
+              // ── Load info table ──
+              _pdfInfoTable([
+                ['Date', _formatPdfDate(load.dateTime)],
+                ['Waste Type', load.mainWasteType],
+                ['Contractor', load.contractorName?.isNotEmpty == true ? load.contractorName! : load.contractorId],
+                ['Driver', load.driverName.isNotEmpty ? load.driverName : '—'],
+                ['Vehicle', load.vehicleReg.isNotEmpty ? load.vehicleReg : '—'],
+              ], borderColor: borderColor),
+              pw.SizedBox(height: 16),
+
+              // ── Items collected ──
+              if (items.isNotEmpty) ...[
+                pw.Text(
+                  'Items Collected',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                ),
+                pw.SizedBox(height: 6),
+                _pdfItemsTable(items, borderColor: borderColor),
+                pw.SizedBox(height: 16),
+              ],
+
+              // ── Weighbridge ──
+              if (load.actualWeighbridgeWeightKg != null) ...[
+                pw.Text(
+                  'Weighbridge',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                ),
+                pw.SizedBox(height: 6),
+                _pdfInfoTable([
+                  if (load.weighbridgeNumber?.isNotEmpty == true)
+                    ['Ticket #', load.weighbridgeNumber!],
+                  ['Actual weight', '${load.actualWeighbridgeWeightKg!.toStringAsFixed(0)} kg'],
+                  if (load.recordedWeightKg > 0) ...[
+                    ['Recorded weight', '${load.recordedWeightKg.toStringAsFixed(0)} kg'],
+                    [
+                      'Deviation',
+                      '${(load.actualWeighbridgeWeightKg! - load.recordedWeightKg) >= 0 ? '+' : ''}'
+                      '${(load.actualWeighbridgeWeightKg! - load.recordedWeightKg).toStringAsFixed(0)} kg',
+                    ],
+                  ],
+                  if (load.weighbridgeTicketWaived)
+                    ['Note', 'Ticket waived by ${load.weighbridgeTicketWaivedByName ?? load.weighbridgeTicketWaivedBy ?? 'admin'}'],
+                ], borderColor: borderColor),
+                pw.SizedBox(height: 16),
+              ],
+
+              // ── Cost ──
+              if (approvedCost != null || calculatedCost > 0) ...[
+                pw.Text(
+                  'Cost (ex VAT)',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                ),
+                pw.SizedBox(height: 6),
+                _pdfInfoTable([
+                  if (calculatedCost > 0)
+                    ['Calculated', 'R ${calculatedCost.toStringAsFixed(2)}'],
+                  if (approvedCost != null)
+                    ['Approved', 'R ${approvedCost.toStringAsFixed(2)}'],
+                  if (load.costReviewedBy?.isNotEmpty == true)
+                    ['Approved by', load.costReviewedBy!],
+                  if (load.costReviewedAt != null)
+                    ['Approved on', _formatPdfDate(load.costReviewedAt!)],
+                ], borderColor: borderColor),
+              ],
+
+              pw.Spacer(),
+              pw.Divider(color: borderColor),
+              pw.Text(
+                'Generated ${_formatPdfDate(DateTime.now())} • CTP Job Cards',
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final bytes = await pdf.save();
+    final tmpDir = await getTemporaryDirectory();
+    final label = load.loadNumber.isNotEmpty
+        ? load.loadNumber.replaceAll(RegExp(r'[^A-Za-z0-9\-]'), '_')
+        : 'waste_load';
+    final file = File('${tmpDir.path}/$label.pdf');
+    await file.writeAsBytes(bytes);
+
+    if (!mounted) return;
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'application/pdf')],
+        subject: 'Waste Load Summary — ${load.loadNumber.isNotEmpty ? load.loadNumber : load.mainWasteType}',
+      ),
+    );
+  }
+
+  String _formatPdfDate(DateTime dt) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  static pw.Widget _pdfInfoTable(
+    List<List<String>> rows, {
+    required PdfColor borderColor,
+  }) {
+    return pw.Table(
+      border: pw.TableBorder.all(color: borderColor, width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(1.4),
+        1: const pw.FlexColumnWidth(2.6),
+      },
+      children: rows.map((row) {
+        return pw.TableRow(children: [
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: pw.Text(
+              row[0],
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey700,
+              ),
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: pw.Text(
+              row.length > 1 ? row[1] : '—',
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+          ),
+        ]);
+      }).toList(),
+    );
+  }
+
+  static pw.Widget _pdfItemsTable(
+    List<WasteItem> items, {
+    required PdfColor borderColor,
+  }) {
+    final double total = items.fold(
+      0.0,
+      (s, i) => s + i.weightKg * (i.ratePerKg ?? 0),
+    );
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: borderColor, width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2.5),
+        1: const pw.FlexColumnWidth(1.5),
+        2: const pw.FlexColumnWidth(1.5),
+        3: const pw.FlexColumnWidth(1.5),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F5F5)),
+          children: ['Subtype', 'Weight', 'R/kg', 'Value'].map((h) {
+            return pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              child: pw.Text(
+                h,
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        ...items.map((item) {
+          final rate = item.ratePerKg;
+          final value = rate != null ? item.weightKg * rate : null;
+          return pw.TableRow(children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: pw.Text(item.subtype, style: const pw.TextStyle(fontSize: 9)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: pw.Text('${item.weightKg.toStringAsFixed(0)} kg', style: const pw.TextStyle(fontSize: 9)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: pw.Text(
+                rate != null ? 'R ${rate.toStringAsFixed(2)}' : '—',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: pw.Text(
+                value != null ? 'R ${value.toStringAsFixed(2)}' : '—',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ),
+          ]);
+        }),
+        if (total > 0)
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F5F5)),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: pw.Text(
+                  'Total',
+                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+              pw.SizedBox(),
+              pw.SizedBox(),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: pw.Text(
+                  'R ${total.toStringAsFixed(2)}',
+                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canEditWeighbridge = _isAdmin || _isManager;
@@ -496,6 +776,15 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       appBar: WasteAppBar(
         title: _currentLoad.loadNumber.isNotEmpty ? _currentLoad.loadNumber : 'Load Detail',
         isOnSite: currentEmployee?.isOnSite,
+        actions: _canShare
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: 'Share load summary',
+                  onPressed: _shareLoadSummary,
+                ),
+              ]
+            : null,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

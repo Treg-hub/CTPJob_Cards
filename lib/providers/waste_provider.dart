@@ -2,6 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
+import '../services/waste_service.dart';
+
+/// Singleton WasteService — all waste screens share one instance so the
+/// in-memory session queues (_sessionOfflinePhotoQueue, etc.) are consistent.
+final wasteServiceProvider = Provider<WasteService>((ref) => WasteService());
 
 // ---------------------------------------------------------------------------
 // STOCK ITEM SELECTION — ephemeral state used in WasteScheduleLoadScreen

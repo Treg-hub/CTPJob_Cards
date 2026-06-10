@@ -262,11 +262,18 @@ class _WasteBeginCollectionScreenState
         itemsData: itemsData,
         loadPhotoPaths: _loadPhotoPaths,
         signatureLocalPath: _signatureTempPath,
+        contractorId: widget.load.contractorId,
       );
 
-      // Mark confirmed stock items as loaded now that the guard has confirmed them
+      // Mark confirmed stock items as loaded. If the load itself was queued
+      // offline we must also queue the stock updates — marking stock online
+      // against a load that isn't in Firestore yet would leave orphaned state.
       if (confirmedStockIds.isNotEmpty) {
-        await _wasteService.markStockLoaded(confirmedStockIds, widget.load.id!);
+        if (!result.queuedOffline) {
+          await _wasteService.markStockLoaded(confirmedStockIds, widget.load.id!);
+        } else {
+          await _wasteService.queueMarkStockLoaded(confirmedStockIds, widget.load.id!);
+        }
       }
 
       if (mounted) {
@@ -341,7 +348,7 @@ class _WasteBeginCollectionScreenState
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('Contractor ID: ${widget.load.contractorId}',
+                  Text('Contractor: ${widget.load.contractorName ?? widget.load.contractorId}',
                       style: TextStyle(fontSize: 13, color: onSurface)),
                   Text(
                     'Expected: ${DateFormat('EEE d MMM, HH:mm').format(scheduledDate)}',

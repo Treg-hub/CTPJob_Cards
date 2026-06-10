@@ -163,10 +163,28 @@ Same steps — open any **Pending Weighbridge** load from Recent loads.
 ## Step 5 — Admin cost review
 
 1. Open the **Review** tab (admin only; badge shows pending count).
-2. Confirm or edit the **cost (R ex VAT)** — a suggested value is calculated from contractor rates when available.
-3. Tap **Approve** to mark the load **Completed**.
+2. The review card shows an **itemized cost table**:
+   - Each waste item on the load is shown with its **subtype**, **weight**, an editable **R/kg rate**, and a calculated **value**.
+   - The **R/kg** field is pre-filled from the contractor's rate register where a rate exists. Empty fields show a ⚠ warning — enter the rate from the physical document.
+   - The **Calculated total** (sum of all line values) updates live as you edit rates.
+3. The **Approved amount** field defaults to the calculated total. Edit it to match the accounts document if they differ.
+4. Tap **Approve** — the system saves both the calculated total and the approved amount separately for audit.
+
+> Rates entered or corrected during review are saved back to the rate register — the same contractor + subtype pair will be pre-filled automatically on future collections.
 
 Reports and exports are available on **CTP Pulse → Waste → Reports**.
+
+---
+
+## Sharing a load summary (PDF)
+
+On any **completed** load, tap the **↑ share icon** in the app bar to generate a PDF summary containing:
+- Load number, date, contractor, driver, vehicle
+- Itemised waste items (subtype, weight, rate, value)
+- Weighbridge weight and deviation
+- Calculated and approved cost
+
+Share or print directly from your phone.
 
 ---
 
@@ -225,6 +243,8 @@ On the Loads tab, the green **Paper Waste Stock** banner shows how many items ar
 
 **Offline**
 - Photos, signatures, and load data queue locally. Tap the orange **cloud sync** banner to retry when back online.
+- Loads scheduled while offline appear in the Incoming list once synced; load numbers are assigned at that point.
+- Stock items linked to an offline collection sync automatically — they will not remain permanently *Loaded* if the parent load was not yet written.
 
 **I cannot see the Waste tab**
 - Your account needs a WasteTrack role. Contact an admin.
@@ -250,7 +270,10 @@ On the Loads tab, the green **Paper Waste Stock** banner shows how many items ar
 - [ ] Enter weighbridge document when it arrives
 
 ### Admin
-- [ ] Review tab: approve cost → Completed
+- [ ] Review tab: enter/confirm R/kg rates for each item
+- [ ] Check calculated total; edit Approved amount if accounts differ
+- [ ] Tap Approve → Completed
+- [ ] Share PDF from load detail if needed for accounts filing
 
 ---
 
