@@ -803,6 +803,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         'url': downloadUrl,
         'section': section,
         'addedBy': FirebaseAuth.instance.currentUser?.uid ?? 'legacy',
+        'addedByName': currentEmployee?.name ?? 'Unknown',
         'timestamp': DateTime.now().toIso8601String(),
         'department': _currentJobCard.department,
         'machine': _currentJobCard.machine,
@@ -905,8 +906,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     Text('Machine: ${photo['machine'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                     Text('Location: ${photo['location'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                     Text('Part: ${photo['part'] ?? 'N/A'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-                    Text('Added by: ${photo['addedBy'] ?? 'Unknown'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-                    Text('Timestamp: ${DateTime.parse(photo['timestamp'] ?? '').toLocal().toString().substring(0,16)}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    // Prefer the human-readable name; legacy photos only have
+                    // the auth UID under addedBy.
+                    Text('Added by: ${photo['addedByName'] ?? photo['addedBy'] ?? 'Unknown'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    Text('Timestamp: ${_formatPhotoTimestamp(photo['timestamp'])}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                   ],
                 ),
               ),
@@ -1397,6 +1400,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       completedBy: user,
       completedAt: now,
       monitoringStartedAt: withMonitoring ? now : null,
+      // closedAt drives Job History / closed queries (orderBy drops docs
+      // missing the field) — it was never written by the app before.
+      closedAt: withMonitoring ? null : now,
       correctiveAction: jobCard.correctiveAction + caEntry,
     );
     final event = AssignmentEvent(
@@ -1515,23 +1521,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   Navigator.pop(context);
                   return;
                 }
-                final now = DateTime.now();
                 final user = currentEmployee?.name ?? 'User';
-                final event = AssignmentEvent(
-                  assignedByName: 'Status → ${selectedStatus.displayName} by $user',
-                  assignedByClockNo: currentEmployee?.clockNo ?? '',
-                  assigneeClockNos: [],
-                  assigneeNames: [],
-                  timestamp: now,
-                );
-                final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory)..add(event);
-                final updated = jobCard.copyWith(
-                  status: selectedStatus,
-                  monitoringStartedAt: selectedStatus == JobStatus.monitor ? now : null,
-                  assignmentHistory: newHistory,
-                );
                 try {
-                  await _firestoreService.saveJobCardOfflineAware(updated);
+                  // Field-scoped update: stamps closedAt on close, clears
+                  // stale completion fields on reopen (copyWith can't null
+                  // fields, so the old whole-doc save left them behind).
+                  await _firestoreService.changeJobCardStatus(
+                    jobCardId: jobCard.id!,
+                    current: jobCard,
+                    to: selectedStatus,
+                    byName: user,
+                    byClockNo: currentEmployee?.clockNo ?? '',
+                  );
                   await _refreshJobCard();
                   if (context.mounted) {
                     Navigator.pop(context);
@@ -2214,6 +2215,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} - ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Legacy photos store '' or no timestamp — DateTime.parse used to throw
+  /// and crash the full-screen viewer.
+  String _formatPhotoTimestamp(dynamic raw) {
+    final dt = DateTime.tryParse(raw?.toString() ?? '');
+    if (dt == null) return 'Unknown';
+    final local = dt.toLocal().toString();
+    return local.length >= 16 ? local.substring(0, 16) : local;
   }
 
   Widget _buildRelatedTab() {

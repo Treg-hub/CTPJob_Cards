@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/job_card.dart';
+import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
@@ -21,7 +26,10 @@ class CreateJobCardScreen extends StatefulWidget {
   State<CreateJobCardScreen> createState() => _CreateJobCardScreenState();
 }
 
-class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
+class _CreateJobCardScreenState extends State<CreateJobCardScreen>
+    with WidgetsBindingObserver {
+  static const String _draftPrefsKey = 'jobCardCreateDraft';
+
   final _formKey = GlobalKey<FormState>();
   String? selectedDepartment;
   String? selectedArea;
@@ -33,6 +41,13 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   String description = '';
   bool _isLoading = false;
   List<Map<String, dynamic>> photos = [];
+
+  // Creation is online-only BY DESIGN: an offline-created job would alert
+  // nobody and the operator would wait for a technician who was never
+  // notified. We block early with an explanation instead of failing the save.
+  bool _isOnline = true;
+  bool _saved = false;
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
 
   final List<Color> priorityColors = [
     Colors.transparent,
@@ -67,6 +82,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Default to the logged-in user's department, but NOT for Mechanical/Electrical
     // workers who roam the whole factory and should pick their department per job.
@@ -77,6 +93,132 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
     if (dept.isNotEmpty && !isMechOrElec) {
       selectedDepartment = dept;
     }
+
+    _initConnectivity();
+    _restoreDraft();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connSub?.cancel();
+    _persistDraft();
+    _partController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Backgrounding may precede process death — persist so the worker who
+    // walks to find signal doesn't retype the whole form.
+    if (state == AppLifecycleState.paused) _persistDraft();
+  }
+
+  Future<void> _initConnectivity() async {
+    if (kIsWeb) return;
+    final online = await ConnectivityService().isOnline();
+    if (mounted) setState(() => _isOnline = online);
+    _connSub = ConnectivityService().connectivityStream.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (mounted && online != _isOnline) setState(() => _isOnline = online);
+    });
+  }
+
+  // ==================== LOCAL DRAFT ====================
+  bool get _hasDraftContent =>
+      selectedDepartment != null ||
+      part.isNotEmpty ||
+      description.isNotEmpty ||
+      photos.isNotEmpty;
+
+  Future<void> _persistDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_saved || !_hasDraftContent) {
+        await prefs.remove(_draftPrefsKey);
+        return;
+      }
+      await prefs.setString(
+        _draftPrefsKey,
+        jsonEncode({
+          'department': selectedDepartment,
+          'area': selectedArea,
+          'machine': selectedMachine,
+          'part': part,
+          'type': jobType?.name,
+          'priority': priority,
+          'description': description,
+          'photos': photos
+              .map((p) => {'file': p['file'], 'section': p['section']})
+              .toList(),
+        }),
+      );
+    } catch (e) {
+      debugPrint('Draft persist failed: $e');
+    }
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftPrefsKey);
+      if (raw == null || raw.isEmpty) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+
+      // Photos survive only while their compressed temp files still exist.
+      final restoredPhotos = <Map<String, dynamic>>[];
+      for (final p in (data['photos'] as List? ?? const [])) {
+        if (p is Map && p['file'] is String && File(p['file'] as String).existsSync()) {
+          restoredPhotos.add({'file': p['file'], 'section': p['section'] ?? 'Description'});
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        selectedDepartment = data['department'] as String? ?? selectedDepartment;
+        selectedArea = data['area'] as String?;
+        selectedMachine = data['machine'] as String?;
+        part = data['part'] as String? ?? '';
+        _partController.text = part;
+        final typeName = data['type'] as String?;
+        jobType = typeName != null ? JobType.fromString(typeName) : null;
+        priority = data['priority'] as int? ?? 3;
+        description = data['description'] as String? ?? '';
+        photos = restoredPhotos;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Draft restored — your unsent job card was kept')),
+      );
+    } catch (e) {
+      debugPrint('Draft restore failed: $e');
+    }
+  }
+
+  Widget _buildOfflineBanner() {
+    if (_isOnline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 30),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off, color: Colors.red, size: 22),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No connection — technicians cannot be alerted. Move to an area '
+              'with signal to submit. Your entries are kept as a draft.',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
   Color _getPriorityColor(String priority) {
     final num = int.tryParse(priority.substring(1)) ?? 0;
@@ -134,6 +276,23 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
       return;
     }
 
+    // Re-check connectivity at the moment of save — the photo uploads and the
+    // numbering transaction both need the server, and an offline job card
+    // would alert nobody.
+    if (!kIsWeb && !await ConnectivityService().isOnline()) {
+      if (mounted) {
+        setState(() => _isOnline = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No connection — technicians cannot be alerted. Your draft is saved; submit when you have signal.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      await _persistDraft();
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -156,6 +315,13 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
       // Step 3: Save
       await _firestoreService.saveJobCardOfflineAware(jobCard);
+
+      // Submitted — drop the local draft.
+      _saved = true;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_draftPrefsKey);
+      } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -260,6 +426,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
           'url': downloadUrl,
           'section': photoData['section'] as String? ?? 'General',
           'addedBy': FirebaseAuth.instance.currentUser?.uid ?? 'legacy',
+          'addedByName': currentEmployee?.name ?? 'Unknown',
           'timestamp': DateTime.now().toIso8601String(),
           'department': selectedDepartment,
           'machine': selectedMachine,
@@ -615,6 +782,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
 
             return ListView(
               children: [
+                _buildOfflineBanner(),
                 if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                   Container(
                     padding: const EdgeInsets.only(left: 16, right: 4, top: 4, bottom: 4),
@@ -880,7 +1048,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _saveJobCard,
+                    onPressed: (_isLoading || !_isOnline) ? null : _saveJobCard,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF8C42),
                       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -888,7 +1056,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.black)
-                        : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
+                        : Text(
+                            _isOnline ? 'Save Job Card' : 'No connection — cannot submit',
+                            style: TextStyle(color: Colors.black, fontSize: _isOnline ? 24 : 18),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -937,6 +1108,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                   key: _formKey,
                   child: ListView(
                     children: [
+                      _buildOfflineBanner(),
                       if (selectedDepartment != null || selectedArea != null || selectedMachine != null) ...[
                         Container(
                           padding: const EdgeInsets.only(left: 16, right: 4, top: 4, bottom: 4),
@@ -1197,7 +1369,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _saveJobCard,
+                          onPressed: (_isLoading || !_isOnline) ? null : _saveJobCard,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFFF8C42),
                             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -1205,7 +1377,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen> {
                           ),
                           child: _isLoading
                               ? const CircularProgressIndicator(color: Colors.black)
-                              : const Text('Save Job Card', style: TextStyle(color: Colors.black)),
+                              : Text(
+                                  _isOnline ? 'Save Job Card' : 'No connection — cannot submit',
+                                  style: TextStyle(color: Colors.black, fontSize: _isOnline ? 24 : 18),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 24),

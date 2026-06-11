@@ -17,7 +17,9 @@ class SyncService {
   SyncService._internal();
 
   static final RegExp _properLoadNumber = RegExp(r'^WT-\d{8}-\d{3}$');
-  final FirebaseFunctions _functions =
+  // Lazy: resolving the Firebase app at singleton construction breaks any
+  // context without an initialized app (the offline-resilience test harness).
+  late final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
   /// Public Hive-safe sanitizer for offline queue payloads.
@@ -26,6 +28,11 @@ class SyncService {
 
   late final Box<SyncQueueItem> _queueBox;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  // Reentrancy guard: connectivity flaps (load shedding, factory Wi-Fi) fire
+  // the listener repeatedly; without this two passes can process the same
+  // queue item concurrently.
+  bool _isProcessing = false;
 
   Future<void> init() async {
     _queueBox = Hive.box<SyncQueueItem>('sync_queue');
@@ -130,8 +137,17 @@ class SyncService {
   }
 
   Future<void> _processQueue() async {
+    if (_isProcessing) return;
     if (_queueBox.isEmpty) return;
+    _isProcessing = true;
+    try {
+      await _processQueueInner();
+    } finally {
+      _isProcessing = false;
+    }
+  }
 
+  Future<void> _processQueueInner() async {
     final items = _queueBox.values.toList();
     final firestore = FirebaseFirestore.instance;
 
@@ -192,12 +208,18 @@ class SyncService {
           }
         } else {
           final docRef = firestore.collection(item.collection).doc(item.id);
+          // Job cards: queue sanitisation turned every Timestamp into an
+          // ISO-8601 string. Replaying those verbatim corrupted the doc and
+          // crashed JobCard.fromFirestore for every user — restore them.
+          final payload = item.collection == Collections.jobCards
+              ? _restoreJobCardTimestamps(item.data)
+              : item.data;
 
           if (item.operation == 'create' ||
               item.operation == 'update' ||
               item.operation == 'set') {
             await docRef.set(
-              item.data,
+              payload,
               SetOptions(merge: item.operation == 'update'),
             );
           } else if (item.operation == 'delete') {
@@ -647,6 +669,65 @@ class SyncService {
         }
       } else if (value is Map<String, dynamic>) {
         result[key] = _restoreFirestoreTimestamps(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  /// Every Timestamp-typed field on a job card document. Queue sanitisation
+  /// converts these to ISO-8601 strings for Hive; replay MUST convert them
+  /// back or the stored doc breaks JobCard.fromFirestore for all users.
+  static const Set<String> _jobCardTimestampKeys = {
+    'createdAt',
+    'assignedAt',
+    'startedAt',
+    'lastUpdatedAt',
+    'notificationReceivedAt',
+    'notifiedAtStage1',
+    'notifiedAtStage2',
+    'notifiedAtStage3',
+    'notifiedAtStage4',
+    'completedAt',
+    'monitoringStartedAt',
+    'closedAt',
+  };
+
+  /// Restores Firestore types on a queued job-card payload:
+  ///  - known timestamp fields: ISO string → [Timestamp]
+  ///    (`lastUpdatedAt` → serverTimestamp, since it means "when this landed")
+  ///  - assignmentHistory entries: string `timestamp` → [Timestamp]
+  /// Visible for the offline-resilience tests.
+  static Map<String, dynamic> restoreJobCardTimestamps(
+          Map<String, dynamic> data) =>
+      _restoreJobCardTimestamps(data);
+
+  static Map<String, dynamic> _restoreJobCardTimestamps(
+    Map<String, dynamic> data,
+  ) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key == 'lastUpdatedAt' && value is String) {
+        result[key] = FieldValue.serverTimestamp();
+      } else if (_jobCardTimestampKeys.contains(key) && value is String) {
+        final parsed = DateTime.tryParse(value);
+        result[key] = parsed != null ? Timestamp.fromDate(parsed) : null;
+      } else if (key == 'assignmentHistory' && value is List) {
+        result[key] = value.map((e) {
+          if (e is Map) {
+            final m = Map<String, dynamic>.from(e);
+            final ts = m['timestamp'];
+            if (ts is String) {
+              final parsed = DateTime.tryParse(ts);
+              if (parsed != null) m['timestamp'] = Timestamp.fromDate(parsed);
+            }
+            return m;
+          }
+          return e;
+        }).toList();
       } else {
         result[key] = value;
       }

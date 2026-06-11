@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'firebase_options.dart';
 import 'models/employee.dart';
 import 'models/sync_queue_item.dart';
@@ -14,6 +15,7 @@ import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/permissions_onboarding_screen.dart';
+import 'screens/update_required_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
 import 'services/sync_service.dart';
@@ -26,6 +28,27 @@ import 'package:permission_handler/permission_handler.dart';
 Employee? currentEmployee;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Tracks the name of the topmost route so notification deep links can avoid
+/// pushing a duplicate JobCardDetailScreen for the job already on screen.
+class TopRouteTracker extends NavigatorObserver {
+  static String? topRouteName;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    topRouteName = route.settings.name;
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    topRouteName = previousRoute?.settings.name;
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    topRouteName = newRoute?.settings.name;
+  }
+}
 
 /// Returns true for async errors that are recoverable noise rather than real
 /// crashes (see PlatformDispatcher.onError below). The app keeps running, so
@@ -94,6 +117,33 @@ void main() async {
     }
   } catch (e) {
     debugPrint('Firebase warning: $e');
+  }
+
+  // ==================== VERSION KILL-SWITCH ====================
+  // settings/app.minSupportedBuild retires old builds with a blocking screen
+  // before login. Firestore-backed (works off the offline cache, unlike the
+  // Remote Config force-update dialog, which only fires on HomeScreen with a
+  // cooldown). Fails open: no doc / no field / fetch error → app continues.
+  if (!kIsWeb) {
+    try {
+      final settingsDoc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('app')
+          .get();
+      final minBuild = settingsDoc.data()?['minSupportedBuild'];
+      if (minBuild is num && minBuild > 0) {
+        final info = await PackageInfo.fromPlatform();
+        final currentBuild = int.tryParse(info.buildNumber) ?? 0;
+        if (currentBuild > 0 && currentBuild < minBuild.toInt()) {
+          final url = settingsDoc.data()?['updateDownloadUrl'] as String? ?? '';
+          debugPrint('🛑 Build $currentBuild < minSupportedBuild $minBuild — blocking');
+          runApp(UpdateRequiredScreen(downloadUrl: url));
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('minSupportedBuild check skipped: $e');
+    }
   }
 
   final notificationService = NotificationService();
@@ -256,6 +306,7 @@ class CtpJobCardsApp extends ConsumerWidget {
 
     return MaterialApp(
       navigatorKey: navigatorKey,
+      navigatorObservers: [TopRouteTracker()],
       title: 'CTP Job Cards',
       themeMode: themeMode,
       theme: ThemeData(

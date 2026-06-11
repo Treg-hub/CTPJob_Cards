@@ -82,6 +82,22 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     return null;
   }
 
+  /// Mech/Elec combined jobs must appear under BOTH trade filters — the old
+  /// exact-name match hid them from the default view of exactly the
+  /// technicians who have to respond to them.
+  bool _matchesStaffFilter(JobCard j) {
+    switch (selectedStaffFilter) {
+      case 'Mechanical':
+        return j.type == JobType.mechanical ||
+            j.type == JobType.mechanicalElectrical;
+      case 'Electrical':
+        return j.type == JobType.electrical ||
+            j.type == JobType.mechanicalElectrical;
+      default:
+        return true;
+    }
+  }
+
   // ==================== CASCADING FILTERS ====================
   Widget _buildCascadingFilters() {
     return FutureBuilder<Map<String, dynamic>>(
@@ -288,7 +304,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           // Apply staff filter for counts
           var jobs = allJobs;
           if (selectedStaffFilter != 'All') {
-            jobs = jobs.where((j) => j.type.name == selectedStaffFilter.toLowerCase()).toList();
+            jobs = jobs.where(_matchesStaffFilter).toList();
           }
 
           // Apply location filters for counts
@@ -392,7 +408,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
 
         // Apply staff filter
         if (selectedStaffFilter != 'All') {
-          jobs = jobs.where((j) => j.type.name == selectedStaffFilter.toLowerCase()).toList();
+          jobs = jobs.where(_matchesStaffFilter).toList();
         }
 
         // Apply location filters

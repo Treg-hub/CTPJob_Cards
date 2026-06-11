@@ -13,7 +13,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../main.dart' show currentEmployee, navigatorKey;
+import '../main.dart' show currentEmployee, navigatorKey, TopRouteTracker;
+import '../models/assignment_event.dart';
 import '../models/job_card.dart';
 import '../constants/collections.dart';
 import '../screens/job_card_detail_screen.dart';
@@ -203,11 +204,22 @@ class NotificationService {
         final doc = query.docs.first;
         final jobData = doc.data();
 
+        // arrayUnion so co-assignees are never clobbered; status untouched
+        // (the old handler wrote scalar strings into the array fields, which
+        // broke every arrayContains query, and reset in-progress jobs to open).
+        final event = AssignmentEvent(
+          assignedByName: name,
+          assignedByClockNo: clockNo,
+          assigneeClockNos: [clockNo],
+          assigneeNames: [name],
+          timestamp: DateTime.now(),
+        );
         await doc.reference.update({
-          'assignedTo': clockNo,
-          'assignedNames': name,
-          'assignedClockNos': clockNo,
-          'status': 'open',
+          'assignedClockNos': FieldValue.arrayUnion([clockNo]),
+          'assignedNames': FieldValue.arrayUnion([name]),
+          if (jobData['assignedAt'] == null)
+            'assignedAt': FieldValue.serverTimestamp(),
+          'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
           'lastUpdatedAt': FieldValue.serverTimestamp(),
         });
 
@@ -490,7 +502,16 @@ class NotificationService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('pendingJobCardNumber');
 
+      // Repeated taps on notifications for the same job used to stack
+      // duplicate detail screens.
+      final routeName = '/job/$jobNum';
+      if (TopRouteTracker.topRouteName == routeName) {
+        debugPrint('navigateToJobDetail: job #$jobNum already on top, skipping push');
+        return;
+      }
+
       navigator.push(MaterialPageRoute(
+        settings: RouteSettings(name: routeName),
         builder: (_) => JobCardDetailScreen(jobCard: jobCard),
       ));
     } catch (e) {

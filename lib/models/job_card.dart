@@ -147,47 +147,49 @@ class JobCard {
       correctiveAction: data['correctiveAction'] as String? ?? '',
       reoccurrenceCount: data['reoccurrenceCount'] as int? ?? 1,
       status: JobStatusExtension.fromString(data['status'] as String? ?? 'Open'),
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
-      assignedAt: data['assignedAt'] != null
-          ? (data['assignedAt'] as Timestamp).toDate()
-          : null,
-      startedAt: data['startedAt'] != null
-          ? (data['startedAt'] as Timestamp).toDate()
-          : null,
-      lastUpdatedAt: data['lastUpdatedAt'] != null
-          ? (data['lastUpdatedAt'] as Timestamp).toDate()
-          : null,
-      notificationReceivedAt: data['notificationReceivedAt'] != null
-          ? (data['notificationReceivedAt'] as Timestamp).toDate()
-          : null,
-      notifiedAtStage1: data['notifiedAtStage1'] != null
-          ? (data['notifiedAtStage1'] as Timestamp).toDate()
-          : null,
-      notifiedAtStage2: data['notifiedAtStage2'] != null
-          ? (data['notifiedAtStage2'] as Timestamp).toDate()
-          : null,
-      notifiedAtStage3: data['notifiedAtStage3'] != null
-          ? (data['notifiedAtStage3'] as Timestamp).toDate()
-          : null,
-      notifiedAtStage4: data['notifiedAtStage4'] != null
-          ? (data['notifiedAtStage4'] as Timestamp).toDate()
-          : null,
+      createdAt: parseTimestamp(data['createdAt']),
+      assignedAt: parseTimestamp(data['assignedAt']),
+      startedAt: parseTimestamp(data['startedAt']),
+      lastUpdatedAt: parseTimestamp(data['lastUpdatedAt']),
+      notificationReceivedAt: parseTimestamp(data['notificationReceivedAt']),
+      notifiedAtStage1: parseTimestamp(data['notifiedAtStage1']),
+      notifiedAtStage2: parseTimestamp(data['notifiedAtStage2']),
+      notifiedAtStage3: parseTimestamp(data['notifiedAtStage3']),
+      notifiedAtStage4: parseTimestamp(data['notifiedAtStage4']),
       completedBy: data['completedBy'] as String?,
-      completedAt: data['completedAt'] != null
-          ? (data['completedAt'] as Timestamp).toDate()
-          : null,
-      monitoringStartedAt: data['monitoringStartedAt'] != null
-          ? (data['monitoringStartedAt'] as Timestamp).toDate()
-          : null,
-      closedAt: data['closedAt'] != null
-          ? (data['closedAt'] as Timestamp).toDate()
-          : null,
-      assignmentHistory: (data['assignmentHistory'] as List?)?.map((m) => AssignmentEvent.fromFirestore(m)).toList() ?? [],
+      completedAt: parseTimestamp(data['completedAt']),
+      monitoringStartedAt: parseTimestamp(data['monitoringStartedAt']),
+      closedAt: parseTimestamp(data['closedAt']),
+      assignmentHistory: _parseAssignmentHistory(data['assignmentHistory']),
       photos: _parsePhotos(data['photos']),
       reviewedBy: _parseReviewedBy(data['reviewedBy']),
     );
+  }
+
+  /// Tolerant timestamp parser. Offline-queue replays historically wrote
+  /// ISO-8601 strings into Timestamp fields, and a single bad value used to
+  /// make this factory throw — poisoning every job list stream at once.
+  /// Accepts [Timestamp], [String] (ISO-8601), [DateTime], or null.
+  static DateTime? parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  /// Parses assignmentHistory, skipping entries that can't be understood
+  /// (e.g. legacy Cloud-Function-shaped events) instead of throwing.
+  static List<AssignmentEvent> _parseAssignmentHistory(dynamic value) {
+    if (value is! List) return const [];
+    final events = <AssignmentEvent>[];
+    for (final raw in value) {
+      if (raw is! Map) continue;
+      final event =
+          AssignmentEvent.tryFromFirestore(Map<String, dynamic>.from(raw));
+      if (event != null) events.add(event);
+    }
+    return events;
   }
 
   /// Serialise to a Firestore map.
