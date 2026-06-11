@@ -977,7 +977,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                       onSelected: (_) => setState(() => priority = num),
                       backgroundColor: priorityColors[num],
                       selectedColor: priorityColors[num].withValues(alpha: 0.2),
-                      labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                      labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                     );
                   }),
@@ -1066,7 +1066,20 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                  const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                  const SizedBox(height: 8),
                  ElevatedButton.icon(
-                   onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                   // Always tappable — when the prerequisites are missing the tap
+                   // explains itself instead of being a dead button.
+                   onPressed: () {
+                     if (part.isEmpty || description.isEmpty) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         const SnackBar(
+                           content: Text('Fill in the part and description first — photos attach to the fault details.'),
+                           backgroundColor: Colors.orange,
+                         ),
+                       );
+                       return;
+                     }
+                     _addPhoto('Description');
+                   },
                    icon: const Icon(Icons.add_a_photo),
                    label: const Text('Add Photo (Camera/Gallery)'),
                  ),
@@ -1299,7 +1312,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                             onSelected: (_) => setState(() => priority = num),
                             backgroundColor: priorityColors[num],
                            selectedColor: priorityColors[num].withValues(alpha: 0.2),
-                            labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : Colors.white, fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                            labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                           );
                         }),
@@ -1387,7 +1400,20 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                       const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       ElevatedButton.icon(
-                        onPressed: part.isNotEmpty && description.isNotEmpty ? () => _addPhoto('Description') : null,
+                        // Always tappable — when the prerequisites are missing
+                        // the tap explains itself instead of being a dead button.
+                        onPressed: () {
+                          if (part.isEmpty || description.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Fill in the part and description first — photos attach to the fault details.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                          _addPhoto('Description');
+                        },
                         icon: const Icon(Icons.add_a_photo),
                         label: const Text('Add Photo (Camera/Gallery)'),
                       ),

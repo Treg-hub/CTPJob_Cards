@@ -397,12 +397,82 @@ class FirestoreService {
         .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
-  Stream<List<JobCard>> getAllJobCards() {
+  /// Stream of job cards, newest first. Pass [limit] wherever the consumer
+  /// doesn't genuinely need the full history — the unbounded form streams
+  /// every job card ever created (with embedded photo arrays) on every open.
+  Stream<List<JobCard>> getAllJobCards({int? limit}) {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection(Collections.jobCards)
+        .orderBy('createdAt', descending: true);
+    if (limit != null) query = query.limit(limit);
+    return query.snapshots().map((snapshot) => parseJobCards(snapshot.docs));
+  }
+
+  /// Server-filtered single-status stream. Equality-only (no orderBy) so it
+  /// needs no composite index — active-status sets are small and consumers
+  /// sort client-side. For closed jobs use [getClosedJobCards] (indexed on
+  /// closedAt) instead.
+  Stream<List<JobCard>> getJobCardsByStatus(JobStatus status, {int limit = 300}) {
     return _firestore
         .collection(Collections.jobCards)
-        .orderBy('createdAt', descending: true)
+        .where('status', isEqualTo: status.name)
+        .limit(limit)
         .snapshots()
         .map((snapshot) => parseJobCards(snapshot.docs));
+  }
+
+  /// Daily Review scope: everything active plus jobs closed in the last
+  /// [closedWindow]. Replaces streaming the entire collection — closed jobs
+  /// older than the window have either been reviewed or never will be.
+  Stream<List<JobCard>> getActiveAndRecentlyClosedJobCards({
+    Duration closedWindow = const Duration(days: 14),
+  }) {
+    final controller = StreamController<List<JobCard>>();
+
+    var open = <JobCard>[];
+    var inProgress = <JobCard>[];
+    var monitor = <JobCard>[];
+    var closed = <JobCard>[];
+
+    void emit() {
+      controller.add([...open, ...inProgress, ...monitor, ...closed]);
+    }
+
+    final subs = <StreamSubscription>[
+      getJobCardsByStatus(JobStatus.open).listen((j) {
+        open = j;
+        emit();
+      }, onError: controller.addError),
+      getJobCardsByStatus(JobStatus.inProgress).listen((j) {
+        inProgress = j;
+        emit();
+      }, onError: controller.addError),
+      getJobCardsByStatus(JobStatus.monitor).listen((j) {
+        monitor = j;
+        emit();
+      }, onError: controller.addError),
+      _firestore
+          .collection(Collections.jobCards)
+          .where('status', isEqualTo: 'closed')
+          .where('closedAt',
+              isGreaterThanOrEqualTo:
+                  Timestamp.fromDate(DateTime.now().subtract(closedWindow)))
+          .orderBy('closedAt', descending: true)
+          .snapshots()
+          .map((snapshot) => parseJobCards(snapshot.docs))
+          .listen((j) {
+        closed = j;
+        emit();
+      }, onError: controller.addError),
+    ];
+
+    controller.onCancel = () {
+      for (final s in subs) {
+        s.cancel();
+      }
+    };
+
+    return controller.stream;
   }
 
   // ============================================================
@@ -822,13 +892,13 @@ class FirestoreService {
     }
   }
 
-  Stream<List<JobCard>> getClosedJobCards() {
-    return _firestore
+  Stream<List<JobCard>> getClosedJobCards({int? limit}) {
+    Query<Map<String, dynamic>> query = _firestore
         .collection(Collections.jobCards)
         .where('status', isEqualTo: 'closed')
-        .orderBy('closedAt', descending: true)
-        .snapshots()
-        .map((snapshot) => parseJobCards(snapshot.docs));
+        .orderBy('closedAt', descending: true);
+    if (limit != null) query = query.limit(limit);
+    return query.snapshots().map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getInProgressJobCards() {

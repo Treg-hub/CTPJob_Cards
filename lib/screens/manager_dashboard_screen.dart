@@ -87,7 +87,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<List<JobCard>>(
-        stream: _firestoreService.getAllJobCards(),
+        // Newest 1500 jobs — covers the 7/30-day analytics windows without
+        // streaming the entire collection history on every dashboard open.
+        stream: _firestoreService.getAllJobCards(limit: 1500),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 

@@ -10,6 +10,12 @@ class Employee {
   final bool isAdmin;
   final DateTime? fcmTokenUpdatedAt;
 
+  /// Bumped server-side when this employee's custom auth claims are minted or
+  /// changed (Phase 3 RBAC). Clients watch it and force an ID-token refresh.
+  /// Read-only on the client: intentionally NOT written by toFirestore so an
+  /// employee update can never clobber it.
+  final int? claimsVersion;
+
   const Employee({
     required this.clockNo,
     required this.name,
@@ -19,6 +25,7 @@ class Employee {
     this.isOnSite = true,
     this.isAdmin = false,
     this.fcmTokenUpdatedAt,
+    this.claimsVersion,
   });
 
   String get displayName => '$name ($clockNo) - $position';
@@ -35,6 +42,7 @@ class Employee {
       fcmTokenUpdatedAt: data['fcmTokenUpdatedAt'] != null
           ? (data['fcmTokenUpdatedAt'] as Timestamp).toDate()
           : null,
+      claimsVersion: data['claimsVersion'] as int?,
     );
   }
 
@@ -62,6 +70,7 @@ class Employee {
     bool? isOnSite,
     bool? isAdmin,
     DateTime? fcmTokenUpdatedAt,
+    int? claimsVersion,
   }) {
     return Employee(
       clockNo: clockNo ?? this.clockNo,
@@ -72,6 +81,7 @@ class Employee {
       isOnSite: isOnSite ?? this.isOnSite,
       isAdmin: isAdmin ?? this.isAdmin,
       fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
+      claimsVersion: claimsVersion ?? this.claimsVersion,
     );
   }
 }
