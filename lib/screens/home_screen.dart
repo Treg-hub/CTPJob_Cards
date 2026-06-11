@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -12,6 +13,7 @@ import '../models/employee.dart';
 import '../models/job_card.dart';
 
 import '../services/firestore_service.dart';
+import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
@@ -51,6 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int _selectedIndex = 0;
 
   final FirestoreService _firestoreService = FirestoreService();
+  final JobCardActionsService _actions = JobCardActionsService();
   final NotificationService _notificationService = NotificationService();
   final LocationService _locationService = LocationService();
 
@@ -153,6 +156,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return 'CTP Job Cards';
   }
 
+  int? _lastClaimsVersion;
+
   void _setupEmployeeStream(String clockNo) {
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
@@ -167,6 +172,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
       if (wasOffsite && isNowOnsite) {
         _checkInboxOnReturn(clockNo);
+      }
+      // Claims plumbing (Phase 3 readiness): the server bumps claimsVersion
+      // after minting custom auth claims; refresh the ID token so rules see
+      // them without requiring a re-login.
+      if (emp.claimsVersion != null && emp.claimsVersion != _lastClaimsVersion) {
+        _lastClaimsVersion = emp.claimsVersion;
+        FirebaseAuth.instance.currentUser
+            ?.getIdToken(true)
+            .then((_) => debugPrint('🔑 ID token refreshed (claimsVersion ${emp.claimsVersion})'))
+            .catchError((Object e) => debugPrint('ID token refresh failed: $e'));
       }
     }, onError: (e) {
       debugPrint('HomeScreen: employee stream error: $e');
@@ -1139,10 +1154,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       isOperator && job.type != JobType.maintenance;
 
   Future<void> _startWork(JobCard job) async {
+    final current = currentEmployee;
+    if (current == null) return;
     try {
-      await _firestoreService.saveJobCardOfflineAware(
-        job.copyWith(status: JobStatus.inProgress, startedAt: DateTime.now()),
-      );
+      // Same implementation as the detail screen's Start — the old My Work
+      // path set inProgress without assigning the user or writing history.
+      await _actions.startJob(job, current);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Work started'), backgroundColor: Colors.blue),
@@ -1189,22 +1206,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         );
                         return;
                       }
+                      final current = currentEmployee;
+                      if (current == null) return;
                       setDialogState(() => isCompleting = true);
                       try {
-                        final now = DateTime.now();
-                        final user = currentEmployee?.name ?? 'User';
-                        final timestamp =
-                            '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}]';
-                        final completedJob = job.copyWith(
-                          status: JobStatus.closed,
-                          completedBy: user,
-                          completedAt: now,
-                          closedAt: now,
-                          notes: job.notes.isNotEmpty
-                              ? '${job.notes}\n\n$timestamp Completed by $user: $note'
-                              : '$timestamp Completed by $user: $note',
-                        );
-                        await _firestoreService.saveJobCardOfflineAware(completedJob);
+                        // Same field-scoped action as the detail screen —
+                        // the old My Work path wrote the note into `notes`
+                        // instead of `correctiveAction` and merge-set the
+                        // whole document.
+                        await _actions.completeJob(job, current, note,
+                            withMonitoring: false);
 
                         if (job.operatorClockNo != null) {
                           try {
@@ -1292,20 +1303,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         );
                         return;
                       }
+                      final current = currentEmployee;
+                      if (current == null) return;
                       setDialogState(() => isMonitoring = true);
                       try {
-                        final now = DateTime.now();
-                        final user = currentEmployee?.name ?? 'User';
-                        final timestamp =
-                            '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}]';
-                        final monitoredJob = job.copyWith(
-                          status: JobStatus.monitor,
-                          monitoringStartedAt: now,
-                          notes: job.notes.isNotEmpty
-                              ? '${job.notes}\n\n$timestamp Monitoring started by $user: $note'
-                              : '$timestamp Monitoring started by $user: $note',
-                        );
-                        await _firestoreService.saveJobCardOfflineAware(monitoredJob);
+                        await _actions.completeJob(job, current, note,
+                            withMonitoring: true);
 
                         if (context.mounted) {
                           Navigator.pop(context);

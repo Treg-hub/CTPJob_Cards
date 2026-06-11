@@ -8,10 +8,11 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../models/assignment_event.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
-import '../models/assignment_event.dart';
 import '../services/firestore_service.dart';
+import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
@@ -31,6 +32,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   late JobCard _currentJobCard;
   final TextEditingController _commentController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
+  final JobCardActionsService _actions = JobCardActionsService();
   final NotificationService _notificationService = NotificationService();
   late TabController _tabController;
 
@@ -201,22 +203,16 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                     Navigator.pop(context);
                                     return;
                                   }
-                                  final event = AssignmentEvent(
-                                    assignedByName: current.name,
-                                    assignedByClockNo: current.clockNo,
-                                    assigneeClockNos: List<String>.from(selectedClockNos),
-                                    assigneeNames: List<String>.from(selectedNames),
-                                    timestamp: DateTime.now(),
-                                  );
-                                  final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory)..add(event);
-                                  final finalUpdated = _currentJobCard.copyWith(
-                                    assignedClockNos: List<String>.from(selectedClockNos),
-                                    assignedNames: List<String>.from(selectedNames),
-                                    assignedAt: _currentJobCard.assignedAt ?? DateTime.now(),
-                                    assignmentHistory: newHistory,
-                                  );
                                   try {
-                                    await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+                                    // Field-scoped assignment write; the
+                                    // onJobCardAssigned CF diffs the array and
+                                    // notifies newly added assignees.
+                                    await _actions.setAssignees(
+                                      _currentJobCard,
+                                      current,
+                                      List<String>.from(selectedClockNos),
+                                      List<String>.from(selectedNames),
+                                    );
                                     await _refreshJobCard();
                                     if (_currentJobCard.operatorClockNo != null) {
                                       try {
@@ -390,17 +386,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   // ==================== ORIGINAL METHODS ====================
   Future<void> _appendComment() async {
-    if (_commentController.text.trim().isEmpty) return;
-    final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'User';
-    final newComment = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: ${_commentController.text.trim()}';
-    final updatedComments = _currentJobCard.comments + newComment;
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+    final current = currentEmployee;
+    if (current == null) return;
 
     try {
-      await _firestoreService.saveJobCardOfflineAware(_currentJobCard.copyWith(
-        comments: updatedComments,
+      await _actions.addComment(
+        _currentJobCard,
+        current,
+        text,
         reoccurrenceCount: _reoccurrenceCount,
-      ));
+      );
       await _refreshJobCard();
       setState(() => _commentController.clear());
       if (mounted) {
@@ -418,23 +415,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   Future<void> _selfUnassign(JobCard jobCard) async {
     final current = currentEmployee;
     if (current == null) return;
-    final updated = jobCard.copyWith(
-      assignedClockNos: (jobCard.assignedClockNos ?? []).where((c) => c != current.clockNo).toList(),
-      assignedNames: (jobCard.assignedNames ?? []).where((n) => n != current.name).toList(),
-    );
-    final event = AssignmentEvent(
-      assignedByName: current.name,
-      assignedByClockNo: current.clockNo,
-      assigneeClockNos: [current.clockNo],
-      assigneeNames: [current.name],
-      timestamp: DateTime.now(),
-      isUnassign: true,
-    );
-    final newHistory = List<AssignmentEvent>.from(_currentJobCard.assignmentHistory);
-    newHistory.add(event);
-    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _actions.selfUnassign(jobCard, current);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Removed from job')));
@@ -720,13 +702,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   Future<void> _appendNote(String noteText) async {
     if (noteText.isEmpty) return;
-    final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'User';
-    final newNote = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: $noteText';
-    final updatedNotes = _currentJobCard.notes + newNote;
+    final current = currentEmployee;
+    if (current == null) return;
 
     try {
-      await _firestoreService.saveJobCardOfflineAware(_currentJobCard.copyWith(notes: updatedNotes));
+      await _actions.addNote(_currentJobCard, current, noteText);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note added!')));
@@ -775,6 +755,27 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
       if (pickedFile == null) return;
 
+      // Multi-MB uploads on factory Wi-Fi take a while — without feedback the
+      // screen looks frozen and users retry, duplicating photos.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(minutes: 2),
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Text('Uploading photo…'),
+              ],
+            ),
+          ),
+        );
+      }
+
       String downloadUrl;
       final storagePath = 'job_cards/$jobId/photos/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
@@ -818,9 +819,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Photo uploaded successfully'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('✅ Photo uploaded successfully'), backgroundColor: Colors.green));
       }
     } catch (e, st) {
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
       if (!kIsWeb) {
         FirebaseCrashlytics.instance.recordError(
         e,
@@ -1150,51 +1154,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _startJob(JobCard jobCard) async {
-    final now = DateTime.now();
     final current = currentEmployee;
-    final user = current?.name ?? 'User';
+    if (current == null) return;
+    final isAlreadyAssigned =
+        jobCard.assignedClockNos?.contains(current.clockNo) ?? false;
 
-    final isAlreadyAssigned = jobCard.assignedClockNos?.contains(current?.clockNo ?? '') ?? false;
-    final updatedClockNos = isAlreadyAssigned
-        ? List<String>.from(jobCard.assignedClockNos ?? [])
-        : <String>[...(jobCard.assignedClockNos ?? []), current?.clockNo ?? ''];
-    final updatedNames = isAlreadyAssigned
-        ? List<String>.from(jobCard.assignedNames ?? [])
-        : <String>[...(jobCard.assignedNames ?? []), user];
-
-    final updated = jobCard.copyWith(
-      status: JobStatus.inProgress,
-      startedAt: now,
-      assignedClockNos: updatedClockNos,
-      assignedNames: updatedNames,
-      assignedAt: isAlreadyAssigned ? jobCard.assignedAt : now,
-    );
-
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
-    if (!isAlreadyAssigned && current != null) {
-      newHistory.add(AssignmentEvent(
-        assignedByName: current.name,
-        assignedByClockNo: current.clockNo,
-        assigneeClockNos: [current.clockNo],
-        assigneeNames: [current.name],
-        timestamp: now,
-      ));
-    }
-    newHistory.add(AssignmentEvent(
-      assignedByName: 'Started by $user',
-      assignedByClockNo: current?.clockNo ?? '',
-      assigneeClockNos: [],
-      assigneeNames: [],
-      timestamp: now,
-    ));
-
-    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
     try {
-      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _actions.startJob(jobCard, current);
 
       // If this user just self-assigned by starting the job (wasn't previously
       // assigned), notify the operator so they know who's now responsible.
-      if (!isAlreadyAssigned && jobCard.operatorClockNo != null && current != null) {
+      if (!isAlreadyAssigned && jobCard.operatorClockNo != null) {
         try {
           final creatorEmp = await _firestoreService.getEmployee(jobCard.operatorClockNo!);
           if (creatorEmp?.fcmToken != null) {
@@ -1391,32 +1361,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _completeJob(JobCard jobCard, bool withMonitoring, String description) async {
-    final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'User';
-    final caEntry = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] '
-        '${withMonitoring ? 'Monitoring' : 'Completed'} by $user: $description';
-    final updated = jobCard.copyWith(
-      status: withMonitoring ? JobStatus.monitor : JobStatus.closed,
-      completedBy: user,
-      completedAt: now,
-      monitoringStartedAt: withMonitoring ? now : null,
-      // closedAt drives Job History / closed queries (orderBy drops docs
-      // missing the field) — it was never written by the app before.
-      closedAt: withMonitoring ? null : now,
-      correctiveAction: jobCard.correctiveAction + caEntry,
-    );
-    final event = AssignmentEvent(
-      assignedByName: withMonitoring ? 'Monitoring by $user' : 'Completed by $user',
-      assignedByClockNo: currentEmployee?.clockNo ?? '',
-      assigneeClockNos: [],
-      assigneeNames: [],
-      timestamp: now,
-    );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
-    newHistory.add(event);
-    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
+    final current = currentEmployee;
+    if (current == null) return;
     try {
-      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _actions.completeJob(jobCard, current, description,
+          withMonitoring: withMonitoring);
       await _refreshJobCard();
 
       if (jobCard.operatorClockNo != null) {
@@ -1458,25 +1407,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _adjustmentMade(JobCard jobCard, String description) async {
-    final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'User';
-    final caEntry = '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] Adjustment by $user: $description – restarted monitoring';
-    final updated = jobCard.copyWith(
-      monitoringStartedAt: now,
-      correctiveAction: jobCard.correctiveAction + caEntry,
-    );
-    final event = AssignmentEvent(
-      assignedByName: 'Adjustment by $user',
-      assignedByClockNo: currentEmployee?.clockNo ?? '',
-      assigneeClockNos: [],
-      assigneeNames: [],
-      timestamp: now,
-    );
-    final newHistory = List<AssignmentEvent>.from(jobCard.assignmentHistory);
-    newHistory.add(event);
-    final finalUpdated = updated.copyWith(assignmentHistory: newHistory);
+    final current = currentEmployee;
+    if (current == null) return;
     try {
-      await _firestoreService.saveJobCardOfflineAware(finalUpdated);
+      await _actions.adjustmentMade(jobCard, current, description);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
@@ -1767,15 +1701,25 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       newPart.trim().isNotEmpty
                   ? () async {
                       Navigator.pop(ctx);
+                      final current = currentEmployee;
+                      if (current == null) return;
                       try {
-                        final updated = _currentJobCard.copyWith(
+                        await _actions.editLocation(
+                          _currentJobCard,
+                          current,
                           department: newDept,
                           area: newArea,
                           machine: newMachine,
                           part: newPart.trim(),
                         );
-                        await _firestoreService.saveJobCardOfflineAware(updated);
-                        if (mounted) setState(() => _currentJobCard = updated);
+                        if (mounted) {
+                          setState(() => _currentJobCard = _currentJobCard.copyWith(
+                                department: newDept,
+                                area: newArea,
+                                machine: newMachine,
+                                part: newPart.trim(),
+                              ));
+                        }
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

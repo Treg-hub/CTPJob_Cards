@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
+import '../services/job_card_actions_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/job_card_tile.dart';
@@ -16,11 +17,14 @@ class DailyReviewScreen extends StatefulWidget {
 class _DailyReviewScreenState extends State<DailyReviewScreen>
     with SingleTickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
+  final JobCardActionsService _actions = JobCardActionsService();
   StreamSubscription<List<JobCard>>? _subscription;
   late TabController _tabController;
 
   // Cards seen in this session (frozen snapshot from first load)
   List<JobCard> _pendingCards = [];
+  // Cards actually opened (and therefore stamped reviewed) this session.
+  final Set<String> _markedThisSession = {};
   // All reviewed cards for this manager (live stream)
   List<JobCard> _reviewedCards = [];
   JobCard? _selectedCard;
@@ -109,7 +113,10 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   }
 
   void _loadCards() {
-    _subscription = _firestoreService.getAllJobCards().listen((allCards) {
+    // Active jobs + last-14-days closed — review never needs the entire
+    // collection history that getAllJobCards() used to stream.
+    _subscription =
+        _firestoreService.getActiveAndRecentlyClosedJobCards().listen((allCards) {
       final manager = currentEmployee;
       if (manager == null) return;
 
@@ -138,19 +145,18 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
         _reviewedCards = reviewed;
 
         if (!_hasMarked) {
+          // Frozen session snapshot. Cards are stamped reviewedBy only when
+          // the manager actually OPENS them (_selectCard) — the old behaviour
+          // stamped everything on screen load, so the reviewedBy timestamps
+          // proved nothing.
           _pendingCards = pending;
           _hasMarked = true;
-
-          final ids = pending
-              .where((c) => c.id != null && c.id!.isNotEmpty)
-              .map((c) => c.id!)
-              .toList();
-          if (ids.isNotEmpty) {
-            _firestoreService.markJobCardsReviewed(ids, clockNo);
-          }
         } else {
-          // Update content of pending cards without changing the set
-          _pendingCards = _pendingCards.map((pc) {
+          // Update content of pending cards without changing the set, but
+          // drop cards this manager has reviewed in this session.
+          _pendingCards = _pendingCards
+              .where((pc) => !_markedThisSession.contains(pc.id))
+              .map((pc) {
             return scoped.where((c) => c.id == pc.id).firstOrNull ?? pc;
           }).toList();
         }
@@ -165,23 +171,35 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
     });
   }
 
+  /// Selecting a card is the review act — stamp reviewedBy NOW, not on
+  /// screen load. The stamp is what the audit trail relies on.
+  void _selectCard(JobCard card) {
+    setState(() {
+      _selectedCard = card;
+      _inputController.clear();
+    });
+    final clockNo = currentEmployee?.clockNo;
+    if (clockNo == null || card.id == null) return;
+    if (_markedThisSession.contains(card.id)) return;
+    if (card.reviewedBy.containsKey(clockNo)) return;
+    _markedThisSession.add(card.id!);
+    _firestoreService.markJobCardsReviewed([card.id!], clockNo);
+  }
+
   Future<void> _saveInput() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _selectedCard == null || _isSaving) return;
+    final current = currentEmployee;
+    if (current == null) return;
 
     setState(() => _isSaving = true);
 
-    final now = DateTime.now();
-    final user = currentEmployee?.name ?? 'Manager';
-    final entry =
-        '\n\n[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}] $user: $text';
-
     try {
-      final updated = _canAddNotes
-          ? _selectedCard!.copyWith(notes: _selectedCard!.notes + entry)
-          : _selectedCard!.copyWith(comments: _selectedCard!.comments + entry);
-
-      await _firestoreService.saveJobCardOfflineAware(updated);
+      if (_canAddNotes) {
+        await _actions.addNote(_selectedCard!, current, text);
+      } else {
+        await _actions.addComment(_selectedCard!, current, text);
+      }
       _inputController.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,10 +300,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
                         : null,
                     child: JobCardTile(
                       job: card,
-                      onTap: () => setState(() {
-                        _selectedCard = card;
-                        _inputController.clear();
-                      }),
+                      onTap: () => _selectCard(card),
                     ),
                   );
                 },

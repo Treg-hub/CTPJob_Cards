@@ -42,11 +42,22 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
+  static const int _closedLimit = 200;
+
   final FirestoreService _firestoreService = FirestoreService();
+  late final Stream<List<JobCard>> _openStream;
+  late final Stream<List<JobCard>> _inProgressStream;
+  late final Stream<List<JobCard>> _monitorStream;
+  late final Stream<List<JobCard>> _closedStream;
 
   @override
   void initState() {
     super.initState();
+    _openStream = _firestoreService.getJobCardsByStatus(JobStatus.open);
+    _inProgressStream =
+        _firestoreService.getJobCardsByStatus(JobStatus.inProgress);
+    _monitorStream = _firestoreService.getJobCardsByStatus(JobStatus.monitor);
+    _closedStream = _firestoreService.getClosedJobCards(limit: _closedLimit);
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
@@ -289,56 +300,76 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           ),
         ],
       ),
+      // Four server-filtered streams (open/inProgress/monitor capped at 300,
+      // closed at the newest 200) replace the old FIVE full-collection
+      // streams this screen used to open — it downloaded every job card ever
+      // created, five times, on every visit.
       body: StreamBuilder<List<JobCard>>(
-        stream: _firestoreService.getAllJobCards(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        stream: _openStream,
+        builder: (context, openSnap) => StreamBuilder<List<JobCard>>(
+          stream: _inProgressStream,
+          builder: (context, ipSnap) => StreamBuilder<List<JobCard>>(
+            stream: _monitorStream,
+            builder: (context, monSnap) => StreamBuilder<List<JobCard>>(
+              stream: _closedStream,
+              builder: (context, closedSnap) {
+                final snaps = [openSnap, ipSnap, monSnap, closedSnap];
+                final firstError =
+                    snaps.where((s) => s.hasError).map((s) => s.error).firstOrNull;
+                if (firstError != null) {
+                  return Center(
+                      child: Text('Error: $firstError',
+                          style: const TextStyle(color: Colors.red)));
+                }
+                if (snaps.every((s) => !s.hasData)) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final allJobs = snapshot.data!;
+                final open = _applyFilters(openSnap.data ?? const []);
+                final inProgress = _applyFilters(ipSnap.data ?? const []);
+                final monitor = _applyFilters(monSnap.data ?? const []);
+                final closed = _applyFilters(closedSnap.data ?? const []);
 
-          // Apply staff filter for counts
-          var jobs = allJobs;
-          if (selectedStaffFilter != 'All') {
-            jobs = jobs.where(_matchesStaffFilter).toList();
-          }
-
-          // Apply location filters for counts
-          if (selectedDepartment != null) jobs = jobs.where((j) => j.department == selectedDepartment).toList();
-          if (selectedArea != null) jobs = jobs.where((j) => j.area == selectedArea).toList();
-          if (selectedMachine != null) jobs = jobs.where((j) => j.machine == selectedMachine).toList();
-          if (selectedPart != null) jobs = jobs.where((j) => j.part == selectedPart).toList();
-
-          // Compute counts
-          final openCount = jobs.where((j) => j.status.name == 'open').length;
-          final inProgressCount = jobs.where((j) => j.status.name == 'inProgress').length;
-          final monitorCount = jobs.where((j) => j.status.name == 'monitor').length;
-          final closedCount = jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').length;
-
-          return _isWide
-              ? _buildWideLayout(openCount, inProgressCount, monitorCount, closedCount)
-              : _buildNarrowLayout(openCount, inProgressCount, monitorCount, closedCount);
-        },
+                return _buildTabbedLayout(open, inProgress, monitor, closed);
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildNarrowLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
+  List<JobCard> _applyFilters(List<JobCard> jobs) {
+    var result = jobs;
+    if (selectedStaffFilter != 'All') {
+      result = result.where(_matchesStaffFilter).toList();
+    }
+    if (selectedDepartment != null) result = result.where((j) => j.department == selectedDepartment).toList();
+    if (selectedArea != null) result = result.where((j) => j.area == selectedArea).toList();
+    if (selectedMachine != null) result = result.where((j) => j.machine == selectedMachine).toList();
+    if (selectedPart != null) result = result.where((j) => j.part == selectedPart).toList();
+    return result
+      ..sort((a, b) =>
+          (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+  }
+
+  Widget _buildTabbedLayout(List<JobCard> open, List<JobCard> inProgress,
+      List<JobCard> monitor, List<JobCard> closed) {
+    // The closed stream is capped — show "200+" instead of implying the
+    // total when the cap is hit.
+    final closedLabel =
+        closed.length >= _closedLimit ? '$_closedLimit+' : '${closed.length}';
     return Column(
       children: [
         TabBar(
           controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          isScrollable: !_isWide,
+          tabAlignment: _isWide ? null : TabAlignment.start,
           tabs: [
-            Tab(text: 'Open ($openCount)'),
-            Tab(text: 'In Progress ($inProgressCount)'),
-            Tab(text: 'Monitoring ($monitorCount)'),
-            Tab(text: 'Closed ($closedCount)'),
+            Tab(text: 'Open (${open.length})'),
+            Tab(text: 'In Progress (${inProgress.length})'),
+            Tab(text: 'Monitoring (${monitor.length})'),
+            Tab(text: 'Closed ($closedLabel)'),
           ],
         ),
 
@@ -350,80 +381,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildJobListForStatus('open'),
-              _buildJobListForStatus('inProgress'),
-              _buildJobListForStatus('monitor'),
-              _buildJobListForStatus('closed'),
+              _buildJobList(open, ''),
+              _buildJobList(inProgress, ''),
+              _buildJobList(monitor, ''),
+              _buildJobList(closed, ''),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWideLayout(int openCount, int inProgressCount, int monitorCount, int closedCount) {
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Open ($openCount)'),
-            Tab(text: 'In Progress ($inProgressCount)'),
-            Tab(text: 'Monitoring ($monitorCount)'),
-            Tab(text: 'Closed ($closedCount)'),
-          ],
-        ),
-
-        // Cascading Filters
-        _buildCascadingFilters(),
-
-        // Job List
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildJobListForStatus('open'),
-              _buildJobListForStatus('inProgress'),
-              _buildJobListForStatus('monitor'),
-              _buildJobListForStatus('closed'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildJobListForStatus(String status) {
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getAllJobCards(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        var jobs = snapshot.data!;
-
-        // Apply staff filter
-        if (selectedStaffFilter != 'All') {
-          jobs = jobs.where(_matchesStaffFilter).toList();
-        }
-
-        // Apply location filters
-        if (selectedDepartment != null) jobs = jobs.where((j) => j.department == selectedDepartment).toList();
-        if (selectedArea != null) jobs = jobs.where((j) => j.area == selectedArea).toList();
-        if (selectedMachine != null) jobs = jobs.where((j) => j.machine == selectedMachine).toList();
-        if (selectedPart != null) jobs = jobs.where((j) => j.part == selectedPart).toList();
-
-        // Filter by status
-        final filteredJobs = status == 'closed'
-            ? jobs.where((j) => j.status.name == 'closed' || j.status.name == 'cancelled').toList()
-            : jobs.where((j) => j.status.name == status).toList();
-
-        return _buildJobList(filteredJobs, '');
-      },
     );
   }
 

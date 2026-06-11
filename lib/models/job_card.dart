@@ -89,6 +89,15 @@ class JobCard {
   final List<Map<String, dynamic>> photos;
   final Map<String, DateTime> reviewedBy;
 
+  // Structured entries ({text, by, byClockNo, at}) written via arrayUnion by
+  // JobCardActionsService. Dual-written alongside the legacy string blobs
+  // (comments/notes/correctiveAction) so old app versions still see entries.
+  // NOT included in toFirestore — only arrayUnion may touch them, otherwise a
+  // stale whole-doc save could erase concurrent entries.
+  final List<Map<String, dynamic>> commentsLog;
+  final List<Map<String, dynamic>> notesLog;
+  final List<Map<String, dynamic>> correctiveActionLog;
+
   const JobCard({
     this.id,
     this.jobCardNumber,
@@ -124,6 +133,9 @@ class JobCard {
     this.assignmentHistory = const [],
     this.photos = const [],
     this.reviewedBy = const {},
+    this.commentsLog = const [],
+    this.notesLog = const [],
+    this.correctiveActionLog = const [],
   });
 
   factory JobCard.fromFirestore(DocumentSnapshot doc) {
@@ -163,7 +175,20 @@ class JobCard {
       assignmentHistory: _parseAssignmentHistory(data['assignmentHistory']),
       photos: _parsePhotos(data['photos']),
       reviewedBy: _parseReviewedBy(data['reviewedBy']),
+      commentsLog: _parseEntryLog(data['commentsLog']),
+      notesLog: _parseEntryLog(data['notesLog']),
+      correctiveActionLog: _parseEntryLog(data['correctiveActionLog']),
     );
+  }
+
+  /// Parses a structured entry log ({text, by, byClockNo, at}) tolerantly.
+  static List<Map<String, dynamic>> _parseEntryLog(dynamic value) {
+    if (value is! List) return const [];
+    final entries = <Map<String, dynamic>>[];
+    for (final raw in value) {
+      if (raw is Map) entries.add(raw.map((k, v) => MapEntry(k.toString(), v)));
+    }
+    return entries;
   }
 
   /// Tolerant timestamp parser. Offline-queue replays historically wrote
@@ -271,6 +296,9 @@ class JobCard {
     List<AssignmentEvent>? assignmentHistory,
     List<Map<String, dynamic>>? photos,
     Map<String, DateTime>? reviewedBy,
+    List<Map<String, dynamic>>? commentsLog,
+    List<Map<String, dynamic>>? notesLog,
+    List<Map<String, dynamic>>? correctiveActionLog,
   }) {
     return JobCard(
       id: id ?? this.id,
@@ -307,6 +335,9 @@ class JobCard {
       assignmentHistory: assignmentHistory ?? this.assignmentHistory,
       photos: photos ?? this.photos,
       reviewedBy: reviewedBy ?? this.reviewedBy,
+      commentsLog: commentsLog ?? this.commentsLog,
+      notesLog: notesLog ?? this.notesLog,
+      correctiveActionLog: correctiveActionLog ?? this.correctiveActionLog,
     );
   }
 
