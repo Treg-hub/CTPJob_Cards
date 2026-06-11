@@ -166,15 +166,17 @@ A job card moves through four statuses during its life:
 
 When you discover a fault or breakdown, create a job card immediately. Do not wait.
 
-> **You must be on-site to create a job card.** The **Create Job Card** tile is hidden from the home screen when your on-site status is off-site. If you are physically on site but the tile is missing, open Settings and tap **Check Current Location** to refresh your on-site status.
+> **You must be on-site and have network connectivity to create a job card.** Creating a job card while offline would mean no technicians are notified — the fault would sit silently unattended. The Create Job Card tile is disabled when you are off-site or offline; tapping it shows the reason. If you are physically on site but the tile shows as off-site, open Settings and tap **Check Current Location** to refresh your status.
 
 **Steps:**
 1. Open the CTP Job Cards app
-2. Tap **Create Job Card** (visible only when on-site)
+2. Tap **Create Job Card** (enabled when on-site and connected)
 3. Fill in all fields — department, area, machine, part, description, and priority
 4. Submit
 
 The job card is live the moment you submit it. The relevant technicians are notified on their phones immediately.
+
+> **If you see a red banner saying "No connection"** inside the Create screen, move to an area with signal before tapping Save. The form stays open and your entries are preserved — you will not lose what you typed.
 
 **Your responsibility as an operator is to fill in the form completely and accurately.** Vague or incomplete job cards slow down the technician and create useless records in the system. Be specific:
 

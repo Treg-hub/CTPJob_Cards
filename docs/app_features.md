@@ -296,8 +296,11 @@ CTP Job Cards is **offline-first**. If connectivity is lost, the app continues t
 
 - **SyncService** initialises at app startup and listens to the `connectivity_plus` stream
 - Failed writes (Firestore offline) are stored as `SyncQueueItem` objects in a Hive box named `sync_queue`
-- When connectivity is restored, `SyncService` replays all queued items in order
+- When connectivity is restored, `SyncService` replays all queued items in order, correctly restoring Firestore `Timestamp` fields so list screens are not corrupted on reconnect
+- The **sync badge** at the top of the Home screen shows a live indicator when items are queued — orange while waiting for connectivity, pulsing while syncing
 - Firestore's built-in offline persistence also caches recent reads, so the UI remains usable even when offline
+
+> **Job card creation requires connectivity.** Creating a job card while offline would mean no technicians are notified — the fault would sit silently in the queue. The Create Job Card screen shows a full-width red banner when offline and disables the Save button until connectivity is restored. Use this time to move to a signal area before submitting.
 
 > The sync queue uses **Hive** (a fast key-value store) for local persistence. `SyncQueueItem` is a `@HiveType`-annotated model — if you modify it, run `flutter pub run build_runner build` to regenerate the Hive adapters.
 
@@ -425,14 +428,18 @@ Every action taken on a job card — creation, status change, assignment, notifi
 
 ## Admin Tools
 
-*Full system control — accounts, geofences, escalation rules*
+*Full system control — accounts, geofences, escalation rules, communications*
 
-Admins have access to all data across all departments plus system configuration tools not available to any other role.
+Admins have access to all data across all departments plus system configuration tools not available to any other role. Admin Settings has six tabs.
 
-- **Employee Management** — Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers. The `isOnSite` column shows a tappable green/grey chip — tap to toggle an employee's on-site status directly.
-- **Geofence Editor** — Draw and adjust the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
-- **Escalation Rules** — Configure the timer and recipient list for each of the four escalation stages. Tune to match your site's staffing and response capacity.
-- **On Site View** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave. Useful for supervisors checking floor availability without leaving the app.
+- **Employees** — Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers. The `isOnSite` column shows a tappable green/grey chip — tap to toggle an employee's on-site status directly.
+- **Structures** — Manage the department → area → machine hierarchy. Cascading deletes with confirmation.
+- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls. Includes **App Update Control**: set a minimum supported build number and download URL. Any device running an older build sees a blocking update screen on next launch — a server-side kill-switch independent of Remote Config.
+- **Job Cards** — Spreadsheet-style export and bulk-delete tooling for the `job_cards` collection.
+- **On Site** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave.
+- **Comms** — Broadcast an update notification to all employees. A pre-filled message template is provided and can be edited. After sending, a result summary shows sent / parked (off-site users) / no-token counts. Recent broadcasts are listed at the bottom of the tab.
+
+**Geofence Editor** — Separate screen accessible from Admin → Settings for drawing the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
 
 ### Technology Stack
 

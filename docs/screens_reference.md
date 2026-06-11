@@ -108,10 +108,15 @@ Form for raising a new job card. The factory structure (department → area → 
 - Description
 - Optional photos (per section)
 
+#### Offline Behaviour
+
+The screen checks connectivity on open and before save. If offline, a full-width red banner is shown and the Save button is disabled. Job card creation intentionally blocks offline because the notification pipeline cannot fire without a Firestore write — technicians would not be alerted. The form state is preserved so nothing is lost when moving to signal.
+
+The Home tile also shows a disabled-with-reason state when offline or off-site (rather than hiding).
+
 #### What Happens On Save
 
-- Calls `FirestoreService.saveJobCardOfflineAware` → if online, runs a transaction that increments the global `counters/jobCards.nextJobCardNumber` and writes the doc
-- If offline, queues the write to Hive via `SyncService`
+- Calls `FirestoreService.saveJobCardOfflineAware` → runs a transaction that increments the global `counters/jobCards.nextJobCardNumber` and writes the doc
 - The `onJobCardCreated` Cloud Function trigger fires and dispatches initial notifications based on `creation_recipients_by_type`
 
 #### Sidebar Widget
@@ -244,6 +249,10 @@ Gradient: orange (left) → **green** (on-site) or **red** (off-site). Title sho
 
 Cards in Monitor status display an **amber** badge (not green) to distinguish "watching" from "resolved".
 
+#### Mark-on-View
+
+A job card is stamped `reviewedBy.{clockNo}: true` the moment the manager selects it in the list — not when the screen loads. The `Pending Review (N)` count decrements immediately as cards are opened. No explicit "mark as reviewed" button is needed.
+
 #### Filter Logic
 
 - Mechanical Manager: sees cards where job type is Mechanical or Mech/Elec
@@ -312,7 +321,7 @@ Visibility into the "Monitoring" state — jobs that were marked completed but k
 
 `lib/screens/admin_screen.dart` — **Roles:** Admin only
 
-The control panel. Five scrollable tabs with icons.
+The control panel. Six scrollable tabs with outlined icons.
 
 #### Tab: Employees
 
@@ -330,11 +339,12 @@ The control panel. Five scrollable tabs with icons.
 
 #### Tab: Settings
 
-- **Force Location Check Now** — manually runs `LocationService.checkCurrentLocation`
-- **Simulate 30-min WorkManager Check** — triggers the background geofence callback for testing
-- **Escalation Config** — per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option that sends a tailored "follow up directly" alert to the person who raised the job). Writes to `notification_configs/global`. See [Escalation Reference](escalation_system.html)
-- **Save Escalation Config** — writes the doc; prompts to confirm when re-enabling stages so old jobs aren't bombarded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled
-- **Reset Escalation Stamps** — calls the `clearEscalationStamps` Cloud Function. Two uses: (a) clears all stage stamps from open jobs so they re-process, (b) backfills `notifiedAtStage1..4 = null` on legacy docs so they appear in the composite indexes
+Four grouped cards:
+
+- **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking update screen is shown with the download URL before Home is reached. Works independently of Remote Config.
+- **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
+- **Access** — **Escalation Config** per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option). Writes to `notification_configs/global`. Prompts to confirm when re-enabling stages so open jobs aren't flooded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled. **Reset Escalation Stamps** calls `clearEscalationStamps` CF.
+- **Modules** — enable/disable Waste Management and Fleet Maintenance
 
 #### Tab: Job Cards
 
@@ -348,6 +358,11 @@ The control panel. Five scrollable tabs with icons.
 - Grouped by department with a green header showing the total on-site count
 - Each row shows: name, position, clock number
 - Updates live as employees clock in and out
+
+#### Tab: Comms
+
+- **Broadcast Update Notice** card — editable title and body fields (pre-filled with the standard update message); **Send Broadcast** button calls the `broadcastUpdateNotice` Cloud Function (`africa-south1`). Admin-gated (`isAdmin: true` on employee doc). After sending, a result card shows: `sent` (push delivered), `parked` (held in inbox for off-site users), `noToken` (no FCM token registered), `total` counts.
+- **Recent Broadcasts** — live stream from the `notifications` collection filtered to `triggeredBy == 'update_notice'`, sorted by `createdAt` descending, limited to last 10.
 
 ### Geofence Editor
 

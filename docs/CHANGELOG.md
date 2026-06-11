@@ -6,6 +6,59 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-11 — Job Cards data integrity overhaul + admin upgrade
+
+Mobile app and backend hardening across all data paths, plus a full Admin screen redesign.
+
+### User-facing changes
+
+**Job History is now fully populated**
+
+Closed job cards from April 2026 onwards now have correct close dates. The **Job History** screen, Manager Dashboard KPIs (Avg Resolution Time, Closed Today, Completion %, Overdue counts), and CTP Pulse resolution metrics are now accurate going back to the start of the system. Previously, `closedAt` was never written by the app, leaving those metrics blank.
+
+**Offline create — informative early block**
+
+The Create Job Card screen now checks connectivity immediately on open and before the final save. If you are offline, a full-width red banner appears: *"No connection — technicians cannot be alerted. Move to signal to submit."* The Save button is disabled while the banner is showing. Previously the form could be submitted offline but the notification system was never triggered, meaning technicians had no idea a job existed.
+
+> The Create Job Card tile on the Home screen also shows a greyed disabled state with a reason when you are offline or off-site, instead of silently hiding.
+
+**Sync indicator now works correctly**
+
+The orange sync badge at the top of the Home screen now correctly reflects queued offline writes. Previously it never showed because the indicator was watching the wrong storage key.
+
+**"Assign Self" from notification now works correctly**
+
+Tapping "Assign Self" from a push notification no longer accidentally resets the job to Open status or removes co-assignees. The job correctly moves to In-Progress, the technician is added to the assigned list, and other assignments are preserved.
+
+**Daily Review: mark on view**
+
+A job card is now stamped as reviewed the moment you open it in Daily Review, not when the screen first loads. The pending count decrements one-by-one as you work through the queue.
+
+**Admin — new Comms tab**
+
+Admins have a new **Comms** tab in Admin Settings for sending broadcast update notifications to all employees. A pre-filled message template is provided and can be edited before sending. After sending, a result summary shows how many devices received it, how many are parked for off-site users, and how many have no registered token. Recent broadcasts are listed below.
+
+**Admin — kill-switch in Settings tab**
+
+The Settings tab in Admin Settings now includes an **App Update Control** card with two fields: **Minimum Supported Build** and **Download URL**. Setting a minimum build number blocks any device running an older version on next app launch — the app shows a blocking update screen with the download link. This works as a server-side control independent of Remote Config.
+
+**Admin screen — full design system update**
+
+The Admin screen is fully updated to the app's design system (theme colours, typography, input styles, card surfaces, section headers) and now has six tabs with outlined icons.
+
+### Under the hood (no UI change, affects data reliability)
+
+- **Stream error isolation** — all Firestore list streams now skip corrupted or unparseable documents instead of crashing. One bad document can no longer break the View Jobs, Home, or Daily Review screen for all users.
+- **Sync replay fix** — offline edits replayed on reconnect now preserve Firestore `Timestamp` fields correctly. Previously, replayed edits could write ISO date strings that caused every list screen to error.
+- **Field-scoped writes** — status changes and assignments now write only the changed fields (`update`) instead of the full document. This prevents concurrent writes from reverting each other's changes.
+- **Comments dual-write** — comment and note updates are now written to a structured `commentsLog` array alongside the legacy string field. CTP Pulse reads the structured log for the Jobs table.
+- **Bounded queries** — View Job Cards and Daily Review now use per-status server-filtered queries with a page limit instead of streaming every job card. Significantly reduces Firestore read costs on large collections.
+- **`onJobCardWritten` audit trigger** — new server-side trigger appends an entry to `job_card_audit` on every job card write, regardless of which client made the change.
+- **`onJobCardAssigned` rewritten** — diffs the `assignedClockNos` array to detect actual changes; sends assignment notifications only to newly-added assignees.
+- **`closedAt` backfill** — 50 existing closed job cards had `closedAt` populated from `completedAt` via a one-time repair script run 2026-06-11.
+
+---
+
 ## 2026-06-10 — WasteTrack production-grade overhaul
 
 ### User-facing changes
