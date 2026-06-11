@@ -210,6 +210,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _jobCardStatusController = TextEditingController();
   final TextEditingController _jobCardDescriptionController = TextEditingController();
   final Set<int> _selectedJobCardRows = {};
+  bool _jobCardsLoaded = false;
 
   // ── Comms tab ─────────────────────────────────────────────────────────────
   final TextEditingController _broadcastTitleController = TextEditingController(
@@ -227,13 +228,23 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
-    _tabController.addListener(() => setState(() {}));
-    _loadEmployees();
+    _tabController.addListener(_onTabChanged);
     _loadStructure();
     _loadKillSwitch();
     _loadNotificationConfig();
     _loadCurrentClockNo();
-    _loadJobCards();
+    // Employees tab (index 0) loads eagerly — it's the landing tab.
+    // Job Cards tab (index 3) loads lazily on first visit to avoid
+    // downloading 1000 docs on every admin screen open.
+    _loadEmployees();
+  }
+
+  void _onTabChanged() {
+    setState(() {});
+    if (_tabController.index == 3 && !_jobCardsLoaded) {
+      _jobCardsLoaded = true;
+      _loadJobCards();
+    }
   }
 
   @override
@@ -1610,6 +1621,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   // ── Job Cards tab ─────────────────────────────────────────────────────────
 
   Widget _buildJobCardsTab() {
+    if (!_jobCardsLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final colors = Theme.of(context).appColors;
     return Column(children: [
       Padding(
