@@ -60,16 +60,36 @@ If the geofence still doesn't fire, Admin can check the device's reported lat/ln
 
 ---
 
+## Job card creation blocked — "No connection" banner
+
+### Symptoms
+
+- The Create Job Card screen shows a red banner and the Save button is disabled
+- The Create Job Card tile on the Home screen is greyed out
+
+### What this means
+
+Creating a job card while offline would mean no technicians are notified. The app intentionally blocks submission until connectivity is restored — the job would be invisible to the system otherwise.
+
+### Fix
+
+Move to an area with network signal (Wi-Fi or mobile data). The banner dismisses automatically when connectivity is detected and the Save button re-enables. Your form entries are preserved — you will not lose anything.
+
+If the banner appears even though you have signal, check that mobile data or Wi-Fi is actually connected (not just "on") and that airplane mode is not active.
+
+---
+
 ## Job cards not syncing
 
 ### Symptoms
 
-- You created a job but it doesn't appear in View Jobs
+- You updated a job but the change doesn't appear for others
 - Closure note didn't save after going offline
+- The orange sync badge is showing
 
 ### Check, in order
 
-1. **Connectivity indicator** — top of the Home screen shows a sync state badge. Yellow/red means writes are queued.
+1. **Connectivity indicator** — the sync badge at the top of the Home screen shows a yellow/amber state when writes are queued and pulsing when actively syncing. If it has been stuck for more than a minute with a signal, continue below.
 2. **Sync queue contents** — Settings → Diagnostics → "View Sync Queue" (admin/dev only) lists pending writes in the Hive `sync_queue` box.
 3. **Force-sync action** — tap the sync badge to manually flush. `SyncService` listens to `connectivity_plus` and replays on reconnect, but the manual trigger is faster than waiting.
 4. **Firebase Auth session** — if your session expired, writes will fail silently and stay queued. Sign out and sign back in.

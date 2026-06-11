@@ -25,20 +25,26 @@
 //                                            # run against the emulator
 //
 // Requires ./serviceAccountKey.json (same as migrate_job_cards.js) unless
-// running against the emulator. TAKE A FIRESTORE EXPORT BACKUP BEFORE --apply.
+// running against the emulator or using Application Default Credentials
+// (gcloud auth login). TAKE A FIRESTORE EXPORT BACKUP BEFORE --apply.
 // =============================================================================
 
 const admin = require("firebase-admin");
+const fs = require("fs");
 
 const APPLY = process.argv.includes("--apply");
 const usingEmulator = !!process.env.FIRESTORE_EMULATOR_HOST;
 
 if (usingEmulator) {
   admin.initializeApp({ projectId: "ctp-job-cards" });
-} else {
+} else if (fs.existsSync("./serviceAccountKey.json")) {
   // eslint-disable-next-line global-require
   const serviceAccount = require("./serviceAccountKey.json");
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+} else {
+  // Fall back to Application Default Credentials (gcloud auth login / ADC).
+  admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: "ctp-job-cards" });
+  console.log("Using Application Default Credentials (no serviceAccountKey.json found).");
 }
 
 const db = admin.firestore();

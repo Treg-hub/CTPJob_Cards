@@ -55,7 +55,7 @@ Below the KPIs:
 - **Priority Breakdown** — bar chart of open jobs by priority (P1 Low → P5 Crit)
 - **Team Performance** — table listing each technician with their closed count, average resolution time, and number of currently assigned jobs. Sort order is by closed count. An assigned count above 3 is highlighted in orange as a workload warning.
 
-> **Daily Review** — an additional **Daily Review** screen lets you scope the day's closed and monitored jobs by department or job type and add manager review notes inline. Use this for your morning review pass. The Home tile pulses red when your pending review queue exceeds 5 items.
+> **Daily Review** — an additional **Daily Review** screen lets you scope the day's closed and monitored jobs by department or job type and add manager review notes inline. Use this for your morning review pass. The Home tile pulses red when your pending review queue exceeds 5 items. A job card is marked as reviewed the moment you open it, so the pending count decrements as you work through the list — you do not need to take any extra action to mark it.
 
 ### Notification History
 
@@ -94,6 +94,8 @@ Review all job cards from your department from the previous day:
 - Were all reported faults captured in the system?
 - Were jobs responded to promptly and closed within a reasonable time?
 - Are there recurring faults on the same machine?
+
+> **Job History is now fully populated.** Closed job cards from April 2026 onwards have correct close dates, so the Job History screen and all dashboard metrics (Avg Resolution Time, Overdue counts, Completion %) reflect real data. Use the **Job History** quick-action tile on the Home screen to search and filter the full closed archive.
 
 ### 2. Enforce Job Card Quality — Operators
 
