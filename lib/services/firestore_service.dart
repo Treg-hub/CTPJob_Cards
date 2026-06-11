@@ -569,6 +569,27 @@ class FirestoreService {
     }
   }
 
+  /// Paginated admin fetch — newest first, 50 records per page.
+  /// Uses a single-field `createdAt DESC` index (no composite needed).
+  /// Pass [startAfter] as the cursor from the previous page.
+  Future<({List<JobCard> cards, DocumentSnapshot? lastDoc, bool hasMore})>
+      fetchAdminJobCardsPage({
+    DocumentSnapshot? startAfter,
+    int pageSize = 50,
+  }) async {
+    var query = _firestore
+        .collection(Collections.jobCards)
+        .orderBy('createdAt', descending: true)
+        .limit(pageSize);
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+    final snap = await query.get();
+    return (
+      cards: parseJobCards(snap.docs),
+      lastDoc: snap.docs.isNotEmpty ? snap.docs.last : null,
+      hasMore: snap.docs.length == pageSize,
+    );
+  }
+
   Future<List<String>> getDepartmentsForJobCards(String status) async {
     try {
       final snapshot = await _firestore
