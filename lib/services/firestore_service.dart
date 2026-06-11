@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/assignment_event.dart';
 import '../models/copper_transaction.dart';
@@ -14,6 +15,35 @@ import 'sync_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// Parses job card docs, skipping any that fail instead of throwing.
+  /// One corrupted document used to error the entire stream emission and
+  /// blank every job list for every user — a skipped doc is logged to
+  /// Crashlytics (non-fatal) so it can be repaired, while the rest render.
+  static List<JobCard> parseJobCards(Iterable<DocumentSnapshot> docs) {
+    final cards = <JobCard>[];
+    for (final doc in docs) {
+      try {
+        cards.add(JobCard.fromFirestore(doc));
+      } catch (e, st) {
+        debugPrint('⚠️ Skipping unparseable job card ${doc.id}: $e');
+        if (!kIsWeb) {
+          try {
+            FirebaseCrashlytics.instance.recordError(
+              e,
+              st,
+              reason: 'job_card_parse_failed',
+              information: ['docId:${doc.id}'],
+              fatal: false,
+            );
+          } catch (_) {
+            // Crashlytics unavailable (tests / pre-init) — the skip still works.
+          }
+        }
+      }
+    }
+    return cards;
+  }
 
   // Employee operations
   Future<Employee?> getEmployee(String clockNo) async {
@@ -189,6 +219,67 @@ class FirestoreService {
     }
   }
 
+  /// Manager status override. Field-scoped update (no whole-doc merge) that
+  /// also keeps the lifecycle timestamps coherent:
+  ///  - closed  → stamps closedAt (Job History / closed queries order on it)
+  ///              and completedBy/completedAt when missing
+  ///  - monitor → stamps monitoringStartedAt, clears closedAt
+  ///  - open    → clears all completion fields so a reopened job doesn't show
+  ///              a stale "Completed by"
+  /// Appends a status-change event to assignmentHistory via arrayUnion.
+  Future<void> changeJobCardStatus({
+    required String jobCardId,
+    required JobCard current,
+    required JobStatus to,
+    required String byName,
+    required String byClockNo,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final event = AssignmentEvent(
+        assignedByName: 'Status → ${to.displayName} by $byName',
+        assignedByClockNo: byClockNo,
+        assigneeClockNos: const [],
+        assigneeNames: const [],
+        timestamp: now,
+      );
+      final update = <String, dynamic>{
+        'status': to.name,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+        'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
+      };
+      switch (to) {
+        case JobStatus.closed:
+          update['closedAt'] = Timestamp.fromDate(now);
+          if (current.completedAt == null) {
+            update['completedAt'] = Timestamp.fromDate(now);
+          }
+          if (current.completedBy == null || current.completedBy!.isEmpty) {
+            update['completedBy'] = byName;
+          }
+          update['monitoringStartedAt'] = FieldValue.delete();
+          break;
+        case JobStatus.monitor:
+          update['monitoringStartedAt'] = Timestamp.fromDate(now);
+          update['closedAt'] = FieldValue.delete();
+          break;
+        case JobStatus.open:
+        case JobStatus.inProgress:
+          update['completedBy'] = FieldValue.delete();
+          update['completedAt'] = FieldValue.delete();
+          update['closedAt'] = FieldValue.delete();
+          update['monitoringStartedAt'] = FieldValue.delete();
+          break;
+      }
+      await _firestore
+          .collection(Collections.jobCards)
+          .doc(jobCardId)
+          .update(update);
+    } catch (e) {
+      throw Exception('Failed to change job card status: $e');
+    }
+  }
+
   /// Atomically append a photo entry to `job_cards/{jobCardId}.photos`.
   ///
   /// Uses [FieldValue.arrayUnion] so concurrent additions from multiple
@@ -245,7 +336,7 @@ class FirestoreService {
         .collection(Collections.jobCards)
         .where('status', isEqualTo: 'open')
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getAssignedJobCards(String employeeClockNo) {
@@ -254,7 +345,7 @@ class FirestoreService {
         .where('status', isEqualTo: 'open')
         .where('assignedClockNos', arrayContains: employeeClockNo)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getMyJobCards(String clockNo) {
@@ -276,7 +367,7 @@ class FirestoreService {
         .where('assignedClockNos', arrayContains: clockNo)
         .snapshots()
         .listen((snap) {
-      assignedJobs = snap.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      assignedJobs = parseJobCards(snap.docs);
       emit();
     });
 
@@ -285,7 +376,7 @@ class FirestoreService {
         .where('operatorClockNo', isEqualTo: clockNo)
         .snapshots()
         .listen((snap) {
-      createdJobs = snap.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      createdJobs = parseJobCards(snap.docs);
       emit();
     });
 
@@ -303,7 +394,7 @@ class FirestoreService {
         .where('status', isEqualTo: 'closed')
         .orderBy('completedAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getAllJobCards() {
@@ -311,7 +402,7 @@ class FirestoreService {
         .collection(Collections.jobCards)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   // ============================================================
@@ -338,7 +429,7 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+          .map((snapshot) => parseJobCards(snapshot.docs));
     }
 
     /// 2. Similar Jobs (Excluding Part)
@@ -358,7 +449,7 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+          .map((snapshot) => parseJobCards(snapshot.docs));
     }
 
     /// 2. Exact All Types (same dept/area/machine/part, different type)
@@ -378,7 +469,7 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+          .map((snapshot) => parseJobCards(snapshot.docs));
     }
 
     /// 3. All Parts (same dept/area/machine, different part, all types)
@@ -396,13 +487,13 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+          .map((snapshot) => parseJobCards(snapshot.docs));
     }
 
   Future<List<JobCard>> getAllJobCardsFuture() async {
     try {
       final snapshot = await _firestore.collection(Collections.jobCards).limit(1000).get();
-      return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      return parseJobCards(snapshot.docs);
     } catch (e) {
       throw Exception('Failed to get all job cards: $e');
     }
@@ -714,7 +805,7 @@ class FirestoreService {
         .where('status', isEqualTo: 'monitor')
         .orderBy('monitoringStartedAt', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Future<List<JobCard>> getRecentlyAutoClosed(DateTime startDate) async {
@@ -725,7 +816,7 @@ class FirestoreService {
           .where('closedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
           .orderBy('closedAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      return parseJobCards(snapshot.docs);
     } catch (e) {
       throw Exception('Failed to get recently auto-closed jobs: $e');
     }
@@ -737,7 +828,7 @@ class FirestoreService {
         .where('status', isEqualTo: 'closed')
         .orderBy('closedAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getInProgressJobCards() {
@@ -745,7 +836,7 @@ class FirestoreService {
         .collection(Collections.jobCards)
         .where('status', isEqualTo: 'inProgress')
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList());
+        .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   /// Server-side filtered one-shot fetch for job card history.
@@ -794,7 +885,7 @@ class FirestoreService {
       if (startAfter != null) query = query.startAfterDocument(startAfter);
 
       final snapshot = await query.get();
-      var results = snapshot.docs.map((doc) => JobCard.fromFirestore(doc)).toList();
+      var results = parseJobCards(snapshot.docs);
 
       // Client-side filters to avoid additional composite indexes
       if (type != null) results = results.where((j) => j.type == type).toList();

@@ -5,8 +5,17 @@ import '../models/sync_queue_item.dart';
 
 final syncQueueProvider = StreamProvider<int>((ref) {
   try {
-    final box = Hive.box<SyncQueueItem>('syncQueue');
-    return box.watch().map((_) => box.length);
+    // Must match the box opened in main.dart — this watched the non-existent
+    // 'syncQueue' box for months, so the banner never appeared at all.
+    final box = Hive.box<SyncQueueItem>('sync_queue');
+    // Emit the current length immediately; box.watch() only fires on changes,
+    // so items queued before this widget built were invisible.
+    Stream<int> lengths() async* {
+      yield box.length;
+      yield* box.watch().map((_) => box.length);
+    }
+
+    return lengths();
   } catch (e) {
     // Return empty stream if box is not available
     return Stream.value(0);
@@ -41,7 +50,7 @@ class SyncIndicator extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                'Syncing $queueLength change${queueLength == 1 ? '' : 's'}…',
+                '$queueLength change${queueLength == 1 ? '' : 's'} waiting to sync…',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

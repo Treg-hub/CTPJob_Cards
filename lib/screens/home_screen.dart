@@ -285,7 +285,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     if (!_canCreateJobCard) {
-      result = result.where((a) => a['title'] != 'Create Job Card').toList();
+      // Keep the tile visible but disabled with a reason — it used to vanish
+      // silently whenever the geofence thought the user was off-site, which
+      // looked like a broken app to someone standing on the factory floor.
+      createAction['disabledReason'] =
+          "You're marked off-site — job cards can only be created on-site. "
+          'If this is wrong, open the app outdoors for a moment so your '
+          'location can update.';
     }
     if (_canReportFleetIssue) {
       result = [
@@ -528,49 +534,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  void _showPasswordDialog(BuildContext context) {
-    final passwordController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Change User Account'),
-        content: TextField(
-          controller: passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Enter password', hintText: '••••••'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              final password = passwordController.text.trim();
-              if (password.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter password'), backgroundColor: Colors.red));
-                return;
-              }
-              try {
-                final correctPassword = await _firestoreService.getSwitchUserPassword();
-                if (password != correctPassword) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Incorrect password'), backgroundColor: Colors.red));
-                  }
-                  return;
-                }
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  _showUserSwitchDialog(context);
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-                }
-              }
-            },
-            child: const Text('Verify'),
-          ),
-        ],
-      ),
-    );
+  /// Admin-gated user switch. The old flow was gated by a shared password
+  /// stored in `settings/app` — readable by every signed-in user, i.e. no
+  /// gate at all. Non-admins now get nothing on title tap.
+  void _handleTitleTap(BuildContext context) {
+    if (!role_utils.isAdmin(currentEmployee)) return;
+    _showUserSwitchDialog(context);
   }
 
   void _showUserSwitchDialog(BuildContext context) {
@@ -615,6 +584,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                             ),
                             tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
                             onTap: () async {
+                              final previous = currentEmployee;
                               try {
                                 await _firestoreService.saveLoggedInEmployee(emp.clockNo);
                                 if (!kIsWeb) {
@@ -629,7 +599,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                     debugPrint('Error updating FCM token: $e');
                                   }
                                 }
-                                setState(() => currentEmployee = emp);
+                                // Re-point the employee stream — the old code
+                                // left it on the previous clockNo, whose next
+                                // emission silently reverted the switch.
+                                _employeeSubscription?.cancel();
+                                setState(() {
+                                  currentEmployee = emp;
+                                  isOnSite = emp.isOnSite;
+                                  _previousIsOnSite = emp.isOnSite;
+                                });
+                                _setupEmployeeStream(emp.clockNo);
+                                // Audit the switch — it changes attribution
+                                // for every subsequent action on this device.
+                                try {
+                                  await FirebaseFirestore.instance.collection('notifications').add({
+                                    'triggeredBy': 'user_switch',
+                                    'level': 'audit',
+                                    'title': 'User switched on device',
+                                    'body':
+                                        '${previous?.name ?? 'Unknown'} (${previous?.clockNo ?? '?'}) → ${emp.name} (${emp.clockNo})',
+                                    'initiatedByClockNo': previous?.clockNo,
+                                    'initiatedByName': previous?.name,
+                                    'sentTo': [emp.clockNo],
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                  });
+                                } catch (e) {
+                                  debugPrint('User switch audit log failed: $e');
+                                }
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -753,6 +749,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   action['icon'] as IconData,
                   action['color'] as Color,
                   action['onTap'] as VoidCallback,
+                  disabledReason: action['disabledReason'] as String?,
                 )),
                 if (kIsWeb && (isManager || isSuperManager))
                   _DailyReviewTile(
@@ -809,26 +806,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap,
+      {String? disabledReason}) {
+    final disabled = disabledReason != null;
     Widget card = Card(
-      elevation: 6,
+      elevation: disabled ? 1 : 6,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: onTap,
+        // Disabled tiles explain themselves instead of doing nothing.
+        onTap: disabled
+            ? () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(disabledReason),
+                    backgroundColor: Colors.orange[800],
+                    duration: const Duration(seconds: 5),
+                  ),
+                )
+            : onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: _cardPaddingInsets,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: _iconSize, color: color),
+              Stack(
+                children: [
+                  Icon(icon, size: _iconSize, color: disabled ? Colors.grey : color),
+                  if (disabled)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Icon(Icons.location_off, size: _iconSize * 0.35, color: Colors.red[400]),
+                    ),
+                ],
+              ),
               SizedBox(height: _isDesktop ? 8 : 12),
               Text(
-                title,
+                disabled ? '$title\n(off-site)' : title,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: disabled
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurface,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -1179,6 +1199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                           status: JobStatus.closed,
                           completedBy: user,
                           completedAt: now,
+                          closedAt: now,
                           notes: job.notes.isNotEmpty
                               ? '${job.notes}\n\n$timestamp Completed by $user: $note'
                               : '$timestamp Completed by $user: $note',
@@ -1688,7 +1709,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
-          onTap: () => _showPasswordDialog(context),
+          onTap: () => _handleTitleTap(context),
           child: Text(_appBarTitle),
         ),
         flexibleSpace: Container(
