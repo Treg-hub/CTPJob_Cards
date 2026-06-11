@@ -740,17 +740,21 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
       } else {
         const specialist = specialists[0];
         const now = admin.firestore.Timestamp.now();
+        // History entry MUST match the Dart AssignmentEvent shape — the mobile
+        // model casts `timestamp` to a Timestamp and a mismatched entry makes
+        // JobCard.fromFirestore throw, which poisons every job list stream.
         await event.data.ref.update({
           assignedClockNos:  [specialist.clockNo],
           assignedNames:     [specialist.name || specialist.clockNo],
           assignedAt:        now,
           escalationStopped: true,
           assignmentHistory: admin.firestore.FieldValue.arrayUnion({
-            clockNo:        specialist.clockNo,
-            name:           specialist.name || specialist.clockNo,
-            assignedAt:     now,
-            assignedBy:     "system",
-            assignedByName: "Auto-assigned (Pre Press Specialist)",
+            assignedByName:    "Auto-assigned (Pre Press Specialist)",
+            assignedByClockNo: "system",
+            assigneeClockNos:  [specialist.clockNo],
+            assigneeNames:     [specialist.name || specialist.clockNo],
+            timestamp:         now,
+            isUnassign:        false,
           }),
         });
         console.log(`onJobCardCreated: specialist job ${jobId} auto-assigned to ${specialist.clockNo}`);
@@ -784,63 +788,107 @@ exports.onJobCardTypeChanged = functions.firestore.onDocumentUpdated({ document:
 });
 
 // ==================== FIRESTORE TRIGGER: JOB ASSIGNED ====================
+// Normalises assignedClockNos to a string array. Legacy writes (the old
+// "Assign Self" notification action) stored a scalar string — tolerate it.
+function toClockNoArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v) => String(v)).filter((v) => v.length > 0);
+  return [String(value)];
+}
+
+// Returns true when [clockNo] added themselves to the job (Start / Join /
+// Assign Self): the latest assignmentHistory entry naming them as assignee was
+// written by them. Self-assigners don't need a "New Job Assigned" alert.
+function isSelfAssign(after, clockNo) {
+  const history = Array.isArray(after.assignmentHistory) ? after.assignmentHistory : [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    const assignees = Array.isArray(entry.assigneeClockNos) ? entry.assigneeClockNos : [];
+    if (assignees.includes(clockNo)) {
+      return entry.assignedByClockNo === clockNo;
+    }
+  }
+  return false;
+}
+
+// Fires on every job_cards update; notifies each NEWLY ADDED assignee
+// (push when on-site, inbox parking when off-site). Replaces the legacy
+// trigger that watched the never-written `assignedTo` scalar field — direct
+// assignments previously generated no notification at all.
 exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "job_cards/{jobId}" }, async (event) => {
   const before = event.data.before.data();
   const after = event.data.after.data();
+  if (!before || !after) return;
 
-  if (!before.assignedTo && after.assignedTo) {
-    const priority = after.priority || 1;
-    const level = getCreationLevel(priority);
+  const beforeSet = new Set(toClockNoArray(before.assignedClockNos));
+  const added = toClockNoArray(after.assignedClockNos).filter((c) => !beforeSet.has(c));
+  if (added.length === 0) return;
 
-    const assigneeDoc = await db.collection("employees").doc(after.assignedTo).get();
-    if (assigneeDoc.exists) {
-      if (assigneeDoc.data().isOnSite !== true) {
-        // Employee is offsite — park notification in inbox for review on return
-        console.log(`onJobCardAssigned: ${after.assignedTo} is offsite — parking in inbox`);
-        await db.collection("notification_inbox")
-          .doc(after.assignedTo).collection("items").add({
-            type: "job_assigned",
-            jobCardId: event.params.jobId,
-            jobCardNumber: after.jobCardNumber || event.params.jobId,
-            title: "New Job Assigned",
-            body: `${after.department} - ${after.machine}\n${after.area} - ${after.part || ""}\n${after.description}`,
-            department: after.department || null,
-            area: after.area || null,
-            machine: after.machine || null,
-            part: after.part || null,
-            priority,
-            triggeredBy: "job_assigned",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-            readAt: null,
-            initiatedByClockNo: after.lastUpdatedBy || null,
-            initiatedByName: after.lastUpdatedByName || null,
-          });
-        // Still stop escalation — job is assigned regardless of notification delivery
-        await event.data.after.ref.update({ escalationStopped: true });
-        return;
-      }
+  const priority = after.priority || 1;
+  const level = getCreationLevel(priority);
+  const jobId = event.params.jobId;
+  const title = "New Job Assigned";
+  const body = `${after.department} - ${after.machine}\n${after.area} - ${after.part || ""}\n${after.description}`;
 
-      await sendNotification({
-        token: assigneeDoc.data().fcmToken,
-        recipientClockNo: after.assignedTo,
-        title: "New Job Assigned",
-        body: `${after.department} - ${after.machine}\n${after.area} - ${after.part}\n${after.description}`,
-        jobCardNumber: after.jobCardNumber || event.params.jobId,
-        level,
-        priority,
-        createdBy: after.operator || "Unknown",
-        department: after.department,
-        area: after.area,
-        machine: after.machine,
-        part: after.part,
-        triggeredBy: "job_assigned",
-        initiatedByClockNo: after.lastUpdatedBy || null,
-        initiatedByName: after.lastUpdatedByName || null,
-      });
-      // Stop all future escalation for this job now that it's been assigned.
-      await event.data.after.ref.update({ escalationStopped: true });
+  for (const clockNo of added) {
+    if (isSelfAssign(after, clockNo)) {
+      console.log(`onJobCardAssigned: ${clockNo} self-assigned on ${jobId} — no alert needed`);
+      continue;
     }
+
+    const assigneeDoc = await db.collection("employees").doc(clockNo).get();
+    if (!assigneeDoc.exists) {
+      console.log(`onJobCardAssigned: assignee ${clockNo} not found, skipping`);
+      continue;
+    }
+
+    if (assigneeDoc.data().isOnSite !== true) {
+      console.log(`onJobCardAssigned: ${clockNo} is offsite — parking in inbox`);
+      await db.collection("notification_inbox")
+        .doc(clockNo).collection("items").add({
+          type: "job_assigned",
+          jobCardId: jobId,
+          jobCardNumber: after.jobCardNumber || jobId,
+          title,
+          body,
+          department: after.department || null,
+          area: after.area || null,
+          machine: after.machine || null,
+          part: after.part || null,
+          priority,
+          triggeredBy: "job_assigned",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+          readAt: null,
+          initiatedByClockNo: after.lastUpdatedBy || null,
+          initiatedByName: after.lastUpdatedByName || null,
+        });
+      continue;
+    }
+
+    await sendNotification({
+      token: assigneeDoc.data().fcmToken,
+      recipientClockNo: clockNo,
+      title,
+      body,
+      jobCardNumber: after.jobCardNumber || jobId,
+      level,
+      priority,
+      createdBy: after.operator || "Unknown",
+      department: after.department,
+      area: after.area,
+      machine: after.machine,
+      part: after.part,
+      triggeredBy: "job_assigned",
+      initiatedByClockNo: after.lastUpdatedBy || null,
+      initiatedByName: after.lastUpdatedByName || null,
+    });
+  }
+
+  // Stop all future escalation now that the job has assignees. (The escalation
+  // loop also self-stamps on assignedClockNos, so this is belt-and-braces.)
+  if (after.escalationStopped !== true) {
+    await event.data.after.ref.update({ escalationStopped: true });
   }
 });
 
@@ -1354,6 +1402,184 @@ async function getOffsiteWorkshopManager(allEmps = null) {
     })
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }))[0] || null;
 }
+
+// ==================== BROADCAST UPDATE NOTICE ====================
+// Admin-triggered: pushes an "update required" notice to every employee with
+// an FCM token, and parks an inbox item for off-site employees so they see it
+// on return. Works against ALL deployed app versions (plain notification +
+// data payload the existing foreground handler already renders). Used on
+// rollout day to drive everyone into the Remote Config force-update dialog.
+exports.broadcastUpdateNotice = functions.https.onCall(async (data) => {
+  const innerData = data.data || data;
+  const callerClockNo = String(innerData.callerClockNo || "");
+  if (!callerClockNo) {
+    throw new functions.https.HttpsError("invalid-argument", "callerClockNo is required");
+  }
+  const callerDoc = await db.collection("employees").doc(callerClockNo).get();
+  if (!callerDoc.exists || callerDoc.data().isAdmin !== true) {
+    throw new functions.https.HttpsError("permission-denied", "Admin only");
+  }
+
+  const title = innerData.title || "Update required — CTP Job Cards";
+  const body = innerData.body ||
+    "A required app update is available. Open the app and tap Update Now to install it.";
+
+  const snap = await db.collection("employees").get();
+  let sent = 0;
+  let parked = 0;
+  let noToken = 0;
+  const sentTo = [];
+
+  for (const doc of snap.docs) {
+    const emp = doc.data();
+
+    // Off-site employees also get an inbox item so the notice survives until
+    // they're back even if the push is missed.
+    if (emp.isOnSite !== true) {
+      try {
+        await db.collection("notification_inbox").doc(doc.id).collection("items").add({
+          type: "update_notice",
+          title,
+          body,
+          triggeredBy: "update_notice",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+          readAt: null,
+          initiatedByClockNo: callerClockNo,
+          initiatedByName: callerDoc.data().name || null,
+        });
+        parked++;
+      } catch (e) {
+        console.error(`broadcastUpdateNotice: inbox parking failed for ${doc.id}:`, e);
+      }
+    }
+
+    if (!emp.fcmToken) {
+      noToken++;
+      continue;
+    }
+
+    try {
+      await messaging.send({
+        token: emp.fcmToken,
+        notification: { title, body },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          triggeredBy: "update_notice",
+          notificationLevel: "normal",
+          title,
+          body,
+        },
+        android: { priority: "high" },
+      });
+      sent++;
+      sentTo.push(doc.id);
+    } catch (e) {
+      const staleTokenCodes = [
+        "messaging/registration-token-not-registered",
+        "messaging/invalid-registration-token",
+      ];
+      if (staleTokenCodes.includes(e.errorInfo?.code)) {
+        try {
+          await doc.ref.update({ fcmToken: null });
+          console.log(`broadcastUpdateNotice: cleared stale token for ${doc.id}`);
+        } catch (clearErr) {
+          console.error(`broadcastUpdateNotice: failed clearing token for ${doc.id}:`, clearErr);
+        }
+      } else {
+        console.error(`broadcastUpdateNotice: send failed for ${doc.id}:`, e);
+      }
+    }
+  }
+
+  await logNotification({
+    triggeredBy: "update_notice",
+    sentTo,
+    level: "normal",
+    title,
+    body,
+    initiatedByClockNo: callerClockNo,
+    initiatedByName: callerDoc.data().name || null,
+  });
+
+  console.log(`broadcastUpdateNotice: sent=${sent} parked=${parked} noToken=${noToken} total=${snap.size}`);
+  return { success: true, sent, parked, noToken, total: snap.size };
+});
+
+// ==================== AUDIT TRAIL: job_card_audit ====================
+// Server-side diff of every job_cards write. Gives the append-only audit
+// collection the docs have always claimed. Actor attribution comes from
+// lastUpdatedBy/lastUpdatedByName once clients stamp them (Phase 2); until
+// then entries record the change with a null actor.
+const AUDIT_SKIP_FIELDS = new Set([
+  // System stamps — auditing these would bury the real actions in noise.
+  "notifiedAtStage1", "notifiedAtStage2", "notifiedAtStage3", "notifiedAtStage4",
+  "escalationStopped", "lastUpdatedAt",
+  // reviewedBy is its own per-manager timestamped record on the job doc; the
+  // daily-review bulk stamp would otherwise emit hundreds of entries at once.
+  "reviewedBy",
+]);
+
+// Deterministic stringify for change detection: sorted keys, Timestamps
+// normalised to epoch millis. A rare false positive only costs one extra
+// audit entry, never a missed one.
+function auditStable(value) {
+  if (value === null || value === undefined) return "null";
+  if (typeof value.toMillis === "function") return `ts:${value.toMillis()}`;
+  if (Array.isArray(value)) return `[${value.map(auditStable).join(",")}]`;
+  if (typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${k}:${auditStable(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+exports.onJobCardWritten = functions.firestore.onDocumentWritten({ document: "job_cards/{jobId}" }, async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  const eventType = !before ? "created" : !after ? "deleted" : "updated";
+
+  const changedFields = [];
+  const beforeChanged = {};
+  const afterChanged = {};
+
+  if (eventType === "updated") {
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    for (const key of keys) {
+      if (AUDIT_SKIP_FIELDS.has(key)) continue;
+      if (auditStable(before[key]) === auditStable(after[key])) continue;
+      changedFields.push(key);
+      // Bulky array fields are recorded by name only — their content is
+      // already self-describing on the job doc.
+      if (key !== "photos" && key !== "assignmentHistory") {
+        beforeChanged[key] = before[key] === undefined ? null : before[key];
+        afterChanged[key] = after[key] === undefined ? null : after[key];
+      }
+    }
+    if (changedFields.length === 0) return; // pure system-stamp update
+  }
+
+  const src = after || before;
+  try {
+    await db.collection("job_card_audit").add({
+      jobCardId: event.params.jobId,
+      jobCardNumber: src.jobCardNumber ?? null,
+      eventType,
+      changedFields,
+      before: eventType === "updated" ? beforeChanged : null,
+      after: eventType === "updated"
+        ? afterChanged
+        : (eventType === "created"
+          ? { status: src.status ?? null, priority: src.priority ?? null, type: src.type ?? null, department: src.department ?? null }
+          : null),
+      actorClockNo: (after && after.lastUpdatedBy) || null,
+      actorName: (after && after.lastUpdatedByName) || null,
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error(`onJobCardWritten: audit write failed for ${event.params.jobId}:`, e);
+  }
+});
 
 // ==================== MIGRATION HELPERS ====================
 exports.migrateEmployeeIds = functions.https.onCall(async () => {
