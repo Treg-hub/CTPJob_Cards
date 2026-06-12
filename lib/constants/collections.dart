@@ -35,6 +35,7 @@ class Collections {
   static const String fleetIssues = 'fleet_issues';
   static const String fleetWorkRecords = 'fleet_work_records';
   static const String fleetWorkParts = 'fleet_work_parts'; // sub-collection of fleetWorkRecords
+  static const String fleetWorkComments = 'fleet_work_comments'; // sub-collection of fleetWorkRecords
   static const String fleetCostLines = 'fleet_cost_lines';
   static const String fleetTypes = 'fleet_types';
   static const String fleetSettings = 'fleet_settings';

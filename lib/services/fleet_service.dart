@@ -14,6 +14,7 @@ import '../models/fleet_cost_line.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
+import '../models/fleet_work_comment.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
@@ -355,6 +356,50 @@ class FleetService {
       batch.set(partsRef.doc(), part.toFirestore());
     }
     await batch.commit();
+  }
+
+  // ---------------------------------------------------------------------------
+  // WORK RECORD COMMENTS (sub-collection)
+  // ---------------------------------------------------------------------------
+
+  Stream<List<FleetWorkComment>> watchComments(String workRecordId) {
+    return _db
+        .collection(Collections.fleetWorkRecords)
+        .doc(workRecordId)
+        .collection(Collections.fleetWorkComments)
+        .orderBy('created_at')
+        .snapshots()
+        .map((s) => s.docs.map(FleetWorkComment.fromFirestore).toList());
+  }
+
+  Future<void> addComment(
+      String workRecordId, FleetWorkComment comment) async {
+    await _db
+        .collection(Collections.fleetWorkRecords)
+        .doc(workRecordId)
+        .collection(Collections.fleetWorkComments)
+        .add(comment.toFirestore());
+  }
+
+  // ---------------------------------------------------------------------------
+  // PART NAME SUGGESTIONS (collection group across all work records)
+  // ---------------------------------------------------------------------------
+
+  Future<List<String>> getSuggestedPartNames() async {
+    try {
+      final snap = await _db
+          .collectionGroup(Collections.fleetWorkParts)
+          .limit(200)
+          .get();
+      final names = <String>{};
+      for (final doc in snap.docs) {
+        final name = doc.data()['part_name'] as String?;
+        if (name != null && name.trim().isNotEmpty) names.add(name.trim());
+      }
+      return names.toList()..sort();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<List<String>> uploadPhotosForRecord(

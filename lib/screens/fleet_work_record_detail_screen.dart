@@ -6,6 +6,7 @@ import '../main.dart' show currentEmployee;
 import '../models/fleet_cost_line.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
+import '../models/fleet_work_comment.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import '../providers/fleet_provider.dart';
@@ -48,6 +49,7 @@ class _FleetWorkRecordDetailScreenState
     final isCostMgr = role_utils.isFleetCostManager(emp, settings);
     final isAdmin = role_utils.isFleetAdmin(emp);
     final canSeeCosts = isCostMgr || isAdmin;
+    final canComment = isMechanic || isAdmin || isCostMgr;
 
     final mechanicView = widget.mechanicMode || (isMechanic && !canSeeCosts);
 
@@ -68,6 +70,7 @@ class _FleetWorkRecordDetailScreenState
             isMechanic: isMechanic,
             mechanicView: mechanicView,
             canSeeCosts: canSeeCosts,
+            canComment: canComment,
             service: _service,
             onEdit: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => FleetLogWorkScreen(
@@ -95,6 +98,7 @@ class _RecordBody extends ConsumerWidget {
     required this.isMechanic,
     required this.mechanicView,
     required this.canSeeCosts,
+    required this.canComment,
     required this.service,
     required this.onEdit,
     required this.onAddCost,
@@ -104,6 +108,7 @@ class _RecordBody extends ConsumerWidget {
   final bool isMechanic;
   final bool mechanicView;
   final bool canSeeCosts;
+  final bool canComment;
   final FleetService service;
   final VoidCallback onEdit;
   final VoidCallback onAddCost;
@@ -179,7 +184,7 @@ class _RecordBody extends ConsumerWidget {
                 '${dateFmt.format(record.startDate)} → ${dateFmt.format(record.endDate)}'),
           ),
         _Row(
-          label: mechanicView ? 'Logged by' : 'Logged by',
+          label: 'Logged by',
           child: Text(
             mechanicView
                 ? record.loggedByName
@@ -320,6 +325,17 @@ class _RecordBody extends ConsumerWidget {
           ),
         ],
 
+        // ── Comments ─────────────────────────────────────────────────────
+        const Divider(),
+        const Text('Comments',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        const SizedBox(height: 8),
+        _CommentsSection(
+          workRecordId: record.id!,
+          service: service,
+          canComment: canComment,
+        ),
+
         // ── Edit button (mechanic, only if no cost lines) ─────────────────
         if (isMechanic && !record.hasCostLines) ...[
           const SizedBox(height: 16),
@@ -334,6 +350,190 @@ class _RecordBody extends ConsumerWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Comments section
+// ---------------------------------------------------------------------------
+
+class _CommentsSection extends StatefulWidget {
+  const _CommentsSection({
+    required this.workRecordId,
+    required this.service,
+    required this.canComment,
+  });
+
+  final String workRecordId;
+  final FleetService service;
+  final bool canComment;
+
+  @override
+  State<_CommentsSection> createState() => _CommentsSectionState();
+}
+
+class _CommentsSectionState extends State<_CommentsSection> {
+  final _ctrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _ctrl.text.trim();
+    final emp = currentEmployee;
+    if (text.isEmpty || emp == null) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.service.addComment(
+        widget.workRecordId,
+        FleetWorkComment(
+          text: text,
+          authorName: emp.name,
+          authorClockNo: emp.clockNo,
+          createdAt: DateTime.now(),
+        ),
+      );
+      _ctrl.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to add comment: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        StreamBuilder<List<FleetWorkComment>>(
+          stream: widget.service.watchComments(widget.workRecordId),
+          builder: (context, snapshot) {
+            final comments = snapshot.data ?? [];
+            if (comments.isEmpty) {
+              return Text(
+                'No comments yet.',
+                style: TextStyle(color: colors?.textMuted, fontSize: 13),
+              );
+            }
+            return Column(
+              children: comments
+                  .map((c) => _CommentTile(comment: c))
+                  .toList(),
+            );
+          },
+        ),
+        if (widget.canComment) ...[
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  decoration: InputDecoration(
+                    hintText: 'Add a comment…',
+                    isDense: true,
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainer,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _submit(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _submitting
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : IconButton(
+                      icon: const Icon(Icons.send, color: kBrandOrange),
+                      onPressed: _submit,
+                      tooltip: 'Send comment',
+                    ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CommentTile extends StatelessWidget {
+  const _CommentTile({required this.comment});
+  final FleetWorkComment comment;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>();
+    final fmt = DateFormat('d MMM yyyy, HH:mm');
+    final initial = comment.authorName.isNotEmpty
+        ? comment.authorName[0].toUpperCase()
+        : '?';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: kBrandOrange.withAlpha(30),
+            child: Text(
+              initial,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: kBrandOrange),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(comment.authorName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(width: 8),
+                    Text(fmt.format(comment.createdAt),
+                        style: TextStyle(
+                            fontSize: 11, color: colors?.textMuted)),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(comment.text,
+                    style: const TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Linked issues list
+// ---------------------------------------------------------------------------
 
 class _LinkedIssueList extends StatelessWidget {
   const _LinkedIssueList({
@@ -394,6 +594,10 @@ class _LinkedIssueList extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Shared row widget
+// ---------------------------------------------------------------------------
 
 class _Row extends StatelessWidget {
   const _Row({required this.label, required this.child});

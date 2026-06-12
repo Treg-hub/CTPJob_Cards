@@ -58,18 +58,31 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   List<String> _linkedIssueIds = [];
   bool _saving = false;
   bool _loading = false;
-  DateTime _jobStartedAt = DateTime.now();
+
+  // The date/time the work was actually carried out — always shown at top and editable.
+  DateTime _workCarriedOut = DateTime.now();
+
+  // The date the record was originally captured (read-only display only).
+  DateTime? _capturedAt;
+
+  // Parts in progress
+  final List<_PartRow> _parts = [];
+
+  // Part name suggestions for quick-add chips
+  List<String> _suggestedPartNames = [];
+
+  // End date loaded from an existing record (preserved on edit).
+  DateTime? _loadedEndDate;
 
   bool get _isEditing => widget.workRecordId != null;
+  bool get _isFixingIssue => !_isEditing && widget.linkedIssueId != null;
   bool get _isLogOtherWork => !_isEditing && !_isFixingIssue;
-
-  // In-progress parts
-  final List<_PartRow> _parts = [];
 
   @override
   void initState() {
     super.initState();
     _loadWorkTypes();
+    _loadSuggestedParts();
     if (widget.workRecordId != null) {
       _loadExistingRecord(widget.workRecordId!);
     } else {
@@ -85,59 +98,28 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     }
   }
 
+  Future<void> _loadSuggestedParts() async {
+    final names = await _service.getSuggestedPartNames();
+    if (mounted) setState(() => _suggestedPartNames = names);
+  }
+
   Future<void> _loadLinkedIssue(String issueId) async {
     final issue = await _service.watchIssue(issueId).first;
     if (!mounted || issue == null) return;
     setState(() {
       _linkedIssue = issue;
-      if (!_isEditing && _titleCtrl.text.trim().isEmpty) {
+      if (_titleCtrl.text.trim().isEmpty) {
         _titleCtrl.text = 'Fix: ${issue.assetName}';
       }
-      if (!_isEditing && _descCtrl.text.trim().isEmpty) {
+      if (_descCtrl.text.trim().isEmpty) {
         _descCtrl.text = issue.description;
+      }
+      // Pre-fill the work date from when the issue was acknowledged.
+      if (issue.acknowledgedAt != null) {
+        _workCarriedOut = issue.acknowledgedAt!;
       }
     });
   }
-
-  bool get _isFixingIssue =>
-      !_isEditing && widget.linkedIssueId != null;
-
-  DateTime _workStartDate() {
-    if (_isEditing) return _loadedStartDate ?? DateTime.now();
-    if (_isFixingIssue) {
-      final acknowledged = _linkedIssue?.acknowledgedAt;
-      if (acknowledged != null) return acknowledged;
-    }
-    if (_isLogOtherWork) return _jobStartedAt;
-    return DateTime.now();
-  }
-
-  Future<void> _pickJobStarted() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _jobStartedAt,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now(),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_jobStartedAt),
-    );
-    if (time == null || !mounted) return;
-    setState(() {
-      _jobStartedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
-  }
-
-  DateTime? _loadedStartDate;
-  DateTime? _loadedEndDate;
 
   Future<void> _loadExistingRecord(String id) async {
     setState(() => _loading = true);
@@ -155,7 +137,8 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
         if (record.machineHoursReading != null) {
           _machineHoursCtrl.text = record.machineHoursReading.toString();
         }
-        _loadedStartDate = record.startDate;
+        _workCarriedOut = record.startDate;
+        _capturedAt = record.createdAt;
         _loadedEndDate = record.endDate;
         _savedPhotoUrls
           ..clear()
@@ -195,9 +178,8 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
   FleetType? _pickDefaultWorkType(List<FleetType> types) {
     if (types.isEmpty) return null;
-    final repair = types.where(
-      (t) => t.label.toLowerCase().contains('repair'),
-    );
+    final repair =
+        types.where((t) => t.label.toLowerCase().contains('repair'));
     return repair.isNotEmpty ? repair.first : types.first;
   }
 
@@ -211,6 +193,30 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             : types.firstOrNull;
       });
     }
+  }
+
+  Future<void> _pickWorkDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _workCarriedOut,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_workCarriedOut),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _workCarriedOut = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
   }
 
   Future<void> _addPhoto() async {
@@ -282,9 +288,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
     setState(() => _saving = true);
     try {
-      final startDate = _isEditing
-          ? (_loadedStartDate ?? DateTime.now())
-          : _workStartDate();
+      final startDate = _workCarriedOut;
       final endDate =
           _isEditing ? (_loadedEndDate ?? DateTime.now()) : DateTime.now();
       final parts = _parts
@@ -412,6 +416,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('d MMM yyyy, HH:mm');
+    final dateFmtShort = DateFormat('d MMM yyyy');
     final settingsAsync = ref.watch(fleetSettingsProvider);
     final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
     final mechanicUx = role_utils.isFleetMechanic(currentEmployee, settings) &&
@@ -430,6 +435,16 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     }
 
     final showBottomSave = _isFixingIssue || (_isLogOtherWork && mechanicUx);
+
+    // Whether the work date differs from today (highlights backdating).
+    final now = DateTime.now();
+    final workDateIsToday = _workCarriedOut.year == now.year &&
+        _workCarriedOut.month == now.month &&
+        _workCarriedOut.day == now.day;
+
+    final captureDisplay = _capturedAt != null
+        ? dateFmtShort.format(_capturedAt!)
+        : dateFmtShort.format(now);
 
     return Scaffold(
       appBar: FleetAppBar(
@@ -452,6 +467,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             else
               TextButton(
                 onPressed: _save,
+                style: TextButton.styleFrom(foregroundColor: Colors.black),
                 child: const Text('Save'),
               ),
         ],
@@ -495,6 +511,17 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             const FleetMechanicGuideBanner.logOtherWork(),
             const SizedBox(height: 16),
           ],
+
+          // ── Dates card (always at top) ─────────────────────────────────
+          _WorkDatesCard(
+            captureDate: captureDisplay,
+            workCarriedOut: _workCarriedOut,
+            dateFmt: dateFmt,
+            workDateIsToday: workDateIsToday,
+            onEdit: _pickWorkDate,
+          ),
+          const SizedBox(height: 16),
+
           if (_isFixingIssue && _linkedIssue != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -518,13 +545,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
                       color: Theme.of(context).appColors.textMuted,
                     ),
                   ),
-                  if (_linkedIssue!.acknowledgedAt != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Work started: ${dateFmt.format(_linkedIssue!.acknowledgedAt!)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
                   const SizedBox(height: 4),
                   Text(
                     'Saving will record the fix and set the resolved time to now.',
@@ -538,59 +558,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             ),
             const SizedBox(height: 16),
           ],
-          if (_isEditing &&
-              _loadedStartDate != null &&
-              _loadedEndDate != null) ...[
-            _TimelineRow(
-              label: 'Work started',
-              value: dateFmt.format(_loadedStartDate!),
-            ),
-            _TimelineRow(
-              label: 'Work completed',
-              value: dateFmt.format(_loadedEndDate!),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (_isLogOtherWork && mechanicUx) ...[
-            FleetSectionLabel('When did you start? *'),
-            InkWell(
-              onTap: _pickJobStarted,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.schedule, color: kBrandOrange, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            dateFmt.format(_jobStartedAt),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            'Finish time is recorded when you save.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context).appColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.grey),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
 
           // ── Asset ──────────────────────────────────────────────────────
           FleetSectionLabel(
@@ -599,7 +566,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           if (widget.linkedIssueId != null &&
               !_isEditing &&
               _selectedAsset != null)
-            // Pre-selected from issue — not editable on create
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -710,7 +676,15 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           _PartsSection(
             parts: _parts,
             optional: useMechanicLabels || _isFixingIssue,
+            suggestedPartNames: _suggestedPartNames,
             onAdd: () => setState(() => _parts.add(_PartRow())),
+            onAddSuggestion: (name) {
+              setState(() {
+                final row = _PartRow();
+                row.nameCtrl.text = name;
+                _parts.add(row);
+              });
+            },
             onRemove: (i) {
               setState(() {
                 _parts[i].nameCtrl.dispose();
@@ -739,21 +713,119 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Dates card
+// ---------------------------------------------------------------------------
+
+class _WorkDatesCard extends StatelessWidget {
+  const _WorkDatesCard({
+    required this.captureDate,
+    required this.workCarriedOut,
+    required this.dateFmt,
+    required this.workDateIsToday,
+    required this.onEdit,
+  });
+
+  final String captureDate;
+  final DateTime workCarriedOut;
+  final DateFormat dateFmt;
+  final bool workDateIsToday;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).appColors.textMuted;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          // Captured date — read-only
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: muted),
+                const SizedBox(width: 8),
+                Text('Captured on',
+                    style: TextStyle(fontSize: 12, color: muted)),
+                const Spacer(),
+                Text(captureDate,
+                    style: TextStyle(fontSize: 12, color: muted)),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+          // Work carried out — tappable
+          InkWell(
+            onTap: onEdit,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.engineering_outlined,
+                      size: 16, color: kBrandOrange),
+                  const SizedBox(width: 8),
+                  Text('Work carried out',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(dateFmt.format(workCarriedOut),
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      if (!workDateIsToday)
+                        Text('Different from today',
+                            style: TextStyle(
+                                fontSize: 10, color: Colors.orange.shade700)),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.edit, size: 14, color: kBrandOrange),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Parts section with quick-add chips
+// ---------------------------------------------------------------------------
+
 class _PartsSection extends StatelessWidget {
   const _PartsSection({
     required this.parts,
     required this.onAdd,
     required this.onRemove,
+    required this.onAddSuggestion,
+    required this.suggestedPartNames,
     this.optional = false,
   });
 
   final List<_PartRow> parts;
   final VoidCallback onAdd;
   final void Function(int index) onRemove;
+  final void Function(String partName) onAddSuggestion;
+  final List<String> suggestedPartNames;
   final bool optional;
 
   @override
   Widget build(BuildContext context) {
+    // Parts already added — filter chips so we don't suggest already-used names.
+    final usedNames = parts.map((r) => r.nameCtrl.text.trim()).toSet();
+    final availableChips = suggestedPartNames
+        .where((n) => !usedNames.contains(n))
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -770,6 +842,42 @@ class _PartsSection extends StatelessWidget {
             ),
           ],
         ),
+        // Quick-add chips from previously-used parts
+        if (availableChips.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick add:',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).appColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: availableChips
+                      .map((name) => ActionChip(
+                            label: Text(name,
+                                style: const TextStyle(fontSize: 11)),
+                            avatar: const Icon(Icons.add, size: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 0),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => onAddSuggestion(name),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
         ...parts.asMap().entries.map((entry) {
           final i = entry.key;
           final row = entry.value;
@@ -810,6 +918,10 @@ class _PartsSection extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Photos section
+// ---------------------------------------------------------------------------
 
 class _PhotosSection extends StatelessWidget {
   const _PhotosSection({
@@ -912,36 +1024,4 @@ class _PhotoThumb extends StatelessWidget {
 class _PartRow {
   final nameCtrl = TextEditingController();
   final qtyCtrl = TextEditingController();
-}
-
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).appColors.textMuted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: muted,
-              ),
-            ),
-          ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
-        ],
-      ),
-    );
-  }
 }

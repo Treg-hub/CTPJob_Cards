@@ -164,6 +164,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         .listen((emp) {
       if (!mounted) return;
       final wasOffsite = _previousIsOnSite == false;
+      final wasOnsite = _previousIsOnSite == true;
       final isNowOnsite = emp.isOnSite;
       setState(() {
         currentEmployee = emp;
@@ -172,6 +173,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
       if (wasOffsite && isNowOnsite) {
         _checkInboxOnReturn(clockNo);
+      } else if (wasOnsite && !isNowOnsite) {
+        _showOffSiteNotice();
       }
       // Claims plumbing (Phase 3 readiness): the server bumps claimsVersion
       // after minting custom auth claims; refresh the ID token so rules see
@@ -196,31 +199,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         .where('read', isEqualTo: false)
         .get()
         .then((snap) {
-      if (!mounted || snap.docs.isEmpty) return;
+      if (!mounted) return;
       final count = snap.docs.length;
+      final message = count > 0
+          ? 'You\'re on-site — $count message${count == 1 ? '' : 's'} waiting for you.'
+          : 'You\'re on-site — no pending messages.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              'Welcome back! $count notification${count == 1 ? '' : 's'} waiting for review.'),
-          action: SnackBarAction(
-            label: 'Open',
-            textColor: const Color(0xFFFF8C42),
-            onPressed: () {
-              if (mounted) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const NotificationInboxScreen()),
-                );
-              }
-            },
-          ),
+          content: Text(message),
+          action: count > 0
+              ? SnackBarAction(
+                  label: 'Open',
+                  textColor: const Color(0xFFFF8C42),
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationInboxScreen()),
+                      );
+                    }
+                  },
+                )
+              : null,
           duration: const Duration(seconds: 6),
         ),
       );
     }).catchError((e) {
       debugPrint('HomeScreen: inbox check on return failed: $e');
     });
+  }
+
+  void _showOffSiteNotice() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+            'You\'ve left site — incoming alerts will be held until you return.'),
+        duration: Duration(seconds: 5),
+      ),
+    );
   }
 
   Future<void> _tryLoadCurrentEmployee() async {
