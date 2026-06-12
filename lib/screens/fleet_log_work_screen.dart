@@ -12,6 +12,7 @@ import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
 import '../models/fleet_work_part.dart';
+import '../models/fleet_work_record.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
@@ -19,6 +20,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_selector.dart';
 import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_issue_summary_card.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_type_selector.dart';
 import 'fleet_work_record_detail_screen.dart';
@@ -53,6 +55,10 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   FleetAsset? _selectedAsset;
   FleetType? _selectedWorkType;
   FleetIssue? _linkedIssue;
+
+  // Other open faults on the selected asset — the mechanic can tick them
+  // so one job closes several reports at once.
+  List<FleetIssue> _otherOpenIssues = [];
   final List<String> _savedPhotoUrls = [];
   final List<String> _pendingPhotoPaths = [];
   List<String> _linkedIssueIds = [];
@@ -88,7 +94,10 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     } else {
       if (widget.preSelectedAssetId != null) {
         _service.getAsset(widget.preSelectedAssetId!).then((a) {
-          if (a != null && mounted) setState(() => _selectedAsset = a);
+          if (a != null && mounted) {
+            setState(() => _selectedAsset = a);
+            _loadOtherOpenIssues();
+          }
         });
       }
       if (widget.linkedIssueId != null) {
@@ -96,6 +105,31 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
         _loadLinkedIssue(widget.linkedIssueId!);
       }
     }
+  }
+
+  /// Loads open faults on the selected asset (excluding the one being
+  /// fixed) so the mechanic can close them with the same job.
+  Future<void> _loadOtherOpenIssues() async {
+    final asset = _selectedAsset;
+    if (asset == null || asset.id == null || _isEditing) {
+      if (mounted && _otherOpenIssues.isNotEmpty) {
+        setState(() => _otherOpenIssues = []);
+      }
+      return;
+    }
+    final issues = await _service.watchIssues(assetId: asset.id).first;
+    if (!mounted || _selectedAsset?.id != asset.id) return;
+    setState(() {
+      _otherOpenIssues = issues
+          .where((i) => i.status.isOpen && i.id != widget.linkedIssueId)
+          .toList();
+      // Drop ticked faults that no longer apply to this asset.
+      _linkedIssueIds = _linkedIssueIds
+          .where((id) =>
+              id == widget.linkedIssueId ||
+              _otherOpenIssues.any((i) => i.id == id))
+          .toList();
+    });
   }
 
   Future<void> _loadSuggestedParts() async {
@@ -111,9 +145,8 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       if (_titleCtrl.text.trim().isEmpty) {
         _titleCtrl.text = 'Fix: ${issue.assetName}';
       }
-      if (_descCtrl.text.trim().isEmpty) {
-        _descCtrl.text = issue.description;
-      }
+      // The fault description is shown read-only above the form; the
+      // mechanic types what THEY did in a blank description field.
       // Pre-fill the work date from when the issue was acknowledged.
       if (issue.acknowledgedAt != null) {
         _workCarriedOut = issue.acknowledgedAt!;
@@ -126,6 +159,33 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     try {
       final record = await _service.getWorkRecord(id);
       if (record == null) return;
+
+      // Guard deep links: locked records can only be viewed or commented on.
+      final settings = await _service.getSettings();
+      final canEdit = record.canEdit(
+        isMechanic: role_utils.isFleetMechanic(currentEmployee, settings),
+        isAdmin: role_utils.isFleetAdmin(currentEmployee),
+      );
+      if (!canEdit) {
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                record.costStatus == FleetCostStatus.pending
+                    ? 'This job is locked — jobs can be edited for '
+                        '${FleetWorkRecord.editLockDays} days. '
+                        'Add a comment for corrections.'
+                    : 'This job is locked because costs have been entered. '
+                        'Add a comment for corrections.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       final parts = await _service.watchParts(id).first;
       final asset = await _service.getAsset(record.assetId);
       if (!mounted) return;
@@ -253,7 +313,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _showError('Please pick which Hyster you worked on.');
+      _showError('Please pick which machine you worked on.');
       return;
     }
     if (_selectedWorkType == null) {
@@ -265,7 +325,9 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       return;
     }
     if (_descCtrl.text.trim().isEmpty) {
-      _showError('Please describe what was done.');
+      _showError(_isFixingIssue
+          ? 'Please describe what you did to fix it.'
+          : 'Please describe what was done.');
       return;
     }
     final labourHours = _labourHoursCtrl.text.trim().isEmpty
@@ -512,7 +574,22 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             const SizedBox(height: 16),
           ],
 
-          // ── Dates card (always at top) ─────────────────────────────────
+          // ── Reported fault (read-only) — fix mode only ─────────────────
+          if (_isFixingIssue && _linkedIssue != null) ...[
+            FleetIssueSummaryCard(issue: _linkedIssue!),
+            const SizedBox(height: 8),
+            Text(
+              'Saving will record your fix against this report and mark it '
+              'as fixed.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).appColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Dates card ─────────────────────────────────────────────────
           _WorkDatesCard(
             captureDate: captureDisplay,
             workCarriedOut: _workCarriedOut,
@@ -522,46 +599,11 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           ),
           const SizedBox(height: 16),
 
-          if (_isFixingIssue && _linkedIssue != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: kBrandOrange.withValues(alpha: 0.08),
-                border: Border.all(color: kBrandOrange.withValues(alpha: 0.4)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Closing a reported issue',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _linkedIssue!.description,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).appColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Saving will record the fix and set the resolved time to now.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).appColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
           // ── Asset ──────────────────────────────────────────────────────
           FleetSectionLabel(
-            useMechanicLabels ? 'Which Hyster? (forks or grab) *' : 'Asset *',
+            useMechanicLabels
+                ? 'Which machine? (forks, grab or BT) *'
+                : 'Asset *',
           ),
           if (widget.linkedIssueId != null &&
               !_isEditing &&
@@ -584,9 +626,66 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           else
             FleetAssetSelector(
               value: _selectedAsset,
-              onChanged: (asset) => setState(() => _selectedAsset = asset),
+              onChanged: (asset) {
+                setState(() => _selectedAsset = asset);
+                _loadOtherOpenIssues();
+              },
             ),
           const SizedBox(height: 16),
+
+          // ── Also fixes: other open faults on this asset ────────────────
+          if (!_isEditing && _otherOpenIssues.isNotEmpty) ...[
+            FleetSectionLabel(
+              _isFixingIssue
+                  ? 'Also fixes these reported problems?'
+                  : 'Does this job fix any reported problems?',
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Tick the reports this job closes — they will be marked '
+                'as fixed when you save.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).appColors.textMuted,
+                ),
+              ),
+            ),
+            ..._otherOpenIssues.map((issue) {
+              final ticked = _linkedIssueIds.contains(issue.id);
+              return CheckboxListTile(
+                value: ticked,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  issue.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                subtitle: Text(
+                  'Reported by ${issue.reportedByName}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).appColors.textMuted,
+                  ),
+                ),
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      if (!_linkedIssueIds.contains(issue.id)) {
+                        _linkedIssueIds.add(issue.id!);
+                      }
+                    } else {
+                      _linkedIssueIds.remove(issue.id);
+                    }
+                  });
+                },
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
 
           if (!_isFixingIssue) ...[
             FleetSectionLabel(useMechanicLabels ? 'Job type *' : 'Work Type *'),
@@ -633,7 +732,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           // ── Description ───────────────────────────────────────────────
           FleetSectionLabel(
             _isFixingIssue
-                ? 'What was wrong / what you fixed *'
+                ? 'What you did to fix it *'
                 : (useMechanicLabels
                     ? 'Details of the work *'
                     : 'Description *'),
@@ -643,7 +742,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             maxLines: 4,
             decoration: fleetDropdownDecoration(
               hintText: _isFixingIssue
-                  ? 'Describe the fault and what you did to fix it.'
+                  ? 'Describe the work YOU did — the fault report is shown above.'
                   : (useMechanicLabels
                       ? 'Describe the work carried out.'
                       : 'Describe what was done.'),

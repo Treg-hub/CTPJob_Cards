@@ -10,9 +10,12 @@ import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
+import '../models/fleet_work_part.dart';
+import '../models/fleet_work_record.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import 'fleet_log_work_screen.dart';
+import 'fleet_work_record_detail_screen.dart';
 
 /// Detailed view of a single fleet issue.
 /// - Reporters: read-only
@@ -449,65 +452,45 @@ class _IssueBody extends StatelessWidget {
             ),
           ),
         const Divider(),
-        if (!mechanicView && issue.acknowledgedByClockNo != null) ...[
-          _DetailRow(
-            label: 'Acknowledged by',
-            child: Text(issue.acknowledgedByClockNo!),
+
+        // ── Progress timeline ────────────────────────────────────────────
+        Text(
+          'Progress',
+          style: TextStyle(
+            color: colors?.textMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
+        ),
+        const SizedBox(height: 12),
+        FleetIssueTimeline(issue: issue),
+        if (issue.status == FleetIssueStatus.resolved &&
+            issue.resolutionType == FleetIssueResolutionType.note &&
+            issue.resolutionNote != null) ...[
+          const SizedBox(height: 8),
           _DetailRow(
-            label: 'Acknowledged at',
-            child: Text(issue.acknowledgedAt != null
-                ? fmt.format(issue.acknowledgedAt!)
-                : '—'),
+            label: mechanicView ? 'Note' : 'Resolution note',
+            child: Text(issue.resolutionNote!),
           ),
         ],
-        if (mechanicView && issue.acknowledgedAt != null) ...[
-          _DetailRow(
-            label: 'Started fixing',
-            child: Text(fmt.format(issue.acknowledgedAt!)),
+
+        // ── The fix — what the mechanic actually did ─────────────────────
+        if (issue.resolutionType == FleetIssueResolutionType.workRecord &&
+            issue.linkedWorkRecordId != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            'The fix',
+            style: TextStyle(
+              color: colors?.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ],
-        if (issue.status == FleetIssueStatus.resolved) ...[
-          const Divider(),
-          if (mechanicView) ...[
-            _DetailRow(
-              label: 'Fixed at',
-              child: Text(issue.resolvedAt != null
-                  ? fmt.format(issue.resolvedAt!)
-                  : '—'),
-            ),
-            if (issue.resolutionType == FleetIssueResolutionType.note &&
-                issue.resolutionNote != null)
-              _DetailRow(
-                label: 'Note',
-                child: Text(issue.resolutionNote!),
-              ),
-          ] else ...[
-            _DetailRow(
-              label: 'Resolved by',
-              child: Text(issue.resolvedByClockNo ?? '—'),
-            ),
-            _DetailRow(
-              label: 'Resolved at',
-              child: Text(issue.resolvedAt != null
-                  ? fmt.format(issue.resolvedAt!)
-                  : '—'),
-            ),
-            if (issue.resolutionType == FleetIssueResolutionType.note &&
-                issue.resolutionNote != null)
-              _DetailRow(
-                label: 'Resolution note',
-                child: Text(issue.resolutionNote!),
-              ),
-            if (issue.linkedWorkRecordId != null)
-              _DetailRow(
-                label: 'Work record',
-                child: Text(issue.linkedWorkRecordId!,
-                    style: const TextStyle(
-                        fontFamily: 'monospace',
-                        color: Colors.blue)),
-              ),
-          ],
+          const SizedBox(height: 8),
+          _FixSummaryCard(
+            workRecordId: issue.linkedWorkRecordId!,
+            mechanicView: mechanicView,
+          ),
         ],
         const Divider(),
 
@@ -543,6 +526,119 @@ class _IssueBody extends StatelessWidget {
           const SizedBox(height: 16),
         ],
       ],
+    );
+  }
+}
+
+/// Summary of the work record that fixed this issue — the mechanic's own
+/// description of the fix, kept visually distinct from the fault report.
+class _FixSummaryCard extends StatelessWidget {
+  const _FixSummaryCard({
+    required this.workRecordId,
+    required this.mechanicView,
+  });
+
+  final String workRecordId;
+  final bool mechanicView;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>();
+    final service = FleetService();
+    final fmt = DateFormat('d MMM yyyy');
+
+    return FutureBuilder<FleetWorkRecord?>(
+      future: service.getWorkRecord(workRecordId),
+      builder: (context, snapshot) {
+        final record = snapshot.data;
+        if (record == null) {
+          return Text(
+            snapshot.connectionState == ConnectionState.waiting
+                ? 'Loading the fix…'
+                : 'Work record not available.',
+            style: TextStyle(color: colors?.textMuted, fontSize: 13),
+          );
+        }
+        return Card(
+          margin: EdgeInsets.zero,
+          color: Colors.green.withValues(alpha: 0.06),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: Colors.green.withValues(alpha: 0.4)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => FleetWorkRecordDetailScreen(
+                  workRecordId: workRecordId,
+                  mechanicMode: mechanicView,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.build_circle_outlined,
+                          size: 16, color: Colors.green),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          record.title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 18),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    record.description,
+                    style: const TextStyle(fontSize: 13, height: 1.35),
+                  ),
+                  StreamBuilder<List<FleetWorkPart>>(
+                    stream: service.watchParts(workRecordId),
+                    builder: (context, partsSnap) {
+                      final parts = partsSnap.data ?? [];
+                      if (parts.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: parts
+                              .map((p) => Chip(
+                                    label: Text(
+                                      p.quantity != null
+                                          ? '${p.partName} ×${p.quantity}'
+                                          : p.partName,
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ))
+                              .toList(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Fixed by ${record.loggedByName} · '
+                    '${fmt.format(record.endDate)}',
+                    style: TextStyle(fontSize: 11, color: colors?.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

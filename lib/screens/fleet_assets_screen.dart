@@ -43,7 +43,7 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
           if (assets.isEmpty) {
             return const Center(
               child: Text(
-                'No assets yet.\nTap + to add a Hyster (forks or grab).',
+                'No assets yet.\nTap + to add a machine (forks, grab or BT).',
                 textAlign: TextAlign.center,
               ),
             );
@@ -265,6 +265,7 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
           else
             TextButton(
               onPressed: _save,
+              style: TextButton.styleFrom(foregroundColor: Colors.black),
               child: const Text('Save'),
             ),
         ],

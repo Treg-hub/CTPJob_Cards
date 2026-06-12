@@ -41,7 +41,7 @@ class _FleetWorkRecordsListScreenState
   final _service = FleetService();
   String? _assetFilterId;
   String? _workTypeFilterId;
-  String? _costStatusFilter; // null = all, 'pending', 'costed'
+  String? _costStatusFilter; // null = all, 'pending', 'costed', 'no_cost'
   List<FleetAsset> _assets = [];
   List<FleetType> _workTypes = [];
 
@@ -50,6 +50,8 @@ class _FleetWorkRecordsListScreenState
   @override
   void initState() {
     super.initState();
+    // Cost managers land on their work queue: jobs still needing costing.
+    if (_isCostTab) _costStatusFilter = 'pending';
     _loadFilters();
   }
 
@@ -68,11 +70,13 @@ class _FleetWorkRecordsListScreenState
     var filtered = records;
 
     if (widget.costsPendingOnly && !widget.costManagerMode) {
-      filtered = filtered.where((r) => !r.hasCostLines).toList();
-    } else if (_isCostTab && _costStatusFilter == 'pending') {
-      filtered = filtered.where((r) => !r.hasCostLines).toList();
-    } else if (_isCostTab && _costStatusFilter == 'costed') {
-      filtered = filtered.where((r) => r.hasCostLines).toList();
+      filtered = filtered
+          .where((r) => r.costStatus == FleetCostStatus.pending)
+          .toList();
+    } else if (_isCostTab && _costStatusFilter != null) {
+      filtered = filtered
+          .where((r) => r.costStatus.value == _costStatusFilter)
+          .toList();
     }
 
     if (_assetFilterId != null) {
@@ -116,6 +120,12 @@ class _FleetWorkRecordsListScreenState
                   selected: _costStatusFilter == 'costed',
                   onTap: () => setState(() => _costStatusFilter = 'costed'),
                 ),
+                const SizedBox(width: 8),
+                _CostFilterChip(
+                  label: 'No cost',
+                  selected: _costStatusFilter == 'no_cost',
+                  onTap: () => setState(() => _costStatusFilter = 'no_cost'),
+                ),
               ],
             ),
           ),
@@ -127,10 +137,10 @@ class _FleetWorkRecordsListScreenState
                 Expanded(
                   child: FleetFilterDropdown<String>(
                     labelText: widget.mechanicMode || _isCostTab
-                        ? 'Hyster'
+                        ? 'Machine'
                         : 'Asset',
                     allLabel: widget.mechanicMode || _isCostTab
-                        ? 'All Hyster'
+                        ? 'All machines'
                         : 'All assets',
                     value: _assetFilterId,
                     options: _assets
@@ -181,8 +191,9 @@ class _FleetWorkRecordsListScreenState
               }
               final allRecords = snapshot.data ?? [];
               final records = _applyFilters(allRecords);
-              final pendingCount =
-                  allRecords.where((r) => !r.hasCostLines).length;
+              final pendingCount = allRecords
+                  .where((r) => r.costStatus == FleetCostStatus.pending)
+                  .length;
 
               if (records.isEmpty) {
                 return Center(
@@ -269,7 +280,7 @@ class WorkRecordTile extends StatelessWidget {
 
   void _onTap(BuildContext context) {
     if (costManagerMode) {
-      if (!record.hasCostLines) {
+      if (record.costStatus == FleetCostStatus.pending) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => FleetAddCostScreen(
@@ -305,7 +316,8 @@ class WorkRecordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>();
     final dateFmt = DateFormat('d MMM');
-    final needsCosting = costManagerMode && !record.hasCostLines;
+    final needsCosting =
+        costManagerMode && record.costStatus == FleetCostStatus.pending;
 
     return Card(
       color: needsCosting
@@ -324,9 +336,9 @@ class WorkRecordTile extends StatelessWidget {
           foregroundColor: Colors.white,
           child: Icon(
             costManagerMode
-                ? (record.hasCostLines
-                    ? Icons.check_circle_outline
-                    : Icons.receipt_outlined)
+                ? (record.costStatus == FleetCostStatus.pending
+                    ? Icons.receipt_outlined
+                    : Icons.check_circle_outline)
                 : Icons.build,
             size: 18,
           ),
@@ -383,8 +395,9 @@ class WorkRecordTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 if (costManagerMode)
-                  FleetCostStatusBadge(hasCostLines: record.hasCostLines)
-                else if (!mechanicMode && record.hasCostLines)
+                  FleetCostStatusBadge(costStatus: record.costStatus)
+                else if (!mechanicMode &&
+                    record.costStatus == FleetCostStatus.costed)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 5,
@@ -409,15 +422,15 @@ class WorkRecordTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  record.hasCostLines
-                      ? 'Tap to view job and add more costs'
-                      : 'Tap to enter costs for this job',
+                  record.costStatus == FleetCostStatus.pending
+                      ? 'Tap to enter costs for this job'
+                      : 'Tap to view job and add more costs',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: record.hasCostLines
-                        ? colors?.textMuted
-                        : kBrandOrange,
+                    color: record.costStatus == FleetCostStatus.pending
+                        ? kBrandOrange
+                        : colors?.textMuted,
                   ),
                 ),
               ),

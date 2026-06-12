@@ -372,7 +372,7 @@ class _IssuesTab extends ConsumerWidget {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Tap "Report Issue" below to log a problem on a Hyster (forks or grab).',
+                  'Tap "Report Issue" below to log a problem on a machine (forks, grab or BT).',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
                 ),

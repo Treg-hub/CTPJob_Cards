@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/fleet_cost_line.dart';
+import '../models/fleet_work_record.dart';
 import '../theme/app_theme.dart';
 
 String costCategoryHint(FleetCostCategory category) {
   switch (category) {
     case FleetCostCategory.parts:
-      return 'Parts or materials bought for this Hyster.';
+      return 'Parts or materials bought for this machine.';
     case FleetCostCategory.labour:
       return 'External labour, contractor, or workshop invoice.';
     case FleetCostCategory.invoice:
@@ -38,8 +39,8 @@ class FleetCostJobsGuideBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'Last 50 mechanic jobs below. Orange = needs costing — tap to enter '
-              'spend. Green = already has costs (tap to view or add more). '
-              'Use General cost for spend not tied to a job.',
+              'spend. Green = costed (tap to view or add more). Grey = no cost '
+              'needed. Use General cost for spend not tied to a job.',
               style: TextStyle(fontSize: 13, height: 1.35),
             ),
           ),
@@ -50,20 +51,25 @@ class FleetCostJobsGuideBanner extends StatelessWidget {
 }
 
 class FleetCostStatusBadge extends StatelessWidget {
-  const FleetCostStatusBadge({super.key, required this.hasCostLines});
+  const FleetCostStatusBadge({super.key, required this.costStatus});
 
-  final bool hasCostLines;
+  final FleetCostStatus costStatus;
 
   @override
   Widget build(BuildContext context) {
+    final (color, label) = switch (costStatus) {
+      FleetCostStatus.pending => (kBrandOrange, 'Needs costing'),
+      FleetCostStatus.costed => (Colors.green, 'Costed'),
+      FleetCostStatus.noCost => (Colors.blueGrey, 'No cost'),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: hasCostLines ? Colors.green : kBrandOrange,
+        color: color,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        hasCostLines ? 'Costed' : 'Needs costing',
+        label,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 9,
@@ -132,7 +138,7 @@ class FleetCostGuideBanner extends StatelessWidget {
               linkedToJob
                   ? 'Enter what was spent on this mechanic job. '
                       'Amounts are only visible to cost managers — not mechanics.'
-                  : 'Record spend against a Hyster. Link to a mechanic job when '
+                  : 'Record spend against a machine. Link to a mechanic job when '
                       'the cost relates to work they logged.',
               style: const TextStyle(fontSize: 13, height: 1.35),
             ),

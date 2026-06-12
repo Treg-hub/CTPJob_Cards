@@ -195,9 +195,15 @@ class SyncService {
           } else {
             final docRef = firestore.collection(item.collection).doc(item.id);
             final payload = _restoreFirestoreTimestamps(item.data);
-            if (item.operation == 'create' ||
-                item.operation == 'update' ||
-                item.operation == 'set') {
+            if (item.operation == 'create') {
+              // Fleet creates are immutable once written (fleet_issues content
+              // can never change per security rules) — if the direct write
+              // already landed, replaying the set() would be denied. Skip it.
+              final existing = await docRef.get();
+              if (!existing.exists) {
+                await docRef.set(payload);
+              }
+            } else if (item.operation == 'update' || item.operation == 'set') {
               await docRef.set(
                 payload,
                 SetOptions(merge: item.operation == 'update'),

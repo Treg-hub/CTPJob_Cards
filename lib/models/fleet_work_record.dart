@@ -1,5 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Costing state of a work record. Drives the cost manager's
+/// "needs costing" queue and locks mechanic edits once set.
+enum FleetCostStatus {
+  pending('pending'),
+  costed('costed'),
+  noCost('no_cost');
+
+  final String value;
+  const FleetCostStatus(this.value);
+
+  static FleetCostStatus fromValue(String? value) {
+    return FleetCostStatus.values.firstWhere(
+      (s) => s.value == value,
+      orElse: () => FleetCostStatus.pending,
+    );
+  }
+}
+
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
   final String? id;
@@ -19,7 +37,10 @@ class FleetWorkRecord {
   final String loggedByName;
   final DateTime? createdAt;
   final List<String> linkedIssueIds;
-  final bool hasCostLines;
+  final FleetCostStatus costStatus;
+
+  /// Days a mechanic may edit a record after it was created.
+  static const int editLockDays = 7;
 
   const FleetWorkRecord({
     this.id,
@@ -39,8 +60,25 @@ class FleetWorkRecord {
     required this.loggedByName,
     this.createdAt,
     this.linkedIssueIds = const [],
-    this.hasCostLines = false,
+    this.costStatus = FleetCostStatus.pending,
   });
+
+  /// Whether the record is still inside the [editLockDays] window.
+  /// Records with no server timestamp yet are treated as locked.
+  bool get isWithinEditWindow {
+    final created = createdAt;
+    if (created == null) return false;
+    return DateTime.now().difference(created).inDays < editLockDays;
+  }
+
+  /// Edit rule shared across screens: admins always; mechanics only
+  /// while uncosted and inside the edit window.
+  bool canEdit({required bool isMechanic, required bool isAdmin}) {
+    if (isAdmin) return true;
+    return isMechanic &&
+        costStatus == FleetCostStatus.pending &&
+        isWithinEditWindow;
+  }
 
   static DateTime _parseDate(dynamic value) {
     if (value is Timestamp) return value.toDate();
@@ -75,7 +113,12 @@ class FleetWorkRecord {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
-      hasCostLines: data['has_cost_lines'] as bool? ?? false,
+      costStatus: data['cost_status'] != null
+          ? FleetCostStatus.fromValue(data['cost_status'] as String?)
+          // Legacy docs predate cost_status and used a boolean flag.
+          : (data['has_cost_lines'] == true
+              ? FleetCostStatus.costed
+              : FleetCostStatus.pending),
     );
   }
 
@@ -96,7 +139,7 @@ class FleetWorkRecord {
       'logged_by_clock_no': loggedByClockNo,
       'logged_by_name': loggedByName,
       'linked_issue_ids': linkedIssueIds,
-      'has_cost_lines': hasCostLines,
+      'cost_status': costStatus.value,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
@@ -119,7 +162,7 @@ class FleetWorkRecord {
     String? loggedByName,
     DateTime? createdAt,
     List<String>? linkedIssueIds,
-    bool? hasCostLines,
+    FleetCostStatus? costStatus,
   }) {
     return FleetWorkRecord(
       id: id ?? this.id,
@@ -139,7 +182,7 @@ class FleetWorkRecord {
       loggedByName: loggedByName ?? this.loggedByName,
       createdAt: createdAt ?? this.createdAt,
       linkedIssueIds: linkedIssueIds ?? this.linkedIssueIds,
-      hasCostLines: hasCostLines ?? this.hasCostLines,
+      costStatus: costStatus ?? this.costStatus,
     );
   }
 }

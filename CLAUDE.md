@@ -147,12 +147,14 @@ Roles are **inferred from `Employee.position` and `Employee.department`** (see `
 | Admin | `clockNo == "22"` | Full access to AdminScreen and all admin features |
 | Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |
 | Security Guard | `department == "Security"` && `position == "Guard"` | WasteHome, WasteBeginCollection, WasteLoadDetail, WasteSignature, WastePendingWeighbridge |
-| Fleet Mechanic | `department == "Workshop"` && `position == "Hyster Mechanic"` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts) |
+| Fleet Mechanic | `department == "Workshop"` && `position == "Hyster Mechanic"` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts; edits lock after 7 days or once costed) |
 | Fleet Reporter | `department` in `fleet_settings.reporter_departments` | FleetHome, FleetReportIssue, FleetIssueDetail (read-only) |
 | Fleet Cost Manager | `clockNo` in `fleet_settings.cost_manager_clock_nos` | FleetHome, FleetAddCost, FleetReports (+ CSV export), FleetWorkRecordDetail (with costs) |
 | Fleet Admin | `clockNo == "22"` (reuses Admin) | FleetAssets (manage register), FleetSettings, plus everything above |
 
 Fleet roles differ from other modules: **Mechanic** is a fixed department+position check, but **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), so their `role.dart` helpers take a `FleetSettings` argument. The mechanic never sees money — work records show only a "Costs pending / Costs entered" label.
+
+Fleet domain rules: fault reports (`fleet_issues`) are content-immutable after creation (only status transitions). The fix is a separate work record; the fix form shows the fault read-only and the mechanic types their own description. Work records carry `cost_status` (`pending|costed|no_cost`) and lock against mechanic edits 7 days after creation (`FleetWorkRecord.editLockDays`) or as soon as `cost_status != pending`; admins are exempt. One work record can close multiple faults via `linked_issue_ids`.
 
 See `docs/architecture/visualization.md` for the complete and visual permission matrix.
 
@@ -184,7 +186,7 @@ All collection names are defined as constants in `lib/constants/collections.dart
 **Fleet Maintenance (`fleet_` prefix):**
 - `fleet_assets`, `fleet_issues`, `fleet_work_records` (with `fleet_work_parts` sub-collection)
 - `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`
-- Work numbers `FM-YYYYMMDD-NNN` via daily counter (Admin SDK only). See `docs/COLLECTIONS.md` for the full schema.
+- Work numbers `FM-YYYYMMDD-NNN` via daily counter (Admin SDK only). Work records carry `cost_status` (`pending|costed|no_cost`), kept in sync by `FleetService.createCostLine` / `deleteCostLine` / `markWorkRecordNoCost`. See `docs/COLLECTIONS.md` for the full schema.
 
 ## Local Storage
 
