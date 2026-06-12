@@ -669,6 +669,12 @@ class FleetService {
               .doc(issueId)
               .update({'photos': urls});
         }
+        // Direct write landed — drop the queued create so the sync replay
+        // never re-writes an issue (reports are immutable once created).
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetIssues,
+          documentId: issueId,
+        );
       } catch (_) {
         queuedOffline = true;
       }
