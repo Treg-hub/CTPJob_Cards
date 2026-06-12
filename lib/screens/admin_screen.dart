@@ -133,7 +133,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   // ── Employees ──────────────────────────────────────────────────────────────
   final TextEditingController _employeeSearchController = TextEditingController();
   List<Employee> _allEmployees = [];
-  List<Employee> _filteredEmployees = [];
 
   // ── Structures ─────────────────────────────────────────────────────────────
   final TextEditingController deptController = TextEditingController();
@@ -282,28 +281,28 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Future<void> _loadCurrentClockNo() async {
     _currentClockNo = await _firestoreService.getLoggedInEmployeeClockNo();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadEmployees() async {
     try {
       _allEmployees = await _firestoreService.getAllEmployees();
-      _filterEmployees();
+      if (mounted) setState(() {});
     } catch (e) {
       _showError('Error loading employees: $e');
     }
   }
 
-  void _filterEmployees() {
+  /// Pure search filter — safe to call during build (no setState).
+  List<Employee> get _displayedEmployees {
     final q = _employeeSearchController.text.toLowerCase();
-    setState(() {
-      _filteredEmployees = _allEmployees.where((e) =>
-        e.name.toLowerCase().contains(q) ||
-        e.department.toLowerCase().contains(q) ||
-        e.position.toLowerCase().contains(q) ||
-        e.clockNo.toLowerCase().contains(q),
-      ).toList();
-    });
+    if (q.isEmpty) return _allEmployees;
+    return _allEmployees.where((e) =>
+      e.name.toLowerCase().contains(q) ||
+      e.department.toLowerCase().contains(q) ||
+      e.position.toLowerCase().contains(q) ||
+      e.clockNo.toLowerCase().contains(q),
+    ).toList();
   }
 
   /// Fetches the next page of job cards (newest first, 50 per page).
@@ -324,6 +323,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       final result = await _firestoreService.fetchAdminJobCardsPage(
         startAfter: reset ? null : _lastJobCardDoc,
       );
+      if (!mounted) return;
       setState(() {
         _jobCardPage = reset ? result.cards : [..._jobCardPage, ...result.cards];
         _lastJobCardDoc = result.lastDoc;
@@ -331,6 +331,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         _jobCardLoadingMore = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _jobCardLoadingMore = false);
       _showError('Error loading job cards: $e');
     }
@@ -352,7 +353,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   Future<void> _loadStructure() async {
     try {
       _structure = _normalizeStructure(await _firestoreService.getFactoryStructure());
-      setState(() {});
+      if (mounted) setState(() {});
     } catch (e) {
       _showError('Error loading structure: $e');
     }
@@ -378,13 +379,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('app').get();
       final data = doc.data() ?? {};
+      if (!mounted) return;
       setState(() {
         _minBuildController.text = (data['minSupportedBuild'] ?? '').toString();
         _updateUrlController.text = (data['updateDownloadUrl'] ?? '').toString();
         _killSwitchLoading = false;
       });
     } catch (_) {
-      setState(() => _killSwitchLoading = false);
+      if (mounted) setState(() => _killSwitchLoading = false);
     }
   }
 
@@ -418,6 +420,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       final s2 = _readStageBlock(config, 'stage2', defaultEnabled: true, defaultMinutes: 10);
       final s3 = _readStageBlock(config, 'stage3', defaultEnabled: false, defaultMinutes: 30);
       final s4 = _readStageBlock(config, 'stage4', defaultEnabled: false, defaultMinutes: 60);
+      if (!mounted) return;
       setState(() {
         _stage1Enabled = s1['enabled'] as bool;
         _stage2Enabled = s2['enabled'] as bool;
@@ -1161,7 +1164,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             child: TextField(
               controller: _employeeSearchController,
               decoration: _inputDecoration('Search employees', hint: 'Name, clock no, department…'),
-              onChanged: (_) => _filterEmployees(),
+              onChanged: (_) => setState(() {}),
             ),
           ),
           const SizedBox(width: 8),
@@ -1186,9 +1189,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             if (snapshot.connectionState == ConnectionState.waiting && _allEmployees.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
-            final employees = snapshot.data ?? _allEmployees;
-            _allEmployees = employees;
-            _filterEmployees();
+            // Plain assignment only — no setState here. Calling setState
+            // inside a builder marks the screen dirty mid-build and rebuilds
+            // this StreamBuilder, which loops forever and freezes the app.
+            _allEmployees = snapshot.data ?? _allEmployees;
+            final displayed = _displayedEmployees;
             return SingleChildScrollView(
               scrollDirection: Axis.vertical,
               child: SingleChildScrollView(
@@ -1207,7 +1212,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     DataColumn(label: Text('FCM Token', style: TextStyle(fontSize: 12))),
                     DataColumn(label: Text('Actions', style: TextStyle(fontSize: 12))),
                   ],
-                  rows: _filteredEmployees.map((emp) {
+                  rows: displayed.map((emp) {
                     final index = _allEmployees.indexOf(emp);
                     final isEditing = _editingIndex == index;
                     return DataRow(
