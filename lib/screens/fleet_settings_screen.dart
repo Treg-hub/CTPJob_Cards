@@ -95,7 +95,7 @@ class _FleetSettingsScreenState extends ConsumerState<FleetSettingsScreen> {
 
     final saveAction = _saving
         ? const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
-        : TextButton(onPressed: _save, child: const Text('Save', style: TextStyle(color: Colors.white)));
+        : TextButton(onPressed: _save, style: TextButton.styleFrom(foregroundColor: Colors.black), child: const Text('Save'));
 
     final body = ListView(
         padding: const EdgeInsets.all(16),

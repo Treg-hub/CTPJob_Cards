@@ -437,13 +437,37 @@ class FleetService {
     final lineRef = _db.collection(Collections.fleetCostLines).doc();
     batch.set(lineRef, line.toFirestore());
 
-    // Update hasCostLines flag on the linked work record (if any)
+    // Costing the linked work record locks it for the mechanic.
     if (line.workRecordId != null) {
       final wrRef = _db
           .collection(Collections.fleetWorkRecords)
           .doc(line.workRecordId);
-      batch.update(wrRef, {'has_cost_lines': true});
+      batch.update(wrRef, {
+        'cost_status': FleetCostStatus.costed.value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
+    await batch.commit();
+  }
+
+  /// Marks a work record as needing no spend (adjustments, inspections)
+  /// so it leaves the costing queue. Locks mechanic edits like costing does.
+  Future<void> markWorkRecordNoCost(
+      String workRecordId, String clockNo, String name) async {
+    final batch = _db.batch();
+    batch.update(
+      _db.collection(Collections.fleetWorkRecords).doc(workRecordId),
+      {
+        'cost_status': FleetCostStatus.noCost.value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+    batch.set(_db.collection(Collections.fleetAudit).doc(), {
+      'action': 'work_record_no_cost',
+      'actor_clock_no': clockNo,
+      'details': 'Marked work record $workRecordId as no cost needed ($name)',
+      'created_at': FieldValue.serverTimestamp(),
+    });
     await batch.commit();
   }
 
@@ -492,7 +516,29 @@ class FleetService {
   }
 
   Future<void> deleteCostLine(String id) async {
-    await _db.collection(Collections.fleetCostLines).doc(id).delete();
+    final ref = _db.collection(Collections.fleetCostLines).doc(id);
+    final snap = await ref.get();
+    final workRecordId = snap.data()?['work_record_id'] as String?;
+    await ref.delete();
+
+    // Removing the last cost line puts the job back in the costing queue
+    // (re-opens mechanic editing only if still within the edit window).
+    if (workRecordId != null) {
+      final remaining = await _db
+          .collection(Collections.fleetCostLines)
+          .where('work_record_id', isEqualTo: workRecordId)
+          .limit(1)
+          .get();
+      if (remaining.docs.isEmpty) {
+        await _db
+            .collection(Collections.fleetWorkRecords)
+            .doc(workRecordId)
+            .update({
+          'cost_status': FleetCostStatus.pending.value,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

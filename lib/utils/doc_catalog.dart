@@ -4,7 +4,6 @@ import '../models/employee.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
 import 'role.dart';
-import 'fleet_labels.dart';
 
 const _allUserFacingRoles = <UserRole>{
   UserRole.operator,
@@ -85,7 +84,7 @@ const List<DocEntry> docCatalog = [
     id: 'fleet_user_guide',
     title: 'Fleet Maintenance User Guide',
     description:
-        'Reporting Hyster faults (forks or grab), logging work, costs, and reports.',
+        'Reporting machine faults (forks, grab or BT), logging work, costs, and reports.',
     icon: Icons.forklift,
     roles: _allUserFacingRoles,
     requiresFleet: true,

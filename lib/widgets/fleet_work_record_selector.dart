@@ -330,8 +330,8 @@ class _FleetWorkRecordPickerSheetState
                       itemBuilder: (context, index) {
                         final record = filtered[index];
                         final isSelected = record.id == widget.selectedId;
-                        final needsCosting =
-                            widget.showCostStatus && !record.hasCostLines;
+                        final needsCosting = widget.showCostStatus &&
+                            record.costStatus == FleetCostStatus.pending;
                         return Material(
                           color: isSelected
                               ? theme.colorScheme.primary.withValues(alpha: 0.08)
@@ -368,7 +368,7 @@ class _FleetWorkRecordPickerSheetState
                             ),
                             trailing: widget.showCostStatus
                                 ? FleetCostStatusBadge(
-                                    hasCostLines: record.hasCostLines,
+                                    costStatus: record.costStatus,
                                   )
                                 : null,
                           ),

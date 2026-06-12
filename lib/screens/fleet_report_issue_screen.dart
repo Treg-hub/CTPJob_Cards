@@ -113,7 +113,7 @@ class _FleetReportIssueScreenState
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _showError('Please pick which Hyster has the problem.');
+      _showError('Please pick which machine has the problem.');
       return;
     }
     final desc = _descCtrl.text.trim();
@@ -225,7 +225,7 @@ class _FleetReportIssueScreenState
             const SizedBox(height: 20),
           ],
 
-          const FleetSectionLabel('Which Hyster? (forks or grab) *'),
+          const FleetSectionLabel('Which machine? (forks, grab or BT) *'),
           FleetAssetSelector(
             value: _selectedAsset,
             onChanged: (asset) => setState(() => _selectedAsset = asset),

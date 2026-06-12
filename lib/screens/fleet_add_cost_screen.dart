@@ -94,7 +94,7 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
     if (emp == null) return;
 
     if (_selectedAsset == null) {
-      _snack('Please pick which Hyster this cost is for.');
+      _snack('Please pick which machine this cost is for.');
       return;
     }
     final desc = _descCtrl.text.trim();
@@ -183,6 +183,7 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
             else
               TextButton(
                 onPressed: _save,
+                style: TextButton.styleFrom(foregroundColor: Colors.black),
                 child: const Text('Save'),
               ),
         ],
@@ -222,7 +223,7 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
           ],
 
           FleetSectionLabel(
-            costMgrUx ? 'Which Hyster? *' : 'Asset *',
+            costMgrUx ? 'Which machine? *' : 'Asset *',
           ),
           FleetAssetSelector(
             value: _selectedAsset,

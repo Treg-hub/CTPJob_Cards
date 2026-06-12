@@ -85,6 +85,156 @@ class FleetSeverityBadge extends StatelessWidget {
   }
 }
 
+/// Reported → Started → Fixed stepper shown on the issue detail screen.
+/// Cancelled issues show Reported → Cancelled instead.
+class FleetIssueTimeline extends StatelessWidget {
+  const FleetIssueTimeline({super.key, required this.issue});
+  final FleetIssue issue;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM yyyy HH:mm');
+    final cancelled = issue.status == FleetIssueStatus.cancelled;
+
+    final steps = <_TimelineStep>[
+      _TimelineStep(
+        label: 'Reported',
+        detail: [
+          issue.reportedByName,
+          if (issue.createdAt != null) fmt.format(issue.createdAt!),
+        ].join(' · '),
+        done: true,
+      ),
+      if (cancelled)
+        _TimelineStep(
+          label: 'Cancelled',
+          detail: [
+            if (issue.cancelledByName != null) issue.cancelledByName!,
+            if (issue.cancelledAt != null) fmt.format(issue.cancelledAt!),
+            if (issue.cancelReason != null) '— ${issue.cancelReason}',
+          ].join(' · '),
+          done: true,
+          color: Colors.grey,
+        )
+      else ...[
+        _TimelineStep(
+          label: 'Started',
+          detail: issue.acknowledgedAt != null
+              ? [
+                  if (issue.acknowledgedByName != null)
+                    issue.acknowledgedByName!,
+                  fmt.format(issue.acknowledgedAt!),
+                ].join(' · ')
+              : 'Waiting for the mechanic',
+          done: issue.acknowledgedAt != null ||
+              issue.status == FleetIssueStatus.resolved,
+        ),
+        _TimelineStep(
+          label: 'Fixed',
+          detail: issue.status == FleetIssueStatus.resolved
+              ? [
+                  if (issue.resolvedByName != null) issue.resolvedByName!,
+                  if (issue.resolvedAt != null) fmt.format(issue.resolvedAt!),
+                ].join(' · ')
+              : 'Not fixed yet',
+          done: issue.status == FleetIssueStatus.resolved,
+        ),
+      ],
+    ];
+
+    return Column(
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          _TimelineRow(step: steps[i], isLast: i == steps.length - 1),
+      ],
+    );
+  }
+}
+
+class _TimelineStep {
+  const _TimelineStep({
+    required this.label,
+    required this.detail,
+    required this.done,
+    this.color,
+  });
+  final String label;
+  final String detail;
+  final bool done;
+  final Color? color;
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.step, required this.isLast});
+  final _TimelineStep step;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>();
+    final dotColor =
+        step.color ?? (step.done ? Colors.green : Colors.grey.shade400);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: step.done ? dotColor : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: dotColor, width: 2),
+                ),
+                child: step.done
+                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: step.done
+                        ? dotColor.withValues(alpha: 0.5)
+                        : Colors.grey.shade300,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    step.label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: step.done ? null : colors?.textMuted,
+                    ),
+                  ),
+                  if (step.detail.isNotEmpty)
+                    Text(
+                      step.detail,
+                      style:
+                          TextStyle(fontSize: 11, color: colors?.textMuted),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Issue row card used in list views and home screen.
 /// Requires [onTap] to be wired externally (decouples from Navigator).
 class FleetIssueTile extends StatelessWidget {

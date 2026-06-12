@@ -6,13 +6,15 @@
 
 ## What Is Fleet Maintenance?
 
-Fleet Maintenance is the module in the CTP Job Cards app used to track the upkeep of the **Hyster machines (forks or grab attachments)** — separate from normal production job cards. It records faults reported on each machine, the work the mechanic does to fix them, and the costs the manager records against each asset.
+Fleet Maintenance is the module in the CTP Job Cards app used to track the upkeep of the **fleet machines (forks, grab or BT)** — separate from normal production job cards. It records faults reported on each machine, the work the mechanic does to fix them, and the costs the manager records against each asset.
+
+**Fault reports and fixes are kept separate.** A report can never be edited after it is submitted. The fix is a separate work record written by the mechanic, linked back to the report — so what was reported and what was done are always both visible, side by side.
 
 This guide covers the four roles that operate Fleet Maintenance day-to-day:
 
 | Role | Responsibilities |
 |------|-----------------|
-| **Fleet Reporter** | Report a problem on a Hyster (forks or grab); track the issues you raised |
+| **Fleet Reporter** | Report a problem on a machine (forks, grab or BT); track the issues you raised |
 | **Hyster Mechanic** | Acknowledge issues, log the work done, resolve issues |
 | **Cost Manager** | Record costs per asset, view spend reports, export CSV |
 | **Fleet Admin** | Manage the asset register and all Fleet settings |
@@ -45,10 +47,10 @@ The **Issues** tab shows a live count badge of currently open issues.
 
 ## Section 2: For Fleet Reporters — Reporting a Problem
 
-When a Hyster (forks or grab) develops a fault:
+When a machine (forks, grab or BT) develops a fault:
 
 1. On the Fleet home screen, tap **Report a Problem**.
-2. **Pick the asset** — choose the Hyster (forks or grab) from the register.
+2. **Pick the asset** — choose the machine from the register.
 3. **Choose the severity:**
    - **Low** — minor, non-urgent
    - **Medium** — needs attention soon
@@ -64,7 +66,10 @@ When a Hyster (forks or grab) develops a fault:
 - The issue appears in the **Issues** list, sorted by severity.
 - If you reported it as **Out of Service**, the Hyster mechanic and the cost manager(s) get an immediate push notification (or it waits in their Notification Inbox if they are off site). The asset shows an orange **OOS** badge everywhere it appears in the app.
 - **High-severity** issues are sent to the mechanic's Notification Inbox without a push.
-- You can track your own reported issues from the Issues list.
+- You can track your own reported issues from the Issues list. Each issue
+  shows a progress timeline (**Reported → Started → Fixed**) and, once
+  fixed, **The fix** — the mechanic's own description of the work done.
+- Your report cannot be edited by anyone after submission.
 
 ---
 
@@ -82,19 +87,24 @@ You can close an issue in one of two ways:
 
 **Option A — Log the work (recommended for real repairs)**
 
-1. Tap **Log Work**.
+1. Tap **Finish the fix**. The original fault report is shown read-only at
+   the top of the form — it cannot be changed.
 2. Select the **work type**.
-3. Enter **labour hours**.
-4. Enter the current **machine-hour reading** from the machine's hour meter.
-5. Add **parts used** — for each part: description, quantity, and (optionally) a part number.
+3. Describe **what you did to fix it** — your own words, separate from the report.
+4. Enter **labour hours** and the current **machine-hour reading**.
+5. Add **parts used** — for each part: description and quantity.
 6. Attach **photos** of the completed work.
-7. Tap **Save**. The work record gets a number like **FM-20260604-001**.
+7. If this job also fixes **other reported problems** on the same machine,
+   tick them under **Also fixes…** — they close together.
+8. Tap **Mark as Fixed**. The work record gets a number like **FM-20260604-001**.
 
 **Option B — Quick resolution note**
 
 For an issue that needs no formal work record (e.g. a false alarm or a trivial fix), tap **Resolve** and enter a short note.
 
 > **You never see costs.** Work records you create show only a "Costs pending / Costs entered" label — the actual money is entered and seen only by the cost manager.
+
+> **Editing.** A work record can be edited for **7 days** after it is saved, and locks immediately once the cost manager enters costs (or marks it "No cost needed"). After that, corrections go in as comments.
 
 When the last open Out-of-Service issue on a machine is resolved, the orange **OOS** badge is automatically cleared from that asset.
 
@@ -127,7 +137,7 @@ The **Reports** tab shows:
 
 Everything that configures the module lives in **Fleet Settings** (Admin only):
 
-- **Asset register** — add and edit the Hyster machines (forks or grab attachments) (name, type, identifier).
+- **Asset register** — add and edit the fleet machines (forks, grab or BT) (name, type, identifier).
 - **Reporter departments** — which departments are allowed to report issues.
 - **Cost-manager clock numbers** — who can enter and view costs.
 - **Asset & work types** — the pick-lists used elsewhere in the module.
@@ -175,4 +185,4 @@ The badge clears only when *every* open Out-of-Service issue on that asset is re
 
 ---
 
-*CTP Fleet Maintenance · Hyster — Forks & Grab Upkeep Guide*
+*CTP Fleet Maintenance · Forks, Grab & BT Upkeep Guide*

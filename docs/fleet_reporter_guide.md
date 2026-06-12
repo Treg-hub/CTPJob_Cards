@@ -1,12 +1,14 @@
 # CTP Fleet Maintenance — Reporter Guide
 
-*A plain-language guide for reporting problems on Hyster machines (forks or grab attachments)*
+*A plain-language guide for reporting problems on fleet machines (forks, grab or BT)*
 
 ---
 
 ## What you use this for
 
-When a **Hyster (forks or grab)** has a fault, you report it here so the **Hyster mechanic** knows what to fix. You do not log repairs or costs — you only describe the problem.
+When a **machine (forks, grab or BT)** has a fault, you report it here so the **mechanic** knows what to fix. You do not log repairs or costs — you only describe the problem.
+
+**Your report is permanent.** Once sent, nobody — not even the mechanic — can change what you wrote. The fix is recorded separately, in the mechanic's own words, so the report and the repair always stay distinct.
 
 Your main tab:
 
@@ -21,7 +23,7 @@ Tap **Report Problem** to submit a new fault.
 ## Reporting a problem — step by step
 
 1. Open **Fleet** → tap **Report Problem**
-2. **Which Hyster (forks or grab)?** — pick the machine from the list
+2. **Which machine (forks, grab or BT)?** — pick the machine from the list
 3. **How urgent is it?** — pick one level (see table below)
 4. **What's wrong?** — describe clearly what happened (at least a short sentence)
 5. **Which part is affected?** — tap a saved part or type a new one (required)
@@ -93,8 +95,9 @@ Up to 3 photos. Useful for:
 
 Open the **Issues** tab and tap any report to see:
 
-- Current status (needs fixing / in progress / fixed)
-- What the mechanic did (when fixed)
+- A **progress timeline**: Reported → Started → Fixed
+- **The fix** — once fixed, a green card shows exactly what the mechanic
+  did, who did it, when, and which parts were used
 - Your report is marked with a **Your report** chip when it is yours
 
 All reporters can see all open issues — this is intentional for transparency across shifts.
