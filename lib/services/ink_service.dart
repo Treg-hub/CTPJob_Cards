@@ -270,6 +270,29 @@ class InkService {
         return {for (final e in latest.entries) e.key: e.value.reading};
       });
 
+  /// The most recent [limit] meter readings per item (newest first) — for the
+  /// grid view that shows the previous few days alongside the entry field.
+  Stream<Map<String, List<({DateTime at, double reading})>>>
+      watchRecentMeterReadings({int limit = 4}) => _db
+          .collection(Collections.inkTransactions)
+          .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+          .snapshots()
+          .map((s) {
+            final byItem = <String, List<({DateTime at, double reading})>>{};
+            for (final doc in s.docs) {
+              final t = InkTransaction.fromFirestore(doc);
+              if (t.meterReading == null) continue;
+              (byItem[t.stockItemCode] ??= [])
+                  .add((at: t.effectiveAt, reading: t.meterReading!));
+            }
+            for (final key in byItem.keys.toList()) {
+              final list = byItem[key]!
+                ..sort((a, b) => b.at.compareTo(a.at)); // newest first
+              if (list.length > limit) byItem[key] = list.sublist(0, limit);
+            }
+            return byItem;
+          });
+
   // ---------------------------------------------------------------------------
   // RECIPES + PRODUCTION
   // ---------------------------------------------------------------------------
