@@ -58,6 +58,7 @@ class InkTransaction {
     this.supplierName,
     this.litresEntered,
     this.conversionFactorUsed,
+    this.meterReading,
     this.readingDate,
   });
 
@@ -113,6 +114,10 @@ class InkTransaction {
   final String? supplierName;
   final double? litresEntered;
   final double? conversionFactorUsed;
+
+  /// Cumulative meter value for a `consumption_meter` reading (used to compute
+  /// the next reading's delta). Null for direct-consumption ("manual") entries.
+  final double? meterReading;
   final DateTime? readingDate;
 
   /// Bridge to the pure costing engine. A `purchase` still awaiting its cost is
@@ -160,6 +165,7 @@ class InkTransaction {
       supplierName: d['supplier_name'] as String?,
       litresEntered: num2('litres_entered'),
       conversionFactorUsed: num2('conversion_factor_used'),
+      meterReading: num2('meter_reading'),
       readingDate: ts('reading_date'),
     );
   }
@@ -193,6 +199,7 @@ class InkTransaction {
         if (litresEntered != null) 'litres_entered': litresEntered,
         if (conversionFactorUsed != null)
           'conversion_factor_used': conversionFactorUsed,
+        if (meterReading != null) 'meter_reading': meterReading,
         if (readingDate != null) 'reading_date': Timestamp.fromDate(readingDate!),
       };
 

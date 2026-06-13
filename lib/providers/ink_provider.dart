@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/ink_conversion_factor.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -43,4 +44,15 @@ final inkActiveSuppliersProvider = StreamProvider<List<InkSupplier>>(
 /// All suppliers incl. inactive (for the manager management screen).
 final inkAllSuppliersProvider = StreamProvider<List<InkSupplier>>(
   (ref) => ref.watch(inkServiceProvider).watchSuppliers(activeOnly: false),
+);
+
+/// Conversion factors (litres→kg) keyed by item code.
+final inkConversionFactorsProvider =
+    StreamProvider<Map<String, InkConversionFactor>>(
+  (ref) => ref.watch(inkServiceProvider).watchConversionFactors(),
+);
+
+/// Latest cumulative meter reading per item code.
+final inkLatestMeterReadingsProvider = StreamProvider<Map<String, double>>(
+  (ref) => ref.watch(inkServiceProvider).watchLatestMeterReadings(),
 );

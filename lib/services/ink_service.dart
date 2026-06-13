@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
+import '../models/ink_conversion_factor.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
+import '../models/ink_txn_type.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
 /// singleton pattern.
@@ -165,4 +167,44 @@ class InkService {
       .collection(Collections.inkSuppliers)
       .doc(id)
       .update({'active': active});
+
+  // ---------------------------------------------------------------------------
+  // CONVERSION FACTORS (litres → kg per meter-read item; manager-managed)
+  // ---------------------------------------------------------------------------
+
+  Stream<Map<String, InkConversionFactor>> watchConversionFactors() => _db
+      .collection(Collections.inkConversionFactors)
+      .snapshots()
+      .map((s) => {
+            for (final d in s.docs) d.id: InkConversionFactor.fromFirestore(d)
+          });
+
+  Future<void> saveConversionFactor(String itemCode, double kgPerLitre) => _db
+      .collection(Collections.inkConversionFactors)
+      .doc(itemCode)
+      .set(
+        InkConversionFactor(itemCode: itemCode, kgPerLitre: kgPerLitre)
+            .toFirestore(),
+        SetOptions(merge: true),
+      );
+
+  /// Latest cumulative meter value per item (from `consumption_meter` txns), so
+  /// the meter screen can compute the next reading's delta.
+  Stream<Map<String, double>> watchLatestMeterReadings() => _db
+      .collection(Collections.inkTransactions)
+      .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+      .snapshots()
+      .map((s) {
+        final latest = <String, ({DateTime at, double reading})>{};
+        for (final doc in s.docs) {
+          final t = InkTransaction.fromFirestore(doc);
+          if (t.meterReading == null) continue;
+          final cur = latest[t.stockItemCode];
+          if (cur == null || t.effectiveAt.isAfter(cur.at)) {
+            latest[t.stockItemCode] =
+                (at: t.effectiveAt, reading: t.meterReading!);
+          }
+        }
+        return {for (final e in latest.entries) e.key: e.value.reading};
+      });
 }
