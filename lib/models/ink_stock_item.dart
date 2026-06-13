@@ -40,6 +40,9 @@ class InkStockItem {
     required this.lastUpdated,
     this.lastTransactionId,
     this.active = true,
+    this.displayOrder = 9999,
+    this.category = '',
+    this.metered = false,
   });
 
   final String itemCode;
@@ -48,6 +51,17 @@ class InkStockItem {
   /// Each item lives in exactly one unit: 'KG' or 'LTS'.
   final String unit;
   final InkItemClass itemClass;
+
+  /// Fixed display order (the legacy ITEMID) — all item lists sort by this, not
+  /// alphabetically.
+  final int displayOrder;
+
+  /// Domain category label (Additive / Toloul / Ink / Binder) for display.
+  final String category;
+
+  /// Whether consumption is read off a meter (the 4 inks + gravure binder).
+  /// CoverWax is produced and consumed into binder, but is NOT metered.
+  final bool metered;
 
   /// Cached closing balance from the ledger.
   final double currentBalance;
@@ -74,6 +88,9 @@ class InkStockItem {
           (d['last_updated'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastTransactionId: d['last_transaction_id'] as String?,
       active: d['active'] as bool? ?? true,
+      displayOrder: (d['display_order'] as num?)?.toInt() ?? 9999,
+      category: d['category'] as String? ?? '',
+      metered: d['metered'] as bool? ?? false,
     );
   }
 
@@ -86,6 +103,9 @@ class InkStockItem {
         'last_updated': Timestamp.fromDate(lastUpdated),
         if (lastTransactionId != null) 'last_transaction_id': lastTransactionId,
         'active': active,
+        'display_order': displayOrder,
+        'category': category,
+        'metered': metered,
       };
 
   InkStockItem copyWith({

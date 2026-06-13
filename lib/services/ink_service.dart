@@ -50,7 +50,11 @@ class InkService {
       .map((s) {
         final items = s.docs.map(InkStockItem.fromFirestore).toList();
         final filtered = activeOnly ? items.where((i) => i.active).toList() : items;
-        filtered.sort((a, b) => a.displayName.compareTo(b.displayName));
+        // Fixed display order (legacy ITEMID), not alphabetical.
+        filtered.sort((a, b) {
+          final c = a.displayOrder.compareTo(b.displayOrder);
+          return c != 0 ? c : a.displayName.compareTo(b.displayName);
+        });
         return filtered;
       });
 
@@ -82,6 +86,38 @@ class InkService {
       .collection(Collections.inkTransactions)
       .doc(txnId)
       .update({'total_cost': totalCost, 'cost_status': InkCostStatus.costed.value});
+
+  /// Records a month-end count on a designated [countDate] (which need not be
+  /// the calendar month-end). For each item whose physical count differs from
+  /// the ledger balance, writes an `adjustment` for the delta (count − ledger),
+  /// at the current WAC — i.e. the adjustment is computed automatically from the
+  /// month's runs, exactly as the factory does it manually today. All
+  /// adjustments share a sessionId.
+  Future<void> recordMonthEndCount({
+    required DateTime countDate,
+    required List<({String itemCode, double counted, double ledgerBalance})>
+        lines,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    final sessionId = _uuid.v4();
+    for (final l in lines) {
+      final delta = l.counted - l.ledgerBalance;
+      if (delta.abs() < 1e-9) continue; // count matches ledger — no adjustment
+      await recordTransaction(InkTransaction(
+        type: InkTxnType.adjustment,
+        stockItemCode: l.itemCode,
+        quantityDelta: delta,
+        effectiveAt: countDate,
+        costStatus: InkCostStatus.na,
+        reason: 'Month-end count',
+        sessionId: sessionId,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        idempotencyKey: '${sessionId}_adj_${l.itemCode}',
+      ));
+    }
+  }
 
   /// Corrects [original] using the reversing-entry model: the original is marked
   /// `voided` (preserved for audit, excluded from replay) and the [correction]

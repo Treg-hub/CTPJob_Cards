@@ -11,6 +11,7 @@ import 'ink_conversion_factor_screen.dart';
 import 'ink_corrections_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_readings_screen.dart';
+import 'ink_month_end_count_screen.dart';
 import 'ink_month_end_report_screen.dart';
 import 'ink_other_meter_screen.dart';
 import 'ink_pending_costs_screen.dart';
@@ -72,7 +73,9 @@ class InkHomeScreen extends ConsumerWidget {
             _ActionGrid(actions: [
               _Action(Icons.store_outlined, 'Suppliers',
                   builder: () => const InkSupplierManagementScreen()),
-              _Action(Icons.tune_outlined, 'Month-end Adjustment',
+              _Action(Icons.fact_check_outlined, 'Month-end Count',
+                  builder: () => const InkMonthEndCountScreen()),
+              _Action(Icons.tune_outlined, 'Stock Adjustment',
                   builder: () => const InkAdjustmentScreen()),
               _Action(Icons.payments_outlined, 'Pending Costs',
                   builder: () => const InkPendingCostsScreen()),
