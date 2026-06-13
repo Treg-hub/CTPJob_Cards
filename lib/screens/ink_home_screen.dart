@@ -10,6 +10,7 @@ import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
 import 'ink_corrections_screen.dart';
 import 'ink_flagged_review_screen.dart';
+import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_point_entry_screen.dart';
 import 'ink_meter_point_management_screen.dart';
@@ -73,6 +74,8 @@ class InkHomeScreen extends ConsumerWidget {
                 builder: () => const InkMeterPointEntryScreen()),
             _Action(Icons.speed_outlined, 'Other Meter',
                 builder: () => const InkOtherMeterScreen()),
+            _Action(Icons.inventory_2_outlined, 'IBC Register',
+                builder: () => const InkIbcRegisterScreen()),
           ]),
           if (isManager) ...[
             const SizedBox(height: 16),

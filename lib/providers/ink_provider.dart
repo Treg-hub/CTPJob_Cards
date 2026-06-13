@@ -87,6 +87,11 @@ final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
   (ref) => ref.watch(inkServiceProvider).watchIbcs(status: InkIbcStatus.received),
 );
 
+/// All IBCs across all statuses (register view).
+final inkAllIbcsProvider = StreamProvider<List<InkIbc>>(
+  (ref) => ref.watch(inkServiceProvider).watchIbcs(),
+);
+
 /// Production run history (newest first).
 final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
   (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
