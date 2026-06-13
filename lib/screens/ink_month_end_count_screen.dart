@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1M — Month-end Count (manager). The factory counts physical stock on a
 /// designated date (not necessarily the calendar month-end) and the system
@@ -35,13 +36,8 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _countDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 7)),
-    );
-    if (d != null) setState(() => _countDate = DateTime(d.year, d.month, d.day));
+    final dt = await pickInkDateTime(context, _countDate);
+    if (dt != null) setState(() => _countDate = dt);
   }
 
   Future<void> _submit(List<InkStockItem> items) async {
@@ -89,7 +85,7 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Month-end Count')),
