@@ -9,6 +9,7 @@ import '../utils/role.dart' as role_utils;
 import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
 import 'ink_corrections_screen.dart';
+import 'ink_flagged_review_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_point_entry_screen.dart';
 import 'ink_meter_point_management_screen.dart';
@@ -100,6 +101,8 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkRevaluationScreen()),
               _Action(Icons.edit_note_outlined, 'Corrections',
                   builder: () => const InkCorrectionsScreen()),
+              _Action(Icons.flag_outlined, 'Flagged',
+                  builder: () => const InkFlaggedReviewScreen()),
             ]),
           ],
           const SizedBox(height: 20),
