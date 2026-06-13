@@ -51,11 +51,9 @@ class InkConversionFactorScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (items) {
-          final candidates = items
-              .where((i) =>
-                  i.itemClass == InkItemClass.ink ||
-                  i.itemClass == InkItemClass.manufactured)
-              .toList();
+          // Only metered items (the 4 inks + gravure binder); CoverWax is
+          // produced/consumed but never metered.
+          final candidates = items.where((i) => i.metered).toList();
           final factors = factorsAsync.valueOrNull ?? {};
           return ListView(
             children: [

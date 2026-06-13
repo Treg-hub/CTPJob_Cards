@@ -29,21 +29,41 @@ class InkMonthEndReportScreen extends ConsumerStatefulWidget {
 class _State extends ConsumerState<InkMonthEndReportScreen> {
   static final _qty = NumberFormat('#,##0.##');
   static final _money = NumberFormat('#,##0.00');
-  late DateTime _month;
+  // Period is [_from 00:00, _to end-of-day]. Defaults to month-to-date but the
+  // dates are free — set them to your designated count dates (count-to-count).
+  late DateTime _from;
+  late DateTime _to;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _month = DateTime(now.year, now.month);
+    _from = DateTime(now.year, now.month, 1);
+    _to = DateTime(now.year, now.month, now.day);
   }
 
-  void _step(int delta) =>
-      setState(() => _month = DateTime(_month.year, _month.month + delta));
+  Future<void> _pick(bool isFrom) async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? _from : _to,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (d != null) {
+      setState(() {
+        final picked = DateTime(d.year, d.month, d.day);
+        if (isFrom) {
+          _from = picked;
+        } else {
+          _to = picked;
+        }
+      });
+    }
+  }
 
   List<_Row> _build(List<InkStockItem> items, List<InkTransaction> txns) {
-    final start = DateTime(_month.year, _month.month);
-    final nextStart = DateTime(_month.year, _month.month + 1);
+    final start = _from;
+    final nextStart = _to.add(const Duration(days: 1)); // include the whole _to day
     final byItem = <String, List<InkTransaction>>{};
     for (final t in txns) {
       (byItem[t.stockItemCode] ??= []).add(t);
@@ -95,10 +115,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       }
       rows.add(row);
     }
-    rows.sort((a, b) {
-      final c = a.item.itemClass.index.compareTo(b.item.itemClass.index);
-      return c != 0 ? c : a.item.displayName.compareTo(b.item.displayName);
-    });
+    rows.sort((a, b) => a.item.displayOrder.compareTo(b.item.displayOrder));
     return rows;
   }
 
@@ -106,25 +123,31 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final txnsAsync = ref.watch(inkAllTransactionsProvider);
-    final mf = DateFormat('MMMM yyyy');
+    final rf = DateFormat('d MMM yyyy');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Month-end Report')),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.all(8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                    onPressed: () => _step(-1),
-                    icon: const Icon(Icons.chevron_left)),
-                Text(mf.format(_month),
-                    style: Theme.of(context).textTheme.titleMedium),
-                IconButton(
-                    onPressed: () => _step(1),
-                    icon: const Icon(Icons.chevron_right)),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pick(true),
+                    icon: const Icon(Icons.event),
+                    label: Text('From ${rf.format(_from)}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pick(false),
+                    icon: const Icon(Icons.event),
+                    label: Text('To ${rf.format(_to)}'),
+                  ),
+                ),
               ],
             ),
           ),
