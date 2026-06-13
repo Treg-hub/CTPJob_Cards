@@ -1,6 +1,13 @@
+import 'dart:io';
+
+import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -155,6 +162,202 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
         SnackBar(content: Text('Period $pk finalised.')));
   }
 
+  // ── Export helpers ────────────────────────────────────────────────────────
+
+  static final _wac = NumberFormat('#,##0.0000');
+  static final _fileDateFmt = DateFormat('yyyy-MM-dd');
+
+  /// Build a flat CSV-ready list from computed rows + toloul totals.
+  List<List<dynamic>> _buildCsvData(
+      List<_Row> rows, double tolRecovery, double tolUsage) {
+    final header = [
+      'Item',
+      'Unit',
+      'Open',
+      'In',
+      'Cons',
+      'Rec',
+      'Adj',
+      'Close',
+      'WAC',
+      'Value',
+    ];
+    final dataRows = rows.map((r) => [
+          r.item.displayName,
+          r.item.unit,
+          r.openBal,
+          r.inQty,
+          r.consQty,
+          r.recQty,
+          r.adjQty,
+          r.closeBal,
+          r.closeWac,
+          r.closeValue,
+        ]);
+    return [
+      header,
+      ...dataRows,
+      [], // blank separator
+      ['Toloul Recovery (L)', tolRecovery],
+      ['Toloul Usage (L)', tolUsage],
+    ];
+  }
+
+  Future<void> _exportCsv(
+      List<_Row> rows, double tolRecovery, double tolUsage) async {
+    if (rows.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data to export')));
+      }
+      return;
+    }
+    try {
+      final csvData = _buildCsvData(rows, tolRecovery, tolUsage);
+      final csvString = const CsvEncoder().convert(csvData);
+      final dir = await getTemporaryDirectory();
+      final fromStr = _fileDateFmt.format(_from);
+      final toStr = _fileDateFmt.format(_to);
+      final file =
+          File('${dir.path}/ink_month_end_${fromStr}_$toStr.csv');
+      await file.writeAsString(csvString);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Ink Month-end Report $fromStr – $toStr (CSV)',
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('CSV exported & shared'),
+                backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('CSV export failed: $e'),
+                backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _exportPdf(
+      List<_Row> rows, double tolRecovery, double tolUsage) async {
+    if (rows.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data to export')));
+      }
+      return;
+    }
+    try {
+      final fromStr = DateFormat('d MMM yyyy').format(_from);
+      final toStr = DateFormat('d MMM yyyy').format(_to);
+      final title = 'Ink Month-end Report  $fromStr – $toStr';
+
+      final tableHeaders = [
+        'Item',
+        'Unit',
+        'Open',
+        'In',
+        'Cons',
+        'Rec',
+        'Adj',
+        'Close',
+        'WAC',
+        'Value',
+      ];
+      final tableData = rows
+          .map((r) => [
+                r.item.displayName,
+                r.item.unit,
+                _qty.format(r.openBal),
+                r.inQty == 0 ? '–' : _qty.format(r.inQty),
+                r.consQty == 0 ? '–' : _qty.format(r.consQty),
+                r.recQty == 0 ? '–' : _qty.format(r.recQty),
+                r.adjQty == 0 ? '–' : _qty.format(r.adjQty),
+                _qty.format(r.closeBal),
+                _wac.format(r.closeWac),
+                _money.format(r.closeValue),
+              ])
+          .toList();
+
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          build: (context) => [
+            pw.Text(
+              title,
+              style: pw.TextStyle(
+                  fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 12),
+            pw.TableHelper.fromTextArray(
+              headers: tableHeaders,
+              data: tableData,
+              headerStyle:
+                  pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.grey300),
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.center,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+                6: pw.Alignment.centerRight,
+                7: pw.Alignment.centerRight,
+                8: pw.Alignment.centerRight,
+                9: pw.Alignment.centerRight,
+              },
+            ),
+            pw.SizedBox(height: 16),
+            pw.Row(children: [
+              pw.Text('Toloul Recovery: ',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('${_qty.format(tolRecovery)} L'),
+              pw.SizedBox(width: 24),
+              pw.Text('Toloul Usage: ',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('${_qty.format(tolUsage)} L'),
+            ]),
+            pw.SizedBox(height: 8),
+            pw.Text(
+              'Generated ${DateFormat('d MMM yyyy HH:mm').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
+            ),
+          ],
+        ),
+      );
+
+      final bytes = await doc.save();
+      final dir = await getTemporaryDirectory();
+      final fromFile = _fileDateFmt.format(_from);
+      final toFile = _fileDateFmt.format(_to);
+      final file =
+          File('${dir.path}/ink_month_end_${fromFile}_$toFile.pdf');
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Ink Month-end Report $fromFile – $toFile (PDF)',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('PDF export failed: $e'),
+                backgroundColor: Colors.red));
+      }
+    }
+  }
+
   Future<void> _reopenPeriod(String pk) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -218,27 +421,47 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       }
     }
 
+    // Pre-compute rows when data is ready so export actions can reuse them.
+    final isLoading = itemsAsync.isLoading || txnsAsync.isLoading;
+    final rows = isLoading
+        ? <_Row>[]
+        : _build(
+            itemsAsync.valueOrNull ?? [], txnsAsync.valueOrNull ?? []);
+
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Month-end Report'),
-        actions: isManager
-            ? [
-                if (isClosed)
-                  TextButton.icon(
-                    onPressed: () => _reopenPeriod(pk),
-                    icon: const Icon(Icons.lock_open),
-                    label: const Text('Re-open'),
-                  )
-                else
-                  TextButton.icon(
-                    onPressed: () => _finalisePeriod(pk),
-                    icon: const Icon(Icons.lock_outline),
-                    label: const Text('Finalise'),
-                  ),
-              ]
-            : null,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.grid_on),
+            tooltip: 'Export CSV',
+            onPressed: isLoading
+                ? null
+                : () => _exportCsv(rows, tolRecovery, tolUsage),
+          ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Export PDF',
+            onPressed: isLoading
+                ? null
+                : () => _exportPdf(rows, tolRecovery, tolUsage),
+          ),
+          if (isManager)
+            if (isClosed)
+              TextButton.icon(
+                onPressed: () => _reopenPeriod(pk),
+                icon: const Icon(Icons.lock_open),
+                label: const Text('Re-open'),
+              )
+            else
+              TextButton.icon(
+                onPressed: () => _finalisePeriod(pk),
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Finalise'),
+              ),
+        ],
       ),
       body: Column(
         children: [
@@ -304,48 +527,44 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
             ),
           ),
           Expanded(
-            child: (itemsAsync.isLoading || txnsAsync.isLoading)
+            child: isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : Builder(builder: (context) {
-                    final rows = _build(
-                        itemsAsync.valueOrNull ?? [], txnsAsync.valueOrNull ?? []);
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SingleChildScrollView(
-                        child: DataTable(
-                          headingRowHeight: 38,
-                          dataRowMinHeight: 34,
-                          dataRowMaxHeight: 40,
-                          columnSpacing: 18,
-                          columns: const [
-                            DataColumn(label: Text('Item')),
-                            DataColumn(label: Text('Open'), numeric: true),
-                            DataColumn(label: Text('In'), numeric: true),
-                            DataColumn(label: Text('Cons'), numeric: true),
-                            DataColumn(label: Text('Rec'), numeric: true),
-                            DataColumn(label: Text('Adj'), numeric: true),
-                            DataColumn(label: Text('Close'), numeric: true),
-                            DataColumn(label: Text('WAC'), numeric: true),
-                            DataColumn(label: Text('Value'), numeric: true),
-                          ],
-                          rows: [
-                            for (final r in rows)
-                              DataRow(cells: [
-                                DataCell(Text(r.item.displayName)),
-                                DataCell(Text(_qty.format(r.openBal))),
-                                DataCell(Text(r.inQty == 0 ? '–' : _qty.format(r.inQty))),
-                                DataCell(Text(r.consQty == 0 ? '–' : _qty.format(r.consQty))),
-                                DataCell(Text(r.recQty == 0 ? '–' : _qty.format(r.recQty))),
-                                DataCell(Text(r.adjQty == 0 ? '–' : _qty.format(r.adjQty))),
-                                DataCell(Text(_qty.format(r.closeBal))),
-                                DataCell(Text(_money.format(r.closeWac))),
-                                DataCell(Text(_money.format(r.closeValue))),
-                              ]),
-                          ],
-                        ),
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        headingRowHeight: 38,
+                        dataRowMinHeight: 34,
+                        dataRowMaxHeight: 40,
+                        columnSpacing: 18,
+                        columns: const [
+                          DataColumn(label: Text('Item')),
+                          DataColumn(label: Text('Open'), numeric: true),
+                          DataColumn(label: Text('In'), numeric: true),
+                          DataColumn(label: Text('Cons'), numeric: true),
+                          DataColumn(label: Text('Rec'), numeric: true),
+                          DataColumn(label: Text('Adj'), numeric: true),
+                          DataColumn(label: Text('Close'), numeric: true),
+                          DataColumn(label: Text('WAC'), numeric: true),
+                          DataColumn(label: Text('Value'), numeric: true),
+                        ],
+                        rows: [
+                          for (final r in rows)
+                            DataRow(cells: [
+                              DataCell(Text(r.item.displayName)),
+                              DataCell(Text(_qty.format(r.openBal))),
+                              DataCell(Text(r.inQty == 0 ? '–' : _qty.format(r.inQty))),
+                              DataCell(Text(r.consQty == 0 ? '–' : _qty.format(r.consQty))),
+                              DataCell(Text(r.recQty == 0 ? '–' : _qty.format(r.recQty))),
+                              DataCell(Text(r.adjQty == 0 ? '–' : _qty.format(r.adjQty))),
+                              DataCell(Text(_qty.format(r.closeBal))),
+                              DataCell(Text(_money.format(r.closeWac))),
+                              DataCell(Text(_money.format(r.closeValue))),
+                            ]),
+                        ],
                       ),
-                    );
-                  }),
+                    ),
+                  ),
           ),
           Container(
             width: double.infinity,
