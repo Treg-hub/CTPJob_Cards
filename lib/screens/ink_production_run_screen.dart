@@ -6,6 +6,7 @@ import '../models/ink_recipe.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
 /// 1/2 also allowed); the screen previews inputs consumed and output produced
@@ -27,16 +28,8 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   bool _submitting = false;
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _effectiveAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) {
-      setState(() => _effectiveAt =
-          DateTime(d.year, d.month, d.day, _effectiveAt.hour, _effectiveAt.minute));
-    }
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _submit(InkRecipe recipe, Map<String, double> wacByItem) async {
@@ -69,7 +62,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final byCode = {for (final i in items) i.itemCode: i};
     final wacByItem = {for (final i in items) i.itemCode: i.weightedAverageCost};
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Production Run')),

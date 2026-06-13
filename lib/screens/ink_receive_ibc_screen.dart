@@ -6,6 +6,7 @@ import '../models/ink_ibc.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 import 'ink_barcode_scan_screen.dart';
 
 class _IbcRow {
@@ -44,16 +45,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _effectiveAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) {
-      setState(() => _effectiveAt =
-          DateTime(d.year, d.month, d.day, _effectiveAt.hour, _effectiveAt.minute));
-    }
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _scan() async {
@@ -114,7 +107,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     final inks =
         items.where((i) => i.itemClass == InkItemClass.ink).toList();
     final suppliers = ref.watch(inkActiveSuppliersProvider).valueOrNull ?? [];
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
     final totalKg = _rows.fold<double>(
         0, (s, r) => s + (double.tryParse(r.kgCtrl.text.trim()) ?? 0));
 
