@@ -1,0 +1,35 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/ink_settings.dart';
+import '../models/ink_stock_item.dart';
+import '../models/ink_transaction.dart';
+import '../services/ink_service.dart';
+
+final inkServiceProvider = Provider<InkService>((ref) => InkService());
+
+/// Module settings (ink_enabled + closed periods). Loaded once per session and
+/// used for home-screen gating, mirroring fleetSettingsProvider.
+final inkSettingsProvider = StreamProvider<InkSettings>(
+  (ref) => ref.watch(inkServiceProvider).watchSettings(),
+);
+
+/// All active stock items with their cached balance/WAC.
+final inkStockItemsProvider = StreamProvider<List<InkStockItem>>(
+  (ref) => ref.watch(inkServiceProvider).watchStockItems(),
+);
+
+/// One stock item's ledger, oldest-effective first.
+final inkItemLedgerProvider =
+    StreamProvider.family<List<InkTransaction>, String>(
+  (ref, itemCode) => ref.watch(inkServiceProvider).watchItemLedger(itemCode),
+);
+
+/// Manager "pending costs" queue.
+final inkPendingCostsProvider = StreamProvider<List<InkTransaction>>(
+  (ref) => ref.watch(inkServiceProvider).watchPendingCosts(),
+);
+
+/// Manager review queue (flagged movements).
+final inkFlaggedProvider = StreamProvider<List<InkTransaction>>(
+  (ref) => ref.watch(inkServiceProvider).watchFlagged(),
+);

@@ -158,3 +158,29 @@ bool isPrepressSpecialist(Employee? employee) {
   return employee.department == 'Pre Press' &&
       employee.position.toLowerCase().contains('specialist');
 }
+
+// =============================================================================
+// INK FACTORY role helpers
+// =============================================================================
+// Ink Factory (production stock-inventory module) is gated by DEPARTMENT
+// membership — any position in "Ink Factory" is an operator. Admins also have
+// access. Cost/value entry (purchase cost, revaluation), month-end adjustments
+// and corrections are MANAGER-gated: position contains "manager" OR isAdmin.
+// =============================================================================
+
+const String inkDepartment = 'Ink Factory';
+
+/// Any Ink Factory user (operators + managers), plus admins. Shows the Ink hub.
+bool isInkUser(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department == inkDepartment || isAdmin(employee);
+}
+
+/// Ink manager — may enter costs/revaluations, run month-end adjustments and
+/// corrections. Admins always qualify.
+bool isInkManager(Employee? employee) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  return isInkUser(employee) &&
+      employee.position.toLowerCase().contains('manager');
+}
