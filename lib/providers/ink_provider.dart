@@ -66,6 +66,12 @@ final inkLatestMeterReadingsProvider = StreamProvider<Map<String, double>>(
   (ref) => ref.watch(inkServiceProvider).watchLatestMeterReadings(),
 );
 
+/// Recent meter readings per item (newest first) for the grid view.
+final inkRecentMeterReadingsProvider = StreamProvider<
+    Map<String, List<({DateTime at, double reading})>>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecentMeterReadings(),
+);
+
 /// Active recipes (for the production picker).
 final inkRecipesProvider = StreamProvider<List<InkRecipe>>(
   (ref) => ref.watch(inkServiceProvider).watchRecipes(activeOnly: true),

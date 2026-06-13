@@ -12,6 +12,7 @@ import 'ink_corrections_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_point_entry_screen.dart';
 import 'ink_meter_point_management_screen.dart';
+import 'ink_meter_readings_grid_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_month_end_count_screen.dart';
 import 'ink_month_end_report_screen.dart';
@@ -59,6 +60,8 @@ class InkHomeScreen extends ConsumerWidget {
                 builder: () => const InkReceiveIbcScreen()),
             _Action(Icons.straighten_outlined, 'Meter Readings',
                 builder: () => const InkMeterReadingsScreen()),
+            _Action(Icons.grid_on_outlined, 'Meter Grid',
+                builder: () => const InkMeterReadingsGridScreen()),
             _Action(Icons.swap_horiz_outlined, 'IBC Transfer',
                 builder: () => const InkIbcTransferScreen()),
             _Action(Icons.science_outlined, 'Production Run',
