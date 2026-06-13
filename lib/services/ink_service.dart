@@ -83,6 +83,21 @@ class InkService {
       .doc(txnId)
       .update({'total_cost': totalCost, 'cost_status': InkCostStatus.costed.value});
 
+  /// Corrects [original] using the reversing-entry model: the original is marked
+  /// `voided` (preserved for audit, excluded from replay) and the [correction]
+  /// transaction is appended. The server re-replays and recomputes balance/WAC.
+  Future<void> correctTransaction({
+    required InkTransaction original,
+    required InkTransaction correction,
+  }) async {
+    if (original.id == null) return;
+    await _db.collection(Collections.inkTransactions).doc(original.id).set({
+      'voided': true,
+      'related_transaction_id': correction.idempotencyKey,
+    }, SetOptions(merge: true));
+    await recordTransaction(correction);
+  }
+
   /// An item's full ledger, oldest-effective first. Equality query (auto-indexed)
   /// + in-memory sort, so it works without the composite index too.
   Stream<List<InkTransaction>> watchItemLedger(String itemCode) => _db

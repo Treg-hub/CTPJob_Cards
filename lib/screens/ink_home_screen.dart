@@ -8,6 +8,7 @@ import '../providers/ink_provider.dart';
 import '../utils/role.dart' as role_utils;
 import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
+import 'ink_corrections_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_month_end_report_screen.dart';
@@ -85,6 +86,8 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkProductionHistoryScreen()),
               _Action(Icons.price_change_outlined, 'Revaluation',
                   builder: () => const InkRevaluationScreen()),
+              _Action(Icons.edit_note_outlined, 'Corrections',
+                  builder: () => const InkCorrectionsScreen()),
             ]),
           ],
           const SizedBox(height: 20),

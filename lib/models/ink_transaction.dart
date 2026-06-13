@@ -40,6 +40,7 @@ class InkTransaction {
     this.totalCost,
     this.newWac,
     this.costStatus = InkCostStatus.na,
+    this.voided = false,
     this.balanceBefore = 0,
     this.balanceAfter = 0,
     this.wacAtTime = 0,
@@ -89,6 +90,9 @@ class InkTransaction {
 
   final InkCostStatus costStatus;
 
+  /// Voided by a correction — preserved for audit, excluded from replay.
+  final bool voided;
+
   // Cached ledger outputs (written by the server replay).
   final double balanceBefore;
   final double balanceAfter;
@@ -130,6 +134,7 @@ class InkTransaction {
         newWac: newWac,
         costPending:
             type == InkTxnType.purchase && costStatus == InkCostStatus.pending,
+        voided: voided,
       );
 
   factory InkTransaction.fromFirestore(DocumentSnapshot doc) {
@@ -147,6 +152,7 @@ class InkTransaction {
       totalCost: num2('total_cost'),
       newWac: num2('new_wac'),
       costStatus: InkCostStatus.fromValue(d['cost_status'] as String?),
+      voided: d['voided'] as bool? ?? false,
       balanceBefore: num2('balance_before') ?? 0,
       balanceAfter: num2('balance_after') ?? 0,
       wacAtTime: num2('wac_at_time') ?? 0,
@@ -182,6 +188,7 @@ class InkTransaction {
         if (totalCost != null) 'total_cost': totalCost,
         if (newWac != null) 'new_wac': newWac,
         'cost_status': costStatus.value,
+        'voided': voided,
         'actor_clock_no': actorClockNo,
         'actor_name': actorName,
         'idempotency_key': idempotencyKey,
@@ -213,6 +220,7 @@ class InkTransaction {
     double? wacAtTime,
     bool? flaggedForReview,
     String? flagReason,
+    bool? voided,
   }) =>
       InkTransaction(
         id: id ?? this.id,
@@ -225,6 +233,7 @@ class InkTransaction {
         totalCost: totalCost ?? this.totalCost,
         newWac: newWac,
         costStatus: costStatus ?? this.costStatus,
+        voided: voided ?? this.voided,
         balanceBefore: balanceBefore ?? this.balanceBefore,
         balanceAfter: balanceAfter ?? this.balanceAfter,
         wacAtTime: wacAtTime ?? this.wacAtTime,

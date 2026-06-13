@@ -42,6 +42,7 @@ class LedgerEntry {
     this.totalCost,
     this.newWac,
     this.costPending = false,
+    this.voided = false,
   });
 
   final InkTxnType type;
@@ -62,6 +63,10 @@ class LedgerEntry {
 
   /// For `purchase`: true while the shipment cost has not yet been captured.
   final bool costPending;
+
+  /// Voided by a correction — excluded from the replay (the original row is
+  /// preserved for audit but no longer affects balance/WAC).
+  final bool voided;
 }
 
 /// The computed position around a single replayed step.
@@ -124,6 +129,7 @@ LedgerResult replayLedger({
   final steps = <LedgerStep>[];
 
   for (final e in sorted) {
+    if (e.voided) continue; // excluded by a correction
     final balBefore = balance;
     final wacBefore = wac;
 

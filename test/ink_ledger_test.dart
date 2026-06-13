@@ -211,6 +211,26 @@ void main() {
     });
   });
 
+  group('corrections (voided)', () {
+    test('a voided entry is excluded from replay', () {
+      final r = replayLedger(
+        openingBalance: 100,
+        openingWac: 10,
+        entries: [
+          entry(InkTxnType.consumptionMeter, 2, qty: -50),
+          // An erroneous -200 that was corrected → voided, must not apply.
+          LedgerEntry(
+              type: InkTxnType.consumptionMeter,
+              effectiveAt: at(1),
+              quantityDelta: -200,
+              voided: true),
+        ],
+      );
+      expect(r.balance, 50); // only the -50 applies
+      expect(r.wac, closeTo(10, 1e-9));
+    });
+  });
+
   group('enum contract', () {
     test('every type round-trips through its Firestore value', () {
       for (final t in InkTxnType.values) {
