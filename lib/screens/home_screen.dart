@@ -35,6 +35,7 @@ import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
 import 'fleet_report_issue_screen.dart';
+import 'ink_home_screen.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/fleet_provider.dart';
@@ -337,6 +338,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 context,
                 MaterialPageRoute(
                     builder: (_) => const FleetReportIssueScreen()),
+              ),
+        },
+      ];
+    }
+    if (role_utils.isInkUser(currentEmployee)) {
+      result = [
+        ...result,
+        {
+          'title': 'Ink Factory',
+          'icon': Icons.water_drop,
+          'color': const Color(0xFF6366F1),
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const InkHomeScreen()),
               ),
         },
       ];

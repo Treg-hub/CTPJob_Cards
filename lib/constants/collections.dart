@@ -56,4 +56,23 @@ class Collections {
   static const String wasteUsageLogs = 'waste_usage_logs';
   static const String wasteCounters = 'waste_counters';
   static const String wasteStock = 'waste_stock';
+
+  // ----- Ink Factory (ink_ prefix) -----
+  // Full production stock-inventory data-entry system, integrated inside this
+  // app as a gated module (department == "Ink Factory"). No data link to Job
+  // Cards. Append-only ledger; balances/WAC are derived by replay.
+  // See docs/Ink_Factory_Migration_Plan.md for the full schema + domain model.
+  static const String inkStockItems = 'ink_stock_items'; // doc id = item code
+  static const String inkTransactions = 'ink_transactions'; // append-only ledger
+  static const String inkIbcs = 'ink_ibcs'; // IBC audit register
+  static const String inkMeterSessions = 'ink_meter_sessions';
+  static const String inkProductionRuns = 'ink_production_runs';
+  static const String inkRecipes = 'ink_recipes';
+  static const String inkConversionFactors = 'ink_conversion_factors';
+  static const String inkRecoveries = 'ink_recoveries';
+  static const String inkSuppliers = 'ink_suppliers'; // managed list (manager-curated)
+  static const String inkCounters = 'ink_counters'; // INK#### sequence
+  static const String inkSettings = 'ink_settings';
+  static const String inkOtherMeterLogs = 'ink_other_meter_logs'; // report-only, no stock impact
+  static const String inkAudit = 'ink_audit';
 }
