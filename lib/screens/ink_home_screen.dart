@@ -6,8 +6,12 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/role.dart' as role_utils;
+import 'ink_adjustment_screen.dart';
+import 'ink_other_meter_screen.dart';
+import 'ink_pending_costs_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_supplier_management_screen.dart';
+import 'ink_toloul_recovery_screen.dart';
 
 /// Ink Factory module hub — the landing screen for the production stock-inventory
 /// module. Shows live stock-on-hand (from the ledger cache) and the data-entry
@@ -40,7 +44,10 @@ class InkHomeScreen extends ConsumerWidget {
             _Action(Icons.straighten_outlined, 'Meter Readings'),
             _Action(Icons.swap_horiz_outlined, 'IBC Transfer'),
             _Action(Icons.science_outlined, 'Production Run'),
-            _Action(Icons.recycling_outlined, 'Toloul Recovery'),
+            _Action(Icons.recycling_outlined, 'Toloul Recovery',
+                builder: () => const InkTolulRecoveryScreen()),
+            _Action(Icons.speed_outlined, 'Other Meter',
+                builder: () => const InkOtherMeterScreen()),
           ]),
           if (isManager) ...[
             const SizedBox(height: 16),
@@ -49,8 +56,10 @@ class InkHomeScreen extends ConsumerWidget {
             _ActionGrid(actions: [
               _Action(Icons.store_outlined, 'Suppliers',
                   builder: () => const InkSupplierManagementScreen()),
-              _Action(Icons.tune_outlined, 'Month-end Adjustment'),
-              _Action(Icons.payments_outlined, 'Pending Costs'),
+              _Action(Icons.tune_outlined, 'Month-end Adjustment',
+                  builder: () => const InkAdjustmentScreen()),
+              _Action(Icons.payments_outlined, 'Pending Costs',
+                  builder: () => const InkPendingCostsScreen()),
               _Action(Icons.summarize_outlined, 'Month-end Report'),
               _Action(Icons.menu_book_outlined, 'Recipes'),
             ]),

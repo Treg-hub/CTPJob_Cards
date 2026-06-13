@@ -113,6 +113,28 @@ class InkService {
       });
 
   // ---------------------------------------------------------------------------
+  // OTHER METERS (report-only capture — factory toloul meters, no stock impact)
+  // ---------------------------------------------------------------------------
+
+  Future<void> writeOtherMeterLog({
+    required String label,
+    required double reading,
+    required DateTime readingDate,
+    String? actorClockNo,
+    String? actorName,
+    String? notes,
+  }) =>
+      _db.collection(Collections.inkOtherMeterLogs).add({
+        'label': label,
+        'reading': reading,
+        'reading_date': Timestamp.fromDate(readingDate),
+        if (actorClockNo != null) 'actor_clock_no': actorClockNo,
+        if (actorName != null) 'actor_name': actorName,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        'recorded_at': FieldValue.serverTimestamp(),
+      });
+
+  // ---------------------------------------------------------------------------
   // SUPPLIERS (manager-curated managed list)
   // ---------------------------------------------------------------------------
 
