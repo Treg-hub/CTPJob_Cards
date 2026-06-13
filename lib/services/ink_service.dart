@@ -95,6 +95,13 @@ class InkService {
         return list;
       });
 
+  /// Every transaction (for the month-end report, which rolls the ledger
+  /// forward per item). Fine at this volume; revisit if it grows large.
+  Stream<List<InkTransaction>> watchAllTransactions() => _db
+      .collection(Collections.inkTransactions)
+      .snapshots()
+      .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+
   /// Manager "pending costs" queue — receipts awaiting a cost.
   Stream<List<InkTransaction>> watchPendingCosts() => _db
       .collection(Collections.inkTransactions)

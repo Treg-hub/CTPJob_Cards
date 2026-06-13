@@ -34,6 +34,11 @@ final inkPendingCostsProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchPendingCosts(),
 );
 
+/// Every transaction (month-end report).
+final inkAllTransactionsProvider = StreamProvider<List<InkTransaction>>(
+  (ref) => ref.watch(inkServiceProvider).watchAllTransactions(),
+);
+
 /// Manager review queue (flagged movements).
 final inkFlaggedProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchFlagged(),

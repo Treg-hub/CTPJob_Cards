@@ -10,6 +10,7 @@ import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_readings_screen.dart';
+import 'ink_month_end_report_screen.dart';
 import 'ink_other_meter_screen.dart';
 import 'ink_pending_costs_screen.dart';
 import 'ink_production_history_screen.dart';
@@ -74,7 +75,8 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkAdjustmentScreen()),
               _Action(Icons.payments_outlined, 'Pending Costs',
                   builder: () => const InkPendingCostsScreen()),
-              _Action(Icons.summarize_outlined, 'Month-end Report'),
+              _Action(Icons.summarize_outlined, 'Month-end Report',
+                  builder: () => const InkMonthEndReportScreen()),
               _Action(Icons.menu_book_outlined, 'Recipes',
                   builder: () => const InkRecipeManagementScreen()),
               _Action(Icons.straighten, 'Conversion Factors',
