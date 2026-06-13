@@ -8,6 +8,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1g — Toloul Recovery. Records solvent recovered from the Lurgi
 /// distillation as a `recovery` transaction (additive, valued at the CURRENT
@@ -35,16 +36,8 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _effectiveAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) {
-      setState(() => _effectiveAt =
-          DateTime(d.year, d.month, d.day, _effectiveAt.hour, _effectiveAt.minute));
-    }
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _submit() async {
@@ -79,7 +72,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
     return Scaffold(
       appBar: AppBar(title: const Text('Toloul Recovery')),
       body: itemsAsync.when(

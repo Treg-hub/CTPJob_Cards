@@ -8,6 +8,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1d — Meter Readings (Lurgi ink/binder consumption).
 ///
@@ -26,6 +27,7 @@ class InkMeterReadingsScreen extends ConsumerStatefulWidget {
 class _State extends ConsumerState<InkMeterReadingsScreen> {
   static final _qty = NumberFormat('#,##0.##');
   final _ctrls = <String, TextEditingController>{};
+  final _reset = <String, bool>{}; // per-item: meter was reset
   bool _cumulative = true;
   DateTime _effectiveAt = DateTime.now();
   bool _submitting = false;
@@ -42,16 +44,8 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _effectiveAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) {
-      setState(() => _effectiveAt =
-          DateTime(d.year, d.month, d.day, _effectiveAt.hour, _effectiveAt.minute));
-    }
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _submit(
@@ -81,10 +75,14 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
         if (last == null) {
           // First reading establishes a baseline — record it with no consumption.
           litres = 0;
+        } else if (_reset[item.itemCode] == true) {
+          // Meter was reset → the new reading IS the consumption since the reset.
+          litres = entered;
         } else {
           litres = entered - last;
           if (litres < 0) {
-            problems.add('${item.displayName}: reading below last (${_qty.format(last)})');
+            problems.add('${item.displayName}: reading ${_qty.format(entered)} is below '
+                'last ${_qty.format(last)} — tick "meter was reset" if that is correct');
             continue;
           }
         }
@@ -213,6 +211,9 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
                         cumulative: _cumulative,
                         factor: factors[item.itemCode]!,
                         last: last[item.itemCode],
+                        reset: _reset[item.itemCode] ?? false,
+                        onResetChanged: (v) =>
+                            setState(() => _reset[item.itemCode] = v),
                         onChanged: () => setState(() {}),
                       ),
                     const SizedBox(height: 12),
@@ -248,6 +249,8 @@ class _MeterCard extends StatelessWidget {
     required this.cumulative,
     required this.factor,
     required this.last,
+    required this.reset,
+    required this.onResetChanged,
     required this.onChanged,
   });
 
@@ -256,34 +259,39 @@ class _MeterCard extends StatelessWidget {
   final bool cumulative;
   final double factor;
   final double? last;
+  final bool reset;
+  final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
     final qty = NumberFormat('#,##0.##');
+    final scheme = Theme.of(context).colorScheme;
     final entered = double.tryParse(controller.text.trim());
+    final belowLast =
+        cumulative && last != null && entered != null && entered < last!;
+    final showReset = cumulative && last != null && (belowLast || reset);
+
     String preview = '';
     Color? previewColor;
     if (entered != null) {
-      double litres;
       if (cumulative) {
         if (last == null) {
           preview = 'First reading — sets baseline, no consumption';
-          previewColor = Theme.of(context).colorScheme.onSurfaceVariant;
-          litres = 0;
+          previewColor = scheme.onSurfaceVariant;
+        } else if (reset) {
+          preview =
+              'Reset — ${qty.format(entered)} L → ${qty.format(entered * factor)} kg consumed';
+        } else if (belowLast) {
+          preview =
+              'Reading is below last (${qty.format(last)}). Was the meter reset?';
+          previewColor = scheme.error;
         } else {
-          litres = entered - last!;
-          if (litres < 0) {
-            preview = 'Below last reading (${qty.format(last)})';
-            previewColor = Theme.of(context).colorScheme.error;
-          } else {
-            preview =
-                '${qty.format(litres)} L → ${qty.format(litres * factor)} kg';
-          }
+          final d = entered - last!;
+          preview = '${qty.format(d)} L → ${qty.format(d * factor)} kg';
         }
       } else {
-        litres = entered;
-        preview = '${qty.format(litres * factor)} kg';
+        preview = '${qty.format(entered * factor)} kg';
       }
     }
 
@@ -325,6 +333,15 @@ class _MeterCard extends StatelessWidget {
                       .bodyMedium
                       ?.copyWith(color: previewColor)),
             ],
+            if (showReset)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Meter was reset (use new reading as consumption)'),
+                value: reset,
+                onChanged: (v) => onResetChanged(v ?? false),
+              ),
           ],
         ),
       ),
