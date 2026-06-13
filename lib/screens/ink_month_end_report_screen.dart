@@ -125,6 +125,27 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     final txnsAsync = ref.watch(inkAllTransactionsProvider);
     final rf = DateFormat('d MMM yyyy');
 
+    // Toloul meter-point totals for the period (no stock effect).
+    final pointLinkage = {
+      for (final p in (ref.watch(inkAllMeterPointsProvider).valueOrNull ?? []))
+        p.id: p.linkage
+    };
+    final mpReadings =
+        ref.watch(inkMeterPointReadingsProvider).valueOrNull ?? [];
+    final periodEnd = _to.add(const Duration(days: 1));
+    var tolRecovery = 0.0, tolUsage = 0.0;
+    for (final r in mpReadings) {
+      if (r.readingDate.isBefore(_from) || !r.readingDate.isBefore(periodEnd)) {
+        continue;
+      }
+      final lk = pointLinkage[r.pointId];
+      if (lk == 'recovery') {
+        tolRecovery += r.consumption;
+      } else if (lk == 'usage') {
+        tolUsage += r.consumption;
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Month-end Report')),
       body: Column(
@@ -194,6 +215,28 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
                       ),
                     );
                   }),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(children: [
+                  Text('Toloul Recovery',
+                      style: Theme.of(context).textTheme.labelMedium),
+                  Text('${_qty.format(tolRecovery)} L',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ]),
+                Column(children: [
+                  Text('Toloul Usage',
+                      style: Theme.of(context).textTheme.labelMedium),
+                  Text('${_qty.format(tolUsage)} L',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ]),
+              ],
+            ),
           ),
         ],
       ),

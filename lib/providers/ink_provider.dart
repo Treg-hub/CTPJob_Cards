@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
 import '../models/ink_ibc.dart';
+import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
@@ -83,4 +84,26 @@ final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
 /// Production run history (newest first).
 final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
   (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
+);
+
+/// Active toloul meter points (for the reading screen).
+final inkActiveMeterPointsProvider = StreamProvider<List<InkMeterPoint>>(
+  (ref) => ref.watch(inkServiceProvider).watchMeterPoints(activeOnly: true),
+);
+
+/// All meter points incl. inactive (manager management).
+final inkAllMeterPointsProvider = StreamProvider<List<InkMeterPoint>>(
+  (ref) => ref.watch(inkServiceProvider).watchMeterPoints(activeOnly: false),
+);
+
+/// Latest cumulative reading per meter point.
+final inkLatestMeterPointReadingsProvider =
+    StreamProvider<Map<String, double>>(
+  (ref) => ref.watch(inkServiceProvider).watchLatestMeterPointReadings(),
+);
+
+/// All meter-point readings (for month-end totals).
+final inkMeterPointReadingsProvider = StreamProvider<
+    List<({String pointId, double consumption, DateTime readingDate})>>(
+  (ref) => ref.watch(inkServiceProvider).watchMeterPointReadings(),
 );

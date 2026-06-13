@@ -10,6 +10,8 @@ import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
 import 'ink_corrections_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
+import 'ink_meter_point_entry_screen.dart';
+import 'ink_meter_point_management_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_month_end_count_screen.dart';
 import 'ink_month_end_report_screen.dart';
@@ -63,6 +65,8 @@ class InkHomeScreen extends ConsumerWidget {
                 builder: () => const InkProductionRunScreen()),
             _Action(Icons.recycling_outlined, 'Toloul Recovery',
                 builder: () => const InkTolulRecoveryScreen()),
+            _Action(Icons.water_outlined, 'Toloul Meters',
+                builder: () => const InkMeterPointEntryScreen()),
             _Action(Icons.speed_outlined, 'Other Meter',
                 builder: () => const InkOtherMeterScreen()),
           ]),
@@ -85,6 +89,8 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkRecipeManagementScreen()),
               _Action(Icons.straighten, 'Conversion Factors',
                   builder: () => const InkConversionFactorScreen()),
+              _Action(Icons.opacity, 'Toloul Meter Points',
+                  builder: () => const InkMeterPointManagementScreen()),
               _Action(Icons.history, 'Production History',
                   builder: () => const InkProductionHistoryScreen()),
               _Action(Icons.price_change_outlined, 'Revaluation',
