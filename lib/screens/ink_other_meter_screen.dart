@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1h — Other-meter capture. Factory toloul meters (consumption/recovery)
 /// that do NOT affect Ink Factory stock are recorded here for reporting only —
@@ -32,13 +33,8 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) setState(() => _date = DateTime(d.year, d.month, d.day));
+    final dt = await pickInkDateTime(context, _date);
+    if (dt != null) setState(() => _date = dt);
   }
 
   Future<void> _submit() async {
@@ -68,7 +64,7 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
     return Scaffold(
       appBar: AppBar(title: const Text('Other Meter Reading')),
       body: Form(

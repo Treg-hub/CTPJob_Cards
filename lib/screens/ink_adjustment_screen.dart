@@ -8,6 +8,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 
 /// Phase 1j — Month-end Adjustment (manager). Reconciles the ledger balance to a
 /// physical stock-take count. The operator enters the COUNTED quantity; the
@@ -37,16 +38,8 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
   }
 
   Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _effectiveAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null) {
-      setState(() => _effectiveAt =
-          DateTime(d.year, d.month, d.day, _effectiveAt.hour, _effectiveAt.minute));
-    }
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _submit(InkStockItem item) async {
@@ -91,7 +84,7 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final df = DateFormat('EEE d MMM yyyy');
+    final df = DateFormat('EEE d MMM yyyy HH:mm');
     return Scaffold(
       appBar: AppBar(title: const Text('Month-end Adjustment')),
       body: itemsAsync.when(
