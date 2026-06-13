@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
 import '../models/ink_ibc.dart';
+import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
@@ -466,4 +467,95 @@ class InkService {
       ));
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // METER POINTS (aux toloul meters — recovery/usage; NO stock impact)
+  // ---------------------------------------------------------------------------
+
+  Stream<List<InkMeterPoint>> watchMeterPoints({bool activeOnly = true}) => _db
+      .collection(Collections.inkMeterPoints)
+      .snapshots()
+      .map((s) {
+        final all = s.docs.map(InkMeterPoint.fromFirestore).toList();
+        final f = activeOnly ? all.where((p) => p.active).toList() : all;
+        f.sort((a, b) {
+          final c = a.sortOrder.compareTo(b.sortOrder);
+          return c != 0
+              ? c
+              : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+        return f;
+      });
+
+  Future<void> addMeterPoint(String name, String linkage) async {
+    final t = name.trim();
+    if (t.isEmpty) return;
+    await _db.collection(Collections.inkMeterPoints).add(
+        InkMeterPoint(name: t, linkage: linkage, sortOrder: 99).toFirestore());
+  }
+
+  Future<void> setMeterPointActive(String id, bool active) => _db
+      .collection(Collections.inkMeterPoints)
+      .doc(id)
+      .update({'active': active});
+
+  /// Records meter-point readings (no stock effect). Each line carries the
+  /// already-computed [consumption] (delta or reset value).
+  Future<void> recordMeterPointReadings({
+    required DateTime readingDate,
+    required List<
+            ({String pointId, double reading, double consumption, bool reset})>
+        lines,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    for (final l in lines) {
+      await _db.collection(Collections.inkMeterPointReadings).add({
+        'point_id': l.pointId,
+        'reading': l.reading,
+        'consumption': l.consumption,
+        'reset': l.reset,
+        'reading_date': Timestamp.fromDate(readingDate),
+        'recorded_at': FieldValue.serverTimestamp(),
+        'actor_clock_no': actorClockNo,
+        'actor_name': actorName,
+      });
+    }
+  }
+
+  /// Latest cumulative reading per meter point (for delta computation).
+  Stream<Map<String, double>> watchLatestMeterPointReadings() => _db
+      .collection(Collections.inkMeterPointReadings)
+      .snapshots()
+      .map((s) {
+        final latest = <String, ({DateTime at, double reading})>{};
+        for (final doc in s.docs) {
+          final d = doc.data();
+          final pid = d['point_id'] as String?;
+          if (pid == null) continue;
+          final at =
+              (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000);
+          final reading = (d['reading'] as num?)?.toDouble() ?? 0;
+          final cur = latest[pid];
+          if (cur == null || at.isAfter(cur.at)) {
+            latest[pid] = (at: at, reading: reading);
+          }
+        }
+        return {for (final e in latest.entries) e.key: e.value.reading};
+      });
+
+  /// All meter-point readings (for month-end totals).
+  Stream<List<({String pointId, double consumption, DateTime readingDate})>>
+      watchMeterPointReadings() => _db
+          .collection(Collections.inkMeterPointReadings)
+          .snapshots()
+          .map((s) => s.docs.map((doc) {
+                final d = doc.data();
+                return (
+                  pointId: d['point_id'] as String? ?? '',
+                  consumption: (d['consumption'] as num?)?.toDouble() ?? 0,
+                  readingDate: (d['reading_date'] as Timestamp?)?.toDate() ??
+                      DateTime(2000),
+                );
+              }).toList());
 }
