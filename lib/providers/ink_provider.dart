@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_ibc.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -66,4 +67,9 @@ final inkRecipesProvider = StreamProvider<List<InkRecipe>>(
 /// All recipes incl. inactive (for the manager management screen).
 final inkAllRecipesProvider = StreamProvider<List<InkRecipe>>(
   (ref) => ref.watch(inkServiceProvider).watchRecipes(activeOnly: false),
+);
+
+/// IBCs still in 'received' state (awaiting transfer to a tank).
+final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
+  (ref) => ref.watch(inkServiceProvider).watchIbcs(status: InkIbcStatus.received),
 );

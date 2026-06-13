@@ -8,10 +8,12 @@ import '../providers/ink_provider.dart';
 import '../utils/role.dart' as role_utils;
 import 'ink_adjustment_screen.dart';
 import 'ink_conversion_factor_screen.dart';
+import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_other_meter_screen.dart';
 import 'ink_pending_costs_screen.dart';
 import 'ink_production_run_screen.dart';
+import 'ink_receive_ibc_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_recipe_management_screen.dart';
 import 'ink_supplier_management_screen.dart';
@@ -45,9 +47,12 @@ class InkHomeScreen extends ConsumerWidget {
           _ActionGrid(actions: [
             _Action(Icons.local_shipping_outlined, 'Receive Stock',
                 builder: () => const InkReceiveRawMaterialScreen()),
+            _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
+                builder: () => const InkReceiveIbcScreen()),
             _Action(Icons.straighten_outlined, 'Meter Readings',
                 builder: () => const InkMeterReadingsScreen()),
-            _Action(Icons.swap_horiz_outlined, 'IBC Transfer'),
+            _Action(Icons.swap_horiz_outlined, 'IBC Transfer',
+                builder: () => const InkIbcTransferScreen()),
             _Action(Icons.science_outlined, 'Production Run',
                 builder: () => const InkProductionRunScreen()),
             _Action(Icons.recycling_outlined, 'Toloul Recovery',

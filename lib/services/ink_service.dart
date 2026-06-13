@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_ibc.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -303,5 +304,98 @@ class InkService {
     }
     await recordTransaction(outputTxn);
     return runId;
+  }
+
+  // ---------------------------------------------------------------------------
+  // IBCs (ink received in containers)
+  // ---------------------------------------------------------------------------
+
+  Stream<List<InkIbc>> watchIbcs({InkIbcStatus? status}) => _db
+      .collection(Collections.inkIbcs)
+      .snapshots()
+      .map((s) {
+        var list = s.docs.map(InkIbc.fromFirestore).toList();
+        if (status != null) {
+          list = list.where((i) => i.status == status).toList();
+        }
+        list.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+        return list;
+      });
+
+  /// Receiving ink via IBC: registers each IBC (doc id = number) and records
+  /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
+  /// idempotent (IBC docs keyed by number; purchase key derived from the
+  /// numbers), so an offline replay won't duplicate.
+  Future<void> recordIbcReceipt({
+    required List<InkIbc> ibcs,
+    required String supplierName,
+    required DateTime effectiveAt,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    for (final ibc in ibcs) {
+      await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
+            InkIbc(
+              ibcNumber: ibc.ibcNumber,
+              itemCode: ibc.itemCode,
+              kg: ibc.kg,
+              receivedDate: effectiveAt,
+              supplierName: supplierName,
+            ).toFirestore(),
+            SetOptions(merge: true),
+          );
+    }
+    final byItem = <String, double>{};
+    final numbersByItem = <String, List<String>>{};
+    for (final ibc in ibcs) {
+      byItem[ibc.itemCode] = (byItem[ibc.itemCode] ?? 0) + ibc.kg;
+      (numbersByItem[ibc.itemCode] ??= []).add(ibc.ibcNumber);
+    }
+    for (final entry in byItem.entries) {
+      final nums = numbersByItem[entry.key]!..sort();
+      await recordTransaction(InkTransaction(
+        type: InkTxnType.purchase,
+        stockItemCode: entry.key,
+        quantityDelta: entry.value,
+        effectiveAt: effectiveAt,
+        costStatus: InkCostStatus.pending,
+        supplierName: supplierName,
+        notes: '${nums.length} IBC(s): ${nums.join(', ')}',
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
+      ));
+    }
+  }
+
+  /// Transfers an IBC to a tank: marks it transferred and records the toloul
+  /// used to wash it as a `consumption_toloul_wash` (ink stock is unaffected —
+  /// the ink was already counted at receipt).
+  Future<void> transferIbc({
+    required InkIbc ibc,
+    required String tolulItemCode,
+    required double washLitres,
+    required DateTime effectiveAt,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set({
+      'status': InkIbcStatus.transferred.value,
+      'transferred_date': Timestamp.fromDate(effectiveAt),
+      'wash_toloul_litres': washLitres,
+    }, SetOptions(merge: true));
+    if (washLitres > 0) {
+      await recordTransaction(InkTransaction(
+        type: InkTxnType.consumptionTolulWash,
+        stockItemCode: tolulItemCode,
+        quantityDelta: -washLitres,
+        effectiveAt: effectiveAt,
+        costStatus: InkCostStatus.na,
+        ibcNumber: ibc.ibcNumber,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        idempotencyKey: 'ibcwash_${ibc.ibcNumber}',
+      ));
+    }
   }
 }
