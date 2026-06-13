@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
 import '../models/ink_ibc.dart';
+import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -72,4 +73,9 @@ final inkAllRecipesProvider = StreamProvider<List<InkRecipe>>(
 /// IBCs still in 'received' state (awaiting transfer to a tank).
 final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
   (ref) => ref.watch(inkServiceProvider).watchIbcs(status: InkIbcStatus.received),
+);
+
+/// Production run history (newest first).
+final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
+  (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
 );

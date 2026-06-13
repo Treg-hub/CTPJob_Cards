@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
 import '../models/ink_ibc.dart';
+import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -240,6 +241,15 @@ class InkService {
 
   Future<void> setRecipeActive(String id, bool active) =>
       _db.collection(Collections.inkRecipes).doc(id).update({'active': active});
+
+  Stream<List<InkProductionRun>> watchProductionRuns() => _db
+      .collection(Collections.inkProductionRuns)
+      .snapshots()
+      .map((s) {
+        final l = s.docs.map(InkProductionRun.fromFirestore).toList()
+          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
+        return l;
+      });
 
   /// Records a production run: a `consumption_production` txn per input (valued
   /// at current WAC) and one `manufacture` txn for the output whose total_cost

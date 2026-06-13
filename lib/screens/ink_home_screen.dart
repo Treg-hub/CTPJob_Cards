@@ -12,10 +12,13 @@ import 'ink_ibc_transfer_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_other_meter_screen.dart';
 import 'ink_pending_costs_screen.dart';
+import 'ink_production_history_screen.dart';
 import 'ink_production_run_screen.dart';
 import 'ink_receive_ibc_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_recipe_management_screen.dart';
+import 'ink_revaluation_screen.dart';
+import 'ink_stock_item_detail_screen.dart';
 import 'ink_supplier_management_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
 
@@ -76,6 +79,10 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkRecipeManagementScreen()),
               _Action(Icons.straighten, 'Conversion Factors',
                   builder: () => const InkConversionFactorScreen()),
+              _Action(Icons.history, 'Production History',
+                  builder: () => const InkProductionHistoryScreen()),
+              _Action(Icons.price_change_outlined, 'Revaluation',
+                  builder: () => const InkRevaluationScreen()),
             ]),
           ],
           const SizedBox(height: 20),
@@ -246,6 +253,10 @@ class _StockTile extends StatelessWidget {
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => InkStockItemDetailScreen(itemCode: item.itemCode))),
       leading: Icon(_icon, color: scheme.primary),
       title: Text(item.displayName),
       subtitle: Text(
