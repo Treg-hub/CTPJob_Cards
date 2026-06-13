@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -207,4 +208,100 @@ class InkService {
         }
         return {for (final e in latest.entries) e.key: e.value.reading};
       });
+
+  // ---------------------------------------------------------------------------
+  // RECIPES + PRODUCTION
+  // ---------------------------------------------------------------------------
+
+  Stream<List<InkRecipe>> watchRecipes({bool activeOnly = true}) => _db
+      .collection(Collections.inkRecipes)
+      .snapshots()
+      .map((s) {
+        final all = s.docs.map(InkRecipe.fromFirestore).toList();
+        final filtered = activeOnly ? all.where((r) => r.active).toList() : all;
+        filtered
+            .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        return filtered;
+      });
+
+  Future<void> saveRecipe(InkRecipe recipe) async {
+    if (recipe.id == null) {
+      await _db.collection(Collections.inkRecipes).add(recipe.toFirestore());
+    } else {
+      // Bump the version on every edit (recipe history is preserved on runs,
+      // which snapshot recipe_version at production time).
+      await _db.collection(Collections.inkRecipes).doc(recipe.id).set(
+            recipe.copyWith(version: recipe.version + 1).toFirestore(),
+            SetOptions(merge: true),
+          );
+    }
+  }
+
+  Future<void> setRecipeActive(String id, bool active) =>
+      _db.collection(Collections.inkRecipes).doc(id).update({'active': active});
+
+  /// Records a production run: a `consumption_production` txn per input (valued
+  /// at current WAC) and one `manufacture` txn for the output whose total_cost
+  /// is the summed input cost (matches the legacy month-end model). All share a
+  /// productionRunId. Returns the run id.
+  Future<String> recordProductionRun({
+    required InkRecipe recipe,
+    required int pots,
+    required DateTime effectiveAt,
+    required String actorClockNo,
+    required String actorName,
+    required Map<String, double> wacByItem,
+  }) async {
+    final runId = _uuid.v4();
+    var totalInputCost = 0.0;
+    final inputTxns = <InkTransaction>[];
+    for (var i = 0; i < recipe.inputs.length; i++) {
+      final line = recipe.inputs[i];
+      final qty = line.qtyPerPot * pots;
+      totalInputCost += qty * (wacByItem[line.itemCode] ?? 0);
+      inputTxns.add(InkTransaction(
+        type: InkTxnType.consumptionProduction,
+        stockItemCode: line.itemCode,
+        quantityDelta: -qty,
+        effectiveAt: effectiveAt,
+        costStatus: InkCostStatus.na,
+        productionRunId: runId,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        idempotencyKey: '${runId}_in_$i',
+      ));
+    }
+    final outputQty = recipe.outputPerPot * pots;
+    final outputTxn = InkTransaction(
+      type: InkTxnType.manufacture,
+      stockItemCode: recipe.outputItemCode,
+      quantityDelta: outputQty,
+      totalCost: totalInputCost,
+      effectiveAt: effectiveAt,
+      costStatus: InkCostStatus.costed,
+      productionRunId: runId,
+      actorClockNo: actorClockNo,
+      actorName: actorName,
+      idempotencyKey: '${runId}_out',
+    );
+
+    await _db.collection(Collections.inkProductionRuns).doc(runId).set({
+      'recipe_id': recipe.id,
+      'recipe_name': recipe.name,
+      'recipe_version': recipe.version,
+      'output_item_code': recipe.outputItemCode,
+      'pots': pots,
+      'output_qty': outputQty,
+      'total_input_cost': totalInputCost,
+      'effective_at': Timestamp.fromDate(effectiveAt),
+      'actor_clock_no': actorClockNo,
+      'actor_name': actorName,
+      'recorded_at': FieldValue.serverTimestamp(),
+    });
+    for (final t in inputTxns) {
+      await recordTransaction(t);
+    }
+    await recordTransaction(outputTxn);
+    return runId;
+  }
 }

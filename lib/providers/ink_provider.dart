@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -55,4 +56,14 @@ final inkConversionFactorsProvider =
 /// Latest cumulative meter reading per item code.
 final inkLatestMeterReadingsProvider = StreamProvider<Map<String, double>>(
   (ref) => ref.watch(inkServiceProvider).watchLatestMeterReadings(),
+);
+
+/// Active recipes (for the production picker).
+final inkRecipesProvider = StreamProvider<List<InkRecipe>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecipes(activeOnly: true),
+);
+
+/// All recipes incl. inactive (for the manager management screen).
+final inkAllRecipesProvider = StreamProvider<List<InkRecipe>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecipes(activeOnly: false),
 );

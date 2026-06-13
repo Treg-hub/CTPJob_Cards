@@ -11,7 +11,9 @@ import 'ink_conversion_factor_screen.dart';
 import 'ink_meter_readings_screen.dart';
 import 'ink_other_meter_screen.dart';
 import 'ink_pending_costs_screen.dart';
+import 'ink_production_run_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
+import 'ink_recipe_management_screen.dart';
 import 'ink_supplier_management_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
 
@@ -46,7 +48,8 @@ class InkHomeScreen extends ConsumerWidget {
             _Action(Icons.straighten_outlined, 'Meter Readings',
                 builder: () => const InkMeterReadingsScreen()),
             _Action(Icons.swap_horiz_outlined, 'IBC Transfer'),
-            _Action(Icons.science_outlined, 'Production Run'),
+            _Action(Icons.science_outlined, 'Production Run',
+                builder: () => const InkProductionRunScreen()),
             _Action(Icons.recycling_outlined, 'Toloul Recovery',
                 builder: () => const InkTolulRecoveryScreen()),
             _Action(Icons.speed_outlined, 'Other Meter',
@@ -64,7 +67,8 @@ class InkHomeScreen extends ConsumerWidget {
               _Action(Icons.payments_outlined, 'Pending Costs',
                   builder: () => const InkPendingCostsScreen()),
               _Action(Icons.summarize_outlined, 'Month-end Report'),
-              _Action(Icons.menu_book_outlined, 'Recipes'),
+              _Action(Icons.menu_book_outlined, 'Recipes',
+                  builder: () => const InkRecipeManagementScreen()),
               _Action(Icons.straighten, 'Conversion Factors',
                   builder: () => const InkConversionFactorScreen()),
             ]),
