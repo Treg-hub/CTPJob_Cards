@@ -6,6 +6,7 @@ import '../models/ink_ibc.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1c — Transfer IBC → tank. Marks the IBC transferred (ink stock is
@@ -39,6 +40,9 @@ class _State extends ConsumerState<InkIbcTransferScreen> {
   Future<void> _submit(InkIbc ibc, String tolulItemCode) async {
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {

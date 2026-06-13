@@ -6,6 +6,7 @@ import '../models/ink_recipe.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
@@ -33,6 +34,9 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   }
 
   Future<void> _submit(InkRecipe recipe, Map<String, double> wacByItem) async {
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {

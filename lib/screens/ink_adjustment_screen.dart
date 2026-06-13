@@ -8,6 +8,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1j — Month-end Adjustment (manager). Reconciles the ledger balance to a
@@ -51,6 +52,9 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
           content: Text('Counted matches the current balance — no adjustment needed.')));
       return;
     }
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     final txn = InkTransaction(

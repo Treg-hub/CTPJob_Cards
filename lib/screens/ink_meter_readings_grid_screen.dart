@@ -8,6 +8,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 2 — Meter Readings (grid). Same cumulative entry as the standard meter
@@ -97,6 +98,9 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
           const SnackBar(content: Text('Enter at least one reading.')));
       return;
     }
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final svc = ref.read(inkServiceProvider);
     try {
