@@ -41,6 +41,48 @@ class InkService {
       .doc('config')
       .set(settings.toFirestore(), SetOptions(merge: true));
 
+  /// Adds [periodKey] to `closed_periods`.
+  Future<void> closePeriod(String periodKey) => _db
+      .collection(Collections.inkSettings)
+      .doc('config')
+      .set(
+        {'closed_periods': FieldValue.arrayUnion([periodKey])},
+        SetOptions(merge: true),
+      );
+
+  /// Removes [periodKey] from both `closed_periods` and
+  /// `periods_needing_reissue`.
+  Future<void> reopenPeriod(String periodKey) => _db
+      .collection(Collections.inkSettings)
+      .doc('config')
+      .set(
+        {
+          'closed_periods': FieldValue.arrayRemove([periodKey]),
+          'periods_needing_reissue': FieldValue.arrayRemove([periodKey]),
+        },
+        SetOptions(merge: true),
+      );
+
+  /// Adds [periodKey] to `periods_needing_reissue` (manager-override was used
+  /// to post into a finalised period).
+  Future<void> flagPeriodForReissue(String periodKey) => _db
+      .collection(Collections.inkSettings)
+      .doc('config')
+      .set(
+        {'periods_needing_reissue': FieldValue.arrayUnion([periodKey])},
+        SetOptions(merge: true),
+      );
+
+  /// Removes [periodKey] from `periods_needing_reissue` (report has been
+  /// re-issued and the flag can be cleared).
+  Future<void> clearReissue(String periodKey) => _db
+      .collection(Collections.inkSettings)
+      .doc('config')
+      .set(
+        {'periods_needing_reissue': FieldValue.arrayRemove([periodKey])},
+        SetOptions(merge: true),
+      );
+
   // ---------------------------------------------------------------------------
   // STOCK ITEMS (cache of the ledger — read-only on the client)
   // ---------------------------------------------------------------------------

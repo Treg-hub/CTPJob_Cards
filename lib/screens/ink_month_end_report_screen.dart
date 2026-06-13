@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_ledger.dart';
+import '../utils/role.dart' as role_utils;
 
 class _Row {
   _Row(this.item);
@@ -19,6 +22,9 @@ class _Row {
 /// Month-end roll-forward report (manager) — reproduces the stock summary
 /// sheet from the ledger: Opening, In (purchase+manufacture), Consumption,
 /// Recovery, Adjustment, Closing balance + WAC + value, per item, for a month.
+///
+/// Managers can Finalise the displayed month (closes its period) or Re-open it.
+/// Banners show if the period is closed or needs re-issue.
 class InkMonthEndReportScreen extends ConsumerStatefulWidget {
   const InkMonthEndReportScreen({super.key});
 
@@ -119,11 +125,77 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     return rows;
   }
 
+  Future<void> _finalisePeriod(String pk) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Finalise period?'),
+        content: Text(
+          'Close period $pk?\n\n'
+          'Further transactions into this month will require a manager '
+          'override and will flag the report for re-issue.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Finalise'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    await ref.read(inkServiceProvider).closePeriod(pk);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Period $pk finalised.')));
+  }
+
+  Future<void> _reopenPeriod(String pk) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Re-open period?'),
+        content: Text(
+          'Re-open period $pk?\n\n'
+          'This removes the close lock and the re-issue flag.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Re-open'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    await ref.read(inkServiceProvider).reopenPeriod(pk);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Period $pk re-opened.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final txnsAsync = ref.watch(inkAllTransactionsProvider);
+    final settingsAsync = ref.watch(inkSettingsProvider);
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final isManager = role_utils.isInkManager(emp);
     final rf = DateFormat('d MMM yyyy');
+    final settings = settingsAsync.valueOrNull;
+    final pk = InkSettings.periodKey(_to);
+    final isClosed = settings?.closedPeriods.contains(pk) ?? false;
+    final needsReissue = settings?.periodsNeedingReissue.contains(pk) ?? false;
 
     // Toloul meter-point totals for the period (no stock effect).
     final pointLinkage = {
@@ -146,10 +218,69 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       }
     }
 
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Month-end Report')),
+      appBar: AppBar(
+        title: const Text('Month-end Report'),
+        actions: isManager
+            ? [
+                if (isClosed)
+                  TextButton.icon(
+                    onPressed: () => _reopenPeriod(pk),
+                    icon: const Icon(Icons.lock_open),
+                    label: const Text('Re-open'),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => _finalisePeriod(pk),
+                    icon: const Icon(Icons.lock_outline),
+                    label: const Text('Finalise'),
+                  ),
+              ]
+            : null,
+      ),
       body: Column(
         children: [
+          // Status banners — shown when _to period is closed / needs re-issue.
+          if (needsReissue)
+            Container(
+              width: double.infinity,
+              color: scheme.errorContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      color: scheme.onErrorContainer, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Period $pk is closed but has had transactions posted '
+                      'since finalisation — report needs re-issue.',
+                      style: TextStyle(color: scheme.onErrorContainer),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (isClosed)
+            Container(
+              width: double.infinity,
+              color: scheme.secondaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.lock, color: scheme.onSecondaryContainer, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Period $pk is finalised.',
+                      style: TextStyle(color: scheme.onSecondaryContainer),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(8),
             child: Row(
@@ -219,7 +350,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            color: scheme.surfaceContainerHighest,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [

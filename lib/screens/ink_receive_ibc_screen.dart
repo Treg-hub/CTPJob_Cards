@@ -6,6 +6,7 @@ import '../models/ink_ibc.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import 'ink_barcode_scan_screen.dart';
 
@@ -79,6 +80,9 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           content: Text('Add at least one complete IBC (number, colour, kg).')));
       return;
     }
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {
