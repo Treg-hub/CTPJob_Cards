@@ -55,6 +55,7 @@ class InkTransaction {
     this.sessionId,
     this.ibcNumber,
     this.lurgiSource,
+    this.supplierName,
     this.litresEntered,
     this.conversionFactorUsed,
     this.readingDate,
@@ -107,6 +108,9 @@ class InkTransaction {
   final String? sessionId;
   final String? ibcNumber;
   final String? lurgiSource;
+
+  /// Supplier name (denormalised from the managed list) for `purchase` receipts.
+  final String? supplierName;
   final double? litresEntered;
   final double? conversionFactorUsed;
   final DateTime? readingDate;
@@ -153,6 +157,7 @@ class InkTransaction {
       sessionId: d['session_id'] as String?,
       ibcNumber: d['ibc_number'] as String?,
       lurgiSource: d['lurgi_source'] as String?,
+      supplierName: d['supplier_name'] as String?,
       litresEntered: num2('litres_entered'),
       conversionFactorUsed: num2('conversion_factor_used'),
       readingDate: ts('reading_date'),
@@ -184,6 +189,7 @@ class InkTransaction {
         if (sessionId != null) 'session_id': sessionId,
         if (ibcNumber != null) 'ibc_number': ibcNumber,
         if (lurgiSource != null) 'lurgi_source': lurgiSource,
+        if (supplierName != null) 'supplier_name': supplierName,
         if (litresEntered != null) 'litres_entered': litresEntered,
         if (conversionFactorUsed != null)
           'conversion_factor_used': conversionFactorUsed,

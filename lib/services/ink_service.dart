@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
+import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
@@ -110,4 +111,36 @@ class InkService {
           ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
         return list;
       });
+
+  // ---------------------------------------------------------------------------
+  // SUPPLIERS (manager-curated managed list)
+  // ---------------------------------------------------------------------------
+
+  Stream<List<InkSupplier>> watchSuppliers({bool activeOnly = true}) => _db
+      .collection(Collections.inkSuppliers)
+      .snapshots()
+      .map((s) {
+        final all = s.docs.map(InkSupplier.fromFirestore).toList();
+        final filtered = activeOnly ? all.where((x) => x.active).toList() : all;
+        filtered.sort((a, b) {
+          final c = a.sortOrder.compareTo(b.sortOrder);
+          return c != 0
+              ? c
+              : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+        return filtered;
+      });
+
+  Future<void> addSupplier(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    await _db
+        .collection(Collections.inkSuppliers)
+        .add(InkSupplier(name: trimmed, sortOrder: 99).toFirestore());
+  }
+
+  Future<void> setSupplierActive(String id, bool active) => _db
+      .collection(Collections.inkSuppliers)
+      .doc(id)
+      .update({'active': active});
 }

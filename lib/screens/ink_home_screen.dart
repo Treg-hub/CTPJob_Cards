@@ -6,6 +6,8 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/role.dart' as role_utils;
+import 'ink_receive_raw_material_screen.dart';
+import 'ink_supplier_management_screen.dart';
 
 /// Ink Factory module hub — the landing screen for the production stock-inventory
 /// module. Shows live stock-on-hand (from the ledger cache) and the data-entry
@@ -33,7 +35,8 @@ class InkHomeScreen extends ConsumerWidget {
           _sectionLabel(context, 'Capture'),
           const SizedBox(height: 8),
           _ActionGrid(actions: [
-            _Action(Icons.local_shipping_outlined, 'Receive Stock'),
+            _Action(Icons.local_shipping_outlined, 'Receive Stock',
+                builder: () => const InkReceiveRawMaterialScreen()),
             _Action(Icons.straighten_outlined, 'Meter Readings'),
             _Action(Icons.swap_horiz_outlined, 'IBC Transfer'),
             _Action(Icons.science_outlined, 'Production Run'),
@@ -44,6 +47,8 @@ class InkHomeScreen extends ConsumerWidget {
             _sectionLabel(context, 'Manager'),
             const SizedBox(height: 8),
             _ActionGrid(actions: [
+              _Action(Icons.store_outlined, 'Suppliers',
+                  builder: () => const InkSupplierManagementScreen()),
               _Action(Icons.tune_outlined, 'Month-end Adjustment'),
               _Action(Icons.payments_outlined, 'Pending Costs'),
               _Action(Icons.summarize_outlined, 'Month-end Report'),
@@ -87,9 +92,12 @@ class InkHomeScreen extends ConsumerWidget {
 }
 
 class _Action {
-  const _Action(this.icon, this.label);
+  const _Action(this.icon, this.label, {this.builder});
   final IconData icon;
   final String label;
+
+  /// When set, tapping pushes this screen; otherwise shows a "later phase" hint.
+  final Widget Function()? builder;
 }
 
 class _ActionGrid extends StatelessWidget {
@@ -124,9 +132,16 @@ class _ActionCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${action.label} — available in Phase 1')),
-        ),
+        onTap: () {
+          if (action.builder != null) {
+            Navigator.push(
+                context, MaterialPageRoute(builder: (_) => action.builder!()));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${action.label} — coming in a later phase')),
+            );
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: Column(

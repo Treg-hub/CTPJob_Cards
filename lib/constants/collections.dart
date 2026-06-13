@@ -70,6 +70,7 @@ class Collections {
   static const String inkRecipes = 'ink_recipes';
   static const String inkConversionFactors = 'ink_conversion_factors';
   static const String inkRecoveries = 'ink_recoveries';
+  static const String inkSuppliers = 'ink_suppliers'; // managed list (manager-curated)
   static const String inkCounters = 'ink_counters'; // INK#### sequence
   static const String inkSettings = 'ink_settings';
   static const String inkOtherMeterLogs = 'ink_other_meter_logs'; // report-only, no stock impact

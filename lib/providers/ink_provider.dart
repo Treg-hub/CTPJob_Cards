@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
+import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 import '../services/ink_service.dart';
 
@@ -32,4 +33,14 @@ final inkPendingCostsProvider = StreamProvider<List<InkTransaction>>(
 /// Manager review queue (flagged movements).
 final inkFlaggedProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchFlagged(),
+);
+
+/// Active suppliers (for the receive picker).
+final inkActiveSuppliersProvider = StreamProvider<List<InkSupplier>>(
+  (ref) => ref.watch(inkServiceProvider).watchSuppliers(activeOnly: true),
+);
+
+/// All suppliers incl. inactive (for the manager management screen).
+final inkAllSuppliersProvider = StreamProvider<List<InkSupplier>>(
+  (ref) => ref.watch(inkServiceProvider).watchSuppliers(activeOnly: false),
 );
