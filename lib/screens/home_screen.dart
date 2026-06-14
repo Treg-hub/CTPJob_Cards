@@ -38,6 +38,7 @@ import 'fleet_report_issue_screen.dart';
 import 'ink_home_screen.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
+import '../providers/ink_provider.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/waste_service.dart';
@@ -343,18 +344,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ];
     }
     if (role_utils.isInkUser(currentEmployee)) {
-      result = [
-        ...result,
-        {
-          'title': 'Ink Factory',
-          'icon': Icons.water_drop,
-          'color': const Color(0xFF6366F1),
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const InkHomeScreen()),
-              ),
-        },
-      ];
+      final inkEnabled =
+          ref.watch(inkSettingsProvider).valueOrNull?.inkEnabled ?? true;
+      if (inkEnabled) {
+        result = [
+          ...result,
+          {
+            'title': 'Ink Factory',
+            'icon': Icons.water_drop,
+            'color': const Color(0xFF6366F1),
+            'onTap': () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InkHomeScreen()),
+                ),
+          },
+        ];
+      }
     }
     return result;
   }

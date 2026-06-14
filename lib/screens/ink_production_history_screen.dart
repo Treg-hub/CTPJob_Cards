@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Production run history (manager) — list of recorded batches.
 class InkProductionHistoryScreen extends ConsumerWidget {
@@ -17,6 +19,8 @@ class InkProductionHistoryScreen extends ConsumerWidget {
     final runsAsync = ref.watch(inkProductionRunsProvider);
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final names = {for (final i in items) i.itemCode: i.displayName};
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Production History')),
@@ -45,8 +49,9 @@ class InkProductionHistoryScreen extends ConsumerWidget {
                             '${_qty.format(r.outputQty)} '
                             '${names[r.outputItemCode] ?? r.outputItemCode}',
                             style: const TextStyle(fontWeight: FontWeight.w600)),
-                        Text(_money.format(r.totalInputCost),
-                            style: Theme.of(context).textTheme.bodySmall),
+                        if (isManager)
+                          Text(_money.format(r.totalInputCost),
+                              style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   );

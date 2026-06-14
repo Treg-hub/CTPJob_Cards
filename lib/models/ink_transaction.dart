@@ -210,6 +210,10 @@ class InkTransaction {
         if (readingDate != null) 'reading_date': Timestamp.fromDate(readingDate!),
       };
 
+  /// Partially clones this transaction, overriding only the fields the server
+  /// replay patches back (cached balance outputs, WAC, cost fields, flags).
+  /// All operator-supplied context fields (reason, ibc, supplier, meter reading,
+  /// etc.) are always forwarded from [this] unchanged.
   InkTransaction copyWith({
     String? id,
     String? seqNumber,
@@ -251,6 +255,7 @@ class InkTransaction {
         lurgiSource: lurgiSource,
         litresEntered: litresEntered,
         conversionFactorUsed: conversionFactorUsed,
+        meterReading: meterReading,
         readingDate: readingDate,
       );
 }

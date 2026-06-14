@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Manager screen: curate the supplier managed list. Add new suppliers and
 /// toggle them active/inactive (inactive ones drop out of the receive picker
@@ -38,6 +40,14 @@ class InkSupplierManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Suppliers')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final suppliersAsync = ref.watch(inkAllSuppliersProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Suppliers')),

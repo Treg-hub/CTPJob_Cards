@@ -138,14 +138,17 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(inkActiveSuppliersProvider, (_, next) {
+      if (_supplier == null &&
+          (next.valueOrNull ?? []).any((s) => s.name == 'Siegwerk')) {
+        setState(() => _supplier = 'Siegwerk');
+      }
+    });
+
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final inks =
         items.where((i) => i.itemClass == InkItemClass.ink).toList();
     final suppliers = ref.watch(inkActiveSuppliersProvider).valueOrNull ?? [];
-    // Ink IBCs come from Siegwerk by default; operator can change it.
-    if (_supplier == null && suppliers.any((s) => s.name == 'Siegwerk')) {
-      _supplier = 'Siegwerk';
-    }
     final df = DateFormat('EEE d MMM yyyy HH:mm');
     final totalKg = _rows.fold<double>(
         0, (s, r) => s + (double.tryParse(r.kgCtrl.text.trim()) ?? 0));

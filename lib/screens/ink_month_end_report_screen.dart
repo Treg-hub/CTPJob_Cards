@@ -209,6 +209,14 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     }
   }
 
+  Future<void> _markReissued(String pk) async {
+    await ref.read(inkServiceProvider).clearReissue(pk);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Re-issue flag cleared for $pk.')));
+    }
+  }
+
   Future<void> _reopenPeriod(String pk) async {
     final ok = await _confirm('Re-open period?',
         'Re-open period $pk?\n\nThis removes the close lock and the re-issue flag.',
@@ -413,8 +421,16 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     final settings = ref.watch(inkSettingsProvider).valueOrNull;
     final emp = ref.watch(currentEmployeeProvider).valueOrNull;
     final isManager = role_utils.isInkManager(emp);
+
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Month-end Report')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final rf = DateFormat('d MMM yyyy');
-    final pk = InkSettings.periodKey(_to);
+    final pk = InkSettings.periodKey(_from);
     final isClosed = settings?.closedPeriods.contains(pk) ?? false;
     final needsReissue = settings?.periodsNeedingReissue.contains(pk) ?? false;
     final scheme = Theme.of(context).colorScheme;
@@ -481,9 +497,26 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       body: Column(
         children: [
           if (needsReissue)
-            _banner(scheme.errorContainer, scheme.onErrorContainer,
-                Icons.warning_amber_rounded,
-                'Period $pk is closed but has had transactions since — needs re-issue.')
+            Container(
+              width: double.infinity,
+              color: scheme.errorContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                Icon(Icons.warning_amber_rounded, color: scheme.onErrorContainer, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Period $pk has transactions since close — re-issue needed.',
+                    style: TextStyle(color: scheme.onErrorContainer),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _markReissued(pk),
+                  child: Text('Mark done',
+                      style: TextStyle(color: scheme.onErrorContainer)),
+                ),
+              ]),
+            )
           else if (isClosed)
             _banner(scheme.secondaryContainer, scheme.onSecondaryContainer,
                 Icons.lock, 'Period $pk is finalised.'),

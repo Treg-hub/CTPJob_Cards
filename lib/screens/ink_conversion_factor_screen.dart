@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_stock_item.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Manager screen: set the litres→kg conversion factor per meter-read item.
 /// An item becomes "meter-read" once it has a factor (the four inks + gravure
@@ -43,6 +45,14 @@ class InkConversionFactorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Conversion Factors')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final factorsAsync = ref.watch(inkConversionFactorsProvider);
     return Scaffold(
@@ -51,9 +61,8 @@ class InkConversionFactorScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (items) {
-          // Only metered items (the 4 inks + gravure binder); CoverWax is
-          // produced/consumed but never metered.
-          final candidates = items.where((i) => i.metered).toList();
+          // Only active metered items (the 4 inks + gravure binder).
+          final candidates = items.where((i) => i.metered && i.active).toList();
           final factors = factorsAsync.valueOrNull ?? {};
           return ListView(
             children: [

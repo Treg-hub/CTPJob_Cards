@@ -229,16 +229,20 @@ class InkService {
     String? actorClockNo,
     String? actorName,
     String? notes,
-  }) =>
-      _db.collection(Collections.inkOtherMeterLogs).add({
-        'label': label,
-        'reading': reading,
-        'reading_date': Timestamp.fromDate(readingDate),
-        if (actorClockNo != null) 'actor_clock_no': actorClockNo,
-        if (actorName != null) 'actor_name': actorName,
-        if (notes != null && notes.isNotEmpty) 'notes': notes,
-        'recorded_at': FieldValue.serverTimestamp(),
-      });
+  }) {
+    final minuteKey = readingDate.millisecondsSinceEpoch ~/ 60000;
+    final safeLabel = label.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final docId = '${actorClockNo ?? 'anon'}_${safeLabel}_$minuteKey';
+    return _db.collection(Collections.inkOtherMeterLogs).doc(docId).set({
+      'label': label,
+      'reading': reading,
+      'reading_date': Timestamp.fromDate(readingDate),
+      if (actorClockNo != null) 'actor_clock_no': actorClockNo,
+      if (actorName != null) 'actor_name': actorName,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'recorded_at': FieldValue.serverTimestamp(),
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // SUPPLIERS (manager-curated managed list)
@@ -581,8 +585,10 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    final minuteKey = readingDate.millisecondsSinceEpoch ~/ 60000;
     for (final l in lines) {
-      await _db.collection(Collections.inkMeterPointReadings).add({
+      final docId = '${l.pointId}_$minuteKey';
+      await _db.collection(Collections.inkMeterPointReadings).doc(docId).set({
         'point_id': l.pointId,
         'reading': l.reading,
         'consumption': l.consumption,

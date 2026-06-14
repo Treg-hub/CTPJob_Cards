@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Manager screen: curate the auxiliary toloul meter points (no stock impact).
 /// Each point links to Toloul Recovery or Toloul Usage; month-end totals each
@@ -57,6 +59,14 @@ class InkMeterPointManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Toloul Meter Points')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final pointsAsync = ref.watch(inkAllMeterPointsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Toloul Meter Points')),

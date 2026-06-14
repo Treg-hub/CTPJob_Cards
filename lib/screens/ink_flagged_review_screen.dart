@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 import 'ink_stock_item_detail_screen.dart' show inkTxnLabel, InkStockItemDetailScreen;
 
 /// Manager screen — flagged / negative-balance transaction review.
@@ -26,6 +28,9 @@ class InkFlaggedReviewScreen extends ConsumerWidget {
     final byCode = <String, InkStockItem>{
       for (final i in (itemsAsync.valueOrNull ?? [])) i.itemCode: i,
     };
+
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Flagged Transactions')),
@@ -52,6 +57,7 @@ class InkFlaggedReviewScreen extends ConsumerWidget {
               qty: _qty,
               money: _money,
               df: _df,
+              isManager: isManager,
             ),
           );
         },
@@ -95,6 +101,7 @@ class _FlaggedTile extends StatelessWidget {
     required this.qty,
     required this.money,
     required this.df,
+    required this.isManager,
   });
 
   final InkTransaction txn;
@@ -102,6 +109,7 @@ class _FlaggedTile extends StatelessWidget {
   final NumberFormat qty;
   final NumberFormat money;
   final DateFormat df;
+  final bool isManager;
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +146,7 @@ class _FlaggedTile extends StatelessWidget {
           ),
           Text(
             'Balance after: ${qty.format(txn.balanceAfter)} $unit'
-            '${txn.wacAtTime > 0 ? "  |  WAC ${money.format(txn.wacAtTime)}" : ""}',
+            '${isManager && txn.wacAtTime > 0 ? "  |  WAC ${money.format(txn.wacAtTime)}" : ""}',
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
           if (txn.flagReason != null && txn.flagReason!.isNotEmpty)
