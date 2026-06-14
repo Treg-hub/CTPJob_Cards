@@ -7,6 +7,7 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Phase 1M — Month-end Count (manager). The factory counts physical stock on a
 /// designated date (not necessarily the calendar month-end) and the system
@@ -47,7 +48,7 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
       final raw = _ctrl(item.itemCode).text.trim();
       if (raw.isEmpty) continue;
       final counted = double.tryParse(raw);
-      if (counted == null) continue;
+      if (counted == null || counted < 0) continue;
       lines.add((
         itemCode: item.itemCode,
         counted: counted,
@@ -88,6 +89,14 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Month-end Count')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final df = DateFormat('EEE d MMM yyyy HH:mm');
 

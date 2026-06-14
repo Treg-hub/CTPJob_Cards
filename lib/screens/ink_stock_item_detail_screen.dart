@@ -35,7 +35,8 @@ class InkStockItemDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
+    final itemsValue = ref.watch(inkStockItemsProvider);
+    final items = itemsValue.valueOrNull ?? [];
     InkStockItem? item;
     for (final i in items) {
       if (i.itemCode == itemCode) item = i;
@@ -50,6 +51,14 @@ class InkStockItemDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(item?.displayName ?? itemCode)),
       body: Column(
         children: [
+          if (itemsValue.hasError)
+            Container(
+              width: double.infinity,
+              color: scheme.errorContainer,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text('Could not load item details.',
+                  style: TextStyle(color: scheme.onErrorContainer)),
+            ),
           if (item != null)
             Card(
               margin: const EdgeInsets.all(12),
@@ -87,21 +96,40 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                     final positive = t.quantityDelta >= 0;
                     return ListTile(
                       dense: true,
-                      leading: t.flaggedForReview
-                          ? Icon(Icons.flag, color: scheme.error)
-                          : null,
-                      title: Text(inkTxnLabel(t.type)),
+                      leading: t.voided
+                          ? Icon(Icons.cancel_outlined,
+                              color: scheme.onSurfaceVariant, size: 20)
+                          : t.flaggedForReview
+                              ? Icon(Icons.flag, color: scheme.error)
+                              : null,
+                      title: Text(
+                        inkTxnLabel(t.type),
+                        style: t.voided
+                            ? TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: scheme.onSurfaceVariant)
+                            : null,
+                      ),
                       subtitle: Text(
                         '${_df.format(t.effectiveAt)}'
                         '${t.seqNumber != null ? ' · ${t.seqNumber}' : ' · pending #'}'
-                        ' · bal ${_qty.format(t.balanceAfter)}'
-                        '${isManager ? ' @ ${_money.format(t.wacAtTime)}' : ''}',
+                        '${t.voided ? ' · VOIDED' : ' · bal ${_qty.format(t.balanceAfter)}'}'
+                        '${!t.voided && isManager ? ' @ ${_money.format(t.wacAtTime)}' : ''}',
+                        style: t.voided
+                            ? TextStyle(color: scheme.onSurfaceVariant)
+                            : null,
                       ),
                       trailing: Text(
                         '${positive ? '+' : ''}${_qty.format(t.quantityDelta)}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: positive ? Colors.green : scheme.error,
+                          color: t.voided
+                              ? scheme.onSurfaceVariant
+                              : positive
+                                  ? Colors.green
+                                  : scheme.error,
+                          decoration:
+                              t.voided ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     );

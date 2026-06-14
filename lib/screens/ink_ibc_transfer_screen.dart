@@ -9,8 +9,6 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
-const _kColours = ['yellow', 'red', 'blue', 'black'];
-const _kColourLabels = ['Yellow', 'Red', 'Blue', 'Black'];
 
 /// Phase 1c — Consume IBC (transfer IBC → tank). Colour tabs let the operator
 /// pick the specific IBC by number, set the date/time, and record the toloul
@@ -37,7 +35,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: _kColours.length, vsync: this);
+    _tab = TabController(length: kInkColourCodes.length, vsync: this);
   }
 
   @override
@@ -93,7 +91,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
 
     String? tolulItemCode;
     for (final i in items) {
-      if (i.itemClass == InkItemClass.solvent) tolulItemCode = i.itemCode;
+      if (i.itemClass == InkItemClass.solvent) { tolulItemCode = i.itemCode; break; }
     }
 
     return Scaffold(
@@ -101,7 +99,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
         title: const Text('Consume IBC'),
         bottom: TabBar(
           controller: _tab,
-          tabs: [for (final l in _kColourLabels) Tab(text: l)],
+          tabs: [for (final l in kInkColourLabels) Tab(text: l)],
         ),
       ),
       body: ibcsAsync.when(
@@ -120,7 +118,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
                 child: TabBarView(
                   controller: _tab,
                   children: [
-                    for (final c in _kColours)
+                    for (final c in kInkColourCodes)
                       _IbcPickList(
                         ibcs: all.where((i) => i.itemCode == c).toList()
                           ..sort((a, b) => a.ibcNumber.compareTo(b.ibcNumber)),
@@ -179,6 +177,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
                                 decoration: const InputDecoration(
                                   labelText: 'Toloul wash',
                                   suffixText: 'LTS',
+                                  helperText: 'Leave blank if no wash used',
                                   isDense: true,
                                   border: OutlineInputBorder(),
                                 ),

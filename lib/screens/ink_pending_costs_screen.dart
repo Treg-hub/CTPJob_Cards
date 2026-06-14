@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/ink_transaction.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Phase 1i — Pending Costs (manager). Lists receipts captured cost-pending and
 /// lets a manager enter the total cost. Setting the cost flips the receipt to
@@ -51,6 +53,26 @@ class InkPendingCostsScreen extends ConsumerWidget {
       ),
     );
     if (value != null && value >= 0 && txn.id != null) {
+      if (value == 0) {
+        if (!context.mounted) return;
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Zero cost?'),
+            content: const Text(
+                'Setting the total cost to R 0.00 is unusual. Confirm?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Confirm')),
+            ],
+          ),
+        );
+        if (ok != true) return;
+      }
       await ref.read(inkServiceProvider).setPurchaseCost(txn.id!, value);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,6 +83,14 @@ class InkPendingCostsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Pending Costs')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final pendingAsync = ref.watch(inkPendingCostsProvider);
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final byCode = {

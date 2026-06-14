@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_recipe.dart';
 import '../models/ink_stock_item.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Manager screen (1e): list + curate production recipes.
 class InkRecipeManagementScreen extends ConsumerWidget {
@@ -11,6 +13,14 @@ class InkRecipeManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Recipes')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final recipesAsync = ref.watch(inkAllRecipesProvider);
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final names = {for (final i in items) i.itemCode: i.displayName};

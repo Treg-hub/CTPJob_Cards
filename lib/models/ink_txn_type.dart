@@ -74,7 +74,7 @@ enum InkTxnType {
 
   static InkTxnType fromValue(String? value) => InkTxnType.values.firstWhere(
         (t) => t.value == value,
-        orElse: () => throw ArgumentError('Unknown ink txn type: $value'),
+        orElse: () => InkTxnType.adjustment, // safe default; unknown types from future schema are treated as adjustments
       );
 
   /// True for types that increase quantity in the normal case.

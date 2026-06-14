@@ -10,6 +10,7 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Phase 1j — Month-end Adjustment (manager). Reconciles the ledger balance to a
 /// physical stock-take count. The operator enters the COUNTED quantity; the
@@ -87,6 +88,14 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Month-end Adjustment')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final df = DateFormat('EEE d MMM yyyy HH:mm');
     return Scaffold(

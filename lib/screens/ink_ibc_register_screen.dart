@@ -5,8 +5,6 @@ import 'package:intl/intl.dart';
 import '../models/ink_ibc.dart';
 import '../providers/ink_provider.dart';
 
-const _kRegColours = ['yellow', 'red', 'blue', 'black'];
-const _kRegColourLabels = ['Yellow', 'Red', 'Blue', 'Black'];
 
 /// IBC register — colour tabs (Yellow | Red | Blue | Black), each with a
 /// search field and a sortable list of IBCs.  Status filter bar above the tabs
@@ -28,7 +26,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: _kRegColours.length, vsync: this);
+    _tab = TabController(length: kInkColourCodes.length, vsync: this);
   }
 
   @override
@@ -46,7 +44,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
         title: const Text('IBC Register'),
         bottom: TabBar(
           controller: _tab,
-          tabs: [for (final l in _kRegColourLabels) Tab(text: l)],
+          tabs: [for (final l in kInkColourLabels) Tab(text: l)],
         ),
       ),
       body: Column(
@@ -83,7 +81,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
                 return TabBarView(
                   controller: _tab,
                   children: [
-                    for (final c in _kRegColours)
+                    for (final c in kInkColourCodes)
                       _RegisterColourTab(
                         ibcs: pool
                             .where((i) => i.itemCode == c)

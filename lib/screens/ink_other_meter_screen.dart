@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1h — Other-meter capture. Factory toloul meters (consumption/recovery)
@@ -39,6 +40,8 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final allowed = await confirmClosedPeriodOverride(context, ref, _date);
+    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {

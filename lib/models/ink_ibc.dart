@@ -1,5 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Canonical ink colour codes (itemCode values) in display order.
+const kInkColourCodes = ['yellow', 'red', 'blue', 'black'];
+
+/// Display labels corresponding to [kInkColourCodes].
+const kInkColourLabels = ['Yellow', 'Red', 'Blue', 'Black'];
+
 /// Lifecycle of an IBC (intermediate bulk container of ink).
 enum InkIbcStatus {
   received('received'),

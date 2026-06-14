@@ -5,8 +5,11 @@ import 'package:uuid/uuid.dart';
 
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
+import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_period_guard.dart';
+import '../utils/role.dart' as role_utils;
 import 'ink_stock_item_detail_screen.dart' show inkTxnLabel;
 
 /// Phase 1M — Corrections (manager). Reversing-entry model: the chosen
@@ -23,6 +26,7 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
   static final _qty = NumberFormat('#,##0.##');
   static final _df = DateFormat('d MMM yyyy');
   String? _itemCode;
+  bool _correcting = false;
 
   Future<void> _correct(InkTransaction original, String unit) async {
     final qtyCtrl =
@@ -66,16 +70,18 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
         ],
       ),
     );
-    if (result != true) return;
+    if (result != true || !mounted) return;
     final newQty = double.tryParse(qtyCtrl.text.trim());
     final reason = reasonCtrl.text.trim();
     if (newQty == null || reason.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Enter a corrected quantity and a reason.')));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Enter a corrected quantity and a reason.')));
       return;
     }
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, original.effectiveAt);
+    if (!allowed) return;
+    setState(() => _correcting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     final correction = InkTransaction(
       type: original.type,
@@ -109,11 +115,21 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _correcting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    if (!isManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Corrections')),
+        body: const Center(child: Text('Manager access required.')),
+      );
+    }
+
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     InkStockItem? selected;
     for (final i in items) {
@@ -150,8 +166,15 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
                         const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Center(child: Text('Error: $e')),
                     data: (txns) {
-                      final live =
-                          txns.where((t) => !t.voided).toList().reversed.toList();
+                      final live = txns
+                          .where((t) =>
+                              !t.voided &&
+                              t.type != InkTxnType.opening &&
+                              t.type != InkTxnType.transfer &&
+                              t.type != InkTxnType.correction)
+                          .toList()
+                          .reversed
+                          .toList();
                       if (live.isEmpty) {
                         return const Center(
                             child: Text('No correctable transactions.'));
@@ -169,7 +192,7 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
                                 '${_df.format(t.effectiveAt)}'
                                 '${t.seqNumber != null ? ' · ${t.seqNumber}' : ''}'),
                             trailing: Text('${_qty.format(t.quantityDelta)} $unit'),
-                            onTap: () => _correct(t, unit),
+                            onTap: _correcting ? null : () => _correct(t, unit),
                           );
                         },
                       );
