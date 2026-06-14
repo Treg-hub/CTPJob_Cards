@@ -226,7 +226,7 @@ class SyncService {
             await _processFleetWorkRecordCreate(item);
           } else {
             final docRef = firestore.collection(item.collection).doc(item.id);
-            final payload = _restoreFirestoreTimestamps(item.data);
+            final payload = _restoreFleetTimestamps(item.data);
             if (item.operation == 'create') {
               // Fleet creates are immutable once written — if the direct write
               // already landed, replaying the set() would be denied. Skip it.
@@ -673,6 +673,63 @@ class SyncService {
     }
   }
 
+  /// Per-item view of queued fleet operations for FleetQueuedScreen.
+  /// Mirrors getQueuedWasteDetails: friendly type, reference, relative age.
+  /// Sorted newest-first; safe no-op when the box isn't open.
+  List<Map<String, dynamic>> getQueuedFleetDetails() {
+    try {
+      if (!_queueBox.isOpen) return [];
+      final now = DateTime.now();
+      final details = <Map<String, dynamic>>[];
+      for (final item in _queueBox.values) {
+        if (!item.collection.startsWith('fleet_')) continue;
+        String type;
+        String? ref;
+        if (item.collection == 'fleet_photos') {
+          type = 'Photo upload';
+          ref = (item.data['targetKind'] as String?) == 'work_record'
+              ? 'for a work record'
+              : 'for a problem report';
+        } else if (item.collection == Collections.fleetWorkRecords &&
+            item.operation == 'create_cf') {
+          type = 'Work record';
+          ref = (item.data['title'] as String?) ??
+              (item.data['asset_name'] as String?);
+        } else if (item.collection == Collections.fleetWorkRecords) {
+          type = 'Work record update';
+          ref = item.data.keys.contains('has_cost_lines')
+              ? 'cost status flag'
+              : null;
+        } else if (item.collection == Collections.fleetIssues) {
+          type = 'Problem report';
+          ref = (item.data['asset_name'] as String?) ??
+              (item.data['description'] as String?);
+        } else if (item.collection == Collections.fleetCostLines) {
+          type = 'Cost entry';
+          ref = (item.data['description'] as String?) ??
+              (item.data['asset_name'] as String?);
+        } else {
+          type = 'Other (${item.collection.substring('fleet_'.length)})';
+          ref = null;
+        }
+        details.add({
+          'id': item.id,
+          'type': type,
+          'ref': ref,
+          'age': _formatRelativeAge(now, item.createdAt),
+          'createdAt': item.createdAt,
+          'collection': item.collection,
+          'operation': item.operation,
+        });
+      }
+      details.sort((a, b) =>
+          (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
+      return details;
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> removeQueuedItem({
     required String collection,
     required String documentId,
@@ -791,6 +848,27 @@ class SyncService {
         }).toList();
       } else {
         result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  /// Fleet replay payloads: created_at/updatedAt become serverTimestamp (via
+  /// [_restoreFirestoreTimestamps]) and `*_date` fields sanitized to ISO
+  /// strings become Timestamps again — fleet queries filter and order on
+  /// cost_date, and a string there would silently drop the doc from results.
+  static Map<String, dynamic> _restoreFleetTimestamps(
+    Map<String, dynamic> data,
+  ) {
+    final base = _restoreFirestoreTimestamps(data);
+    final result = <String, dynamic>{};
+    for (final entry in base.entries) {
+      final value = entry.value;
+      if (entry.key.endsWith('_date') && value is String) {
+        final parsed = DateTime.tryParse(value);
+        result[entry.key] = parsed != null ? Timestamp.fromDate(parsed) : value;
+      } else {
+        result[entry.key] = value;
       }
     }
     return result;

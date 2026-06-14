@@ -14,6 +14,7 @@ import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
+import '../widgets/fleet_photo_viewer.dart';
 import 'fleet_add_cost_screen.dart';
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_log_work_screen.dart';
@@ -100,10 +101,13 @@ class _FleetWorkRecordDetailScreenState
 
     return Scaffold(
       appBar: FleetAppBar(title: mechanicView ? 'Job Details' : 'Work Record'),
-      body: FutureBuilder<FleetWorkRecord?>(
-        future: _service.getWorkRecord(widget.workRecordId),
+      // Stream so offline-synced photos, edits, and the costed flag update
+      // live — a FutureBuilder here showed stale data next to live sub-streams.
+      body: StreamBuilder<FleetWorkRecord?>(
+        stream: _service.watchWorkRecord(widget.workRecordId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final record = snapshot.data;
@@ -279,13 +283,11 @@ class _RecordBody extends ConsumerWidget {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
-            children: record.photos
-                .map((url) => ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(url,
-                          width: 100, height: 100, fit: BoxFit.cover),
-                    ))
-                .toList(),
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < record.photos.length; i++)
+                FleetPhotoThumb(urls: record.photos, index: i),
+            ],
           ),
         ],
 
@@ -644,13 +646,17 @@ class _LinkedIssueList extends StatelessWidget {
         (issues) => issues.whereType<FleetIssue>().toList(),
       ),
       builder: (context, snapshot) {
+        final muted =
+            Theme.of(context).extension<AppColors>()?.textMuted;
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Text('Loading linked issues…',
+              style: TextStyle(color: muted));
+        }
         final issues = snapshot.data ?? [];
         if (issues.isEmpty) {
-          return Text('Loading linked issues…',
-              style: TextStyle(
-                  color: Theme.of(context)
-                      .extension<AppColors>()
-                      ?.textMuted));
+          // Distinct from loading: the linked issues no longer exist.
+          return Text('Linked problem not found (it may have been removed).',
+              style: TextStyle(color: muted));
         }
         return Column(
           children: issues

@@ -30,6 +30,11 @@ class FleetReportsScreen extends ConsumerStatefulWidget {
 class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
   final _service = FleetService();
 
+  /// When the period has this many cost lines the query is capped and the
+  /// totals/CSV are incomplete — a warning banner tells the user to narrow
+  /// the period rather than silently under-reporting.
+  static const int _costLinesCap = 2000;
+
   bool _isYtd = false;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _exporting = false;
@@ -143,12 +148,14 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
     final colors = Theme.of(context).appColors;
 
     final body = StreamBuilder<List<FleetCostLine>>(
-      stream: _service.watchCostLines(from: _from, to: _to, limit: 500),
+      stream:
+          _service.watchCostLines(from: _from, to: _to, limit: _costLinesCap),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final lines = snapshot.data ?? [];
+        final capped = lines.length >= _costLinesCap;
 
         double totalZar = 0;
         for (final l in lines) {
@@ -230,6 +237,31 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (capped)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.amber.shade700),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber,
+                              color: Colors.amber.shade800, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Showing the first $_costLinesCap cost entries — '
+                              'totals and the CSV export may be incomplete. '
+                              'Narrow the period for exact figures.',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
