@@ -16,7 +16,9 @@ class SyncService {
   factory SyncService() => _instance;
   SyncService._internal();
 
-  static final RegExp _properLoadNumber = RegExp(r'^WT-\d{8}-\d{3}$');
+  // Matches new-format W-NNNN numbers; legacy WT-YYYYMMDD-NNN treated as valid too.
+  static final RegExp _properLoadNumber = RegExp(r'^W-\d{4,}$');
+  static final RegExp _legacyLoadNumber  = RegExp(r'^WT-\d{8}-\d{3}$');
   // Lazy: resolving the Firebase app at singleton construction breaks any
   // context without an initialized app (the offline-resilience test harness).
   late final FirebaseFunctions _functions =
@@ -409,6 +411,7 @@ class SyncService {
   bool _needsWasteLoadNumber(String? loadNumber) {
     if (loadNumber == null || loadNumber.isEmpty) return false;
     if (_properLoadNumber.hasMatch(loadNumber)) return false;
+    if (_legacyLoadNumber.hasMatch(loadNumber)) return false;
     return loadNumber.startsWith('OFFLINE-');
   }
 
@@ -422,7 +425,7 @@ class SyncService {
     return null;
   }
 
-  /// Replaces provisional OFFLINE-* numbers with atomic WT-YYYYMMDD-NNN via CF.
+  /// Replaces provisional OFFLINE-* numbers with atomic W-NNNN numbers via CF.
   Future<void> _assignWasteLoadNumberIfNeeded(
     String loadId,
     Map<String, dynamic> data,

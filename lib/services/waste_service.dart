@@ -877,6 +877,7 @@ class WasteService {
     required List<String> localPhotoPaths,
     String? sourceStockId,
     String? contractorId,
+    bool isQuantityOnly = false,
   }) async {
     final online = await _checkOnline();
     var queuedOffline = !online;
@@ -908,6 +909,7 @@ class WasteService {
       'photos': photoUrls,
       if (sourceStockId != null) 'source_stock_id': sourceStockId,
       'is_deleted': false,
+      'is_quantity_only': isQuantityOnly,
       'createdAt': now.toIso8601String(),
       if (rate != null) 'rate_per_kg': rate,
     };

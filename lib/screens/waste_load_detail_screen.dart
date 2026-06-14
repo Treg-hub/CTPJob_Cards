@@ -323,7 +323,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         content: Text(
           isCompleted
               ? 'This load is completed. Deleting "${item.subtype}" is permanent and cannot be undone.'
-              : 'Remove "${item.subtype}" (${item.weightKg.toStringAsFixed(1)} kg) from this load?',
+              : item.isQuantityOnly
+                  ? 'Remove "${item.subtype}" (qty ${item.quantity ?? 0}) from this load?'
+                  : 'Remove "${item.subtype}" (${item.weightKg.toStringAsFixed(1)} kg) from this load?',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -415,6 +417,14 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     }
   }
 
+  Set<String> get _quantityOnlyTypeNames =>
+      _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
+
+  Map<String, String> get _quantityLabelByType => {
+        for (final t in _wasteTypes)
+          if (t.isQuantityOnly) t.mainType: t.quantityLabelFor('default'),
+      };
+
   Future<void> _addItem() async {
     final typeNames = _wasteTypes.map((t) => t.mainType).toList();
     final result = await showModalBottomSheet<_NewItemResult>(
@@ -427,6 +437,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           child: _AddItemSheet(
             typeNames: typeNames,
             defaultType: _currentLoad.mainWasteType,
+            quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            quantityLabelByType: _quantityLabelByType,
           ),
         ),
       ),
@@ -442,6 +454,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         quantity: result.quantity,
         notes: result.notes,
         localPhotoPaths: result.localPhotoPaths,
+        isQuantityOnly: result.isQuantityOnly,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -681,10 +694,12 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     List<WasteItem> items, {
     required PdfColor borderColor,
   }) {
-    final double total = items.fold(
-      0.0,
-      (s, i) => s + i.weightKg * (i.ratePerKg ?? 0),
-    );
+    final hasQtyOnly = items.any((i) => i.isQuantityOnly);
+    final double total = items.fold(0.0, (s, i) => s + (i.lineValue ?? 0));
+
+    final headers = hasQtyOnly
+        ? ['Subtype', 'Qty / Weight', 'R/unit or /kg', 'Value']
+        : ['Subtype', 'Weight', 'R/kg', 'Value'];
 
     return pw.Table(
       border: pw.TableBorder.all(color: borderColor, width: 0.5),
@@ -697,7 +712,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       children: [
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F5F5)),
-          children: ['Subtype', 'Weight', 'R/kg', 'Value'].map((h) {
+          children: headers.map((h) {
             return pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               child: pw.Text(
@@ -713,7 +728,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         ),
         ...items.map((item) {
           final rate = item.ratePerKg;
-          final value = rate != null ? item.weightKg * rate : null;
+          final value = item.lineValue;
+          final measureCell = item.isQuantityOnly
+              ? 'Qty ${item.quantity ?? 0}'
+              : '${item.weightKg.toStringAsFixed(0)} kg';
+          final rateCell = item.isQuantityOnly
+              ? (rate != null ? 'R ${rate.toStringAsFixed(2)}/unit' : '—')
+              : (rate != null ? 'R ${rate.toStringAsFixed(2)}' : '—');
           return pw.TableRow(children: [
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -721,14 +742,11 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: pw.Text('${item.weightKg.toStringAsFixed(0)} kg', style: const pw.TextStyle(fontSize: 9)),
+              child: pw.Text(measureCell, style: const pw.TextStyle(fontSize: 9)),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: pw.Text(
-                rate != null ? 'R ${rate.toStringAsFixed(2)}' : '—',
-                style: const pw.TextStyle(fontSize: 9),
-              ),
+              child: pw.Text(rateCell, style: const pw.TextStyle(fontSize: 9)),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1531,9 +1549,12 @@ class _ItemRow extends StatelessWidget {
                       ],
                     ),
                     Text(
-                      '${item.weightKg.toStringAsFixed(1)} kg'
-                      '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
-                      '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
+                      item.isQuantityOnly
+                          ? 'Qty ${item.quantity ?? 0}'
+                              '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}'
+                          : '${item.weightKg.toStringAsFixed(1)} kg'
+                              '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
+                              '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
                       style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                     ),
                   ],
@@ -1623,6 +1644,7 @@ class _NewItemResult {
   final int? quantity;
   final String? notes;
   final List<String> localPhotoPaths;
+  final bool isQuantityOnly;
 
   const _NewItemResult({
     required this.subtype,
@@ -1630,13 +1652,21 @@ class _NewItemResult {
     this.quantity,
     this.notes,
     required this.localPhotoPaths,
+    this.isQuantityOnly = false,
   });
 }
 
 class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet({required this.typeNames, this.defaultType});
+  const _AddItemSheet({
+    required this.typeNames,
+    this.defaultType,
+    this.quantityOnlyTypeNames = const {},
+    this.quantityLabelByType = const {},
+  });
   final List<String> typeNames;
   final String? defaultType;
+  final Set<String> quantityOnlyTypeNames;
+  final Map<String, String> quantityLabelByType;
 
   @override
   State<_AddItemSheet> createState() => _AddItemSheetState();
@@ -1667,10 +1697,14 @@ class _AddItemSheetState extends State<_AddItemSheet> {
     super.dispose();
   }
 
-  bool get _valid =>
-      _type != null &&
-      (double.tryParse(_weightCtrl.text) ?? 0) > 0 &&
-      _photos.isNotEmpty;
+  bool get _isQtyOnly => _type != null && widget.quantityOnlyTypeNames.contains(_type);
+  String get _qtyLabel => widget.quantityLabelByType[_type] ?? 'Quantity';
+
+  bool get _valid {
+    if (_type == null || _photos.isEmpty) return false;
+    if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
+    return (double.tryParse(_weightCtrl.text) ?? 0) > 0;
+  }
 
   Future<void> _addPhoto(ImageSource source) async {
     setState(() => _addingPhoto = true);
@@ -1715,7 +1749,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   items: widget.typeNames
                       .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                       .toList(),
-                  onChanged: (v) => setState(() => _type = v),
+                  onChanged: (v) => setState(() {
+                    _type = v;
+                    _weightCtrl.clear();
+                    _qtyCtrl.clear();
+                  }),
                 )
               else
                 TextField(
@@ -1723,18 +1761,30 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   onChanged: (v) => setState(() => _type = v.isEmpty ? null : v),
                 ),
               const SizedBox(height: 10),
-              TextField(
-                controller: _weightCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-              ),
+              if (_isQtyOnly) ...[
+                TextField(
+                  controller: _qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: '$_qtyLabel *',
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ] else ...[
+                TextField(
+                  controller: _weightCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
+                ),
+              ],
               const SizedBox(height: 10),
               TextField(
                 controller: _notesCtrl,
@@ -1798,10 +1848,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   onPressed: _valid
                       ? () => Navigator.pop(context, _NewItemResult(
                           subtype: _type!,
-                          weightKg: double.parse(_weightCtrl.text),
+                          weightKg: _isQtyOnly ? 0.0 : double.parse(_weightCtrl.text),
                           quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
                           notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
                           localPhotoPaths: List.of(_photos),
+                          isQuantityOnly: _isQtyOnly,
                         ))
                       : null,
                   child: const Text('Add'),

@@ -88,6 +88,21 @@ class _WasteBeginCollectionScreenState
     } catch (_) {}
   }
 
+  Set<String> get _quantityOnlyTypeNames =>
+      _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
+
+  Map<String, String> get _quantityLabelByType => {
+        for (final t in _wasteTypes)
+          if (t.isQuantityOnly) t.mainType: t.quantityLabelFor('default'),
+      };
+
+  /// Returns the short unit string for a quantity-only type, e.g. "bins".
+  String _unitFor(String typeName) {
+    final label = _quantityLabelByType[typeName] ?? 'Quantity (units)';
+    final m = RegExp(r'\(([^)]+)\)').firstMatch(label);
+    return m?.group(1) ?? 'units';
+  }
+
   Future<void> _loadPrelinkedStock() async {
     setState(() => _loadingPrelinked = true);
     try {
@@ -95,10 +110,14 @@ class _WasteBeginCollectionScreenState
           .getStockItemsByIds(widget.load.selectedStockIds);
       if (mounted) {
         setState(() {
+          final qtyOnly = _quantityOnlyTypeNames;
           for (final stock in items) {
-            // Only add if on_site (not already loaded onto another load)
             if (stock.status == WasteStockStatus.onSite) {
-              _items.add(_ItemEntry.fromStock(stock));
+              _items.add(_ItemEntry.fromStock(
+                stock,
+                isQuantityOnly: qtyOnly.contains(stock.wasteType) ||
+                    qtyOnly.contains(stock.subtype),
+              ));
             }
           }
         });
@@ -191,8 +210,7 @@ class _WasteBeginCollectionScreenState
     final available = (contractor.id != null && contractor.wasteTypeIds.isNotEmpty)
         ? _wasteTypes.where((t) => contractor.wasteTypeIds.contains(t.id)).toList()
         : _wasteTypes;
-    final typeNames =
-        itemSubtypeOptionsForChips(available, _wasteTypes);
+    final typeNames = itemSubtypeOptionsForChips(available, _wasteTypes);
 
     final result = await showModalBottomSheet<_ItemEntry>(
       context: context,
@@ -201,7 +219,11 @@ class _WasteBeginCollectionScreenState
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddItemSheet(types: typeNames),
+          child: _AddItemSheet(
+            types: typeNames,
+            quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            quantityLabelByType: _quantityLabelByType,
+          ),
         ),
       ),
     );
@@ -244,6 +266,7 @@ class _WasteBeginCollectionScreenState
         'quantity': i.quantity,
         'notes': i.notes,
         'localPhotoPaths': i.photoPaths,
+        'is_quantity_only': i.isQuantityOnly,
         if (i.stockId != null) 'source_stock_id': i.stockId,
       }).toList();
 
@@ -499,7 +522,9 @@ class _WasteBeginCollectionScreenState
                                 ],
                               ),
                               const SizedBox(height: 2),
-                              Text('${item.weightKg} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
+                              Text(item.isQuantityOnly
+                                  ? '${item.quantity ?? 0} ${_unitFor(item.subtype)}'
+                                  : '${item.weightKg.toStringAsFixed(1)} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
                               if (item.photoPaths.isNotEmpty)
                                 Text('${item.photoPaths.length} photo(s)',
                                     style: TextStyle(fontSize: 12, color: appColors.wasteGreen))
@@ -690,6 +715,8 @@ class _ItemEntry {
   final List<String> photoPaths;
   /// Non-null when this entry was pre-populated from a waste_stock item.
   final String? stockId;
+  /// Mirrors WasteType.isQuantityOnly — weight is meaningless for these items.
+  final bool isQuantityOnly;
 
   const _ItemEntry({
     required this.subtype,
@@ -698,17 +725,19 @@ class _ItemEntry {
     this.notes,
     required this.photoPaths,
     this.stockId,
+    this.isQuantityOnly = false,
   });
 
   /// Create an entry from a pre-loaded stock item.
   /// Photos are the stock item's existing URLs (stored as paths for display).
-  factory _ItemEntry.fromStock(WasteStockItem stock) {
+  factory _ItemEntry.fromStock(WasteStockItem stock, {bool isQuantityOnly = false}) {
     return _ItemEntry(
       subtype: stock.subtype,
       weightKg: stock.estimatedWeightKg ?? 0.0,
       notes: stock.notes,
-      photoPaths: stock.photos, // existing URLs from stock record
+      photoPaths: stock.photos,
       stockId: stock.id,
+      isQuantityOnly: isQuantityOnly,
     );
   }
 }
@@ -718,8 +747,14 @@ class _ItemEntry {
 // ---------------------------------------------------------------------------
 
 class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet({required this.types});
+  const _AddItemSheet({
+    required this.types,
+    this.quantityOnlyTypeNames = const {},
+    this.quantityLabelByType = const {},
+  });
   final List<String> types;
+  final Set<String> quantityOnlyTypeNames;
+  final Map<String, String> quantityLabelByType;
 
   @override
   State<_AddItemSheet> createState() => _AddItemSheetState();
@@ -748,10 +783,15 @@ class _AddItemSheetState extends State<_AddItemSheet> {
     super.dispose();
   }
 
-  bool get _valid =>
-      _wasteType != null &&
-      double.tryParse(_weightCtrl.text) != null &&
-      _photos.isNotEmpty;
+  bool get _isQtyOnly => _wasteType != null && widget.quantityOnlyTypeNames.contains(_wasteType);
+
+  bool get _valid {
+    if (_wasteType == null || _photos.isEmpty) return false;
+    if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
+    return double.tryParse(_weightCtrl.text) != null;
+  }
+
+  String get _qtyLabel => widget.quantityLabelByType[_wasteType] ?? 'Quantity';
 
   Future<void> _addPhoto(ImageSource source) async {
     setState(() => _addingPhoto = true);
@@ -794,7 +834,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   value: _wasteType,
                   isExpanded: true,
                   items: widget.types.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                  onChanged: (v) => setState(() => _wasteType = v),
+                  onChanged: (v) => setState(() {
+                    _wasteType = v;
+                    _weightCtrl.clear();
+                    _qtyCtrl.clear();
+                  }),
                 ),
               ] else
                 TextField(
@@ -802,18 +846,30 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   onChanged: (v) => setState(() => _wasteType = v.isEmpty ? null : v),
                 ),
               const SizedBox(height: 10),
-              TextField(
-                controller: _weightCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-              ),
+              if (_isQtyOnly) ...[
+                TextField(
+                  controller: _qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: '$_qtyLabel *',
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ] else ...[
+                TextField(
+                  controller: _weightCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
+                ),
+              ],
               const SizedBox(height: 10),
               TextField(
                 controller: _notesCtrl,
@@ -877,10 +933,11 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   onPressed: _valid
                       ? () => Navigator.pop(context, _ItemEntry(
                           subtype: _wasteType!,
-                          weightKg: double.parse(_weightCtrl.text),
+                          weightKg: _isQtyOnly ? 0.0 : double.parse(_weightCtrl.text),
                           quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
                           notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
                           photoPaths: List.of(_photos),
+                          isQuantityOnly: _isQtyOnly,
                         ))
                       : null,
                   child: const Text('Add'),

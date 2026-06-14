@@ -815,7 +815,11 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${load.mainWasteType}${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}',
+                      load.loadNumber.isNotEmpty
+                          ? '${load.mainWasteType}${load.driverName.isNotEmpty ? '  •  ${load.driverName}' : ''}'
+                          : load.driverName.isNotEmpty
+                              ? load.driverName
+                              : '',
                       style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                       overflow: TextOverflow.ellipsis,
                     ),

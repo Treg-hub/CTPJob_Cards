@@ -46,7 +46,7 @@ Future<void> seedWasteData() async {
     {'mainType': 'Compactor Bin', 'subtypes': [], 'quantityLabels': {}},
     {'mainType': 'Scrap Metal', 'subtypes': [], 'quantityLabels': {}},
     {'mainType': 'Copper Skins', 'subtypes': [], 'quantityLabels': {}},
-    {'mainType': 'IBC Bins', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}},
+    {'mainType': 'IBC Bins', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}, 'isQuantityOnly': true},
   ];
 
   for (final t in types) {
