@@ -51,7 +51,7 @@ class InkHomeScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          _StockValueSummary(itemsAsync: itemsAsync),
+          _StockValueSummary(itemsAsync: itemsAsync, showMoney: isManager),
           const SizedBox(height: 16),
           _sectionLabel(context, 'Capture'),
           const SizedBox(height: 8),
@@ -118,7 +118,10 @@ class InkHomeScreen extends ConsumerWidget {
                     child: Center(child: Text('No stock items yet.')),
                   )
                 : Column(
-                    children: [for (final i in items) _StockTile(item: i)],
+                    children: [
+                      for (final i in items)
+                        _StockTile(item: i, showMoney: isManager)
+                    ],
                   ),
             loading: () => const Padding(
               padding: EdgeInsets.all(24),
@@ -215,8 +218,9 @@ class _ActionCard extends StatelessWidget {
 }
 
 class _StockValueSummary extends StatelessWidget {
-  const _StockValueSummary({required this.itemsAsync});
+  const _StockValueSummary({required this.itemsAsync, required this.showMoney});
   final AsyncValue<List<InkStockItem>> itemsAsync;
+  final bool showMoney;
 
   @override
   Widget build(BuildContext context) {
@@ -237,11 +241,11 @@ class _StockValueSummary extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Total stock value',
+                Text(showMoney ? 'Total stock value' : 'Stock on hand',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: scheme.onPrimaryContainer)),
                 Text(
-                  InkHomeScreen._money.format(total),
+                  showMoney ? InkHomeScreen._money.format(total) : '$count items',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: scheme.onPrimaryContainer,
                       fontWeight: FontWeight.bold),
@@ -249,8 +253,9 @@ class _StockValueSummary extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            Text('$count items',
-                style: TextStyle(color: scheme.onPrimaryContainer)),
+            if (showMoney)
+              Text('$count items',
+                  style: TextStyle(color: scheme.onPrimaryContainer)),
           ],
         ),
       ),
@@ -259,8 +264,9 @@ class _StockValueSummary extends StatelessWidget {
 }
 
 class _StockTile extends StatelessWidget {
-  const _StockTile({required this.item});
+  const _StockTile({required this.item, required this.showMoney});
   final InkStockItem item;
+  final bool showMoney;
 
   IconData get _icon => switch (item.itemClass) {
         InkItemClass.ink => Icons.water_drop_outlined,
@@ -284,15 +290,16 @@ class _StockTile extends StatelessWidget {
       title: Text(item.displayName),
       subtitle: Text(
         '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}'
-        '  @ ${InkHomeScreen._money.format(item.weightedAverageCost)}',
+        '${showMoney ? '  @ ${InkHomeScreen._money.format(item.weightedAverageCost)}' : ''}',
         style: TextStyle(color: negative ? scheme.error : null),
       ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(InkHomeScreen._money.format(item.value),
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (showMoney)
+            Text(InkHomeScreen._money.format(item.value),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           if (negative)
             Text('negative', style: TextStyle(color: scheme.error, fontSize: 11)),
         ],

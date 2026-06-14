@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../models/ink_stock_item.dart';
 import '../models/ink_txn_type.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 
 String inkTxnLabel(InkTxnType t) => switch (t) {
       InkTxnType.purchase => 'Purchase',
@@ -40,6 +42,9 @@ class InkStockItemDetailScreen extends ConsumerWidget {
     }
     final ledgerAsync = ref.watch(inkItemLedgerProvider(itemCode));
     final scheme = Theme.of(context).colorScheme;
+    // Operators see quantities only — never WAC / value (cost is manager-only).
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(title: Text(item?.displayName ?? itemCode)),
@@ -56,8 +61,11 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                   children: [
                     _stat(context, 'Balance',
                         '${_qty.format(item.currentBalance)} ${item.unit}'),
-                    _stat(context, 'WAC', _money.format(item.weightedAverageCost)),
-                    _stat(context, 'Value', _money.format(item.value)),
+                    if (isManager)
+                      _stat(context, 'WAC',
+                          _money.format(item.weightedAverageCost)),
+                    if (isManager)
+                      _stat(context, 'Value', _money.format(item.value)),
                   ],
                 ),
               ),
@@ -86,7 +94,8 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                       subtitle: Text(
                         '${_df.format(t.effectiveAt)}'
                         '${t.seqNumber != null ? ' · ${t.seqNumber}' : ' · pending #'}'
-                        ' · bal ${_qty.format(t.balanceAfter)} @ ${_money.format(t.wacAtTime)}',
+                        ' · bal ${_qty.format(t.balanceAfter)}'
+                        '${isManager ? ' @ ${_money.format(t.wacAtTime)}' : ''}',
                       ),
                       trailing: Text(
                         '${positive ? '+' : ''}${_qty.format(t.quantityDelta)}',
