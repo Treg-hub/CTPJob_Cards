@@ -6,17 +6,19 @@ import '../models/ink_ibc.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../services/ink_barcode_parser.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import 'ink_barcode_scan_screen.dart';
 
 class _IbcRow {
-  _IbcRow({String number = ''})
+  _IbcRow({String number = '', this.itemCode, String kg = '', this.charge})
       : numberCtrl = TextEditingController(text: number),
-        kgCtrl = TextEditingController();
+        kgCtrl = TextEditingController(text: kg);
   final TextEditingController numberCtrl;
   String? itemCode;
   final TextEditingController kgCtrl;
+  String? charge; // Siegwerk batch/lot from the GS1 barcode
 }
 
 /// Phase 1b — Receive Ink via IBC. Scan (Code-128) or type each IBC's number,
@@ -55,11 +57,33 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _scan() async {
-    final code = await Navigator.push<String>(context,
+    final res = await Navigator.push<IbcScanResult>(context,
         MaterialPageRoute(builder: (_) => const InkBarcodeScanScreen()));
-    if (code != null && code.isNotEmpty) {
-      setState(() => _rows.add(_IbcRow(number: code)));
-    }
+    if (res == null || !res.hasAnything) return;
+    final itemCode = res.colour?.toLowerCase();
+    final kg = res.weightKg == null
+        ? ''
+        : (res.weightKg! % 1 == 0
+            ? res.weightKg!.toInt().toString()
+            : res.weightKg!.toString());
+    setState(() {
+      // Fill the first empty row, otherwise add a new prefilled one.
+      final empties = _rows.where((r) =>
+          r.numberCtrl.text.trim().isEmpty && r.kgCtrl.text.trim().isEmpty);
+      if (empties.isNotEmpty) {
+        final r = empties.first;
+        if (res.ibcNumber != null) r.numberCtrl.text = res.ibcNumber!;
+        if (itemCode != null) r.itemCode = itemCode;
+        if (kg.isNotEmpty) r.kgCtrl.text = kg;
+        r.charge = res.charge;
+      } else {
+        _rows.add(_IbcRow(
+            number: res.ibcNumber ?? '',
+            itemCode: itemCode,
+            kg: kg,
+            charge: res.charge));
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -77,7 +101,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           ibcNumber: num,
           itemCode: r.itemCode!,
           kg: kg,
-          receivedDate: _effectiveAt));
+          receivedDate: _effectiveAt,
+          chargeNumber: r.charge));
     }
     if (ibcs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -194,10 +219,13 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   children: [
                     TextField(
                       controller: _rows[idx].numberCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                           labelText: 'IBC number',
+                          helperText: _rows[idx].charge != null
+                              ? 'Charge ${_rows[idx].charge}'
+                              : null,
                           isDense: true,
-                          border: OutlineInputBorder()),
+                          border: const OutlineInputBorder()),
                     ),
                     const SizedBox(height: 8),
                     Row(

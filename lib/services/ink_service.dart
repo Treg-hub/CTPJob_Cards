@@ -479,6 +479,7 @@ class InkService {
               supplierName: supplierName,
               orderNumber: orderNumber,
               cgnaNumber: cgnaNumber,
+              chargeNumber: ibc.chargeNumber,
             ).toFirestore(),
             SetOptions(merge: true),
           );
