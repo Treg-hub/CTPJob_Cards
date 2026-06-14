@@ -211,7 +211,7 @@ Key functions:
 - `clearEscalationStamps` — admin-triggered; clears stage stamps on open jobs
 - `onCopperTransactionWrite` — copper sell alert; parks to inbox if recipient is off-site
 - `onJobCardTypeChanged` — re-fires notifications when job type changes
-- `createWasteLoad` *(callable, africa-south1)* — atomic load creation with daily sequence number (WT-YYYYMMDD-NNN)
+- `createWasteLoad` *(callable, africa-south1)* — atomic load creation with global sequential number (W-NNNN, never resets)
 
 **Fleet Maintenance functions live in the monorepo codebase, NOT this repo's `/functions`.** They are in `firebase/functions/src/index.ts` (the `wastetrack-overtime` codebase) and deployed from `/firebase`:
 - `createFleetWorkRecord` *(callable, africa-south1)* — atomic work-record number (FM-YYYYMMDD-NNN). The mobile app **calls** this via `FleetService.createWorkRecord`.

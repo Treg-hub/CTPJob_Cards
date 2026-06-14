@@ -439,19 +439,26 @@ class WasteService {
     List<String> loadPhotoPaths = const [],
     String? signatureLocalPath,
     String? contractorId,
+    bool isQuantityOnly = false,
   }) async {
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
     final online = await _checkOnline();
     var queuedOffline = !online;
     final now = DateTime.now();
 
+    // Quantity-only loads skip the weighbridge step entirely.
+    final nextStatus = isQuantityOnly
+        ? WasteLoadStatus.pendingCostReview
+        : WasteLoadStatus.pendingWeighbridge;
+    final timestampKey = isQuantityOnly ? 'pending_cost_review_at' : 'pending_weighbridge_at';
+
     final statusPayload = {
-      'status': WasteLoadStatus.pendingWeighbridge.value,
+      'status': nextStatus.value,
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
       'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
-      'pending_weighbridge_at': now.toIso8601String(),
+      timestampKey: now.toIso8601String(),
     };
 
     var statusAlreadyPending = false;
@@ -460,7 +467,8 @@ class WasteService {
         await _firestore.runTransaction((tx) async {
           final snap = await tx.get(ref);
           final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
-          if (current == WasteLoadStatus.pendingWeighbridge) {
+          if (current == WasteLoadStatus.pendingWeighbridge ||
+              current == WasteLoadStatus.pendingCostReview) {
             statusAlreadyPending = true;
             return;
           }
@@ -469,7 +477,7 @@ class WasteService {
           }
           tx.update(ref, {
             ...statusPayload,
-            'pending_weighbridge_at': FieldValue.serverTimestamp(),
+            timestampKey: FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
         }).timeout(_firestoreWriteTimeout);
@@ -624,13 +632,15 @@ class WasteService {
   }
 
   /// Guard/manager finishes loading on an on-the-spot [draft] load.
-  /// Requires loaded-truck photos + driver signature → [pendingWeighbridge].
+  /// Requires loaded-truck photos + driver signature.
+  /// Quantity-only loads transition to [pendingCostReview]; all others to [pendingWeighbridge].
   Future<({bool queuedOffline})> finishLoading({
     required String loadId,
     required List<String> loadPhotoPaths,
     String? signatureLocalPath,
     required String finishedBy,
     String? finishedByName,
+    bool isQuantityOnly = false,
   }) async {
     if (signatureLocalPath == null) {
       throw ArgumentError('Driver signature is required');
@@ -641,9 +651,14 @@ class WasteService {
     var queuedOffline = !online;
     final now = DateTime.now();
 
+    final nextStatus = isQuantityOnly
+        ? WasteLoadStatus.pendingCostReview
+        : WasteLoadStatus.pendingWeighbridge;
+    final timestampKey = isQuantityOnly ? 'pending_cost_review_at' : 'pending_weighbridge_at';
+
     final statusPayload = {
-      'status': WasteLoadStatus.pendingWeighbridge.value,
-      'pending_weighbridge_at': now.toIso8601String(),
+      'status': nextStatus.value,
+      timestampKey: now.toIso8601String(),
       'collected_by': finishedBy,
       if (finishedByName != null) 'collected_by_name': finishedByName,
     };
@@ -654,7 +669,8 @@ class WasteService {
         await _firestore.runTransaction((tx) async {
           final snap = await tx.get(ref);
           final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
-          if (current == WasteLoadStatus.pendingWeighbridge) {
+          if (current == WasteLoadStatus.pendingWeighbridge ||
+              current == WasteLoadStatus.pendingCostReview) {
             statusAlreadyPending = true;
             return;
           }
@@ -665,7 +681,7 @@ class WasteService {
           }
           tx.update(ref, {
             ...statusPayload,
-            'pending_weighbridge_at': FieldValue.serverTimestamp(),
+            timestampKey: FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
         }).timeout(_firestoreWriteTimeout);
@@ -877,6 +893,7 @@ class WasteService {
     required List<String> localPhotoPaths,
     String? sourceStockId,
     String? contractorId,
+    bool isQuantityOnly = false,
   }) async {
     final online = await _checkOnline();
     var queuedOffline = !online;
@@ -908,6 +925,7 @@ class WasteService {
       'photos': photoUrls,
       if (sourceStockId != null) 'source_stock_id': sourceStockId,
       'is_deleted': false,
+      'is_quantity_only': isQuantityOnly,
       'createdAt': now.toIso8601String(),
       if (rate != null) 'rate_per_kg': rate,
     };

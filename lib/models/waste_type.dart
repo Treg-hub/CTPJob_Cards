@@ -7,18 +7,22 @@ class WasteType {
   final String mainType;
   final List<String> subtypes;
   final Map<String, String> quantityLabels; // subtype -> label, e.g. "Reelends" -> "Quantity (reels)"
+  /// True for types measured by count, not weight (e.g. IBC Bins).
+  /// Weight field is hidden in all item entry screens; quantity is required instead.
+  final bool isQuantityOnly;
 
   const WasteType({
     this.id,
     required this.mainType,
     this.subtypes = const [],
     this.quantityLabels = const {},
+    this.isQuantityOnly = false,
   });
 
   /// Returns the dynamic quantity label for a given subtype.
-  /// Falls back to "Quantity (units)" per spec.
+  /// For quantity-only types, returns the 'default' label or "Quantity (units)".
   String quantityLabelFor(String subtype) {
-    return quantityLabels[subtype] ?? 'Quantity (units)';
+    return quantityLabels[subtype] ?? quantityLabels['default'] ?? 'Quantity (units)';
   }
 
   factory WasteType.fromFirestore(DocumentSnapshot doc) {
@@ -33,6 +37,7 @@ class WasteType {
       quantityLabels: (data['quantityLabels'] as Map<String, dynamic>?)
               ?.map((k, v) => MapEntry(k, v.toString())) ??
           const {},
+      isQuantityOnly: data['isQuantityOnly'] as bool? ?? false,
     );
   }
 
@@ -40,5 +45,6 @@ class WasteType {
         'mainType': mainType,
         'subtypes': subtypes,
         'quantityLabels': quantityLabels,
+        'isQuantityOnly': isQuantityOnly,
       };
 }

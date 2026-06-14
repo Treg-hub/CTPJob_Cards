@@ -489,7 +489,7 @@ Load list is driven by two live `StreamSubscription`s on `watchLoads()` and `wat
 
 `lib/screens/waste_schedule_load_screen.dart` — **Roles:** Security Manager, Admin
 
-Form for creating a new scheduled waste load. Saves to `waste_loads` via `WasteService.createLoad` (Cloud Function `createWasteLoad`) which assigns an auto-incremented load number (format: `WT-YYYYMMDD-NNN`).
+Form for creating a new scheduled waste load. Saves to `waste_loads` via `WasteService.createLoad` (Cloud Function `createWasteLoad`) which assigns a global sequential load number (format: `W-NNNN`, never resets).
 
 #### Required Fields
 

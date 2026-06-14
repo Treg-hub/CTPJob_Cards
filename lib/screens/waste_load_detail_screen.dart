@@ -26,6 +26,7 @@ import '../services/waste_service.dart';
 import '../services/sync_service.dart';
 
 import '../constants/collections.dart';
+import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 
 /// View / edit a single Waste Load.
@@ -323,7 +324,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         content: Text(
           isCompleted
               ? 'This load is completed. Deleting "${item.subtype}" is permanent and cannot be undone.'
-              : 'Remove "${item.subtype}" (${item.weightKg.toStringAsFixed(1)} kg) from this load?',
+              : item.isQuantityOnly
+                  ? 'Remove "${item.subtype}" (qty ${item.quantity ?? 0}) from this load?'
+                  : 'Remove "${item.subtype}" (${item.weightKg.toStringAsFixed(1)} kg) from this load?',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -415,18 +418,29 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     }
   }
 
+  Set<String> get _quantityOnlyTypeNames =>
+      _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
+
+  Map<String, String> get _quantityLabelByType => {
+        for (final t in _wasteTypes)
+          if (t.isQuantityOnly) t.mainType: t.quantityLabelFor('default'),
+      };
+
   Future<void> _addItem() async {
     final typeNames = _wasteTypes.map((t) => t.mainType).toList();
-    final result = await showModalBottomSheet<_NewItemResult>(
+    final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddItemSheet(
-            typeNames: typeNames,
+          child: WasteAddItemSheet(
+            types: typeNames,
             defaultType: _currentLoad.mainWasteType,
+            title: 'Add Item to Load',
+            quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            quantityLabelByType: _quantityLabelByType,
           ),
         ),
       ),
@@ -442,6 +456,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         quantity: result.quantity,
         notes: result.notes,
         localPhotoPaths: result.localPhotoPaths,
+        isQuantityOnly: result.isQuantityOnly,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -681,10 +696,12 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     List<WasteItem> items, {
     required PdfColor borderColor,
   }) {
-    final double total = items.fold(
-      0.0,
-      (s, i) => s + i.weightKg * (i.ratePerKg ?? 0),
-    );
+    final hasQtyOnly = items.any((i) => i.isQuantityOnly);
+    final double total = items.fold(0.0, (s, i) => s + (i.lineValue ?? 0));
+
+    final headers = hasQtyOnly
+        ? ['Subtype', 'Qty / Weight', 'R/unit or /kg', 'Value']
+        : ['Subtype', 'Weight', 'R/kg', 'Value'];
 
     return pw.Table(
       border: pw.TableBorder.all(color: borderColor, width: 0.5),
@@ -697,7 +714,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       children: [
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F5F5)),
-          children: ['Subtype', 'Weight', 'R/kg', 'Value'].map((h) {
+          children: headers.map((h) {
             return pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               child: pw.Text(
@@ -713,7 +730,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         ),
         ...items.map((item) {
           final rate = item.ratePerKg;
-          final value = rate != null ? item.weightKg * rate : null;
+          final value = item.lineValue;
+          final measureCell = item.isQuantityOnly
+              ? 'Qty ${item.quantity ?? 0}'
+              : '${item.weightKg.toStringAsFixed(0)} kg';
+          final rateCell = item.isQuantityOnly
+              ? (rate != null ? 'R ${rate.toStringAsFixed(2)}/unit' : '—')
+              : (rate != null ? 'R ${rate.toStringAsFixed(2)}' : '—');
           return pw.TableRow(children: [
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -721,14 +744,11 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: pw.Text('${item.weightKg.toStringAsFixed(0)} kg', style: const pw.TextStyle(fontSize: 9)),
+              child: pw.Text(measureCell, style: const pw.TextStyle(fontSize: 9)),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: pw.Text(
-                rate != null ? 'R ${rate.toStringAsFixed(2)}' : '—',
-                style: const pw.TextStyle(fontSize: 9),
-              ),
+              child: pw.Text(rateCell, style: const pw.TextStyle(fontSize: 9)),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1310,7 +1330,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     );
   }
 
-  /// Draft load: truck photos + signature → pending weighbridge (off-site document later).
+  /// Draft load: truck photos + signature → pending cost review (qty-only) or
+  /// pending weighbridge (weight-based, off-site document to follow).
   Future<void> _finishLoading() async {
     final signatureBytes = await Navigator.push<Uint8List>(
       context,
@@ -1321,6 +1342,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (signatureBytes == null || !mounted) return;
 
     setState(() => _isSaving = true);
+    final isQtyOnly = _quantityOnlyTypeNames.contains(_currentLoad.mainWasteType);
     String? signatureTempPath;
     try {
       final tmp = await Directory.systemTemp.createTemp('waste_sig');
@@ -1334,12 +1356,16 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         signatureLocalPath: signatureTempPath,
         finishedBy: currentEmployee?.clockNo ?? '',
         finishedByName: currentEmployee?.name,
+        isQuantityOnly: isQtyOnly,
       );
 
+      final nextStatus = isQtyOnly
+          ? WasteLoadStatus.pendingCostReview
+          : WasteLoadStatus.pendingWeighbridge;
       setState(() {
         _currentLoad = _currentLoad.copyWith(
-          status: WasteLoadStatus.pendingWeighbridge,
-          pendingWeighbridgeAt: DateTime.now(),
+          status: nextStatus,
+          pendingWeighbridgeAt: isQtyOnly ? null : DateTime.now(),
           collectedBy: currentEmployee?.clockNo,
           collectedByName: currentEmployee?.name,
         );
@@ -1351,8 +1377,10 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           SnackBar(
             content: Text(
               result.queuedOffline
-                  ? 'Finish loading saved offline — weighbridge document can be entered when synced'
-                  : 'Loading finished — enter off-site weighbridge document when it arrives',
+                  ? 'Finish loading saved offline — will sync when connection returns'
+                  : isQtyOnly
+                      ? 'Loading finished — awaiting admin cost review'
+                      : 'Loading finished — enter off-site weighbridge document when it arrives',
             ),
             backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
           ),
@@ -1364,16 +1392,19 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           : null;
       if (!mounted) return;
       if (refreshed != null &&
-          refreshed.status == WasteLoadStatus.pendingWeighbridge) {
+          (refreshed.status == WasteLoadStatus.pendingWeighbridge ||
+           refreshed.status == WasteLoadStatus.pendingCostReview)) {
         setState(() {
           _currentLoad = refreshed;
           _finishLoadPhotoPaths.clear();
         });
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Loading already finished — signature and photos saved where possible. Enter weighbridge document below.',
+              refreshed.status == WasteLoadStatus.pendingCostReview
+                  ? 'Loading already finished — awaiting admin cost review.'
+                  : 'Loading already finished — signature and photos saved where possible. Enter weighbridge document below.',
             ),
             backgroundColor: Colors.green,
           ),
@@ -1531,9 +1562,12 @@ class _ItemRow extends StatelessWidget {
                       ],
                     ),
                     Text(
-                      '${item.weightKg.toStringAsFixed(1)} kg'
-                      '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
-                      '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
+                      item.isQuantityOnly
+                          ? 'Qty ${item.quantity ?? 0}'
+                              '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}'
+                          : '${item.weightKg.toStringAsFixed(1)} kg'
+                              '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
+                              '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : ''}',
                       style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                     ),
                   ],
@@ -1614,217 +1648,6 @@ class _ItemRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Add item bottom sheet (used from load detail for post-submission additions)
-// ---------------------------------------------------------------------------
-
-class _NewItemResult {
-  final String subtype;
-  final double weightKg;
-  final int? quantity;
-  final String? notes;
-  final List<String> localPhotoPaths;
-
-  const _NewItemResult({
-    required this.subtype,
-    required this.weightKg,
-    this.quantity,
-    this.notes,
-    required this.localPhotoPaths,
-  });
-}
-
-class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet({required this.typeNames, this.defaultType});
-  final List<String> typeNames;
-  final String? defaultType;
-
-  @override
-  State<_AddItemSheet> createState() => _AddItemSheetState();
-}
-
-class _AddItemSheetState extends State<_AddItemSheet> {
-  final WasteService _wasteService = WasteService();
-  late String? _type;
-  final _weightCtrl = TextEditingController();
-  final _qtyCtrl    = TextEditingController();
-  final _notesCtrl  = TextEditingController();
-  final List<String> _photos = [];
-  bool _addingPhoto = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _type = widget.typeNames.contains(widget.defaultType)
-        ? widget.defaultType
-        : (widget.typeNames.isNotEmpty ? widget.typeNames.first : null);
-  }
-
-  @override
-  void dispose() {
-    _weightCtrl.dispose();
-    _qtyCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  bool get _valid =>
-      _type != null &&
-      (double.tryParse(_weightCtrl.text) ?? 0) > 0 &&
-      _photos.isNotEmpty;
-
-  Future<void> _addPhoto(ImageSource source) async {
-    setState(() => _addingPhoto = true);
-    try {
-      final path = await _wasteService.pickAndCompressPhotoFromSource(source);
-      if (path != null && mounted) setState(() => _photos.add(path));
-    } finally {
-      if (mounted) setState(() => _addingPhoto = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: const Text('Add Item to Load',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.typeNames.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  initialValue: _type,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Waste Type', isDense: true),
-                  items: widget.typeNames
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _type = v),
-                )
-              else
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Waste Type *', isDense: true),
-                  onChanged: (v) => setState(() => _type = v.isEmpty ? null : v),
-                ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _weightCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _notesCtrl,
-                decoration: const InputDecoration(labelText: 'Notes (optional)', isDense: true),
-              ),
-              const SizedBox(height: 12),
-              Text('Photos * (${_photos.length})',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt),
-                    tooltip: 'Camera',
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library),
-                    tooltip: 'Gallery',
-                  ),
-                  if (_addingPhoto) ...[
-                    const SizedBox(width: 12),
-                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ],
-                ],
-              ),
-              if (_photos.isNotEmpty)
-                SizedBox(
-                  height: 64,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _photos.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 6),
-                    itemBuilder: (_, i) => Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(File(_photos[i]), width: 60, height: 60, fit: BoxFit.cover),
-                        ),
-                        Positioned(
-                          top: 0, right: 0,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _photos.removeAt(i)),
-                            child: const CircleAvatar(
-                              radius: 9,
-                              backgroundColor: Colors.red,
-                              child: Icon(Icons.close, size: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _valid
-                      ? () => Navigator.pop(context, _NewItemResult(
-                          subtype: _type!,
-                          weightKg: double.parse(_weightCtrl.text),
-                          quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
-                          notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
-                          localPhotoPaths: List.of(_photos),
-                        ))
-                      : null,
-                  child: const Text('Add'),
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Status stepper
 // ---------------------------------------------------------------------------
 
@@ -1835,8 +1658,8 @@ class _WasteStatusStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = status == WasteLoadStatus.scheduled
-        ? ['Scheduled', 'Loaded', 'Weighbridge', 'Review', 'Done']
-        : ['Created', 'Loaded', 'Weighbridge', 'Review', 'Done'];
+        ? ['Scheduled', 'Loading', 'Weighbridge', 'Review', 'Done']
+        : ['Created', 'Loading', 'Weighbridge', 'Review', 'Done'];
     final currentIdx = switch (status) {
       WasteLoadStatus.scheduled          => 0,
       WasteLoadStatus.draft              => 1,
