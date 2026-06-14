@@ -8,6 +8,7 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
 /// 1/2 also allowed); the screen previews inputs consumed and output produced
@@ -67,6 +68,9 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     final byCode = {for (final i in items) i.itemCode: i};
     final wacByItem = {for (final i in items) i.itemCode: i.weightedAverageCost};
     final df = DateFormat('EEE d MMM yyyy HH:mm');
+    // Operators don't see cost — only managers.
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Production Run')),
@@ -141,7 +145,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 Text('Consumes', style: Theme.of(context).textTheme.titleMedium),
                 for (final l in recipe.inputs)
                   _line(context, byCode[l.itemCode], l.qtyPerPot * _pots,
-                      wacByItem[l.itemCode] ?? 0),
+                      wacByItem[l.itemCode] ?? 0, isManager),
                 const Divider(height: 24),
                 Text('Produces', style: Theme.of(context).textTheme.titleMedium),
                 ListTile(
@@ -152,20 +156,23 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                   trailing: Text('${_qty.format(outputQty)} '
                       '${byCode[recipe.outputItemCode]?.unit ?? 'kg'}'),
                 ),
-                Card(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Estimated input cost'),
-                        Text(_money.format(totalInputCost),
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
+                if (isManager)
+                  Card(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Estimated input cost'),
+                          Text(_money.format(totalInputCost),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _submitting
@@ -189,7 +196,8 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     );
   }
 
-  Widget _line(BuildContext context, InkStockItem? item, double qty, double wac) {
+  Widget _line(BuildContext context, InkStockItem? item, double qty, double wac,
+      bool showMoney) {
     final negative = item != null && item.currentBalance < qty;
     return ListTile(
       dense: true,
@@ -200,7 +208,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error))
           : null,
       trailing: Text('${_qty.format(qty)} ${item?.unit ?? ''}'
-          '  ·  ${_money.format(qty * wac)}'),
+          '${showMoney ? '  ·  ${_money.format(qty * wac)}' : ''}'),
     );
   }
 }
