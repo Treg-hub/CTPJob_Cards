@@ -20,9 +20,6 @@ enum FleetCostStatus {
 
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
-  /// Records lock from editing this many days after creation, regardless of
-  /// costing status (decided 2026-06-10). Cost lines stay open.
-  static const int editLockDays = 14;
 
   final String? id;
   final String workNumber;
@@ -42,6 +39,7 @@ class FleetWorkRecord {
   final DateTime? createdAt;
   final List<String> linkedIssueIds;
   final FleetCostStatus costStatus;
+  final bool hasCostLines;
 
   /// Days a mechanic may edit a record after it was created.
   static const int editLockDays = 7;
@@ -65,6 +63,7 @@ class FleetWorkRecord {
     this.createdAt,
     this.linkedIssueIds = const [],
     this.costStatus = FleetCostStatus.pending,
+    this.hasCostLines = false,
   });
 
   /// Whether the record is still inside the [editLockDays] window.
@@ -125,6 +124,9 @@ class FleetWorkRecord {
           : (data['has_cost_lines'] == true
               ? FleetCostStatus.costed
               : FleetCostStatus.pending),
+      hasCostLines: data['has_cost_lines'] == true ||
+          (data['cost_status'] != null &&
+              data['cost_status'] != FleetCostStatus.pending.value),
     );
   }
 
