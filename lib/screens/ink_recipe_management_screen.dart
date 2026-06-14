@@ -173,7 +173,7 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
               controller: _nameCtrl,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                  labelText: 'Recipe name', border: OutlineInputBorder()),
+                  labelText: 'Recipe name'),
               validator: (v) =>
                   (v ?? '').trim().isEmpty ? 'Enter a name' : null,
             ),
@@ -183,7 +183,7 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
               value: _outputItemCode,
               isExpanded: true,
               decoration: const InputDecoration(
-                  labelText: 'Produces (output)', border: OutlineInputBorder()),
+                  labelText: 'Produces (output)'),
               items: [
                 for (final i in outputs)
                   DropdownMenuItem(value: i.itemCode, child: Text(i.displayName)),
@@ -196,8 +196,7 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
               controller: _outputPerPotCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                  labelText: 'Output per pot (kg)',
-                  border: OutlineInputBorder()),
+                  labelText: 'Output per pot (kg)'),
               validator: (v) {
                 final d = double.tryParse((v ?? '').trim());
                 if (d == null || d <= 0) return 'Enter the kg produced per pot';
@@ -221,7 +220,6 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
                         isExpanded: true,
                         decoration: const InputDecoration(
                             labelText: 'Item',
-                            border: OutlineInputBorder(),
                             isDense: true),
                         items: [
                           for (final i in inputCandidates)
@@ -241,7 +239,6 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
                             decimal: true),
                         decoration: const InputDecoration(
                             labelText: 'Qty/pot',
-                            border: OutlineInputBorder(),
                             isDense: true),
                       ),
                     ),

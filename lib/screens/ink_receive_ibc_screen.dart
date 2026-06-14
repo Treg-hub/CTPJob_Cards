@@ -163,7 +163,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             value: _supplier,
             isExpanded: true,
             decoration: const InputDecoration(
-                labelText: 'Supplier', border: OutlineInputBorder()),
+                labelText: 'Supplier'),
             items: [
               for (final s in suppliers)
                 DropdownMenuItem(value: s.name, child: Text(s.name)),
@@ -187,8 +187,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   controller: _orderCtrl,
                   decoration: const InputDecoration(
                       labelText: 'Order number',
-                      isDense: true,
-                      border: OutlineInputBorder()),
+                      isDense: true),
                 ),
               ),
               const SizedBox(width: 8),
@@ -197,8 +196,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   controller: _cgnaCtrl,
                   decoration: const InputDecoration(
                       labelText: 'CGNA number',
-                      isDense: true,
-                      border: OutlineInputBorder()),
+                      isDense: true),
                 ),
               ),
             ],
@@ -227,8 +225,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                           helperText: _rows[idx].charge != null
                               ? 'Charge ${_rows[idx].charge}'
                               : null,
-                          isDense: true,
-                          border: const OutlineInputBorder()),
+                          isDense: true),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -241,8 +238,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                             isExpanded: true,
                             decoration: const InputDecoration(
                                 labelText: 'Colour',
-                                isDense: true,
-                                border: OutlineInputBorder()),
+                                isDense: true),
                             items: [
                               for (final i in inks)
                                 DropdownMenuItem(
@@ -263,8 +259,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                             onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                                 labelText: 'kg',
-                                isDense: true,
-                                border: OutlineInputBorder()),
+                                isDense: true),
                           ),
                         ),
                         IconButton(

@@ -6,6 +6,7 @@ import '../models/ink_stock_item.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 
 String inkTxnLabel(InkTxnType t) => switch (t) {
@@ -127,7 +128,7 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                           color: t.voided
                               ? scheme.onSurfaceVariant
                               : positive
-                                  ? Colors.green
+                                  ? Theme.of(context).appColors.statusCompleted
                                   : scheme.error,
                           decoration:
                               t.voided ? TextDecoration.lineThrough : null,

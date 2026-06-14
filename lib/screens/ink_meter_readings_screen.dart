@@ -327,7 +327,6 @@ class _MeterCard extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: cumulative ? 'New meter reading' : 'Consumed',
                 suffixText: 'L',
-                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),

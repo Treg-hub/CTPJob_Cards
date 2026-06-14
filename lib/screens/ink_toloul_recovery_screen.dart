@@ -103,7 +103,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
                   value: _itemCode,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Solvent', border: OutlineInputBorder()),
+                      labelText: 'Solvent'),
                   items: [
                     for (final i in items)
                       DropdownMenuItem(
@@ -121,7 +121,6 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
                   decoration: InputDecoration(
                     labelText: 'Volume recovered',
                     suffixText: selected?.unit ?? 'LTS',
-                    border: const OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final d = double.tryParse((v ?? '').trim());
@@ -134,8 +133,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
                   controller: _sourceCtrl,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                      labelText: 'Lurgi / source (optional)',
-                      border: OutlineInputBorder()),
+                      labelText: 'Lurgi / source (optional)'),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(

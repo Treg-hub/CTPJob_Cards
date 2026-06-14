@@ -79,7 +79,7 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
               controller: _labelCtrl,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                  labelText: 'Meter / label', border: OutlineInputBorder()),
+                  labelText: 'Meter / label'),
               validator: (v) =>
                   (v ?? '').trim().isEmpty ? 'Enter the meter name' : null,
             ),
@@ -88,7 +88,7 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
               controller: _readingCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                  labelText: 'Reading', border: OutlineInputBorder()),
+                  labelText: 'Reading'),
               validator: (v) =>
                   double.tryParse((v ?? '').trim()) == null ? 'Enter a number' : null,
             ),
@@ -105,7 +105,7 @@ class _State extends ConsumerState<InkOtherMeterScreen> {
             TextFormField(
               controller: _notesCtrl,
               decoration: const InputDecoration(
-                  labelText: 'Notes (optional)', border: OutlineInputBorder()),
+                  labelText: 'Notes (optional)'),
               maxLines: 2,
             ),
             const SizedBox(height: 20),

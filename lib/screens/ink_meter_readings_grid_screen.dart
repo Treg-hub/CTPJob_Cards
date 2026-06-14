@@ -297,7 +297,6 @@ class _GridCard extends StatelessWidget {
                 labelText: 'New meter reading',
                 suffixText: 'L',
                 isDense: true,
-                border: OutlineInputBorder(),
               ),
             ),
             if (preview.isNotEmpty) ...[

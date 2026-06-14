@@ -115,7 +115,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 value: _recipeId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                    labelText: 'Recipe', border: OutlineInputBorder()),
+                    labelText: 'Recipe'),
                 items: [
                   for (final r in recipes)
                     DropdownMenuItem(value: r.id, child: Text(r.name)),

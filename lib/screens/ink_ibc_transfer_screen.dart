@@ -179,7 +179,6 @@ class _State extends ConsumerState<InkIbcTransferScreen>
                                   suffixText: 'LTS',
                                   helperText: 'Leave blank if no wash used',
                                   isDense: true,
-                                  border: OutlineInputBorder(),
                                 ),
                               ),
                             ),

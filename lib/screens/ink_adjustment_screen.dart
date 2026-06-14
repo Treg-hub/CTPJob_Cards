@@ -9,6 +9,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../theme/app_theme.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
 
@@ -121,7 +122,7 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
                   value: _itemCode,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Item', border: OutlineInputBorder()),
+                      labelText: 'Item'),
                   items: [
                     for (final i in items)
                       DropdownMenuItem(
@@ -148,7 +149,6 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
                   decoration: InputDecoration(
                     labelText: 'Counted (physical stock-take)',
                     suffixText: selected?.unit ?? '',
-                    border: const OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final d = double.tryParse((v ?? '').trim());
@@ -165,7 +165,7 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
                           color: delta == 0
                               ? null
                               : (delta > 0
-                                  ? Colors.green
+                                  ? Theme.of(context).appColors.statusCompleted
                                   : Theme.of(context).colorScheme.error),
                         ),
                   ),
@@ -174,8 +174,7 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
                 TextFormField(
                   controller: _reasonCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Reason / note (optional)',
-                      border: OutlineInputBorder()),
+                      labelText: 'Reason / note (optional)'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),

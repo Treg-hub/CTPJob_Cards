@@ -110,7 +110,7 @@ class _State extends ConsumerState<InkRevaluationScreen> {
                   value: _itemCode,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Item', border: OutlineInputBorder()),
+                      labelText: 'Item'),
                   items: [
                     for (final i in items)
                       DropdownMenuItem(
@@ -135,8 +135,7 @@ class _State extends ConsumerState<InkRevaluationScreen> {
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                       labelText: 'New WAC',
-                      prefixText: 'R ',
-                      border: OutlineInputBorder()),
+                      prefixText: 'R '),
                   validator: (v) {
                     final d = double.tryParse((v ?? '').trim());
                     if (d == null || d < 0) return 'Enter the new WAC';
@@ -147,8 +146,7 @@ class _State extends ConsumerState<InkRevaluationScreen> {
                 TextFormField(
                   controller: _reasonCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Reason (accounts instruction)',
-                      border: OutlineInputBorder()),
+                      labelText: 'Reason (accounts instruction)'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
