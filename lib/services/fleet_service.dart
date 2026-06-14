@@ -20,6 +20,15 @@ import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
 import 'sync_service.dart';
 
+/// Thrown when a status change loses a race — the issue moved on while this
+/// screen showed a stale snapshot. toString is the user-facing message.
+class FleetConflictException implements Exception {
+  final String message;
+  FleetConflictException(this.message);
+  @override
+  String toString() => message;
+}
+
 /// All Fleet Maintenance Firestore and Storage operations.
 /// Follows the WasteService singleton pattern.
 class FleetService {
@@ -27,6 +36,29 @@ class FleetService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
+
+  // ---------------------------------------------------------------------------
+  // AUDIT TRAIL — append-only fleet_audit (rules block update/delete).
+  // Fire-and-forget: auditing must never block or fail the action it records.
+  // Offline writes are buffered by the Firestore SDK and flush on reconnect.
+  // ---------------------------------------------------------------------------
+
+  void logAudit(
+    String action, {
+    required String actorClockNo,
+    String? actorName,
+    Map<String, dynamic>? details,
+  }) {
+    try {
+      unawaited(_db.collection(Collections.fleetAudit).add({
+        'action': action,
+        'actor_clock_no': actorClockNo,
+        if (actorName != null) 'actor_name': actorName,
+        if (details != null && details.isNotEmpty) 'details': details,
+        'created_at': FieldValue.serverTimestamp(),
+      }).then<void>((_) {}).catchError((_) {}));
+    } catch (_) {}
+  }
 
   // ---------------------------------------------------------------------------
   // SETTINGS
@@ -50,11 +82,19 @@ class FleetService {
     });
   }
 
-  Future<void> saveSettings(FleetSettings settings) async {
+  Future<void> saveSettings(
+    FleetSettings settings, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     await _db
         .collection(Collections.fleetSettings)
         .doc('config')
         .set(settings.toFirestore(), SetOptions(merge: true));
+    if (actorClockNo != null) {
+      logAudit('settings_saved',
+          actorClockNo: actorClockNo, actorName: actorName);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -136,7 +176,19 @@ class FleetService {
     return FleetAsset.fromFirestore(snap);
   }
 
-  Future<void> saveAsset(FleetAsset asset) async {
+  Stream<FleetAsset?> watchAsset(String id) {
+    return _db
+        .collection(Collections.fleetAssets)
+        .doc(id)
+        .snapshots()
+        .map((snap) => snap.exists ? FleetAsset.fromFirestore(snap) : null);
+  }
+
+  Future<void> saveAsset(
+    FleetAsset asset, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     if (asset.id == null) {
       await _db.collection(Collections.fleetAssets).add(asset.toFirestore());
     } else {
@@ -145,6 +197,35 @@ class FleetService {
           .doc(asset.id)
           .set(asset.toFirestore(), SetOptions(merge: true));
     }
+    if (actorClockNo != null) {
+      logAudit('asset_saved',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          details: {
+            'asset_name': asset.name,
+            'asset_tag': asset.assetTag,
+            'active': asset.active,
+          });
+    }
+  }
+
+  /// All issues for one asset, newest first. Uses an equality-only query
+  /// (auto-indexed) with a client-side sort, so no composite index is
+  /// needed — at ~12 assets the per-asset issue count stays small.
+  Stream<List<FleetIssue>> watchAssetIssues(String assetId) {
+    return _db
+        .collection(Collections.fleetIssues)
+        .where('asset_id', isEqualTo: assetId)
+        .snapshots()
+        .map((s) {
+      final issues = s.docs.map(FleetIssue.fromFirestore).toList()
+        ..sort((a, b) {
+          final ad = a.createdAt ?? DateTime(2000);
+          final bd = b.createdAt ?? DateTime(2000);
+          return bd.compareTo(ad);
+        });
+      return issues;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -217,17 +298,52 @@ class FleetService {
             snap.exists ? FleetIssue.fromFirestore(snap) : null);
   }
 
+  /// Throws [FleetConflictException] when the issue's live status is not in
+  /// [allowed] — i.e. someone else changed it while this screen showed a
+  /// stale snapshot. When the server can't be reached (offline) the check is
+  /// skipped and the buffered write proceeds; the single-mechanic workflow
+  /// makes an offline conflict effectively impossible.
+  Future<void> _guardIssueStatus(
+      String issueId, Set<FleetIssueStatus> allowed) async {
+    DocumentSnapshot<Map<String, dynamic>> snap;
+    try {
+      snap = await _db
+          .collection(Collections.fleetIssues)
+          .doc(issueId)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return;
+    }
+    if (!snap.exists) {
+      throw FleetConflictException('This problem no longer exists.');
+    }
+    final status =
+        FleetIssueStatus.fromString(snap.data()?['status'] as String?);
+    if (!allowed.contains(status)) {
+      throw FleetConflictException(
+        'This problem is already ${status.displayLabel.toLowerCase()} — '
+        'go back and reopen it to see the latest.',
+      );
+    }
+  }
+
   Future<void> acknowledgeIssue(String issueId, String clockNo, String name) async {
+    await _guardIssueStatus(issueId, {FleetIssueStatus.open});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'acknowledged',
       'acknowledged_by_clock_no': clockNo,
       'acknowledged_by_name': name,
       'acknowledged_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_acknowledged',
+        actorClockNo: clockNo, actorName: name, details: {'issue_id': issueId});
   }
 
   Future<void> resolveIssueWithNote(
       String issueId, String note, String clockNo, String name) async {
+    await _guardIssueStatus(
+        issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'resolved',
       'resolution_type': 'note',
@@ -236,8 +352,13 @@ class FleetService {
       'resolved_by_name': name,
       'resolved_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_resolved_note',
+        actorClockNo: clockNo, actorName: name, details: {'issue_id': issueId});
   }
 
+  /// Deliberately unguarded: a logged work record is the strongest form of
+  /// resolution and may overwrite a note-resolution that raced it. Also
+  /// called from the offline replay path, which must never throw conflicts.
   Future<void> resolveIssueWithWorkRecord(
       String issueId, String workRecordId, String clockNo, String name) async {
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
@@ -248,10 +369,16 @@ class FleetService {
       'resolved_by_name': name,
       'resolved_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_resolved_work_record',
+        actorClockNo: clockNo,
+        actorName: name,
+        details: {'issue_id': issueId, 'work_record_id': workRecordId});
   }
 
   Future<void> cancelIssue(
       String issueId, String clockNo, String name, {String? reason}) async {
+    await _guardIssueStatus(
+        issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'cancelled',
       'cancelled_by_clock_no': clockNo,
@@ -259,6 +386,10 @@ class FleetService {
       if (reason != null) 'cancel_reason': reason,
       'cancelled_at': FieldValue.serverTimestamp(),
     });
+    logAudit('issue_cancelled',
+        actorClockNo: clockNo,
+        actorName: name,
+        details: {'issue_id': issueId, if (reason != null) 'reason': reason});
   }
 
   // ---------------------------------------------------------------------------
@@ -302,12 +433,31 @@ class FleetService {
     return FleetWorkRecord.fromFirestore(snap);
   }
 
+  Stream<FleetWorkRecord?> watchWorkRecord(String id) {
+    return _db
+        .collection(Collections.fleetWorkRecords)
+        .doc(id)
+        .snapshots()
+        .map((snap) =>
+            snap.exists ? FleetWorkRecord.fromFirestore(snap) : null);
+  }
+
   Future<void> updateWorkRecord(
-      String id, Map<String, dynamic> data) async {
+    String id,
+    Map<String, dynamic> data, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(id)
         .update({...data, 'updatedAt': FieldValue.serverTimestamp()});
+    if (actorClockNo != null) {
+      logAudit('work_record_edited',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          details: {'work_record_id': id});
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -471,6 +621,71 @@ class FleetService {
     await batch.commit();
   }
 
+  /// Creates a cost line offline-first — same queue-first pattern as issues.
+  /// The linked work record's has_cost_lines flag is queued as a separate
+  /// merge-update so it replays safely too.
+  Future<({String id, bool queuedOffline})> createCostLineResilient(
+      FleetCostLine line) async {
+    final lineId = _db.collection(Collections.fleetCostLines).doc().id;
+    final online = await _checkOnline();
+    final data = line.toFirestore();
+
+    await SyncService().addToQueue(
+      collection: Collections.fleetCostLines,
+      operation: 'create',
+      data: SyncService.sanitizeForHive(data),
+      documentId: lineId,
+    );
+    if (line.workRecordId != null) {
+      await SyncService().addToQueue(
+        collection: Collections.fleetWorkRecords,
+        operation: 'update',
+        data: {'has_cost_lines': true},
+        documentId: line.workRecordId!,
+      );
+    }
+
+    logAudit('cost_line_added',
+        actorClockNo: line.enteredByClockNo,
+        actorName: line.enteredByName,
+        details: {
+          'asset_name': line.assetName,
+          'amount_zar': line.amountZar,
+          if (line.workNumber != null) 'work_number': line.workNumber,
+        });
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        final batch = _db.batch();
+        batch.set(_db.collection(Collections.fleetCostLines).doc(lineId), data);
+        if (line.workRecordId != null) {
+          batch.update(
+            _db.collection(Collections.fleetWorkRecords).doc(line.workRecordId),
+            {'has_cost_lines': true},
+          );
+        }
+        await batch.commit().timeout(_firestoreWriteTimeout);
+        queuedOffline = false;
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetCostLines,
+          documentId: lineId,
+        );
+        if (line.workRecordId != null) {
+          await SyncService().removeQueuedItem(
+            collection: Collections.fleetWorkRecords,
+            documentId: line.workRecordId!,
+          );
+        }
+      } catch (_) {
+        queuedOffline = true;
+      }
+      unawaited(SyncService().processNow());
+    }
+
+    return (id: lineId, queuedOffline: queuedOffline);
+  }
+
   Stream<List<FleetCostLine>> watchCostLines({
     String? assetId,
     DateTime? from,
@@ -591,6 +806,15 @@ class FleetService {
   Future<bool> _checkOnline() =>
       ConnectivityService().isOnline().catchError((_) => false);
 
+  /// Deterministic queue id per photo so a successful direct upload can
+  /// dequeue its own entry, and accidental duplicates dedupe at startup.
+  static String fleetPhotoQueueId({
+    required String targetKind,
+    required String targetId,
+    required String localPath,
+  }) =>
+      '${targetKind}_${targetId}_${localPath.hashCode}';
+
   Future<void> queueOfflineFleetPhoto({
     required String localPath,
     required String targetKind,
@@ -604,12 +828,21 @@ class FleetService {
         'targetKind': targetKind,
         'targetId': targetId,
       },
-      documentId:
-          '${targetKind}_${targetId}_${DateTime.now().millisecondsSinceEpoch}',
+      documentId: fleetPhotoQueueId(
+        targetKind: targetKind,
+        targetId: targetId,
+        localPath: localPath,
+      ),
     );
   }
 
   /// Creates an issue offline-first; photos queue when upload fails or offline.
+  ///
+  /// Queue bookkeeping: the create entry is removed as soon as the direct
+  /// write lands (so a later replay can never overwrite status changes or
+  /// photo URLs made in the meantime), and each photo entry is removed as
+  /// its direct upload+patch succeeds. The replay path is additionally
+  /// guarded by create-if-not-exists in SyncService.
   Future<({String id, bool queuedOffline})> createIssueResilient(
     FleetIssue issue, {
     List<String> photoPaths = const [],
@@ -640,43 +873,57 @@ class FleetService {
       );
     }
 
+    logAudit('issue_reported',
+        actorClockNo: issue.reportedByClockNo,
+        actorName: issue.reportedByName,
+        details: {
+          'issue_id': issueId,
+          'asset_name': issue.assetName,
+          'severity': issue.severity.value,
+        });
+
     var queuedOffline = !online;
     if (online) {
+      var docCreated = false;
       try {
         await _db.collection(Collections.fleetIssues).doc(issueId).set({
           ...base,
           'created_at': FieldValue.serverTimestamp(),
         }).timeout(_firestoreWriteTimeout);
-
-        final urls = <String>[];
-        for (final path in photoPaths) {
-          try {
-            urls.add(await uploadFleetPhoto(
-              localPath: path,
-              fleetRef: 'fleet_issues/$issueId',
-            ).timeout(_photoUploadTimeout));
-          } catch (_) {
-            await queueOfflineFleetPhoto(
-              localPath: path,
-              targetKind: 'issue',
-              targetId: issueId,
-            );
-          }
-        }
-        if (urls.isNotEmpty) {
-          await _db
-              .collection(Collections.fleetIssues)
-              .doc(issueId)
-              .update({'photos': urls});
-        }
-        // Direct write landed — drop the queued create so the sync replay
-        // never re-writes an issue (reports are immutable once created).
+        docCreated = true;
         await SyncService().removeQueuedItem(
           collection: Collections.fleetIssues,
           documentId: issueId,
         );
       } catch (_) {
         queuedOffline = true;
+      }
+
+      if (docCreated) {
+        for (final path in photoPaths) {
+          try {
+            final url = await uploadFleetPhoto(
+              localPath: path,
+              fleetRef: 'fleet_issues/$issueId',
+            ).timeout(_photoUploadTimeout);
+            await _db
+                .collection(Collections.fleetIssues)
+                .doc(issueId)
+                .update({
+              'photos': FieldValue.arrayUnion([url]),
+            }).timeout(_firestoreWriteTimeout);
+            await SyncService().removeQueuedItem(
+              collection: 'fleet_photos',
+              documentId: fleetPhotoQueueId(
+                targetKind: 'issue',
+                targetId: issueId,
+                localPath: path,
+              ),
+            );
+          } catch (_) {
+            // Entry stays queued for retry.
+          }
+        }
       }
       unawaited(SyncService().processNow());
     }
@@ -685,6 +932,13 @@ class FleetService {
   }
 
   /// Creates a work record via CF when online; queues create_cf when offline/slow.
+  ///
+  /// Duplicate-safe: the queue id is passed to the CF as `client_ref`, which
+  /// becomes the record's document ID — so a replayed call (lost response,
+  /// force-close, failed attachment step) returns the existing record instead
+  /// of minting a new FM number. After the CF succeeds, the created record id
+  /// is stamped onto the queue item and per-step progress (photos, parts) is
+  /// pruned from it, so a replay only resumes what's still outstanding.
   Future<({String id, String? workNumber, bool queuedOffline})>
       createWorkRecordResilient(
     Map<String, dynamic> data, {
@@ -695,7 +949,10 @@ class FleetService {
     required String loggedByName,
   }) async {
     final online = await _checkOnline();
-    final queuePayload = Map<String, dynamic>.from(data);
+    final queueId = const Uuid().v4();
+    final cfData = Map<String, dynamic>.from(data)..['client_ref'] = queueId;
+
+    final queuePayload = Map<String, dynamic>.from(cfData);
     if (photoPaths.isNotEmpty) {
       queuePayload['_pending_photo_paths'] = photoPaths;
     }
@@ -713,7 +970,6 @@ class FleetService {
       queuePayload['_resolver_name'] = loggedByName;
     }
 
-    final queueId = const Uuid().v4();
     await SyncService().addToQueue(
       collection: Collections.fleetWorkRecords,
       operation: 'create_cf',
@@ -721,46 +977,113 @@ class FleetService {
       documentId: queueId,
     );
 
-    var queuedOffline = !online;
-    if (online) {
-      try {
-        final result = await createWorkRecord(data).timeout(_callableTimeout);
-        final recordId = result['id'] as String;
+    // Logged at queue time (the record is guaranteed to exist via replay);
+    // client_ref ties the audit entry to the eventual document.
+    logAudit('work_record_created',
+        actorClockNo: loggedByClockNo,
+        actorName: loggedByName,
+        details: {
+          'client_ref': queueId,
+          'asset_name': data['asset_name'],
+          'title': data['title'],
+        });
 
-        if (photoPaths.isNotEmpty) {
-          final uploaded =
-              await uploadPhotosForRecord(recordId, photoPaths);
-          if (uploaded.isNotEmpty) {
-            await updateWorkRecord(recordId, {'photos': uploaded});
-          }
-        }
-        if (parts.isNotEmpty) {
-          await replaceParts(recordId, parts);
-        }
+    if (!online) {
+      return (id: queueId, workNumber: null, queuedOffline: true);
+    }
+
+    // Step 1 — create the record. On failure the queued entry replays later;
+    // client_ref guarantees the replay can't duplicate it.
+    String recordId;
+    String? workNumber;
+    try {
+      final result = await createWorkRecord(cfData).timeout(_callableTimeout);
+      recordId = result['id'] as String;
+      workNumber = result['work_number'] as String?;
+    } catch (_) {
+      unawaited(SyncService().processNow());
+      return (id: queueId, workNumber: null, queuedOffline: true);
+    }
+
+    await SyncService().mutateQueuedItemData(
+      collection: Collections.fleetWorkRecords,
+      documentId: queueId,
+      mutate: (d) => d['_created_record_id'] = recordId,
+    );
+
+    // Step 2 — attachments and linked issues. Failures leave the queue item
+    // in place (minus completed steps) for the replay to finish.
+    var pending = false;
+    for (final path in photoPaths) {
+      try {
+        final url = await uploadFleetPhoto(
+          localPath: path,
+          fleetRef: 'fleet_work_records/$recordId',
+        ).timeout(_photoUploadTimeout);
+        await _db
+            .collection(Collections.fleetWorkRecords)
+            .doc(recordId)
+            .update({
+          'photos': FieldValue.arrayUnion([url]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }).timeout(_firestoreWriteTimeout);
+        await SyncService().mutateQueuedItemData(
+          collection: Collections.fleetWorkRecords,
+          documentId: queueId,
+          mutate: (d) =>
+              (d['_pending_photo_paths'] as List?)?.remove(path),
+        );
+      } catch (_) {
+        pending = true;
+      }
+    }
+
+    if (parts.isNotEmpty) {
+      try {
+        await replaceParts(recordId, parts)
+            .timeout(_firestoreWriteTimeout);
+        await SyncService().mutateQueuedItemData(
+          collection: Collections.fleetWorkRecords,
+          documentId: queueId,
+          mutate: (d) => d.remove('_parts'),
+        );
+      } catch (_) {
+        pending = true;
+      }
+    }
+
+    if (linkedIssueIds.isNotEmpty) {
+      try {
         for (final issueId in linkedIssueIds) {
           await resolveIssueWithWorkRecord(
             issueId,
             recordId,
             loggedByClockNo,
             loggedByName,
-          );
+          ).timeout(_firestoreWriteTimeout);
         }
-
-        await SyncService().removeQueuedItem(
+        await SyncService().mutateQueuedItemData(
           collection: Collections.fleetWorkRecords,
           documentId: queueId,
-        );
-        return (
-          id: recordId,
-          workNumber: result['work_number'] as String?,
-          queuedOffline: false,
+          mutate: (d) => d
+            ..remove('_linked_issue_ids')
+            ..remove('_resolver_clock_no')
+            ..remove('_resolver_name'),
         );
       } catch (_) {
-        queuedOffline = true;
+        pending = true;
       }
-      unawaited(SyncService().processNow());
     }
 
-    return (id: queueId, workNumber: null, queuedOffline: queuedOffline);
+    if (pending) {
+      unawaited(SyncService().processNow());
+      return (id: recordId, workNumber: workNumber, queuedOffline: true);
+    }
+
+    await SyncService().removeQueuedItem(
+      collection: Collections.fleetWorkRecords,
+      documentId: queueId,
+    );
+    return (id: recordId, workNumber: workNumber, queuedOffline: false);
   }
 }

@@ -348,6 +348,37 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       return;
     }
 
+    // Hour meters only count up — confirm an intentionally lower reading
+    // (e.g. after a meter swap) instead of silently accepting a typo.
+    if (!_isEditing) {
+      final lastReading = _selectedAsset?.currentMachineHours;
+      if (lastReading != null && machineHours < lastReading) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Reading lower than last recorded'),
+            content: Text(
+              'The hour meter usually only counts up.\n\n'
+              'Last recorded: ${_formatHours(lastReading)} h\n'
+              'You entered: ${_formatHours(machineHours)} h\n\n'
+              'Save anyway?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Go back'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save anyway'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true || !mounted) return;
+      }
+    }
+
     setState(() => _saving = true);
     try {
       final startDate = _workCarriedOut;
@@ -366,9 +397,28 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           .toList();
 
       String recordId;
+      String? workNumber;
       var queuedOffline = false;
       if (_isEditing) {
         recordId = widget.workRecordId!;
+        // Re-check server state — the detail screen's Edit button gating is
+        // advisory only; costs may have been entered or the 14-day window
+        // passed since this form was opened.
+        final fresh = await _service.getWorkRecord(recordId);
+        if (fresh == null) {
+          _showError('Could not load this job — check your connection and try again.');
+          return;
+        }
+        if (fresh.hasCostLines) {
+          _showError('Costs have been entered for this job — it can no longer be edited.');
+          return;
+        }
+        if (fresh.isEditLocked) {
+          _showError(
+            'This job is locked — records can\'t be edited after ${FleetWorkRecord.editLockDays} days.',
+          );
+          return;
+        }
         final uploaded = await _service.uploadPhotosForRecord(
             recordId, _pendingPhotoPaths);
         final allPhotos = [..._savedPhotoUrls, ...uploaded];
@@ -414,6 +464,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           loggedByName: emp.name,
         );
         recordId = result.id;
+        workNumber = result.workNumber;
         queuedOffline = result.queuedOffline;
       }
 
@@ -425,9 +476,13 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
         } else if (queuedOffline) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Work saved offline — will sync when connection returns.',
+                // workNumber present = record created, only attachments
+                // (photos/parts) are still queued.
+                workNumber != null
+                    ? 'Job $workNumber saved — photos/parts will finish syncing.'
+                    : 'Work saved offline — will sync when connection returns.',
               ),
               backgroundColor: Colors.orange,
             ),
@@ -474,6 +529,10 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  String _formatHours(double hours) => hours % 1 == 0
+      ? hours.toStringAsFixed(0)
+      : hours.toStringAsFixed(1);
 
   @override
   Widget build(BuildContext context) {
@@ -760,6 +819,17 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
               hintText: 'Reading on the hour meter',
             ),
           ),
+          if (_selectedAsset?.currentMachineHours != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Last recorded: ${_formatHours(_selectedAsset!.currentMachineHours!)} h',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).appColors.textMuted,
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
 
           // ── Labour hours (optional) ───────────────────────────────────

@@ -10,6 +10,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_form_fields.dart';
 import '../widgets/fleet_type_selector.dart';
+import 'fleet_asset_detail_screen.dart';
 
 /// Admin-only screen: manage the fleet asset register (forklifts, grabs, etc.).
 class FleetAssetsScreen extends ConsumerStatefulWidget {
@@ -43,7 +44,7 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
           if (assets.isEmpty) {
             return const Center(
               child: Text(
-                'No assets yet.\nTap + to add a machine (forks, grab or BT).',
+                'No assets yet.\nTap + to add a Hyster (forks or grab).',
                 textAlign: TextAlign.center,
               ),
             );
@@ -56,7 +57,14 @@ class _FleetAssetsScreenState extends ConsumerState<FleetAssetsScreen> {
               final asset = assets[index];
               return _AssetTile(
                 asset: asset,
-                onTap: () => _openAssetForm(context, asset),
+                // Detail page (history, spend, service status); Edit lives
+                // inside it.
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        FleetAssetDetailScreen(assetId: asset.id!),
+                  ),
+                ),
               );
             },
           );
@@ -171,10 +179,14 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
   final _nameCtrl = TextEditingController();
   final _tagCtrl = TextEditingController();
   final _serialCtrl = TextEditingController();
+  final _intervalHoursCtrl = TextEditingController();
+  final _intervalDaysCtrl = TextEditingController();
+  final _lastServiceHoursCtrl = TextEditingController();
 
   FleetType? _selectedType;
   bool _active = true;
   bool _saving = false;
+  DateTime? _lastServiceDate;
 
   @override
   void initState() {
@@ -185,16 +197,44 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
       _tagCtrl.text = a.assetTag;
       _serialCtrl.text = a.serial ?? '';
       _active = a.active;
+      if (a.serviceIntervalHours != null) {
+        _intervalHoursCtrl.text = _fmtNum(a.serviceIntervalHours!);
+      }
+      if (a.serviceIntervalDays != null) {
+        _intervalDaysCtrl.text = a.serviceIntervalDays.toString();
+      }
+      if (a.lastServiceMachineHours != null) {
+        _lastServiceHoursCtrl.text = _fmtNum(a.lastServiceMachineHours!);
+      }
+      _lastServiceDate = a.lastServiceDate;
     }
     _loadTypes();
   }
+
+  static String _fmtNum(double v) =>
+      v % 1 == 0 ? v.toStringAsFixed(0) : v.toString();
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _tagCtrl.dispose();
     _serialCtrl.dispose();
+    _intervalHoursCtrl.dispose();
+    _intervalDaysCtrl.dispose();
+    _lastServiceHoursCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLastServiceDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _lastServiceDate ?? DateTime.now(),
+      firstDate: DateTime(2015),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && mounted) {
+      setState(() => _lastServiceDate = picked);
+    }
   }
 
   Future<void> _loadTypes() async {
@@ -221,6 +261,34 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
       );
       return;
     }
+    final intervalHours = _intervalHoursCtrl.text.trim().isEmpty
+        ? null
+        : double.tryParse(_intervalHoursCtrl.text.replaceAll(',', '.'));
+    final intervalDays = _intervalDaysCtrl.text.trim().isEmpty
+        ? null
+        : int.tryParse(_intervalDaysCtrl.text.trim());
+    final lastServiceHours = _lastServiceHoursCtrl.text.trim().isEmpty
+        ? null
+        : double.tryParse(_lastServiceHoursCtrl.text.replaceAll(',', '.'));
+    if (_intervalHoursCtrl.text.trim().isNotEmpty &&
+        (intervalHours == null || intervalHours <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Service interval (hours) must be a positive number.')));
+      return;
+    }
+    if (_intervalDaysCtrl.text.trim().isNotEmpty &&
+        (intervalDays == null || intervalDays <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Service interval (days) must be a positive number.')));
+      return;
+    }
+    if (_lastServiceHoursCtrl.text.trim().isNotEmpty &&
+        lastServiceHours == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Hour meter at last service must be a number.')));
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       final asset = FleetAsset(
@@ -231,9 +299,19 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
         assetTag: _tagCtrl.text.trim(),
         serial: _serialCtrl.text.trim().isEmpty ? null : _serialCtrl.text.trim(),
         active: _active,
+        currentMachineHours: widget.asset?.currentMachineHours,
         hasOpenOosIssue: widget.asset?.hasOpenOosIssue ?? false,
+        serviceIntervalHours: intervalHours,
+        serviceIntervalDays: intervalDays,
+        lastServiceMachineHours: lastServiceHours,
+        lastServiceDate: _lastServiceDate,
       );
-      await widget.service.saveAsset(asset);
+      final emp = currentEmployee;
+      await widget.service.saveAsset(
+        asset,
+        actorClockNo: emp?.clockNo,
+        actorName: emp?.name,
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -252,23 +330,34 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
     return Scaffold(
       appBar: FleetAppBar(
         title: isEdit ? 'Edit Asset' : 'Add Asset',
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              style: TextButton.styleFrom(foregroundColor: Colors.black),
-              child: const Text('Save'),
+      ),
+      // Bottom bar instead of an app-bar action: a default TextButton on the
+      // orange FleetAppBar renders primary-on-primary and is invisible.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(
+              _saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Save asset'),
             ),
-        ],
+            style: FilledButton.styleFrom(
+              backgroundColor: kBrandOrange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -316,6 +405,89 @@ class FleetAssetFormScreenState extends ConsumerState<FleetAssetFormScreen> {
               subtitle: const Text('Inactive assets are hidden in pickers'),
               value: _active,
               onChanged: (v) => setState(() => _active = v),
+            ),
+            const Divider(height: 32),
+
+            // ── Preventive maintenance ───────────────────────────────────
+            const Text(
+              'Service intervals (optional)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Set one or both. The Issues tab shows a "service due" banner '
+              'once the hour meter or calendar passes the interval since the '
+              'last service.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _intervalHoursCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: fleetDropdownDecoration(
+                      labelText: 'Every X hours',
+                      hintText: 'e.g. 1000',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _intervalDaysCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: fleetDropdownDecoration(
+                      labelText: 'Every X days',
+                      hintText: 'e.g. 90',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Last service (baseline — updated after each service)',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickLastServiceDate,
+                    borderRadius: BorderRadius.circular(4),
+                    child: InputDecorator(
+                      decoration:
+                          fleetDropdownDecoration(labelText: 'Date'),
+                      child: Text(
+                        _lastServiceDate != null
+                            ? '${_lastServiceDate!.day}/${_lastServiceDate!.month}/${_lastServiceDate!.year}'
+                            : 'Not set',
+                        style: TextStyle(
+                          color: _lastServiceDate != null
+                              ? null
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _lastServiceHoursCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: fleetDropdownDecoration(
+                      labelText: 'Hour meter',
+                      hintText: 'at last service',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

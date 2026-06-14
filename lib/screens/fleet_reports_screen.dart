@@ -30,9 +30,45 @@ class FleetReportsScreen extends ConsumerStatefulWidget {
 class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
   final _service = FleetService();
 
+  /// When the period has this many cost lines the query is capped and the
+  /// totals/CSV are incomplete — a warning banner tells the user to narrow
+  /// the period rather than silently under-reporting.
+  static const int _costLinesCap = 2000;
+
   bool _isYtd = false;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _exporting = false;
+
+  /// Previous month's total for the KPI delta (month mode only).
+  double? _prevTotal;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrevTotal();
+  }
+
+  Future<void> _loadPrevTotal() async {
+    if (_isYtd) {
+      if (mounted) setState(() => _prevTotal = null);
+      return;
+    }
+    final prevFrom =
+        DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+    final prevTo =
+        DateTime(_selectedMonth.year, _selectedMonth.month, 0, 23, 59, 59);
+    try {
+      final lines =
+          await _service.getCostLinesOnce(from: prevFrom, to: prevTo);
+      double total = 0;
+      for (final l in lines) {
+        total += l.amountZar;
+      }
+      if (mounted) setState(() => _prevTotal = total);
+    } catch (_) {
+      if (mounted) setState(() => _prevTotal = null);
+    }
+  }
 
   DateTime get _from {
     if (_isYtd) return DateTime(DateTime.now().year, 1, 1);
@@ -56,6 +92,7 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
       _selectedMonth =
           DateTime(_selectedMonth.year, _selectedMonth.month - 1);
     });
+    _loadPrevTotal();
   }
 
   void _nextMonth() {
@@ -63,6 +100,7 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
     final next = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     if (next.isAfter(DateTime(now.year, now.month))) return;
     setState(() => _selectedMonth = next);
+    _loadPrevTotal();
   }
 
   Future<void> _export(List<FleetCostLine> lines) async {
@@ -143,12 +181,14 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
     final colors = Theme.of(context).appColors;
 
     final body = StreamBuilder<List<FleetCostLine>>(
-      stream: _service.watchCostLines(from: _from, to: _to, limit: 500),
+      stream:
+          _service.watchCostLines(from: _from, to: _to, limit: _costLinesCap),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final lines = snapshot.data ?? [];
+        final capped = lines.length >= _costLinesCap;
 
         double totalZar = 0;
         for (final l in lines) {
@@ -185,7 +225,10 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
                     selectedColor: kBrandOrange,
                     labelStyle:
                         TextStyle(color: !_isYtd ? Colors.white : null),
-                    onSelected: (_) => setState(() => _isYtd = false),
+                    onSelected: (_) {
+                      setState(() => _isYtd = false);
+                      _loadPrevTotal();
+                    },
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
@@ -194,7 +237,10 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
                     selectedColor: kBrandOrange,
                     labelStyle:
                         TextStyle(color: _isYtd ? Colors.white : null),
-                    onSelected: (_) => setState(() => _isYtd = true),
+                    onSelected: (_) {
+                      setState(() => _isYtd = true);
+                      _loadPrevTotal();
+                    },
                   ),
                   const Spacer(),
                   if (!_isYtd) ...[
@@ -230,19 +276,66 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (capped)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.amber.shade700),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber,
+                              color: Colors.amber.shade800, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Showing the first $_costLinesCap cost entries — '
+                              'totals and the CSV export may be incomplete. '
+                              'Narrow the period for exact figures.',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
-                        child: _KpiCard(
-                          label: _isYtd
-                              ? (costMgrUx
-                                  ? 'Total year so far'
-                                  : 'Total YTD')
-                              : (costMgrUx
-                                  ? 'Total this month'
-                                  : 'Total This Month'),
-                          value: 'R ${moneyFmt.format(totalZar)}',
-                        ),
+                        child: Builder(builder: (context) {
+                          String? delta;
+                          Color? deltaColor;
+                          if (!_isYtd &&
+                              _prevTotal != null &&
+                              _prevTotal! > 0) {
+                            final prevMonth = DateTime(_selectedMonth.year,
+                                _selectedMonth.month - 1);
+                            final pct = (totalZar - _prevTotal!) /
+                                _prevTotal! *
+                                100;
+                            final arrow = pct >= 0 ? '▲' : '▼';
+                            delta =
+                                '$arrow ${pct.abs().toStringAsFixed(0)}% vs ${DateFormat('MMM').format(prevMonth)}';
+                            // Spend going up is the warning direction.
+                            deltaColor = pct >= 0
+                                ? Colors.red.shade700
+                                : Colors.green.shade700;
+                          }
+                          return _KpiCard(
+                            label: _isYtd
+                                ? (costMgrUx
+                                    ? 'Total year so far'
+                                    : 'Total YTD')
+                                : (costMgrUx
+                                    ? 'Total this month'
+                                    : 'Total This Month'),
+                            value: 'R ${moneyFmt.format(totalZar)}',
+                            delta: delta,
+                            deltaColor: deltaColor,
+                          );
+                        }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -293,6 +386,10 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
                     ...sortedAssets.map((e) {
                       final pct =
                           totalZar > 0 ? e.value / totalZar : 0.0;
+                      // Monthly spend alert (admin-set threshold; 0 = off).
+                      final flagged = !_isYtd &&
+                          settings.assetSpendAlertZar > 0 &&
+                          e.value >= settings.assetSpendAlertZar;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Column(
@@ -302,16 +399,32 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
                               mainAxisAlignment:
                                   MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  e.key,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                Row(
+                                  children: [
+                                    if (flagged) ...[
+                                      Icon(Icons.warning_amber,
+                                          size: 16,
+                                          color: Colors.red.shade700),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(
+                                      e.key,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: flagged
+                                            ? Colors.red.shade700
+                                            : null,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 Text(
                                   'R ${moneyFmt.format(e.value)}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w600,
+                                    color: flagged
+                                        ? Colors.red.shade700
+                                        : null,
                                   ),
                                 ),
                               ],
@@ -322,12 +435,25 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
                               child: LinearProgressIndicator(
                                 value: pct.toDouble(),
                                 backgroundColor: Colors.grey[200],
-                                valueColor: const AlwaysStoppedAnimation(
-                                  kBrandOrange,
+                                valueColor: AlwaysStoppedAnimation(
+                                  flagged
+                                      ? Colors.red.shade700
+                                      : kBrandOrange,
                                 ),
                                 minHeight: 8,
                               ),
                             ),
+                            if (flagged)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Over the R ${moneyFmt.format(settings.assetSpendAlertZar)} monthly alert threshold',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.red.shade700,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -409,9 +535,16 @@ class _FleetReportsScreenState extends ConsumerState<FleetReportsScreen> {
 }
 
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.label, required this.value});
+  const _KpiCard({
+    required this.label,
+    required this.value,
+    this.delta,
+    this.deltaColor,
+  });
   final String label;
   final String value;
+  final String? delta;
+  final Color? deltaColor;
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +564,17 @@ class _KpiCard extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            if (delta != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                delta!,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: deltaColor ?? muted,
+                ),
+              ),
+            ],
           ],
         ),
       ),

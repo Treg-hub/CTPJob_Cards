@@ -98,9 +98,13 @@ You can close an issue in one of two ways:
    tick them under **Also fixes…** — they close together.
 8. Tap **Mark as Fixed**. The work record gets a number like **FM-20260604-001**.
 
+> **Editing window:** a work record can be edited for **7 days** after it is created (and only until costs are entered). After that use the comments section for corrections.
+
 **Option B — Quick resolution note**
 
 For an issue that needs no formal work record (e.g. a false alarm or a trivial fix), tap **Resolve** and enter a short note.
+
+> **Out-of-service issues are the exception:** they can only be closed by logging the repair as a work record — a note alone is not accepted.
 
 > **You never see costs.** Work records you create show only a "Costs pending / Costs entered" label — the actual money is entered and seen only by the cost manager.
 
