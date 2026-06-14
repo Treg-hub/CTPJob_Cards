@@ -26,6 +26,7 @@ import 'ink_receive_ibc_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_recipe_management_screen.dart';
 import 'ink_revaluation_screen.dart';
+import 'ink_value_adjustment_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_supplier_management_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
@@ -102,6 +103,8 @@ class InkHomeScreen extends ConsumerWidget {
                   builder: () => const InkProductionHistoryScreen()),
               _Action(Icons.price_change_outlined, 'Revaluation',
                   builder: () => const InkRevaluationScreen()),
+              _Action(Icons.currency_exchange_outlined, 'Value Adjustment',
+                  builder: () => const InkValueAdjustmentScreen()),
               _Action(Icons.edit_note_outlined, 'Corrections',
                   builder: () => const InkCorrectionsScreen()),
               _Action(Icons.flag_outlined, 'Flagged',

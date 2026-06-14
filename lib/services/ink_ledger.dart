@@ -165,6 +165,14 @@ LedgerResult replayLedger({
         balance = balBefore + e.quantityDelta;
         break;
 
+      case InkTxnType.valueAdjustment:
+        // Cost-only adjustment (rand amount in totalCost, can be negative).
+        // WAC = (balance × currentWac + amount) / balance; quantity unchanged.
+        if (balBefore > 0 && e.totalCost != null) {
+          wac = (balBefore * wacBefore + e.totalCost!) / balBefore;
+        }
+        break;
+
       case InkTxnType.transfer:
       case InkTxnType.correction:
         // Quantity-neutral for this stock item.
