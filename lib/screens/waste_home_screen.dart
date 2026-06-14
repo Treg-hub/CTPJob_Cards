@@ -625,11 +625,11 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
         // On-site stock summary banner
         if (role_utils.isWasteUser(currentEmployee, _wasteSettings))
-          _OnSiteStockBanner(wasteService: _wasteService),
+          _OnSiteStockBanner(wasteService: _wasteService, wasteTypes: _wasteTypes),
 
-        // Help + quick filter chips
+        // Help icon + quick filter chips in one row
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          padding: const EdgeInsets.fromLTRB(4, 6, 8, 0),
           child: Row(
             children: [
               IconButton(
@@ -639,30 +639,28 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                   MaterialPageRoute(builder: (_) => const WasteGuideScreen()),
                 ),
                 icon: const Icon(Icons.help_outline),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.all(6),
               ),
-              const Expanded(child: SizedBox.shrink()),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-          child: Wrap(
-            spacing: 8,
-            children: [
-              ChoiceChip(
-                label: const Text('All'),
-                selected: _filter == 'all',
-                onSelected: (_) => setState(() => _filter = 'all'),
-              ),
-              ChoiceChip(
-                label: const Text('Today'),
-                selected: _filter == 'today',
-                onSelected: (_) => setState(() => _filter = 'today'),
-              ),
-              ChoiceChip(
-                label: const Text('This Week'),
-                selected: _filter == 'week',
-                onSelected: (_) => setState(() => _filter = 'week'),
+              Wrap(
+                spacing: 6,
+                children: [
+                  ChoiceChip(
+                    label: const Text('All'),
+                    selected: _filter == 'all',
+                    onSelected: (_) => setState(() => _filter = 'all'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Today'),
+                    selected: _filter == 'today',
+                    onSelected: (_) => setState(() => _filter = 'today'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('This Week'),
+                    selected: _filter == 'week',
+                    onSelected: (_) => setState(() => _filter = 'week'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -974,11 +972,16 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
 
 // ---------------------------------------------------------------------------
 // On-site stock summary banner — tappable card shown in the loads tab.
-// Fetches the on-site stock count + total estimated weight (not a stream).
+// Separates weight-based items from quantity-only items (e.g. IBC Bins) so
+// both measures are displayed accurately.
 // ---------------------------------------------------------------------------
 class _OnSiteStockBanner extends StatefulWidget {
-  const _OnSiteStockBanner({required this.wasteService});
+  const _OnSiteStockBanner({
+    required this.wasteService,
+    this.wasteTypes = const [],
+  });
   final WasteService wasteService;
+  final List<WasteType> wasteTypes;
 
   @override
   State<_OnSiteStockBanner> createState() => _OnSiteStockBannerState();
@@ -987,9 +990,13 @@ class _OnSiteStockBanner extends StatefulWidget {
 class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   bool _loading = true;
   bool _error = false;
-  int _count = 0;
+  int _weightedCount = 0;
+  int _qtyOnlyCount = 0;
   double _totalKg = 0;
   StreamSubscription<List<WasteStockItem>>? _stockSub;
+
+  Set<String> get _qtyOnlyTypeNames =>
+      widget.wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
 
   @override
   void initState() {
@@ -997,10 +1004,22 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
     _stockSub = widget.wasteService.watchAllStockOnSite().listen(
       (items) {
         if (!mounted) return;
-        final total = items.fold<double>(0.0, (acc, i) => acc + (i.estimatedWeightKg ?? 0.0));
+        final qtyTypes = _qtyOnlyTypeNames;
+        int wtCount = 0;
+        int qtyCount = 0;
+        double totalKg = 0;
+        for (final i in items) {
+          if (qtyTypes.contains(i.wasteType) || qtyTypes.contains(i.subtype)) {
+            qtyCount++;
+          } else {
+            wtCount++;
+            totalKg += i.estimatedWeightKg ?? 0.0;
+          }
+        }
         setState(() {
-          _count = items.length;
-          _totalKg = total;
+          _weightedCount = wtCount;
+          _qtyOnlyCount = qtyCount;
+          _totalKg = totalKg;
           _loading = false;
           _error = false;
         });
@@ -1017,9 +1036,21 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
     super.dispose();
   }
 
+  String _buildSummary() {
+    final total = _weightedCount + _qtyOnlyCount;
+    if (total == 0) return '';
+    if (_weightedCount > 0 && _qtyOnlyCount > 0) {
+      final wtPart = _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '$_weightedCount item${_weightedCount == 1 ? '' : 's'}';
+      return '$wtPart  +  $_qtyOnlyCount bin${_qtyOnlyCount == 1 ? '' : 's'}';
+    }
+    if (_qtyOnlyCount > 0) return '';
+    return _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error) return const SizedBox.shrink();
+    final total = _weightedCount + _qtyOnlyCount;
     final appColors = Theme.of(context).appColors;
     final surfaceBg = appColors.wasteGreenSurface;
     final onSurface = onColor(surfaceBg);
@@ -1049,43 +1080,18 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
                   Icon(Icons.inventory_2_outlined, color: appColors.wasteGreen, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$_count item${_count == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: onSurface),
-                            ),
-                            Text('on site',
-                                style: TextStyle(
-                                    fontSize: 10, color: onSurface.withAlpha(180))),
-                          ],
+                        Text(
+                          '$total item${total == 1 ? '' : 's'} on site',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: onSurface),
                         ),
-                        Container(
-                          width: 1, height: 28,
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          color: onSurface.withAlpha(60),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '—',
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: onSurface),
-                            ),
-                            Text('est. weight',
-                                style: TextStyle(
-                                    fontSize: 10, color: onSurface.withAlpha(180))),
-                          ],
-                        ),
+                        if (!_loading && _buildSummary().isNotEmpty)
+                          Text(
+                            _buildSummary(),
+                            style: TextStyle(fontSize: 11, color: onSurface.withAlpha(180)),
+                          ),
                       ],
                     ),
                   ),

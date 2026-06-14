@@ -14,6 +14,7 @@ import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../utils/waste_stock_mapping.dart';
+import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_app_bar.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import 'waste_signature_screen.dart';
@@ -212,14 +213,14 @@ class _WasteBeginCollectionScreenState
         : _wasteTypes;
     final typeNames = itemSubtypeOptionsForChips(available, _wasteTypes);
 
-    final result = await showModalBottomSheet<_ItemEntry>(
+    final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddItemSheet(
+          child: WasteAddItemSheet(
             types: typeNames,
             quantityOnlyTypeNames: _quantityOnlyTypeNames,
             quantityLabelByType: _quantityLabelByType,
@@ -228,7 +229,14 @@ class _WasteBeginCollectionScreenState
       ),
     );
     if (result != null && mounted) {
-      setState(() => _items.add(result));
+      setState(() => _items.add(_ItemEntry(
+        subtype: result.subtype,
+        weightKg: result.weightKg,
+        quantity: result.quantity,
+        notes: result.notes,
+        photoPaths: result.localPhotoPaths,
+        isQuantityOnly: result.isQuantityOnly,
+      )));
     }
   }
 
@@ -257,6 +265,7 @@ class _WasteBeginCollectionScreenState
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
+    final isQtyOnly = _quantityOnlyTypeNames.contains(widget.load.mainWasteType);
 
     try {
       // Build itemsData for submitCollection — includes both stock-sourced and fresh items
@@ -286,6 +295,7 @@ class _WasteBeginCollectionScreenState
         loadPhotoPaths: _loadPhotoPaths,
         signatureLocalPath: _signatureTempPath,
         contractorId: widget.load.contractorId,
+        isQuantityOnly: isQtyOnly,
       );
 
       // Mark confirmed stock items as loaded. If the load itself was queued
@@ -305,7 +315,9 @@ class _WasteBeginCollectionScreenState
             content: Text(
               result.queuedOffline
                   ? 'Collection saved offline — will sync when connection returns'
-                  : 'Collection submitted — manager will enter weighbridge weight',
+                  : isQtyOnly
+                      ? 'Collection submitted — awaiting admin cost review'
+                      : 'Collection submitted — manager will enter weighbridge weight',
             ),
             backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
             duration: const Duration(seconds: 4),
@@ -742,220 +754,3 @@ class _ItemEntry {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Add item bottom sheet (fresh items only — stock comes from pre-populated list)
-// ---------------------------------------------------------------------------
-
-class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet({
-    required this.types,
-    this.quantityOnlyTypeNames = const {},
-    this.quantityLabelByType = const {},
-  });
-  final List<String> types;
-  final Set<String> quantityOnlyTypeNames;
-  final Map<String, String> quantityLabelByType;
-
-  @override
-  State<_AddItemSheet> createState() => _AddItemSheetState();
-}
-
-class _AddItemSheetState extends State<_AddItemSheet> {
-  final WasteService _wasteService = WasteService();
-  String? _wasteType;
-  final _weightCtrl = TextEditingController();
-  final _qtyCtrl    = TextEditingController();
-  final _notesCtrl  = TextEditingController();
-  final List<String> _photos = [];
-  bool _addingPhoto = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.types.isNotEmpty) _wasteType = widget.types.first;
-  }
-
-  @override
-  void dispose() {
-    _weightCtrl.dispose();
-    _qtyCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  bool get _isQtyOnly => _wasteType != null && widget.quantityOnlyTypeNames.contains(_wasteType);
-
-  bool get _valid {
-    if (_wasteType == null || _photos.isEmpty) return false;
-    if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
-    return double.tryParse(_weightCtrl.text) != null;
-  }
-
-  String get _qtyLabel => widget.quantityLabelByType[_wasteType] ?? 'Quantity';
-
-  Future<void> _addPhoto(ImageSource source) async {
-    setState(() => _addingPhoto = true);
-    try {
-      final path = await _wasteService.pickAndCompressPhotoFromSource(source);
-      if (path != null && mounted) setState(() => _photos.add(path));
-    } finally {
-      if (mounted) setState(() => _addingPhoto = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('Add Waste Item',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.types.isNotEmpty) ...[
-                const Text('Waste Type', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
-                DropdownButton<String>(
-                  value: _wasteType,
-                  isExpanded: true,
-                  items: widget.types.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                  onChanged: (v) => setState(() {
-                    _wasteType = v;
-                    _weightCtrl.clear();
-                    _qtyCtrl.clear();
-                  }),
-                ),
-              ] else
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Waste Type *', isDense: true),
-                  onChanged: (v) => setState(() => _wasteType = v.isEmpty ? null : v),
-                ),
-              const SizedBox(height: 10),
-              if (_isQtyOnly) ...[
-                TextField(
-                  controller: _qtyCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: '$_qtyLabel *',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ] else ...[
-                TextField(
-                  controller: _weightCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Weight (kg) *', isDense: true, suffixText: 'kg'),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _qtyCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-                ),
-              ],
-              const SizedBox(height: 10),
-              TextField(
-                controller: _notesCtrl,
-                decoration: const InputDecoration(labelText: 'Notes (optional)', isDense: true),
-              ),
-              const SizedBox(height: 12),
-              Text('Photos (${_photos.length}) *',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt),
-                    tooltip: 'Camera',
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library),
-                    tooltip: 'Gallery',
-                  ),
-                  if (_addingPhoto) ...[
-                    const SizedBox(width: 12),
-                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ],
-                ],
-              ),
-              if (_photos.isNotEmpty)
-                SizedBox(
-                  height: 64,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _photos.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 6),
-                    itemBuilder: (_, i) => Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(File(_photos[i]), width: 60, height: 60, fit: BoxFit.cover),
-                        ),
-                        Positioned(
-                          top: 0, right: 0,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _photos.removeAt(i)),
-                            child: const CircleAvatar(
-                              radius: 9,
-                              backgroundColor: Colors.red,
-                              child: Icon(Icons.close, size: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _valid
-                      ? () => Navigator.pop(context, _ItemEntry(
-                          subtype: _wasteType!,
-                          weightKg: _isQtyOnly ? 0.0 : double.parse(_weightCtrl.text),
-                          quantity: _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
-                          notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
-                          photoPaths: List.of(_photos),
-                          isQuantityOnly: _isQtyOnly,
-                        ))
-                      : null,
-                  child: const Text('Add'),
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
