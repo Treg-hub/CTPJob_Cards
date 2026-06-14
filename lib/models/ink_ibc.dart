@@ -30,6 +30,7 @@ class InkIbc {
     this.washTolulLitres,
     this.orderNumber,
     this.cgnaNumber,
+    this.chargeNumber,
   });
 
   final String? id;
@@ -48,6 +49,9 @@ class InkIbc {
   /// CGNA number captured at receipt.
   final String? cgnaNumber;
 
+  /// Siegwerk batch/lot ("Charge"), from the GS1 barcode (AI 10).
+  final String? chargeNumber;
+
   factory InkIbc.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkIbc(
@@ -63,6 +67,7 @@ class InkIbc {
       washTolulLitres: (d['wash_toloul_litres'] as num?)?.toDouble(),
       orderNumber: d['order_number'] as String?,
       cgnaNumber: d['cgna_number'] as String?,
+      chargeNumber: d['charge_number'] as String?,
     );
   }
 
@@ -78,5 +83,6 @@ class InkIbc {
         if (washTolulLitres != null) 'wash_toloul_litres': washTolulLitres,
         if (orderNumber != null) 'order_number': orderNumber,
         if (cgnaNumber != null) 'cgna_number': cgnaNumber,
+        if (chargeNumber != null) 'charge_number': chargeNumber,
       };
 }
