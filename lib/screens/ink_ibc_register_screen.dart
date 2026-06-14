@@ -5,9 +5,12 @@ import 'package:intl/intl.dart';
 import '../models/ink_ibc.dart';
 import '../providers/ink_provider.dart';
 
-/// IBC register — shows all IBCs with a status filter (All / Received /
-/// Transferred). Dense list with colour name, kg, status chip, dates, and
-/// wash toloul for transferred IBCs.
+const _kRegColours = ['yellow', 'red', 'blue', 'black'];
+const _kRegColourLabels = ['Yellow', 'Red', 'Blue', 'Black'];
+
+/// IBC register — colour tabs (Yellow | Red | Blue | Black), each with a
+/// search field and a sortable list of IBCs.  Status filter bar above the tabs
+/// applies across all colours (All / Received / Consumed).
 class InkIbcRegisterScreen extends ConsumerStatefulWidget {
   const InkIbcRegisterScreen({super.key});
 
@@ -15,25 +18,40 @@ class InkIbcRegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<InkIbcRegisterScreen> createState() => _State();
 }
 
-class _State extends ConsumerState<InkIbcRegisterScreen> {
-  static final _qty = NumberFormat('#,##0.##');
-  static final _df = DateFormat('d MMM yyyy');
+class _State extends ConsumerState<InkIbcRegisterScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab;
 
   /// null = All
   InkIbcStatus? _filter;
 
   @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: _kRegColours.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final ibcsAsync = ref.watch(inkAllIbcsProvider);
-    final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
-    final nameByCode = {for (final i in items) i.itemCode: i.displayName};
 
     return Scaffold(
-      appBar: AppBar(title: const Text('IBC Register')),
+      appBar: AppBar(
+        title: const Text('IBC Register'),
+        bottom: TabBar(
+          controller: _tab,
+          tabs: [for (final l in _kRegColourLabels) Tab(text: l)],
+        ),
+      ),
       body: Column(
         children: [
-          // ── Filter bar ──────────────────────────────────────────────────
+          // ── Status filter ─────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
             child: SingleChildScrollView(
@@ -43,76 +61,212 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                 children: [
                   _filterChip(context, null, 'All'),
                   _filterChip(context, InkIbcStatus.received, 'Received'),
-                  _filterChip(context, InkIbcStatus.transferred, 'Consumed'),
+                  _filterChip(
+                      context, InkIbcStatus.transferred, 'Consumed'),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 6),
-          // ── List ────────────────────────────────────────────────────────
+
+          // ── Colour tab views ──────────────────────────────────────────────
           Expanded(
             child: ibcsAsync.when(
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (all) {
-                final ibcs = _filter == null
+                final pool = _filter == null
                     ? all
                     : all.where((b) => b.status == _filter).toList();
 
-                if (ibcs.isEmpty) {
-                  final label = switch (_filter) {
-                    null => 'No IBCs recorded yet.',
-                    InkIbcStatus.received =>
-                      'No IBCs currently in received state.',
-                    InkIbcStatus.transferred =>
-                      'No consumed IBCs found.',
-                  };
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(label,
-                          style: TextStyle(
-                              color: scheme.onSurfaceVariant)),
-                    ),
-                  );
-                }
+                return TabBarView(
+                  controller: _tab,
+                  children: [
+                    for (final c in _kRegColours)
+                      _RegisterColourTab(
+                        ibcs: pool
+                            .where((i) => i.itemCode == c)
+                            .toList()
+                          ..sort((a, b) =>
+                              a.ibcNumber.compareTo(b.ibcNumber)),
+                        colourLabel:
+                            c[0].toUpperCase() + c.substring(1),
+                        statusFilter: _filter,
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                return ListView.separated(
+  Widget _filterChip(
+      BuildContext context, InkIbcStatus? value, String label) {
+    final selected = _filter == value;
+    final scheme = Theme.of(context).colorScheme;
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (_) => setState(() => _filter = value),
+      selectedColor: scheme.primaryContainer,
+      labelStyle: TextStyle(
+        color:
+            selected ? scheme.onPrimaryContainer : scheme.onSurface,
+        fontWeight:
+            selected ? FontWeight.w600 : FontWeight.normal,
+      ),
+    );
+  }
+}
+
+// ── Searchable IBC list for one colour tab ──────────────────────────────────
+
+class _RegisterColourTab extends StatefulWidget {
+  const _RegisterColourTab({
+    required this.ibcs,
+    required this.colourLabel,
+    required this.statusFilter,
+  });
+
+  final List<InkIbc> ibcs;
+  final String colourLabel;
+  final InkIbcStatus? statusFilter;
+
+  @override
+  State<_RegisterColourTab> createState() => _RegisterColourTabState();
+}
+
+class _RegisterColourTabState extends State<_RegisterColourTab>
+    with AutomaticKeepAliveClientMixin {
+  static final _qty = NumberFormat('#,##0.##');
+  static final _df = DateFormat('d MMM yyyy');
+
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final scheme = Theme.of(context).colorScheme;
+    final filtered = widget.ibcs
+        .where((i) =>
+            _query.isEmpty ||
+            i.ibcNumber.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => _query = v.trim()),
+            decoration: InputDecoration(
+              hintText: 'Search IBC number…',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24)),
+              contentPadding: const EdgeInsets.symmetric(
+                  vertical: 8, horizontal: 16),
+              suffixIcon: _query.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      })
+                  : null,
+            ),
+          ),
+        ),
+        // Count line
+        if (widget.ibcs.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Row(
+              children: [
+                Text(
+                  '${filtered.length} IBC${filtered.length == 1 ? '' : 's'}',
+                  style: TextStyle(
+                      fontSize: 12, color: scheme.onSurfaceVariant),
+                ),
+                if (_query.isNotEmpty &&
+                    filtered.length != widget.ibcs.length)
+                  Text(
+                    ' of ${widget.ibcs.length}',
+                    style: TextStyle(
+                        fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+              ],
+            ),
+          ),
+        // IBC list
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      _query.isNotEmpty
+                          ? 'No IBCs match "$_query".'
+                          : 'No ${widget.colourLabel} IBCs'
+                              '${widget.statusFilter != null ? ' (${widget.statusFilter!.value})' : ''}.',
+                      style:
+                          TextStyle(color: scheme.onSurfaceVariant),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                  itemCount: ibcs.length,
+                  itemCount: filtered.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, indent: 56),
                   itemBuilder: (_, i) {
-                    final ibc = ibcs[i];
-                    final colour =
-                        nameByCode[ibc.itemCode] ?? ibc.itemCode;
-                    final isTransferred =
+                    final ibc = filtered[i];
+                    final consumed =
                         ibc.status == InkIbcStatus.transferred;
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Status icon column
+                          // Status icon
                           Padding(
-                            padding:
-                                const EdgeInsets.only(top: 2, right: 12),
+                            padding: const EdgeInsets.only(
+                                top: 2, right: 12),
                             child: Icon(
-                              isTransferred
+                              consumed
                                   ? Icons.check_circle_outline
                                   : Icons.propane_tank_outlined,
                               size: 22,
-                              color: isTransferred
+                              color: consumed
                                   ? scheme.tertiary
                                   : scheme.primary,
                             ),
                           ),
-                          // Content
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                                 // IBC number + status chip
                                 Row(
@@ -134,18 +288,25 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                // Colour + kg
+                                // kg + charge
                                 Text(
-                                  '$colour · ${_qty.format(ibc.kg)} kg',
+                                  [
+                                    '${_qty.format(ibc.kg)} kg',
+                                    if (ibc.chargeNumber != null)
+                                      'Charge ${ibc.chargeNumber}',
+                                  ].join(' · '),
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall,
                                 ),
                                 const SizedBox(height: 2),
-                                // Received date (+ supplier)
+                                // Received date + supplier
                                 Text(
-                                  'Received ${_df.format(ibc.receivedDate)}'
-                                  '${ibc.supplierName != null ? ' · ${ibc.supplierName}' : ''}',
+                                  [
+                                    'Received ${_df.format(ibc.receivedDate)}',
+                                    if (ibc.supplierName != null)
+                                      ibc.supplierName!,
+                                  ].join(' · '),
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall
@@ -153,12 +314,33 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                                           color:
                                               scheme.onSurfaceVariant),
                                 ),
-                                // Transferred date + wash toloul (when applicable)
-                                if (isTransferred) ...[
+                                if (ibc.orderNumber != null ||
+                                    ibc.cgnaNumber != null) ...[
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Transferred ${ibc.transferredDate != null ? _df.format(ibc.transferredDate!) : '—'}'
-                                    '${ibc.washTolulLitres != null ? ' · Wash ${_qty.format(ibc.washTolulLitres!)} LTS' : ''}',
+                                    [
+                                      if (ibc.orderNumber != null)
+                                        'Order ${ibc.orderNumber}',
+                                      if (ibc.cgnaNumber != null)
+                                        'CGNA ${ibc.cgnaNumber}',
+                                    ].join(' · '),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                            color:
+                                                scheme.onSurfaceVariant),
+                                  ),
+                                ],
+                                // Consumed date + wash
+                                if (consumed) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    [
+                                      'Consumed ${ibc.transferredDate != null ? _df.format(ibc.transferredDate!) : '—'}',
+                                      if (ibc.washTolulLitres != null)
+                                        'Wash ${_qty.format(ibc.washTolulLitres!)} LTS',
+                                    ].join(' · '),
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -173,33 +355,14 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                       ),
                     );
                   },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterChip(
-      BuildContext context, InkIbcStatus? value, String label) {
-    final selected = _filter == value;
-    final scheme = Theme.of(context).colorScheme;
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => setState(() => _filter = value),
-      selectedColor: scheme.primaryContainer,
-      labelStyle: TextStyle(
-        color: selected ? scheme.onPrimaryContainer : scheme.onSurface,
-        fontWeight:
-            selected ? FontWeight.w600 : FontWeight.normal,
-      ),
+                ),
+        ),
+      ],
     );
   }
 }
+
+// ── Status chip ─────────────────────────────────────────────────────────────
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status, required this.scheme});
@@ -208,19 +371,19 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTransferred = status == InkIbcStatus.transferred;
+    final consumed = status == InkIbcStatus.transferred;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isTransferred
+        color: consumed
             ? scheme.tertiaryContainer
             : scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        isTransferred ? 'Consumed' : 'Received',
+        consumed ? 'Consumed' : 'Received',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: isTransferred
+              color: consumed
                   ? scheme.onTertiaryContainer
                   : scheme.onSecondaryContainer,
               fontWeight: FontWeight.w600,
