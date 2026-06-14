@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
@@ -14,6 +15,9 @@ import '../utils/role.dart' as role_utils;
 /// 1/2 also allowed); the screen previews inputs consumed and output produced
 /// (with an estimated cost from current WACs) and records the run: a
 /// consumption per input + a manufacture of the output.
+///
+/// Below the form the 10 most recent production runs are shown as a quick
+/// history so the operator can confirm what was last made.
 class InkProductionRunScreen extends ConsumerStatefulWidget {
   const InkProductionRunScreen({super.key});
 
@@ -64,11 +68,11 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   @override
   Widget build(BuildContext context) {
     final recipesAsync = ref.watch(inkRecipesProvider);
+    final runsAsync = ref.watch(inkProductionRunsProvider);
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final byCode = {for (final i in items) i.itemCode: i};
     final wacByItem = {for (final i in items) i.itemCode: i.weightedAverageCost};
     final df = DateFormat('EEE d MMM yyyy HH:mm');
-    // Operators don't see cost — only managers.
     final isManager =
         role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
@@ -95,14 +99,17 @@ class _State extends ConsumerState<InkProductionRunScreen> {
           double totalInputCost = 0;
           if (recipe != null) {
             for (final l in recipe.inputs) {
-              totalInputCost += l.qtyPerPot * _pots * (wacByItem[l.itemCode] ?? 0);
+              totalInputCost +=
+                  l.qtyPerPot * _pots * (wacByItem[l.itemCode] ?? 0);
             }
           }
           final outputQty = (recipe?.outputPerPot ?? 0) * _pots;
+          final scheme = Theme.of(context).colorScheme;
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // ── Recipe picker ───────────────────────────────────────────
               DropdownButtonFormField<String>(
                 // ignore: deprecated_member_use
                 value: _recipeId,
@@ -116,6 +123,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 onChanged: (v) => setState(() => _recipeId = v),
               ),
               const SizedBox(height: 16),
+              // ── Pot count ───────────────────────────────────────────────
               Row(
                 children: [
                   const Text('Pots: '),
@@ -127,11 +135,13 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                       ButtonSegment(value: 3, label: Text('3 (batch)')),
                     ],
                     selected: {_pots},
-                    onSelectionChanged: (s) => setState(() => _pots = s.first),
+                    onSelectionChanged: (s) =>
+                        setState(() => _pots = s.first),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
+              // ── Effective date ──────────────────────────────────────────
               OutlinedButton.icon(
                 onPressed: _pickDate,
                 icon: const Icon(Icons.event),
@@ -140,14 +150,18 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                     minimumSize: const Size.fromHeight(48),
                     alignment: Alignment.centerLeft),
               ),
+
+              // ── Recipe preview ──────────────────────────────────────────
               if (recipe != null) ...[
                 const SizedBox(height: 20),
-                Text('Consumes', style: Theme.of(context).textTheme.titleMedium),
+                Text('Consumes',
+                    style: Theme.of(context).textTheme.titleMedium),
                 for (final l in recipe.inputs)
                   _line(context, byCode[l.itemCode], l.qtyPerPot * _pots,
                       wacByItem[l.itemCode] ?? 0, isManager),
                 const Divider(height: 24),
-                Text('Produces', style: Theme.of(context).textTheme.titleMedium),
+                Text('Produces',
+                    style: Theme.of(context).textTheme.titleMedium),
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
@@ -158,8 +172,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 ),
                 if (isManager)
                   Card(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: scheme.surfaceContainerHighest,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Row(
@@ -167,8 +180,8 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                         children: [
                           const Text('Estimated input cost'),
                           Text(_money.format(totalInputCost),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -189,6 +202,47 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                       minimumSize: const Size.fromHeight(52)),
                 ),
               ],
+
+              // ── Recent production runs ──────────────────────────────────
+              const SizedBox(height: 28),
+              const Divider(),
+              const SizedBox(height: 4),
+              Text('Recent Runs',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              ...runsAsync.when(
+                loading: () =>
+                    [const LinearProgressIndicator()],
+                error: (_, __) => [],
+                data: (runs) {
+                  final recent = runs.take(10).toList();
+                  if (recent.isEmpty) {
+                    return [
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No production runs recorded yet.',
+                          style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: 13),
+                        ),
+                      ),
+                    ];
+                  }
+                  return [
+                    for (final run in recent)
+                      _RunTile(
+                        run: run,
+                        byCode: byCode,
+                        isManager: isManager,
+                        qty: _qty,
+                        money: _money,
+                      ),
+                  ];
+                },
+              ),
+              const SizedBox(height: 16),
             ],
           );
         },
@@ -196,19 +250,116 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     );
   }
 
-  Widget _line(BuildContext context, InkStockItem? item, double qty, double wac,
-      bool showMoney) {
+  Widget _line(BuildContext context, InkStockItem? item, double qty,
+      double wac, bool showMoney) {
     final negative = item != null && item.currentBalance < qty;
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       title: Text(item?.displayName ?? '?'),
       subtitle: negative
-          ? Text('Only ${_qty.format(item.currentBalance)} ${item.unit} on hand',
-              style: TextStyle(color: Theme.of(context).colorScheme.error))
+          ? Text(
+              'Only ${_qty.format(item.currentBalance)} ${item.unit} on hand',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error))
           : null,
       trailing: Text('${_qty.format(qty)} ${item?.unit ?? ''}'
           '${showMoney ? '  ·  ${_money.format(qty * wac)}' : ''}'),
+    );
+  }
+}
+
+// ── Recent production run tile ───────────────────────────────────────────────
+
+class _RunTile extends StatelessWidget {
+  const _RunTile({
+    required this.run,
+    required this.byCode,
+    required this.isManager,
+    required this.qty,
+    required this.money,
+  });
+
+  static final _df = DateFormat('d MMM yy HH:mm');
+
+  final InkProductionRun run;
+  final Map<String, InkStockItem> byCode;
+  final bool isManager;
+  final NumberFormat qty;
+  final NumberFormat money;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final outputName =
+        byCode[run.outputItemCode]?.displayName ?? run.outputItemCode;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Pot-count badge
+          Container(
+            width: 30,
+            height: 30,
+            margin: const EdgeInsets.only(right: 12, top: 1),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${run.pots}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Recipe + output
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${run.recipeName} — ${qty.format(run.outputQty)} kg $outputName',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                    ),
+                    if (isManager && run.totalInputCost > 0)
+                      Text(
+                        money.format(run.totalInputCost),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                // Date + actor
+                Text(
+                  [
+                    _df.format(run.effectiveAt),
+                    if (run.actorName != null) run.actorName!,
+                  ].join(' · '),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
