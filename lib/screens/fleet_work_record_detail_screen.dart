@@ -409,7 +409,7 @@ class _RecordBody extends ConsumerWidget {
         ),
 
         // ── Edit button — admins always; mechanics while uncosted and
-        //    within the 7-day edit window ─────────────────────────────────
+        //    within the edit window ────────────────────────────────────────
         if (record.canEdit(isMechanic: isMechanic, isAdmin: isAdmin)) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(

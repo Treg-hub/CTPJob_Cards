@@ -117,6 +117,8 @@ To correct a locked job, **add a comment** on the job explaining the correction.
 
 Sometimes a report is wrong (duplicate, not a real fault). On the problem screen, use **Close with a note only** and write a short explanation. No hour-meter or work record is needed.
 
+> **Exception — Out of service problems:** if the machine was reported **out of service**, you must close it by logging the repair (**Finish the fix**). The note-only option is not available for these.
+
 ---
 
 ## What you never need to worry about
@@ -147,7 +149,7 @@ When the last open out-of-service problem on a machine is fixed, the red warning
 | Log planned work (no fault) | **Log other work** |
 | Close several reports with one job | Tick them under **Also fixes…** |
 | Fix a typo in a saved job | Edit within 7 days, comment after that |
-| Dismiss a false alarm | **Close with a note only** |
+| Dismiss a false alarm | **Close with a note only** (not available for out-of-service problems) |
 
 ---
 

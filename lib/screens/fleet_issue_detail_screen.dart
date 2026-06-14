@@ -41,6 +41,10 @@ class _FleetIssueDetailScreenState
   final _service = FleetService();
   bool _actionInProgress = false;
 
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _startJob(FleetIssue issue) async {
     final emp = currentEmployee;
     if (emp == null || issue.status != FleetIssueStatus.open) return;
@@ -100,6 +104,16 @@ class _FleetIssueDetailScreenState
   Future<void> _resolveWithNote(FleetIssue issue) async {
     final emp = currentEmployee;
     if (emp == null) return;
+
+    // Out-of-service issues must be closed with a work record — a note alone
+    // can't close a safety-critical fault (decided 2026-06-10).
+    if (issue.severity == FleetIssueSeverity.outOfService) {
+      _showError(
+        'Out-of-service problems must be closed by logging the repair '
+        '(use "Finish the fix").',
+      );
+      return;
+    }
 
     final noteCtrl = TextEditingController();
     final mechanicClose = widget.mechanicMode;
@@ -389,12 +403,21 @@ class _IssueBody extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: actionInProgress ? null : onResolveWithNote,
-              child: const Text('Close with a note only (no work log)'),
+          if (issue.severity == FleetIssueSeverity.outOfService)
+            // OOS faults must be closed with a work log (decided 2026-06-10).
+            Center(
+              child: Text(
+                'Out of service — must be closed by logging the repair.',
+                style: TextStyle(fontSize: 12, color: colors?.textMuted),
+              ),
+            )
+          else
+            Center(
+              child: TextButton(
+                onPressed: actionInProgress ? null : onResolveWithNote,
+                child: const Text('Close with a note only (no work log)'),
+              ),
             ),
-          ),
           const Divider(height: 32),
         ],
         if (isReporter && !isMechanic) ...[

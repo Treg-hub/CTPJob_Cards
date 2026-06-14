@@ -20,6 +20,10 @@ enum FleetCostStatus {
 
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
+  /// Records lock from editing this many days after creation, regardless of
+  /// costing status (decided 2026-06-10). Cost lines stay open.
+  static const int editLockDays = 14;
+
   final String? id;
   final String workNumber;
   final String assetId;
@@ -64,12 +68,14 @@ class FleetWorkRecord {
   });
 
   /// Whether the record is still inside the [editLockDays] window.
-  /// Records with no server timestamp yet are treated as locked.
+  /// Records with no server timestamp yet are treated as not locked.
   bool get isWithinEditWindow {
     final created = createdAt;
-    if (created == null) return false;
+    if (created == null) return true;
     return DateTime.now().difference(created).inDays < editLockDays;
   }
+
+  bool get isEditLocked => !isWithinEditWindow;
 
   /// Edit rule shared across screens: admins always; mechanics only
   /// while uncosted and inside the edit window.
