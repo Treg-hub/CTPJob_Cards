@@ -11,7 +11,8 @@
 /// declares the type, its Firestore string, and its report column.
 ///
 /// LOCKED RULES (see docs/Ink_Factory_Migration_Plan.md §3.2):
-///   • WAC changes ONLY on `purchase` (once costed), `manufacture`, `revaluation`.
+///   • WAC changes ONLY on `purchase` (once costed), `manufacture`, `revaluation`,
+///     and `valueAdjustment`.
 ///   • `recovery` and `adjustment` move quantity at the CURRENT WAC (no WAC change).
 ///   • All `consumption*` types are deductions issued at the current WAC.
 ///   • `transfer` (IBC→tank) is quantity-neutral for the stock item (audit only).
@@ -62,7 +63,12 @@ enum InkTxnType {
 
   /// A correction event linking to the transaction it amends. Applied by editing
   /// the corrected transaction and re-replaying; carries no balance effect itself.
-  correction('correction', InkReportColumn.none);
+  correction('correction', InkReportColumn.none),
+
+  /// Pure cost (rand value) adjustment under instruction from accounts. Quantity
+  /// is unchanged. WAC is recalculated: (balance × currentWac + amount) / balance.
+  /// The signed amount goes in [InkTransaction.totalCost] (negative = value decrease).
+  valueAdjustment('value_adjustment', InkReportColumn.revaluations);
 
   const InkTxnType(this.value, this.reportColumn);
 

@@ -21,6 +21,7 @@ String inkTxnLabel(InkTxnType t) => switch (t) {
       InkTxnType.revaluation => 'Revaluation',
       InkTxnType.transfer => 'Transfer',
       InkTxnType.correction => 'Correction',
+      InkTxnType.valueAdjustment => 'Value adjustment',
     };
 
 /// Stock item detail — the read-back surface: current position + the full
