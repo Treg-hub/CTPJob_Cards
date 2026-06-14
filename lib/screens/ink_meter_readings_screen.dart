@@ -161,8 +161,9 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
                 e.key: e.value.kgPerLitre
           };
           final last = lastAsync.valueOrNull ?? {};
-          final meterItems =
-              items.where((i) => factors.containsKey(i.itemCode)).toList();
+          final meterItems = items
+              .where((i) => i.metered && factors.containsKey(i.itemCode))
+              .toList();
 
           if (meterItems.isEmpty) {
             return const Padding(

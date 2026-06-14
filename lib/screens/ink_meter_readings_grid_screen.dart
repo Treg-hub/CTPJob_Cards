@@ -129,8 +129,9 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
     };
     final last = ref.watch(inkLatestMeterReadingsProvider).valueOrNull ?? {};
     final recent = ref.watch(inkRecentMeterReadingsProvider).valueOrNull ?? {};
-    final meterItems =
-        items.where((i) => factors.containsKey(i.itemCode)).toList();
+    final meterItems = items
+        .where((i) => i.metered && factors.containsKey(i.itemCode))
+        .toList();
     final df = DateFormat('EEE d MMM HH:mm');
 
     if (meterItems.isEmpty) {

@@ -466,6 +466,8 @@ class InkService {
     required DateTime effectiveAt,
     required String actorClockNo,
     required String actorName,
+    String? orderNumber,
+    String? cgnaNumber,
   }) async {
     for (final ibc in ibcs) {
       await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
@@ -475,6 +477,8 @@ class InkService {
               kg: ibc.kg,
               receivedDate: effectiveAt,
               supplierName: supplierName,
+              orderNumber: orderNumber,
+              cgnaNumber: cgnaNumber,
             ).toFirestore(),
             SetOptions(merge: true),
           );
@@ -494,7 +498,9 @@ class InkService {
         effectiveAt: effectiveAt,
         costStatus: InkCostStatus.pending,
         supplierName: supplierName,
-        notes: '${nums.length} IBC(s): ${nums.join(', ')}',
+        notes: '${nums.length} IBC(s): ${nums.join(', ')}'
+            '${(orderNumber ?? '').isNotEmpty ? ' · Order $orderNumber' : ''}'
+            '${(cgnaNumber ?? '').isNotEmpty ? ' · CGNA $cgnaNumber' : ''}',
         actorClockNo: actorClockNo,
         actorName: actorName,
         idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
