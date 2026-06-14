@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/ink_ibc.dart';
 import '../providers/ink_provider.dart';
+import '../theme/app_theme.dart';
 
 
 /// IBC register — colour tabs (Yellow | Red | Blue | Black), each with a
@@ -257,7 +258,7 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                                   : Icons.propane_tank_outlined,
                               size: 22,
                               color: consumed
-                                  ? scheme.tertiary
+                                  ? Theme.of(context).appColors.statusCompleted
                                   : scheme.primary,
                             ),
                           ),
@@ -343,7 +344,7 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                                         .textTheme
                                         .bodySmall
                                         ?.copyWith(
-                                            color: scheme.tertiary),
+                                            color: Theme.of(context).appColors.statusCompleted),
                                   ),
                                 ],
                               ],
@@ -370,20 +371,19 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final consumed = status == InkIbcStatus.transferred;
+    final chipColor = consumed
+        ? Theme.of(context).appColors.statusCompleted
+        : scheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: consumed
-            ? scheme.tertiaryContainer
-            : scheme.secondaryContainer,
+        color: chipColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         consumed ? 'Consumed' : 'Received',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: consumed
-                  ? scheme.onTertiaryContainer
-                  : scheme.onSecondaryContainer,
+              color: chipColor,
               fontWeight: FontWeight.w600,
             ),
       ),
