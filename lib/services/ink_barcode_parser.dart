@@ -49,7 +49,9 @@ class IbcScanResult {
 /// scan the GS1-128 barcode and read the 14 digits after "(01)" on the label.
 const Map<String, String> kInkGtinColours = {
   '04045647007179': 'Yellow',
-  // TODO: add Red, Blue, and Black GTINs once confirmed from physical labels
+  '04045647007407': 'Red',
+  '04045648163515': 'Blue',
+  // TODO: add Black GTIN once confirmed from physical label
 };
 
 /// Siegwerk article number (right-9 of a standalone legacy product barcode) → colour.
