@@ -136,9 +136,41 @@ class SyncService {
     return value;
   }
 
+  /// Drops older duplicate fleet queue entries (same collection/doc/op).
+  /// Photo entries use deterministic ids (issue_{id}_{pathHash}), so two
+  /// entries with the same key are true duplicates of the same upload.
+  /// create_cf entries have unique queue ids and are never deduped.
+  void _dedupeFleetQueue() {
+    try {
+      if (!_queueBox.isOpen) return;
+      final seen = <String, SyncQueueItem>{};
+      final toDelete = <SyncQueueItem>[];
+      for (final item in _queueBox.values.toList()) {
+        if (!item.collection.startsWith('fleet_')) continue;
+        final key = '${item.collection}:${item.id}:${item.operation}';
+        final existing = seen[key];
+        if (existing == null) {
+          seen[key] = item;
+        } else if (item.createdAt.isAfter(existing.createdAt)) {
+          toDelete.add(existing);
+          seen[key] = item;
+        } else {
+          toDelete.add(item);
+        }
+      }
+      for (final item in toDelete) {
+        item.delete();
+        debugPrint('🗑️ Pruned duplicate fleet queue entry: ${item.collection}/${item.id}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ _dedupeFleetQueue error (safe no-op): $e');
+    }
+  }
+
   Future<void> _processQueue() async {
     if (_isProcessing) return;
     if (_queueBox.isEmpty) return;
+    _dedupeFleetQueue();
     _isProcessing = true;
     try {
       await _processQueueInner();
@@ -196,9 +228,10 @@ class SyncService {
             final docRef = firestore.collection(item.collection).doc(item.id);
             final payload = _restoreFirestoreTimestamps(item.data);
             if (item.operation == 'create') {
-              // Fleet creates are immutable once written (fleet_issues content
-              // can never change per security rules) — if the direct write
+              // Fleet creates are immutable once written — if the direct write
               // already landed, replaying the set() would be denied. Skip it.
+              // Also safe for work records whose photo URLs/status may have
+              // changed since the queue entry was written.
               final existing = await docRef.get();
               if (!existing.exists) {
                 await docRef.set(payload);
@@ -657,6 +690,28 @@ class SyncService {
     }
   }
 
+  /// Mutates the data map of one queued item in place and persists it.
+  /// Used to record partial progress (e.g. the CF-created record id, photo
+  /// paths already uploaded) so a replay resumes instead of repeating work.
+  Future<void> mutateQueuedItemData({
+    required String collection,
+    required String documentId,
+    required void Function(Map<String, dynamic> data) mutate,
+  }) async {
+    try {
+      if (!_queueBox.isOpen) return;
+      for (final item in _queueBox.values.toList()) {
+        if (item.collection == collection && item.id == documentId) {
+          mutate(item.data);
+          await item.save();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ mutateQueuedItemData error: $e');
+    }
+  }
+
   static Map<String, dynamic> _restoreFirestoreTimestamps(
     Map<String, dynamic> data,
   ) {
@@ -779,6 +834,7 @@ class SyncService {
 
   Future<void> _processFleetWorkRecordCreate(SyncQueueItem item) async {
     final raw = Map<String, dynamic>.from(item.data);
+    final createdRecordId = raw.remove('_created_record_id') as String?;
     final photoPaths =
         (raw.remove('_pending_photo_paths') as List?)?.cast<String>() ?? [];
     final partsRaw = raw.remove('_parts');
@@ -787,29 +843,45 @@ class SyncService {
     final resolverClock = raw.remove('_resolver_clock_no') as String? ?? '';
     final resolverName = raw.remove('_resolver_name') as String? ?? '';
 
-    final callable = _functions.httpsCallable('createFleetWorkRecord');
-    final result = await callable.call(raw);
-    final resultData = Map<String, dynamic>.from(result.data as Map);
-    if (resultData['success'] != true) {
-      throw Exception(resultData['error'] ?? 'createFleetWorkRecord failed');
+    // Only call the CF when no record exists yet for this queue item. The
+    // queue id doubles as the CF idempotency key (client_ref → document ID),
+    // so even a lost response cannot mint a duplicate work number.
+    String recordId;
+    if (createdRecordId != null) {
+      recordId = createdRecordId;
+    } else {
+      raw.putIfAbsent('client_ref', () => item.id);
+      final callable = _functions.httpsCallable('createFleetWorkRecord');
+      final result = await callable.call(raw);
+      final resultData = Map<String, dynamic>.from(result.data as Map);
+      if (resultData['success'] != true) {
+        throw Exception(resultData['error'] ?? 'createFleetWorkRecord failed');
+      }
+      recordId = resultData['id'] as String;
+      item.data['_created_record_id'] = recordId;
+      await item.save();
     }
-    final recordId = resultData['id'] as String;
 
     for (final path in photoPaths) {
       final file = File(path);
-      if (!file.existsSync()) continue;
-      final fileName = '${const Uuid().v4()}.jpg';
-      final ref = FirebaseStorage.instance
-          .ref('fleet_work_records/$recordId/photos/$fileName');
-      final snapshot = await ref.putFile(file);
-      final url = await snapshot.ref.getDownloadURL();
-      await FirebaseFirestore.instance
-          .collection(Collections.fleetWorkRecords)
-          .doc(recordId)
-          .update({
-        'photos': FieldValue.arrayUnion([url]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      if (file.existsSync()) {
+        final fileName = '${const Uuid().v4()}.jpg';
+        final ref = FirebaseStorage.instance
+            .ref('fleet_work_records/$recordId/photos/$fileName');
+        final snapshot = await ref.putFile(file);
+        final url = await snapshot.ref.getDownloadURL();
+        await FirebaseFirestore.instance
+            .collection(Collections.fleetWorkRecords)
+            .doc(recordId)
+            .update({
+          'photos': FieldValue.arrayUnion([url]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      // Persist progress per photo so a crash mid-batch never re-uploads
+      // (or retries a deleted temp file).
+      (item.data['_pending_photo_paths'] as List?)?.remove(path);
+      await item.save();
     }
 
     if (partsRaw is List && partsRaw.isNotEmpty) {
@@ -817,7 +889,13 @@ class SyncService {
           .collection(Collections.fleetWorkRecords)
           .doc(recordId)
           .collection(Collections.fleetWorkParts);
+      // Replace rather than append so a partial earlier replay can't
+      // duplicate parts.
+      final existing = await partsRef.get();
       final batch = FirebaseFirestore.instance.batch();
+      for (final doc in existing.docs) {
+        batch.delete(doc.reference);
+      }
       for (final part in partsRaw) {
         if (part is Map) {
           batch.set(partsRef.doc(), {
@@ -828,6 +906,8 @@ class SyncService {
         }
       }
       await batch.commit();
+      item.data.remove('_parts');
+      await item.save();
     }
 
     for (final issueId in linkedIssueIds) {

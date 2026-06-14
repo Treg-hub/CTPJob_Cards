@@ -591,6 +591,15 @@ class FleetService {
   Future<bool> _checkOnline() =>
       ConnectivityService().isOnline().catchError((_) => false);
 
+  /// Deterministic queue id per photo so a successful direct upload can
+  /// dequeue its own entry, and accidental duplicates dedupe at startup.
+  static String fleetPhotoQueueId({
+    required String targetKind,
+    required String targetId,
+    required String localPath,
+  }) =>
+      '${targetKind}_${targetId}_${localPath.hashCode}';
+
   Future<void> queueOfflineFleetPhoto({
     required String localPath,
     required String targetKind,
@@ -604,12 +613,21 @@ class FleetService {
         'targetKind': targetKind,
         'targetId': targetId,
       },
-      documentId:
-          '${targetKind}_${targetId}_${DateTime.now().millisecondsSinceEpoch}',
+      documentId: fleetPhotoQueueId(
+        targetKind: targetKind,
+        targetId: targetId,
+        localPath: localPath,
+      ),
     );
   }
 
   /// Creates an issue offline-first; photos queue when upload fails or offline.
+  ///
+  /// Queue bookkeeping: the create entry is removed as soon as the direct
+  /// write lands (so a later replay can never overwrite status changes or
+  /// photo URLs made in the meantime), and each photo entry is removed as
+  /// its direct upload+patch succeeds. The replay path is additionally
+  /// guarded by create-if-not-exists in SyncService.
   Future<({String id, bool queuedOffline})> createIssueResilient(
     FleetIssue issue, {
     List<String> photoPaths = const [],
@@ -642,41 +660,46 @@ class FleetService {
 
     var queuedOffline = !online;
     if (online) {
+      var docCreated = false;
       try {
         await _db.collection(Collections.fleetIssues).doc(issueId).set({
           ...base,
           'created_at': FieldValue.serverTimestamp(),
         }).timeout(_firestoreWriteTimeout);
-
-        final urls = <String>[];
-        for (final path in photoPaths) {
-          try {
-            urls.add(await uploadFleetPhoto(
-              localPath: path,
-              fleetRef: 'fleet_issues/$issueId',
-            ).timeout(_photoUploadTimeout));
-          } catch (_) {
-            await queueOfflineFleetPhoto(
-              localPath: path,
-              targetKind: 'issue',
-              targetId: issueId,
-            );
-          }
-        }
-        if (urls.isNotEmpty) {
-          await _db
-              .collection(Collections.fleetIssues)
-              .doc(issueId)
-              .update({'photos': urls});
-        }
-        // Direct write landed — drop the queued create so the sync replay
-        // never re-writes an issue (reports are immutable once created).
+        docCreated = true;
         await SyncService().removeQueuedItem(
           collection: Collections.fleetIssues,
           documentId: issueId,
         );
       } catch (_) {
         queuedOffline = true;
+      }
+
+      if (docCreated) {
+        for (final path in photoPaths) {
+          try {
+            final url = await uploadFleetPhoto(
+              localPath: path,
+              fleetRef: 'fleet_issues/$issueId',
+            ).timeout(_photoUploadTimeout);
+            await _db
+                .collection(Collections.fleetIssues)
+                .doc(issueId)
+                .update({
+              'photos': FieldValue.arrayUnion([url]),
+            }).timeout(_firestoreWriteTimeout);
+            await SyncService().removeQueuedItem(
+              collection: 'fleet_photos',
+              documentId: fleetPhotoQueueId(
+                targetKind: 'issue',
+                targetId: issueId,
+                localPath: path,
+              ),
+            );
+          } catch (_) {
+            // Entry stays queued for retry.
+          }
+        }
       }
       unawaited(SyncService().processNow());
     }
@@ -685,6 +708,13 @@ class FleetService {
   }
 
   /// Creates a work record via CF when online; queues create_cf when offline/slow.
+  ///
+  /// Duplicate-safe: the queue id is passed to the CF as `client_ref`, which
+  /// becomes the record's document ID — so a replayed call (lost response,
+  /// force-close, failed attachment step) returns the existing record instead
+  /// of minting a new FM number. After the CF succeeds, the created record id
+  /// is stamped onto the queue item and per-step progress (photos, parts) is
+  /// pruned from it, so a replay only resumes what's still outstanding.
   Future<({String id, String? workNumber, bool queuedOffline})>
       createWorkRecordResilient(
     Map<String, dynamic> data, {
@@ -695,7 +725,10 @@ class FleetService {
     required String loggedByName,
   }) async {
     final online = await _checkOnline();
-    final queuePayload = Map<String, dynamic>.from(data);
+    final queueId = const Uuid().v4();
+    final cfData = Map<String, dynamic>.from(data)..['client_ref'] = queueId;
+
+    final queuePayload = Map<String, dynamic>.from(cfData);
     if (photoPaths.isNotEmpty) {
       queuePayload['_pending_photo_paths'] = photoPaths;
     }
@@ -713,7 +746,6 @@ class FleetService {
       queuePayload['_resolver_name'] = loggedByName;
     }
 
-    final queueId = const Uuid().v4();
     await SyncService().addToQueue(
       collection: Collections.fleetWorkRecords,
       operation: 'create_cf',
@@ -721,46 +753,102 @@ class FleetService {
       documentId: queueId,
     );
 
-    var queuedOffline = !online;
-    if (online) {
-      try {
-        final result = await createWorkRecord(data).timeout(_callableTimeout);
-        final recordId = result['id'] as String;
+    if (!online) {
+      return (id: queueId, workNumber: null, queuedOffline: true);
+    }
 
-        if (photoPaths.isNotEmpty) {
-          final uploaded =
-              await uploadPhotosForRecord(recordId, photoPaths);
-          if (uploaded.isNotEmpty) {
-            await updateWorkRecord(recordId, {'photos': uploaded});
-          }
-        }
-        if (parts.isNotEmpty) {
-          await replaceParts(recordId, parts);
-        }
+    // Step 1 — create the record. On failure the queued entry replays later;
+    // client_ref guarantees the replay can't duplicate it.
+    String recordId;
+    String? workNumber;
+    try {
+      final result = await createWorkRecord(cfData).timeout(_callableTimeout);
+      recordId = result['id'] as String;
+      workNumber = result['work_number'] as String?;
+    } catch (_) {
+      unawaited(SyncService().processNow());
+      return (id: queueId, workNumber: null, queuedOffline: true);
+    }
+
+    await SyncService().mutateQueuedItemData(
+      collection: Collections.fleetWorkRecords,
+      documentId: queueId,
+      mutate: (d) => d['_created_record_id'] = recordId,
+    );
+
+    // Step 2 — attachments and linked issues. Failures leave the queue item
+    // in place (minus completed steps) for the replay to finish.
+    var pending = false;
+    for (final path in photoPaths) {
+      try {
+        final url = await uploadFleetPhoto(
+          localPath: path,
+          fleetRef: 'fleet_work_records/$recordId',
+        ).timeout(_photoUploadTimeout);
+        await _db
+            .collection(Collections.fleetWorkRecords)
+            .doc(recordId)
+            .update({
+          'photos': FieldValue.arrayUnion([url]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }).timeout(_firestoreWriteTimeout);
+        await SyncService().mutateQueuedItemData(
+          collection: Collections.fleetWorkRecords,
+          documentId: queueId,
+          mutate: (d) =>
+              (d['_pending_photo_paths'] as List?)?.remove(path),
+        );
+      } catch (_) {
+        pending = true;
+      }
+    }
+
+    if (parts.isNotEmpty) {
+      try {
+        await replaceParts(recordId, parts)
+            .timeout(_firestoreWriteTimeout);
+        await SyncService().mutateQueuedItemData(
+          collection: Collections.fleetWorkRecords,
+          documentId: queueId,
+          mutate: (d) => d.remove('_parts'),
+        );
+      } catch (_) {
+        pending = true;
+      }
+    }
+
+    if (linkedIssueIds.isNotEmpty) {
+      try {
         for (final issueId in linkedIssueIds) {
           await resolveIssueWithWorkRecord(
             issueId,
             recordId,
             loggedByClockNo,
             loggedByName,
-          );
+          ).timeout(_firestoreWriteTimeout);
         }
-
-        await SyncService().removeQueuedItem(
+        await SyncService().mutateQueuedItemData(
           collection: Collections.fleetWorkRecords,
           documentId: queueId,
-        );
-        return (
-          id: recordId,
-          workNumber: result['work_number'] as String?,
-          queuedOffline: false,
+          mutate: (d) => d
+            ..remove('_linked_issue_ids')
+            ..remove('_resolver_clock_no')
+            ..remove('_resolver_name'),
         );
       } catch (_) {
-        queuedOffline = true;
+        pending = true;
       }
-      unawaited(SyncService().processNow());
     }
 
-    return (id: queueId, workNumber: null, queuedOffline: queuedOffline);
+    if (pending) {
+      unawaited(SyncService().processNow());
+      return (id: recordId, workNumber: workNumber, queuedOffline: true);
+    }
+
+    await SyncService().removeQueuedItem(
+      collection: Collections.fleetWorkRecords,
+      documentId: queueId,
+    );
+    return (id: recordId, workNumber: workNumber, queuedOffline: false);
   }
 }
