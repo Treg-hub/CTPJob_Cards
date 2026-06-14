@@ -127,7 +127,7 @@ class _State extends ConsumerState<InkValueAdjustmentScreen> {
                   value: _itemCode,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Item', border: OutlineInputBorder()),
+                      labelText: 'Item'),
                   items: [
                     for (final i in items)
                       DropdownMenuItem(
@@ -155,7 +155,6 @@ class _State extends ConsumerState<InkValueAdjustmentScreen> {
                     labelText: 'Adjustment amount',
                     prefixText: 'R ',
                     helperText: 'Positive = value increase · Negative = value decrease',
-                    border: OutlineInputBorder(),
                   ),
                   onChanged: (_) => setState(() {}),
                   validator: (v) {
@@ -176,8 +175,7 @@ class _State extends ConsumerState<InkValueAdjustmentScreen> {
                 TextFormField(
                   controller: _reasonCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Reason (accounts instruction ref.)',
-                      border: OutlineInputBorder()),
+                      labelText: 'Reason (accounts instruction ref.)'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),

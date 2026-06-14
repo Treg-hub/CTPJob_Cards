@@ -251,7 +251,6 @@ class _PointCard extends StatelessWidget {
                 labelText: 'New reading',
                 suffixText: 'L',
                 isDense: true,
-                border: OutlineInputBorder(),
               ),
             ),
             if (preview.isNotEmpty) ...[

@@ -114,7 +114,7 @@ class _InkReceiveRawMaterialScreenState
                   value: _itemCode,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Item', border: OutlineInputBorder()),
+                      labelText: 'Item'),
                   items: [
                     for (final i in items)
                       DropdownMenuItem(
@@ -132,7 +132,6 @@ class _InkReceiveRawMaterialScreenState
                   decoration: InputDecoration(
                     labelText: 'Quantity received',
                     suffixText: selected?.unit ?? '',
-                    border: const OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final d = double.tryParse((v ?? '').trim());
@@ -151,7 +150,7 @@ class _InkReceiveRawMaterialScreenState
                     value: _supplier,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                        labelText: 'Supplier', border: OutlineInputBorder()),
+                        labelText: 'Supplier'),
                     items: [
                       for (final s in suppliers)
                         DropdownMenuItem(value: s.name, child: Text(s.name)),
@@ -173,8 +172,7 @@ class _InkReceiveRawMaterialScreenState
                 TextFormField(
                   controller: _notesCtrl,
                   decoration: const InputDecoration(
-                      labelText: 'Notes (optional)',
-                      border: OutlineInputBorder()),
+                      labelText: 'Notes (optional)'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),

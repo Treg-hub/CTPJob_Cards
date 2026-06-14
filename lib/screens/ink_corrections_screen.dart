@@ -185,7 +185,7 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
               value: _itemCode,
               isExpanded: true,
               decoration: const InputDecoration(
-                  labelText: 'Item', border: OutlineInputBorder()),
+                  labelText: 'Item'),
               items: [
                 for (final i in items)
                   DropdownMenuItem(

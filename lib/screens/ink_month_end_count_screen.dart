@@ -6,6 +6,7 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../theme/app_theme.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
 
@@ -187,7 +188,7 @@ class _CountCard extends StatelessWidget {
                       'Adjust ${delta > 0 ? '+' : ''}${qty.format(delta)}',
                       style: TextStyle(
                           fontSize: 12,
-                          color: delta > 0 ? Colors.green : scheme.error),
+                          color: delta > 0 ? Theme.of(context).appColors.statusCompleted : scheme.error),
                     ),
                 ],
               ),
@@ -204,7 +205,6 @@ class _CountCard extends StatelessWidget {
                   labelText: 'Counted',
                   suffixText: item.unit,
                   isDense: true,
-                  border: const OutlineInputBorder(),
                 ),
               ),
             ),

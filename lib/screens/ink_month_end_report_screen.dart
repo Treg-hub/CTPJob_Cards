@@ -155,6 +155,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
             row.consVal += vd; // negative
             break;
           case InkTxnType.revaluation:
+          case InkTxnType.valueAdjustment:
             row.revalVal += vd;
             break;
           case InkTxnType.transfer:
@@ -279,7 +280,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(msg),
-        backgroundColor: err ? Colors.red : Colors.green));
+        backgroundColor: err ? Theme.of(context).colorScheme.error : null));
   }
 
   Future<void> _exportCsv(
