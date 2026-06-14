@@ -32,6 +32,8 @@ class InkReceiveIbcScreen extends ConsumerStatefulWidget {
 
 class _State extends ConsumerState<InkReceiveIbcScreen> {
   String? _supplier;
+  final _orderCtrl = TextEditingController();
+  final _cgnaCtrl = TextEditingController();
   DateTime _effectiveAt = DateTime.now();
   final List<_IbcRow> _rows = [_IbcRow()];
   bool _submitting = false;
@@ -42,6 +44,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       r.numberCtrl.dispose();
       r.kgCtrl.dispose();
     }
+    _orderCtrl.dispose();
+    _cgnaCtrl.dispose();
     super.dispose();
   }
 
@@ -92,6 +96,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             effectiveAt: _effectiveAt,
             actorClockNo: emp?.clockNo ?? '',
             actorName: emp?.name ?? '',
+            orderNumber: _orderCtrl.text.trim(),
+            cgnaNumber: _cgnaCtrl.text.trim(),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -111,6 +117,10 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     final inks =
         items.where((i) => i.itemClass == InkItemClass.ink).toList();
     final suppliers = ref.watch(inkActiveSuppliersProvider).valueOrNull ?? [];
+    // Ink IBCs come from Siegwerk by default; operator can change it.
+    if (_supplier == null && suppliers.any((s) => s.name == 'Siegwerk')) {
+      _supplier = 'Siegwerk';
+    }
     final df = DateFormat('EEE d MMM yyyy HH:mm');
     final totalKg = _rows.fold<double>(
         0, (s, r) => s + (double.tryParse(r.kgCtrl.text.trim()) ?? 0));
@@ -140,6 +150,30 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 alignment: Alignment.centerLeft),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _orderCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Order number',
+                      isDense: true,
+                      border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _cgnaCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'CGNA number',
+                      isDense: true,
+                      border: OutlineInputBorder()),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(

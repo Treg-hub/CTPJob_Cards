@@ -28,6 +28,8 @@ class InkIbc {
     this.supplierName,
     this.transferredDate,
     this.washTolulLitres,
+    this.orderNumber,
+    this.cgnaNumber,
   });
 
   final String? id;
@@ -39,6 +41,12 @@ class InkIbc {
   final String? supplierName;
   final DateTime? transferredDate;
   final double? washTolulLitres;
+
+  /// Purchase order number for the receipt (default supplier Siegwerk).
+  final String? orderNumber;
+
+  /// CGNA number captured at receipt.
+  final String? cgnaNumber;
 
   factory InkIbc.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
@@ -53,6 +61,8 @@ class InkIbc {
       supplierName: d['supplier_name'] as String?,
       transferredDate: (d['transferred_date'] as Timestamp?)?.toDate(),
       washTolulLitres: (d['wash_toloul_litres'] as num?)?.toDouble(),
+      orderNumber: d['order_number'] as String?,
+      cgnaNumber: d['cgna_number'] as String?,
     );
   }
 
@@ -66,5 +76,7 @@ class InkIbc {
         if (transferredDate != null)
           'transferred_date': Timestamp.fromDate(transferredDate!),
         if (washTolulLitres != null) 'wash_toloul_litres': washTolulLitres,
+        if (orderNumber != null) 'order_number': orderNumber,
+        if (cgnaNumber != null) 'cgna_number': cgnaNumber,
       };
 }
