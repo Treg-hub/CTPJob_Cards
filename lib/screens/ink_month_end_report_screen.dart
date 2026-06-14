@@ -17,21 +17,43 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_ledger.dart';
 import '../utils/role.dart' as role_utils;
+import 'ink_stock_item_detail_screen.dart' show inkTxnLabel;
 
+/// One summary row per item — mirrors the legacy month-end sheet:
+/// Opening (WAC/Bal/Value), Manufacture+Purchase (qty/value), Consumption,
+/// Recoveries, Adjustments, Revaluations, Closing (Bal/Value/WAC).
+/// All movement values are derived from the replay (value delta per step).
 class _Row {
   _Row(this.item);
   final InkStockItem item;
-  double openBal = 0, inQty = 0, consQty = 0, recQty = 0, adjQty = 0;
+  double openBal = 0, openWac = 0;
+  double inQty = 0, inVal = 0; // purchase + manufacture + opening
+  double consQty = 0, consVal = 0; // consumption* (signed, negative)
+  double recQty = 0, recVal = 0; // recovery
+  double adjQty = 0, adjVal = 0; // adjustment (signed)
+  double revalVal = 0; // revaluation value change (qty 0)
   double closeBal = 0, closeWac = 0;
-  double get closeValue => closeBal * closeWac;
+  double get openVal => openBal * openWac;
+  double get closeVal => closeBal * closeWac;
 }
 
-/// Month-end roll-forward report (manager) — reproduces the stock summary
-/// sheet from the ledger: Opening, In (purchase+manufacture), Consumption,
-/// Recovery, Adjustment, Closing balance + WAC + value, per item, for a month.
-///
-/// Managers can Finalise the displayed month (closes its period) or Re-open it.
-/// Banners show if the period is closed or needs re-issue.
+/// One line in the full transaction-list export.
+class _TxnLine {
+  _TxnLine(this.date, this.seq, this.item, this.type, this.qty, this.value,
+      this.balance, this.wac);
+  final DateTime date;
+  final String seq;
+  final String item;
+  final String type;
+  final double qty;
+  final double value;
+  final double balance;
+  final double wac;
+}
+
+/// Month-end roll-forward report (manager). Reproduces the stock summary sheet
+/// from the ledger, exports a summary PDF/CSV and a full transaction-list PDF.
+/// Managers can Finalise/Re-open the displayed month (period-close lock).
 class InkMonthEndReportScreen extends ConsumerStatefulWidget {
   const InkMonthEndReportScreen({super.key});
 
@@ -42,8 +64,10 @@ class InkMonthEndReportScreen extends ConsumerStatefulWidget {
 class _State extends ConsumerState<InkMonthEndReportScreen> {
   static final _qty = NumberFormat('#,##0.##');
   static final _money = NumberFormat('#,##0.00');
-  // Period is [_from 00:00, _to end-of-day]. Defaults to month-to-date but the
-  // dates are free — set them to your designated count dates (count-to-count).
+  static final _wac = NumberFormat('#,##0.0000');
+  static final _fileDateFmt = DateFormat('yyyy-MM-dd');
+
+  // Period is [_from 00:00, _to end-of-day]. Free dates — set to your count dates.
   late DateTime _from;
   late DateTime _to;
 
@@ -54,6 +78,8 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     _from = DateTime(now.year, now.month, 1);
     _to = DateTime(now.year, now.month, now.day);
   }
+
+  DateTime get _periodEnd => _to.add(const Duration(days: 1));
 
   Future<void> _pick(bool isFrom) async {
     final d = await showDatePicker(
@@ -74,9 +100,11 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     }
   }
 
+  bool _inPeriod(DateTime t) =>
+      !t.isBefore(_from) && t.isBefore(_periodEnd);
+
+  // ── Summary roll-forward (per item) ───────────────────────────────────────
   List<_Row> _build(List<InkStockItem> items, List<InkTransaction> txns) {
-    final start = _from;
-    final nextStart = _to.add(const Duration(days: 1)); // include the whole _to day
     final byItem = <String, List<InkTransaction>>{};
     for (final t in txns) {
       (byItem[t.stockItemCode] ??= []).add(t);
@@ -85,42 +113,50 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     for (final item in items) {
       final its = byItem[item.itemCode] ?? const [];
       final before = its
-          .where((t) => t.effectiveAt.isBefore(start))
+          .where((t) => t.effectiveAt.isBefore(_from))
           .map((t) => t.toLedgerEntry())
           .toList();
       final upToEnd = its
-          .where((t) => t.effectiveAt.isBefore(nextStart))
+          .where((t) => t.effectiveAt.isBefore(_periodEnd))
           .map((t) => t.toLedgerEntry())
           .toList();
       final opening = replayLedger(entries: before);
-      final closing = replayLedger(entries: upToEnd);
+      final result = replayLedger(entries: upToEnd);
       final row = _Row(item)
         ..openBal = opening.balance
-        ..closeBal = closing.balance
-        ..closeWac = closing.wac;
-      for (final t in its) {
-        if (t.effectiveAt.isBefore(start) || !t.effectiveAt.isBefore(nextStart)) {
-          continue;
-        }
-        switch (t.type) {
+        ..openWac = opening.wac
+        ..closeBal = result.balance
+        ..closeWac = result.wac;
+      for (final step in result.steps) {
+        final e = step.entry;
+        if (!_inPeriod(e.effectiveAt)) continue;
+        final vd = step.balanceAfter * step.wacAfter -
+            step.balanceBefore * step.wacBefore;
+        switch (e.type) {
           case InkTxnType.purchase:
           case InkTxnType.manufacture:
           case InkTxnType.opening:
-            row.inQty += t.quantityDelta;
+            row.inQty += e.quantityDelta;
+            row.inVal += vd;
             break;
           case InkTxnType.recovery:
-            row.recQty += t.quantityDelta;
+            row.recQty += e.quantityDelta;
+            row.recVal += vd;
             break;
           case InkTxnType.adjustment:
-            row.adjQty += t.quantityDelta;
+            row.adjQty += e.quantityDelta;
+            row.adjVal += vd;
             break;
           case InkTxnType.consumptionMeter:
           case InkTxnType.consumptionProduction:
           case InkTxnType.consumptionTolulWash:
           case InkTxnType.consumptionTolulProduction:
-            row.consQty += -t.quantityDelta;
+            row.consQty += e.quantityDelta; // negative
+            row.consVal += vd; // negative
             break;
           case InkTxnType.revaluation:
+            row.revalVal += vd;
+            break;
           case InkTxnType.transfer:
           case InkTxnType.correction:
             break;
@@ -132,273 +168,256 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     return rows;
   }
 
+  // ── Full transaction list for the period ──────────────────────────────────
+  List<_TxnLine> _buildTxnList(
+      List<InkStockItem> items, List<InkTransaction> txns) {
+    final names = {for (final i in items) i.itemCode: i.displayName};
+    final lines = <_TxnLine>[];
+    for (final t in txns) {
+      if (t.voided || !_inPeriod(t.effectiveAt)) continue;
+      final isIn = t.type == InkTxnType.purchase ||
+          t.type == InkTxnType.manufacture ||
+          t.type == InkTxnType.opening;
+      final value = (isIn && t.totalCost != null)
+          ? t.totalCost!
+          : t.quantityDelta * t.wacAtTime;
+      lines.add(_TxnLine(
+        t.effectiveAt,
+        t.seqNumber ?? 'pending',
+        names[t.stockItemCode] ?? t.stockItemCode,
+        inkTxnLabel(t.type),
+        t.quantityDelta,
+        value,
+        t.balanceAfter,
+        t.wacAtTime,
+      ));
+    }
+    lines.sort((a, b) => a.date.compareTo(b.date));
+    return lines;
+  }
+
+  // ── Period close / re-open ────────────────────────────────────────────────
   Future<void> _finalisePeriod(String pk) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Finalise period?'),
-        content: Text(
-          'Close period $pk?\n\n'
-          'Further transactions into this month will require a manager '
-          'override and will flag the report for re-issue.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Finalise'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!mounted) return;
+    final ok = await _confirm('Finalise period?',
+        'Close period $pk?\n\nFurther transactions into this month will require '
+        'a manager override and will flag the report for re-issue.', 'Finalise');
+    if (ok != true || !mounted) return;
     await ref.read(inkServiceProvider).closePeriod(pk);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Period $pk finalised.')));
-  }
-
-  // ── Export helpers ────────────────────────────────────────────────────────
-
-  static final _wac = NumberFormat('#,##0.0000');
-  static final _fileDateFmt = DateFormat('yyyy-MM-dd');
-
-  /// Build a flat CSV-ready list from computed rows + toloul totals.
-  List<List<dynamic>> _buildCsvData(
-      List<_Row> rows, double tolRecovery, double tolUsage) {
-    final header = [
-      'Item',
-      'Unit',
-      'Open',
-      'In',
-      'Cons',
-      'Rec',
-      'Adj',
-      'Close',
-      'WAC',
-      'Value',
-    ];
-    final dataRows = rows.map((r) => [
-          r.item.displayName,
-          r.item.unit,
-          r.openBal,
-          r.inQty,
-          r.consQty,
-          r.recQty,
-          r.adjQty,
-          r.closeBal,
-          r.closeWac,
-          r.closeValue,
-        ]);
-    return [
-      header,
-      ...dataRows,
-      [], // blank separator
-      ['Toloul Recovery (L)', tolRecovery],
-      ['Toloul Usage (L)', tolUsage],
-    ];
-  }
-
-  Future<void> _exportCsv(
-      List<_Row> rows, double tolRecovery, double tolUsage) async {
-    if (rows.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No data to export')));
-      }
-      return;
-    }
-    try {
-      final csvData = _buildCsvData(rows, tolRecovery, tolUsage);
-      final csvString = const CsvEncoder().convert(csvData);
-      final dir = await getTemporaryDirectory();
-      final fromStr = _fileDateFmt.format(_from);
-      final toStr = _fileDateFmt.format(_to);
-      final file =
-          File('${dir.path}/ink_month_end_${fromStr}_$toStr.csv');
-      await file.writeAsString(csvString);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: 'Ink Month-end Report $fromStr – $toStr (CSV)',
-        ),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('CSV exported & shared'),
-                backgroundColor: Colors.green));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('CSV export failed: $e'),
-                backgroundColor: Colors.red));
-      }
-    }
-  }
-
-  Future<void> _exportPdf(
-      List<_Row> rows, double tolRecovery, double tolUsage) async {
-    if (rows.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No data to export')));
-      }
-      return;
-    }
-    try {
-      final fromStr = DateFormat('d MMM yyyy').format(_from);
-      final toStr = DateFormat('d MMM yyyy').format(_to);
-      final title = 'Ink Month-end Report  $fromStr – $toStr';
-
-      final tableHeaders = [
-        'Item',
-        'Unit',
-        'Open',
-        'In',
-        'Cons',
-        'Rec',
-        'Adj',
-        'Close',
-        'WAC',
-        'Value',
-      ];
-      final tableData = rows
-          .map((r) => [
-                r.item.displayName,
-                r.item.unit,
-                _qty.format(r.openBal),
-                r.inQty == 0 ? '–' : _qty.format(r.inQty),
-                r.consQty == 0 ? '–' : _qty.format(r.consQty),
-                r.recQty == 0 ? '–' : _qty.format(r.recQty),
-                r.adjQty == 0 ? '–' : _qty.format(r.adjQty),
-                _qty.format(r.closeBal),
-                _wac.format(r.closeWac),
-                _money.format(r.closeValue),
-              ])
-          .toList();
-
-      final doc = pw.Document();
-      doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.landscape,
-          build: (context) => [
-            pw.Text(
-              title,
-              style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 12),
-            pw.TableHelper.fromTextArray(
-              headers: tableHeaders,
-              data: tableData,
-              headerStyle:
-                  pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-              cellStyle: const pw.TextStyle(fontSize: 8),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignments: {
-                0: pw.Alignment.centerLeft,
-                1: pw.Alignment.center,
-                2: pw.Alignment.centerRight,
-                3: pw.Alignment.centerRight,
-                4: pw.Alignment.centerRight,
-                5: pw.Alignment.centerRight,
-                6: pw.Alignment.centerRight,
-                7: pw.Alignment.centerRight,
-                8: pw.Alignment.centerRight,
-                9: pw.Alignment.centerRight,
-              },
-            ),
-            pw.SizedBox(height: 16),
-            pw.Row(children: [
-              pw.Text('Toloul Recovery: ',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.Text('${_qty.format(tolRecovery)} L'),
-              pw.SizedBox(width: 24),
-              pw.Text('Toloul Usage: ',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.Text('${_qty.format(tolUsage)} L'),
-            ]),
-            pw.SizedBox(height: 8),
-            pw.Text(
-              'Generated ${DateFormat('d MMM yyyy HH:mm').format(DateTime.now())}',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
-            ),
-          ],
-        ),
-      );
-
-      final bytes = await doc.save();
-      final dir = await getTemporaryDirectory();
-      final fromFile = _fileDateFmt.format(_from);
-      final toFile = _fileDateFmt.format(_to);
-      final file =
-          File('${dir.path}/ink_month_end_${fromFile}_$toFile.pdf');
-      await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: 'Ink Month-end Report $fromFile – $toFile (PDF)',
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('PDF export failed: $e'),
-                backgroundColor: Colors.red));
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Period $pk finalised.')));
     }
   }
 
   Future<void> _reopenPeriod(String pk) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Re-open period?'),
-        content: Text(
-          'Re-open period $pk?\n\n'
-          'This removes the close lock and the re-issue flag.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Re-open'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!mounted) return;
+    final ok = await _confirm('Re-open period?',
+        'Re-open period $pk?\n\nThis removes the close lock and the re-issue flag.',
+        'Re-open');
+    if (ok != true || !mounted) return;
     await ref.read(inkServiceProvider).reopenPeriod(pk);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Period $pk re-opened.')));
+    }
+  }
+
+  Future<bool?> _confirm(String title, String body, String action) => showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+          ],
+        ),
+      );
+
+  // ── Exports ───────────────────────────────────────────────────────────────
+  static const _summaryHeaders = [
+    'Item', 'Unit', 'Open WAC', 'Open Bal', 'Open Value', //
+    'Mfg/Pur', 'Mfg/Pur Value', 'Cons', 'Cons Value', //
+    'Rec', 'Rec Value', 'Adj', 'Adj Value', 'Reval Value', //
+    'Close Bal', 'Close Value', 'Close WAC',
+  ];
+
+  List<String> _summaryRowStrings(_Row r) => [
+        r.item.displayName,
+        r.item.unit,
+        _wac.format(r.openWac),
+        _qty.format(r.openBal),
+        _money.format(r.openVal),
+        r.inQty == 0 ? '–' : _qty.format(r.inQty),
+        r.inVal == 0 ? '–' : _money.format(r.inVal),
+        r.consQty == 0 ? '–' : _qty.format(r.consQty),
+        r.consVal == 0 ? '–' : _money.format(r.consVal),
+        r.recQty == 0 ? '–' : _qty.format(r.recQty),
+        r.recVal == 0 ? '–' : _money.format(r.recVal),
+        r.adjQty == 0 ? '–' : _qty.format(r.adjQty),
+        r.adjVal == 0 ? '–' : _money.format(r.adjVal),
+        r.revalVal == 0 ? '–' : _money.format(r.revalVal),
+        _qty.format(r.closeBal),
+        _money.format(r.closeVal),
+        _wac.format(r.closeWac),
+      ];
+
+  Future<void> _share(File file, String text) =>
+      SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: text));
+
+  void _toast(String msg, {bool err = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Period $pk re-opened.')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: err ? Colors.red : Colors.green));
+  }
+
+  Future<void> _exportCsv(
+      List<_Row> rows, double tolRecovery, double tolUsage) async {
+    if (rows.isEmpty) return _toast('No data to export', err: true);
+    try {
+      final data = <List<dynamic>>[
+        _summaryHeaders,
+        for (final r in rows)
+          [
+            r.item.displayName, r.item.unit, r.openWac, r.openBal, r.openVal,
+            r.inQty, r.inVal, r.consQty, r.consVal, r.recQty, r.recVal, //
+            r.adjQty, r.adjVal, r.revalVal, r.closeBal, r.closeVal, r.closeWac,
+          ],
+        [],
+        ['Toloul Recovery (L)', tolRecovery],
+        ['Toloul Usage (L)', tolUsage],
+      ];
+      final dir = await getTemporaryDirectory();
+      final f = File(
+          '${dir.path}/ink_summary_${_fileDateFmt.format(_from)}_${_fileDateFmt.format(_to)}.csv');
+      await f.writeAsString(const CsvEncoder().convert(data));
+      await _share(f, 'Ink Month-end Summary (CSV)');
+      _toast('CSV exported & shared');
+    } catch (e) {
+      _toast('CSV export failed: $e', err: true);
+    }
+  }
+
+  Future<void> _exportSummaryPdf(
+      List<_Row> rows, double tolRecovery, double tolUsage) async {
+    if (rows.isEmpty) return _toast('No data to export', err: true);
+    try {
+      final fromStr = DateFormat('d MMM yyyy').format(_from);
+      final toStr = DateFormat('d MMM yyyy').format(_to);
+      final doc = pw.Document();
+      doc.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        build: (context) => [
+          pw.Text('Ink Month-end Summary   $fromStr – $toStr',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.TableHelper.fromTextArray(
+            headers: _summaryHeaders,
+            data: [for (final r in rows) _summaryRowStrings(r)],
+            headerStyle:
+                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 6.5),
+            cellStyle: const pw.TextStyle(fontSize: 6.5),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            cellAlignment: pw.Alignment.centerRight,
+            cellAlignments: {0: pw.Alignment.centerLeft, 1: pw.Alignment.center},
+          ),
+          pw.SizedBox(height: 14),
+          pw.Row(children: [
+            pw.Text('Toloul Recovery: ',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text('${_qty.format(tolRecovery)} L'),
+            pw.SizedBox(width: 24),
+            pw.Text('Toloul Usage: ',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text('${_qty.format(tolUsage)} L'),
+          ]),
+        ],
+      ));
+      final dir = await getTemporaryDirectory();
+      final f = File(
+          '${dir.path}/ink_summary_${_fileDateFmt.format(_from)}_${_fileDateFmt.format(_to)}.pdf');
+      await f.writeAsBytes(await doc.save());
+      await _share(f, 'Ink Month-end Summary (PDF)');
+    } catch (e) {
+      _toast('PDF export failed: $e', err: true);
+    }
+  }
+
+  Future<void> _exportTxnListPdf(List<_TxnLine> lines) async {
+    if (lines.isEmpty) return _toast('No transactions in period', err: true);
+    try {
+      final fromStr = DateFormat('d MMM yyyy').format(_from);
+      final toStr = DateFormat('d MMM yyyy').format(_to);
+      final df = DateFormat('d MMM HH:mm');
+      final doc = pw.Document();
+      doc.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        build: (context) => [
+          pw.Text('Ink Transactions   $fromStr – $toStr',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'Date', 'No.', 'Item', 'Type', 'Qty', 'Value', 'Balance', 'WAC'
+            ],
+            data: [
+              for (final l in lines)
+                [
+                  df.format(l.date),
+                  l.seq,
+                  l.item,
+                  l.type,
+                  _qty.format(l.qty),
+                  _money.format(l.value),
+                  _qty.format(l.balance),
+                  _wac.format(l.wac),
+                ]
+            ],
+            headerStyle:
+                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
+            cellStyle: const pw.TextStyle(fontSize: 7),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            cellAlignments: {
+              0: pw.Alignment.centerLeft,
+              1: pw.Alignment.centerLeft,
+              2: pw.Alignment.centerLeft,
+              3: pw.Alignment.centerLeft,
+              4: pw.Alignment.centerRight,
+              5: pw.Alignment.centerRight,
+              6: pw.Alignment.centerRight,
+              7: pw.Alignment.centerRight,
+            },
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text('${lines.length} transactions',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+        ],
+      ));
+      final dir = await getTemporaryDirectory();
+      final f = File(
+          '${dir.path}/ink_transactions_${_fileDateFmt.format(_from)}_${_fileDateFmt.format(_to)}.pdf');
+      await f.writeAsBytes(await doc.save());
+      await _share(f, 'Ink Transactions (PDF)');
+    } catch (e) {
+      _toast('PDF export failed: $e', err: true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final txnsAsync = ref.watch(inkAllTransactionsProvider);
-    final settingsAsync = ref.watch(inkSettingsProvider);
+    final settings = ref.watch(inkSettingsProvider).valueOrNull;
     final emp = ref.watch(currentEmployeeProvider).valueOrNull;
     final isManager = role_utils.isInkManager(emp);
     final rf = DateFormat('d MMM yyyy');
-    final settings = settingsAsync.valueOrNull;
     final pk = InkSettings.periodKey(_to);
     final isClosed = settings?.closedPeriods.contains(pk) ?? false;
     final needsReissue = settings?.periodsNeedingReissue.contains(pk) ?? false;
+    final scheme = Theme.of(context).colorScheme;
 
     // Toloul meter-point totals for the period (no stock effect).
     final pointLinkage = {
@@ -407,28 +426,18 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     };
     final mpReadings =
         ref.watch(inkMeterPointReadingsProvider).valueOrNull ?? [];
-    final periodEnd = _to.add(const Duration(days: 1));
     var tolRecovery = 0.0, tolUsage = 0.0;
     for (final r in mpReadings) {
-      if (r.readingDate.isBefore(_from) || !r.readingDate.isBefore(periodEnd)) {
-        continue;
-      }
+      if (!_inPeriod(r.readingDate)) continue;
       final lk = pointLinkage[r.pointId];
-      if (lk == 'recovery') {
-        tolRecovery += r.consumption;
-      } else if (lk == 'usage') {
-        tolUsage += r.consumption;
-      }
+      if (lk == 'recovery') tolRecovery += r.consumption;
+      if (lk == 'usage') tolUsage += r.consumption;
     }
 
-    // Pre-compute rows when data is ready so export actions can reuse them.
     final isLoading = itemsAsync.isLoading || txnsAsync.isLoading;
-    final rows = isLoading
-        ? <_Row>[]
-        : _build(
-            itemsAsync.valueOrNull ?? [], txnsAsync.valueOrNull ?? []);
-
-    final scheme = Theme.of(context).colorScheme;
+    final items = itemsAsync.valueOrNull ?? [];
+    final txns = txnsAsync.valueOrNull ?? [];
+    final rows = isLoading ? <_Row>[] : _build(items, txns);
 
     return Scaffold(
       appBar: AppBar(
@@ -436,17 +445,23 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.grid_on),
-            tooltip: 'Export CSV',
-            onPressed: isLoading
-                ? null
-                : () => _exportCsv(rows, tolRecovery, tolUsage),
+            tooltip: 'Summary CSV',
+            onPressed:
+                isLoading ? null : () => _exportCsv(rows, tolRecovery, tolUsage),
           ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Export PDF',
+            tooltip: 'Summary PDF',
             onPressed: isLoading
                 ? null
-                : () => _exportPdf(rows, tolRecovery, tolUsage),
+                : () => _exportSummaryPdf(rows, tolRecovery, tolUsage),
+          ),
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Transaction list PDF',
+            onPressed: isLoading
+                ? null
+                : () => _exportTxnListPdf(_buildTxnList(items, txns)),
           ),
           if (isManager)
             if (isClosed)
@@ -465,66 +480,32 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       ),
       body: Column(
         children: [
-          // Status banners — shown when _to period is closed / needs re-issue.
           if (needsReissue)
-            Container(
-              width: double.infinity,
-              color: scheme.errorContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: scheme.onErrorContainer, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Period $pk is closed but has had transactions posted '
-                      'since finalisation — report needs re-issue.',
-                      style: TextStyle(color: scheme.onErrorContainer),
-                    ),
-                  ),
-                ],
-              ),
-            )
+            _banner(scheme.errorContainer, scheme.onErrorContainer,
+                Icons.warning_amber_rounded,
+                'Period $pk is closed but has had transactions since — needs re-issue.')
           else if (isClosed)
-            Container(
-              width: double.infinity,
-              color: scheme.secondaryContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.lock, color: scheme.onSecondaryContainer, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Period $pk is finalised.',
-                      style: TextStyle(color: scheme.onSecondaryContainer),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _banner(scheme.secondaryContainer, scheme.onSecondaryContainer,
+                Icons.lock, 'Period $pk is finalised.'),
           Padding(
             padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pick(true),
-                    icon: const Icon(Icons.event),
-                    label: Text('From ${rf.format(_from)}'),
-                  ),
+            child: Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pick(true),
+                  icon: const Icon(Icons.event),
+                  label: Text('From ${rf.format(_from)}'),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pick(false),
-                    icon: const Icon(Icons.event),
-                    label: Text('To ${rf.format(_to)}'),
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pick(false),
+                  icon: const Icon(Icons.event),
+                  label: Text('To ${rf.format(_to)}'),
                 ),
-              ],
-            ),
+              ),
+            ]),
           ),
           Expanded(
             child: isLoading
@@ -533,33 +514,24 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
                       child: DataTable(
-                        headingRowHeight: 38,
-                        dataRowMinHeight: 34,
-                        dataRowMaxHeight: 40,
-                        columnSpacing: 18,
-                        columns: const [
-                          DataColumn(label: Text('Item')),
-                          DataColumn(label: Text('Open'), numeric: true),
-                          DataColumn(label: Text('In'), numeric: true),
-                          DataColumn(label: Text('Cons'), numeric: true),
-                          DataColumn(label: Text('Rec'), numeric: true),
-                          DataColumn(label: Text('Adj'), numeric: true),
-                          DataColumn(label: Text('Close'), numeric: true),
-                          DataColumn(label: Text('WAC'), numeric: true),
-                          DataColumn(label: Text('Value'), numeric: true),
+                        headingRowHeight: 36,
+                        dataRowMinHeight: 32,
+                        dataRowMaxHeight: 38,
+                        columnSpacing: 14,
+                        columns: [
+                          for (final h in _summaryHeaders)
+                            DataColumn(
+                                label: Text(h,
+                                    style: const TextStyle(fontSize: 11)),
+                                numeric: h != 'Item' && h != 'Unit'),
                         ],
                         rows: [
                           for (final r in rows)
-                            DataRow(cells: [
-                              DataCell(Text(r.item.displayName)),
-                              DataCell(Text(_qty.format(r.openBal))),
-                              DataCell(Text(r.inQty == 0 ? '–' : _qty.format(r.inQty))),
-                              DataCell(Text(r.consQty == 0 ? '–' : _qty.format(r.consQty))),
-                              DataCell(Text(r.recQty == 0 ? '–' : _qty.format(r.recQty))),
-                              DataCell(Text(r.adjQty == 0 ? '–' : _qty.format(r.adjQty))),
-                              DataCell(Text(_qty.format(r.closeBal))),
-                              DataCell(Text(_money.format(r.closeWac))),
-                              DataCell(Text(_money.format(r.closeValue))),
+                            DataRow(
+                                cells: [
+                              for (final c in _summaryRowStrings(r))
+                                DataCell(
+                                    Text(c, style: const TextStyle(fontSize: 11)))
                             ]),
                         ],
                       ),
@@ -573,18 +545,8 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Column(children: [
-                  Text('Toloul Recovery',
-                      style: Theme.of(context).textTheme.labelMedium),
-                  Text('${_qty.format(tolRecovery)} L',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                ]),
-                Column(children: [
-                  Text('Toloul Usage',
-                      style: Theme.of(context).textTheme.labelMedium),
-                  Text('${_qty.format(tolUsage)} L',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                ]),
+                _stat(context, 'Toloul Recovery', '${_qty.format(tolRecovery)} L'),
+                _stat(context, 'Toloul Usage', '${_qty.format(tolUsage)} L'),
               ],
             ),
           ),
@@ -592,4 +554,22 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       ),
     );
   }
+
+  Widget _banner(Color bg, Color fg, IconData icon, String text) => Container(
+        width: double.infinity,
+        color: bg,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          Icon(icon, color: fg, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: fg))),
+        ]),
+      );
+
+  Widget _stat(BuildContext context, String label, String value) => Column(
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      );
 }
