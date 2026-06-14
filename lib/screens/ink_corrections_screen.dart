@@ -28,46 +28,82 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
   String? _itemCode;
   bool _correcting = false;
 
+  static final _dtf = DateFormat('d MMM yyyy HH:mm');
+
   Future<void> _correct(InkTransaction original, String unit) async {
     final qtyCtrl =
         TextEditingController(text: original.quantityDelta.toString());
     final reasonCtrl = TextEditingController();
+    var effectiveAt = original.effectiveAt;
+
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Correct ${inkTxnLabel(original.type)}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Original: ${_qty.format(original.quantityDelta)} $unit · '
-                '${_df.format(original.effectiveAt)}'
-                '${original.seqNumber != null ? ' · ${original.seqNumber}' : ''}'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: qtyCtrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true, signed: true),
-              decoration: const InputDecoration(
-                  labelText: 'Corrected quantity',
-                  helperText: 'Signed — negative = out (consumption)'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: reasonCtrl,
-              decoration: const InputDecoration(labelText: 'Reason *'),
-            ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('Correct ${inkTxnLabel(original.type)}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Original: ${_qty.format(original.quantityDelta)} $unit · '
+                  '${_df.format(original.effectiveAt)}'
+                  '${original.seqNumber != null ? ' · ${original.seqNumber}' : ''}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: qtyCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
+                decoration: const InputDecoration(
+                    labelText: 'Corrected quantity',
+                    helperText: 'Signed — negative = out (consumption)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reasonCtrl,
+                decoration: const InputDecoration(labelText: 'Reason *'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Date: ${_dtf.format(effectiveAt)}',
+                      style: Theme.of(ctx).textTheme.bodyMedium,
+                    ),
+                  ),
+                  TextButton(
+                    child: const Text('Edit date/time'),
+                    onPressed: () async {
+                      final d = await showDatePicker(
+                        context: ctx,
+                        initialDate: effectiveAt,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 1)),
+                      );
+                      if (d == null || !ctx.mounted) return;
+                      final t = await showTimePicker(
+                        context: ctx,
+                        initialTime: TimeOfDay.fromDateTime(effectiveAt),
+                      );
+                      if (t == null) return;
+                      setDlg(() => effectiveAt = DateTime(
+                          d.year, d.month, d.day, t.hour, t.minute));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Apply correction')),
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Apply correction')),
-        ],
       ),
     );
     if (result != true || !mounted) return;
@@ -79,7 +115,7 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
       return;
     }
     final allowed =
-        await confirmClosedPeriodOverride(context, ref, original.effectiveAt);
+        await confirmClosedPeriodOverride(context, ref, effectiveAt);
     if (!allowed) return;
     setState(() => _correcting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
@@ -87,7 +123,7 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
       type: original.type,
       stockItemCode: original.stockItemCode,
       quantityDelta: newQty,
-      effectiveAt: original.effectiveAt,
+      effectiveAt: effectiveAt,
       totalCost: original.totalCost,
       newWac: original.newWac,
       costStatus: original.costStatus,
