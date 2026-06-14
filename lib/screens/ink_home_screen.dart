@@ -64,7 +64,7 @@ class InkHomeScreen extends ConsumerWidget {
                 builder: () => const InkMeterReadingsScreen()),
             _Action(Icons.grid_on_outlined, 'Meter Grid',
                 builder: () => const InkMeterReadingsGridScreen()),
-            _Action(Icons.swap_horiz_outlined, 'IBC Transfer',
+            _Action(Icons.swap_horiz_outlined, 'Consume IBC',
                 builder: () => const InkIbcTransferScreen()),
             _Action(Icons.science_outlined, 'Production Run',
                 builder: () => const InkProductionRunScreen()),

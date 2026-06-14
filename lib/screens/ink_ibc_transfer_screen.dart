@@ -56,7 +56,7 @@ class _State extends ConsumerState<InkIbcTransferScreen> {
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('IBC transferred; wash recorded.')));
+          const SnackBar(content: Text('IBC consumed; wash recorded.')));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -78,7 +78,7 @@ class _State extends ConsumerState<InkIbcTransferScreen> {
     final df = DateFormat('EEE d MMM yyyy HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Transfer IBC → Tank')),
+      appBar: AppBar(title: const Text('Consume IBC')),
       body: ibcsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -86,7 +86,7 @@ class _State extends ConsumerState<InkIbcTransferScreen> {
           if (ibcs.isEmpty) {
             return const Padding(
               padding: EdgeInsets.all(24),
-              child: Center(child: Text('No received IBCs awaiting transfer.')),
+              child: Center(child: Text('No IBCs awaiting consumption.')),
             );
           }
           InkIbc? selected;
@@ -150,7 +150,7 @@ class _State extends ConsumerState<InkIbcTransferScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.check),
-                label: const Text('Transfer IBC'),
+                label: const Text('Consume IBC'),
                 style:
                     FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
               ),

@@ -43,7 +43,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                 children: [
                   _filterChip(context, null, 'All'),
                   _filterChip(context, InkIbcStatus.received, 'Received'),
-                  _filterChip(context, InkIbcStatus.transferred, 'Transferred'),
+                  _filterChip(context, InkIbcStatus.transferred, 'Consumed'),
                 ],
               ),
             ),
@@ -66,7 +66,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen> {
                     InkIbcStatus.received =>
                       'No IBCs currently in received state.',
                     InkIbcStatus.transferred =>
-                      'No transferred IBCs found.',
+                      'No consumed IBCs found.',
                   };
                   return Center(
                     child: Padding(
@@ -218,7 +218,7 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        isTransferred ? 'Transferred' : 'Received',
+        isTransferred ? 'Consumed' : 'Received',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: isTransferred
                   ? scheme.onTertiaryContainer
