@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
@@ -634,6 +635,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
     setState(() => _isBroadcasting = true);
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isBroadcasting = false);
+        _showError('Session expired. Please log out and log back in.');
+        return;
+      }
+      await user.getIdToken(true); // ensure token is fresh before admin CF call
       final result = await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('broadcastUpdateNotice')
           .call({'callerClockNo': _currentClockNo ?? '22', 'title': title, 'body': body});
