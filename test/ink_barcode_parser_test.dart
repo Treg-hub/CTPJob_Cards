@@ -97,6 +97,11 @@ void main() {
       expect(r.colour, 'Yellow');
     });
 
+    test('Black GTIN 04045647839596 resolves to Black', () {
+      final r = parseIbcBarcodes(['01040456478395961000000000003100000940']);
+      expect(r.colour, 'Black');
+    });
+
     test('unknown GTIN returns null colour (falls through to legacy check)', () {
       // GTIN 04045647999999 not in kInkGtinColours and no legacy article code.
       final r = parseIbcBarcodes(['01040456479999991000000000003100000940']);
