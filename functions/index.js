@@ -1,5 +1,6 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -15,13 +16,13 @@ functions.setGlobalOptions({ region: "africa-south1" });
 // any signed-in user self-escalate by writing isAdmin:true to their own profile.
 // Keyed by uid (the unforgeable auth identity). Seed every existing admin's uid
 // into admins/{uid} BEFORE deploying these changes (see scripts/seed_admins.js).
-async function assertAdmin(context) {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+async function assertAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
   if (!adminDoc.exists || adminDoc.data().isAdmin !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Admin only.");
+    throw new HttpsError("permission-denied", "Admin only.");
   }
 }
 
@@ -42,18 +43,18 @@ async function assertAdmin(context) {
  * Timestamps are set SERVER-SIDE (createdAt, lastUpdatedAt); the payload must be
  * plain JSON — no Timestamp / FieldValue sentinels (see JobCard.toCreatePayload).
  */
-exports.createJobCard = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+exports.createJobCard = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  const innerData = data.data || data;
+  const innerData = request.data;
   const clientRef = typeof innerData.client_ref === "string" && innerData.client_ref.length > 0
     ? innerData.client_ref
     : undefined;
   const jobData = { ...innerData };
   delete jobData.client_ref;
   if (!jobData.department) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing required job data (department).");
+    throw new HttpsError("invalid-argument", "Missing required job data (department).");
   }
 
   const counterRef = db.collection("counters").doc("jobCards");
@@ -76,7 +77,7 @@ exports.createJobCard = functions.https.onCall(async (data, context) => {
       jobCardNumber: next,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      created_by_uid: context.auth.uid,
+      created_by_uid: request.auth.uid,
     });
     return { id: jobRef.id, jobCardNumber: next };
   });
@@ -91,15 +92,15 @@ exports.createJobCard = functions.https.onCall(async (data, context) => {
  * the caller's `clockNum` custom claim (set by setCustomClaims) — never a
  * client-supplied id — so a user can only ever write their own record.
  */
-exports.updateEmployeePresence = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+exports.updateEmployeePresence = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  const clockNo = context.auth.token && context.auth.token.clockNum;
+  const clockNo = request.auth.token && request.auth.token.clockNum;
   if (!clockNo) {
-    throw new functions.https.HttpsError("failed-precondition", "No clockNum claim — call setCustomClaims first.");
+    throw new HttpsError("failed-precondition", "No clockNum claim — call setCustomClaims first.");
   }
-  const innerData = data.data || data;
+  const innerData = request.data;
   const update = {};
   if (typeof innerData.fcmToken === "string") {
     update.fcmToken = innerData.fcmToken;
@@ -126,26 +127,26 @@ exports.updateEmployeePresence = functions.https.onCall(async (data, context) =>
  * already owned by this same uid — it can never steal a clock number already
  * linked to a different account (an improvement over the old client flow).
  */
-exports.linkEmployeeAccount = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+exports.linkEmployeeAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  const innerData = data.data || data;
+  const innerData = request.data;
   const clockNo = String(innerData.clockNo || "");
   if (!clockNo) {
-    throw new functions.https.HttpsError("invalid-argument", "clockNo is required.");
+    throw new HttpsError("invalid-argument", "clockNo is required.");
   }
-  const uid = context.auth.uid;
-  const email = (context.auth.token && context.auth.token.email) || innerData.email || null;
+  const uid = request.auth.uid;
+  const email = (request.auth.token && request.auth.token.email) || innerData.email || null;
   const ref = db.collection("employees").doc(clockNo);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) {
-      throw new functions.https.HttpsError("not-found", "No employee with that clock number.");
+      throw new HttpsError("not-found", "No employee with that clock number.");
     }
     const existingUid = snap.data().uid;
     if (existingUid && existingUid !== uid) {
-      throw new functions.https.HttpsError("permission-denied", "This clock number is already linked to another account.");
+      throw new HttpsError("permission-denied", "This clock number is already linked to another account.");
     }
     tx.set(ref, {
       uid,
@@ -168,15 +169,15 @@ exports.linkEmployeeAccount = functions.https.onCall(async (data, context) => {
  * this "redirect notifications" capability would require reworking switch-user
  * to re-authenticate per employee; tracked as a follow-up.)
  */
-exports.setDeviceFcmToken = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+exports.setDeviceFcmToken = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  const innerData = data.data || data;
+  const innerData = request.data;
   const clockNo = String(innerData.clockNo || "");
   const fcmToken = innerData.fcmToken;
   if (!clockNo || typeof fcmToken !== "string" || !fcmToken) {
-    throw new functions.https.HttpsError("invalid-argument", "clockNo and fcmToken are required.");
+    throw new HttpsError("invalid-argument", "clockNo and fcmToken are required.");
   }
   await db.collection("employees").doc(clockNo).set({
     fcmToken,
@@ -458,9 +459,9 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department, operat
 // email/password), so it is deleted rather than guarded.
 
 // ==================== SEND JOB ASSIGNMENT NOTIFICATION ====================
-exports.sendJobAssignmentNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
-  const innerData = data.data || data;
+exports.sendJobAssignmentNotification = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const innerData = request.data;
   const {
     recipientToken,
     jobCardId,
@@ -478,7 +479,7 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data, cont
     recipientClockNo,
   } = innerData;
 
-  if (!recipientToken) throw new functions.https.HttpsError("invalid-argument", "Missing recipientToken");
+  if (!recipientToken) throw new HttpsError("invalid-argument", "Missing recipientToken");
   
   if (recipientClockNo) {
     const empDoc = await db.collection("employees").doc(recipientClockNo).get();
@@ -556,9 +557,9 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data, cont
 });
 
 // ==================== SEND CREATOR NOTIFICATION ====================
-exports.sendCreatorNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
-  const innerData = data.data || data;
+exports.sendCreatorNotification = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const innerData = request.data;
   const {
     recipientToken,
     jobCardId,
@@ -576,7 +577,7 @@ exports.sendCreatorNotification = functions.https.onCall(async (data, context) =
   } = innerData;
 
   if (!recipientToken || !recipientToken.trim()) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing or invalid recipientToken");
+    throw new HttpsError("invalid-argument", "Missing or invalid recipientToken");
   }
 
   // Creator notifications are post-creation updates (self-assigned, completed,
@@ -1575,14 +1576,19 @@ async function getOffsiteWorkshopManager(allEmps = null) {
 // on return. Works against ALL deployed app versions (plain notification +
 // data payload the existing foreground handler already renders). Used on
 // rollout day to drive everyone into the Remote Config force-update dialog.
-exports.broadcastUpdateNotice = functions.https.onCall(async (data, context) => {
+exports.broadcastUpdateNotice = onCall(async (request) => {
   // Admin gate via server-trusted admins/{uid} (was: client-writable employees.isAdmin).
-  await assertAdmin(context);
-  const innerData = data.data || data;
+  await assertAdmin(request);
+  const innerData = request.data;
 
   const title = innerData.title || "Update required — CTP Job Cards";
   const body = innerData.body ||
     "A required app update is available. Open the app and tap Update Now to install it.";
+
+  const callerClockNo = (request.auth.token && request.auth.token.clockNum) || null;
+  const callerDoc = callerClockNo
+    ? await db.collection("employees").doc(String(callerClockNo)).get()
+    : null;
 
   const snap = await db.collection("employees").get();
   let sent = 0;
@@ -1606,7 +1612,7 @@ exports.broadcastUpdateNotice = functions.https.onCall(async (data, context) => 
           read: false,
           readAt: null,
           initiatedByClockNo: callerClockNo,
-          initiatedByName: callerDoc.data().name || null,
+          initiatedByName: callerDoc?.data()?.name || null,
         });
         parked++;
       } catch (e) {
@@ -1742,8 +1748,8 @@ exports.onJobCardWritten = functions.firestore.onDocumentWritten({ document: "jo
 });
 
 // ==================== MIGRATION HELPERS ====================
-exports.migrateEmployeeIds = functions.https.onCall(async (data, context) => {
-  await assertAdmin(context); // destructive one-time migration — admin only
+exports.migrateEmployeeIds = onCall(async (request) => {
+  await assertAdmin(request); // destructive one-time migration — admin only
   const employeesRef = db.collection("employees");
   const snapshot = await employeesRef.get();
   const migrated = [];
@@ -1765,9 +1771,9 @@ exports.migrateEmployeeIds = functions.https.onCall(async (data, context) => {
   return { migrated, count: migrated.length };
 });
 
-exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+exports.migrateJobStatuses = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
   const snapshot = await db.collection("job_cards").get();
@@ -1799,8 +1805,8 @@ exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
 });
 
 // ==================== CLEAR STALE ESCALATION STAMPS (one-time reset) ====================
-exports.clearEscalationStamps = functions.https.onCall(async (data, context) => {
-  await assertAdmin(context); // admin maintenance tool
+exports.clearEscalationStamps = onCall(async (request) => {
+  await assertAdmin(request); // admin maintenance tool
   const config = await getNotificationConfig();
   const snapshot = await db.collection("job_cards")
     .where("status", "==", "open")
