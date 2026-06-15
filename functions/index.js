@@ -25,6 +25,166 @@ async function assertAdmin(context) {
   }
 }
 
+// ==================== WAVE B: SERVER-AUTHORITATIVE WRITES ====================
+// These callables let the client stop writing the `counters` and `employees`
+// collections directly (both locked in firestore.rules under Wave B). All use
+// the Admin SDK (bypassing rules) and run in africa-south1 (global region).
+
+/**
+ * createJobCard — atomically assigns the next job-card number and creates the
+ * job_cards doc, replacing the client-side counter transaction so
+ * counters/jobCards can be locked to Admin-SDK-only writes.
+ *
+ * Idempotent: when the client supplies `client_ref` it becomes the doc ID, so a
+ * retried call (offline replay, lost response, force-close) returns the existing
+ * doc instead of minting a duplicate job + number.
+ *
+ * Timestamps are set SERVER-SIDE (createdAt, lastUpdatedAt); the payload must be
+ * plain JSON — no Timestamp / FieldValue sentinels (see JobCard.toCreatePayload).
+ */
+exports.createJobCard = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const innerData = data.data || data;
+  const clientRef = typeof innerData.client_ref === "string" && innerData.client_ref.length > 0
+    ? innerData.client_ref
+    : undefined;
+  const jobData = { ...innerData };
+  delete jobData.client_ref;
+  if (!jobData.department) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required job data (department).");
+  }
+
+  const counterRef = db.collection("counters").doc("jobCards");
+  const jobRef = clientRef
+    ? db.collection("job_cards").doc(clientRef)
+    : db.collection("job_cards").doc();
+
+  const result = await db.runTransaction(async (tx) => {
+    if (clientRef) {
+      const existing = await tx.get(jobRef);
+      if (existing.exists) {
+        return { id: jobRef.id, jobCardNumber: existing.data().jobCardNumber, deduped: true };
+      }
+    }
+    const counterSnap = await tx.get(counterRef);
+    const next = counterSnap.exists ? (counterSnap.data().nextJobCardNumber ?? 1) : 1;
+    tx.set(counterRef, { nextJobCardNumber: next + 1 }, { merge: true });
+    tx.set(jobRef, {
+      ...jobData,
+      jobCardNumber: next,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      created_by_uid: context.auth.uid,
+    });
+    return { id: jobRef.id, jobCardNumber: next };
+  });
+
+  return { success: true, ...result };
+});
+
+/**
+ * updateEmployeePresence — lets a signed-in user update ONLY their own employee
+ * presence fields (fcmToken, isOnSite, permissions) via the Admin SDK, so the
+ * employees collection can be locked to Admin/CF-only writes. The target doc is
+ * the caller's `clockNum` custom claim (set by setCustomClaims) — never a
+ * client-supplied id — so a user can only ever write their own record.
+ */
+exports.updateEmployeePresence = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const clockNo = context.auth.token && context.auth.token.clockNum;
+  if (!clockNo) {
+    throw new functions.https.HttpsError("failed-precondition", "No clockNum claim — call setCustomClaims first.");
+  }
+  const innerData = data.data || data;
+  const update = {};
+  if (typeof innerData.fcmToken === "string") {
+    update.fcmToken = innerData.fcmToken;
+    update.fcmTokenUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  if (typeof innerData.isOnSite === "boolean") {
+    update.isOnSite = innerData.isOnSite;
+  }
+  if (innerData.permissions && typeof innerData.permissions === "object") {
+    update.permissions = innerData.permissions;
+  }
+  if (Object.keys(update).length === 0) {
+    return { success: true, clockNo: String(clockNo), noop: true };
+  }
+  await db.collection("employees").doc(String(clockNo)).set(update, { merge: true });
+  return { success: true, clockNo: String(clockNo) };
+});
+
+/**
+ * linkEmployeeAccount — links the caller's Firebase Auth uid (+ email) to an
+ * employee doc identified by clockNo, during registration / login self-heal.
+ * Replaces the client write of `uid` to employees so the collection can be
+ * locked. Security: only links a doc that is currently UNCLAIMED (no uid) or
+ * already owned by this same uid — it can never steal a clock number already
+ * linked to a different account (an improvement over the old client flow).
+ */
+exports.linkEmployeeAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const innerData = data.data || data;
+  const clockNo = String(innerData.clockNo || "");
+  if (!clockNo) {
+    throw new functions.https.HttpsError("invalid-argument", "clockNo is required.");
+  }
+  const uid = context.auth.uid;
+  const email = (context.auth.token && context.auth.token.email) || innerData.email || null;
+  const ref = db.collection("employees").doc(clockNo);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      throw new functions.https.HttpsError("not-found", "No employee with that clock number.");
+    }
+    const existingUid = snap.data().uid;
+    if (existingUid && existingUid !== uid) {
+      throw new functions.https.HttpsError("permission-denied", "This clock number is already linked to another account.");
+    }
+    tx.set(ref, {
+      uid,
+      email,
+      registeredAt: snap.data().registeredAt || admin.firestore.FieldValue.serverTimestamp(),
+      uidHealedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { success: true, clockNo };
+});
+
+/**
+ * setDeviceFcmToken — points an employee's notifications at the caller's device
+ * by writing ONLY the fcmToken on employees/{clockNo}. Used by the shared-device
+ * "switch user" flow, where the signed-in account stays the same but the active
+ * employee changes, so the target's notifications must route to this handset.
+ *
+ * Any signed-in user may call it — the same capability the switch-user feature
+ * has always had — but it can change nothing except the token. (Fully removing
+ * this "redirect notifications" capability would require reworking switch-user
+ * to re-authenticate per employee; tracked as a follow-up.)
+ */
+exports.setDeviceFcmToken = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const innerData = data.data || data;
+  const clockNo = String(innerData.clockNo || "");
+  const fcmToken = innerData.fcmToken;
+  if (!clockNo || typeof fcmToken !== "string" || !fcmToken) {
+    throw new functions.https.HttpsError("invalid-argument", "clockNo and fcmToken are required.");
+  }
+  await db.collection("employees").doc(clockNo).set({
+    fcmToken,
+    fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { success: true, clockNo };
+});
+
 // ==================== IN-MEMORY CACHES (module-level, server-side only) ====================
 // Config cache: notification_configs/global is almost never changed; cache for 10 min.
 let _configCache = null;

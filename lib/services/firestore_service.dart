@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
@@ -138,32 +139,58 @@ class FirestoreService {
   }
 
   // Job Card operations
+  /// Creates a job card via the `createJobCard` Cloud Function, which atomically
+  /// assigns the next number and writes the doc with the Admin SDK. The old
+  /// client-side `counters` transaction is gone — `counters` is now locked
+  /// (Wave B). Requires connectivity; offline creation is handled upstream in
+  /// [saveJobCardOfflineAware].
   Future<void> createJobCard(JobCard jobCard) async {
     try {
-      await _firestore.runTransaction((transaction) async {
-        // Get the counter document
-        final counterRef = _firestore.collection(Collections.counters).doc('jobCards');
-        final counterSnapshot = await transaction.get(counterRef);
-
-        int nextNumber;
-        if (counterSnapshot.exists) {
-          nextNumber = counterSnapshot.data()?['nextJobCardNumber'] as int? ?? 1;
-        } else {
-          // Initialize counter if it doesn't exist
-          nextNumber = 1;
-        }
-
-        // Update counter
-        transaction.set(counterRef, {'nextJobCardNumber': nextNumber + 1}, SetOptions(merge: true));
-
-        // Create job card with the number
-        final jobCardWithNumber = jobCard.copyWith(jobCardNumber: nextNumber);
-        final jobCardRef = _firestore.collection(Collections.jobCards).doc(); // Auto-ID
-        transaction.set(jobCardRef, jobCardWithNumber.toFirestore());
-      });
+      await FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('createJobCard')
+          .call(jobCard.toCreatePayload());
     } catch (e) {
       throw Exception('Failed to create job card: $e');
     }
+  }
+
+  /// Updates ONLY the current user's own presence fields via the
+  /// `updateEmployeePresence` Cloud Function (the `employees` collection is
+  /// locked to admin/CF writes under Wave B). Non-fatal: presence is best-effort
+  /// and must never break login, geofencing, or token refresh.
+  Future<void> updateMyPresence({String? fcmToken, bool? isOnSite, Map<String, dynamic>? permissions}) async {
+    final payload = <String, dynamic>{};
+    if (fcmToken != null) payload['fcmToken'] = fcmToken;
+    if (isOnSite != null) payload['isOnSite'] = isOnSite;
+    if (permissions != null) payload['permissions'] = permissions;
+    if (payload.isEmpty) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('updateEmployeePresence')
+          .call(payload);
+    } catch (e) {
+      debugPrint('updateMyPresence failed (non-fatal): $e');
+    }
+  }
+
+  /// Links the current Firebase Auth account to an employee doc (by clock no)
+  /// via the `linkEmployeeAccount` Cloud Function — used at registration and
+  /// login self-heal in place of the old direct `uid` write to `employees`.
+  /// Throws on failure so registration can surface it.
+  Future<void> linkMyAccount(String clockNo, {String? email}) async {
+    await FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('linkEmployeeAccount')
+        .call({'clockNo': clockNo, if (email != null) 'email': email});
+  }
+
+  /// Points an employee's notifications at this device by setting only their
+  /// fcmToken, via the `setDeviceFcmToken` Cloud Function. Used by the
+  /// shared-device "switch user" flow (the employees collection is locked to
+  /// admin/CF writes under Wave B).
+  Future<void> setDeviceFcmToken(String clockNo, String fcmToken) async {
+    await FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('setDeviceFcmToken')
+        .call({'clockNo': clockNo, 'fcmToken': fcmToken});
   }
 
   Future<void> updateJobCard(String jobCardId, JobCard jobCard) async {

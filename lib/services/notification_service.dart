@@ -18,6 +18,7 @@ import '../models/assignment_event.dart';
 import '../models/job_card.dart';
 import '../constants/collections.dart';
 import '../screens/job_card_detail_screen.dart';
+import 'firestore_service.dart';
 
 // Channel IDs — must match those declared on the native side (FirebaseMessagingService.kt).
 // Each priority maps to one channel:
@@ -412,10 +413,7 @@ class NotificationService {
     _messaging.onTokenRefresh.listen((newToken) async {
       final clockNo = currentEmployee?.clockNo;
       if (clockNo != null) {
-        await FirebaseFirestore.instance.collection(Collections.employees).doc(clockNo).set({
-          'fcmToken': newToken,
-          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await FirestoreService().updateMyPresence(fcmToken: newToken);
         debugPrint('FCM token auto-refreshed for $clockNo');
       }
     });
@@ -640,10 +638,7 @@ class NotificationService {
     try {
       final token = await _messaging.getToken();
       if (token != null && token.isNotEmpty) {
-        await FirebaseFirestore.instance.collection(Collections.employees).doc(clockNo).set({
-          'fcmToken': token,
-          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await FirestoreService().updateMyPresence(fcmToken: token);
         debugPrint('FCM token refreshed on startup for $clockNo');
       }
     } catch (e) {
