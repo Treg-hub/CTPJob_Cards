@@ -144,11 +144,16 @@ class FirestoreService {
   /// client-side `counters` transaction is gone — `counters` is now locked
   /// (Wave B). Requires connectivity; offline creation is handled upstream in
   /// [saveJobCardOfflineAware].
-  Future<void> createJobCard(JobCard jobCard) async {
+  Future<void> createJobCard(JobCard jobCard, {String? clientRef}) async {
     try {
+      final payload = jobCard.toCreatePayload();
+      // Idempotency: a stable client_ref becomes the doc ID server-side, so a
+      // retried submit (lost response, reconnect) returns the existing job
+      // instead of minting a duplicate job + number.
+      if (clientRef != null && clientRef.isNotEmpty) payload['client_ref'] = clientRef;
       await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('createJobCard')
-          .call(jobCard.toCreatePayload());
+          .call(payload);
     } catch (e) {
       throw Exception('Failed to create job card: $e');
     }
@@ -1025,12 +1030,12 @@ class FirestoreService {
   }
 
   // Offline-aware save for Job Cards
-  Future<void> saveJobCardOfflineAware(JobCard jobCard) async {
+  Future<void> saveJobCardOfflineAware(JobCard jobCard, {String? clientRef}) async {
     final isOnline = await ConnectivityService().isOnline();
 
     if (isOnline) {
       if (jobCard.id == null) {
-        await createJobCard(jobCard);
+        await createJobCard(jobCard, clientRef: clientRef);
       } else {
         await updateJobCard(jobCard.id!, jobCard);
       }
