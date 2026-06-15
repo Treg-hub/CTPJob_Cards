@@ -45,6 +45,9 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
         title: const Text('IBC Register'),
         bottom: TabBar(
           controller: _tab,
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black54,
+          indicatorColor: Colors.black,
           tabs: [for (final l in kInkColourLabels) Tab(text: l)],
         ),
       ),

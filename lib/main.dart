@@ -435,9 +435,9 @@ class CtpJobCardsApp extends ConsumerWidget {
           ),
         ),
         tabBarTheme: const TabBarThemeData(
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.black54,
-          indicatorColor: Colors.black,
+          labelColor: kBrandOrange,
+          unselectedLabelColor: Colors.white54,
+          indicatorColor: kBrandOrange,
           labelPadding: EdgeInsets.symmetric(horizontal: 8),
         ),
         switchTheme: const SwitchThemeData(

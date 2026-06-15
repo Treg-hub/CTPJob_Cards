@@ -99,6 +99,9 @@ class _State extends ConsumerState<InkIbcTransferScreen>
         title: const Text('Consume IBC'),
         bottom: TabBar(
           controller: _tab,
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black54,
+          indicatorColor: Colors.black,
           tabs: [for (final l in kInkColourLabels) Tab(text: l)],
         ),
       ),
