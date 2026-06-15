@@ -585,6 +585,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     );
     if (confirm != true) return;
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) { _showError('Session expired. Please log out and log back in.'); return; }
+      await user.getIdToken(true);
       final result = await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('clearEscalationStamps')
           .call();
