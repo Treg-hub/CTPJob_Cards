@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/notification_service.dart';
+import '../services/auth_claims_service.dart';
 import 'home_screen.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
@@ -138,6 +139,11 @@ class _LoginScreenState extends State<LoginScreen> {
               .recordError(e, st, reason: 'fcm_register_at_login');
         }
       }
+
+      // Mint/refresh server-derived custom claims (role, department, isAdmin
+      // from the locked admins/{uid} registry) so admin config writes are
+      // authorised. Non-fatal — never blocks login.
+      await AuthClaimsService.refreshClaims();
 
       if (mounted) {
         Navigator.pushReplacement(
