@@ -18,6 +18,7 @@ import 'screens/permissions_onboarding_screen.dart';
 import 'screens/update_required_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
+import 'services/auth_claims_service.dart';
 import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
@@ -263,6 +264,9 @@ void main() async {
         if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
         if (!kIsWeb) {
           NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
+          // Refresh server-derived custom claims (role/department/isAdmin) for
+          // returning sessions. Fire-and-forget — never blocks startup.
+          AuthClaimsService.refreshClaims();
         }
       }
 

@@ -8,6 +8,23 @@ const db = admin.firestore();
 
 functions.setGlobalOptions({ region: "africa-south1" });
 
+// ==================== SERVER-TRUSTED ADMIN CHECK ====================
+// SECURITY: admin status is read from the locked admins/{uid} collection
+// (read,write: if false in firestore.rules — Admin SDK / console only), NEVER
+// from the client-writable employees doc. Trusting employees.isAdmin would let
+// any signed-in user self-escalate by writing isAdmin:true to their own profile.
+// Keyed by uid (the unforgeable auth identity). Seed every existing admin's uid
+// into admins/{uid} BEFORE deploying these changes (see scripts/seed_admins.js).
+async function assertAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || adminDoc.data().isAdmin !== true) {
+    throw new functions.https.HttpsError("permission-denied", "Admin only.");
+  }
+}
+
 // ==================== IN-MEMORY CACHES (module-level, server-side only) ====================
 // Config cache: notification_configs/global is almost never changed; cache for 10 min.
 let _configCache = null;
@@ -275,26 +292,14 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department, operat
 }
 
 // ==================== CUSTOM TOKEN AUTH ====================
-exports.createCustomToken = functions.https.onCall(async (data, _context) => {
-  const clockNo = data.clockNo || (data.data && data.data.clockNo) || data;
-  if (!clockNo) throw new functions.https.HttpsError("invalid-argument", "clockNo is required");
-
-  const employeeDoc = await db.collection("employees").doc(clockNo).get();
-  if (!employeeDoc.exists) throw new functions.https.HttpsError("not-found", "Employee not found");
-
-  const employeeData = employeeDoc.data();
-  const uid = `employee_${clockNo}`;
-
-  const customToken = await admin.auth().createCustomToken(uid, {
-    clockNo,
-    name: employeeData.name || "",
-    type: "employee",
-  });
-  return { customToken };
-});
+// REMOVED (security): createCustomToken was an UNAUTHENTICATED callable that
+// minted a Firebase Auth custom token for ANY clockNo — letting anyone who knew
+// the endpoint impersonate any employee. It is unused by the app (login uses
+// email/password), so it is deleted rather than guarded.
 
 // ==================== SEND JOB ASSIGNMENT NOTIFICATION ====================
-exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
+exports.sendJobAssignmentNotification = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
   const innerData = data.data || data;
   const {
     recipientToken,
@@ -391,7 +396,8 @@ exports.sendJobAssignmentNotification = functions.https.onCall(async (data) => {
 });
 
 // ==================== SEND CREATOR NOTIFICATION ====================
-exports.sendCreatorNotification = functions.https.onCall(async (data) => {
+exports.sendCreatorNotification = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
   const innerData = data.data || data;
   const {
     recipientToken,
@@ -1409,16 +1415,10 @@ async function getOffsiteWorkshopManager(allEmps = null) {
 // on return. Works against ALL deployed app versions (plain notification +
 // data payload the existing foreground handler already renders). Used on
 // rollout day to drive everyone into the Remote Config force-update dialog.
-exports.broadcastUpdateNotice = functions.https.onCall(async (data) => {
+exports.broadcastUpdateNotice = functions.https.onCall(async (data, context) => {
+  // Admin gate via server-trusted admins/{uid} (was: client-writable employees.isAdmin).
+  await assertAdmin(context);
   const innerData = data.data || data;
-  const callerClockNo = String(innerData.callerClockNo || "");
-  if (!callerClockNo) {
-    throw new functions.https.HttpsError("invalid-argument", "callerClockNo is required");
-  }
-  const callerDoc = await db.collection("employees").doc(callerClockNo).get();
-  if (!callerDoc.exists || callerDoc.data().isAdmin !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Admin only");
-  }
 
   const title = innerData.title || "Update required — CTP Job Cards";
   const body = innerData.body ||
@@ -1582,7 +1582,8 @@ exports.onJobCardWritten = functions.firestore.onDocumentWritten({ document: "jo
 });
 
 // ==================== MIGRATION HELPERS ====================
-exports.migrateEmployeeIds = functions.https.onCall(async () => {
+exports.migrateEmployeeIds = functions.https.onCall(async (data, context) => {
+  await assertAdmin(context); // destructive one-time migration — admin only
   const employeesRef = db.collection("employees");
   const snapshot = await employeesRef.get();
   const migrated = [];
@@ -1638,7 +1639,8 @@ exports.migrateJobStatuses = functions.https.onCall(async (data, context) => {
 });
 
 // ==================== CLEAR STALE ESCALATION STAMPS (one-time reset) ====================
-exports.clearEscalationStamps = functions.https.onCall(async () => {
+exports.clearEscalationStamps = functions.https.onCall(async (data, context) => {
+  await assertAdmin(context); // admin maintenance tool
   const config = await getNotificationConfig();
   const snapshot = await db.collection("job_cards")
     .where("status", "==", "open")
