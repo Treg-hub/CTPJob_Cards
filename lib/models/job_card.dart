@@ -261,6 +261,32 @@ class JobCard {
     return map;
   }
 
+  /// JSON-safe payload for the `createJobCard` Cloud Function. Callables cannot
+  /// carry Firestore `Timestamp`/`FieldValue` sentinels, so this emits only
+  /// plain values; the server sets `jobCardNumber`, `createdAt`, and
+  /// `lastUpdatedAt`. Used in place of the old client-side counter transaction.
+  Map<String, dynamic> toCreatePayload() {
+    return <String, dynamic>{
+      'department': department,
+      'area': area,
+      'machine': machine,
+      'part': part,
+      'type': type.name,
+      'priority': priority,
+      'operator': operator,
+      'operatorClockNo': operatorClockNo,
+      'assignedClockNos': assignedClockNos,
+      'assignedNames': assignedNames,
+      'description': description,
+      'notes': notes,
+      'comments': comments,
+      'correctiveAction': correctiveAction,
+      'reoccurrenceCount': reoccurrenceCount,
+      'status': status.name,
+      'photos': photos,
+    };
+  }
+
   JobCard copyWith({
     String? id,
     int? jobCardNumber,

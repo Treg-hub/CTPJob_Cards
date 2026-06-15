@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
+import '../services/firestore_service.dart';
 import 'permissions_onboarding_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -42,8 +43,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Create Firebase Auth account
-      final credential = await FirebaseAuth.instance
+      // 1. Create Firebase Auth account (signs the user in)
+      await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
       // 2. IMPORTANT: Wait for auth to fully propagate
@@ -65,15 +66,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final empDoc = empQuery.docs.first;
       final empData = empDoc.data();
 
-      // 4. Update the employee document with uid + email
-      await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(clockNo)
-          .set({
-        'uid': credential.user!.uid,
-        'email': email,
-        'registeredAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));   // ← This is safer
+      // 4. Link this auth account to the employee doc via the CF. employees is
+      //    locked under Wave B, so the client can no longer write uid directly;
+      //    the CF also refuses to claim a clock number already linked elsewhere.
+      await FirestoreService().linkMyAccount(clockNo, email: email);
 
       // 5. Create Employee object and save
       final employee = Employee(

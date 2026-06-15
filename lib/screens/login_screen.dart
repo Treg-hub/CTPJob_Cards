@@ -8,6 +8,7 @@ import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/notification_service.dart';
 import '../services/auth_claims_service.dart';
+import '../services/firestore_service.dart';
 import 'home_screen.dart';
 import 'registration_screen.dart';
 import 'permissions_onboarding_screen.dart';
@@ -92,10 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         try {
-          await emailQuery.docs.first.reference.set(
-            {'uid': uid, 'uidHealedAt': FieldValue.serverTimestamp()},
-            SetOptions(merge: true),
-          );
+          // employees is locked under Wave B — link uid via the CF, not a
+          // direct write. (Doc id == clockNo.)
+          await FirestoreService().linkMyAccount(emailQuery.docs.first.id, email: email);
         } catch (e, st) {
           if (!kIsWeb) {
             FirebaseCrashlytics.instance.recordError(e, st, reason: 'login_uid_self_heal_failed');
@@ -126,6 +126,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
 
+      // Mint/refresh server-derived custom claims FIRST (role, department,
+      // clockNum, isAdmin from the locked admins/{uid} registry). The presence
+      // CF used by the FCM-token save below needs the clockNum claim, and admin
+      // config writes need isAdmin. Non-fatal — never blocks login.
+      await AuthClaimsService.refreshClaims();
+
       if (!kIsWeb) {
         // Do not request notification permission here — it fires during the
         // permissions onboarding screen after the user has read the explanation.
@@ -139,11 +145,6 @@ class _LoginScreenState extends State<LoginScreen> {
               .recordError(e, st, reason: 'fcm_register_at_login');
         }
       }
-
-      // Mint/refresh server-derived custom claims (role, department, isAdmin
-      // from the locked admins/{uid} registry) so admin config writes are
-      // authorised. Non-fatal — never blocks login.
-      await AuthClaimsService.refreshClaims();
 
       if (mounted) {
         Navigator.pushReplacement(

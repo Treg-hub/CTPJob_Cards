@@ -69,7 +69,7 @@ void callbackDispatcher() {
 
       if (emp.isOnSite != onSite) {
         // Status changed — update Firestore and log the transition.
-        await firestore.updateEmployee(emp.copyWith(isOnSite: onSite));
+        await firestore.updateMyPresence(isOnSite: onSite);
         await firestore.logGeoFenceEvent(
           clockNo: clockNo,
           eventType: onSite ? 'enter' : 'exit',
@@ -239,7 +239,7 @@ class LocationService {
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && emp.isOnSite != onSite) {
         // Firestore disagrees with GPS — a geofence event was missed. Correct it.
-        await _firestoreService.updateEmployee(emp.copyWith(isOnSite: onSite));
+        await _firestoreService.updateMyPresence(isOnSite: onSite);
         await _firestoreService.logGeoFenceEvent(
           clockNo: clockNo,
           eventType: onSite ? 'enter' : 'exit',
@@ -336,7 +336,7 @@ class LocationService {
 
     final emp = await _firestoreService.getEmployee(_clockNo!);
     if (emp != null) {
-      await _firestoreService.updateEmployee(emp.copyWith(isOnSite: isEntering));
+      await _firestoreService.updateMyPresence(isOnSite: isEntering);
     }
     await _firestoreService.logGeoFenceEvent(
       clockNo: _clockNo!,

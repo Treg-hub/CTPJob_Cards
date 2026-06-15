@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee;
+import '../services/firestore_service.dart';
 
 class PermissionItem {
   final Permission permission;
@@ -69,22 +69,16 @@ class PermissionsNotifier extends AsyncNotifier<Map<Permission, PermissionStatus
     
     final emp = currentEmployee;
     if (emp != null) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('employees')
-            .doc(emp.clockNo)
-            .set({
-          'permissions': {
-            perm.toString(): {
-              'granted': status.isGranted,
-              'grantedAt': FieldValue.serverTimestamp(),
-              'version': 1,
-            }
-          }
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Firestore permission save error: $e');
-      }
+      // employees is locked (Wave B) — record the grant via the presence CF.
+      // (updateMyPresence is non-fatal; a JSON-safe ISO timestamp is used since
+      // callables cannot carry FieldValue.serverTimestamp.)
+      await FirestoreService().updateMyPresence(permissions: {
+        perm.toString(): {
+          'granted': status.isGranted,
+          'grantedAt': DateTime.now().toUtc().toIso8601String(),
+          'version': 1,
+        },
+      });
     }
 
     ref.invalidateSelf();

@@ -267,6 +267,11 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
     });
   }
 
+  // Stable idempotency key for the in-flight submit. Generated once per create
+  // intent and reused across retries (so a lost response can't duplicate the
+  // job); cleared on success so the next create gets a fresh id.
+  String? _pendingClientRef;
+
   Future<void> _saveJobCard() async {
     if (!_formKey.currentState!.validate()) return;
     if (selectedDepartment == null || selectedArea == null || selectedMachine == null || part.isEmpty || jobType == null) {
@@ -313,8 +318,10 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
         photos: uploadedPhotos,   // ← THIS WAS THE MISSING PART
       );
 
-      // Step 3: Save
-      await _firestoreService.saveJobCardOfflineAware(jobCard);
+      // Step 3: Save (idempotent — a stable client_ref dedupes a retried submit).
+      _pendingClientRef ??= const Uuid().v4();
+      await _firestoreService.saveJobCardOfflineAware(jobCard, clientRef: _pendingClientRef);
+      _pendingClientRef = null; // success — next create gets a fresh id
 
       // Submitted — drop the local draft.
       _saved = true;

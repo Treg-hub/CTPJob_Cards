@@ -644,9 +644,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                   try {
                                     final token = await _notificationService.getToken();
                                     if (token != null) {
-                                      await _firestoreService.updateEmployee(
-                                        emp.copyWith(fcmToken: token, fcmTokenUpdatedAt: DateTime.now()),
-                                      );
+                                      // Switch-user: route the target employee's
+                                      // notifications to this device via the CF
+                                      // (employees is locked under Wave B).
+                                      await _firestoreService.setDeviceFcmToken(emp.clockNo, token);
                                     }
                                   } catch (e) {
                                     debugPrint('Error updating FCM token: $e');
