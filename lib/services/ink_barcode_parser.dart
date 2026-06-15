@@ -51,7 +51,7 @@ const Map<String, String> kInkGtinColours = {
   '04045647007179': 'Yellow',
   '04045647007407': 'Red',
   '04045648163515': 'Blue',
-  // TODO: add Black GTIN once confirmed from physical label
+  '04045647839596': 'Black',
 };
 
 /// Siegwerk article number (right-9 of a standalone legacy product barcode) → colour.
