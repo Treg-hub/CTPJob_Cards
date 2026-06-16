@@ -21,8 +21,13 @@ import '../widgets/fleet_reporter_widgets.dart';
 /// Reporters, mechanics, and admins can report a problem on a forklift or grab.
 class FleetReportIssueScreen extends ConsumerStatefulWidget {
   final FleetAsset? preSelectedAsset;
+  final FleetIssueSeverity? preSelectedSeverity;
 
-  const FleetReportIssueScreen({super.key, this.preSelectedAsset});
+  const FleetReportIssueScreen({
+    super.key,
+    this.preSelectedAsset,
+    this.preSelectedSeverity,
+  });
 
   @override
   ConsumerState<FleetReportIssueScreen> createState() =>
@@ -46,6 +51,9 @@ class _FleetReportIssueScreenState
     super.initState();
     _selectedAsset =
         widget.preSelectedAsset ?? ref.read(selectedFleetAssetProvider);
+    if (widget.preSelectedSeverity != null) {
+      _severity = widget.preSelectedSeverity!;
+    }
   }
 
   @override
@@ -121,11 +129,6 @@ class _FleetReportIssueScreenState
       _showError('Please describe the problem (at least 10 characters).');
       return;
     }
-    if (_selectedParts.isEmpty) {
-      _showError('Please pick or type at least one affected part.');
-      return;
-    }
-
     setState(() => _submitting = true);
     try {
       final issue = FleetIssue(
@@ -274,9 +277,9 @@ class _FleetReportIssueScreenState
           ),
           const SizedBox(height: 20),
 
-          const FleetSectionLabel('Which part is affected? *'),
+          const FleetSectionLabel('Which part is affected? (optional)'),
           Text(
-            'Tap a saved part or type a new one below.',
+            'Only fill this in if you know — the mechanic will identify parts when they do the work.',
             style: TextStyle(fontSize: 12, color: colors.textMuted),
           ),
           const SizedBox(height: 8),

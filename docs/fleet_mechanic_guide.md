@@ -14,81 +14,71 @@ Your main tabs:
 
 | Tab | What it is |
 |-----|------------|
-| **To Fix** | Problems waiting for you (needs fixing / in progress) |
-| **History** | Jobs you have already logged |
+| **To Fix** | Open problems waiting for you (not yet started) |
+| **In progress** | Problems you have already opened — work is underway |
+| **Fixed** | Problems you have closed with a logged fix |
+| **History** | All work records you have logged |
 
 ---
 
-## The three problem statuses
+## The problem statuses
 
 | Status | Meaning |
 |--------|---------|
-| **Needs fixing** | New report — nobody has started work yet |
-| **In progress** | You tapped **Start job** — the clock is running |
-| **Fixed** | Work is logged and the problem is closed |
-
-Use the filter chips at the top of **To Fix** to switch between these lists.
+| **Needs fixing** | New report — not yet opened by a mechanic. Shows in **To Fix**. |
+| **In progress** | You opened the problem — it is logged as seen. Shows in **In progress**. |
+| **Fixed** | Work is logged and the problem is closed. |
 
 ---
 
 ## Fixing a reported problem (most common)
 
-### Quick job (same visit) — e.g. check brakes, tighten chain
+### Quick job (same visit)
 
 1. Open **Fleet** → **To Fix**
-2. Tap the problem
-3. Tap **Start job** (moves it to *In progress*)
-4. Tap **Finish the fix**
-5. The original fault report is shown at the top — you cannot change it. Fill in:
+2. Tap the problem — the **Mark as Fixed** form opens and the problem is automatically logged as *In progress*
+3. The original fault report is shown at the top — read-only. Fill in:
+   - **What you did to fix it** (required) — describe **your** work
    - **Hour-meter reading** (required) — number on the hour meter on the machine
-   - **What you did to fix it** — describe **your** work, not the fault
    - **Labour hours** — optional
    - **Parts** and **photos** — optional
-   - **Also fixes…** — if other reported problems on the same machine were
-     fixed by this job, tick them and they close too
-6. Tap **Mark as Fixed**
+   - **Also fixes…** — if other open problems on the same machine were fixed by this job, tick them and they will close too
+4. Tap **Mark as Fixed**
 
-Done. The problem disappears from **To Fix** and the job appears in **History**.
+Done. The problem disappears from **To Fix** / **In progress** and the job appears in **History**.
+
+---
 
 ### Long job (several days) — e.g. replace transmission
 
-1. **Day 1** — Open the problem → tap **Start job** only  
-   - The job clock starts now  
-   - You do **not** need to fill in the fix form yet  
-   - The problem shows as **In progress** in **To Fix**
+1. **Day 1** — Tap the problem in **To Fix**  
+   - The fix form opens and the problem is automatically logged as *In progress*  
+   - Close the form without saving — you are not done yet  
+   - The problem moves to the **In progress** tab
 
-2. **While you work** — Leave it as *In progress*. Other people can see you are on it.
+2. **While you work** — The problem stays in **In progress**. Other people can see it is being worked on.
 
-3. **Last day** — Open the same problem → tap **Finish the fix**  
-   - Enter the hour-meter reading when the machine is ready  
-   - Describe what was wrong and what you replaced/fixed  
-   - Add **total labour hours** for the whole job (e.g. `16`) if you want  
-   - Add parts used and photos if helpful  
+3. **Last day** — Open the **In progress** tab → tap the same problem → fill in the fix form:
+   - Set **Work carried out** to the day you started (tap the date to change it)
+   - Enter the hour-meter reading, description, parts, and photos
    - Tap **Mark as Fixed**
 
-**Start time** = when you tapped **Start job**  
-**Finish time** = when you tapped **Mark as Fixed**
+**Work date** = when the work was carried out (editable)  
+**Saved at** = when you tapped **Mark as Fixed**
 
 ---
 
 ## Logging work that is not a reported problem
 
-Use **Log other work** on the **History** tab for planned jobs with no fault report — e.g. scheduled service, transmission swap you planned yourself.
+Use **Log other work** for planned jobs with no fault report — e.g. scheduled service, overhaul you planned yourself.
 
 1. **History** → **Log other work**
-2. **When did you start?** — tap to set the start date/time (defaults to now). For multi-day jobs, set the day you began.
+2. Tap the **Work carried out** date to set when the job was done (defaults to now). For multi-day jobs, set the day you started.
 3. Pick the machine, job type, title, and description
-   - If the machine has open reported problems that this job fixes, tick
-     them under **Does this job fix any reported problems?** — they close
-     when you save
+   - If the machine has open reported problems that this job fixes, tick them under **Does this job fix any reported problems?** — they close when you save
 4. Enter hour-meter reading (required)
 5. Add labour hours, parts, and photos if needed
 6. Tap **Save job**
-
-**Start time** = what you set above  
-**Finish time** = when you tap **Save job**
-
-This does not close a problem in **To Fix** — it only adds a record to **History**.
 
 ---
 
@@ -99,9 +89,9 @@ On the **History** tab you can filter by:
 - **Machine** — show jobs for one machine only
 - **Job type** — e.g. Repair, Routine, Inspection
 
-Leave both on “All” to see everything.
+Leave both on "All" to see everything.
 
-Tap any job to see details: what you did, hour-meter reading, started/finished dates, and parts.
+Tap any job to see details: what you did, hour-meter reading, work date, and parts.
 
 ---
 
@@ -113,27 +103,19 @@ To correct a locked job, **add a comment** on the job explaining the correction.
 
 ---
 
-## Closing a problem without a work log
+## Out-of-service machines
 
-Sometimes a report is wrong (duplicate, not a real fault). On the problem screen, use **Close with a note only** and write a short explanation. No hour-meter or work record is needed.
+When a problem is marked **Out of Service**, the machine cannot be used until it is fixed. These appear at the top of the list and may trigger notifications. Fix them the same way: tap the problem → fill in the fix form → **Mark as Fixed**.
 
-> **Exception — Out of service problems:** if the machine was reported **out of service**, you must close it by logging the repair (**Finish the fix**). The note-only option is not available for these.
+When the last open out-of-service problem on a machine is fixed, the red warning clears automatically.
 
 ---
 
 ## What you never need to worry about
 
-- **Costs / invoices** — managers enter these; you only see “costs pending” on a job
+- **Costs / invoices** — managers enter these; you only see "costs pending" on a job
 - **Work record numbers** — the system creates these automatically
-- **Start/end date pickers** — start = **Start job**, finish = **Mark as Fixed**
-
----
-
-## Out-of-service machines
-
-When a problem is marked **Out of Service**, the Hyster cannot be used until it is fixed. These appear at the top of the list and may trigger notifications. Fix them the same way: **Start job** → **Finish the fix**.
-
-When the last open out-of-service problem on a machine is fixed, the red warning clears automatically.
+- **"Close with a note only"** — if a report is a false alarm, ask an admin or manager to cancel it
 
 ---
 
@@ -141,18 +123,17 @@ When the last open out-of-service problem on a machine is fixed, the red warning
 
 | I want to… | Do this |
 |------------|---------|
-| Begin a repair | **Start job** |
-| Complete a repair | **Finish the fix** → **Mark as Fixed** |
+| Start on a problem | Tap it in **To Fix** — it is logged as started automatically |
+| Complete a repair | Open **In progress** → tap the problem → fill in fix form → **Mark as Fixed** |
 | See open problems | **To Fix** tab |
+| See in-progress jobs | **In progress** tab |
 | See finished jobs | **History** tab |
-| Filter by machine | **History** → Machine dropdown |
-| Log planned work (no fault) | **Log other work** |
+| Log planned work (no fault) | **History** → **Log other work** |
 | Close several reports with one job | Tick them under **Also fixes…** |
-| Fix a typo in a saved job | Edit within 7 days, comment after that |
-| Dismiss a false alarm | **Close with a note only** (not available for out-of-service problems) |
+| Fix a typo in a saved job | Edit within 7 days, add a comment after that |
 
 ---
 
 ## Need access?
 
-If you do not see the **Fleet** tab or your jobs will not save, ask an admin to add your clock number under **Fleet Settings → Mechanic clock numbers**.
+If you do not see the **Fleet** tab or your jobs will not save, ask an admin to check your account is set up as a Hyster mechanic.

@@ -16,6 +16,7 @@ import 'fleet_issues_list_screen.dart';
 import 'fleet_log_work_screen.dart';
 import 'fleet_queued_screen.dart';
 import 'fleet_report_issue_screen.dart';
+import '../widgets/fleet_quick_report_sheet.dart';
 import 'fleet_reports_screen.dart';
 import 'fleet_settings_screen.dart';
 import 'fleet_work_records_list_screen.dart';
@@ -137,7 +138,17 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     if (tabIdx == 0 && role_utils.canReportFleetIssue(emp, settings)) {
       final reporterFab = isReporter && !isAdmin && !isCostMgr && !isMechanic;
       fab = FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetReportIssueScreen())),
+        onPressed: () async {
+          final result = await showFleetQuickReportSheet(context);
+          if (result != null && context.mounted) {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => FleetReportIssueScreen(
+                preSelectedAsset: result.asset,
+                preSelectedSeverity: result.severity,
+              ),
+            ));
+          }
+        },
         icon: const Icon(Icons.report_problem_outlined),
         label: Text(reporterFab ? 'Report Problem' : 'Report Issue'),
         backgroundColor: kBrandOrange,

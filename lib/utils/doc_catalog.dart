@@ -92,7 +92,7 @@ const List<DocEntry> docCatalog = [
   DocEntry(
     id: 'fleet_mechanic_guide',
     title: 'Mechanic Guide',
-    description: 'To Fix, Start job, Finish the fix, History, and Log other work.',
+    description: 'To Fix, marking problems as fixed, History, and Log other work.',
     icon: Icons.build_circle_outlined,
     roles: _allUserFacingRoles,
     requiresFleet: true,

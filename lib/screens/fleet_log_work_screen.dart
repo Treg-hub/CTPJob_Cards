@@ -68,9 +68,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   // The date/time the work was actually carried out — always shown at top and editable.
   DateTime _workCarriedOut = DateTime.now();
 
-  // The date the record was originally captured (read-only display only).
-  DateTime? _capturedAt;
-
   // Parts in progress
   final List<_PartRow> _parts = [];
 
@@ -145,13 +142,18 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       if (_titleCtrl.text.trim().isEmpty) {
         _titleCtrl.text = 'Fix: ${issue.assetName}';
       }
-      // The fault description is shown read-only above the form; the
-      // mechanic types what THEY did in a blank description field.
-      // Pre-fill the work date from when the issue was acknowledged.
       if (issue.acknowledgedAt != null) {
         _workCarriedOut = issue.acknowledgedAt!;
       }
     });
+    if (issue.status == FleetIssueStatus.open) {
+      final emp = currentEmployee;
+      if (emp != null) {
+        _service
+            .acknowledgeIssue(issue.id!, emp.clockNo, emp.name)
+            .catchError((_) {});
+      }
+    }
   }
 
   Future<void> _loadExistingRecord(String id) async {
@@ -198,7 +200,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           _machineHoursCtrl.text = record.machineHoursReading.toString();
         }
         _workCarriedOut = record.startDate;
-        _capturedAt = record.createdAt;
         _loadedEndDate = record.endDate;
         _savedPhotoUrls
           ..clear()
@@ -320,7 +321,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       _showError('Please pick a job type.');
       return;
     }
-    if (_titleCtrl.text.trim().isEmpty) {
+    if (!_isFixingIssue && _titleCtrl.text.trim().isEmpty) {
       _showError('Please enter a short title for the work.');
       return;
     }
@@ -377,6 +378,14 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
         );
         if (proceed != true || !mounted) return;
       }
+    }
+
+    // Auto-generate title in fix mode — the description carries the detail.
+    if (_isFixingIssue && _titleCtrl.text.trim().isEmpty) {
+      final desc = _descCtrl.text.trim();
+      _titleCtrl.text = desc.length > 60
+          ? desc.substring(0, 60)
+          : 'Fix: ${_selectedAsset!.name}';
     }
 
     setState(() => _saving = true);
@@ -537,7 +546,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('d MMM yyyy, HH:mm');
-    final dateFmtShort = DateFormat('d MMM yyyy');
     final settingsAsync = ref.watch(fleetSettingsProvider);
     final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
     final mechanicUx = role_utils.isFleetMechanic(currentEmployee, settings) &&
@@ -562,10 +570,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
     final workDateIsToday = _workCarriedOut.year == now.year &&
         _workCarriedOut.month == now.month &&
         _workCarriedOut.day == now.day;
-
-    final captureDisplay = _capturedAt != null
-        ? dateFmtShort.format(_capturedAt!)
-        : dateFmtShort.format(now);
 
     return Scaffold(
       appBar: FleetAppBar(
@@ -650,7 +654,6 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
           // ── Dates card ─────────────────────────────────────────────────
           _WorkDatesCard(
-            captureDate: captureDisplay,
             workCarriedOut: _workCarriedOut,
             dateFmt: dateFmt,
             workDateIsToday: workDateIsToday,
@@ -658,31 +661,13 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Asset ──────────────────────────────────────────────────────
-          FleetSectionLabel(
-            useMechanicLabels
-                ? 'Which machine? (forks, grab or BT) *'
-                : 'Asset *',
-          ),
-          if (widget.linkedIssueId != null &&
-              !_isEditing &&
-              _selectedAsset != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Row(
-                children: [
-                  const Icon(Icons.forklift, color: kBrandOrange),
-                  const SizedBox(width: 12),
-                  Text(_selectedAsset!.name,
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            )
-          else
+          // ── Asset (hidden in fix mode — shown in the reported fault card) ──
+          if (!_isFixingIssue) ...[
+            FleetSectionLabel(
+              useMechanicLabels
+                  ? 'Which machine? (forks, grab or BT) *'
+                  : 'Asset *',
+            ),
             FleetAssetSelector(
               value: _selectedAsset,
               onChanged: (asset) {
@@ -690,7 +675,8 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
                 _loadOtherOpenIssues();
               },
             ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
 
           // ── Also fixes: other open faults on this asset ────────────────
           if (!_isEditing && _otherOpenIssues.isNotEmpty) ...[
@@ -768,25 +754,21 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
             const SizedBox(height: 16),
           ],
 
-          // ── Title ─────────────────────────────────────────────────────
-          FleetSectionLabel(
-            _isFixingIssue
-                ? 'What you did (short title) *'
-                : (useMechanicLabels
-                    ? 'What you did (short title) *'
-                    : 'Title *'),
-          ),
-          TextField(
-            controller: _titleCtrl,
-            decoration: fleetDropdownDecoration(
-              hintText: _isFixingIssue
-                  ? 'e.g. Replaced hydraulic hose'
-                  : (useMechanicLabels
-                      ? 'e.g. Transmission replacement'
-                      : 'e.g. Engine oil change + filter'),
+          // ── Title (hidden in fix mode — auto-generated from description) ──
+          if (!_isFixingIssue) ...[
+            FleetSectionLabel(
+              useMechanicLabels ? 'What you did (short title) *' : 'Title *',
             ),
-          ),
-          const SizedBox(height: 16),
+            TextField(
+              controller: _titleCtrl,
+              decoration: fleetDropdownDecoration(
+                hintText: useMechanicLabels
+                    ? 'e.g. Transmission replacement'
+                    : 'e.g. Engine oil change + filter',
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // ── Description ───────────────────────────────────────────────
           FleetSectionLabel(
@@ -888,14 +870,12 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
 
 class _WorkDatesCard extends StatelessWidget {
   const _WorkDatesCard({
-    required this.captureDate,
     required this.workCarriedOut,
     required this.dateFmt,
     required this.workDateIsToday,
     required this.onEdit,
   });
 
-  final String captureDate;
   final DateTime workCarriedOut;
   final DateFormat dateFmt;
   final bool workDateIsToday;
@@ -903,64 +883,42 @@ class _WorkDatesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = Theme.of(context).appColors.textMuted;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Theme.of(context).colorScheme.outline),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        children: [
-          // Captured date — read-only
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, size: 16, color: muted),
-                const SizedBox(width: 8),
-                Text('Captured on',
-                    style: TextStyle(fontSize: 12, color: muted)),
-                const Spacer(),
-                Text(captureDate,
-                    style: TextStyle(fontSize: 12, color: muted)),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
-          // Work carried out — tappable
-          InkWell(
-            onTap: onEdit,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Row(
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              const Icon(Icons.engineering_outlined,
+                  size: 16, color: kBrandOrange),
+              const SizedBox(width: 8),
+              const Text('Work carried out',
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Icon(Icons.engineering_outlined,
-                      size: 16, color: kBrandOrange),
-                  const SizedBox(width: 8),
-                  Text('Work carried out',
+                  Text(dateFmt.format(workCarriedOut),
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(dateFmt.format(workCarriedOut),
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600)),
-                      if (!workDateIsToday)
-                        Text('Different from today',
-                            style: TextStyle(
-                                fontSize: 10, color: Colors.orange.shade700)),
-                    ],
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.edit, size: 14, color: kBrandOrange),
+                  if (!workDateIsToday)
+                    Text('Different from today',
+                        style: TextStyle(
+                            fontSize: 10, color: Colors.orange.shade700)),
                 ],
               ),
-            ),
+              const SizedBox(width: 6),
+              const Icon(Icons.edit, size: 14, color: kBrandOrange),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

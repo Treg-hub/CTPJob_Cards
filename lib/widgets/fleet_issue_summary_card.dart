@@ -49,6 +49,18 @@ class FleetIssueSummaryCard extends StatelessWidget {
               FleetSeverityBadge(severity: issue.severity),
             ],
           ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.forklift, size: 14, color: kBrandOrange),
+              const SizedBox(width: 6),
+              Text(
+                issue.assetName,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
             issue.description,

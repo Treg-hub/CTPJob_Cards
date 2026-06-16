@@ -36,97 +36,28 @@ class _FleetIssuesListScreenState
   final _service = FleetService();
   String? _statusFilter; // null = all open statuses
 
-  void _snack(String msg, {Color? color}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: color),
-    );
-  }
-
-  /// Swipe action for an OPEN issue: acknowledge it ("Start job").
-  Future<void> _quickStartJob(FleetIssue issue) async {
-    final emp = currentEmployee;
-    if (emp == null || issue.id == null) return;
-    try {
-      await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
-      if (mounted) {
-        _snack(
-          'Job started on ${issue.assetName}. Swipe again when done to finish the fix.',
-          color: Colors.green,
-        );
-      }
-    } catch (e) {
-      if (mounted) _snack('$e', color: Colors.red);
-    }
-  }
-
-  /// Swipe action for an ACKNOWLEDGED issue: straight into Mark as Fixed.
-  Future<void> _quickFinishFix(FleetIssue issue) async {
-    if (issue.id == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => FleetLogWorkScreen(
-          preSelectedAssetId: issue.assetId,
-          preSelectedAssetName: issue.assetName,
-          linkedIssueId: issue.id,
-        ),
-      ),
-    );
-  }
-
-  /// Mechanic tiles get a swipe-right shortcut matching the issue's next step.
   Widget _buildTile(FleetIssue issue) {
-    final tile = FleetIssueTile(
+    return FleetIssueTile(
       issue: issue,
       mechanicMode: widget.mechanicMode,
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => FleetIssueDetailScreen(
-          issueId: issue.id!,
-          mechanicMode: widget.mechanicMode,
-        ),
-      )),
-    );
-    if (!widget.mechanicMode || !issue.status.isOpen) return tile;
-
-    final isOpen = issue.status == FleetIssueStatus.open;
-    return Dismissible(
-      key: ValueKey('fleet_issue_swipe_${issue.id}'),
-      direction: DismissDirection.startToEnd,
-      // The swipe triggers the action and snaps back — never dismisses.
-      confirmDismiss: (_) async {
-        if (isOpen) {
-          await _quickStartJob(issue);
+      onTap: () {
+        if (widget.mechanicMode && issue.status.isOpen) {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => FleetLogWorkScreen(
+              preSelectedAssetId: issue.assetId,
+              preSelectedAssetName: issue.assetName,
+              linkedIssueId: issue.id!,
+            ),
+          ));
         } else {
-          await _quickFinishFix(issue);
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => FleetIssueDetailScreen(
+              issueId: issue.id!,
+              mechanicMode: widget.mechanicMode,
+            ),
+          ));
         }
-        return false;
       },
-      background: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        padding: const EdgeInsets.only(left: 20),
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          color: isOpen ? Colors.blue : kBrandOrange,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isOpen ? Icons.play_circle_outline : Icons.build_circle_outlined,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              isOpen ? 'Start job' : 'Finish the fix',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-      child: tile,
     );
   }
 
@@ -202,7 +133,9 @@ class _FleetIssuesListScreenState
           Expanded(
             child: StreamBuilder<List<FleetIssue>>(
               stream: _statusFilter == null
-                  ? _service.watchOpenIssues(limit: 100)
+                  ? (widget.mechanicMode
+                      ? _service.watchIssues(status: 'open', limit: 100)
+                      : _service.watchOpenIssues(limit: 100))
                   : _statusFilter == _kMineFilter
                       ? _service.watchIssues(
                           reportedByClockNo: currentEmployee?.clockNo,
