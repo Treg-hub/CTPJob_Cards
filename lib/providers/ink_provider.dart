@@ -118,3 +118,13 @@ final inkMeterPointReadingsProvider = StreamProvider<
     List<({String pointId, double consumption, DateTime readingDate})>>(
   (ref) => ref.watch(inkServiceProvider).watchMeterPointReadings(),
 );
+
+/// True if the daily ink meter reading has already been entered today.
+final inkTodayInkMeterDoneProvider = StreamProvider<bool>(
+  (ref) => ref.watch(inkServiceProvider).watchTodayInkMeterStatus(),
+);
+
+/// True if the daily toloul meter reading has already been entered today.
+final inkTodayToloulMeterDoneProvider = StreamProvider<bool>(
+  (ref) => ref.watch(inkServiceProvider).watchTodayToloulMeterStatus(),
+);

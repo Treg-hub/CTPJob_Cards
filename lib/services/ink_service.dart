@@ -130,6 +130,13 @@ class InkService {
       .doc(txnId)
       .update({'total_cost': totalCost, 'cost_status': InkCostStatus.costed.value});
 
+  /// Manager: correct the effective date on a pending (uncosted) receipt.
+  /// The server trigger re-replays from [effectiveAt] when the cost is later saved.
+  Future<void> setReceiptEffectiveAt(String txnId, DateTime effectiveAt) => _db
+      .collection(Collections.inkTransactions)
+      .doc(txnId)
+      .update({'effective_at': Timestamp.fromDate(effectiveAt)});
+
   /// Records a month-end count on a designated [countDate] (which need not be
   /// the calendar month-end). For each item whose physical count differs from
   /// the ledger balance, writes an `adjustment` for the delta (count − ledger),
@@ -621,6 +628,32 @@ class InkService {
         }
         return {for (final e in latest.entries) e.key: e.value.reading};
       });
+
+  /// True if at least one ink-meter (consumptionMeter) transaction was recorded
+  /// today (midnight → now). Used by the daily-readings hub to lock the tile.
+  Stream<bool> watchTodayInkMeterStatus() {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    return _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+        .snapshots()
+        .map((s) => s.docs.isNotEmpty);
+  }
+
+  /// True if at least one toloul meter-point reading was recorded today.
+  Stream<bool> watchTodayToloulMeterStatus() {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    return _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+        .snapshots()
+        .map((s) => s.docs.isNotEmpty);
+  }
 
   /// All meter-point readings (for month-end totals).
   Stream<List<({String pointId, double consumption, DateTime readingDate})>>
