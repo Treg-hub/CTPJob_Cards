@@ -636,6 +636,31 @@ class InkService {
     }
   }
 
+  /// The most recent [limit] readings per meter point (newest first) — for the
+  /// history strip in the entry grid.
+  Stream<Map<String, List<({DateTime at, double reading})>>>
+      watchRecentMeterPointReadings({int limit = 4}) => _db
+          .collection(Collections.inkMeterPointReadings)
+          .snapshots()
+          .map((s) {
+            final byPoint = <String, List<({DateTime at, double reading})>>{};
+            for (final doc in s.docs) {
+              final d = doc.data();
+              final pid = d['point_id'] as String?;
+              if (pid == null) continue;
+              final at =
+                  (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000);
+              final reading = (d['reading'] as num?)?.toDouble() ?? 0;
+              (byPoint[pid] ??= []).add((at: at, reading: reading));
+            }
+            for (final key in byPoint.keys.toList()) {
+              final list = byPoint[key]!
+                ..sort((a, b) => b.at.compareTo(a.at));
+              if (list.length > limit) byPoint[key] = list.sublist(0, limit);
+            }
+            return byPoint;
+          });
+
   /// Latest cumulative reading per meter point (for delta computation).
   Stream<Map<String, double>> watchLatestMeterPointReadings() => _db
       .collection(Collections.inkMeterPointReadings)

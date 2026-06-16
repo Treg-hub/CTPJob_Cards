@@ -114,6 +114,12 @@ final inkLatestMeterPointReadingsProvider =
   (ref) => ref.watch(inkServiceProvider).watchLatestMeterPointReadings(),
 );
 
+/// Recent readings per meter point (newest first) for the entry grid.
+final inkRecentMeterPointReadingsProvider = StreamProvider<
+    Map<String, List<({DateTime at, double reading})>>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecentMeterPointReadings(),
+);
+
 /// All meter-point readings (for month-end totals).
 final inkMeterPointReadingsProvider = StreamProvider<
     List<({String pointId, double consumption, DateTime readingDate})>>(

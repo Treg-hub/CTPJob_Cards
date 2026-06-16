@@ -7,10 +7,13 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 
-/// Phase 2 — Toloul Meter Point readings. Cumulative readings (delta =
-/// consumption, with meter-reset handling), no stock effect. Month-end totals
-/// each point by its linkage (Recovery / Usage).
+const _maxToloulLitres = 15000.0;
+
+/// Toloul meter point readings — grid layout mirroring InkMeterReadingsGridScreen.
+/// Cumulative entry (delta = consumption) with meter-reset handling, history
+/// strip per point, and role-gated date picker (managers/admins only).
 class InkMeterPointEntryScreen extends ConsumerStatefulWidget {
   const InkMeterPointEntryScreen({super.key});
 
@@ -55,11 +58,11 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
         continue;
       }
       final lastReading = last[id];
-      final reset = _reset[id] ?? false;
+      final didReset = _reset[id] ?? false;
       double consumption;
       if (lastReading == null) {
-        consumption = 0; // baseline
-      } else if (reset) {
+        consumption = 0;
+      } else if (didReset) {
         consumption = entered;
       } else {
         consumption = entered - lastReading;
@@ -72,7 +75,7 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
         pointId: id,
         reading: entered,
         consumption: consumption,
-        reset: reset
+        reset: didReset,
       ));
     }
     if (problems.isNotEmpty) {
@@ -87,20 +90,14 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
       return;
     }
 
-    // Warn when any point consumption exceeds the maximum expected daily value.
-    const maxToloulLitres = 15000.0;
     final qty = NumberFormat('#,##0.##');
-    final overMax = lines
-        .where((l) => l.consumption > maxToloulLitres)
-        .map((l) {
-          final pt = points.firstWhere((p) => p.id == l.pointId,
-              orElse: () => InkMeterPoint(
-                  name: l.pointId,
-                  linkage: '',
-                  sortOrder: 0));
-          return '${pt.name}: ${qty.format(l.consumption)} L (max ${qty.format(maxToloulLitres)} L)';
-        })
-        .toList();
+    final overMax = lines.where((l) => l.consumption > _maxToloulLitres).map(
+        (l) {
+      final pt = points.firstWhere((p) => p.id == l.pointId,
+          orElse: () => InkMeterPoint(name: l.pointId, linkage: '', sortOrder: 0));
+      return '${pt.name}: ${qty.format(l.consumption)} L (max ${qty.format(_maxToloulLitres)} L)';
+    }).toList();
+
     if (overMax.isNotEmpty) {
       if (!mounted) return;
       final confirm = await showDialog<bool>(
@@ -118,8 +115,7 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(children: [
                     Icon(Icons.warning_amber_rounded,
-                        size: 16,
-                        color: Theme.of(ctx).colorScheme.error),
+                        size: 16, color: Theme.of(ctx).colorScheme.error),
                     const SizedBox(width: 6),
                     Expanded(child: Text(w)),
                   ]),
@@ -155,8 +151,8 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
             actorName: emp?.name ?? '',
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${lines.length} meter reading(s) recorded.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${lines.length} meter reading(s) recorded.')));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -168,9 +164,14 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final canEditDate = role_utils.isInkManager(emp) || role_utils.isAdmin(emp);
+
     final pointsAsync = ref.watch(inkActiveMeterPointsProvider);
     final last = ref.watch(inkLatestMeterPointReadingsProvider).valueOrNull ?? {};
-    final df = DateFormat('EEE d MMM yyyy HH:mm');
+    final recent =
+        ref.watch(inkRecentMeterPointReadingsProvider).valueOrNull ?? {};
+    final df = DateFormat('EEE d MMM HH:mm');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Toloul Meter Readings')),
@@ -190,14 +191,46 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: OutlinedButton.icon(
-                  onPressed: _pickDate,
-                  icon: const Icon(Icons.event),
-                  label: Text('Reading date: ${df.format(_readingDate)}'),
-                  style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      alignment: Alignment.centerLeft),
-                ),
+                child: canEditDate
+                    ? OutlinedButton.icon(
+                        onPressed: _pickDate,
+                        icon: const Icon(Icons.event),
+                        label: Text('Reading date: ${df.format(_readingDate)}'),
+                        style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            alignment: Alignment.centerLeft),
+                      )
+                    : Container(
+                        height: 48,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outline
+                                  .withValues(alpha: 0.5)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.event,
+                                size: 18,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant),
+                            const SizedBox(width: 8),
+                            Text('Reading date: ${df.format(_readingDate)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
               ),
               Expanded(
                 child: ListView(
@@ -208,6 +241,7 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
                         point: p,
                         controller: _ctrl(p.id!),
                         last: last[p.id],
+                        history: recent[p.id] ?? const [],
                         reset: _reset[p.id] ?? false,
                         onResetChanged: (v) =>
                             setState(() => _reset[p.id!] = v),
@@ -215,7 +249,8 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
                       ),
                     const SizedBox(height: 12),
                     FilledButton.icon(
-                      onPressed: _submitting ? null : () => _submit(points, last),
+                      onPressed:
+                          _submitting ? null : () => _submit(points, last),
                       icon: _submitting
                           ? const SizedBox(
                               width: 18,
@@ -242,6 +277,7 @@ class _PointCard extends StatelessWidget {
     required this.point,
     required this.controller,
     required this.last,
+    required this.history,
     required this.reset,
     required this.onResetChanged,
     required this.onChanged,
@@ -250,6 +286,7 @@ class _PointCard extends StatelessWidget {
   final InkMeterPoint point;
   final TextEditingController controller;
   final double? last;
+  final List<({DateTime at, double reading})> history;
   final bool reset;
   final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
@@ -257,12 +294,12 @@ class _PointCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final qty = NumberFormat('#,##0.##');
+    final hd = DateFormat('d/M');
     final scheme = Theme.of(context).colorScheme;
     final entered = double.tryParse(controller.text.trim());
     final belowLast = last != null && entered != null && entered < last!;
     final showReset = last != null && (belowLast || reset);
 
-    const maxToloulLitres = 15000.0;
     String preview = '';
     Color? color;
     double? consumptionLitres;
@@ -282,7 +319,7 @@ class _PointCard extends StatelessWidget {
       }
     }
     final aboveMax =
-        consumptionLitres != null && consumptionLitres > maxToloulLitres;
+        consumptionLitres != null && consumptionLitres > _maxToloulLitres;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -297,20 +334,59 @@ class _PointCard extends StatelessWidget {
                   child: Text(point.name,
                       style: Theme.of(context).textTheme.titleSmall),
                 ),
-                Text(point.linkageLabelText,
-                    style: Theme.of(context).textTheme.bodySmall),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    point.linkageLabelText,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSecondaryContainer),
+                  ),
+                ),
               ],
             ),
-            if (last != null)
-              Text('Last: ${qty.format(last)} L',
-                  style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 6),
+            // Previous readings strip (newest → oldest).
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final h in history)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(hd.format(h.at),
+                              style: Theme.of(context).textTheme.labelSmall),
+                          Text(qty.format(h.reading),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  if (history.isEmpty)
+                    Text('No previous readings',
+                        style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: controller,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => onChanged(),
               decoration: const InputDecoration(
-                labelText: 'New reading',
+                labelText: 'New meter reading',
                 suffixText: 'L',
                 isDense: true,
               ),
@@ -324,7 +400,7 @@ class _PointCard extends StatelessWidget {
                       ?.copyWith(color: color)),
             ],
             if (aboveMax) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Row(
                 children: [
                   Icon(Icons.warning_amber_rounded,
@@ -332,7 +408,7 @@ class _PointCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Above expected max (${qty.format(maxToloulLitres)} L) — verify before submitting',
+                      'Above expected max (${qty.format(_maxToloulLitres)} L) — verify before submitting',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
