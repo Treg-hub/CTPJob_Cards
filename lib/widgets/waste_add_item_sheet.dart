@@ -80,7 +80,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
   String get _qtyLabel => widget.quantityLabelByType[_wasteType] ?? 'Quantity';
 
   bool get _valid {
-    if (_wasteType == null || _photos.isEmpty) return false;
+    if (_wasteType == null) return false;
     if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
     return (double.tryParse(_weightCtrl.text) ?? 0) > 0;
   }
@@ -181,7 +181,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                     labelText: 'Notes (optional)', isDense: true),
               ),
               const SizedBox(height: 12),
-              Text('Photos * (${_photos.length})',
+              Text('Photos (${_photos.length})',
                   style:
                       const TextStyle(fontSize: 12, color: Color(0xFF616161))),
               const SizedBox(height: 6),

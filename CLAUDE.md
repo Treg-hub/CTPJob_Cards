@@ -119,7 +119,7 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 
 ### Current Role System Summary
 - Roles are **derived** from `Employee.position` + `department` (see `lib/utils/role.dart`)
-- Admin is currently gated by hardcoded `clockNo == "22"`
+- Admin is gated by `Employee.isAdmin` (Firestore field `isAdmin: true`)
 - WasteTrack roles are derived from `department == "Security"` + `position` — `isSecurityManager()` and `isSecurityGuard()` are separate helpers in `role.dart`
 - Fleet roles: `isFleetMechanic()` (Workshop + Hyster Mechanic) is settings-free; `isFleetReporter(emp, settings)` and `isFleetCostManager(emp, settings)` read the `fleet_settings/config` allow-lists, so they take a `FleetSettings` argument. The Fleet tab is gated on `fleet_settings.fleet_enabled` + `isFleetUser()`
 - There is **no go_router** and **no centralized route guards**
@@ -144,13 +144,13 @@ Roles are **inferred from `Employee.position` and `Employee.department`** (see `
 | Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, CreateJobCard, ViewJobCards, JobCardDetail |
 | Manager | `position` contains `manager` | ManagerDashboard, DailyReview, ViewJobCards |
 | Operator | neither manager nor technician | Home, CreateJobCard (on-site only), JobCardDetail |
-| Admin | `clockNo == "22"` | Full access to AdminScreen and all admin features |
+| Admin | `Employee.isAdmin == true` (Firestore field) | Full access to AdminScreen and all admin features |
 | Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |
 | Security Guard | `department == "Security"` && `position == "Guard"` | WasteHome, WasteBeginCollection, WasteLoadDetail, WasteSignature, WastePendingWeighbridge |
 | Fleet Mechanic | `department == "Workshop"` && `position == "Hyster Mechanic"` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts; edits lock after 7 days or once costed) |
 | Fleet Reporter | `department` in `fleet_settings.reporter_departments` | FleetHome, FleetReportIssue, FleetIssueDetail (read-only) |
 | Fleet Cost Manager | `clockNo` in `fleet_settings.cost_manager_clock_nos` | FleetHome, FleetAddCost, FleetReports (+ CSV export), FleetWorkRecordDetail (with costs) |
-| Fleet Admin | `clockNo == "22"` (reuses Admin) | FleetAssets (manage register), FleetSettings, plus everything above |
+| Fleet Admin | `Employee.isAdmin == true` (reuses isAdmin) | FleetAssets (manage register), FleetSettings, plus everything above |
 
 Fleet roles differ from other modules: **Mechanic** is a fixed department+position check, but **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), so their `role.dart` helpers take a `FleetSettings` argument. The mechanic never sees money — work records show only a "Costs pending / Costs entered" label.
 
