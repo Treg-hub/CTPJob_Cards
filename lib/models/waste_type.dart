@@ -8,8 +8,12 @@ class WasteType {
   final List<String> subtypes;
   final Map<String, String> quantityLabels; // subtype -> label, e.g. "Reelends" -> "Quantity (reels)"
   /// True for types measured by count, not weight (e.g. IBC Bins).
-  /// Weight field is hidden in all item entry screens; quantity is required instead.
+  /// Weight field is hidden; quantity is required. Weighbridge step is skipped.
   final bool isQuantityOnly;
+
+  /// True for types too large to weigh on-site (e.g. compactor bins, copper skins).
+  /// Guard records quantity; weight field is hidden. Weighbridge step is still required.
+  final bool noSiteWeight;
 
   const WasteType({
     this.id,
@@ -17,6 +21,7 @@ class WasteType {
     this.subtypes = const [],
     this.quantityLabels = const {},
     this.isQuantityOnly = false,
+    this.noSiteWeight = false,
   });
 
   /// Returns the dynamic quantity label for a given subtype.
@@ -38,6 +43,7 @@ class WasteType {
               ?.map((k, v) => MapEntry(k, v.toString())) ??
           const {},
       isQuantityOnly: data['isQuantityOnly'] as bool? ?? false,
+      noSiteWeight: data['noSiteWeight'] as bool? ?? false,
     );
   }
 
@@ -46,5 +52,6 @@ class WasteType {
         'subtypes': subtypes,
         'quantityLabels': quantityLabels,
         'isQuantityOnly': isQuantityOnly,
+        'noSiteWeight': noSiteWeight,
       };
 }

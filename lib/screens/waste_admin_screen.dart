@@ -73,7 +73,8 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
   Future<void> _addNewType() async {
     final nameCtrl = TextEditingController();
     bool isQtyOnly = false;
-    final result = await showDialog<({String name, bool isQuantityOnly})>(
+    bool noSiteWeight = false;
+    final result = await showDialog<({String name, bool isQuantityOnly, bool noSiteWeight})>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
@@ -90,9 +91,19 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Quantity only (no weight)'),
-                subtitle: const Text('e.g. IBC Bins — counted by unit, not kg'),
+                subtitle: const Text('e.g. IBC Bins — priced per unit, no weighbridge'),
                 value: isQtyOnly,
-                onChanged: (v) => setDState(() => isQtyOnly = v),
+                onChanged: (v) => setDState(() {
+                  isQtyOnly = v;
+                  if (v) noSiteWeight = false;
+                }),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('No on-site weight'),
+                subtitle: const Text('e.g. Compactor bins — guard records qty, weight from weighbridge'),
+                value: noSiteWeight,
+                onChanged: isQtyOnly ? null : (v) => setDState(() => noSiteWeight = v),
               ),
             ],
           ),
@@ -102,7 +113,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
               onPressed: () {
                 final name = nameCtrl.text.trim();
                 if (name.isEmpty) return;
-                Navigator.pop(ctx, (name: name, isQuantityOnly: isQtyOnly));
+                Navigator.pop(ctx, (name: name, isQuantityOnly: isQtyOnly, noSiteWeight: noSiteWeight));
               },
               child: const Text('Create'),
             ),
@@ -115,7 +126,7 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     setState(() => _isProcessing = true);
     try {
       await _wasteService.createWasteType(
-        WasteType(mainType: result.name, isQuantityOnly: result.isQuantityOnly),
+        WasteType(mainType: result.name, isQuantityOnly: result.isQuantityOnly, noSiteWeight: result.noSiteWeight),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,6 +146,19 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
     if (type.id == null) return;
     try {
       await _wasteService.setWasteTypeQuantityOnly(type.id!, value);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleNoSiteWeight(WasteType type, bool value) async {
+    if (type.id == null) return;
+    try {
+      await _wasteService.setWasteTypeNoSiteWeight(type.id!, value);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -401,18 +425,28 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                               children: types.map((t) {
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
-                                  child: SwitchListTile(
-                                    title: Text(t.mainType, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    subtitle: Text(
-                                      t.isQuantityOnly ? 'Quantity only — no weight' : 'Weight-based (kg)',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    secondary: Icon(
-                                      t.isQuantityOnly ? Icons.numbers : Icons.monitor_weight_outlined,
-                                      size: 20,
-                                    ),
-                                    value: t.isQuantityOnly,
-                                    onChanged: (v) => _toggleQuantityOnly(t, v),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                                        child: Text(t.mainType, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                                      ),
+                                      SwitchListTile(
+                                        dense: true,
+                                        title: const Text('Quantity only (no weight)', style: TextStyle(fontSize: 13)),
+                                        subtitle: const Text('Priced per unit — weighbridge skipped', style: TextStyle(fontSize: 11)),
+                                        value: t.isQuantityOnly,
+                                        onChanged: (v) => _toggleQuantityOnly(t, v),
+                                      ),
+                                      SwitchListTile(
+                                        dense: true,
+                                        title: const Text('No on-site weight', style: TextStyle(fontSize: 13)),
+                                        subtitle: const Text('Guard records qty — weight comes from weighbridge', style: TextStyle(fontSize: 11)),
+                                        value: t.noSiteWeight,
+                                        onChanged: t.isQuantityOnly ? null : (v) => _toggleNoSiteWeight(t, v),
+                                      ),
+                                    ],
                                   ),
                                 );
                               }).toList(),
