@@ -86,6 +86,62 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
           const SnackBar(content: Text('Enter at least one reading.')));
       return;
     }
+
+    // Warn when any point consumption exceeds the maximum expected daily value.
+    const maxToloulLitres = 15000.0;
+    final qty = NumberFormat('#,##0.##');
+    final overMax = lines
+        .where((l) => l.consumption > maxToloulLitres)
+        .map((l) {
+          final pt = points.firstWhere((p) => p.id == l.pointId,
+              orElse: () => InkMeterPoint(
+                  name: l.pointId,
+                  linkage: '',
+                  sortOrder: 0));
+          return '${pt.name}: ${qty.format(l.consumption)} L (max ${qty.format(maxToloulLitres)} L)';
+        })
+        .toList();
+    if (overMax.isNotEmpty) {
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Above expected maximum'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('The following readings exceed the daily limit:'),
+              const SizedBox(height: 10),
+              for (final w in overMax)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16,
+                        color: Theme.of(ctx).colorScheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(w)),
+                  ]),
+                ),
+              const SizedBox(height: 10),
+              const Text('Verify the readings are correct before proceeding.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Review')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirm & Submit')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _readingDate);
     if (!allowed) return;
@@ -206,21 +262,27 @@ class _PointCard extends StatelessWidget {
     final belowLast = last != null && entered != null && entered < last!;
     final showReset = last != null && (belowLast || reset);
 
+    const maxToloulLitres = 15000.0;
     String preview = '';
     Color? color;
+    double? consumptionLitres;
     if (entered != null) {
       if (last == null) {
         preview = 'First reading — sets baseline';
         color = scheme.onSurfaceVariant;
       } else if (reset) {
+        consumptionLitres = entered;
         preview = 'Reset — ${qty.format(entered)} L';
       } else if (belowLast) {
         preview = 'Below last (${qty.format(last)}). Was the meter reset?';
         color = scheme.error;
       } else {
-        preview = '${qty.format(entered - last!)} L';
+        consumptionLitres = entered - last!;
+        preview = '${qty.format(consumptionLitres)} L';
       }
     }
+    final aboveMax =
+        consumptionLitres != null && consumptionLitres > maxToloulLitres;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -260,6 +322,25 @@ class _PointCard extends StatelessWidget {
                       .textTheme
                       .bodyMedium
                       ?.copyWith(color: color)),
+            ],
+            if (aboveMax) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 16, color: scheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Above expected max (${qty.format(maxToloulLitres)} L) — verify before submitting',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
             ],
             if (showReset)
               CheckboxListTile(

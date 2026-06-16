@@ -11,6 +11,26 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 
+/// Maximum expected daily consumption in litres, matched against the item's
+/// displayName/itemCode (case-insensitive substring). Items not listed here
+/// have no limit check. Values set by factory management.
+const _maxConsumptionByKeyword = <String, double>{
+  'black': 1500,
+  'blue': 1500,
+  'red': 2000,
+  'yellow': 3200,
+  'binder': 3000,
+  'gravure': 3000,
+};
+
+double? _maxLitresFor(InkStockItem item) {
+  final search = '${item.itemCode} ${item.displayName}'.toLowerCase();
+  for (final e in _maxConsumptionByKeyword.entries) {
+    if (search.contains(e.key)) return e.value;
+  }
+  return null;
+}
+
 /// Phase 1d — Meter Readings (Lurgi ink/binder consumption).
 ///
 /// Rebuilt for the factory floor: a single vertical scroll, one card per meter,
@@ -119,6 +139,71 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
       return;
     }
 
+    // Warn when any consumption exceeds the per-item expected maximum.
+    final warnings = <String>[];
+    for (final item in meterItems) {
+      final raw = _ctrl(item.itemCode).text.trim();
+      final entered = double.tryParse(raw);
+      if (entered == null) continue;
+      final last = lastReadings[item.itemCode];
+      final maxL = _maxLitresFor(item);
+      if (maxL == null) continue;
+      double? consumption;
+      if (_cumulative) {
+        if (last != null && _reset[item.itemCode] != true && entered >= last) {
+          consumption = entered - last;
+        } else if (_reset[item.itemCode] == true) {
+          consumption = entered;
+        }
+      } else {
+        consumption = entered;
+      }
+      if (consumption != null && consumption > maxL) {
+        warnings.add(
+            '${item.displayName}: ${_qty.format(consumption)} L (max ${_qty.format(maxL)} L)');
+      }
+    }
+    if (warnings.isNotEmpty) {
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Above expected maximum'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('The following readings exceed the daily limit:'),
+              const SizedBox(height: 10),
+              for (final w in warnings)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16,
+                        color: Theme.of(ctx).colorScheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(w)),
+                  ]),
+                ),
+              const SizedBox(height: 10),
+              const Text('Verify the readings are correct before proceeding.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Review')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirm & Submit')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
@@ -218,6 +303,7 @@ class _State extends ConsumerState<InkMeterReadingsScreen> {
                         factor: factors[item.itemCode]!,
                         last: last[item.itemCode],
                         reset: _reset[item.itemCode] ?? false,
+                        maxConsumptionLitres: _maxLitresFor(item),
                         onResetChanged: (v) =>
                             setState(() => _reset[item.itemCode] = v),
                         onChanged: () => setState(() {}),
@@ -258,6 +344,7 @@ class _MeterCard extends StatelessWidget {
     required this.reset,
     required this.onResetChanged,
     required this.onChanged,
+    this.maxConsumptionLitres,
   });
 
   final InkStockItem item;
@@ -266,6 +353,7 @@ class _MeterCard extends StatelessWidget {
   final double factor;
   final double? last;
   final bool reset;
+  final double? maxConsumptionLitres;
   final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
 
@@ -280,12 +368,14 @@ class _MeterCard extends StatelessWidget {
 
     String preview = '';
     Color? previewColor;
+    double? consumptionLitres;
     if (entered != null) {
       if (cumulative) {
         if (last == null) {
           preview = 'First reading — sets baseline, no consumption';
           previewColor = scheme.onSurfaceVariant;
         } else if (reset) {
+          consumptionLitres = entered;
           preview =
               'Reset — ${qty.format(entered)} L → ${qty.format(entered * factor)} kg consumed';
         } else if (belowLast) {
@@ -294,12 +384,17 @@ class _MeterCard extends StatelessWidget {
           previewColor = scheme.error;
         } else {
           final d = entered - last!;
+          consumptionLitres = d;
           preview = '${qty.format(d)} L → ${qty.format(d * factor)} kg';
         }
       } else {
+        consumptionLitres = entered;
         preview = '${qty.format(entered * factor)} kg';
       }
     }
+    final aboveMax = maxConsumptionLitres != null &&
+        consumptionLitres != null &&
+        consumptionLitres > maxConsumptionLitres!;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -337,6 +432,25 @@ class _MeterCard extends StatelessWidget {
                       .textTheme
                       .bodyMedium
                       ?.copyWith(color: previewColor)),
+            ],
+            if (aboveMax) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 16, color: scheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Above expected max (${qty.format(maxConsumptionLitres!)} L) — verify before submitting',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
             ],
             if (showReset)
               CheckboxListTile(

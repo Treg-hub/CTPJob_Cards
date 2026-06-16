@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -86,19 +87,41 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     });
   }
 
-  Future<void> _submit() async {
+  /// Validates all rows and returns the complete IBC list, or null if invalid
+  /// (shows a snackbar describing the first error found).
+  List<InkIbc>? _buildValidIbcs() {
     if (_supplier == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Select a supplier.')));
-      return;
+      return null;
     }
     final ibcs = <InkIbc>[];
-    for (final r in _rows) {
-      final num = r.numberCtrl.text.trim();
-      final kg = double.tryParse(r.kgCtrl.text.trim());
-      if (num.isEmpty || r.itemCode == null || kg == null || kg <= 0) continue;
+    for (var i = 0; i < _rows.length; i++) {
+      final r = _rows[i];
+      final numText = r.numberCtrl.text.trim();
+      final kgText = r.kgCtrl.text.trim();
+      final kg = double.tryParse(kgText);
+
+      // Skip completely blank rows silently.
+      if (numText.isEmpty && r.itemCode == null && kgText.isEmpty) continue;
+
+      if (numText.length != 8) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Row ${i + 1}: IBC number must be exactly 8 digits.')));
+        return null;
+      }
+      if (r.itemCode == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Row ${i + 1}: select a colour.')));
+        return null;
+      }
+      if (kg == null || kg <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Row ${i + 1}: enter a valid weight.')));
+        return null;
+      }
       ibcs.add(InkIbc(
-          ibcNumber: num,
+          ibcNumber: numText,
           itemCode: r.itemCode!,
           kg: kg,
           receivedDate: _effectiveAt,
@@ -107,8 +130,138 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     if (ibcs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Add at least one complete IBC (number, colour, kg).')));
-      return;
+      return null;
     }
+    return ibcs;
+  }
+
+  Future<void> _confirmAndSubmit() async {
+    final ibcs = _buildValidIbcs();
+    if (ibcs == null) return;
+
+    final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
+    final displayName = {for (final i in items) i.itemCode: i.displayName};
+
+    // Group by colour for the summary.
+    final summary = <String, ({int count, double kg})>{};
+    for (final ibc in ibcs) {
+      final prev = summary[ibc.itemCode];
+      summary[ibc.itemCode] = prev == null
+          ? (count: 1, kg: ibc.kg)
+          : (count: prev.count + 1, kg: prev.kg + ibc.kg);
+    }
+
+    // Sort entries by the stock item displayOrder so the table is always consistent.
+    final orderOf = {for (final i in items) i.itemCode: i.displayOrder};
+    final sortedEntries = summary.entries.toList()
+      ..sort((a, b) =>
+          (orderOf[a.key] ?? 9999).compareTo(orderOf[b.key] ?? 9999));
+
+    final nf = NumberFormat('#,##0.##');
+    final totalKg = ibcs.fold<double>(0, (s, i) => s + i.kg);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Receipt'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                      flex: 4,
+                      child: Text('Colour',
+                          style: Theme.of(ctx)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(fontWeight: FontWeight.bold))),
+                  SizedBox(
+                      width: 44,
+                      child: Text('IBCs',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(ctx)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(fontWeight: FontWeight.bold))),
+                  SizedBox(
+                      width: 76,
+                      child: Text('Total kg',
+                          textAlign: TextAlign.right,
+                          style: Theme.of(ctx)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(fontWeight: FontWeight.bold))),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 4),
+            for (final entry in sortedEntries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Expanded(
+                        flex: 4,
+                        child: Text(displayName[entry.key] ?? entry.key)),
+                    SizedBox(
+                        width: 44,
+                        child: Text('${entry.value.count}',
+                            textAlign: TextAlign.center)),
+                    SizedBox(
+                        width: 76,
+                        child: Text(nf.format(entry.value.kg),
+                            textAlign: TextAlign.right)),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 4),
+            const Divider(height: 1),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                    flex: 4,
+                    child: Text('Total',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.bold))),
+                SizedBox(
+                    width: 44,
+                    child: Text('${ibcs.length}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                SizedBox(
+                    width: 76,
+                    child: Text(nf.format(totalKg),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Receive IBCs')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await _doSubmit(ibcs);
+  }
+
+  Future<void> _doSubmit(List<InkIbc> ibcs) async {
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
@@ -220,12 +373,18 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   children: [
                     TextField(
                       controller: _rows[idx].numberCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      maxLength: 8,
                       decoration: InputDecoration(
                           labelText: 'IBC number',
                           helperText: _rows[idx].charge != null
                               ? 'Charge ${_rows[idx].charge}'
                               : null,
+                          counterText:
+                              '${_rows[idx].numberCtrl.text.length}/8',
                           isDense: true),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -299,7 +458,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _submitting ? null : _submit,
+            onPressed: _submitting ? null : _confirmAndSubmit,
             icon: _submitting
                 ? const SizedBox(
                     width: 18,

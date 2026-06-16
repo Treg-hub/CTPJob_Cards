@@ -5,16 +5,29 @@ import 'package:intl/intl.dart';
 import '../models/ink_transaction.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
 
 /// Phase 1i — Pending Costs (manager). Lists receipts captured cost-pending and
-/// lets a manager enter the total cost. Setting the cost flips the receipt to
-/// `costed`, which triggers the server WAC re-replay.
+/// lets a manager enter the total cost and correct the effective date.
+/// Setting the cost flips the receipt to `costed`, triggering a WAC re-replay.
 class InkPendingCostsScreen extends ConsumerWidget {
   const InkPendingCostsScreen({super.key});
 
   static final _qty = NumberFormat('#,##0.##');
-  static final _df = DateFormat('d MMM yyyy');
+  static final _df = DateFormat('d MMM yyyy HH:mm');
+
+  Future<void> _editDate(
+      BuildContext context, WidgetRef ref, InkTransaction txn) async {
+    final picked = await pickInkDateTime(context, txn.effectiveAt);
+    if (picked == null || picked == txn.effectiveAt) return;
+    if (txn.id == null) return;
+    await ref.read(inkServiceProvider).setReceiptEffectiveAt(txn.id!, picked);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Effective date updated.')));
+    }
+  }
 
   Future<void> _enterCost(
       BuildContext context, WidgetRef ref, InkTransaction txn, String unit) async {
@@ -83,7 +96,8 @@ class InkPendingCostsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isManager = role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
     if (!isManager) {
       return Scaffold(
         appBar: AppBar(title: const Text('Pending Costs')),
@@ -105,23 +119,64 @@ class InkPendingCostsScreen extends ConsumerWidget {
         data: (txns) => txns.isEmpty
             ? const Center(child: Text('No receipts awaiting a cost.'))
             : ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: txns.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final t = txns[i];
                   final item = byCode[t.stockItemCode];
                   final unit = item?.unit ?? '';
-                  return ListTile(
-                    leading: const Icon(Icons.payments_outlined),
-                    title: Text(item?.displayName ?? t.stockItemCode),
-                    subtitle: Text(
-                      '${_qty.format(t.quantityDelta)} $unit'
-                      '${t.supplierName != null ? ' · ${t.supplierName}' : ''}'
-                      ' · ${_df.format(t.effectiveAt)}',
-                    ),
-                    trailing: FilledButton.tonal(
-                      onPressed: () => _enterCost(context, ref, t, unit),
-                      child: const Text('Enter cost'),
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.payments_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item?.displayName ?? t.stockItemCode,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 26),
+                          child: Text(
+                            '${_qty.format(t.quantityDelta)} $unit'
+                            '${t.supplierName != null ? ' · ${t.supplierName}' : ''}'
+                            '${t.notes != null ? '\n${t.notes}' : ''}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => _editDate(context, ref, t),
+                              icon: const Icon(Icons.event_outlined, size: 16),
+                              label: Text(_df.format(t.effectiveAt)),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                textStyle: Theme.of(context).textTheme.labelSmall,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                            const Spacer(),
+                            FilledButton.tonal(
+                              onPressed: () =>
+                                  _enterCost(context, ref, t, unit),
+                              child: const Text('Enter cost'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   );
                 },

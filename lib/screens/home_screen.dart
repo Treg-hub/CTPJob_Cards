@@ -36,6 +36,8 @@ import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
 import 'fleet_report_issue_screen.dart';
 import 'ink_home_screen.dart';
+import 'ink_daily_readings_screen.dart';
+import '../widgets/fleet_quick_report_sheet.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/ink_provider.dart';
@@ -332,14 +334,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       result = [
         ...result,
         {
-          'title': FleetLabels.reportHysterProblem,
+          'title': FleetLabels.reportProblem,
           'icon': Icons.forklift,
           'color': kBrandOrange,
-          'onTap': () => Navigator.push(
+          'onTap': () async {
+            final result = await showFleetQuickReportSheet(context);
+            if (result != null && mounted) {
+              Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const FleetReportIssueScreen()),
-              ),
+                  builder: (_) => FleetReportIssueScreen(
+                    preSelectedAsset: result.asset,
+                    preSelectedSeverity: result.severity,
+                  ),
+                ),
+              );
+            }
+          },
         },
       ];
     }
@@ -361,6 +372,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ];
       }
     }
+    if (role_utils.isInkMeterUser(currentEmployee)) {
+      result = [
+        ...result,
+        {
+          'title': 'Daily Readings',
+          'icon': Icons.speed,
+          'color': const Color(0xFF0EA5E9),
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InkDailyReadingsScreen()),
+              ),
+        },
+      ];
+    }
     return result;
   }
 
@@ -368,6 +394,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   EdgeInsets get _cardPaddingInsets => _isDesktop ? const EdgeInsets.all(20) : const EdgeInsets.all(16);
   double get _gridSpacing => _isDesktop ? 6 : (_isTablet ? 15 : 12);
   double get _screenPadding => _isDesktop ? 20 : 16;
+  double get _tileWidth => _isDesktop ? 150 : (_isTablet ? 140 : 130);
 
   Future<void> _loadFleetSettings() async {
     try {
@@ -806,13 +833,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   disabledReason: action['disabledReason'] as String?,
                 )),
                 if (kIsWeb && (isManager || isSuperManager))
-                  _DailyReviewTile(
-                    pendingCount: _pendingReviewCount,
-                    iconSize: _iconSize,
-                    padding: _cardPaddingInsets,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+                  SizedBox(
+                    width: _tileWidth,
+                    child: _DailyReviewTile(
+                      pendingCount: _pendingReviewCount,
+                      iconSize: _iconSize,
+                      padding: _cardPaddingInsets,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+                      ),
                     ),
                   ),
               ],
@@ -931,7 +961,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ],
       );
     }
-    return card;
+    return SizedBox(width: _tileWidth, child: card);
   }
 
   Widget _buildRecentJobCards() {

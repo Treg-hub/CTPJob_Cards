@@ -28,6 +28,7 @@ import 'ink_recipe_management_screen.dart';
 import 'ink_revaluation_screen.dart';
 import 'ink_value_adjustment_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
+import 'ink_stock_screen.dart';
 import 'ink_supplier_management_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
 
@@ -83,6 +84,8 @@ class InkHomeScreen extends ConsumerWidget {
             _sectionLabel(context, 'Manager'),
             const SizedBox(height: 8),
             _ActionGrid(actions: [
+              _Action(Icons.bar_chart_outlined, 'Stock',
+                  builder: () => const InkStockScreen()),
               _Action(Icons.store_outlined, 'Suppliers',
                   builder: () => const InkSupplierManagementScreen()),
               _Action(Icons.fact_check_outlined, 'Month-end Count',

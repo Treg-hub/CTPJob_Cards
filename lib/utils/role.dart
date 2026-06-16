@@ -170,6 +170,25 @@ bool isPrepressSpecialist(Employee? employee) {
 
 const String inkDepartment = 'Ink Factory';
 
+// =============================================================================
+// LURGI role helpers
+// =============================================================================
+// Lurgi operates the ink and toloul meters daily (target 06:00). During the
+// transition rollout, Ink Factory users also retain meter-entry access.
+// =============================================================================
+
+const String lurgiDepartment = 'Lurgi';
+
+/// True when the employee is in the Lurgi department (plus admins).
+bool isLurgiUser(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department == lurgiDepartment || isAdmin(employee);
+}
+
+/// Can enter meter readings — Lurgi (primary duty) or Ink Factory (transition).
+bool isInkMeterUser(Employee? employee) =>
+    isLurgiUser(employee) || isInkUser(employee);
+
 /// Any Ink Factory user (operators + managers), plus admins. Shows the Ink hub.
 bool isInkUser(Employee? employee) {
   if (employee == null) return false;
