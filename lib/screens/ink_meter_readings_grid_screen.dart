@@ -10,10 +10,32 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 
-/// Phase 2 — Meter Readings (grid). Same cumulative entry as the standard meter
-/// screen, but each meter shows its previous readings for quick context/easier
-/// entry. Includes meter-reset handling and an editable date+time.
+/// Maximum expected daily consumption in litres, matched against the item's
+/// displayName/itemCode (case-insensitive substring). Values set by factory
+/// management. Items not listed have no limit check.
+const _maxConsumptionByKeyword = <String, double>{
+  'black': 1500,
+  'blue': 1500,
+  'red': 2000,
+  'yellow': 3200,
+  'binder': 3000,
+  'gravure': 3000,
+};
+
+double? _maxLitresFor(InkStockItem item) {
+  final search = '${item.itemCode} ${item.displayName}'.toLowerCase();
+  for (final e in _maxConsumptionByKeyword.entries) {
+    if (search.contains(e.key)) return e.value;
+  }
+  return null;
+}
+
+/// Primary meter readings screen — cumulative entry with history strip per
+/// meter for quick context. Replaces the legacy list-style screen.
+/// Date/time can only be edited by managers and admins; Lurgi users see
+/// the date as read-only text.
 class InkMeterReadingsGridScreen extends ConsumerStatefulWidget {
   const InkMeterReadingsGridScreen({super.key});
 
@@ -49,6 +71,7 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
     final sessionId = const Uuid().v4();
     final toWrite = <InkTransaction>[];
     final problems = <String>[];
+
     for (final item in items) {
       final raw = _ctrl(item.itemCode).text.trim();
       if (raw.isEmpty) continue;
@@ -67,7 +90,8 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
       } else {
         litres = entered - lastReading;
         if (litres < 0) {
-          problems.add('${item.displayName}: reading below last — tick "meter was reset"');
+          problems.add(
+              '${item.displayName}: reading below last — tick "meter was reset"');
           continue;
         }
       }
@@ -87,6 +111,7 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
         idempotencyKey: const Uuid().v4(),
       ));
     }
+
     if (problems.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(problems.join('\n')),
@@ -98,9 +123,74 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
           const SnackBar(content: Text('Enter at least one reading.')));
       return;
     }
+
+    // Warn when any consumption exceeds the per-item expected maximum.
+    final qty = NumberFormat('#,##0.##');
+    final warnings = <String>[];
+    for (final item in items) {
+      final raw = _ctrl(item.itemCode).text.trim();
+      final entered = double.tryParse(raw);
+      if (entered == null) continue;
+      final maxL = _maxLitresFor(item);
+      if (maxL == null) continue;
+      final lastReading = last[item.itemCode];
+      double? consumption;
+      if (lastReading == null) {
+        // baseline — no consumption recorded
+      } else if (_reset[item.itemCode] == true) {
+        consumption = entered;
+      } else if (entered >= lastReading) {
+        consumption = entered - lastReading;
+      }
+      if (consumption != null && consumption > maxL) {
+        warnings.add(
+            '${item.displayName}: ${qty.format(consumption)} L (max ${qty.format(maxL)} L)');
+      }
+    }
+    if (warnings.isNotEmpty) {
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Above expected maximum'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('The following readings exceed the daily limit:'),
+              const SizedBox(height: 10),
+              for (final w in warnings)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16, color: Theme.of(ctx).colorScheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(w)),
+                  ]),
+                ),
+              const SizedBox(height: 10),
+              const Text('Verify the readings are correct before proceeding.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Review')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirm & Submit')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
+
     setState(() => _submitting = true);
     final svc = ref.read(inkServiceProvider);
     try {
@@ -121,6 +211,9 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final canEditDate = role_utils.isInkManager(emp) || role_utils.isAdmin(emp);
+
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final factorsMap = ref.watch(inkConversionFactorsProvider).valueOrNull ?? {};
     final factors = {
@@ -136,7 +229,7 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
 
     if (meterItems.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Meter Readings (grid)')),
+        appBar: AppBar(title: const Text('Meter Readings')),
         body: const Padding(
           padding: EdgeInsets.all(24),
           child: Center(
@@ -147,19 +240,51 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Meter Readings (grid)')),
+      appBar: AppBar(title: const Text('Meter Readings')),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: OutlinedButton.icon(
-              onPressed: _pickDate,
-              icon: const Icon(Icons.event),
-              label: Text('Reading date: ${df.format(_effectiveAt)}'),
-              style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  alignment: Alignment.centerLeft),
-            ),
+            child: canEditDate
+                ? OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.event),
+                    label: Text('Reading date: ${df.format(_effectiveAt)}'),
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        alignment: Alignment.centerLeft),
+                  )
+                : Container(
+                    height: 48,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.event,
+                            size: 18,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Text('Reading date: ${df.format(_effectiveAt)}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
           ),
           Expanded(
             child: ListView(
@@ -173,6 +298,7 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
                     last: last[item.itemCode],
                     history: recent[item.itemCode] ?? const [],
                     reset: _reset[item.itemCode] ?? false,
+                    maxConsumptionLitres: _maxLitresFor(item),
                     onResetChanged: (v) =>
                         setState(() => _reset[item.itemCode] = v),
                     onChanged: () => setState(() {}),
@@ -210,6 +336,7 @@ class _GridCard extends StatelessWidget {
     required this.reset,
     required this.onResetChanged,
     required this.onChanged,
+    this.maxConsumptionLitres,
   });
 
   final InkStockItem item;
@@ -218,6 +345,7 @@ class _GridCard extends StatelessWidget {
   final double? last;
   final List<({DateTime at, double reading})> history;
   final bool reset;
+  final double? maxConsumptionLitres;
   final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
 
@@ -232,11 +360,13 @@ class _GridCard extends StatelessWidget {
 
     String preview = '';
     Color? color;
+    double? consumptionLitres;
     if (entered != null) {
       if (last == null) {
         preview = 'First reading — sets baseline';
         color = scheme.onSurfaceVariant;
       } else if (reset) {
+        consumptionLitres = entered;
         preview =
             'Reset — ${qty.format(entered)} L → ${qty.format(entered * factor)} kg';
       } else if (belowLast) {
@@ -244,9 +374,14 @@ class _GridCard extends StatelessWidget {
         color = scheme.error;
       } else {
         final d = entered - last!;
+        consumptionLitres = d;
         preview = '${qty.format(d)} L → ${qty.format(d * factor)} kg';
       }
     }
+
+    final aboveMax = maxConsumptionLitres != null &&
+        consumptionLitres != null &&
+        consumptionLitres > maxConsumptionLitres!;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -307,13 +442,32 @@ class _GridCard extends StatelessWidget {
                       .bodyMedium
                       ?.copyWith(color: color)),
             ],
+            if (aboveMax) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 16, color: scheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Above expected max (${qty.format(maxConsumptionLitres!)} L) — verify before submitting',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (showReset)
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 controlAffinity: ListTileControlAffinity.leading,
-                title:
-                    const Text('Meter was reset (use new reading as consumption)'),
+                title: const Text(
+                    'Meter was reset (use new reading as consumption)'),
                 value: reset,
                 onChanged: (v) => onResetChanged(v ?? false),
               ),
