@@ -67,36 +67,31 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
   static final _wac = NumberFormat('#,##0.0000');
   static final _fileDateFmt = DateFormat('yyyy-MM-dd');
 
-  // Period is [_from 00:00, _to end-of-day]. Free dates — set to your count dates.
+  // Period boundaries — driven by count dates from the ledger.
   late DateTime _from;
   late DateTime _to;
+  bool _periodInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    // Fallback until count dates load.
     final now = DateTime.now();
     _from = DateTime(now.year, now.month, 1);
-    _to = DateTime(now.year, now.month, now.day);
+    _to = now;
   }
 
   DateTime get _periodEnd => _to.add(const Duration(days: 1));
 
-  Future<void> _pick(bool isFrom) async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: isFrom ? _from : _to,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (d != null) {
-      setState(() {
-        final picked = DateTime(d.year, d.month, d.day);
-        if (isFrom) {
-          _from = picked;
-        } else {
-          _to = picked;
-        }
-      });
+  void _initPeriodFromCounts(List<DateTime> counts) {
+    if (_periodInitialized || counts.isEmpty) return;
+    _periodInitialized = true;
+    if (counts.length == 1) {
+      _from = counts.first;
+      _to = DateTime.now();
+    } else {
+      _from = counts[counts.length - 2];
+      _to = counts.last;
     }
   }
 
@@ -430,7 +425,11 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       );
     }
 
+    final countDates = ref.watch(inkMonthEndCountDatesProvider);
+    _initPeriodFromCounts(countDates);
+
     final rf = DateFormat('d MMM yyyy');
+    final rfTime = DateFormat('d MMM yyyy HH:mm');
     final pk = InkSettings.periodKey(_from);
     final isClosed = settings?.closedPeriods.contains(pk) ?? false;
     final needsReissue = settings?.periodsNeedingReissue.contains(pk) ?? false;
@@ -521,26 +520,97 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
           else if (isClosed)
             _banner(scheme.secondaryContainer, scheme.onSecondaryContainer,
                 Icons.lock, 'Period $pk is finalised.'),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pick(true),
-                  icon: const Icon(Icons.event),
-                  label: Text('From ${rf.format(_from)}'),
-                ),
+          if (countDates.isEmpty)
+            Container(
+              margin: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pick(false),
-                  icon: const Icon(Icons.event),
-                  label: Text('To ${rf.format(_to)}'),
+              child: Row(children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(
+                  'No month-end counts yet. Record a count via Month-end Count first.',
+                  style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+                )),
+              ]),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(children: [
+                Expanded(
+                  child: InputDecorator(
+                    decoration:
+                        const InputDecoration(labelText: 'From count', isDense: true),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<DateTime>(
+                        isDense: true,
+                        value:
+                            countDates.contains(_from) ? _from : countDates.first,
+                        items: countDates
+                            .map((d) => DropdownMenuItem(
+                                value: d, child: Text(rfTime.format(d))))
+                            .toList(),
+                        onChanged: (d) {
+                          if (d == null) return;
+                          setState(() {
+                            _from = d;
+                            // Advance _to if it is no longer after _from.
+                            final later = countDates
+                                .where((c) => c.isAfter(d))
+                                .toList();
+                            if (!_to.isAfter(d)) {
+                              _to = later.isNotEmpty
+                                  ? later.first
+                                  : DateTime.now();
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ]),
-          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InputDecorator(
+                    decoration:
+                        const InputDecoration(labelText: 'To count', isDense: true),
+                    child: DropdownButtonHideUnderline(
+                      child: Builder(builder: (ctx) {
+                        final now = DateTime.now();
+                        final later =
+                            countDates.where((d) => d.isAfter(_from)).toList();
+                        // Sentinel: null → "Today"
+                        final toChoices = [...later, null];
+                        DateTime? currentVal =
+                            countDates.contains(_to) && _to.isAfter(_from)
+                                ? _to
+                                : null;
+                        return DropdownButton<DateTime?>(
+                          isDense: true,
+                          value: currentVal,
+                          items: toChoices
+                              .map((d) => DropdownMenuItem<DateTime?>(
+                                    value: d,
+                                    child: Text(d == null
+                                        ? 'Today (${rf.format(now)})'
+                                        : rfTime.format(d)),
+                                  ))
+                              .toList(),
+                          onChanged: (d) =>
+                              setState(() => _to = d ?? DateTime.now()),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())

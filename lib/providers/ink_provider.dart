@@ -128,3 +128,19 @@ final inkTodayInkMeterDoneProvider = StreamProvider<bool>(
 final inkTodayToloulMeterDoneProvider = StreamProvider<bool>(
   (ref) => ref.watch(inkServiceProvider).watchTodayToloulMeterStatus(),
 );
+
+/// Distinct count-event timestamps from recorded month-end counts, sorted
+/// ascending. Derived in-memory from inkAllTransactionsProvider so it stays
+/// in sync without an extra Firestore query.
+final inkMonthEndCountDatesProvider = Provider<List<DateTime>>((ref) {
+  final txns = ref.watch(inkAllTransactionsProvider).valueOrNull ?? [];
+  final seen = <String>{};
+  final dates = <DateTime>[];
+  for (final t in txns) {
+    if (t.voided || t.reason != 'Month-end count') continue;
+    final key = t.effectiveAt.toIso8601String();
+    if (seen.add(key)) dates.add(t.effectiveAt);
+  }
+  dates.sort();
+  return dates;
+});

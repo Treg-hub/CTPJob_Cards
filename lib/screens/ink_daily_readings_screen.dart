@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/ink_provider.dart';
 import 'ink_meter_point_entry_screen.dart';
-import 'ink_meter_readings_screen.dart';
+import 'ink_meter_readings_grid_screen.dart';
 
 /// Daily Readings hub — entry point for Lurgi (and Ink Factory during transition).
 /// Shows the done/due status for both the ink-meter and toloul-meter sessions,
@@ -37,7 +37,7 @@ class InkDailyReadingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (_) => const InkMeterReadingsScreen()),
+                  builder: (_) => const InkMeterReadingsGridScreen()),
             ),
           ),
           const SizedBox(height: 12),
