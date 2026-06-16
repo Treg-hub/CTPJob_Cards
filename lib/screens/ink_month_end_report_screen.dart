@@ -95,8 +95,10 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     }
   }
 
+  // Period is strictly AFTER _from (previous count's adjustments belong to the
+  // opening balance, not this period's movements) through end of _to's day.
   bool _inPeriod(DateTime t) =>
-      !t.isBefore(_from) && t.isBefore(_periodEnd);
+      t.isAfter(_from) && t.isBefore(_periodEnd);
 
   // ── Summary roll-forward (per item) ───────────────────────────────────────
   List<_Row> _build(List<InkStockItem> items, List<InkTransaction> txns) {
@@ -107,8 +109,10 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     final rows = <_Row>[];
     for (final item in items) {
       final its = byItem[item.itemCode] ?? const [];
+      // Opening balance includes everything up to and including _from so the
+      // previous count's adjustments are reflected in opening stock, not movements.
       final before = its
-          .where((t) => t.effectiveAt.isBefore(_from))
+          .where((t) => !t.effectiveAt.isAfter(_from))
           .map((t) => t.toLedgerEntry())
           .toList();
       final upToEnd = its
