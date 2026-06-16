@@ -12,6 +12,7 @@ class WasteAddItemSheetResult {
   final String? notes;
   final List<String> localPhotoPaths;
   final bool isQuantityOnly;
+  final bool isNoSiteWeight;
 
   const WasteAddItemSheetResult({
     required this.subtype,
@@ -20,6 +21,7 @@ class WasteAddItemSheetResult {
     this.notes,
     required this.localPhotoPaths,
     this.isQuantityOnly = false,
+    this.isNoSiteWeight = false,
   });
 }
 
@@ -35,6 +37,7 @@ class WasteAddItemSheet extends StatefulWidget {
     this.defaultType,
     this.title = 'Add Waste Item',
     this.quantityOnlyTypeNames = const {},
+    this.noSiteWeightTypeNames = const {},
     this.quantityLabelByType = const {},
   });
 
@@ -42,6 +45,9 @@ class WasteAddItemSheet extends StatefulWidget {
   final String? defaultType;
   final String title;
   final Set<String> quantityOnlyTypeNames;
+  /// Types where weight is not recorded on-site; guard records quantity only
+  /// but the weighbridge step is still required.
+  final Set<String> noSiteWeightTypeNames;
   final Map<String, String> quantityLabelByType;
 
   @override
@@ -77,11 +83,17 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
   bool get _isQtyOnly =>
       _wasteType != null && widget.quantityOnlyTypeNames.contains(_wasteType);
 
+  bool get _isNoSiteWeight =>
+      _wasteType != null && widget.noSiteWeightTypeNames.contains(_wasteType);
+
+  /// True when weight field should be hidden and quantity is required.
+  bool get _hideWeight => _isQtyOnly || _isNoSiteWeight;
+
   String get _qtyLabel => widget.quantityLabelByType[_wasteType] ?? 'Quantity';
 
   bool get _valid {
     if (_wasteType == null) return false;
-    if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
+    if (_hideWeight) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
     return (double.tryParse(_weightCtrl.text) ?? 0) > 0;
   }
 
@@ -135,6 +147,10 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                     _wasteType = v;
                     _weightCtrl.clear();
                     _qtyCtrl.clear();
+                    // Default qty to 1 for no-site-weight types
+                    if (v != null && widget.noSiteWeightTypeNames.contains(v) && _qtyCtrl.text.isEmpty) {
+                      _qtyCtrl.text = '1';
+                    }
                   }),
                 )
               else
@@ -145,13 +161,14 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                       setState(() => _wasteType = v.isEmpty ? null : v),
                 ),
               const SizedBox(height: 10),
-              if (_isQtyOnly) ...[
+              if (_hideWeight) ...[
                 TextField(
                   controller: _qtyCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: '$_qtyLabel *',
                     isDense: true,
+                    helperText: _isNoSiteWeight ? 'Weight will be confirmed at weighbridge' : null,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -251,7 +268,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                             context,
                             WasteAddItemSheetResult(
                               subtype: _wasteType!,
-                              weightKg: _isQtyOnly
+                              weightKg: _hideWeight
                                   ? 0.0
                                   : double.parse(_weightCtrl.text),
                               quantity: _qtyCtrl.text.isNotEmpty
@@ -262,6 +279,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                                   : null,
                               localPhotoPaths: List.of(_photos),
                               isQuantityOnly: _isQtyOnly,
+                              isNoSiteWeight: _isNoSiteWeight,
                             ),
                           )
                       : null,

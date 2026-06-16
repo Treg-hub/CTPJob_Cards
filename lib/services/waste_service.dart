@@ -1408,6 +1408,19 @@ class WasteService {
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
         'isQuantityOnly': isQuantityOnly,
+        if (isQuantityOnly) 'noSiteWeight': false, // mutually exclusive
+      });
+    } catch (e) {
+      throw Exception('Failed to update waste type: $e');
+    }
+  }
+
+  /// Toggles the noSiteWeight flag on an existing waste type.
+  Future<void> setWasteTypeNoSiteWeight(String typeId, bool noSiteWeight) async {
+    try {
+      await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
+        'noSiteWeight': noSiteWeight,
+        if (noSiteWeight) 'isQuantityOnly': false, // mutually exclusive
       });
     } catch (e) {
       throw Exception('Failed to update waste type: $e');

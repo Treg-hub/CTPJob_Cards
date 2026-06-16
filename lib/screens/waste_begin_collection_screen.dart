@@ -92,9 +92,12 @@ class _WasteBeginCollectionScreenState
   Set<String> get _quantityOnlyTypeNames =>
       _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
 
+  Set<String> get _noSiteWeightTypeNames =>
+      _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
+
   Map<String, String> get _quantityLabelByType => {
         for (final t in _wasteTypes)
-          if (t.isQuantityOnly) t.mainType: t.quantityLabelFor('default'),
+          if (t.isQuantityOnly || t.noSiteWeight) t.mainType: t.quantityLabelFor('default'),
       };
 
   /// Returns the short unit string for a quantity-only type, e.g. "bins".
@@ -133,7 +136,9 @@ class _WasteBeginCollectionScreenState
       _driverCtrl.text.trim().isNotEmpty &&
       _regCtrl.text.trim().isNotEmpty &&
       _items.isNotEmpty &&
-      _items.every((i) => i.photoPaths.isNotEmpty) &&
+      // Per-item photos not required for quantity-only or no-site-weight types
+      // (truck-level photo covers these).
+      _items.every((i) => i.photoPaths.isNotEmpty || i.isQuantityOnly || i.isNoSiteWeight) &&
       _loadPhotoPaths.isNotEmpty &&
       _signatureBytes != null &&
       !_isSubmitting;
@@ -223,6 +228,7 @@ class _WasteBeginCollectionScreenState
           child: WasteAddItemSheet(
             types: typeNames,
             quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            noSiteWeightTypeNames: _noSiteWeightTypeNames,
             quantityLabelByType: _quantityLabelByType,
           ),
         ),
@@ -236,6 +242,7 @@ class _WasteBeginCollectionScreenState
         notes: result.notes,
         photoPaths: result.localPhotoPaths,
         isQuantityOnly: result.isQuantityOnly,
+        isNoSiteWeight: result.isNoSiteWeight,
       )));
     }
   }
@@ -276,6 +283,7 @@ class _WasteBeginCollectionScreenState
         'notes': i.notes,
         'localPhotoPaths': i.photoPaths,
         'is_quantity_only': i.isQuantityOnly,
+        'is_no_site_weight': i.isNoSiteWeight,
         if (i.stockId != null) 'source_stock_id': i.stockId,
       }).toList();
 
@@ -729,6 +737,8 @@ class _ItemEntry {
   final String? stockId;
   /// Mirrors WasteType.isQuantityOnly — weight is meaningless for these items.
   final bool isQuantityOnly;
+  /// Mirrors WasteType.noSiteWeight — weight recorded at weighbridge, not on-site.
+  final bool isNoSiteWeight;
 
   const _ItemEntry({
     required this.subtype,
@@ -738,11 +748,12 @@ class _ItemEntry {
     required this.photoPaths,
     this.stockId,
     this.isQuantityOnly = false,
+    this.isNoSiteWeight = false,
   });
 
   /// Create an entry from a pre-loaded stock item.
   /// Photos are the stock item's existing URLs (stored as paths for display).
-  factory _ItemEntry.fromStock(WasteStockItem stock, {bool isQuantityOnly = false}) {
+  factory _ItemEntry.fromStock(WasteStockItem stock, {bool isQuantityOnly = false, bool isNoSiteWeight = false}) {
     return _ItemEntry(
       subtype: stock.subtype,
       weightKg: stock.estimatedWeightKg ?? 0.0,
@@ -750,6 +761,7 @@ class _ItemEntry {
       photoPaths: stock.photos,
       stockId: stock.id,
       isQuantityOnly: isQuantityOnly,
+      isNoSiteWeight: isNoSiteWeight,
     );
   }
 }
