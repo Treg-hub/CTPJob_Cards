@@ -1403,6 +1403,17 @@ class WasteService {
     }
   }
 
+  /// Toggles the isQuantityOnly flag on an existing waste type.
+  Future<void> setWasteTypeQuantityOnly(String typeId, bool isQuantityOnly) async {
+    try {
+      await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
+        'isQuantityOnly': isQuantityOnly,
+      });
+    } catch (e) {
+      throw Exception('Failed to update waste type: $e');
+    }
+  }
+
   /// Adds a subtype to an existing waste type (arrayUnion for safety).
   Future<void> addSubtypeToType(String typeId, String newSubtype) async {
     if (newSubtype.trim().isEmpty) return;

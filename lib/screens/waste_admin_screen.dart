@@ -71,33 +71,55 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
 
   // --- Manage Types helpers ---
   Future<void> _addNewType() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
+    final nameCtrl = TextEditingController();
+    bool isQtyOnly = false;
+    final result = await showDialog<({String name, bool isQuantityOnly})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add New Waste Type'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Main Type Name (e.g. Hazardous Waste)'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Create'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          title: const Text('Add New Waste Type'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Main Type Name (e.g. Hazardous Waste)'),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Quantity only (no weight)'),
+                subtitle: const Text('e.g. IBC Bins — counted by unit, not kg'),
+                value: isQtyOnly,
+                onChanged: (v) => setDState(() => isQtyOnly = v),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(ctx, (name: name, isQuantityOnly: isQtyOnly));
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
-    if (result == null || result.isEmpty) return;
+    if (result == null) return;
 
     setState(() => _isProcessing = true);
     try {
-      await _wasteService.createWasteType(WasteType(mainType: result));
+      await _wasteService.createWasteType(
+        WasteType(mainType: result.name, isQuantityOnly: result.isQuantityOnly),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Created type: $result'), backgroundColor: Colors.green),
+          SnackBar(content: Text('Created type: ${result.name}'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
@@ -106,6 +128,19 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _toggleQuantityOnly(WasteType type, bool value) async {
+    if (type.id == null) return;
+    try {
+      await _wasteService.setWasteTypeQuantityOnly(type.id!, value);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -366,8 +401,18 @@ class _WasteAdminScreenState extends ConsumerState<WasteAdminScreen> {
                               children: types.map((t) {
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
-                                  child: ListTile(
+                                  child: SwitchListTile(
                                     title: Text(t.mainType, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    subtitle: Text(
+                                      t.isQuantityOnly ? 'Quantity only — no weight' : 'Weight-based (kg)',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    secondary: Icon(
+                                      t.isQuantityOnly ? Icons.numbers : Icons.monitor_weight_outlined,
+                                      size: 20,
+                                    ),
+                                    value: t.isQuantityOnly,
+                                    onChanged: (v) => _toggleQuantityOnly(t, v),
                                   ),
                                 );
                               }).toList(),
