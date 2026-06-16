@@ -40,41 +40,29 @@ class _FleetIssueDetailScreenState
     extends ConsumerState<FleetIssueDetailScreen> {
   final _service = FleetService();
   bool _actionInProgress = false;
+  bool _hasAutoAcknowledged = false;
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _startJob(FleetIssue issue) async {
+  // Silently acknowledges the issue when the mechanic opens the screen —
+  // no separate "Start job" tap required.
+  Future<void> _autoAcknowledge(FleetIssue issue) async {
+    if (_hasAutoAcknowledged) return;
     final emp = currentEmployee;
     if (emp == null || issue.status != FleetIssueStatus.open) return;
-    setState(() => _actionInProgress = true);
+    _hasAutoAcknowledged = true;
     try {
       await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Job started. Come back and tap "Finish the fix" when done.',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _actionInProgress = false);
+      debugPrint('Auto-acknowledge error: $e');
     }
   }
 
   Future<void> _finishFix(FleetIssue issue) async {
     final emp = currentEmployee;
-    if (emp == null || issue.status != FleetIssueStatus.acknowledged) return;
+    if (emp == null || !issue.status.isOpen) return;
     setState(() => _actionInProgress = true);
     try {
       if (!mounted) return;
@@ -272,6 +260,14 @@ class _FleetIssueDetailScreenState
           if (issue == null) {
             return const Center(child: Text('Issue not found.'));
           }
+
+          // Auto-acknowledge when mechanic first opens an open issue.
+          if (mechanicView && issue.status == FleetIssueStatus.open) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _autoAcknowledge(issue),
+            );
+          }
+
           final isOwnReport =
               emp != null && issue.reportedByClockNo == emp.clockNo;
           return _IssueBody(
@@ -282,8 +278,7 @@ class _FleetIssueDetailScreenState
             isOwnReport: isOwnReport,
             canCancel: canCancel,
             actionInProgress: _actionInProgress,
-            onStartJob: () => _startJob(issue),
-            onFinishFix: () => _finishFix(issue),
+            onMarkAsFixed: () => _finishFix(issue),
             onResolveWithNote: () => _resolveWithNote(issue),
             onCancel: () => _cancel(issue),
           );
@@ -306,8 +301,7 @@ class _IssueBody extends StatelessWidget {
     required this.isOwnReport,
     required this.canCancel,
     required this.actionInProgress,
-    required this.onStartJob,
-    required this.onFinishFix,
+    required this.onMarkAsFixed,
     required this.onResolveWithNote,
     required this.onCancel,
   });
@@ -319,8 +313,7 @@ class _IssueBody extends StatelessWidget {
   final bool isOwnReport;
   final bool canCancel;
   final bool actionInProgress;
-  final VoidCallback onStartJob;
-  final VoidCallback onFinishFix;
+  final VoidCallback onMarkAsFixed;
   final VoidCallback onResolveWithNote;
   final VoidCallback onCancel;
 
@@ -362,62 +355,18 @@ class _IssueBody extends StatelessWidget {
         ),
         if (mechanicView && issue.status.isOpen) ...[
           const SizedBox(height: 16),
-          if (issue.status == FleetIssueStatus.open) ...[
-            _ActionButton(
-              label: 'Start job',
-              icon: Icons.play_circle_outline,
-              color: Colors.blue,
-              loading: actionInProgress,
-              onPressed: onStartJob,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Use this when the repair will take time (e.g. transmission). '
-              'The job clock starts now — finish and log the work when complete.',
-              style: TextStyle(fontSize: 12, color: colors?.textMuted),
-            ),
-          ] else ...[
-            if (issue.acknowledgedAt != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'Job started ${fmt.format(issue.acknowledgedAt!)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colors?.textMuted,
-                  ),
-                ),
-              ),
-            _ActionButton(
-              label: 'Finish the fix',
-              icon: Icons.build_circle_outlined,
-              color: kBrandOrange,
-              loading: actionInProgress,
-              onPressed: onFinishFix,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Record the hour-meter reading and what you did to close this problem.',
-              style: TextStyle(fontSize: 12, color: colors?.textMuted),
-            ),
-          ],
-          const SizedBox(height: 12),
-          if (issue.severity == FleetIssueSeverity.outOfService)
-            // OOS faults must be closed with a work log (decided 2026-06-10).
-            Center(
-              child: Text(
-                'Out of service — must be closed by logging the repair.',
-                style: TextStyle(fontSize: 12, color: colors?.textMuted),
-              ),
-            )
-          else
-            Center(
-              child: TextButton(
-                onPressed: actionInProgress ? null : onResolveWithNote,
-                child: const Text('Close with a note only (no work log)'),
-              ),
-            ),
+          _ActionButton(
+            label: 'Mark as Fixed',
+            icon: Icons.build_circle_outlined,
+            color: kBrandOrange,
+            loading: actionInProgress,
+            onPressed: onMarkAsFixed,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Record what you did, the meter reading, and close this problem.',
+            style: TextStyle(fontSize: 12, color: colors?.textMuted),
+          ),
           const Divider(height: 32),
         ],
         if (isReporter && !isMechanic) ...[

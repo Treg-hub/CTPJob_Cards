@@ -20,7 +20,7 @@ String mechanicIssueStatusLabel(FleetIssueStatus status) {
 String mechanicIssueActionHint(FleetIssueStatus status) {
   switch (status) {
     case FleetIssueStatus.open:
-      return 'Tap to start';
+      return 'Tap to view';
     case FleetIssueStatus.acknowledged:
       return 'Tap to finish';
     case FleetIssueStatus.resolved:
@@ -34,7 +34,7 @@ class FleetMechanicGuideBanner extends StatelessWidget {
   const FleetMechanicGuideBanner({
     super.key,
     this.text =
-        'Tap a problem → Start job when you begin → Finish the fix when done.',
+        'Tap a problem to open it — it\'s logged as seen automatically. Tap Mark as Fixed when the repair is done.',
   });
 
   /// Banner for planned / non-issue work on the Log other work screen.

@@ -1,8 +1,14 @@
-# CTP Job Cards — Architecture Visualization
+# CTP Job Cards — Architecture Visualization (DEPRECATED DUPE)
 
-> **Generated**: 2026-05-22  
+> **⚠️ This is an outdated copy (2026-05-22). Use the live primary canvas instead: `docs/architecture/visualization.md` (updated 2026-06-16 with Ink mobile-only, Pulse cross-links, core services, richer map notes). Sync changes there only, then consider deleting this dupe to reduce maintenance.**
+>
+> **Generated**: 2026-05-22 (historical reference only)  
 > **Scope**: Full static analysis of `lib/` (all 22 screens + role derivation + auth flows).  
 > **Source of Truth**: Actual code — no assumptions. Role logic lives in `lib/utils/role.dart`, `home_screen.dart`, `job_card_detail_screen.dart`, `settings_screen.dart`, and ad-hoc position checks. There is **no go_router**, **no centralized guard**, and **no route-level protection**.
+
+**See Instructions for AI Agents.md and docs/architecture/visualization.md (PRIMARY) for current map state (Job Cards branding, services, cross-links, prior subagent refs to gating/CF split/collection gaps, Phase 8 polish with new small notes + Excalidraw specs in Canvases/ + POLISH-CHECKLIST.md).**
+
+**DEPRECATED DUPE (2026-05-22 original).** Edits only in primary `docs/architecture/visualization.md`. This file retained for history only. See monorepo Phase 8 updates in README.md, Instructions, Components/admins-collection.md etc. for latest cross-links.
 
 ---
 
