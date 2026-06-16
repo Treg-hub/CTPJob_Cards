@@ -154,23 +154,16 @@ class _WasteScheduleLoadScreenState
   }
 
   Future<void> _pickDate() async {
+    final admin = isWasteAdmin(currentEmployee);
     final picked = await showDatePicker(
       context: context,
       initialDate: _scheduledFor,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      firstDate: admin ? DateTime(2020) : DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 30)),
     );
     if (picked != null && mounted) {
-      final pickedTime = await showTimePicker(
-        context: context, // ignore: use_build_context_synchronously
-        initialTime: TimeOfDay.fromDateTime(_scheduledFor),
-      );
       setState(() {
-        _scheduledFor = DateTime(
-          picked.year, picked.month, picked.day,
-          pickedTime?.hour ?? _scheduledFor.hour,
-          pickedTime?.minute ?? _scheduledFor.minute,
-        );
+        _scheduledFor = DateTime(picked.year, picked.month, picked.day);
       });
     }
   }
@@ -512,8 +505,8 @@ class _WasteScheduleLoadScreenState
 
                   const SizedBox(height: 20),
 
-                  // ── Expected date/time ───────────────────────
-                  Text('Expected Date & Time *', style: Theme.of(context).textTheme.labelLarge),
+                  // ── Expected date ────────────────────────────
+                  Text('Expected Date *', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: _pickDate,
@@ -524,7 +517,7 @@ class _WasteScheduleLoadScreenState
                         suffixIcon: Icon(Icons.calendar_today),
                       ),
                       child: Text(
-                        DateFormat('EEE d MMM yyyy, HH:mm').format(_scheduledFor),
+                        DateFormat('EEE d MMM yyyy').format(_scheduledFor),
                       ),
                     ),
                   ),
