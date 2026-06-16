@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_count_event.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
@@ -137,12 +138,18 @@ class InkService {
       .doc(txnId)
       .update({'effective_at': Timestamp.fromDate(effectiveAt)});
 
+  /// All count events ordered by count date descending (manager history).
+  Stream<List<InkCountEvent>> watchCountEvents() => _db
+      .collection(Collections.inkCountEvents)
+      .orderBy('count_date', descending: true)
+      .snapshots()
+      .map((s) => s.docs.map(InkCountEvent.fromFirestore).toList());
+
   /// Records a month-end count on a designated [countDate] (which need not be
-  /// the calendar month-end). For each item whose physical count differs from
-  /// the ledger balance, writes an `adjustment` for the delta (count − ledger),
-  /// at the current WAC — i.e. the adjustment is computed automatically from the
-  /// month's runs, exactly as the factory does it manually today. All
-  /// adjustments share a sessionId.
+  /// the calendar month-end). Always writes a count-event document so the
+  /// session is recorded even when every item matches the ledger. For each item
+  /// whose physical count differs from the ledger balance an `adjustment`
+  /// transaction is written; all share the same sessionId.
   Future<void> recordMonthEndCount({
     required DateTime countDate,
     required List<({String itemCode, double counted, double ledgerBalance})>
@@ -151,13 +158,34 @@ class InkService {
     required String actorName,
   }) async {
     final sessionId = _uuid.v4();
-    for (final l in lines) {
-      final delta = l.counted - l.ledgerBalance;
-      if (delta.abs() < 1e-9) continue; // count matches ledger — no adjustment
+    final adjustments = lines.where((l) => (l.counted - l.ledgerBalance).abs() >= 1e-9).toList();
+
+    // Write the count-event record unconditionally — even a zero-variance count
+    // needs to be visible as a period boundary in the month-end report.
+    await _db.collection(Collections.inkCountEvents).doc(sessionId).set(
+          InkCountEvent(
+            countDate: countDate,
+            sessionId: sessionId,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+            adjustmentCount: adjustments.length,
+            lines: [
+              for (final l in lines)
+                InkCountLine(
+                  itemCode: l.itemCode,
+                  counted: l.counted,
+                  ledgerBalance: l.ledgerBalance,
+                )
+            ],
+            createdAt: DateTime.now(),
+          ).toFirestore(),
+        );
+
+    for (final l in adjustments) {
       await recordTransaction(InkTransaction(
         type: InkTxnType.adjustment,
         stockItemCode: l.itemCode,
-        quantityDelta: delta,
+        quantityDelta: l.counted - l.ledgerBalance,
         effectiveAt: countDate,
         costStatus: InkCostStatus.na,
         reason: 'Month-end count',

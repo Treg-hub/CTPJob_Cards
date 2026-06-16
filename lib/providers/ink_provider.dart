@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_count_event.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
@@ -129,18 +130,17 @@ final inkTodayToloulMeterDoneProvider = StreamProvider<bool>(
   (ref) => ref.watch(inkServiceProvider).watchTodayToloulMeterStatus(),
 );
 
-/// Distinct count-event timestamps from recorded month-end counts, sorted
-/// ascending. Derived in-memory from inkAllTransactionsProvider so it stays
-/// in sync without an extra Firestore query.
+/// All month-end count sessions, newest first.
+final inkCountEventsProvider = StreamProvider<List<InkCountEvent>>(
+  (ref) => ref.watch(inkServiceProvider).watchCountEvents(),
+);
+
+/// Count-event timestamps sorted ascending — used by the month-end report to
+/// populate the period selector. Derived from inkCountEventsProvider so it
+/// reflects every session, including zero-variance counts that produce no
+/// adjustment transactions.
 final inkMonthEndCountDatesProvider = Provider<List<DateTime>>((ref) {
-  final txns = ref.watch(inkAllTransactionsProvider).valueOrNull ?? [];
-  final seen = <String>{};
-  final dates = <DateTime>[];
-  for (final t in txns) {
-    if (t.voided || t.reason != 'Month-end count') continue;
-    final key = t.effectiveAt.toIso8601String();
-    if (seen.add(key)) dates.add(t.effectiveAt);
-  }
-  dates.sort();
+  final events = ref.watch(inkCountEventsProvider).valueOrNull ?? [];
+  final dates = events.map((e) => e.countDate).toList()..sort();
   return dates;
 });
