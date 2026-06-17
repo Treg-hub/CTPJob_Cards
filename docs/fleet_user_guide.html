@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Fleet User Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Fleet User Guide</h1>
+</header>
+<h1 id="ctp-fleet-maintenance--user-guide">CTP Fleet Maintenance — User
+Guide</h1>
+<p><em>For Fleet Reporters, Hyster Mechanics, and Cost Managers</em></p>
+<hr />
+<h2 id="what-is-fleet-maintenance">What Is Fleet Maintenance?</h2>
+<p>Fleet Maintenance is the module in the CTP Job Cards app used to
+track the upkeep of the <strong>fleet machines (forks, grab or
+BT)</strong> — separate from normal production job cards. It records
+faults reported on each machine, the work the mechanic does to fix them,
+and the costs the manager records against each asset.</p>
+<p><strong>Fault reports and fixes are kept separate.</strong> A report
+can never be edited after it is submitted. The fix is a separate work
+record written by the mechanic, linked back to the report — so what was
+reported and what was done are always both visible, side by side.</p>
+<p>This guide covers the four roles that operate Fleet Maintenance
+day-to-day:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Responsibilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fleet Reporter</strong></td>
+<td>Report a problem on a machine (forks, grab or BT); track the issues
+you raised</td>
+</tr>
+<tr>
+<td><strong>Hyster Mechanic</strong></td>
+<td>Acknowledge issues, log the work done, resolve issues</td>
+</tr>
+<tr>
+<td><strong>Cost Manager</strong></td>
+<td>Record costs per asset, view spend reports, export CSV</td>
+</tr>
+<tr>
+<td><strong>Fleet Admin</strong></td>
+<td>Manage the asset register and all Fleet settings</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Admin</strong> users have full access to every Fleet screen
+plus the Fleet Settings configuration panel.</p>
+</blockquote>
+<hr />
+<h2 id="section-1-accessing-fleet-maintenance">Section 1: Accessing
+Fleet Maintenance</h2>
+<p>Fleet Maintenance is reached from the <strong>Fleet</strong> tab in
+the app. If you do not see the Fleet tab:</p>
+<ul>
+<li>The module may not be switched on yet. An admin enables it in
+<strong>Fleet Settings → Enable Fleet</strong>.</li>
+<li>Your account may not have a Fleet role. Fleet roles are based on
+your department, position, or clock number — contact an admin to be
+added.</li>
+</ul>
+<p>The Fleet home screen is organised into role-based tabs. You will
+only see the tabs your role allows:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Who sees it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Issues</strong></td>
+<td>Everyone with Fleet access</td>
+</tr>
+<tr>
+<td><strong>Work</strong></td>
+<td>Mechanic + Admin</td>
+</tr>
+<tr>
+<td><strong>Costs</strong></td>
+<td>Cost Manager + Admin</td>
+</tr>
+<tr>
+<td><strong>Reports</strong></td>
+<td>Cost Manager + Admin</td>
+</tr>
+<tr>
+<td><strong>Assets</strong></td>
+<td>Admin</td>
+</tr>
+<tr>
+<td><strong>Settings</strong></td>
+<td>Admin</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>Issues</strong> tab shows a live count badge of currently
+open issues.</p>
+<hr />
+<h2 id="section-2-for-fleet-reporters--reporting-a-problem">Section 2:
+For Fleet Reporters — Reporting a Problem</h2>
+<p>When a machine (forks, grab or BT) develops a fault:</p>
+<ol type="1">
+<li>On the Fleet home screen, tap <strong>Report a
+Problem</strong>.</li>
+<li><strong>Pick the asset</strong> — choose the machine from the
+register.</li>
+<li><strong>Choose the severity:</strong>
+<ul>
+<li><strong>Low</strong> — minor, non-urgent</li>
+<li><strong>Medium</strong> — needs attention soon</li>
+<li><strong>High</strong> — serious, prioritise</li>
+<li><strong>Out of Service</strong> — the machine cannot be used</li>
+</ul></li>
+<li><strong>Confirm the shift</strong> — auto-detected from the current
+time; change it if needed.</li>
+<li><strong>Describe the fault</strong> — be specific about what is
+wrong.</li>
+<li><strong>Attach photos</strong> — up to 3 photos to show the
+problem.</li>
+<li>Tap <strong>Submit</strong>.</li>
+</ol>
+<h3 id="what-happens-after-you-report">What happens after you
+report</h3>
+<ul>
+<li>The issue appears in the <strong>Issues</strong> list, sorted by
+severity.</li>
+<li>If you reported it as <strong>Out of Service</strong>, the Hyster
+mechanic and the cost manager(s) get an immediate push notification (or
+it waits in their Notification Inbox if they are off site). The asset
+shows an orange <strong>OOS</strong> badge everywhere it appears in the
+app.</li>
+<li><strong>High-severity</strong> issues are sent to the mechanic's
+Notification Inbox without a push.</li>
+<li>You can track your own reported issues from the Issues list. Each
+issue shows a progress timeline (<strong>Reported → Started →
+Fixed</strong>) and, once fixed, <strong>The fix</strong> — the
+mechanic's own description of the work done.</li>
+<li>Your report cannot be edited by anyone after submission.</li>
+</ul>
+<hr />
+<h2 id="section-3-for-hyster-mechanics--working-an-issue">Section 3: For
+Hyster Mechanics — Working an Issue</h2>
+<p>The mechanic sees all open issues in the <strong>Issues</strong> tab,
+sorted by severity (Out of Service first).</p>
+<h3 id="step-1-acknowledge">Step 1: Acknowledge</h3>
+<p>Open an issue and tap <strong>Acknowledge</strong> to signal you have
+seen it and are taking it on. This lets reporters and managers know the
+issue is being handled.</p>
+<h3 id="step-2-resolve-the-issue">Step 2: Resolve the issue</h3>
+<p>You can close an issue in one of two ways:</p>
+<p><strong>Option A — Log the work (recommended for real
+repairs)</strong></p>
+<ol type="1">
+<li>Tap <strong>Finish the fix</strong>. The original fault report is
+shown read-only at the top of the form — it cannot be changed.</li>
+<li>Select the <strong>work type</strong>.</li>
+<li>Describe <strong>what you did to fix it</strong> — your own words,
+separate from the report.</li>
+<li>Enter <strong>labour hours</strong> and the current
+<strong>machine-hour reading</strong>.</li>
+<li>Add <strong>parts used</strong> — for each part: description and
+quantity.</li>
+<li>Attach <strong>photos</strong> of the completed work.</li>
+<li>If this job also fixes <strong>other reported problems</strong> on
+the same machine, tick them under <strong>Also fixes…</strong> — they
+close together.</li>
+<li>Tap <strong>Mark as Fixed</strong>. The work record gets a number
+like <strong>FM-20260604-001</strong>.</li>
+</ol>
+<blockquote>
+<p><strong>Editing window:</strong> a work record can be edited for
+<strong>7 days</strong> after it is created (and only until costs are
+entered). After that use the comments section for corrections.</p>
+</blockquote>
+<p><strong>Option B — Quick resolution note</strong></p>
+<p>For an issue that needs no formal work record (e.g. a false alarm or
+a trivial fix), tap <strong>Resolve</strong> and enter a short note.</p>
+<blockquote>
+<p><strong>Out-of-service issues are the exception:</strong> they can
+only be closed by logging the repair as a work record — a note alone is
+not accepted.</p>
+</blockquote>
+<blockquote>
+<p><strong>You never see costs.</strong> Work records you create show
+only a "Costs pending / Costs entered" label — the actual money is
+entered and seen only by the cost manager.</p>
+</blockquote>
+<blockquote>
+<p><strong>Editing.</strong> A work record can be edited for <strong>7
+days</strong> after it is saved, and locks immediately once the cost
+manager enters costs (or marks it "No cost needed"). After that,
+corrections go in as comments.</p>
+</blockquote>
+<p>When the last open Out-of-Service issue on a machine is resolved, the
+orange <strong>OOS</strong> badge is automatically cleared from that
+asset.</p>
+<hr />
+<h2 id="section-4-for-cost-managers--recording-costs">Section 4: For
+Cost Managers — Recording Costs</h2>
+<p>The <strong>Costs</strong> tab is where the overseeing manager
+records what was spent on each machine.</p>
+<h3 id="adding-a-cost-line">Adding a cost line</h3>
+<ol type="1">
+<li>Open the <strong>Costs</strong> tab and tap <strong>Add
+Cost</strong>.</li>
+<li><strong>Pick the asset.</strong></li>
+<li>Choose the <strong>cost type</strong> — parts, labour, invoice, or
+other.</li>
+<li>Enter the <strong>amount</strong>.</li>
+<li>Add an <strong>invoice reference</strong> and
+<strong>supplier</strong> if applicable.</li>
+<li>Tap <strong>Save</strong>.</li>
+</ol>
+<h3 id="viewing-reports">Viewing reports</h3>
+<p>The <strong>Reports</strong> tab shows:</p>
+<ul>
+<li><strong>Month-to-date</strong> and <strong>year-to-date</strong>
+spend per machine.</li>
+<li>A breakdown of cost by category per asset.</li>
+<li><strong>Export CSV</strong> — download the full cost data for the
+selected period for your own records or accounting.</li>
+</ul>
+<hr />
+<h2 id="section-5-for-admins--fleet-settings">Section 5: For Admins —
+Fleet Settings</h2>
+<p>Everything that configures the module lives in <strong>Fleet
+Settings</strong> (Admin only):</p>
+<ul>
+<li><strong>Asset register</strong> — add and edit the fleet machines
+(forks, grab or BT) (name, type, identifier).</li>
+<li><strong>Reporter departments</strong> — which departments are
+allowed to report issues.</li>
+<li><strong>Cost-manager clock numbers</strong> — who can enter and view
+costs.</li>
+<li><strong>Asset &amp; work types</strong> — the pick-lists used
+elsewhere in the module.</li>
+<li><strong>Enable Fleet</strong> — the master on/off switch for the
+whole module.</li>
+</ul>
+<p>Until Fleet is enabled and at least the reporter departments and
+asset register are configured, the Fleet tab stays hidden for everyone
+except admins.</p>
+<hr />
+<h2 id="section-6-issue-severities--the-oos-badge">Section 6: Issue
+Severities &amp; the OOS Badge</h2>
+<table>
+<thead>
+<tr>
+<th>Severity</th>
+<th>Meaning</th>
+<th>What it triggers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Low</strong></td>
+<td>Minor, non-urgent</td>
+<td>Listed in Issues; no alert</td>
+</tr>
+<tr>
+<td><strong>Medium</strong></td>
+<td>Needs attention soon</td>
+<td>Listed in Issues; no push</td>
+</tr>
+<tr>
+<td><strong>High</strong></td>
+<td>Serious</td>
+<td>Goes to the mechanic's Notification Inbox</td>
+</tr>
+<tr>
+<td><strong>Out of Service</strong></td>
+<td>Machine cannot be used</td>
+<td>Immediate push to mechanic + cost managers; orange
+<strong>OOS</strong> badge on the asset</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>OOS</strong> badge stays on a machine until every open
+Out-of-Service issue against it is resolved or cancelled.</p>
+<hr />
+<h2 id="section-7-notification-inbox">Section 7: Notification Inbox</h2>
+<p>If you are <strong>off site</strong> when a Fleet notification is
+generated, it is held in your <strong>Notification Inbox</strong> (bell
+icon in the top bar) instead of being sent as a push alert. When you
+arrive on site and open the app, a banner tells you how many
+notifications are waiting. Tap any item to open the related issue.</p>
+<hr />
+<h2 id="section-8-troubleshooting">Section 8: Troubleshooting</h2>
+<p><strong>I cannot see the Fleet tab.</strong> Either the module is not
+enabled yet (an admin must turn it on in Fleet Settings) or your account
+does not have a Fleet role. Contact an admin.</p>
+<p><strong>I reported an Out-of-Service issue but no one was
+notified.</strong> The mechanic and cost managers receive a push only
+when they are on site; otherwise the alert waits in their Notification
+Inbox. Confirm the cost-manager clock numbers and the mechanic are
+correctly configured in Fleet Settings.</p>
+<p><strong>The asset I need to report on is not in the list.</strong>
+The asset register is managed by an admin in Fleet Settings → Asset
+register. Ask an admin to add the machine.</p>
+<p><strong>I'm the mechanic but I can't see costs.</strong> This is by
+design. Mechanics never see cost amounts — only a "Costs pending / Costs
+entered" label. Cost figures are visible only to cost managers and
+admins.</p>
+<p><strong>The OOS badge is still showing after I fixed the
+machine.</strong> The badge clears only when <em>every</em> open
+Out-of-Service issue on that asset is resolved or cancelled. Check the
+Issues list for any other open OOS issues on the same machine.</p>
+<hr />
+<p><em>CTP Fleet Maintenance · Forks, Grab &amp; BT Upkeep
+Guide</em></p>
+</body>
+</html>

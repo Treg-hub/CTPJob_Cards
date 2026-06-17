@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Waste User Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Waste User Guide</h1>
+</header>
+<h1 id="waste-recovery--full-load-guide">Waste Recovery — Full Load
+Guide</h1>
+<p><em>For Security Managers, Security Guards, and Admins</em></p>
+<p>This guide walks through the <strong>complete waste load
+lifecycle</strong> in WasteTrack — from recording stock on site, through
+scheduling or creating a load, loading capture (items + loaded-truck
+photos + driver signature), <strong>off-site weighbridge
+document</strong> entry, and <strong>admin cost review</strong>.</p>
+<blockquote>
+<p><strong>There is no on-site weighbridge.</strong> The truck leaves
+after loading. The certified weight arrives later on a mailed/email
+weighbridge document.</p>
+</blockquote>
+<hr />
+<h2 id="who-does-what">Who does what?</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Typical tasks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Security Manager</strong></td>
+<td>Record paper stock; schedule loads; create on-the-spot loads; link
+stock; capture loaded-truck photos; enter off-site weighbridge
+documents</td>
+</tr>
+<tr>
+<td><strong>Security Guard</strong></td>
+<td>Begin scheduled collections; confirm or add waste items;
+loaded-truck photos; driver signature; submit collection</td>
+</tr>
+<tr>
+<td><strong>Admin</strong></td>
+<td>Everything above, plus <strong>Review</strong> (approve costs),
+<strong>Settings</strong> (contractors, types, rates). Reports are on
+<strong>CTP Pulse</strong> only.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Guards can schedule loads</strong> only when an admin has
+enabled <em>Guards Can Schedule Loads</em> in CTP Pulse → Waste
+Settings.</p>
+</blockquote>
+<hr />
+<h2 id="the-big-picture">The big picture</h2>
+<p>There are <strong>two ways</strong> a load starts. After loading, the
+path depends on the waste type:</p>
+<ul>
+<li><strong>Weight-based and no-on-site-weight loads</strong> → Pending
+Weighbridge → weighbridge document → Pending Cost Review →
+Completed.</li>
+<li><strong>Quantity-only loads</strong> (e.g. IBC Bins) → skip
+weighbridge → go straight to Pending Cost Review → Completed.</li>
+</ul>
+<pre><code>  ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+  │ 1. Stock (opt.) │ ──► │ 2. Create load   │ ──► │ 3. Items + photos   │
+  │  Paper Waste    │     │  Schedule OR     │     │  On-site stock or   │
+  │  Stock screen   │     │  New on the spot │     │  fresh capture      │
+  └─────────────────┘     └──────────────────┘     └──────────┬──────────┘
+                                                              │
+                    ┌─────────────────────────────────────────┴────────────────────────┐
+                    │                                                                   │
+           ┌────────▼────────┐                                            ┌───────────▼──────────┐
+           │ SCHEDULED PATH  │                                            │ ON-THE-SPOT PATH     │
+           │ Guard: Begin    │                                            │ Manager: New Load    │
+           │ Collection      │                                            │ (Draft status)       │
+           └────────┬────────┘                                            └───────────┬──────────┘
+                    │                                                                   │
+                    └────────────────────┬──────────────────────────────────────────────┘
+                                         │
+              ┌──────────────────────────┴──────────────────────────┐
+              │  Weight-based / No-on-site-weight loads              │  Quantity-only loads
+              ▼                                                       │  (e.g. IBC Bins)
+   ┌─────────────────────┐                                           │
+   │ Pending Weighbridge │                                           │
+   │ Manager enters      │                                           │
+   │ ticket + weight     │                                           │
+   └──────────┬──────────┘                                           │
+              └──────────────────────────┬──────────────────────────┘
+                                         ▼
+                            ┌────────────────────────┐
+                            │  Pending Cost Review   │
+                            │  Admin approves cost   │
+                            └────────────┬───────────┘
+                                         ▼
+                            ┌────────────────────────┐
+                            │  Completed             │
+                            └────────────────────────┘</code></pre>
+<hr />
+<h2 id="waste-item-types">Waste item types</h2>
+<p>When adding an item to a load, the form adapts to the waste type.
+There are three modes:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>What guard enters</th>
+<th>Weighbridge</th>
+<th>Example types</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Weight-based</strong></td>
+<td>Weight (kg) + optional quantity</td>
+<td>Required</td>
+<td>Paper waste, copper offcuts</td>
+</tr>
+<tr>
+<td><strong>Quantity only</strong></td>
+<td>Count only (no weight)</td>
+<td>Skipped — goes straight to cost review</td>
+<td>IBC Bins</td>
+</tr>
+<tr>
+<td><strong>No on-site weight</strong></td>
+<td>Count only (no weight)</td>
+<td>Still required — weight confirmed on ticket</td>
+<td>Compactor bins, open bins, copper skins</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>The form automatically shows the correct fields for the selected type
+— you do not need to choose a mode manually.</p>
+</blockquote>
+<p><strong>Photos:</strong> Photos are optional per item. For
+quantity-only and no-on-site-weight types, the loaded-truck photo
+captures the visual evidence for the whole load. For weight-based items,
+photographing the material is strongly recommended.</p>
+<hr />
+<h2 id="step-0--record-stock-on-site-optional-but-recommended">Step 0 —
+Record stock on site (optional but recommended)</h2>
+<p>Use this when waste is <strong>already sitting on site</strong>
+before the truck arrives (e.g. slab waste, reelends, scrap reels).</p>
+<ol type="1">
+<li>On the <strong>Loads</strong> tab, tap <strong>+ New /
+Schedule</strong> → <strong>Paper Waste Stock</strong>.</li>
+<li>Tap <strong>+</strong> to record a new stock item: choose subtype,
+take photos, enter estimated weight.</li>
+<li>The item stays <strong>On Site</strong> until it is linked to a load
+and the collection is confirmed.</li>
+</ol>
+<p>Stock is stored under <strong>Paper Waste</strong> with a
+<strong>subtype</strong> (e.g. <em>Slab Waste</em>, <em>Reelends</em>,
+<em>Scrap Reels</em>) — even when the contractor's waste types are
+listed as separate chips.</p>
+<hr />
+<h2 id="step-1--create-the-load">Step 1 — Create the load</h2>
+<p>Tap <strong>+ New / Schedule</strong> on the Loads tab.</p>
+<h3
+id="option-a--schedule-incoming-load-before-the-truck-arrives">Option A
+— Schedule Incoming Load (before the truck arrives)</h3>
+<p><em>Managers, admins, and guards (if enabled).</em></p>
+<ol type="1">
+<li><strong>Contractor</strong> — select who is collecting (e.g.
+Glenpak).</li>
+<li><strong>Waste types</strong> — tap one or more chips. All contractor
+types are pre-selected; deselect any you do not need. Stock and new
+items are <strong>filtered to your selection</strong>.</li>
+<li><strong>On-site stock (optional)</strong> — tick saved stock items
+to pre-link. The guard will see these when collection starts.</li>
+<li><strong>Expected date</strong> — the day the truck is due. Time is
+not required.</li>
+<li><strong>Notes</strong> — optional instructions for the guard.</li>
+<li>Tap <strong>Schedule Load</strong>.</li>
+</ol>
+<p>The load appears under <strong>Incoming</strong> on the Loads tab
+with status <strong>Scheduled</strong>.</p>
+<blockquote>
+<p><strong>Admins only:</strong> dates can be set to any past date (for
+corrections or testing). All other users can only schedule today or
+future dates.</p>
+</blockquote>
+<h3 id="option-b--new-load-on-the-spot-truck-is-here-now">Option B — New
+Load on the spot (truck is here now)</h3>
+<p><em>Managers and admins only.</em></p>
+<ol type="1">
+<li><strong>Contractor</strong> — select the collecting company.</li>
+<li><strong>Waste types</strong> — select one or more chips (same
+multi-select behaviour as scheduling).</li>
+<li><strong>On-site stock (optional)</strong> — tick stock to include,
+or use <strong>Add Waste Item → Add from on-site stock</strong>
+later.</li>
+<li>Enter <strong>driver name</strong>, <strong>vehicle
+registration</strong>, and optional notes.</li>
+<li><strong>Waste items</strong> — tap <strong>Add Waste Item</strong>:
+<ul>
+<li><strong>Add from on-site stock</strong> — pick already-captured
+stock items.</li>
+<li><strong>Capture new item</strong> — see <em>Waste item types</em>
+above for what the form shows.</li>
+</ul></li>
+<li>Tap <strong>Create Load</strong>.</li>
+</ol>
+<p>The load is saved as <strong>Draft</strong>. Open it from Recent
+loads to continue with weighbridge and signature (see Path B below).</p>
+<hr />
+<h2 id="step-2--multi-type-loads-eg-glenpak">Step 2 — Multi-type loads
+(e.g. Glenpak)</h2>
+<p>Some contractors collect <strong>several paper subtypes on one
+truck</strong> (slab waste + reelends + scrap reels).</p>
+<ul>
+<li>Select <strong>all relevant chips</strong> when creating or
+scheduling the load.</li>
+<li>On-site stock list shows only items matching your selected
+types.</li>
+<li><strong>Add Waste Item</strong> only offers subtypes you have
+selected.</li>
+<li>The load saves as <strong>Paper Waste</strong> in the system so
+stock linking works correctly.</li>
+</ul>
+<hr />
+<h2 id="step-3--guard-collects-a-scheduled-load">Step 3 — Guard collects
+a scheduled load</h2>
+<p>When the contractor arrives:</p>
+<ol type="1">
+<li>On the <strong>Loads</strong> tab, find the load under
+<strong>Incoming</strong>.</li>
+<li>Tap <strong>Begin Collection</strong>.</li>
+<li>Enter <strong>driver name</strong> and <strong>vehicle
+registration</strong>.</li>
+<li><strong>Waste items:</strong>
+<ul>
+<li>Pre-linked stock appears automatically (marked
+<em>Pre-loaded</em>).</li>
+<li>Tap <strong>From stock</strong> to add more saved items found at the
+gate.</li>
+<li>Tap <strong>Fresh item</strong> to capture new material.</li>
+<li><strong>Weight-based items:</strong> enter weight in kg. Photos
+recommended.</li>
+<li><strong>Quantity-only items</strong> (e.g. IBC Bins): enter count
+only — no weight field.</li>
+<li><strong>No-on-site-weight items</strong> (e.g. compactor bins):
+enter count — weight confirmed at weighbridge.</li>
+</ul></li>
+<li><strong>Loaded truck photos</strong> — photograph the fully loaded
+truck before it leaves. At least one is required.</li>
+<li>Tap <strong>Capture Driver Signature</strong> — pass the phone to
+the driver to sign.</li>
+<li>Tap <strong>Submit Collection</strong>.</li>
+</ol>
+<p><strong>After submission:</strong></p>
+<ul>
+<li>Weight-based or no-on-site-weight loads → <strong>Pending
+Weighbridge</strong>.</li>
+<li>Quantity-only loads (IBC Bins) → <strong>Pending Cost
+Review</strong> (weighbridge skipped).</li>
+</ul>
+<hr />
+<h2 id="step-4--off-site-weighbridge-document-manager--admin">Step 4 —
+Off-site weighbridge document (Manager / Admin)</h2>
+<p><em>Only applies to weight-based and no-on-site-weight loads.
+Quantity-only loads skip this step.</em></p>
+<p>When the weighbridge ticket arrives (email/photo/PDF — truck does not
+return):</p>
+<h3 id="from-the-weighbridge-tab">From the Weighbridge tab</h3>
+<ol type="1">
+<li>Open the <strong>Weighbridge</strong> tab (badge shows how many are
+waiting).</li>
+<li>Tap a load to open its detail.</li>
+<li>Scroll to <strong>Off-site Weighbridge Document</strong>.</li>
+<li>Enter the <strong>ticket/reference number</strong>.</li>
+<li>Photograph the <strong>weighbridge document</strong>.</li>
+<li>Enter the <strong>certified weight in kg</strong>.</li>
+<li>Tap <strong>Submit Weighbridge Document</strong>.</li>
+</ol>
+<p>The load moves to <strong>Pending Cost Review</strong> for admin
+approval.</p>
+<h3 id="from-load-detail">From load detail</h3>
+<p>Same steps — open any <strong>Pending Weighbridge</strong> load from
+Recent loads.</p>
+<hr />
+<h2 id="step-5--admin-cost-review">Step 5 — Admin cost review</h2>
+<ol type="1">
+<li>Open the <strong>Review</strong> tab (admin only; badge shows
+pending count).</li>
+<li>The review card shows an <strong>itemized cost table</strong>:
+<ul>
+<li>Each waste item on the load is shown with its
+<strong>subtype</strong>, <strong>weight</strong>, an editable
+<strong>R/kg rate</strong>, and a calculated
+<strong>value</strong>.</li>
+<li>For <strong>no-on-site-weight items</strong> (compactor bins etc.),
+the on-site weight column will show zero — the weighbridge ticket weight
+is used for the total cost calculation.</li>
+<li>The <strong>R/kg</strong> field is pre-filled from the contractor's
+rate register where a rate exists. Empty fields show a ⚠ warning — enter
+the rate from the physical document.</li>
+<li>The <strong>Calculated total</strong> (sum of all line values)
+updates live as you edit rates.</li>
+</ul></li>
+<li>The <strong>Approved amount</strong> field defaults to the
+calculated total. Edit it to match the accounts document if they
+differ.</li>
+<li>Tap <strong>Approve</strong> — the system saves both the calculated
+total and the approved amount separately for audit.</li>
+</ol>
+<blockquote>
+<p>Rates entered or corrected during review are saved back to the rate
+register — the same contractor + subtype pair will be pre-filled
+automatically on future collections.</p>
+</blockquote>
+<p>Reports and exports are available on <strong>CTP Pulse → Waste →
+Reports</strong>.</p>
+<hr />
+<h2 id="sharing-a-load-summary-pdf">Sharing a load summary (PDF)</h2>
+<p>On any <strong>completed</strong> load, tap the <strong>↑ share
+icon</strong> in the app bar to generate a PDF summary containing:</p>
+<ul>
+<li>Load number, date, contractor, driver, vehicle</li>
+<li>Itemised waste items (subtype, weight, rate, value)</li>
+<li>Weighbridge weight and deviation</li>
+<li>Calculated and approved cost</li>
+</ul>
+<p>Share or print directly from your phone.</p>
+<hr />
+<h2 id="path-b--on-the-spot-load-draft-finish-loading">Path B —
+On-the-spot load (Draft) finish loading</h2>
+<p>When a manager creates a <strong>New Load on the spot</strong>:</p>
+<ol type="1">
+<li>Open the <strong>Draft</strong> load from Recent loads.</li>
+<li>Add or edit items / stock if needed.</li>
+<li>Tap <strong>Finish Loading</strong> — add <strong>loaded-truck
+photos</strong> and capture <strong>driver signature</strong>.</li>
+<li>Load becomes <strong>Pending Weighbridge</strong> (or
+<strong>Pending Cost Review</strong> for quantity-only loads) — enter
+the off-site document when it arrives (Step 4).</li>
+</ol>
+<hr />
+<h2 id="load-statuses-explained">Load statuses explained</h2>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+<th>What to do next</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scheduled</strong></td>
+<td>Manager scheduled the collection; truck not yet processed</td>
+<td>Guard taps <strong>Begin Collection</strong> when contractor
+arrives</td>
+</tr>
+<tr>
+<td><strong>Draft</strong></td>
+<td>On-the-spot load created; truck still loading</td>
+<td>Manager: <strong>Finish Loading</strong> (truck photos +
+signature)</td>
+</tr>
+<tr>
+<td><strong>Pending Weighbridge</strong></td>
+<td>Loading finished; awaiting off-site document</td>
+<td>Manager: photograph ticket + enter certified weight</td>
+</tr>
+<tr>
+<td><strong>Pending Cost Review</strong></td>
+<td>Weighbridge document captured (or quantity-only load submitted)</td>
+<td>Admin: approve cost in <strong>Review</strong> tab</td>
+</tr>
+<tr>
+<td><strong>Completed</strong></td>
+<td>Admin approved cost</td>
+<td>Record is locked</td>
+</tr>
+<tr>
+<td><strong>Cancelled</strong></td>
+<td>Load was cancelled before collection</td>
+<td>No further action</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="deviation-alerts">Deviation alerts</h2>
+<p>When the weighbridge weight is saved, the app compares:</p>
+<ul>
+<li><strong>Recorded weight</strong> — sum of item weights entered
+on-site</li>
+<li><strong>Actual weight</strong> — certified weighbridge reading</li>
+</ul>
+<p>A <strong>deviation</strong> is flagged if the difference exceeds
+<strong>5%</strong> or <strong>50 kg</strong> (whichever applies first).
+Flagged loads show an amber warning in detail view and in
+<strong>Reports</strong>. This is for management review — not an
+automatic rejection.</p>
+<blockquote>
+<p>For <strong>no-on-site-weight items</strong> (compactor bins, copper
+skins), the on-site recorded weight is zero by design — only the
+weighbridge total is meaningful. Deviation will appear as 100% for these
+items; this is expected and can be ignored. Only the weighbridge weight
+is used for cost calculations.</p>
+</blockquote>
+<hr />
+<h2 id="paper-waste-stock-banner">Paper Waste Stock banner</h2>
+<p>On the Loads tab, the green <strong>Paper Waste Stock</strong> banner
+shows how many items are on site and the total estimated weight. Tap it
+to open the stock inventory.</p>
+<hr />
+<h2 id="admin--manage-waste-types">Admin — Manage waste types</h2>
+<p>Go to <strong>Waste → Admin → Manage Waste Types</strong> to
+configure types and their weight mode.</p>
+<p>Each type has two toggles:</p>
+<table>
+<thead>
+<tr>
+<th>Toggle</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Quantity only (no weight)</strong></td>
+<td>Guard enters count only; weighbridge step skipped; priced per unit
+(e.g. IBC Bins)</td>
+</tr>
+<tr>
+<td><strong>No on-site weight</strong></td>
+<td>Guard enters count only; weighbridge still required; weight
+confirmed on ticket (e.g. compactor bins)</td>
+</tr>
+</tbody>
+</table>
+<p>The two toggles are mutually exclusive — turning one on clears the
+other. Leave both off for standard weight-based types (paper waste,
+copper offcuts).</p>
+<hr />
+<h2 id="tips--troubleshooting">Tips &amp; troubleshooting</h2>
+<p><strong>Stock not showing when I select waste types</strong></p>
+<ul>
+<li>Stock lives under Paper Waste subtypes. Make sure the matching chips
+are selected (e.g. <em>Reelends</em>, <em>Slab Waste</em>).</li>
+<li>Only <strong>on-site</strong> stock appears — items already loaded
+on another truck are excluded.</li>
+</ul>
+<p><strong>Cannot submit collection</strong></p>
+<ul>
+<li>Need: driver name, vehicle reg, at least one item, at least one
+<strong>loaded-truck photo</strong>, and a driver signature.</li>
+<li>Weight-based items need a weight entered. Quantity-only and
+no-on-site-weight items need a count entered.</li>
+<li>Per-item photos are optional — the truck photo is the primary
+evidence.</li>
+</ul>
+<p><strong>Weighbridge tab is empty</strong></p>
+<ul>
+<li>Only loads in <strong>Pending Weighbridge</strong> appear.
+Quantity-only loads (IBC Bins) go straight to Cost Review and will not
+appear here.</li>
+</ul>
+<p><strong>Load went straight to Cost Review — no weighbridge
+step</strong></p>
+<ul>
+<li>This is correct for quantity-only types (IBC Bins). The cost is
+calculated by count × rate, not by weight.</li>
+</ul>
+<p><strong>Offline</strong></p>
+<ul>
+<li>Photos, signatures, and load data queue locally. Tap the orange
+<strong>cloud sync</strong> banner to retry when back online.</li>
+<li>Loads scheduled while offline appear in the Incoming list once
+synced; load numbers are assigned at that point.</li>
+<li>Stock items linked to an offline collection sync automatically —
+they will not remain permanently <em>Loaded</em> if the parent load was
+not yet written.</li>
+</ul>
+<p><strong>I cannot see the Waste tab</strong></p>
+<ul>
+<li>Your account needs a WasteTrack role. Contact an admin.</li>
+</ul>
+<hr />
+<h2 id="quick-checklist">Quick checklist</h2>
+<h3 id="manager--scheduled-load">Manager — scheduled load</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />Record stock (optional)</label></li>
+<li><label><input type="checkbox" />Schedule load: contractor, waste
+types, stock, expected date</label></li>
+<li><label><input type="checkbox" />After guard submits: enter off-site
+weighbridge document when received <em>(not needed for IBC
+Bins)</em></label></li>
+</ul>
+<h3 id="guard--collection">Guard — collection</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />Begin Collection on incoming
+load</label></li>
+<li><label><input type="checkbox" />Driver details + confirm/add
+items</label>
+<ul>
+<li>Weight-based: enter weight (photos optional but recommended)</li>
+<li>IBC Bins / compactor bins: enter quantity only</li>
+</ul></li>
+<li><label><input type="checkbox" />At least one loaded-truck photo +
+driver signature</label></li>
+<li><label><input type="checkbox" />Submit Collection</label></li>
+</ul>
+<h3 id="manager--truck-already-here">Manager — truck already here</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />New Load on the spot: contractor,
+types, items/stock</label></li>
+<li><label><input type="checkbox" />Finish loading: truck photos +
+signature</label></li>
+<li><label><input type="checkbox" />Enter weighbridge document when it
+arrives <em>(not needed for IBC Bins)</em></label></li>
+</ul>
+<h3 id="admin">Admin</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />Review tab: enter/confirm R/kg rates
+for each item</label></li>
+<li><label><input type="checkbox" />Check calculated total; edit
+Approved amount if accounts differ</label></li>
+<li><label><input type="checkbox" />Tap Approve → Completed</label></li>
+<li><label><input type="checkbox" />Share PDF from load detail if needed
+for accounts filing</label></li>
+</ul>
+<hr />
+<p><em>CTP WasteTrack · Waste Recovery Load Guide · Updated 16 June
+2026</em></p>
+</body>
+</html>
