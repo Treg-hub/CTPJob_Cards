@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>screens_reference</title>
+  <title>Screens Reference</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">screens_reference</h1>
+<h1 class="title">Screens Reference</h1>
 </header>
 <!--
 Title: CTP Job Cards — Screens Reference
@@ -131,7 +131,8 @@ off-site</strong> (<code>isOnSite: false</code>); off-site employees
 must be on-site to create new jobs</li>
 <li><code>My Assigned Jobs</code></li>
 <li><code>View Job Cards</code></li>
-<li><code>Closed Jobs</code></li>
+<li><code>Job History</code> — server-filtered search of closed job
+cards (see <a href="#job-card-history">Job Card History</a>)</li>
 <li><code>Settings</code></li>
 </ul>
 <h4 id="manager-only-tiles">Manager-Only Tiles</h4>
@@ -152,6 +153,14 @@ admin whitelist</li>
 of <code>employees/{clockNo}.isOnSite</code>, which is driven by
 background geofencing in <code>location_service.dart</code>.</p>
 </blockquote>
+<blockquote>
+<p><strong>Notification bell</strong> — a bell icon in the AppBar shows
+a live badge with the count of unread inbox items. Tapping it opens the
+<a href="#notification-inbox">Notification Inbox</a>. When the
+employee's <code>isOnSite</code> transitions from <code>false</code> to
+<code>true</code>, a SnackBar appears with the unread count and an
+"Open" shortcut if items are waiting.</p>
+</blockquote>
 <h3 id="create-job-card">Create Job Card</h3>
 <p><code>lib/screens/create_job_card_screen.dart</code> —
 <strong>Roles:</strong> All</p>
@@ -168,13 +177,20 @@ parts for the selected machine are suggested.</p>
 <li>Description</li>
 <li>Optional photos (per section)</li>
 </ul>
+<h4 id="offline-behaviour">Offline Behaviour</h4>
+<p>The screen checks connectivity on open and before save. If offline, a
+full-width red banner is shown and the Save button is disabled. Job card
+creation intentionally blocks offline because the notification pipeline
+cannot fire without a Firestore write — technicians would not be
+alerted. The form state is preserved so nothing is lost when moving to
+signal.</p>
+<p>The Home tile also shows a disabled-with-reason state when offline or
+off-site (rather than hiding).</p>
 <h4 id="what-happens-on-save">What Happens On Save</h4>
 <ul>
-<li>Calls <code>FirestoreService.saveJobCardOfflineAware</code> → if
-online, runs a transaction that increments the global
+<li>Calls <code>FirestoreService.saveJobCardOfflineAware</code> → runs a
+transaction that increments the global
 <code>counters/jobCards.nextJobCardNumber</code> and writes the doc</li>
-<li>If offline, queues the write to Hive via
-<code>SyncService</code></li>
 <li>The <code>onJobCardCreated</code> Cloud Function trigger fires and
 dispatches initial notifications based on
 <code>creation_recipients_by_type</code></li>
@@ -182,8 +198,9 @@ dispatches initial notifications based on
 <h4 id="sidebar-widget">Sidebar Widget</h4>
 <ul>
 <li><strong>Similar Job Cards</strong> — wide-layout sidebar streams
-matching open cards as the form is filled, helping prevent
-duplicates</li>
+matching closed/monitor cards as the form is filled, server-filtered by
+department → area → machine → part to prevent duplicate jobs without
+downloading the full collection</li>
 </ul>
 <h3 id="my-assigned-jobs">My Assigned Jobs</h3>
 <p><code>lib/screens/my_assigned_jobs_screen.dart</code> —
@@ -235,11 +252,14 @@ assigned/unassigned</li>
 <h4 id="notifications-triggered-here">Notifications Triggered Here</h4>
 <ul>
 <li>Assigning a job → <code>sendJobAssignmentNotification</code> Cloud
-Function call</li>
+Function call. If the assignee is <strong>off-site</strong>, the
+notification is parked in their <a
+href="#notification-inbox">Notification Inbox</a> instead of sent as a
+push.</li>
 <li>Closing/updating → <code>sendCreatorNotification</code> to the
-original creator</li>
+original creator. If the creator is off-site, parked to inbox.</li>
 <li>Both also trigger <code>onJobCardAssigned</code> which sets
-<code>escalationStopped: true</code></li>
+<code>escalationStopped: true</code> regardless of delivery method.</li>
 </ul>
 <h3 id="view-job-cards">View Job Cards</h3>
 <p><code>lib/screens/view_job_cards_screen.dart</code> —
@@ -264,17 +284,63 @@ app bar)</h4>
 <li>Filter and search across all factory structure levels</li>
 <li>Wide-layout view with split master/detail on tablets</li>
 </ul>
-<h3 id="closed-jobs">Closed Jobs</h3>
-<p><code>lib/screens/closed_jobs_screen.dart</code> —
+<h3 id="job-card-history">Job Card History</h3>
+<p><code>lib/screens/job_card_history_screen.dart</code> —
 <strong>Roles:</strong> All</p>
-<p>Lighter-weight read-only browser of completed and auto-closed jobs.
-Useful for technicians who want to look up past work without the full
-filter UI of <strong>View Job Cards</strong>.</p>
-<h4 id="capabilities-1">Capabilities</h4>
+<p>Searchable archive of all closed job cards with server-side filtering
+to minimise Firestore read costs. Accessible via the <strong>Job
+History</strong> quick-action tile on the Home screen.</p>
+<h4 id="server-side-filters-trigger-a-new-firestore-fetch">Server-Side
+Filters (trigger a new Firestore fetch)</h4>
+<table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Options</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Date Range</td>
+<td>Last 7 days / Last 30 days / Last 90 days / Custom / All time</td>
+<td>Default: Last 30 days</td>
+</tr>
+<tr>
+<td>Department</td>
+<td>All or specific department chip</td>
+<td>Cascading — enables Area when selected</td>
+</tr>
+<tr>
+<td>Area</td>
+<td>All or specific area chip</td>
+<td>Cascading — enables Machine when selected</td>
+</tr>
+<tr>
+<td>Machine</td>
+<td>All or specific machine chip</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Each filter combination maps to a composite Firestore index. Fetches
+at most <strong>50 documents per page</strong> ordered by
+<code>closedAt</code> descending. Tap <strong>Load More</strong> for
+cursor-based pagination.</p>
+<h4
+id="client-side-refinement-applied-to-current-page-zero-additional-reads">Client-Side
+Refinement (applied to current page, zero additional reads)</h4>
 <ul>
-<li>Date-range filter</li>
-<li>Tap to open the detail view (read-only)</li>
+<li><strong>Type</strong> — Mechanical / Electrical / Mech-Elec /
+Maintenance chips</li>
+<li><strong>Priority</strong> — P1–P5 chips, colour-coded</li>
+<li><strong>Free-text search</strong> — searches description, machine,
+part, notes, operator name, and job card number across the fetched
+result set</li>
 </ul>
+<h4 id="navigation">Navigation</h4>
+<p>Tap any result to open <strong>Job Card Detail</strong> in full
+read-only (or write-capable if the user has the right role).</p>
 <h3 id="daily-review">Daily Review</h3>
 <p><code>lib/screens/daily_review_screen.dart</code> —
 <strong>Roles:</strong> Manager</p>
@@ -311,6 +377,11 @@ control.</p>
 <h4 id="monitor-status-badge">Monitor Status Badge</h4>
 <p>Cards in Monitor status display an <strong>amber</strong> badge (not
 green) to distinguish "watching" from "resolved".</p>
+<h4 id="mark-on-view">Mark-on-View</h4>
+<p>A job card is stamped <code>reviewedBy.{clockNo}: true</code> the
+moment the manager selects it in the list — not when the screen loads.
+The <code>Pending Review (N)</code> count decrements immediately as
+cards are opened. No explicit "mark as reviewed" button is needed.</p>
 <h4 id="filter-logic">Filter Logic</h4>
 <ul>
 <li>Mechanical Manager: sees cards where job type is Mechanical or
@@ -443,13 +514,15 @@ monitoring job that hasn't had updates for 7 days since
 <h3 id="admin">Admin</h3>
 <p><code>lib/screens/admin_screen.dart</code> — <strong>Roles:</strong>
 Admin only</p>
-<p>The control panel. Four tabs.</p>
+<p>The control panel. Six scrollable tabs with outlined icons.</p>
 <h4 id="tab-employees">Tab: Employees</h4>
 <ul>
 <li>Spreadsheet-style editor for the <code>employees</code>
 collection</li>
 <li>Add / edit / bulk-delete employees</li>
-<li>Per-row toggle for <code>isOnSite</code></li>
+<li><code>isOnSite</code> column shows a tappable green <strong>"On
+Site"</strong> / grey <strong>"Off Site"</strong> chip — tap to toggle
+the employee's status directly</li>
 <li>FCM token visible and editable (for debugging)</li>
 <li>CSV import / export with template download</li>
 </ul>
@@ -461,26 +534,28 @@ collection</li>
 <li>Cascading deletes with confirmation dialogs</li>
 </ul>
 <h4 id="tab-settings">Tab: Settings</h4>
+<p>Four grouped cards:</p>
 <ul>
-<li><strong>Force Location Check Now</strong> — manually runs
-<code>LocationService.checkCurrentLocation</code></li>
-<li><strong>Simulate 30-min WorkManager Check</strong> — triggers the
-background geofence callback for testing</li>
-<li><strong>Escalation Config</strong> — per-stage cards with Enable
-toggle, minutes input, recipient checkboxes (including a <em>Job Creator
-(Operator)</em> option that sends a tailored "follow up directly" alert
-to the person who raised the job). Writes to
-<code>notification_configs/global</code>. See <a
-href="escalation_system.html">Escalation Reference</a></li>
-<li><strong>Save Escalation Config</strong> — writes the doc; prompts to
-confirm when re-enabling stages so old jobs aren't bombarded. Writes
+<li><strong>App Update Control</strong> —
+<code>Minimum Supported Build</code> (int) and
+<code>Update Download URL</code> (string). Written to
+<code>settings/app</code> in Firestore. On app launch, if
+<code>currentBuild &lt; minSupportedBuild</code>, a blocking update
+screen is shown with the download URL before Home is reached. Works
+independently of Remote Config.</li>
+<li><strong>Location</strong> — Force Location Check Now (manually
+triggers <code>LocationService.checkCurrentLocation</code>); Simulate
+30-min WorkManager Check</li>
+<li><strong>Access</strong> — <strong>Escalation Config</strong>
+per-stage cards with Enable toggle, minutes input, recipient checkboxes
+(including a <em>Job Creator (Operator)</em> option). Writes to
+<code>notification_configs/global</code>. Prompts to confirm when
+re-enabling stages so open jobs aren't flooded. Writes
 <code>enabled_at = now</code> on any stage transitioning from disabled →
-enabled</li>
-<li><strong>Reset Escalation Stamps</strong> — calls the
-<code>clearEscalationStamps</code> Cloud Function. Two uses: (a) clears
-all stage stamps from open jobs so they re-process, (b) backfills
-<code>notifiedAtStage1..4 = null</code> on legacy docs so they appear in
-the composite indexes</li>
+enabled. <strong>Reset Escalation Stamps</strong> calls
+<code>clearEscalationStamps</code> CF.</li>
+<li><strong>Modules</strong> — enable/disable Waste Management and Fleet
+Maintenance</li>
 </ul>
 <h4 id="tab-job-cards">Tab: Job Cards</h4>
 <ul>
@@ -489,6 +564,30 @@ the composite indexes</li>
 <li>CSV export with full filter applied</li>
 <li>Bulk delete with confirmation</li>
 </ul>
+<h4 id="tab-on-site">Tab: On Site</h4>
+<ul>
+<li>Real-time view of every employee currently marked
+<code>isOnSite: true</code></li>
+<li>Grouped by department with a green header showing the total on-site
+count</li>
+<li>Each row shows: name, position, clock number</li>
+<li>Updates live as employees clock in and out</li>
+</ul>
+<h4 id="tab-comms">Tab: Comms</h4>
+<ul>
+<li><strong>Broadcast Update Notice</strong> card — editable title and
+body fields (pre-filled with the standard update message); <strong>Send
+Broadcast</strong> button calls the <code>broadcastUpdateNotice</code>
+Cloud Function (<code>africa-south1</code>). Admin-gated
+(<code>isAdmin: true</code> on employee doc). After sending, a result
+card shows: <code>sent</code> (push delivered), <code>parked</code>
+(held in inbox for off-site users), <code>noToken</code> (no FCM token
+registered), <code>total</code> counts.</li>
+<li><strong>Recent Broadcasts</strong> — live stream from the
+<code>notifications</code> collection filtered to
+<code>triggeredBy == 'update_notice'</code>, sorted by
+<code>createdAt</code> descending, limited to last 10.</li>
+</ul>
 <h3 id="geofence-editor">Geofence Editor</h3>
 <p><code>lib/screens/geofence_editor_screen.dart</code> —
 <strong>Roles:</strong> Admin only</p>
@@ -496,7 +595,7 @@ the composite indexes</li>
 <code>config/geofence</code>. The native Android
 <code>GeofenceHelper</code> reads this to decide on-site vs
 off-site.</p>
-<h4 id="capabilities-2">Capabilities</h4>
+<h4 id="capabilities-1">Capabilities</h4>
 <ul>
 <li>Drop a centre point on the map (or enter lat/long)</li>
 <li>Adjust radius via slider</li>
@@ -516,29 +615,118 @@ shrink the radius, people currently inside the old boundary may flip to
 <h3 id="settings">Settings</h3>
 <p><code>lib/screens/settings_screen.dart</code> —
 <strong>Roles:</strong> All</p>
-<p>Per-user preferences and self-service tooling.</p>
+<p>Per-user preferences and self-service tooling. Organised into
+labelled sections:</p>
 <h4 id="sections-1">Sections</h4>
 <ul>
-<li><strong>Account</strong> — current user info, On-Site indicator,
-<code>Log Out</code></li>
-<li><strong>Appearance</strong> — Dark/Light mode toggle (writes to
+<li><strong>Your Profile</strong> — current user info (name, clock,
+department), live on-site / off-site indicator, link to
+Documentation</li>
+<li><strong>Preferences</strong> — Dark/Light mode toggle (writes to
 Riverpod theme provider)</li>
-<li><strong>Permissions Status</strong> — live status for Notifications,
+<li><strong>Notifications</strong> — link to <a
+href="#notification-inbox">Notification Inbox</a> with live unread count
+badge; link to <a href="#notification-tests">Notification Tests</a></li>
+<li><strong>App &amp; Connectivity</strong> — Reset Permissions, Check
+for Update, Refresh FCM Token</li>
+<li><strong>App Permissions</strong> — live status for Notifications,
 System Alert Window, Notification Policy, Battery Optimisation. Tapping
 any row jumps to the OS settings page</li>
-<li><strong>Notification Tests</strong>
+<li><strong>Modules</strong> <em>(Admin only)</em> — enable/disable
+<strong>Waste Management</strong> (writes <code>wasteTrackEnabled</code>
+to SharedPreferences) and <strong>Fleet Maintenance</strong> (writes
+<code>fleet_enabled</code> to <code>fleet_settings/config</code> in
+Firestore). Turning a module off hides its tab from all users
+immediately.</li>
+<li><strong>Admin</strong> <em>(Admin only)</em> — amber-bordered card
+containing links to Admin Settings and Notification Diagnostics</li>
+<li><strong>Account</strong> — Log Out</li>
+</ul>
+<h3 id="notification-inbox">Notification Inbox</h3>
+<p><code>lib/screens/notification_inbox_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Shows notifications that were held because the employee was off-site
+at the time of delivery. Accessible from the bell icon in the Home
+screen AppBar (with live unread badge) and from the Notifications
+section in Settings.</p>
+<h4 id="layout-1">Layout</h4>
 <ul>
-<li>Full Screen Alert (Priority 5, bypasses DND)</li>
-<li>Persistent Notification with action buttons</li>
-<li>Medium-priority notification</li>
-<li>Standard normal notification</li>
-</ul></li>
-<li><strong>Diagnostics</strong> — link to <a
-href="#notification-diagnostics">Notification Diagnostics</a></li>
+<li><strong>Unread</strong> section at the top — highlighted with a
+coloured border and an orange dot indicator; "Mark all read" action in
+header</li>
+<li><strong>Earlier</strong> section — previously-read items in muted
+style</li>
+<li>Empty state: "You're all caught up" with a green check icon</li>
+</ul>
+<h4 id="per-item-actions">Per-item Actions</h4>
+<ul>
+<li><strong>Tap</strong> — marks item as read and navigates to the
+relevant job card (if one exists)</li>
+<li><strong>Mark all read</strong> — batch-marks every unread item via a
+Firestore batch write</li>
+</ul>
+<h4 id="notification-types-displayed">Notification Types Displayed</h4>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Icon</th>
+<th>Colour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>job_assigned</code></td>
+<td>Person + job card</td>
+<td>Blue</td>
+</tr>
+<tr>
+<td><code>job_closed</code></td>
+<td>Check circle</td>
+<td>Green</td>
+</tr>
+<tr>
+<td><code>self_assigned</code></td>
+<td>Person add</td>
+<td>Teal</td>
+</tr>
+<tr>
+<td><code>job_updated</code></td>
+<td>Edit note</td>
+<td>Deep Orange</td>
+</tr>
+<tr>
+<td><code>busy_response</code></td>
+<td>Do-not-disturb</td>
+<td>Red</td>
+</tr>
+<tr>
+<td><code>copper_sell</code></td>
+<td>Coin</td>
+<td>Amber</td>
+</tr>
+</tbody>
+</table>
+<h4 id="data-source">Data Source</h4>
+<p><code>notification_inbox/{clockNo}/items</code> — subcollection per
+employee. Writes are created by Cloud Functions (not the Flutter app).
+Items persist until manually marked read; they are not auto-deleted.</p>
+<h3 id="notification-tests">Notification Tests</h3>
+<p><code>lib/screens/notification_test_screen.dart</code> —
+<strong>Roles:</strong> All</p>
+<p>Extracted self-contained screen for triggering the three notification
+delivery modes on the current device. Accessible from Settings →
+Notifications → Notification Tests.</p>
+<ul>
+<li><strong>Full Screen Alert</strong> (P5) — bypasses DND, takes over
+screen</li>
+<li><strong>Persistent Notification</strong> — red banner with action
+buttons</li>
+<li><strong>General Notification</strong> — standard banner</li>
 </ul>
 <h3 id="notification-diagnostics">Notification Diagnostics</h3>
 <p><code>lib/screens/notification_diagnostics_screen.dart</code> —
-<strong>Roles:</strong> All (test tool)</p>
+<strong>Roles:</strong> Admin</p>
 <p>Developer/admin tool for verifying the notification + geofence stack
 works end-to-end on a device.</p>
 <h4 id="tests-available">Tests Available</h4>
@@ -557,6 +745,235 @@ position, isOnSite, fcmToken</li>
 system but the device isn't physically inside the geofence. Hit Test
 ENTER and the next escalation cycle will treat the user as on-site.</p>
 </blockquote>
+<hr />
+<h2 id="wastetrack-module">WasteTrack Module</h2>
+<p>Screens for the waste management feature. Accessible via the
+<strong>Waste</strong> tab in the bottom navigation bar. Roles: Security
+Manager (<code>department == "Security"</code> &amp;&amp;
+<code>position == "Manager"</code>), Security Guard
+(<code>department == "Security"</code> &amp;&amp;
+<code>position == "Guard"</code>), and Admin. Other employees do not see
+the Waste tab.</p>
+<h3 id="waste-home">Waste Home</h3>
+<p><code>lib/screens/waste_home_screen.dart</code> —
+<strong>Roles:</strong> Security Manager, Security Guard, Admin</p>
+<p>Entry point for WasteTrack. Shows load cards grouped by status:
+<strong>Incoming</strong> (scheduled, awaiting collection), <strong>In
+Progress</strong> (collection started), <strong>Pending
+Weighbridge</strong> (waiting for actual weight), and a summary count of
+Completed loads.</p>
+<p>Load list is driven by two live <code>StreamSubscription</code>s on
+<code>watchLoads()</code> and <code>watchScheduledLoads()</code> —
+updates are reflected in real time without any manual refresh.</p>
+<h4 id="role-based-differences">Role-based differences</h4>
+<ul>
+<li><strong>Security Manager</strong> — sees all loads; can tap
+<strong>Schedule Load</strong> to create a new scheduled load; can edit
+or cancel any scheduled load via bottom sheet</li>
+<li><strong>Security Guard</strong> — sees only loads ready for
+collection (scheduled, incoming); tapping a card opens <strong>Begin
+Collection</strong></li>
+<li><strong>Admin</strong> — full visibility; Admin button navigates to
+<strong>Waste Admin</strong></li>
+</ul>
+<h4 id="key-actions-1">Key Actions</h4>
+<ul>
+<li><strong>+ New / Schedule</strong> <em>(FAB)</em> — bottom sheet with
+"Schedule Incoming Load" or "New Load (on the spot)"</li>
+<li><strong>Begin Collection</strong> <em>(Guard/Admin)</em> — opens
+<strong>Waste Begin Collection</strong> for that load</li>
+<li><strong>⋮ More actions</strong> <em>(top-right overflow menu)</em> —
+Pending Weighbridge, Reports, Waste Admin, Enable/Disable toggle (shown
+per role). Cloud sync retry button appears alongside when queue is
+non-empty.</li>
+<li><strong>All / Today / This Week</strong> filter chips — apply to
+both scheduled and recent loads; shows "No loads match" empty state with
+a clear-filter button when active filter returns zero results</li>
+</ul>
+<h3 id="waste-schedule-load">Waste Schedule Load</h3>
+<p><code>lib/screens/waste_schedule_load_screen.dart</code> —
+<strong>Roles:</strong> Security Manager, Admin</p>
+<p>Form for creating a new scheduled waste load. Saves to
+<code>waste_loads</code> via <code>WasteService.createLoad</code> (Cloud
+Function <code>createWasteLoad</code>) which assigns a global sequential
+load number (format: <code>W-NNNN</code>, never resets).</p>
+<h4 id="required-fields-2">Required Fields</h4>
+<ul>
+<li>Contractor (from <code>waste_contractors</code>)</li>
+<li>Main waste type (from <code>waste_types</code>)</li>
+<li>Scheduled date/time</li>
+<li>Optional notes</li>
+</ul>
+<h3 id="waste-begin-collection">Waste Begin Collection</h3>
+<p><code>lib/screens/waste_begin_collection_screen.dart</code> —
+<strong>Roles:</strong> Security Guard, Admin</p>
+<p>Opens for a specific scheduled load when a guard taps <strong>Begin
+Collection</strong>. Transitions the load status from
+<code>scheduled</code> → <code>pending_weighbridge</code> on submission.
+Guard fills in driver name, vehicle reg, adds waste items with photos,
+and captures the contractor signature.</p>
+<p>Add-item uses a <code>showModalBottomSheet</code> (not a dialog) for
+camera stability. Calls <code>WasteService.submitCollection</code> which
+stores <code>collectedByName</code> from
+<code>currentEmployee.name</code> on the load document.</p>
+<h3 id="waste-create-load">Waste Create Load</h3>
+<p><code>lib/screens/waste_create_load_screen.dart</code> —
+<strong>Roles:</strong> Security Guard, Security Manager, Admin</p>
+<p>Two-screen flow: <strong>Step 1</strong> selects the main waste type
+(grid with category-aware icons); <strong>Step 2</strong> fills load
+details and adds items. A step progress bar is shown at the top of each
+screen.</p>
+<p>Add-item uses <code>showModalBottomSheet</code> (camera-safe).
+Subtypes are loaded dynamically from the selected
+<code>WasteType.subtypes</code> — not hardcoded.</p>
+<p>On successful save, <code>saveCompleteWasteLoad</code> returns the
+new load ID. The screen immediately fetches the full load and
+<code>pushReplacement</code>s to <strong>Waste Load Detail</strong> so
+the user can capture the signature without navigating back through the
+home screen.</p>
+<p><code>contractor_name</code> is stored on the load document at save
+time (looked up from the <code>_contractors</code> list by the selected
+<code>_contractorId</code>).</p>
+<h4 id="key-actions-2">Key Actions</h4>
+<ul>
+<li><strong>Add Item</strong> — slide-up sheet: select subtype, enter
+weight, attach photo(s)</li>
+<li><strong>Remove Item</strong> — tap × on item card</li>
+<li><strong>Create Load</strong> — validates required fields and items,
+saves via <code>saveCompleteWasteLoad</code>, navigates to detail on
+success</li>
+<li>Offline: item writes are queued via <code>SyncService</code> if
+connectivity is lost</li>
+</ul>
+<h3 id="waste-signature">Waste Signature</h3>
+<p><code>lib/screens/waste_signature_screen.dart</code> —
+<strong>Roles:</strong> Security Guard, Admin</p>
+<p>Full-screen signature capture. The contractor driver signs directly
+on the phone screen. Signature is stored as a PNG byte array, uploaded
+to Firebase Storage under <code>waste/{loadId}/signature/</code>, and
+the download URL is saved to the load document.</p>
+<h3 id="waste-load-detail">Waste Load Detail</h3>
+<p><code>lib/screens/waste_load_detail_screen.dart</code> —
+<strong>Roles:</strong> All WasteTrack roles</p>
+<p>Full detail view of a single waste load.</p>
+<h4 id="layout-top-to-bottom">Layout (top to bottom)</h4>
+<ol type="1">
+<li><strong>Amber action banner</strong> — shown only when
+<code>status == pendingWeighbridge</code> and the user is Admin or
+Manager. Prompts immediate weighbridge entry.</li>
+<li><strong>Status stepper</strong> — 4-step horizontal progress bar
+showing current lifecycle position. Steps vary by flow:
+<code>scheduled</code> loads show (Scheduled → Collecting → Weighbridge
+→ Complete); direct loads show (Created → Signature → Weighbridge →
+Complete).</li>
+<li><strong>Status banner</strong> — coloured icon + type name + status
+label.</li>
+<li><strong>Info card</strong> — driver, vehicle, contractor name
+(<code>contractorName</code> field; falls back to
+<code>contractorId</code>), date, and collector name
+(<code>collectedByName</code> field; falls back to clock number).</li>
+<li><strong>Items card</strong> — live <code>StreamBuilder</code> on
+<code>WasteService.watchItemsForLoad()</code>. Lists each item: subtype,
+weight, quantity, photo count.</li>
+<li><strong>Weight card</strong> — recorded weight vs. actual
+weighbridge weight with inline variance row (green if within thresholds,
+red if deviation).</li>
+<li><strong>Weighbridge entry</strong> <em>(Admin/Manager only,
+non-terminal status)</em> — text field + save button.</li>
+<li><strong>Mark Complete &amp; Signature button</strong> <em>(draft
+status only)</em> — navigates to <strong>Waste Signature</strong>, then
+marks load complete.</li>
+</ol>
+<h4 id="status-actions-available-per-role">Status actions available per
+role</h4>
+<table>
+<thead>
+<tr>
+<th>Current status</th>
+<th>Guard action</th>
+<th>Manager action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scheduled</td>
+<td>Begin Collection</td>
+<td>Edit / Cancel</td>
+</tr>
+<tr>
+<td>Draft / In Progress</td>
+<td>Capture Signature</td>
+<td>View</td>
+</tr>
+<tr>
+<td>Pending Weighbridge</td>
+<td>View</td>
+<td>Enter Weighbridge Weight (amber banner)</td>
+</tr>
+<tr>
+<td>Completed</td>
+<td>View only</td>
+<td>View only</td>
+</tr>
+</tbody>
+</table>
+<h3 id="waste-pending-weighbridge">Waste Pending Weighbridge</h3>
+<p><code>lib/screens/waste_pending_weighbridge_screen.dart</code> —
+<strong>Roles:</strong> Security Guard, Security Manager, Admin</p>
+<p>List screen showing all loads in <code>pending_weighbridge</code>
+status. Guard or manager enters the actual weighbridge weight. On save,
+<code>WasteService.saveWeighbridgeWeight</code> computes the deviation,
+writes the result to <code>waste_loads</code>, and triggers a deviation
+flag if thresholds are exceeded (&gt; 5% or &gt; 50 kg).</p>
+<h3 id="waste-queued">Waste Queued</h3>
+<p><code>lib/screens/waste_queued_screen.dart</code> —
+<strong>Roles:</strong> Security Guard, Admin</p>
+<p>Shows loads that are queued locally (created or updated offline and
+not yet synced to Firestore). Reflects the Hive <code>sync_queue</code>
+entries for WasteTrack operations. Guard can review pending items and
+manually trigger a sync flush.</p>
+<h3 id="waste-reports">Waste Reports</h3>
+<p><code>lib/screens/waste_reports_screen.dart</code> —
+<strong>Roles:</strong> Security Manager, Admin</p>
+<p>Date-range report of completed loads. Filterable by contractor and
+waste type.</p>
+<h4 id="capabilities-2">Capabilities</h4>
+<ul>
+<li><strong>Run Report</strong> — queries <code>waste_loads</code> with
+server-side date and status filters</li>
+<li><strong>Export CSV</strong> — pure-Dart CSV generation, written to
+device storage</li>
+<li>Deviation-flagged loads are highlighted in the results table</li>
+</ul>
+<h3 id="waste-admin">Waste Admin</h3>
+<p><code>lib/screens/waste_admin_screen.dart</code> —
+<strong>Roles:</strong> Admin only</p>
+<p>Configuration panel for the WasteTrack module. Three tabs:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it manages</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Manage Types</strong></td>
+<td>Create waste type categories; add sub-types; set
+active/inactive</td>
+</tr>
+<tr>
+<td><strong>Manage Rates</strong></td>
+<td>Set cost rate per kg per waste type; view current rate list</td>
+</tr>
+<tr>
+<td><strong>Contractors</strong></td>
+<td>Add/edit contractor records used when scheduling loads</td>
+</tr>
+</tbody>
+</table>
+<p>Writes to <code>waste_types</code>, <code>waste_rates</code>, and
+<code>waste_contractors</code> collections.</p>
 <hr />
 <h2 id="cross-cutting-concerns">Cross-Cutting Concerns</h2>
 <p>Behaviour that affects multiple screens.</p>

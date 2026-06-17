@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Fleet Cost Manager Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Fleet Cost Manager Guide</h1>
+</header>
+<h1 id="ctp-fleet-maintenance--cost-manager-guide">CTP Fleet Maintenance
+— Cost Manager Guide</h1>
+<p><em>A plain-language guide for recording spend and reviewing fleet
+costs</em></p>
+<hr />
+<h2 id="what-you-use-this-for">What you use this for</h2>
+<p>Mechanics log <strong>what they did</strong> on fleet machines
+(forks, grab or BT). You record <strong>what it cost</strong> — parts,
+invoices, labour, and other spend. Mechanics never see amounts; only you
+and admins do.</p>
+<p>Your main tabs:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Costs</strong></td>
+<td>Queue of mechanic jobs — enter spend against each job</td>
+</tr>
+<tr>
+<td><strong>Reports</strong></td>
+<td>Totals, spend per machine, and export for accounts</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="the-two-ways-to-add-a-cost">The two ways to add a cost</h2>
+<h3 id="1-cost-against-a-mechanic-job-most-common">1. Cost against a
+mechanic job (most common)</h3>
+<p>Use when the spend relates to work the mechanic logged (repair,
+service, parts for that job).</p>
+<ol type="1">
+<li>Open <strong>Fleet</strong> → <strong>Costs</strong> tab</li>
+<li>Find the job in the list (last 50 jobs, newest first)</li>
+<li><strong>Orange “Needs costing”</strong> = no costs yet → <strong>tap
+the job</strong></li>
+<li>Fill in what was purchased, amount (R), category, invoice
+details</li>
+<li>Tap <strong>Save cost</strong></li>
+</ol>
+<p>The job turns <strong>green “Costed”</strong>. You can tap it again
+later to <strong>add more cost lines</strong> to the same job.</p>
+<p><strong>Entering a cost locks the job for the mechanic</strong> —
+they can no longer edit what they wrote, so your costs always match the
+work as you reviewed it. (Mechanics can still add comments.)</p>
+<p><strong>Filters on Costs tab</strong> (opens on <strong>Needs
+costing</strong> — your work queue):</p>
+<table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>All jobs</strong></td>
+<td>Every job in the list (orange = still needs costing)</td>
+</tr>
+<tr>
+<td><strong>Needs costing</strong></td>
+<td>Only jobs with no costs entered yet</td>
+</tr>
+<tr>
+<td><strong>Costed</strong></td>
+<td>Only jobs that already have at least one cost line</td>
+</tr>
+<tr>
+<td><strong>No cost</strong></td>
+<td>Jobs you marked as needing no spend</td>
+</tr>
+</tbody>
+</table>
+<p>You can also filter by <strong>Machine</strong> or <strong>Job
+type</strong>.</p>
+<h3 id="jobs-with-no-spend--no-cost-needed">Jobs with no spend — "No
+cost needed"</h3>
+<p>Some jobs cost nothing (an adjustment, an inspection). Open the job
+and tap <strong>No cost needed</strong> — it leaves the costing queue
+(grey <strong>No cost</strong> badge) without a zero-value entry. This
+also locks the job for the mechanic.</p>
+<h3 id="2-general-cost-not-tied-to-a-job">2. General cost (not tied to a
+job)</h3>
+<p>Use for spend on a machine that is <strong>not</strong> linked to one
+mechanic job — e.g. annual contract, delivery fee, stock not tied to a
+specific repair.</p>
+<ol type="1">
+<li>On the <strong>Costs</strong> tab, tap <strong>General cost</strong>
+(bottom-right)</li>
+<li>Pick the machine, category, description, and amount</li>
+<li>Leave <strong>Link to mechanic's job</strong> empty (or link one if
+you change your mind)</li>
+<li>Tap <strong>Save cost</strong></li>
+</ol>
+<hr />
+<h2 id="cost-categories">Cost categories</h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Parts</strong></td>
+<td>Parts or materials bought for a machine</td>
+</tr>
+<tr>
+<td><strong>Labour</strong></td>
+<td>External labour or contractor invoice</td>
+</tr>
+<tr>
+<td><strong>Invoice</strong></td>
+<td>Full supplier invoice (may cover several items)</td>
+</tr>
+<tr>
+<td><strong>Other</strong></td>
+<td>Delivery, consumables, anything else</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="add-cost-form--field-guide">Add Cost form — field guide</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required?</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Which machine?</td>
+<td>Yes</td>
+<td>The machine this spend applies to</td>
+</tr>
+<tr>
+<td>Link to mechanic's job</td>
+<td>No</td>
+<td>Pre-filled when you tap a job from the Costs list</td>
+</tr>
+<tr>
+<td>What type of cost?</td>
+<td>Yes</td>
+<td>Parts / Labour / Invoice / Other</td>
+</tr>
+<tr>
+<td>What was purchased / paid for?</td>
+<td>Yes</td>
+<td>Short description for reports</td>
+</tr>
+<tr>
+<td>Amount (Rands)</td>
+<td>Yes</td>
+<td>VAT-inclusive amount you want recorded</td>
+</tr>
+<tr>
+<td>Invoice number</td>
+<td>No</td>
+<td>Helps matching to supplier paperwork</td>
+</tr>
+<tr>
+<td>Supplier</td>
+<td>No</td>
+<td>Who you paid</td>
+</tr>
+<tr>
+<td>Invoice / payment date</td>
+<td>Yes</td>
+<td>Date on the invoice or when paid</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="reports-tab">Reports tab</h2>
+<p>Use <strong>Reports</strong> to review spend and export data.</p>
+<ol type="1">
+<li>Open <strong>Fleet</strong> → <strong>Reports</strong></li>
+<li>Choose <strong>This month</strong> (use arrows to change month) or
+<strong>Year to date</strong></li>
+<li>See:
+<ul>
+<li><strong>Total spend</strong> for the period</li>
+<li><strong>Number of cost lines</strong></li>
+<li><strong>Spend per machine</strong> (bar chart)</li>
+<li>Full list of every cost line</li>
+</ul></li>
+<li>Tap <strong>Export CSV</strong> to share a spreadsheet (e.g. email
+to accounts)</li>
+</ol>
+<p>The CSV includes date, machine, job number (if linked), category,
+description, amount, invoice, supplier, and who entered it.</p>
+<hr />
+<h2 id="how-jobs-and-costs-stay-in-sync">How jobs and costs stay in
+sync</h2>
+<pre><code>Mechanic logs job → appears on Costs tab (Needs costing)
+        ↓
+You enter cost(s) linked to that job → job marked Costed
+        ↓
+Costs appear in Reports for the invoice/payment month</code></pre>
+<ul>
+<li>A job can have <strong>multiple cost lines</strong> (e.g. parts
+invoice + labour invoice).</li>
+<li>A job with <strong>no spend</strong>: tap <strong>No cost
+needed</strong> on the job so it leaves the queue.</li>
+<li>Deleting the <strong>last</strong> cost line on a job puts it back
+in the <strong>Needs costing</strong> queue.</li>
+<li><strong>General costs</strong> without a job link still appear in
+Reports under the machine name.</li>
+</ul>
+<hr />
+<h2 id="quick-reference">Quick reference</h2>
+<table>
+<thead>
+<tr>
+<th>I want to…</th>
+<th>Do this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enter costs for a repair</td>
+<td><strong>Costs</strong> → tap orange job → <strong>Save
+cost</strong></td>
+</tr>
+<tr>
+<td>Enter spend not tied to one job</td>
+<td><strong>General cost</strong> FAB</td>
+</tr>
+<tr>
+<td>Job had no spend</td>
+<td>Open job → <strong>No cost needed</strong></td>
+</tr>
+<tr>
+<td>See what's still uncosted</td>
+<td><strong>Costs</strong> → <strong>Needs costing</strong> filter</td>
+</tr>
+<tr>
+<td>Review monthly spend</td>
+<td><strong>Reports</strong> → This month</td>
+</tr>
+<tr>
+<td>Export for accounts</td>
+<td><strong>Reports</strong> → <strong>Export CSV</strong></td>
+</tr>
+<tr>
+<td>Add another invoice to same job</td>
+<td><strong>Costs</strong> → tap green job → <strong>Add Cost</strong>
+on detail</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="need-access">Need access?</h2>
+<p>If you do not see <strong>Costs</strong> or <strong>Reports</strong>,
+ask an admin to add your <strong>clock number</strong> under
+<strong>Fleet Settings → Cost manager clock numbers</strong>.</p>
+</body>
+</html>

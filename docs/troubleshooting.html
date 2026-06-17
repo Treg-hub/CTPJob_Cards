@@ -125,16 +125,40 @@ Location" button. This calls
 reported lat/lng in the <code>employees</code> document — that confirms
 whether the OS is even sending location updates.</p>
 <hr />
-<h2 id="job-cards-not-syncing">Job cards not syncing</h2>
+<h2 id="job-card-creation-blocked--no-connection-banner">Job card
+creation blocked — "No connection" banner</h2>
 <h3 id="symptoms-3">Symptoms</h3>
 <ul>
-<li>You created a job but it doesn't appear in View Jobs</li>
+<li>The Create Job Card screen shows a red banner and the Save button is
+disabled</li>
+<li>The Create Job Card tile on the Home screen is greyed out</li>
+</ul>
+<h3 id="what-this-means">What this means</h3>
+<p>Creating a job card while offline would mean no technicians are
+notified. The app intentionally blocks submission until connectivity is
+restored — the job would be invisible to the system otherwise.</p>
+<h3 id="fix">Fix</h3>
+<p>Move to an area with network signal (Wi-Fi or mobile data). The
+banner dismisses automatically when connectivity is detected and the
+Save button re-enables. Your form entries are preserved — you will not
+lose anything.</p>
+<p>If the banner appears even though you have signal, check that mobile
+data or Wi-Fi is actually connected (not just "on") and that airplane
+mode is not active.</p>
+<hr />
+<h2 id="job-cards-not-syncing">Job cards not syncing</h2>
+<h3 id="symptoms-4">Symptoms</h3>
+<ul>
+<li>You updated a job but the change doesn't appear for others</li>
 <li>Closure note didn't save after going offline</li>
+<li>The orange sync badge is showing</li>
 </ul>
 <h3 id="check-in-order-3">Check, in order</h3>
 <ol type="1">
-<li><strong>Connectivity indicator</strong> — top of the Home screen
-shows a sync state badge. Yellow/red means writes are queued.</li>
+<li><strong>Connectivity indicator</strong> — the sync badge at the top
+of the Home screen shows a yellow/amber state when writes are queued and
+pulsing when actively syncing. If it has been stuck for more than a
+minute with a signal, continue below.</li>
 <li><strong>Sync queue contents</strong> — Settings → Diagnostics →
 "View Sync Queue" (admin/dev only) lists pending writes in the Hive
 <code>sync_queue</code> box.</li>
@@ -163,7 +187,7 @@ dashboard</li>
 <code>position.toLowerCase().contains('manager')</code>. If your
 position string doesn't contain the word "manager" (case-insensitive),
 you're treated as a non-manager.</p>
-<h3 id="fix">Fix</h3>
+<h3 id="fix-1">Fix</h3>
 <p>Ask Admin to update your <code>position</code> field in the
 <code>employees</code> Firestore collection. Common examples that
 work:</p>
@@ -184,7 +208,7 @@ extend <code>lib/utils/role.dart</code> to recognise it.</p>
 <hr />
 <h2 id="login-fails--no-employee-profile-found">Login fails / "No
 employee profile found"</h2>
-<h3 id="symptoms-4">Symptoms</h3>
+<h3 id="symptoms-5">Symptoms</h3>
 <ul>
 <li>Firebase Auth accepts the password</li>
 <li>App immediately shows "No employee profile found. Please register
@@ -195,7 +219,7 @@ first."</li>
 (Firebase Auth UID). If your employee document exists but has no
 <code>uid</code> field, or has the wrong <code>uid</code>, the lookup
 fails.</p>
-<h3 id="fix-1">Fix</h3>
+<h3 id="fix-2">Fix</h3>
 <p>Admin needs to set the <code>uid</code> field on your
 <code>employees/{clockNo}</code> document to match your Firebase Auth
 UID. The Firebase Console → Authentication tab shows the UID for each
@@ -205,7 +229,7 @@ create one.</p>
 <hr />
 <h2 id="escalation-didnt-reach-me-even-though-im-a-manager">Escalation
 didn't reach me even though I'm a manager</h2>
-<h3 id="symptoms-5">Symptoms</h3>
+<h3 id="symptoms-6">Symptoms</h3>
 <ul>
 <li>A job hit Stage 2 escalation and the dashboard logged it</li>
 <li>You're on-site and have the right position, but you didn't get an
