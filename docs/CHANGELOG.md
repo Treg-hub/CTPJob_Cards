@@ -6,6 +6,45 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-17 — More reliable on-site detection + required security update (v2.1.1)
+
+A focused update that makes on-site / off-site detection dependable, gives you a one-tap fix for the phone settings that silently block job alerts, and prepares the app for a server-side security tightening. **This is a required update** — see the note at the end.
+
+### User-facing changes
+
+**More reliable on-site / off-site detection**
+
+The app is now much better at registering when you arrive at and leave the site. Background detection is more consistent, so you receive the job alerts meant for you while you're on site — and they correctly stop once you've left. Behind this, every presence change (the geofence, the 30-minute on-site check, and the check when you open the app) now flows through one consistent path.
+
+**Location & battery health banner**
+
+If a setting that background geofencing depends on gets switched off — **Location set to "Allow all the time"** or the **battery-optimisation exemption** — the Home screen now shows an orange banner warning that your on-site alerts may not work, with a one-tap **Fix**. Android won't always re-show the "Allow all the time" prompt, so Fix takes you straight to the right Settings page when it's needed. The banner clears itself once both are granted.
+
+**Web app — automatic sign-off when idle**
+
+On the web version, if you leave the app open and step away, you're now automatically marked **off-site** after a period of inactivity, or as soon as the browser tab is hidden or closed. This stops managers who leave the dashboard open on a PC from being left showing "on site" after they've gone home. (The web app never marks you on-site by itself — arriving on site is still detected only by the phone.)
+
+**Onboarding shows the real site radius**
+
+The permissions walkthrough now reads the live geofence radius from settings instead of a fixed "800 m", so what new staff are told matches the barrier the admin has actually configured.
+
+**Admin — on-site presence view**
+
+The **On Site** tab in Admin Settings now shows how long each person has been on site, and flags anyone who has been on site for more than **14 hours** so you can check whether their detection has stopped updating. Manually toggling someone on / off-site is now recorded with a timestamp.
+
+### Under the hood (no UI change)
+
+- **One central presence log** — the geofence, the 30-minute check, the app-open check, web inactivity, and admin changes now all write to a single `app_geofence` record, replacing two separate (and partly mismatched) logs. Every adjustment is stored with its source.
+- **Server-stamped presence times** — the server now stamps each on-site / off-site change with a trustworthy time and its source, which is what powers the new admin view and the 14-hour flag.
+- **Background write prepared for the security update** — the native geofence write now updates only your own presence fields, through a path that stays valid once the server-side lockdown below is switched on.
+- **Required update / security tightening** — this build routes employee and job-number writes through server-validated functions, ahead of locking those collections down. **Older versions will stop being able to create job cards and refresh their notifications once the lockdown is switched on shortly — so please update.**
+
+### A note on update frequency
+
+Thank you for bearing with the frequent updates while the app was being built out. The core is now stabilising, so updates will become **much less frequent** from here on.
+
+---
+
 ## 2026-06-11 — Job Cards data integrity overhaul + admin upgrade
 
 Mobile app and backend hardening across all data paths, plus a full Admin screen redesign.
