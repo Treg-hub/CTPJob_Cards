@@ -1088,6 +1088,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   // ── On Site tab ───────────────────────────────────────────────────────────
 
+  // Compact "on site for" duration, used by the 14h-stuck flag display.
+  String _onSiteDuration(DateTime since) {
+    final d = DateTime.now().difference(since);
+    if (d.inHours >= 24) return '${d.inDays}d ${d.inHours % 24}h';
+    if (d.inHours >= 1) return '${d.inHours}h ${d.inMinutes % 60}m';
+    return '${d.inMinutes}m';
+  }
+
   Widget _buildOnsiteTab() {
     final colors = Theme.of(context).appColors;
     return StreamBuilder<QuerySnapshot>(
@@ -1106,10 +1114,21 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             ]),
           );
         }
+        // Parse rows + compute the on-site-since duration and the 14h-stuck flag
+        // (surfaces sessions where geofence/permissions likely stopped working).
+        final now = DateTime.now();
+        var flaggedCount = 0;
         final grouped = <String, List<Map<String, dynamic>>>{};
         for (final doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
-          grouped.putIfAbsent((data['department'] as String? ?? 'Unknown').trim(), () => []).add({...data, 'id': doc.id});
+          final since = data['lastOnSiteAt'] is Timestamp
+              ? (data['lastOnSiteAt'] as Timestamp).toDate()
+              : null;
+          final stuck = since != null && now.difference(since).inHours >= 14;
+          if (stuck) flaggedCount++;
+          grouped
+              .putIfAbsent((data['department'] as String? ?? 'Unknown').trim(), () => [])
+              .add({...data, 'id': doc.id, 'since': since, 'stuck': stuck});
         }
         final depts = grouped.keys.toList()..sort();
         return Column(children: [
@@ -1126,6 +1145,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               ),
             ]),
           ),
+          if (flaggedCount > 0)
+            Container(
+              width: double.infinity,
+              color: Colors.red.shade50,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: Row(children: [
+                const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.red),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$flaggedCount on site 14h+ — check their geofence / location permissions',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red.shade700, fontSize: 12),
+                  ),
+                ),
+              ]),
+            ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(12),
@@ -1140,18 +1175,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       child: ListTile(
                         dense: true,
                         leading: CircleAvatar(
-                          backgroundColor: colors.wasteGreenSurface,
+                          backgroundColor: (emp['stuck'] as bool) ? Colors.red.shade100 : colors.wasteGreenSurface,
                           child: Text(
                             (emp['name'] as String? ?? '?')[0].toUpperCase(),
-                            style: TextStyle(fontWeight: FontWeight.bold, color: colors.wasteGreenDark),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: (emp['stuck'] as bool) ? Colors.red.shade700 : colors.wasteGreenDark),
                           ),
                         ),
                         title: Text(emp['name'] as String? ?? '—', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        subtitle: Text(emp['position'] as String? ?? '—', style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                        trailing: Text(
-                          emp['id'] as String? ?? '',
-                          style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: colors.textMuted),
+                        subtitle: Text(
+                          emp['since'] != null
+                              ? '${emp['position'] as String? ?? '—'}  •  on site ${_onSiteDuration(emp['since'] as DateTime)}'
+                              : (emp['position'] as String? ?? '—'),
+                          style: TextStyle(fontSize: 12, color: (emp['stuck'] as bool) ? Colors.red.shade700 : colors.textMuted),
                         ),
+                        trailing: (emp['stuck'] as bool)
+                            ? const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18)
+                            : Text(
+                                emp['id'] as String? ?? '',
+                                style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: colors.textMuted),
+                              ),
                       ),
                     ),
                 ],
@@ -1237,7 +1279,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                         DataCell(isEditing ? SizedBox(width: 120, child: TextField(controller: _departmentController, style: const TextStyle(fontSize: 13))) : Text(emp.department, style: const TextStyle(fontSize: 13))),
                         DataCell(
                           GestureDetector(
-                            onTap: () => _firestoreService.updateEmployee(emp.copyWith(isOnSite: !emp.isOnSite)),
+                            onTap: () => _firestoreService.adminSetPresence(emp.clockNo, !emp.isOnSite),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(

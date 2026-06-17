@@ -24,7 +24,11 @@ class Collections {
   static const String notifications = 'notifications';
   static const String copperTransactions = 'copper_transactions';
   static const String copperInventory = 'copper_inventory';
-  static const String geoFenceLogs = 'geo_fence_logs';
+  // Central geofence/presence audit log (single source of truth). Replaces the
+  // legacy split between native `geofence_logs` and Dart `geo_fence_logs`.
+  // Written by: native GeofenceReceiver, WorkManager heartbeat, app-open check,
+  // web inactivity guard, admin manual toggle, and updateEmployeePresence (CF).
+  static const String appGeofence = 'app_geofence';
   static const String alertResponses = 'alertResponses';
   static const String feedback = 'feedback';
 

@@ -13,7 +13,9 @@ import com.google.android.gms.location.GeofencingEvent
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.FirebaseApp
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.TimeUnit
@@ -57,28 +59,55 @@ class GeofenceReceiver : BroadcastReceiver() {
                 }
 
                 val db = FirebaseFirestore.getInstance()
+                val empRef = db.collection("employees").document(clockNo)
 
-                val updateTask = db.collection("employees")
-                    .document(clockNo)
-                    .update("isOnSite", isEntering)
-
-                val logTask = db.collection("geofence_logs").add(
-                    mapOf(
-                        "clockNo"   to clockNo,
-                        "event"     to eventType,
-                        "source"    to "native_geofence",
-                        "timestamp" to Timestamp.now()
-                    )
-                )
-
-                // Block this background thread for up to 25 s waiting for both writes.
-                // This is safe here (not the main thread) and more reliable than posting
-                // a callback back onto the main looper of a freshly-woken process.
+                // Transaction so we only write + log on a REAL transition. This keeps
+                // lastOnSiteAt a true session start (so the admin 14h-stuck flag is
+                // meaningful) and stops INITIAL_TRIGGER_ENTER / re-registration from
+                // resetting it or double-logging. The write touches only the presence
+                // fields, so it satisfies the Wave B own-presence carve-out rule.
+                var didTransition = false
                 try {
-                    Tasks.await(Tasks.whenAll(updateTask, logTask), 25, TimeUnit.SECONDS)
-                    Log.d(TAG, "✅ Firestore updated — clockNo=$clockNo isOnSite=$isEntering")
+                    didTransition = Tasks.await(
+                        db.runTransaction<Boolean> { txn ->
+                            val prev = txn.get(empRef).getBoolean("isOnSite")
+                            if (prev != null && prev == isEntering) return@runTransaction false
+                            val update = hashMapOf<String, Any>(
+                                "isOnSite" to isEntering,
+                                "presenceSource" to "native_geofence",
+                                "presenceUpdatedAt" to FieldValue.serverTimestamp()
+                            )
+                            if (isEntering) update["lastOnSiteAt"] = FieldValue.serverTimestamp()
+                            else update["lastOffSiteAt"] = FieldValue.serverTimestamp()
+                            txn.set(empRef, update, SetOptions.merge())
+                            true
+                        },
+                        25, TimeUnit.SECONDS
+                    )
+                    Log.d(TAG, "✅ Presence txn — clockNo=$clockNo isOnSite=$isEntering transition=$didTransition")
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Firestore write failed: ${e.message}")
+                    Log.e(TAG, "❌ Presence transaction failed: ${e.message}")
+                }
+
+                // Central audit log — only on a real transition (app_geofence).
+                if (didTransition) {
+                    try {
+                        Tasks.await(
+                            db.collection("app_geofence").add(
+                                mapOf(
+                                    "clockNo"   to clockNo,
+                                    "eventType" to eventType,
+                                    "source"    to "native_geofence",
+                                    "isOnSite"  to isEntering,
+                                    "timestamp" to Timestamp.now(),
+                                    "createdAt" to Timestamp.now()
+                                )
+                            ),
+                            25, TimeUnit.SECONDS
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ app_geofence log failed: ${e.message}")
+                    }
                 }
 
                 // Notify the Dart side only when the Flutter engine is running (foreground).

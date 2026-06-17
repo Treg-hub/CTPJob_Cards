@@ -50,8 +50,8 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
       SnackBar(
         content: Text(
           isEntering
-            ? '✅ Test ENTER logged to geo_fence_logs + isOnSite updated'
-            : '📍 Test EXIT logged to geo_fence_logs + isOnSite updated'
+            ? '✅ Test ENTER logged to app_geofence + isOnSite updated'
+            : '📍 Test EXIT logged to app_geofence + isOnSite updated'
         ),
       ),
     );
@@ -117,7 +117,7 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
               ),
               const SizedBox(height: 8),
               const Text(
-                "Writes to geo_fence_logs collection + updates isOnSite flag",
+                "Writes to app_geofence collection + updates isOnSite flag",
                 style: TextStyle(fontSize: 12, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),

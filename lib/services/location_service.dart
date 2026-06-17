@@ -14,6 +14,43 @@ import '../constants/collections.dart';
 const String locationTaskName = "ctp_location_check_task";
 const MethodChannel _channel = MethodChannel('ctp/geofence');
 
+/// Central geofence barrier (lat/lng/radius). Single source of truth: the
+/// `settings/geofence` Firestore doc, edited via GeofenceEditorScreen.
+class GeofenceConfig {
+  final double latitude;
+  final double longitude;
+  final double radius;
+  const GeofenceConfig(this.latitude, this.longitude, this.radius);
+}
+
+/// One default, used everywhere the `settings/geofence` doc is missing — keeps
+/// the live geofence, the editor, the WorkManager check and the onboarding copy
+/// in agreement instead of drifting apart.
+const GeofenceConfig kDefaultGeofence =
+    GeofenceConfig(-29.994938052011612, 30.939421740548614, 800.0);
+
+/// Reads the central geofence barrier from `settings/geofence`, falling back to
+/// [kDefaultGeofence]. Top-level so the WorkManager isolate can call it too.
+Future<GeofenceConfig> loadGeofenceConfig() async {
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection(Collections.settings)
+        .doc('geofence')
+        .get();
+    if (doc.exists) {
+      final d = doc.data()!;
+      return GeofenceConfig(
+        (d['latitude'] as num?)?.toDouble() ?? kDefaultGeofence.latitude,
+        (d['longitude'] as num?)?.toDouble() ?? kDefaultGeofence.longitude,
+        (d['radius'] as num?)?.toDouble() ?? kDefaultGeofence.radius,
+      );
+    }
+  } catch (e) {
+    debugPrint('loadGeofenceConfig failed, using default: $e');
+  }
+  return kDefaultGeofence;
+}
+
 // ---------------------------------------------------------------------------
 // WorkManager callback — runs in a separate isolate, no access to LocationService
 // state. Only scheduled when employee is on-site. Self-cancels when off-site
@@ -36,20 +73,7 @@ void callbackDispatcher() {
         return Future.value(true);
       }
 
-      final settingsDoc = await FirebaseFirestore.instance
-          .collection(Collections.settings)
-          .doc('geofence')
-          .get();
-
-      double lat = -29.994938052011612;
-      double lng = 30.939421740548614;
-      double radius = 800;
-
-      if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
-        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
-        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-      }
+      final cfg = await loadGeofenceConfig();
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -58,9 +82,9 @@ void callbackDispatcher() {
         ),
       );
 
-      final onSite =
-          Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <=
-              radius;
+      final onSite = Geolocator.distanceBetween(
+              cfg.latitude, cfg.longitude, pos.latitude, pos.longitude) <=
+          cfg.radius;
 
       final firestore = FirestoreService();
       final emp = await firestore.getEmployee(clockNo);
@@ -68,21 +92,26 @@ void callbackDispatcher() {
       if (emp == null) return Future.value(true);
 
       if (emp.isOnSite != onSite) {
-        // Status changed — update Firestore and log the transition.
-        await firestore.updateMyPresence(isOnSite: onSite);
+        // Transition — the CF stamps the timestamps and logs the enter/exit to
+        // app_geofence (source carries through).
+        await firestore.updateMyPresence(isOnSite: onSite, source: 'workmanager_30min');
+        debugPrint('📍 WorkManager: isOnSite changed to $onSite');
+      } else if (onSite) {
+        // No change but still on-site — heartbeat breadcrumb so the admin 14h
+        // stuck-investigation has a trail ("log all adjustments incl. workmanager").
         await firestore.logGeoFenceEvent(
           clockNo: clockNo,
-          eventType: onSite ? 'enter' : 'exit',
+          eventType: 'check',
           source: 'workmanager_30min',
           latitude: pos.latitude,
           longitude: pos.longitude,
           accuracy: pos.accuracy,
+          radiusUsed: cfg.radius,
         );
-        debugPrint('📍 WorkManager: isOnSite changed to $onSite');
       }
 
-      // Employee is off-site (whether it just changed or was already off-site).
-      // Cancel WorkManager — no point keeping the 30-min check running.
+      // Off-site (just changed or already) — cancel WorkManager. It must not
+      // keep running once off-site; an ENTER restarts it.
       if (!onSite) {
         await Workmanager().cancelByUniqueName(locationTaskName);
         debugPrint('🛑 WorkManager self-cancelled — employee is off-site');
@@ -123,26 +152,13 @@ class LocationService {
     await _notificationService.initialize();
 
     try {
-      final settingsDoc = await FirebaseFirestore.instance
-          .collection(Collections.settings)
-          .doc('geofence')
-          .get();
-
-      double lat = -29.994938052011612;
-      double lng = 30.939421740548614;
-      double radius = 800.0;
-
-      if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
-        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
-        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-      }
+      final cfg = await loadGeofenceConfig();
 
       await _channel.invokeMethod('registerGeofence', {
         'clockNo': clockNo,
-        'lat': lat,
-        'lng': lng,
-        'radius': radius,
+        'lat': cfg.latitude,
+        'lng': cfg.longitude,
+        'radius': cfg.radius,
       });
 
       debugPrint('✅ Native geofence registered');
@@ -185,6 +201,13 @@ class LocationService {
 
     await _sendNotification(isEntering);
 
+    // Foreground fallback: GeofenceReceiver.kt writes presence itself, but if
+    // that direct write is ever denied/failed, correct it through the CF. The CF
+    // is transition-aware, so this is a no-op when the native write already
+    // landed (and therefore logs nothing in the normal case).
+    await _firestoreService.updateMyPresence(
+        isOnSite: isEntering, source: 'native_geofence_fg');
+
     if (isEntering) {
       // Employee arrived — start the 30-min on-site heartbeat check.
       await _startWorkManagerCheck();
@@ -201,24 +224,14 @@ class LocationService {
   // Also syncs WorkManager: running only when on-site.
   // ---------------------------------------------------------------------------
   Future<void> checkCurrentLocation() async {
+    // Web presence is driven by WebPresenceService (inactivity), never by
+    // browser geolocation — guard so the web build doesn't prompt for location
+    // or flip isOnSite from an inaccurate web fix.
+    if (kIsWeb) return;
     try {
       debugPrint('📍 checkCurrentLocation() called');
 
-      final settingsDoc = await FirebaseFirestore.instance
-          .collection(Collections.settings)
-          .doc('geofence')
-          .get();
-
-      double lat = -29.994938052011612;
-      double lng = 30.939421740548614;
-      double radius = 800.0;
-
-      if (settingsDoc.exists) {
-        lat = settingsDoc.data()?['latitude']?.toDouble() ?? lat;
-        lng = settingsDoc.data()?['longitude']?.toDouble() ?? lng;
-        radius = settingsDoc.data()?['radius']?.toDouble() ?? radius;
-        debugPrint('📍 Geofence settings → lat=$lat lng=$lng radius=$radius');
-      }
+      final cfg = await loadGeofenceConfig();
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -227,9 +240,9 @@ class LocationService {
         ),
       );
 
-      final onSite =
-          Geolocator.distanceBetween(lat, lng, pos.latitude, pos.longitude) <=
-              radius;
+      final onSite = Geolocator.distanceBetween(
+              cfg.latitude, cfg.longitude, pos.latitude, pos.longitude) <=
+          cfg.radius;
       debugPrint('📍 App-open check → onSite=$onSite');
 
       final prefs = await SharedPreferences.getInstance();
@@ -238,16 +251,10 @@ class LocationService {
 
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && emp.isOnSite != onSite) {
-        // Firestore disagrees with GPS — a geofence event was missed. Correct it.
-        await _firestoreService.updateMyPresence(isOnSite: onSite);
-        await _firestoreService.logGeoFenceEvent(
-          clockNo: clockNo,
-          eventType: onSite ? 'enter' : 'exit',
-          source: 'app_open_check',
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          accuracy: pos.accuracy,
-        );
+        // Firestore disagrees with GPS — a geofence event was missed. Correct it
+        // via the CF (which stamps timestamps + logs the enter/exit).
+        await _firestoreService.updateMyPresence(
+            isOnSite: onSite, source: 'app_open_check');
         debugPrint('📍 App-open check: corrected isOnSite to $onSite');
       }
 
@@ -336,7 +343,8 @@ class LocationService {
 
     final emp = await _firestoreService.getEmployee(_clockNo!);
     if (emp != null) {
-      await _firestoreService.updateMyPresence(isOnSite: isEntering);
+      await _firestoreService.updateMyPresence(
+          isOnSite: isEntering, source: 'manual_test');
     }
     await _firestoreService.logGeoFenceEvent(
       clockNo: _clockNo!,
