@@ -40,9 +40,730 @@ from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
 <hr />
 <h2
+id="2026-06-17--more-reliable-on-site-detection--required-security-update-v211">2026-06-17
+— More reliable on-site detection + required security update
+(v2.1.1)</h2>
+<p>A focused update that makes on-site / off-site detection dependable,
+gives you a one-tap fix for the phone settings that silently block job
+alerts, and prepares the app for a server-side security tightening.
+<strong>This is a required update</strong> — see the note at the
+end.</p>
+<h3 id="user-facing-changes">User-facing changes</h3>
+<p><strong>More reliable on-site / off-site detection</strong></p>
+<p>The app is now much better at registering when you arrive at and
+leave the site. Background detection is more consistent, so you receive
+the job alerts meant for you while you're on site — and they correctly
+stop once you've left. Behind this, every presence change (the geofence,
+the 30-minute on-site check, and the check when you open the app) now
+flows through one consistent path.</p>
+<p><strong>Location &amp; battery health banner</strong></p>
+<p>If a setting that background geofencing depends on gets switched off
+— <strong>Location set to "Allow all the time"</strong> or the
+<strong>battery-optimisation exemption</strong> — the Home screen now
+shows an orange banner warning that your on-site alerts may not work,
+with a one-tap <strong>Fix</strong>. Android won't always re-show the
+"Allow all the time" prompt, so Fix takes you straight to the right
+Settings page when it's needed. The banner clears itself once both are
+granted.</p>
+<p><strong>Web app — automatic sign-off when idle</strong></p>
+<p>On the web version, if you leave the app open and step away, you're
+now automatically marked <strong>off-site</strong> after a period of
+inactivity, or as soon as the browser tab is hidden or closed. This
+stops managers who leave the dashboard open on a PC from being left
+showing "on site" after they've gone home. (The web app never marks you
+on-site by itself — arriving on site is still detected only by the
+phone.)</p>
+<p><strong>Onboarding shows the real site radius</strong></p>
+<p>The permissions walkthrough now reads the live geofence radius from
+settings instead of a fixed "800 m", so what new staff are told matches
+the barrier the admin has actually configured.</p>
+<p><strong>Admin — on-site presence view</strong></p>
+<p>The <strong>On Site</strong> tab in Admin Settings now shows how long
+each person has been on site, and flags anyone who has been on site for
+more than <strong>14 hours</strong> so you can check whether their
+detection has stopped updating. Manually toggling someone on / off-site
+is now recorded with a timestamp.</p>
+<h3 id="under-the-hood-no-ui-change">Under the hood (no UI change)</h3>
+<ul>
+<li><strong>One central presence log</strong> — the geofence, the
+30-minute check, the app-open check, web inactivity, and admin changes
+now all write to a single <code>app_geofence</code> record, replacing
+two separate (and partly mismatched) logs. Every adjustment is stored
+with its source.</li>
+<li><strong>Server-stamped presence times</strong> — the server now
+stamps each on-site / off-site change with a trustworthy time and its
+source, which is what powers the new admin view and the 14-hour
+flag.</li>
+<li><strong>Background write prepared for the security update</strong> —
+the native geofence write now updates only your own presence fields,
+through a path that stays valid once the server-side lockdown below is
+switched on.</li>
+<li><strong>Required update / security tightening</strong> — this build
+routes employee and job-number writes through server-validated
+functions, ahead of locking those collections down. <strong>Older
+versions will stop being able to create job cards and refresh their
+notifications once the lockdown is switched on shortly — so please
+update.</strong></li>
+</ul>
+<h3 id="a-note-on-update-frequency">A note on update frequency</h3>
+<p>Thank you for bearing with the frequent updates while the app was
+being built out. The core is now stabilising, so updates will become
+<strong>much less frequent</strong> from here on.</p>
+<hr />
+<h2
+id="2026-06-11--job-cards-data-integrity-overhaul--admin-upgrade">2026-06-11
+— Job Cards data integrity overhaul + admin upgrade</h2>
+<p>Mobile app and backend hardening across all data paths, plus a full
+Admin screen redesign.</p>
+<h3 id="user-facing-changes-1">User-facing changes</h3>
+<p><strong>Job History is now fully populated</strong></p>
+<p>Closed job cards from April 2026 onwards now have correct close
+dates. The <strong>Job History</strong> screen, Manager Dashboard KPIs
+(Avg Resolution Time, Closed Today, Completion %, Overdue counts), and
+CTP Pulse resolution metrics are now accurate going back to the start of
+the system. Previously, <code>closedAt</code> was never written by the
+app, leaving those metrics blank.</p>
+<p><strong>Offline create — informative early block</strong></p>
+<p>The Create Job Card screen now checks connectivity immediately on
+open and before the final save. If you are offline, a full-width red
+banner appears: <em>"No connection — technicians cannot be alerted. Move
+to signal to submit."</em> The Save button is disabled while the banner
+is showing. Previously the form could be submitted offline but the
+notification system was never triggered, meaning technicians had no idea
+a job existed.</p>
+<blockquote>
+<p>The Create Job Card tile on the Home screen also shows a greyed
+disabled state with a reason when you are offline or off-site, instead
+of silently hiding.</p>
+</blockquote>
+<p><strong>Sync indicator now works correctly</strong></p>
+<p>The orange sync badge at the top of the Home screen now correctly
+reflects queued offline writes. Previously it never showed because the
+indicator was watching the wrong storage key.</p>
+<p><strong>"Assign Self" from notification now works
+correctly</strong></p>
+<p>Tapping "Assign Self" from a push notification no longer accidentally
+resets the job to Open status or removes co-assignees. The job correctly
+moves to In-Progress, the technician is added to the assigned list, and
+other assignments are preserved.</p>
+<p><strong>Daily Review: mark on view</strong></p>
+<p>A job card is now stamped as reviewed the moment you open it in Daily
+Review, not when the screen first loads. The pending count decrements
+one-by-one as you work through the queue.</p>
+<p><strong>Admin — new Comms tab</strong></p>
+<p>Admins have a new <strong>Comms</strong> tab in Admin Settings for
+sending broadcast update notifications to all employees. A pre-filled
+message template is provided and can be edited before sending. After
+sending, a result summary shows how many devices received it, how many
+are parked for off-site users, and how many have no registered token.
+Recent broadcasts are listed below.</p>
+<p><strong>Admin — kill-switch in Settings tab</strong></p>
+<p>The Settings tab in Admin Settings now includes an <strong>App Update
+Control</strong> card with two fields: <strong>Minimum Supported
+Build</strong> and <strong>Download URL</strong>. Setting a minimum
+build number blocks any device running an older version on next app
+launch — the app shows a blocking update screen with the download link.
+This works as a server-side control independent of Remote Config.</p>
+<p><strong>Admin screen — full design system update</strong></p>
+<p>The Admin screen is fully updated to the app's design system (theme
+colours, typography, input styles, card surfaces, section headers) and
+now has six tabs with outlined icons.</p>
+<h3 id="under-the-hood-no-ui-change-affects-data-reliability">Under the
+hood (no UI change, affects data reliability)</h3>
+<ul>
+<li><strong>Stream error isolation</strong> — all Firestore list streams
+now skip corrupted or unparseable documents instead of crashing. One bad
+document can no longer break the View Jobs, Home, or Daily Review screen
+for all users.</li>
+<li><strong>Sync replay fix</strong> — offline edits replayed on
+reconnect now preserve Firestore <code>Timestamp</code> fields
+correctly. Previously, replayed edits could write ISO date strings that
+caused every list screen to error.</li>
+<li><strong>Field-scoped writes</strong> — status changes and
+assignments now write only the changed fields (<code>update</code>)
+instead of the full document. This prevents concurrent writes from
+reverting each other's changes.</li>
+<li><strong>Comments dual-write</strong> — comment and note updates are
+now written to a structured <code>commentsLog</code> array alongside the
+legacy string field. CTP Pulse reads the structured log for the Jobs
+table.</li>
+<li><strong>Bounded queries</strong> — View Job Cards and Daily Review
+now use per-status server-filtered queries with a page limit instead of
+streaming every job card. Significantly reduces Firestore read costs on
+large collections.</li>
+<li><strong><code>onJobCardWritten</code> audit trigger</strong> — new
+server-side trigger appends an entry to <code>job_card_audit</code> on
+every job card write, regardless of which client made the change.</li>
+<li><strong><code>onJobCardAssigned</code> rewritten</strong> — diffs
+the <code>assignedClockNos</code> array to detect actual changes; sends
+assignment notifications only to newly-added assignees.</li>
+<li><strong><code>closedAt</code> backfill</strong> — 50 existing closed
+job cards had <code>closedAt</code> populated from
+<code>completedAt</code> via a one-time repair script run
+2026-06-11.</li>
+</ul>
+<hr />
+<h2 id="2026-06-10--wastetrack-production-grade-overhaul">2026-06-10 —
+WasteTrack production-grade overhaul</h2>
+<h3 id="user-facing-changes-2">User-facing changes</h3>
+<p><strong>New load number format — W-NNNN</strong></p>
+<p>Load numbers are now <strong>global sequential</strong>:
+<code>W-0001</code>, <code>W-0042</code>, <code>W-1500</code>. They
+never reset and are unique forever. The old date-bucketed format
+(<code>WT-YYYYMMDD-NNN</code>) has been retired. All new loads receive a
+<code>W-NNNN</code> number automatically; existing loads keep their old
+number until they are reassigned on next sync.</p>
+<p><strong>Home screen — active loads + last 10 completed</strong></p>
+<p>The Loads tab now shows:</p>
+<ul>
+<li><strong>All active loads</strong> (Scheduled, Draft, Pending
+Weighbridge, Pending Cost Review) — no page limit, every in-flight load
+is always visible.</li>
+<li><strong>Last 10 completed/cancelled</strong> loads below a divider,
+ordered by completion date (most recent first).</li>
+</ul>
+<p>Previously, a 50-load page limit could silently hide active loads
+when many completed loads existed.</p>
+<p><strong>Admin cost review — itemized per-item table</strong></p>
+<p>The Review tab now shows a <strong>line-by-line cost
+breakdown</strong> for each waste item on the load:</p>
+<table>
+<thead>
+<tr>
+<th>Subtype</th>
+<th>Weight</th>
+<th>R/kg</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reelends</td>
+<td>320 kg</td>
+<td>0.90</td>
+<td>R 288.00</td>
+</tr>
+<tr>
+<td>Slab Waste</td>
+<td>180 kg</td>
+<td>0.85</td>
+<td>R 153.00</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>R/kg</strong> is pre-filled from the contractor's rate
+register when available; leave it blank if unknown and the system will
+warn with ⚠.</li>
+<li><strong>Calculated total</strong> (sum of line values) is shown
+read-only.</li>
+<li><strong>Approved amount</strong> defaults to the calculated total
+but can be edited to match the physical accounts document.</li>
+<li>Rates entered or corrected during review are saved back to the rate
+register automatically for future loads.</li>
+<li>Both the <strong>calculated</strong> and <strong>approved</strong>
+amounts are stored separately for audit — any discrepancy is visible in
+CTP Pulse Reports.</li>
+</ul>
+<p><strong>PDF share on completed loads</strong></p>
+<p>On any completed load, tap the <strong>share icon</strong> (↑) in the
+load detail app bar to generate and share a PDF summary: load number,
+contractor, driver, itemized weights and costs, weighbridge details, and
+approval record.</p>
+<p><strong>Offline schedule improvements</strong></p>
+<ul>
+<li>Loads scheduled while offline are queued and sync automatically when
+connectivity returns. The load number (<code>W-NNNN</code>) is assigned
+on sync.</li>
+<li>Stock items linked to an offline-submitted collection are also
+queued — they will not be permanently stuck as <em>Loaded</em> if the
+parent load never reached Firestore.</li>
+</ul>
+<h3 id="under-the-hood-no-ui-change-but-affects-data-reliability">Under
+the hood (no UI change but affects data reliability)</h3>
+<ul>
+<li>Deleting a waste item is now a <strong>single atomic
+transaction</strong> — the load weight and stock status can no longer
+end up inconsistent if the network drops mid-delete.</li>
+<li>The <code>updateLoad</code> operation now correctly queues its
+payload when offline without leaking
+<code>FieldValue.serverTimestamp()</code> into the local Hive
+store.</li>
+<li><code>deleteWasteItem</code> blocks with a clear error if offline —
+supervised admin action, not a field worker action.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-05--production-release-new-job-types-module-toggles-admin-improvements">2026-06-05
+— Production release: new job types, module toggles, admin
+improvements</h2>
+<h3 id="user-facing-changes-3">User-facing changes</h3>
+<p><strong>New job types</strong></p>
+<ul>
+<li><strong>Building Maintenance</strong> — a new job card type for
+building faults. Routes directly to the on-site Building Maintenance
+team and the Workshop Manager. No escalation timer fires — like
+Maintenance type, it is excluded from the escalation engine.</li>
+<li><strong>Pre Press Specialist</strong> — a new type visible only when
+the selected department is "Pre Press". Routes to the on-site Pre Press
+Specialist and the Workshop Manager. Also excluded from escalation.</li>
+<li>Both new types show a contextual info banner in the Create Job Card
+form explaining how they are routed.</li>
+</ul>
+<p><strong>Module enable / disable now in Settings</strong></p>
+<ul>
+<li>Admins can now enable or disable the <strong>Waste
+Management</strong> module and the <strong>Fleet Maintenance</strong>
+module directly from <strong>Settings → Modules</strong>. Previously
+this required navigating inside each module's own admin tab. Turning a
+module off hides its tab from all users immediately.</li>
+</ul>
+<p><strong>Admin access now Firestore-driven</strong></p>
+<ul>
+<li>Admin status is now set per user in Firestore
+(<code>isAdmin: true</code> on the employee document) instead of being
+hardcoded to a single clock number. To grant or revoke admin access,
+edit the employee's Firestore record — no code change or app release
+required.</li>
+</ul>
+<p><strong>Waste Management — production release</strong></p>
+<ul>
+<li>The pilot-mode controls have been removed from the Waste Admin
+screen. WasteTrack is now a full production module — no clock-number
+restriction or pilot list.</li>
+<li>The disabled state for Waste now shows a plain "Waste Management is
+disabled — contact your administrator" message instead of pilot-mode
+wording.</li>
+</ul>
+<h3 id="developer--maintenance-changes">Developer / maintenance
+changes</h3>
+<ul>
+<li><strong>Update service</strong> — In-app update checks now run every
+4 hours (was 24 hours). When Remote Config keys are not yet published,
+the service retries after 1 hour instead of waiting the full interval —
+prevents a misconfigured RC from silencing update prompts
+indefinitely.</li>
+<li><strong>AppColors null crash fixed</strong> —
+<code>Theme.of(context).appColors</code> now falls back to the light
+theme defaults instead of throwing a null check error when a dialog or
+route loses the theme extension context. Resolves a Crashlytics crash
+(1.2.1).</li>
+<li><strong>USE_FULL_SCREEN_INTENT permission</strong> — The Android 14+
+full-screen intent settings redirect has been moved from
+<code>MainActivity.onCreate</code> (which fired on every cold start) to
+the user-initiated permissions flow inside the app. The system settings
+page no longer appears automatically on first launch.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-04--crash-fix-in-app-docs-fixes-fleet-user-guide">2026-06-04
+— Crash fix, in-app docs fixes, Fleet user guide</h2>
+<h3 id="user-facing-changes-4">User-facing changes</h3>
+<ul>
+<li><strong>Crash fix</strong> — A crash affecting some devices has been
+resolved. On certain devices, the home screen or daily review screen
+would crash silently after being opened from the background or after a
+network disruption. This has been fixed and will no longer occur.</li>
+<li><strong>WasteTrack User Guide now opens correctly</strong> — The
+in-app WasteTrack User Guide was showing raw page boilerplate instead of
+its content. The guide is now bundled correctly and displays as
+intended.</li>
+<li><strong>New: Fleet Maintenance User Guide</strong> — A full Fleet
+Maintenance guide is now available in Settings → Documentation for fleet
+users (reporters, the Hyster mechanic, cost managers, and admins). It
+covers reporting forklift/grab faults, logging work, recording costs,
+and reports. It only appears for users with Fleet access when the module
+is enabled.</li>
+<li><strong>Documentation list cleaned up</strong> — Two developer-only
+references (Cloud Functions Deployment, Firebase Security Rules) that
+could not open in-app have been removed from the documentation list.
+They remain available to developers outside the app.</li>
+</ul>
+<h3 id="developer--maintenance-changes-1">Developer / maintenance
+changes</h3>
+<ul>
+<li><strong>Firestore stream <code>onError</code> handlers</strong> —
+Added <code>onError</code> callbacks to all five Firestore
+<code>.snapshots()</code> stream subscriptions in
+<code>home_screen.dart</code> (employee stream, open jobs, in-progress
+jobs, review count) and <code>daily_review_screen.dart</code> (all job
+cards). Previously a <code>PlatformException(channel-error)</code> from
+the Firestore Pigeon transport propagated as an unhandled stream error
+and crashed the app. The error is now caught, logged to debug output,
+and the screen remains functional with its last known data.</li>
+<li><strong>FCM subscription leak fixed</strong> —
+<code>FirebaseMessaging.onMessageOpenedApp.listen()</code> in
+<code>HomeScreen</code> was never stored or cancelled on
+<code>dispose()</code>. Each login session added a permanent listener
+that accumulated in memory and could trigger <code>setState()</code> on
+disposed widgets. Now stored in <code>_messagingSubscription</code> and
+cancelled in <code>dispose()</code>.</li>
+<li><strong>Landing page — Remote Config driven</strong> —
+<code>ctp-job-cards-landing.web.app</code> now fetches
+<code>latest_version</code>, <code>latest_build</code>,
+<code>download_url</code>, and <code>release_notes</code> from Firebase
+Remote Config on every page load. Future releases only require a Remote
+Config update — no HTML edits or redeployment needed. Fallback values in
+the HTML ensure the page renders instantly even if Remote Config is
+unreachable.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-03--ctp-pulse-web-dashboard-theme--contrast-fixes">2026-06-03
+— CTP Pulse web dashboard: theme &amp; contrast fixes</h2>
+<p>Web-only update to CTP Pulse (factory board at port 3003). No mobile
+changes.</p>
+<h3 id="what-changed">What changed</h3>
+<ul>
+<li><strong>Status badge contrast</strong> — Overtime entry status
+badges (Pending, Workshop Approved, Approved, Cancelled) now use
+correctly contrasting colours in both light and dark modes. Previously
+the coloured text was too light to read in light mode.</li>
+<li><strong>KPI trend colours</strong> — Declining-trend indicators on
+KPI cards now correctly show in red (destructive colour). Previously
+they had no colour at all.</li>
+<li><strong>Fleet severity labels</strong> — Issue severity labels (Out
+of Service, High, Medium, Low) in the Fleet page open-issues table now
+render in legible colours in dark mode.</li>
+<li><strong>Fleet cost chart</strong> — The "Cost by Category per Asset"
+stacked bar chart now has correctly themed axis labels, gridlines,
+tooltip, and legend in dark mode. Previously axis text was
+near-invisible in dark mode.</li>
+<li><strong>Native date/select inputs</strong> — Date pickers and
+dropdown filter selects now follow the app's dark theme; previously the
+browser rendered them with a white background in dark mode.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-03--fleet-maintenance-module-hyster-forklifts--grabs">2026-06-03
+— Fleet Maintenance module (Hyster forklifts &amp; grabs)</h2>
+<p>A new <strong>Fleet</strong> tab for tracking forklift and grab
+maintenance — separate from normal job cards. It appears once an admin
+enables it in Fleet Settings and you have a fleet role.</p>
+<h3 id="user-facing-changes-5">User-facing changes</h3>
+<p><strong>New: Fleet tab</strong></p>
+<ul>
+<li><strong>Report a problem</strong> — operators and shift leads in the
+configured departments can report an issue on a forklift or grab: pick
+the asset, choose severity (Low / Medium / High / Out of Service),
+confirm the shift (auto-detected), describe the fault, and attach up to
+3 photos.</li>
+<li><strong>Out of Service alerts</strong> — when an asset is reported
+out of service, the Hyster mechanic and the cost manager(s) get an
+immediate push notification (or it waits in their notification inbox if
+they're off-site). The asset shows an orange <strong>OOS</strong> badge
+everywhere it appears. High-severity issues go to the notification inbox
+without a push.</li>
+<li><strong>Mechanic queue &amp; work logging</strong> — the mechanic
+sees open issues sorted by severity, can <strong>Acknowledge</strong> an
+issue, then resolve it either by logging the work (work type, labour
+hours, machine-hour reading, parts used, photos) or with a quick
+resolution note. Each work record gets a number like
+<code>FM-20260603-001</code>.</li>
+<li><strong>Costs (managers only)</strong> — the overseeing manager
+records cost lines per asset (parts / labour / invoice / other, with
+amount, invoice ref and supplier), views month and year-to-date spend
+per machine, and exports a full CSV. <strong>The mechanic never sees
+money</strong> — work records only show a "Costs pending / Costs
+entered" label.</li>
+<li><strong>Admin</strong> — the asset register (add/edit forklifts and
+grabs), reporter departments, cost-manager list, asset/work types, and
+the module on/off switch all live in <strong>Fleet
+Settings</strong>.</li>
+</ul>
+<h3 id="who-sees-what">Who sees what</h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>How you're recognised</th>
+<th>What you can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fleet Mechanic</td>
+<td>Workshop department + "Hyster Mechanic" position</td>
+<td>Log work, acknowledge/resolve issues</td>
+</tr>
+<tr>
+<td>Fleet Reporter</td>
+<td>Your department is enabled in Fleet Settings</td>
+<td>Report issues, track your own</td>
+</tr>
+<tr>
+<td>Cost Manager</td>
+<td>Your clock number is on the cost-manager list</td>
+<td>Enter costs, view reports, export CSV</td>
+</tr>
+<tr>
+<td>Fleet Admin</td>
+<td>System admin</td>
+<td>Manage assets and all settings</td>
+</tr>
+</tbody>
+</table>
+<h3 id="developer--architecture-changes">Developer / architecture
+changes</h3>
+<ul>
+<li>New <code>fleet_*</code> Firestore collections
+(<code>fleet_assets</code>, <code>fleet_issues</code>,
+<code>fleet_work_records</code> + <code>fleet_work_parts</code>,
+<code>fleet_cost_lines</code>, <code>fleet_types</code>,
+<code>fleet_settings</code>, <code>fleet_counters</code>,
+<code>fleet_audit</code>). Same signed-in auth model as WasteTrack; role
+enforcement is client-side.</li>
+<li>Cloud Functions in the monorepo <code>firebase/functions</code>
+codebase: <code>createFleetWorkRecord</code> (atomic FM-number),
+<code>onFleetIssueCreated</code> (OOS notifications + asset badge),
+<code>onFleetIssueUpdated</code> (clears badge on resolve).</li>
+<li>CTP Pulse gains a <strong>Fleet Maintenance</strong> board module
+(open issues, work hours MTD, cost MTD, avg resolution time) plus a
+<code>/fleet</code> detail page with cost-by-asset and cost-by-category
+charts and a live open-issues table. Access via the <code>fleet</code>
+board module in <code>/admin/users</code>.</li>
+<li>See <code>docs/architecture/visualization.md</code> for the full
+role/screen matrix and <code>docs/COLLECTIONS.md</code> for the
+schemas.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-03--job-card-history-screen-firestore-read-cost-fixes">2026-06-03
+— Job Card History screen, Firestore read cost fixes</h2>
+<h3 id="user-facing-changes-6">User-facing changes</h3>
+<p><strong>New: Job Card History screen</strong></p>
+<ul>
+<li>A dedicated <strong>Job History</strong> quick-action tile is now on
+the Home screen for all roles.</li>
+<li>The screen lets you search the full closed job card archive without
+streaming the entire collection — only the records matching your filter
+are downloaded.</li>
+<li><strong>Server-side filters</strong>: date preset (Last 7 / 30 / 90
+days, custom range, or all time), department, area, and machine. Each
+change triggers a fresh Firestore fetch capped at 50 records per page.
+Use <strong>Load More</strong> for pagination.</li>
+<li><strong>Client-side refinement</strong> (no extra reads): Type chips
+(Mechanical / Electrical / Mech-Elec / Maintenance), Priority chips
+(P1–P5), and free-text search across description, machine, part, notes,
+and operator.</li>
+<li>Tap any result to open the full Job Card Detail screen.</li>
+</ul>
+<p><strong>Create Job Card — similar jobs panel</strong></p>
+<ul>
+<li>The "previous jobs for this machine" sidebar previously downloaded
+every job card in the system and filtered on-device. It now uses
+server-filtered indexed queries — only the records that match the
+current department → area → machine → part selection are fetched.</li>
+</ul>
+<h3 id="developer--architecture-changes-1">Developer / architecture
+changes</h3>
+<ul>
+<li><strong><code>FirestoreService.getInProgressJobCards()</code></strong>
+— new server-filtered stream for <code>status == inProgress</code>
+jobs.</li>
+<li><strong><code>FirestoreService.searchClosedJobCards()</code></strong>
+— new one-shot fetch with server-side equality filters (department,
+area, machine) and an optional date range on <code>closedAt</code>, plus
+cursor-based pagination. Type and priority filtering applied client-side
+on the returned page.</li>
+<li><strong>Home screen count badge</strong> — the two
+<code>getAllJobCards()</code> live listeners used to count the
+open/in-progress badge and render the recent jobs panel have been
+replaced with <code>getOpenJobCards()</code> +
+<code>getInProgressJobCards()</code> streams. Closed documents are never
+downloaded to the home screen.</li>
+<li><strong><code>closed_jobs_screen.dart</code> removed</strong> —
+superseded by <code>job_card_history_screen.dart</code>.</li>
+<li><strong>3 new Firestore composite indexes</strong> in
+<code>firestore.indexes.json</code>:
+<code>status + department + closedAt DESC</code>, <code>+ area</code>,
+<code>+ machine</code>. Required for the server-side history queries.
+Deploy with <code>firebase deploy --only firestore:indexes</code>.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-02--wastetrack-ux-overhaul-notification-inbox-fixes">2026-06-02
+— WasteTrack UX overhaul, notification inbox fixes</h2>
+<h3 id="user-facing-changes-7">User-facing changes</h3>
+<p><strong>WasteTrack home screen</strong></p>
+<ul>
+<li><strong>Live updates</strong> — The load list now updates
+automatically in real time. You no longer need to pull down to refresh;
+new or updated loads appear as soon as they change.</li>
+<li><strong>Actions moved to overflow menu</strong> — The toolbar
+buttons (Pending Weighbridge, Reports, Waste Admin, Enable/Disable
+toggle) are now grouped under a <strong>⋮ More actions</strong> menu at
+the top right. The cloud sync retry button remains visible at all times
+when there are queued items.</li>
+<li><strong>Filter empty states</strong> — When the Today or This Week
+filter returns no results, the screen now shows a clear "No loads match"
+message with a tap-to-clear button instead of a blank list.</li>
+<li><strong>Contractor name on scheduled load cards</strong> — Incoming
+scheduled load cards now show the contractor's display name instead of
+the internal contractor ID.</li>
+</ul>
+<p><strong>WasteTrack load detail screen</strong></p>
+<ul>
+<li><strong>Waste items now listed</strong> — The load detail screen now
+shows all waste items in the load (subtype, weight, photo count)
+directly on the page. Previously you could not see the item breakdown
+from the detail view.</li>
+<li><strong>Status progress stepper</strong> — A four-step progress bar
+(Created → Signature → Weighbridge → Complete, or Scheduled → Collecting
+→ Weighbridge → Complete for two-phase loads) is shown at the top of the
+detail screen so you can see at a glance where the load is in its
+lifecycle.</li>
+<li><strong>Weighbridge action banner</strong> — When a load is in
+<strong>Pending Weighbridge</strong> status, a highlighted amber banner
+now appears at the top of the screen prompting the manager to enter the
+weighbridge weight. Previously this was easy to miss.</li>
+<li><strong>Collector name shown</strong> — The "Collected by" field now
+shows the guard's name instead of their clock number.</li>
+</ul>
+<p><strong>WasteTrack create load flow</strong></p>
+<ul>
+<li><strong>Opens load detail after saving</strong> — After creating a
+new load, the app now navigates you directly to the load detail screen.
+You can immediately capture the driver signature without going back to
+the home screen to find the load.</li>
+<li><strong>Waste type icons</strong> — The waste type selection grid
+now shows category-specific icons (hazardous, recyclables, cardboard,
+metal, e-waste, organic) instead of a generic trash icon for every
+type.</li>
+<li><strong>Add item is a slide-up sheet</strong> — The "Add Waste Item"
+form is now a slide-up bottom sheet instead of a pop-up dialog. This is
+more stable when the camera is involved and easier to use on smaller
+screens.</li>
+</ul>
+<p><strong>WasteTrack begin collection</strong></p>
+<ul>
+<li>Same camera-stable slide-up sheet for adding waste items during
+collection (consistent with create load flow above).</li>
+</ul>
+<p><strong>Notification inbox</strong></p>
+<ul>
+<li><strong>On-site status indicator in app bar</strong> — The
+notification inbox screen's app bar now shows the same orange → green
+(on-site) / orange → red (off-site) gradient as every other screen in
+the app.</li>
+</ul>
+<h3 id="developer--architecture-changes-2">Developer / architecture
+changes</h3>
+<ul>
+<li><strong>Firestore rules: notification_inbox added</strong> — The
+<code>notification_inbox/{clockNo}/items</code> subcollection was
+missing from the Firestore security rules, causing permission denied
+errors when the Flutter app tried to read or mark inbox items. Rule
+added to the Job Cards tier. Deployed to production.</li>
+<li><strong><code>WasteLoad</code> model: <code>contractorName</code>,
+<code>collectedByName</code> fields</strong> — Both are now stored on
+the load document at creation/collection time and read back for display,
+avoiding secondary lookups.</li>
+<li><strong><code>WasteService.getLoad()</code></strong> — New method
+for fetching a single load by ID, used by the post-creation
+navigation.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-01--wastetrack-module-offsite-notification-inbox-admin-on-site-view-settings-redesign">2026-06-01
+— WasteTrack module, offsite notification inbox, admin on-site view,
+settings redesign</h2>
+<h3 id="user-facing-changes-8">User-facing changes</h3>
+<p><strong>WasteTrack — Waste Management Module</strong></p>
+<p>A full waste management module is now integrated into the app for
+Security department staff. Accessible via the <strong>Waste</strong> tab
+in the bottom navigation bar (only visible to Security Manager, Security
+Guard, and Admin roles).</p>
+<ul>
+<li><strong>Security Manager</strong> — Schedule waste loads with
+contractor, waste type, and date. Edit or cancel scheduled loads before
+collection begins. Review completed loads and deviation reports. Export
+CSV reports by date range.</li>
+<li><strong>Security Guard</strong> — Begin collections for scheduled
+loads. Add waste items with recorded weights and photos. Capture the
+contractor's on-screen signature. Enter the actual weighbridge weight
+after the truck returns from the external scale.</li>
+<li><strong>Deviation alerts</strong> — When the difference between the
+recorded weight and the actual weighbridge weight exceeds 5% or 50 kg,
+the load is flagged for manager review.</li>
+<li><strong>Load numbering</strong> — Each load is assigned an automatic
+daily sequence number (format: WT-YYYYMMDD-NNN).</li>
+<li><strong>Admin</strong> — Full WasteTrack configuration panel: manage
+waste types, sub-types, cost rates, and contractor records.</li>
+</ul>
+<p><strong>Offsite Notification Hold (Notification Inbox)</strong></p>
+<ul>
+<li><p><strong>Notification Inbox</strong> — Notifications are no longer
+sent as push alerts when you are off site. Instead they are held in a
+new <strong>Notification Inbox</strong> (bell icon in the top bar).
+Unread items show a live count badge. When you come back on site and
+open the app, a banner tells you how many are waiting. Tap any item in
+the inbox to open the related job card and mark it as read.</p></li>
+<li><p><strong>Notifications affected by offsite hold</strong> — All of
+the following are now held rather than pushed when the recipient is
+off-site:</p>
+<ul>
+<li>Job assignment (assigned directly by a manager while you are off
+shift)</li>
+<li>Job completion and update acknowledgements (sent back to the person
+who raised the job)</li>
+<li>"I'm Busy" responses from technicians (sent back to the job
+creator)</li>
+<li>Copper sell threshold alert (for authorised users only)</li>
+</ul></li>
+</ul>
+<p><strong>Admin &amp; Settings</strong></p>
+<ul>
+<li><p><strong>Admin — On Site tab</strong> — A new <strong>On
+Site</strong> tab in Admin Settings shows every employee currently
+marked on-site, grouped by department, updating in real time. Useful for
+supervisors to see who is available on the floor.</p></li>
+<li><p><strong>Admin — Employee list</strong> — The
+<code>isOnSite</code> column in the employee table is now a green
+<strong>"On Site"</strong> / grey <strong>"Off Site"</strong> status
+chip. Tapping the chip toggles the employee's status directly — no need
+to open the edit row.</p></li>
+<li><p><strong>Settings screen redesigned</strong> — Reorganised into
+labelled sections: Your Profile, Preferences, Notifications, App &amp;
+Connectivity, App Permissions, Admin, Account. Notification test buttons
+moved to a dedicated sub-screen (Settings → Notifications → Notification
+Tests) to reduce clutter.</p></li>
+<li><p><strong>Admin settings — Tab icons</strong> — All five admin tabs
+now display an icon alongside the label for faster navigation.</p></li>
+<li><p><strong>Waste screens — contrast fixes</strong> — Several waste
+screens had light-grey text or icons that were hard to read on white
+backgrounds:</p>
+<ul>
+<li>Weight boxes on the load detail screen now use dark text when no
+weighbridge data has been entered (was grey-on-grey).</li>
+<li>Disabled-state block icons across create, home, and reports screens
+are now a darker grey.</li>
+<li>The empty items placeholder in the begin-collection screen has a
+more visible border.</li>
+</ul></li>
+</ul>
+<h3 id="developer--architecture-changes-3">Developer / architecture
+changes</h3>
+<ul>
+<li><strong>WasteTrack collections</strong> — 11 new Firestore
+collections added under the <code>waste_</code> prefix (see
+<code>lib/constants/collections.dart</code>).</li>
+<li><strong><code>createWasteLoad</code> Cloud Function</strong> —
+Callable function in <code>africa-south1</code> handles atomic load
+creation and daily sequence numbering.</li>
+<li><strong><code>lib/constants/collections.dart</code></strong> — New
+canonical constants file for all Firestore collection names. All
+services now use constants instead of inline string literals.</li>
+<li><strong>Functions codebase named <code>jobcards</code></strong> —
+Deploys from this repo are now scoped to Job Cards functions only;
+cannot accidentally wipe WasteTrack/Overtime functions in the shared
+Firebase project.</li>
+</ul>
+<hr />
+<h2
 id="2026-05-23--dashboard-overhaul-screen-consistency-and-ui-improvements">2026-05-23
 — Dashboard overhaul, screen consistency, and UI improvements</h2>
-<h3 id="user-facing-changes">User-facing changes</h3>
+<h3 id="user-facing-changes-9">User-facing changes</h3>
 <ul>
 <li><strong>Manager Dashboard rebuilt</strong> — department and
 date-range filters are now displayed above the KPI section. Nine KPI
@@ -88,7 +809,7 @@ pure black.</li>
 id="2026-05-21--job-card-detail-redesign-onboarding-fix-off-site-gate-docs-accuracy-pass">2026-05-21
 — Job card detail redesign, onboarding fix, off-site gate, docs accuracy
 pass</h2>
-<h3 id="user-facing-changes-1">User-facing changes</h3>
+<h3 id="user-facing-changes-10">User-facing changes</h3>
 <ul>
 <li><strong>Job card detail screen redesigned</strong> — unified tile
 layout, streamlined sections and visual hierarchy across the Details,
