@@ -27,6 +27,18 @@ class _PermissionsOnboardingScreenState
   bool _isLoading = false;
   final PageController _pageController = PageController();
 
+  // Live geofence radius from the central `settings/geofence` doc, so the
+  // onboarding copy always matches the real barrier instead of a hard-coded "800 m".
+  int _radiusMeters = kDefaultGeofence.radius.round();
+
+  @override
+  void initState() {
+    super.initState();
+    loadGeofenceConfig().then((cfg) {
+      if (mounted) setState(() => _radiusMeters = cfg.radius.round());
+    });
+  }
+
   // Fired when the user taps "Next" — requests the permissions explained by the
   // page they are LEAVING, awaiting each system dialog so it is resolved BEFORE
   // the next screen appears. By the time the final permissions-status page is
@@ -115,8 +127,8 @@ class _PermissionsOnboardingScreenState
         const _JobCardFlowPage(),
         const _JobStatusPage(),
         const _PriorityLevelsPage(),
-        const _EscalationPage(),
-        const _PermissionsPage(),
+        _EscalationPage(radiusMeters: _radiusMeters),
+        _PermissionsPage(radiusMeters: _radiusMeters),
       ];
 
   Future<void> _completeOnboarding() async {
@@ -824,7 +836,8 @@ class _PriorityLevelsPage extends StatelessWidget {
 
 // PAGE 6 - How Escalation Works
 class _EscalationPage extends StatelessWidget {
-  const _EscalationPage();
+  final int radiusMeters;
+  const _EscalationPage({required this.radiusMeters});
 
   @override
   Widget build(BuildContext context) {
@@ -909,14 +922,14 @@ class _EscalationPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            const _PermissionPreface(
+            _PermissionPreface(
               perms: [
                 _PermDetail(
                   Icons.location_on_outlined,
                   "Location — Allow all the time",
-                  "Detects when you arrive on site (within 800 m) so you only get alerts for jobs you can attend. Background ('Allow all the time') access is required for this to work when the app is closed.",
+                  "Detects when you arrive on site (within $radiusMeters m) so you only get alerts for jobs you can attend. Background ('Allow all the time') access is required for this to work when the app is closed.",
                 ),
-                _PermDetail(
+                const _PermDetail(
                   Icons.battery_saver,
                   "Ignore battery optimisation",
                   "Keeps geofencing alive so on-site detection keeps working when your phone is idle.",
@@ -988,7 +1001,8 @@ class _EscalationPage extends StatelessWidget {
 
 // PAGE 7 - Permissions + Test Buttons
 class _PermissionsPage extends ConsumerStatefulWidget {
-  const _PermissionsPage();
+  final int radiusMeters;
+  const _PermissionsPage({required this.radiusMeters});
   @override
   ConsumerState<_PermissionsPage> createState() => _PermissionsPageState();
 }
@@ -1065,10 +1079,10 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
             const Text("Let's Set This Up",
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            const Text(
-              "We need these permissions so the app can work properly for you. Geofencing detects when you arrive on site (within 800 m) so you only get alerts for jobs you can actually attend.",
+            Text(
+              "We need these permissions so the app can work properly for you. Geofencing detects when you arrive on site (within ${widget.radiusMeters} m) so you only get alerts for jobs you can actually attend.",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15),
+              style: const TextStyle(fontSize: 15),
             ),
             const SizedBox(height: 20),
             for (final item in items)

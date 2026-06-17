@@ -163,18 +163,45 @@ class FirestoreService {
   /// `updateEmployeePresence` Cloud Function (the `employees` collection is
   /// locked to admin/CF writes under Wave B). Non-fatal: presence is best-effort
   /// and must never break login, geofencing, or token refresh.
-  Future<void> updateMyPresence({String? fcmToken, bool? isOnSite, Map<String, dynamic>? permissions}) async {
+  Future<void> updateMyPresence({String? fcmToken, bool? isOnSite, Map<String, dynamic>? permissions, String? source}) async {
     final payload = <String, dynamic>{};
     if (fcmToken != null) payload['fcmToken'] = fcmToken;
     if (isOnSite != null) payload['isOnSite'] = isOnSite;
     if (permissions != null) payload['permissions'] = permissions;
     if (payload.isEmpty) return;
+    // `source` tags the presence change in app_geofence (the CF logs the
+    // enter/exit). Only meaningful alongside an isOnSite change.
+    if (source != null && isOnSite != null) payload['source'] = source;
     try {
       await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('updateEmployeePresence')
           .call(payload);
     } catch (e) {
       debugPrint('updateMyPresence failed (non-fatal): $e');
+    }
+  }
+
+  /// Admin-only direct presence write (the admin On-Site toggle). Admins carry
+  /// the isAdmin claim, so this is permitted under the Wave B employees lock.
+  /// Stamps the matching timestamp and logs an `admin_manual` event so the
+  /// central audit stays complete.
+  Future<void> adminSetPresence(String clockNo, bool isOnSite) async {
+    try {
+      await _firestore.collection(Collections.employees).doc(clockNo).set({
+        'isOnSite': isOnSite,
+        'presenceSource': 'admin_manual',
+        'presenceUpdatedAt': FieldValue.serverTimestamp(),
+        if (isOnSite) 'lastOnSiteAt': FieldValue.serverTimestamp()
+        else 'lastOffSiteAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await logGeoFenceEvent(
+        clockNo: clockNo,
+        eventType: isOnSite ? 'enter' : 'exit',
+        source: 'admin_manual',
+      );
+    } catch (e) {
+      debugPrint('adminSetPresence failed: $e');
+      rethrow;
     }
   }
 
@@ -1095,18 +1122,24 @@ class FirestoreService {
     }
   }
 
-  // ==================== GEO FENCE EVENT LOGGING (NEW - replanned) ====================
+  // ==================== CENTRAL GEOFENCE/PRESENCE EVENT LOGGING ====================
+  // Single source of truth: Collections.appGeofence ('app_geofence'). Used for
+  // 'check' heartbeats (WorkManager no-change ticks), manual tests, and the
+  // web inactivity guard. Enter/exit transitions routed through the CF are
+  // logged server-side by updateEmployeePresence; native enter/exit are logged
+  // by GeofenceReceiver.kt directly.
   Future<void> logGeoFenceEvent({
     required String clockNo,
-    required String eventType, // 'enter' or 'exit'
-    required String source,    // 'native_geofence', 'fallback', 'background_check', 'resume_check', 'manual_test'
+    required String eventType, // 'enter' | 'exit' | 'check'
+    required String source,    // 'workmanager_30min', 'app_open_check', 'web_inactivity', 'manual_test', 'admin_manual', …
     double? latitude,
     double? longitude,
     double? accuracy,
+    double? radiusUsed,
     String? notes,
   }) async {
     try {
-      await _firestore.collection(Collections.geoFenceLogs).add({
+      await _firestore.collection(Collections.appGeofence).add({
         'timestamp': FieldValue.serverTimestamp(),
         'clockNo': clockNo,
         'eventType': eventType,
@@ -1114,13 +1147,13 @@ class FirestoreService {
         'latitude': latitude,
         'longitude': longitude,
         'accuracy': accuracy,
-        'radiusUsed': 800.0,
+        'radiusUsed': radiusUsed,
         'notes': notes ?? '',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('📍 [GeoFenceLog] $eventType logged for $clockNo via $source');
+      debugPrint('📍 [app_geofence] $eventType logged for $clockNo via $source');
     } catch (e) {
-      debugPrint('❌ Failed to log geo fence event: $e');
+      debugPrint('❌ Failed to log geofence event: $e');
     }
   }
 }

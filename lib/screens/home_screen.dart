@@ -23,6 +23,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/job_card_tile.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
+import '../widgets/geofence_health_banner.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'manager_dashboard_screen.dart';
@@ -809,6 +810,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       padding: EdgeInsets.all(_screenPadding),
       child: Column(
         children: [
+          // Nudges the user if Location-Always / battery-opt got revoked, which
+          // silently breaks background geofencing (hidden on web + when healthy).
+          const GeofenceHealthBanner(),
           Text(
             'Quick Actions',
             style: TextStyle(

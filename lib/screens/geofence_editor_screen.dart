@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/location_service.dart' show kDefaultGeofence, loadGeofenceConfig;
 
 class GeofenceEditorScreen extends StatefulWidget {
   const GeofenceEditorScreen({super.key});
@@ -14,8 +15,11 @@ class GeofenceEditorScreen extends StatefulWidget {
 }
 
 class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
-  static const LatLng _defaultCentre = LatLng(-29.923493321252604, 31.003267644258845);
-  static const double _defaultRadius = 500;
+  // Defaults come from the single central source (location_service) so the
+  // editor, the live geofence and the WorkManager check never drift apart.
+  static final LatLng _defaultCentre =
+      LatLng(kDefaultGeofence.latitude, kDefaultGeofence.longitude);
+  static final double _defaultRadius = kDefaultGeofence.radius;
   static const double _minRadius = 50;
   static const double _maxRadius = 5000;
 
@@ -50,19 +54,9 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
     final prefs = await SharedPreferences.getInstance();
     _clockNo = prefs.getString('loggedInClockNo');
 
-    final doc = await FirebaseFirestore.instance
-        .collection('settings')
-        .doc('geofence')
-        .get();
-
-    if (doc.exists) {
-      final data = doc.data()!;
-      _centre = LatLng(
-        (data['latitude'] as num?)?.toDouble() ?? _defaultCentre.latitude,
-        (data['longitude'] as num?)?.toDouble() ?? _defaultCentre.longitude,
-      );
-      _radius = (data['radius'] as num?)?.toDouble() ?? _defaultRadius;
-    }
+    final cfg = await loadGeofenceConfig();
+    _centre = LatLng(cfg.latitude, cfg.longitude);
+    _radius = cfg.radius;
 
     _syncTextControllers();
     if (mounted) setState(() => _isLoading = false);

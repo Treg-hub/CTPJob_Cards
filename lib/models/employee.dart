@@ -16,6 +16,14 @@ class Employee {
   /// employee update can never clobber it.
   final int? claimsVersion;
 
+  /// Presence transition timestamps, written by the geofence/WorkManager/web
+  /// paths and the updateEmployeePresence Cloud Function. Read-only on the
+  /// client (NOT in toFirestore) so admin edits / CSV import never clobber them.
+  /// `lastOnSiteAt` is the start of the current on-site session — used by the
+  /// admin view's "on-site 14h+" stuck flag.
+  final DateTime? lastOnSiteAt;
+  final DateTime? lastOffSiteAt;
+
   const Employee({
     required this.clockNo,
     required this.name,
@@ -26,6 +34,8 @@ class Employee {
     this.isAdmin = false,
     this.fcmTokenUpdatedAt,
     this.claimsVersion,
+    this.lastOnSiteAt,
+    this.lastOffSiteAt,
   });
 
   String get displayName => '$name ($clockNo) - $position';
@@ -43,6 +53,12 @@ class Employee {
           ? (data['fcmTokenUpdatedAt'] as Timestamp).toDate()
           : null,
       claimsVersion: data['claimsVersion'] as int?,
+      lastOnSiteAt: data['lastOnSiteAt'] is Timestamp
+          ? (data['lastOnSiteAt'] as Timestamp).toDate()
+          : null,
+      lastOffSiteAt: data['lastOffSiteAt'] is Timestamp
+          ? (data['lastOffSiteAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -71,6 +87,8 @@ class Employee {
     bool? isAdmin,
     DateTime? fcmTokenUpdatedAt,
     int? claimsVersion,
+    DateTime? lastOnSiteAt,
+    DateTime? lastOffSiteAt,
   }) {
     return Employee(
       clockNo: clockNo ?? this.clockNo,
@@ -82,6 +100,8 @@ class Employee {
       isAdmin: isAdmin ?? this.isAdmin,
       fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
       claimsVersion: claimsVersion ?? this.claimsVersion,
+      lastOnSiteAt: lastOnSiteAt ?? this.lastOnSiteAt,
+      lastOffSiteAt: lastOffSiteAt ?? this.lastOffSiteAt,
     );
   }
 }

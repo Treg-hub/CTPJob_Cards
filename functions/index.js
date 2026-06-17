@@ -100,23 +100,60 @@ exports.updateEmployeePresence = onCall(async (request) => {
   if (!clockNo) {
     throw new HttpsError("failed-precondition", "No clockNum claim — call setCustomClaims first.");
   }
-  const innerData = request.data;
+  const innerData = request.data || {};
+  const source = typeof innerData.source === "string" ? innerData.source : "cf";
+  const ref = db.collection("employees").doc(String(clockNo));
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
   const update = {};
   if (typeof innerData.fcmToken === "string") {
     update.fcmToken = innerData.fcmToken;
-    update.fcmTokenUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
-  }
-  if (typeof innerData.isOnSite === "boolean") {
-    update.isOnSite = innerData.isOnSite;
+    update.fcmTokenUpdatedAt = now;
   }
   if (innerData.permissions && typeof innerData.permissions === "object") {
     update.permissions = innerData.permissions;
   }
+
+  // Presence: read the current value so on/off-site timestamps are stamped only
+  // on a real transition (keeps lastOnSiteAt a true session start, so the admin
+  // 14h-stuck flag stays meaningful even if a heartbeat re-asserts isOnSite).
+  let transition = null; // 'enter' | 'exit' | null
+  if (typeof innerData.isOnSite === "boolean") {
+    const snap = await ref.get();
+    const prev = snap.exists ? snap.data().isOnSite : undefined;
+    update.isOnSite = innerData.isOnSite;
+    update.presenceSource = source;
+    update.presenceUpdatedAt = now;
+    if (prev !== innerData.isOnSite) {
+      transition = innerData.isOnSite ? "enter" : "exit";
+      if (innerData.isOnSite) update.lastOnSiteAt = now;
+      else update.lastOffSiteAt = now;
+    }
+  }
+
   if (Object.keys(update).length === 0) {
     return { success: true, clockNo: String(clockNo), noop: true };
   }
-  await db.collection("employees").doc(String(clockNo)).set(update, { merge: true });
-  return { success: true, clockNo: String(clockNo) };
+  await ref.set(update, { merge: true });
+
+  // Central presence audit log (app_geofence). Admin SDK bypasses rules, so this
+  // works even before the app_geofence security rule ships. Logged only on an
+  // actual on/off transition to avoid heartbeat noise.
+  if (transition) {
+    try {
+      await db.collection("app_geofence").add({
+        clockNo: String(clockNo),
+        eventType: transition,
+        source,
+        isOnSite: innerData.isOnSite,
+        timestamp: now,
+        createdAt: now,
+      });
+    } catch (e) {
+      console.error("updateEmployeePresence: app_geofence log failed", e);
+    }
+  }
+  return { success: true, clockNo: String(clockNo), transition };
 });
 
 /**
