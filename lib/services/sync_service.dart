@@ -409,7 +409,7 @@ class SyncService {
   }
 
   bool _needsWasteLoadNumber(String? loadNumber) {
-    if (loadNumber == null || loadNumber.isEmpty) return false;
+    if (loadNumber == null || loadNumber.trim().isEmpty) return true;
     if (_properLoadNumber.hasMatch(loadNumber)) return false;
     if (_legacyLoadNumber.hasMatch(loadNumber)) return false;
     return loadNumber.startsWith('OFFLINE-');

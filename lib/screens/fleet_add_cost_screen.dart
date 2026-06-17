@@ -128,16 +128,18 @@ class _FleetAddCostScreenState extends ConsumerState<FleetAddCostScreen> {
         enteredByClockNo: emp.clockNo,
         enteredByName: emp.name,
       );
-      await _service.createCostLine(line);
+      final result = await _service.createCostLineResilient(line);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _selectedWorkRecord != null
-                  ? 'Cost saved and linked to the mechanic job.'
-                  : 'Cost saved.',
+              result.queuedOffline
+                  ? 'Cost saved offline — will sync when connection returns.'
+                  : _selectedWorkRecord != null
+                      ? 'Cost saved and linked to the mechanic job.'
+                      : 'Cost saved.',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
           ),
         );
         Navigator.of(context).pop();

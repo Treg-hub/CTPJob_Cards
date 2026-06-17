@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>manager_guide</title>
+  <title>Manager Guide</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">manager_guide</h1>
+<h1 class="title">Manager Guide</h1>
 </header>
 <h1 id="ctp-job-cards--manager-guide">CTP Job Cards — Manager Guide</h1>
 <hr />
@@ -160,7 +160,10 @@ count above 3 is highlighted in orange as a workload warning.</li>
 Review</strong> screen lets you scope the day's closed and monitored
 jobs by department or job type and add manager review notes inline. Use
 this for your morning review pass. The Home tile pulses red when your
-pending review queue exceeds 5 items.</p>
+pending review queue exceeds 5 items. A job card is marked as reviewed
+the moment you open it, so the pending count decrements as you work
+through the list — you do not need to take any extra action to mark
+it.</p>
 </blockquote>
 <h3 id="notification-history">Notification History</h3>
 <p>Every notification sent by the system is logged. You can see:</p>
@@ -170,6 +173,23 @@ pending review queue exceeds 5 items.</p>
 <li>Which jobs escalated to you because no technician responded in
 time</li>
 </ul>
+<h3 id="notification-inbox--off-site-delivery">Notification Inbox —
+Off-Site Delivery</h3>
+<p>If you are <strong>off-site</strong> (your <code>isOnSite</code>
+status is false) when an escalation or job update arrives, the
+notification is not pushed to your phone. Instead it is held in your
+<strong>Notification Inbox</strong> and delivered when you return
+on-site.</p>
+<ul>
+<li>The <strong>bell icon</strong> in the Home screen app bar shows a
+live count of unread inbox items.</li>
+<li>When you arrive on site, a banner appears with the count and a
+shortcut to your inbox.</li>
+<li>Items persist until you mark them read — they do not expire.</li>
+</ul>
+<p>This means a job may have escalated to you while you were off shift
+without you receiving a push alert. Review your inbox at the start of
+each shift.</p>
 <h3 id="escalation-notifications">Escalation Notifications</h3>
 <p>When a P4 or P5 job has not been accepted within the escalation
 window, <strong>you will receive a notification.</strong> When this
@@ -191,6 +211,14 @@ yourself</li>
 time?</li>
 <li>Are there recurring faults on the same machine?</li>
 </ul>
+<blockquote>
+<p><strong>Job History is now fully populated.</strong> Closed job cards
+from April 2026 onwards have correct close dates, so the Job History
+screen and all dashboard metrics (Avg Resolution Time, Overdue counts,
+Completion %) reflect real data. Use the <strong>Job History</strong>
+quick-action tile on the Home screen to search and filter the full
+closed archive.</p>
+</blockquote>
 <h3 id="2-enforce-job-card-quality--operators">2. Enforce Job Card
 Quality — Operators</h3>
 <p>Operators are responsible for the quality of the job card at the

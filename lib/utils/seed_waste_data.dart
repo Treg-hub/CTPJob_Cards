@@ -43,9 +43,19 @@ Future<void> seedWasteData() async {
       },
     },
     {'mainType': 'Open Bin', 'subtypes': [], 'quantityLabels': {}},
-    {'mainType': 'Compactor Bin', 'subtypes': [], 'quantityLabels': {}},
+    {
+      'mainType': 'Compactor Bin',
+      'subtypes': [],
+      'quantityLabels': {'default': 'Quantity (bins)'},
+      'noSiteWeight': true,
+    },
     {'mainType': 'Scrap Metal', 'subtypes': [], 'quantityLabels': {}},
-    {'mainType': 'Copper Skins', 'subtypes': [], 'quantityLabels': {}},
+    {
+      'mainType': 'Copper Skins',
+      'subtypes': [],
+      'quantityLabels': {'default': 'Quantity (skins)'},
+      'noSiteWeight': true,
+    },
     {'mainType': 'IBC Bins', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}, 'isQuantityOnly': true},
   ];
 

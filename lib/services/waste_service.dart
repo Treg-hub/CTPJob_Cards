@@ -19,6 +19,7 @@ import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
+import '../utils/waste_type_routing.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
 ///
@@ -83,6 +84,23 @@ class WasteService {
       return Map<String, dynamic>.from(result.data);
     } catch (e) {
       throw Exception('Failed to create waste load via Cloud Function: $e');
+    }
+  }
+
+  /// Issues W-NNNN for loads with empty or OFFLINE-* provisional numbers.
+  Future<String?> assignLoadNumberIfNeeded(String loadId) async {
+    try {
+      final result = await _functions
+          .httpsCallable('assignWasteLoadNumber')
+          .call({'loadId': loadId})
+          .timeout(_cloudFunctionTimeout);
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return data['load_number'] as String?;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('assignLoadNumberIfNeeded failed for $loadId: $e');
+      }
+      return null;
     }
   }
 
@@ -446,11 +464,18 @@ class WasteService {
     var queuedOffline = !online;
     final now = DateTime.now();
 
+    final skipWeighbridge = isQuantityOnly ||
+        itemsAllQuantityOnly(
+          itemsData.map((i) => i['is_quantity_only'] == true),
+        );
+    final recordedWeightKg = sumRecordedWeightKg(itemsData);
+
     // Quantity-only loads skip the weighbridge step entirely.
-    final nextStatus = isQuantityOnly
+    final nextStatus = skipWeighbridge
         ? WasteLoadStatus.pendingCostReview
         : WasteLoadStatus.pendingWeighbridge;
-    final timestampKey = isQuantityOnly ? 'pending_cost_review_at' : 'pending_weighbridge_at';
+    final timestampKey =
+        skipWeighbridge ? 'pending_cost_review_at' : 'pending_weighbridge_at';
 
     final statusPayload = {
       'status': nextStatus.value,
@@ -458,6 +483,7 @@ class WasteService {
       'vehicle_reg': vehicleReg,
       'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
+      'recorded_weight_kg': recordedWeightKg,
       timestampKey: now.toIso8601String(),
     };
 
@@ -552,6 +578,7 @@ class WasteService {
           'load_id': loadId,
           'photos': photoUrls,
           'is_deleted': false,
+          'is_no_site_weight': item['is_no_site_weight'] == true,
           'createdAt': queuedOffline ? now.toIso8601String() : FieldValue.serverTimestamp(),
           if (itemRate != null) 'rate_per_kg': itemRate,
         });
@@ -626,6 +653,10 @@ class WasteService {
           documentId: loadId,
         );
       }
+    }
+
+    if (!queuedOffline) {
+      unawaited(assignLoadNumberIfNeeded(loadId));
     }
 
     return (queuedOffline: queuedOffline);
@@ -827,11 +858,14 @@ class WasteService {
 
       final loadId = data['load_id'] as String?;
       final weightKg = (data['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final countsTowardRecorded = data['is_quantity_only'] != true &&
+          data['is_no_site_weight'] != true &&
+          weightKg > 0;
       final stockId = sourceStockId ?? data['source_stock_id'] as String?;
 
       DocumentReference<Map<String, dynamic>>? loadRef;
       DocumentSnapshot<Map<String, dynamic>>? loadSnap;
-      if (loadId != null && weightKg > 0) {
+      if (loadId != null && countsTowardRecorded) {
         loadRef = _firestore.collection(Collections.wasteLoads).doc(loadId);
         loadSnap = await tx.get(loadRef);
       }
@@ -894,12 +928,14 @@ class WasteService {
     String? sourceStockId,
     String? contractorId,
     bool isQuantityOnly = false,
+    bool isNoSiteWeight = false,
   }) async {
     final online = await _checkOnline();
     var queuedOffline = !online;
     final itemRef = _firestore.collection(Collections.wasteItems).doc();
     final photoUrls = <String>[];
     final now = DateTime.now();
+    final countsTowardRecorded = !isQuantityOnly && !isNoSiteWeight && weightKg > 0;
 
     // Prefill rate from waste_rates for per-item cost tracking.
     final rate = contractorId != null
@@ -926,6 +962,7 @@ class WasteService {
       if (sourceStockId != null) 'source_stock_id': sourceStockId,
       'is_deleted': false,
       'is_quantity_only': isQuantityOnly,
+      'is_no_site_weight': isNoSiteWeight,
       'createdAt': now.toIso8601String(),
       if (rate != null) 'rate_per_kg': rate,
     };
@@ -935,18 +972,23 @@ class WasteService {
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    var nextRecorded = weightKg;
-    try {
-      final loadSnap = await _firestore
-          .collection(Collections.wasteLoads)
-          .doc(loadId)
-          .get(const GetOptions(source: Source.serverAndCache));
-      final currentRecorded =
-          (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
-      nextRecorded = currentRecorded + weightKg;
-    } catch (_) {}
+    var nextRecorded = 0.0;
+    if (countsTowardRecorded) {
+      try {
+        final loadSnap = await _firestore
+            .collection(Collections.wasteLoads)
+            .doc(loadId)
+            .get(const GetOptions(source: Source.serverAndCache));
+        final currentRecorded =
+            (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
+        nextRecorded = currentRecorded + weightKg;
+      } catch (_) {
+        nextRecorded = weightKg;
+      }
+    }
 
-    final weightUpdate = {'recorded_weight_kg': nextRecorded};
+    final weightUpdate =
+        countsTowardRecorded ? {'recorded_weight_kg': nextRecorded} : null;
 
     if (queuedOffline) {
       await _enqueueWasteOp(
@@ -956,17 +998,21 @@ class WasteService {
         data: queueData,
         documentId: itemRef.id,
       );
-      await _enqueueWasteOp(
-        shouldQueue: true,
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: weightUpdate,
-        documentId: loadId,
-      );
+      if (weightUpdate != null) {
+        await _enqueueWasteOp(
+          shouldQueue: true,
+          collection: Collections.wasteLoads,
+          operation: 'update',
+          data: weightUpdate,
+          documentId: loadId,
+        );
+      }
     } else {
       try {
         await itemRef.set(liveData).timeout(_firestoreWriteTimeout);
-        await updateLoad(loadId, weightUpdate).timeout(_firestoreWriteTimeout);
+        if (weightUpdate != null) {
+          await updateLoad(loadId, weightUpdate).timeout(_firestoreWriteTimeout);
+        }
       } catch (_) {
         queuedOffline = true;
         await _enqueueWasteOp(
@@ -976,13 +1022,15 @@ class WasteService {
           data: queueData,
           documentId: itemRef.id,
         );
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: weightUpdate,
-          documentId: loadId,
-        );
+        if (weightUpdate != null) {
+          await _enqueueWasteOp(
+            shouldQueue: true,
+            collection: Collections.wasteLoads,
+            operation: 'update',
+            data: weightUpdate,
+            documentId: loadId,
+          );
+        }
       }
     }
 
@@ -1612,18 +1660,26 @@ class WasteService {
       return (rate: rate, randValueExVat: weightKg * rate);
     }
 
+    double calculatedTotal = 0;
     double totalWeight = 0;
-    double weightedCost = 0;
     for (final item in items) {
-      final w = item.weightKg;
-      if (w <= 0) continue;
       final rate = costPerKgFor(item.subtype);
       if (rate == null || rate <= 0) continue;
+      if (item.isQuantityOnly) {
+        calculatedTotal += (item.quantity ?? 0) * rate;
+        continue;
+      }
+      final w = item.weightKg;
+      if (w <= 0) continue;
       totalWeight += w;
-      weightedCost += w * rate;
+      calculatedTotal += w * rate;
     }
-    if (totalWeight <= 0 || weightedCost <= 0) return null;
-    final avgRate = weightedCost / totalWeight;
+    if (calculatedTotal > 0) {
+      final avgRate = totalWeight > 0 ? calculatedTotal / totalWeight : calculatedTotal / weightKg;
+      return (rate: avgRate, randValueExVat: calculatedTotal);
+    }
+    if (totalWeight <= 0) return null;
+    final avgRate = calculatedTotal / totalWeight;
     return (rate: avgRate, randValueExVat: weightKg * avgRate);
   }
 

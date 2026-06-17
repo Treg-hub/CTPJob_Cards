@@ -121,7 +121,7 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 - Roles are **derived** from `Employee.position` + `department` (see `lib/utils/role.dart`)
 - Admin is gated by `Employee.isAdmin` (Firestore field `isAdmin: true`)
 - WasteTrack roles are derived from `department == "Security"` + `position` — `isSecurityManager()` and `isSecurityGuard()` are separate helpers in `role.dart`
-- Fleet roles: `isFleetMechanic()` (Workshop + Hyster Mechanic) is settings-free; `isFleetReporter(emp, settings)` and `isFleetCostManager(emp, settings)` read the `fleet_settings/config` allow-lists, so they take a `FleetSettings` argument. The Fleet tab is gated on `fleet_settings.fleet_enabled` + `isFleetUser()`
+- Fleet roles: `isFleetMechanic(emp, settings)`, `isFleetReporter(emp, settings)`, and `isFleetCostManager(emp, settings)` all read allow-lists from `fleet_settings/config` (`mechanic_clock_nos`, `reporter_departments`, `cost_manager_clock_nos`). The Fleet tab is gated on `fleet_settings.fleet_enabled` + `isFleetUser()`
 - There is **no go_router** and **no centralized route guards**
 - Permission checks are scattered across multiple screens
 - Copper features are controlled by a hardcoded clock-number whitelist (`_copperAuthorizedClockNos` in `role.dart`)
@@ -147,12 +147,12 @@ Roles are **inferred from `Employee.position` and `Employee.department`** (see `
 | Admin | `Employee.isAdmin == true` (Firestore field) | Full access to AdminScreen and all admin features |
 | Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |
 | Security Guard | `department == "Security"` && `position == "Guard"` | WasteHome, WasteBeginCollection, WasteLoadDetail, WasteSignature, WastePendingWeighbridge |
-| Fleet Mechanic | `department == "Workshop"` && `position == "Hyster Mechanic"` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts; edits lock after 7 days or once costed) |
+| Fleet Mechanic | `clockNo` in `fleet_settings.mechanic_clock_nos` | FleetHome, FleetLogWork, FleetIssuesList, FleetIssueDetail (acknowledge/resolve), FleetWorkRecordDetail (no cost amounts; edits lock after 7 days or once costed) |
 | Fleet Reporter | `department` in `fleet_settings.reporter_departments` | FleetHome, FleetReportIssue, FleetIssueDetail (read-only) |
 | Fleet Cost Manager | `clockNo` in `fleet_settings.cost_manager_clock_nos` | FleetHome, FleetAddCost, FleetReports (+ CSV export), FleetWorkRecordDetail (with costs) |
 | Fleet Admin | `Employee.isAdmin == true` (reuses isAdmin) | FleetAssets (manage register), FleetSettings, plus everything above |
 
-Fleet roles differ from other modules: **Mechanic** is a fixed department+position check, but **Reporter** and **Cost Manager** are config-driven (read from `fleet_settings/config`), so their `role.dart` helpers take a `FleetSettings` argument. The mechanic never sees money — work records show only a "Costs pending / Costs entered" label.
+Fleet roles are config-driven (read from `fleet_settings/config`), so all `role.dart` fleet helpers take a `FleetSettings` argument. Mechanics are also operators — they can report plant job cards. The mechanic never sees money — work records show only a "Costs pending / Costs entered" label.
 
 Fleet domain rules: fault reports (`fleet_issues`) are content-immutable after creation (only status transitions). The fix is a separate work record; the fix form shows the fault read-only and the mechanic types their own description. Work records carry `cost_status` (`pending|costed|no_cost`) and lock against mechanic edits 7 days after creation (`FleetWorkRecord.editLockDays`) or as soon as `cost_status != pending`; admins are exempt. One work record can close multiple faults via `linked_issue_ids`.
 
@@ -186,7 +186,7 @@ All collection names are defined as constants in `lib/constants/collections.dart
 **Fleet Maintenance (`fleet_` prefix):**
 - `fleet_assets`, `fleet_issues`, `fleet_work_records` (with `fleet_work_parts` sub-collection)
 - `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`
-- Work numbers `FM-YYYYMMDD-NNN` via daily counter (Admin SDK only). Work records carry `cost_status` (`pending|costed|no_cost`), kept in sync by `FleetService.createCostLine` / `deleteCostLine` / `markWorkRecordNoCost`. See `docs/COLLECTIONS.md` for the full schema.
+- Work numbers `FM-NNNN` via global counter (Admin SDK only; legacy records may use `FM-YYYYMMDD-NNN`). Work records carry `cost_status` (`pending|costed|no_cost`), kept in sync by `FleetService.createCostLineResilient` / `deleteCostLine` / `markWorkRecordNoCost`. See `docs/COLLECTIONS.md` for the full schema.
 
 ## Local Storage
 
@@ -214,7 +214,7 @@ Key functions:
 - `createWasteLoad` *(callable, africa-south1)* — atomic load creation with global sequential number (W-NNNN, never resets)
 
 **Fleet Maintenance functions live in the monorepo codebase, NOT this repo's `/functions`.** They are in `firebase/functions/src/index.ts` (the `wastetrack-overtime` codebase) and deployed from `/firebase`:
-- `createFleetWorkRecord` *(callable, africa-south1)* — atomic work-record number (FM-YYYYMMDD-NNN). The mobile app **calls** this via `FleetService.createWorkRecord`.
+- `createFleetWorkRecord` *(callable, africa-south1)* — atomic work-record number (`FM-NNNN`). The mobile app **calls** this via `FleetService.createWorkRecordResilient`.
 - `onFleetIssueCreated` *(Firestore trigger)* — out-of-service issues send a medium-high push (or park to inbox) to the mechanic + cost managers and set `fleet_assets.has_open_oos_issue`; high-severity issues park to the notification inbox only.
 - `onFleetIssueUpdated` *(Firestore trigger)* — clears `has_open_oos_issue` when the last open OOS issue on an asset is resolved/cancelled.
 

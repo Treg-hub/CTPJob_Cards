@@ -54,9 +54,9 @@ void main() {
       expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
     });
 
-    test('missing createdAt locks the record for non-admins', () {
+    test('missing createdAt stays editable while syncing offline', () {
       final r = _record(createdAt: null);
-      expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
+      expect(r.canEdit(isMechanic: true, isAdmin: false), isTrue);
     });
 
     test('admin can always edit', () {

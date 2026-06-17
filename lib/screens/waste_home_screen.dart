@@ -23,6 +23,7 @@ import 'waste_load_detail_screen.dart';
 import 'waste_stock_inventory_screen.dart';
 import 'waste_guide_screen.dart';
 import 'waste_queued_screen.dart';
+import 'waste_reports_screen.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../theme/app_theme.dart';
@@ -391,8 +392,11 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   int _tabCount() {
     final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
     final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-    // Loads + Weighbridge (manager/admin) + Review + Settings (admin only)
-    return 1 + (isAdmin || isManager ? 1 : 0) + (isAdmin ? 2 : 0);
+    // Loads + Weighbridge + Reports (manager/admin) + Review + Settings (admin only)
+    return 1 +
+        (isAdmin || isManager ? 1 : 0) +
+        (isAdmin || isManager ? 1 : 0) +
+        (isAdmin ? 2 : 0);
   }
 
   @override
@@ -910,6 +914,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
             ],
           ),
         ),
+      if (isAdmin || isManager) const Tab(text: 'Reports'),
       if (isAdmin)
         Tab(
           child: Row(
@@ -929,6 +934,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     final tabViews = <Widget>[
       _buildLoadsTab(context, isAdmin, isManager),
       if (isAdmin || isManager) const WastePendingWeighbridgeScreen(embedded: true),
+      if (isAdmin || isManager) const WasteReportsScreen(embedded: true),
       if (isAdmin) const WasteReviewScreen(embedded: true),
       if (isAdmin) const WasteAdminScreen(embedded: true),
     ];

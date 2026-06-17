@@ -11,6 +11,10 @@ import '../providers/permissions_provider.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../utils/role.dart';
+import '../models/fleet_settings.dart';
+import '../models/waste_settings.dart';
+import '../services/fleet_service.dart';
+import '../services/waste_service.dart';
 import 'home_screen.dart';
 
 class PermissionsOnboardingScreen extends ConsumerStatefulWidget {
@@ -259,17 +263,39 @@ class _WelcomePage extends StatelessWidget {
 }
 
 // PAGE 2 - Your Role in CTP (role-aware, including specialized roles)
-class _YourRolePage extends StatelessWidget {
+class _YourRolePage extends StatefulWidget {
   final UserRole role;
   final Employee? employee;
   const _YourRolePage({required this.role, this.employee});
 
+  @override
+  State<_YourRolePage> createState() => _YourRolePageState();
+}
+
+class _YourRolePageState extends State<_YourRolePage> {
+  WasteSettings? _wasteSettings;
+  FleetSettings? _fleetSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    WasteService().getWasteSettings().then((settings) {
+      if (mounted) setState(() => _wasteSettings = settings);
+    });
+    FleetService().getSettings().then((settings) {
+      if (mounted) setState(() => _fleetSettings = settings);
+    });
+  }
+
+  UserRole get role => widget.role;
+  Employee? get employee => widget.employee;
+
   // Specialized role checks take priority over the base UserRole so that
   // a Security Guard (maps to 'operator') or Hyster Mechanic (maps to
   // 'technician') sees content relevant to their actual day-to-day module.
-  bool get _isSecurityManager => isSecurityManager(employee, null);
-  bool get _isSecurityGuard => isSecurityGuard(employee, null);
-  bool get _isFleetMechanic => isFleetMechanic(employee, null);
+  bool get _isSecurityManager => isSecurityManager(employee, _wasteSettings);
+  bool get _isSecurityGuard => isSecurityGuard(employee, _wasteSettings);
+  bool get _isFleetMechanic => isFleetMechanic(employee, _fleetSettings);
 
   String get _title {
     if (_isSecurityManager) return "You're a Security Manager";
@@ -322,11 +348,11 @@ class _YourRolePage extends StatelessWidget {
         _RoleBullet(Icons.add_box_outlined,
             "Schedule waste collections: pick contractor, waste type, date and time"),
         _RoleBullet(Icons.checklist,
-            "Review live load status in the Waste tab — Scheduled, In Progress, Pending Weighbridge, Completed"),
+            "Review live load status in the Waste tab — Scheduled, Pending Weighbridge, Pending Cost Review, Completed"),
+        _RoleBullet(Icons.scale,
+            "Enter off-site weighbridge weights when tickets arrive — the Weighbridge tab shows what's waiting"),
         _RoleBullet(Icons.bar_chart,
-            "Open Reports to check weights, flag deviations, and export CSV or PDF"),
-        _RoleBullet(Icons.admin_panel_settings,
-            "Manage contractors, waste types, and rates from the Admin panel inside the Waste tab"),
+            "Open the Reports tab to check weights, flag deviations, and export CSV or PDF"),
       ];
     }
     if (_isSecurityGuard) {
@@ -334,11 +360,11 @@ class _YourRolePage extends StatelessWidget {
         _RoleBullet(Icons.local_shipping,
             "When a contractor arrives, find their scheduled load in the Waste tab and tap Begin Collection"),
         _RoleBullet(Icons.photo_camera,
-            "Add each waste type with its recorded weight and a photo — at least one photo per load is required"),
+            "Record each item with photos — weighted types need kg; quantity-only types need a count instead"),
         _RoleBullet(Icons.draw,
             "Capture the contractor driver's signature before the truck leaves the gate"),
-        _RoleBullet(Icons.scale,
-            "When the truck returns from the external weighbridge, enter the certified weight to complete the load"),
+        _RoleBullet(Icons.inventory_2,
+            "Use On-site Stock to log material accumulating before a collection is scheduled"),
       ];
     }
     if (_isFleetMechanic) {
@@ -346,9 +372,9 @@ class _YourRolePage extends StatelessWidget {
         _RoleBullet(Icons.list_alt,
             "Your Fleet tab shows all open issues sorted by severity — Out of Service jobs appear first"),
         _RoleBullet(Icons.touch_app,
-            "Acknowledge an issue when you start working on it, then resolve it by logging your work"),
+            "Tap an issue to Log Work — acknowledgement happens when you start, then resolve it by saving the job"),
         _RoleBullet(Icons.engineering,
-            "Work records capture labour hours, machine hour-meter reading, parts used, and photos — numbered FM-YYYYMMDD-NNN"),
+            "Work records capture labour hours, machine hour-meter reading, parts used, and photos — numbered FM-####"),
         _RoleBullet(Icons.money_off,
             "You never see cost amounts — a cost manager handles that separately"),
       ];
@@ -420,7 +446,7 @@ class _YourRolePage extends StatelessWidget {
       return "The next few pages cover the job card system — you may still receive on-site notifications, so this context is useful.";
     }
     if (_isFleetMechanic) {
-      return "The next few pages cover the standard job card system — you can still create and receive job cards for plant faults.";
+      return "The next few pages cover the standard job card system — as an operator you can still report and receive plant job cards too.";
     }
     return "The next few pages explain how job cards, priorities, and escalation work — everyone uses these the same way.";
   }

@@ -20,6 +20,7 @@ import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../utils/waste_stock_mapping.dart';
+import '../utils/waste_type_routing.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
@@ -421,9 +422,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   Set<String> get _quantityOnlyTypeNames =>
       _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
 
+  Set<String> get _noSiteWeightTypeNames =>
+      _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
+
   Map<String, String> get _quantityLabelByType => {
         for (final t in _wasteTypes)
-          if (t.isQuantityOnly) t.mainType: t.quantityLabelFor('default'),
+          if (t.isQuantityOnly || t.noSiteWeight)
+            t.mainType: t.quantityLabelFor('default'),
       };
 
   Future<void> _addItem() async {
@@ -440,6 +445,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             defaultType: _currentLoad.mainWasteType,
             title: 'Add Item to Load',
             quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            noSiteWeightTypeNames: _noSiteWeightTypeNames,
             quantityLabelByType: _quantityLabelByType,
           ),
         ),
@@ -457,6 +463,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         notes: result.notes,
         localPhotoPaths: result.localPhotoPaths,
         isQuantityOnly: result.isQuantityOnly,
+        isNoSiteWeight: result.isNoSiteWeight,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -830,7 +837,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                       children: [
                         Text('Weighbridge entry required',
                             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900, fontSize: 14)),
-                        Text('Enter the actual weighbridge weight below to complete this load.',
+                        Text('Enter the certified off-site weight below — admin will approve cost after this.',
                             style: TextStyle(fontSize: 12, color: Colors.amber.shade800)),
                       ],
                     ),
@@ -1342,7 +1349,10 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (signatureBytes == null || !mounted) return;
 
     setState(() => _isSaving = true);
-    final isQtyOnly = _quantityOnlyTypeNames.contains(_currentLoad.mainWasteType);
+    final skipWeighbridge = mainTypeSkipsWeighbridge(
+      _currentLoad.mainWasteType,
+      _wasteTypes,
+    );
     String? signatureTempPath;
     try {
       final tmp = await Directory.systemTemp.createTemp('waste_sig');
@@ -1356,16 +1366,16 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         signatureLocalPath: signatureTempPath,
         finishedBy: currentEmployee?.clockNo ?? '',
         finishedByName: currentEmployee?.name,
-        isQuantityOnly: isQtyOnly,
+        isQuantityOnly: skipWeighbridge,
       );
 
-      final nextStatus = isQtyOnly
+      final nextStatus = skipWeighbridge
           ? WasteLoadStatus.pendingCostReview
           : WasteLoadStatus.pendingWeighbridge;
       setState(() {
         _currentLoad = _currentLoad.copyWith(
           status: nextStatus,
-          pendingWeighbridgeAt: isQtyOnly ? null : DateTime.now(),
+          pendingWeighbridgeAt: skipWeighbridge ? null : DateTime.now(),
           collectedBy: currentEmployee?.clockNo,
           collectedByName: currentEmployee?.name,
         );
@@ -1378,7 +1388,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             content: Text(
               result.queuedOffline
                   ? 'Finish loading saved offline — will sync when connection returns'
-                  : isQtyOnly
+                  : skipWeighbridge
                       ? 'Loading finished — awaiting admin cost review'
                       : 'Loading finished — enter off-site weighbridge document when it arrives',
             ),
