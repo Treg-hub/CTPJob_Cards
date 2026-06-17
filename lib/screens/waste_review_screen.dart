@@ -10,6 +10,7 @@ import '../models/waste_item.dart';
 import '../models/waste_settings.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/formatters.dart';
+import '../utils/waste_type_routing.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import 'waste_load_detail_screen.dart';
@@ -207,7 +208,10 @@ class _LoadReviewCardState extends State<_LoadReviewCard> {
   }
 
   double get _calculatedTotal {
-    return _items.fold(0.0, (sum, item) => sum + item.weightKg * _rateFor(item));
+    return _items.fold(
+      0.0,
+      (sum, item) => sum + itemLineValue(item, _rateFor(item)),
+    );
   }
 
   Future<void> _approve() async {
@@ -430,14 +434,14 @@ class _LoadReviewCardState extends State<_LoadReviewCard> {
                         color: textMuted))),
             Expanded(
                 flex: 2,
-                child: Text('Weight',
+                child: Text('Qty/Weight',
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: textMuted))),
             Expanded(
                 flex: 3,
-                child: Text('R/kg',
+                child: Text('Rate',
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -455,7 +459,7 @@ class _LoadReviewCardState extends State<_LoadReviewCard> {
         const SizedBox(height: 4),
         ..._items.map((item) {
           final rate = _rateFor(item);
-          final lineValue = item.weightKg * rate;
+          final lineValue = itemLineValue(item, rate);
           final ctrl = _rateControllers[item.id!]!;
           final missingRate = ctrl.text.trim().isEmpty;
 
@@ -471,8 +475,12 @@ class _LoadReviewCardState extends State<_LoadReviewCard> {
                         overflow: TextOverflow.ellipsis)),
                 Expanded(
                     flex: 2,
-                    child: Text(formatSAWeight(item.weightKg),
-                        style: const TextStyle(fontSize: 12))),
+                    child: Text(
+                      item.isQuantityOnly || item.isNoSiteWeight
+                          ? '${item.quantity ?? 0} units'
+                          : formatSAWeight(item.weightKg),
+                      style: const TextStyle(fontSize: 12),
+                    )),
                 Expanded(
                   flex: 3,
                   child: Row(

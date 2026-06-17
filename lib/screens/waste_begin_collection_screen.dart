@@ -14,6 +14,7 @@ import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../utils/waste_stock_mapping.dart';
+import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_app_bar.dart';
 import '../widgets/waste_stock_link_sheet.dart';
@@ -121,6 +122,8 @@ class _WasteBeginCollectionScreenState
                 stock,
                 isQuantityOnly: qtyOnly.contains(stock.wasteType) ||
                     qtyOnly.contains(stock.subtype),
+                isNoSiteWeight: _noSiteWeightTypeNames.contains(stock.wasteType) ||
+                    _noSiteWeightTypeNames.contains(stock.subtype),
               ));
             }
           }
@@ -195,7 +198,13 @@ class _WasteBeginCollectionScreenState
       setState(() {
         for (final stock in stocks) {
           if (stock.id != null && stock.status == WasteStockStatus.onSite) {
-            _items.add(_ItemEntry.fromStock(stock));
+            _items.add(_ItemEntry.fromStock(
+              stock,
+              isQuantityOnly: _quantityOnlyTypeNames.contains(stock.wasteType) ||
+                  _quantityOnlyTypeNames.contains(stock.subtype),
+              isNoSiteWeight: _noSiteWeightTypeNames.contains(stock.wasteType) ||
+                  _noSiteWeightTypeNames.contains(stock.subtype),
+            ));
           }
         }
       });
@@ -272,7 +281,11 @@ class _WasteBeginCollectionScreenState
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
-    final isQtyOnly = _quantityOnlyTypeNames.contains(widget.load.mainWasteType);
+    final skipWeighbridge = loadSkipsWeighbridge(
+      mainWasteType: widget.load.mainWasteType,
+      allTypes: _wasteTypes,
+      itemQuantityOnlyFlags: _items.map((i) => i.isQuantityOnly),
+    );
 
     try {
       // Build itemsData for submitCollection — includes both stock-sourced and fresh items
@@ -303,7 +316,7 @@ class _WasteBeginCollectionScreenState
         loadPhotoPaths: _loadPhotoPaths,
         signatureLocalPath: _signatureTempPath,
         contractorId: widget.load.contractorId,
-        isQuantityOnly: isQtyOnly,
+        isQuantityOnly: skipWeighbridge,
       );
 
       // Mark confirmed stock items as loaded. If the load itself was queued
@@ -323,7 +336,7 @@ class _WasteBeginCollectionScreenState
             content: Text(
               result.queuedOffline
                   ? 'Collection saved offline — will sync when connection returns'
-                  : isQtyOnly
+                  : skipWeighbridge
                       ? 'Collection submitted — awaiting admin cost review'
                       : 'Collection submitted — manager will enter weighbridge weight',
             ),

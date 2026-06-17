@@ -97,6 +97,12 @@ class _WasteScheduleLoadScreenState
       .toList();
   bool get _usesPaperStock =>
       selectedChipsUsePaperStock(_selectedTypes, _wasteTypes);
+  bool get _canAccess =>
+      isWasteAdmin(currentEmployee) ||
+      isSecurityManager(currentEmployee, _wasteSettings) ||
+      (isSecurityGuard(currentEmployee, _wasteSettings) &&
+          (_wasteSettings?.guardCanSchedule ?? false));
+
   bool get _canSelectStock =>
       isSecurityManager(currentEmployee, _wasteSettings) ||
       isWasteAdmin(currentEmployee);
@@ -230,6 +236,21 @@ class _WasteScheduleLoadScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_wasteSettings != null && !_canAccess) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Schedule Incoming Load')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Access denied. Security Manager, Admin, or an authorised Guard may schedule loads.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Schedule Incoming Load'),

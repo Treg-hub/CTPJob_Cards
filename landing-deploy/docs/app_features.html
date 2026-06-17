@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>app_features</title>
+  <title>App Features</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">app_features</h1>
+<h1 class="title">App Features</h1>
 </header>
 <!--
 Title: CTP Job Cards — Interactive Feature Guide
@@ -116,10 +116,14 @@ notified on closure.</li>
 <li>Real-time geofencing</li>
 <li>Offline sync</li>
 <li>Permanent audit trail</li>
-<li>Manager dashboard</li>
+<li>Manager dashboard &amp; Daily Review</li>
+<li>Notification Inbox (offsite hold &amp; delivery)</li>
 <li>Role-based access</li>
 <li>Light &amp; dark theme</li>
 <li>Notification action buttons</li>
+<li>Copper Inventory module (clock-number restricted)</li>
+<li>WasteTrack module (Security department)</li>
+<li>Fleet Maintenance module (Hyster forklifts &amp; grabs)</li>
 </ul>
 <p>Planned:</p>
 <ul>
@@ -130,11 +134,14 @@ notified on closure.</li>
 <h2 id="user-roles">User Roles</h2>
 <p><em>Four roles with distinct access scopes and
 responsibilities</em></p>
-<p>Every employee's role controls what they can see and do. Roles are
-<strong>inferred automatically</strong> from the <code>position</code>
-field in each employee's profile — there is no separate role field to
-set. An Admin can adjust an employee's effective role by updating their
-<code>position</code> string.</p>
+<p>Every employee's role controls what they can see and do. Three roles
+(Operator, Technician, Manager) are <strong>inferred
+automatically</strong> from the <code>position</code> field in each
+employee's profile — there is no separate role field to set. The
+<strong>Admin role</strong> is the exception: it is controlled by the
+<code>isAdmin</code> boolean field on the employee's Firestore document.
+To grant or revoke Admin, edit that field directly — no code change or
+app release is needed.</p>
 <h3 id="operator">Operator</h3>
 <p>Discovers a fault and creates the job card. Responsible for capturing
 all details accurately at the point of report. Receives notifications
@@ -155,10 +162,17 @@ department visibility on the Manager Dashboard.</p>
 Daily Review · Monitoring Dashboard</p>
 <h3 id="admin">Admin</h3>
 <p>Full system access. Manages employee accounts, configures geofence
-boundaries, adjusts escalation rules, and has access to all data across
-all departments.</p>
+boundaries, adjusts escalation rules, enables/disables modules (Waste
+Management, Fleet Maintenance), and has access to all data across all
+departments.</p>
 <p><strong>Key Screens:</strong> Admin Screen · Geofence Editor ·
-Employee Management</p>
+Employee Management · Settings (Modules)</p>
+<blockquote>
+<p><strong>Admin access is controlled per user in Firestore.</strong>
+Set <code>isAdmin: true</code> on an employee's Firestore document to
+grant Admin. No code change required — takes effect on next app launch
+by that user.</p>
+</blockquote>
 <h3 id="authentication">Authentication</h3>
 <p>All users sign in with their <strong>Gmail address and
 password</strong> (Firebase Auth). The system issues a custom token
@@ -220,8 +234,10 @@ linked to a job card.</p>
 </tr>
 <tr>
 <td><strong>Type</strong></td>
-<td>Mechanical / Electrical / Mech-Elec</td>
-<td>Routes to the correct trade of technician</td>
+<td>Mechanical / Electrical / Mech-Elec / Maintenance / Building / Pre
+Press Spec</td>
+<td>Routes to the correct trade or team; Building and Pre Press Spec
+bypass escalation</td>
 </tr>
 <tr>
 <td><strong>Closure Note</strong></td>
@@ -411,6 +427,25 @@ another</td>
 </tr>
 </tbody>
 </table>
+<h3 id="notification-inbox--off-site-hold">Notification Inbox — Off-Site
+Hold</h3>
+<p>When a user is off-site, the system does <strong>not</strong> send a
+live push notification. Instead, the notification is held in a
+<strong>Notification Inbox</strong> until the user is back on site.</p>
+<p>Notifications held in the inbox include: job assignments made while
+off shift, job closure/update acknowledgements sent back to the creator,
+"I'm Busy" responses from technicians, and Copper sell-threshold alerts
+(for authorised users).</p>
+<ul>
+<li>The <strong>bell icon</strong> in the Home screen app bar shows a
+live unread-count badge.</li>
+<li>When the user returns on-site and opens the app, a banner appears:
+"X notifications waiting" with a one-tap shortcut to the inbox.</li>
+<li>Items in the inbox persist until manually marked as read — they do
+not expire.</li>
+<li>Tapping any inbox item navigates directly to the relevant job card
+and marks it as read.</li>
+</ul>
 <h3 id="on-site-entry--departure-notifications">On-Site Entry &amp;
 Departure Notifications</h3>
 <p>The geofencing system also generates automatic notifications when
@@ -549,10 +584,23 @@ to the <code>connectivity_plus</code> stream</li>
 <code>SyncQueueItem</code> objects in a Hive box named
 <code>sync_queue</code></li>
 <li>When connectivity is restored, <code>SyncService</code> replays all
-queued items in order</li>
+queued items in order, correctly restoring Firestore
+<code>Timestamp</code> fields so list screens are not corrupted on
+reconnect</li>
+<li>The <strong>sync badge</strong> at the top of the Home screen shows
+a live indicator when items are queued — orange while waiting for
+connectivity, pulsing while syncing</li>
 <li>Firestore's built-in offline persistence also caches recent reads,
 so the UI remains usable even when offline</li>
 </ul>
+<blockquote>
+<p><strong>Job card creation requires connectivity.</strong> Creating a
+job card while offline would mean no technicians are notified — the
+fault would sit silently in the queue. The Create Job Card screen shows
+a full-width red banner when offline and disables the Save button until
+connectivity is restored. Use this time to move to a signal area before
+submitting.</p>
+</blockquote>
 <blockquote>
 <p>The sync queue uses <strong>Hive</strong> (a fast key-value store)
 for local persistence. <code>SyncQueueItem</code> is a
@@ -656,6 +704,8 @@ can immediately drill into the relevant cards.</p>
 stock, department-filtered.</li>
 <li><strong>Trendline</strong> — opened vs. closed jobs over the
 selected period, with legend.</li>
+<li><strong>Department Area Chart</strong> — area breakdown of open jobs
+by department.</li>
 <li><strong>Priority Breakdown</strong> — bar chart of open jobs by
 priority, labelled P1 Low through P5 Crit.</li>
 <li><strong>Team Performance</strong> — per-technician table showing
@@ -800,21 +850,40 @@ Root cause: age/fatigue.</td>
 </table>
 <hr />
 <h2 id="admin-tools">Admin Tools</h2>
-<p><em>Full system control — accounts, geofences, escalation
-rules</em></p>
+<p><em>Full system control — accounts, geofences, escalation rules,
+communications</em></p>
 <p>Admins have access to all data across all departments plus system
-configuration tools not available to any other role.</p>
+configuration tools not available to any other role. Admin Settings has
+six tabs.</p>
 <ul>
-<li><strong>Employee Management</strong> — Create, edit, and deactivate
-employee accounts. Set roles, departments, and trade types. Link
-accounts to clock numbers.</li>
-<li><strong>Geofence Editor</strong> — Draw and adjust the site boundary
-polygon on a live map. Changes take effect immediately for all users
-without a software update.</li>
-<li><strong>Escalation Rules</strong> — Configure the timer and
-recipient list for each of the four escalation stages. Tune to match
-your site's staffing and response capacity.</li>
+<li><strong>Employees</strong> — Create, edit, and deactivate employee
+accounts. Set roles, departments, and trade types. Link accounts to
+clock numbers. The <code>isOnSite</code> column shows a tappable
+green/grey chip — tap to toggle an employee's on-site status
+directly.</li>
+<li><strong>Structures</strong> — Manage the department → area → machine
+hierarchy. Cascading deletes with confirmation.</li>
+<li><strong>Settings</strong> — Escalation config (per-stage timer,
+recipients, enable/disable), location tools, access and module controls.
+Includes <strong>App Update Control</strong>: set a minimum supported
+build number and download URL. Any device running an older build sees a
+blocking update screen on next launch — a server-side kill-switch
+independent of Remote Config.</li>
+<li><strong>Job Cards</strong> — Spreadsheet-style export and
+bulk-delete tooling for the <code>job_cards</code> collection.</li>
+<li><strong>On Site</strong> — Real-time panel showing every employee
+currently marked on-site, grouped by department. Updates live as
+employees arrive and leave.</li>
+<li><strong>Comms</strong> — Broadcast an update notification to all
+employees. A pre-filled message template is provided and can be edited.
+After sending, a result summary shows sent / parked (off-site users) /
+no-token counts. Recent broadcasts are listed at the bottom of the
+tab.</li>
 </ul>
+<p><strong>Geofence Editor</strong> — Separate screen accessible from
+Admin → Settings for drawing the site boundary polygon on a live map.
+Changes take effect immediately for all users without a software
+update.</p>
 <h3 id="technology-stack">Technology Stack</h3>
 <table>
 <thead>
@@ -863,6 +932,88 @@ maintain, no single point of hardware failure. All data is encrypted at
 rest and in transit. Backed by Google's 99.99% availability SLA with
 automatic scaling.</p>
 </blockquote>
+<hr />
+<h2 id="fleet-maintenance">Fleet Maintenance</h2>
+<p><em>Tracking maintenance, issues, and costs for Hyster forklifts and
+grabs — a separate module from production job cards.</em></p>
+<p>Fleet Maintenance is a self-contained module behind its own
+<strong>Fleet</strong> tab. It is only visible once an admin turns it on
+in Fleet Settings and gives the relevant people a fleet role. It
+deliberately keeps forklift/grab work <strong>separate</strong> from
+plant breakdown job cards, with its own asset register and history.</p>
+<h3 id="what-it-does">What it does</h3>
+<ul>
+<li><strong>Issue reporting</strong> — Operators and shift leads (in the
+departments an admin enables) report a problem on a specific forklift or
+grab: severity (Low / Medium / High / Out of Service), shift
+(auto-detected as day / night / weekend), a description, and up to three
+photos.</li>
+<li><strong>Out-of-service alerts</strong> — Reporting an asset <em>out
+of service</em> immediately push-notifies the Hyster mechanic and the
+cost manager(s) — or holds it in their notification inbox if they're
+off-site — and flags the asset with an orange <strong>OOS</strong> badge
+until the issue is resolved. High-severity issues go to the inbox
+without a push.</li>
+<li><strong>Mechanic work log</strong> — The mechanic works an "open
+issues" queue sorted by severity, acknowledges an issue, and resolves it
+by either logging the work or leaving a resolution note (out-of-service
+issues must be closed with a work record — a note alone is not
+accepted). Work records capture work type, labour hours, the machine
+hour-meter reading, parts used, and photos, are numbered
+<code>FM-NNNN</code> (short global sequence; legacy records keep
+<code>FM-YYYYMMDD-NNN</code>), and lock from editing 14 days after
+creation. The hour-meter reading is propagated to the asset so the next
+mechanic sees the last recorded hours.</li>
+<li><strong>Cost tracking (managers only)</strong> — The overseeing
+manager enters cost lines against an asset (parts / labour / invoice /
+other, with amount, invoice reference, and supplier), sees month and
+year-to-date spend per machine, and exports a full CSV. <strong>The
+mechanic never sees cost amounts</strong> — only a "Costs pending /
+Costs entered" label.</li>
+<li><strong>Admin</strong> — The forklift/grab register, the list of
+reporter departments, the cost-manager clock numbers, the asset and work
+types, and the module on/off switch are all managed in Fleet
+Settings.</li>
+</ul>
+<h3 id="roles">Roles</h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>How you're recognised</th>
+<th>What you can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fleet Mechanic</strong></td>
+<td>Workshop department + "Hyster Mechanic" position</td>
+<td>Log work, acknowledge and resolve issues (no money shown)</td>
+</tr>
+<tr>
+<td><strong>Fleet Reporter</strong></td>
+<td>Your department is enabled in Fleet Settings</td>
+<td>Report issues and track the ones you raised</td>
+</tr>
+<tr>
+<td><strong>Cost Manager</strong></td>
+<td>Your clock number is on the cost-manager list</td>
+<td>Enter costs, view spend reports, export CSV</td>
+</tr>
+<tr>
+<td><strong>Fleet Admin</strong></td>
+<td>System admin</td>
+<td>Manage the asset register and all Fleet settings</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-the-management-dashboard-ctp-pulse">On the management
+dashboard (CTP Pulse)</h3>
+<p>Managers with the Fleet module on the web board see a <strong>Fleet
+Maintenance</strong> section: open issues (live), maintenance hours this
+month, cost this month, and average issue resolution time — plus a
+dedicated Fleet page with cost-per-asset and cost-by-category charts and
+a live list of open issues.</p>
 <hr />
 <h2 id="ai--predictive-maintenance-roadmap">AI &amp; Predictive
 Maintenance Roadmap</h2>

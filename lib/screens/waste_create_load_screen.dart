@@ -32,6 +32,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
   final WasteService _wasteService = WasteService();
   bool _isLoading = true;
   bool _effectiveWasteEnabled = true;
+  WasteSettings? _wasteSettings;
 
   @override
   void initState() {
@@ -43,13 +44,19 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
   Future<void> _loadFeatureStatus() async {
     final clock = currentEmployee?.clockNo;
     final enabled = await _wasteService.isWasteTrackEnabledForCurrentUser(clock);
+    final settings = await _wasteService.getWasteSettings();
     if (mounted) {
       setState(() {
         _effectiveWasteEnabled = enabled;
+        _wasteSettings = settings;
         _isLoading = false;
       });
     }
   }
+
+  bool get _canAccess =>
+      role_utils.isWasteAdmin(currentEmployee) ||
+      role_utils.isSecurityManager(currentEmployee, _wasteSettings);
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +89,21 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
                   style: TextStyle(color: Theme.of(context).appColors.textMuted),
                 ),
               ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_wasteSettings != null && !_canAccess) {
+      return Scaffold(
+        appBar: WasteAppBar(title: 'New Waste Load', isOnSite: currentEmployee?.isOnSite),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Access denied. On-the-spot load creation is for Security Managers and Admins.',
+              textAlign: TextAlign.center,
             ),
           ),
         ),

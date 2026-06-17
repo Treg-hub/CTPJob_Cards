@@ -23,6 +23,8 @@ class WasteItem {
   /// Snapshot of WasteType.isQuantityOnly at recording time.
   /// When true: measured by count not weight; ratePerKg is treated as rate per unit.
   final bool isQuantityOnly;
+  /// Snapshot of WasteType.noSiteWeight — weight confirmed at weighbridge, not on-site.
+  final bool isNoSiteWeight;
 
   const WasteItem({
     this.id,
@@ -37,6 +39,7 @@ class WasteItem {
     this.isDeleted = false,
     this.ratePerKg,
     this.isQuantityOnly = false,
+    this.isNoSiteWeight = false,
   });
 
   /// Line value: for quantity-only items uses qty × rate; for weight-based uses kg × rate.
@@ -64,6 +67,7 @@ class WasteItem {
       isDeleted: data['is_deleted'] as bool? ?? false,
       ratePerKg: (data['rate_per_kg'] as num?)?.toDouble(),
       isQuantityOnly: data['is_quantity_only'] as bool? ?? false,
+      isNoSiteWeight: data['is_no_site_weight'] as bool? ?? false,
     );
   }
 
@@ -80,6 +84,7 @@ class WasteItem {
       'is_deleted': isDeleted,
       if (ratePerKg != null) 'rate_per_kg': ratePerKg,
       'is_quantity_only': isQuantityOnly,
+      'is_no_site_weight': isNoSiteWeight,
     };
   }
 
@@ -97,6 +102,7 @@ class WasteItem {
     double? ratePerKg,
     bool clearRatePerKg = false,
     bool? isQuantityOnly,
+    bool? isNoSiteWeight,
   }) {
     return WasteItem(
       id: id ?? this.id,
@@ -111,6 +117,7 @@ class WasteItem {
       isDeleted: isDeleted ?? this.isDeleted,
       ratePerKg: clearRatePerKg ? null : (ratePerKg ?? this.ratePerKg),
       isQuantityOnly: isQuantityOnly ?? this.isQuantityOnly,
+      isNoSiteWeight: isNoSiteWeight ?? this.isNoSiteWeight,
     );
   }
 }

@@ -411,7 +411,7 @@ class _FleetLogWorkScreenState extends ConsumerState<FleetLogWorkScreen> {
       if (_isEditing) {
         recordId = widget.workRecordId!;
         // Re-check server state — the detail screen's Edit button gating is
-        // advisory only; costs may have been entered or the 14-day window
+        // advisory only; costs may have been entered or the 7-day window
         // passed since this form was opened.
         final fresh = await _service.getWorkRecord(recordId);
         if (fresh == null) {

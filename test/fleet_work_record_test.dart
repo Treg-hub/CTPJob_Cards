@@ -18,9 +18,9 @@ FleetWorkRecord _record({DateTime? createdAt}) => FleetWorkRecord(
     );
 
 void main() {
-  group('FleetWorkRecord edit lock (14 days)', () {
-    test('editLockDays is the agreed 14-day window', () {
-      expect(FleetWorkRecord.editLockDays, 14);
+  group('FleetWorkRecord edit lock (7 days)', () {
+    test('editLockDays is the agreed 7-day window', () {
+      expect(FleetWorkRecord.editLockDays, 7);
     });
 
     test('not locked without createdAt (still syncing offline)', () {
@@ -28,12 +28,12 @@ void main() {
     });
 
     test('not locked within the window', () {
-      final created = DateTime.now().subtract(const Duration(days: 13, hours: 23));
+      final created = DateTime.now().subtract(const Duration(days: 6, hours: 23));
       expect(_record(createdAt: created).isEditLocked, isFalse);
     });
 
-    test('locked once 14 days have passed', () {
-      final created = DateTime.now().subtract(const Duration(days: 14, minutes: 1));
+    test('locked once 7 days have passed', () {
+      final created = DateTime.now().subtract(const Duration(days: 7, minutes: 1));
       expect(_record(createdAt: created).isEditLocked, isTrue);
     });
 
