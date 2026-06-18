@@ -92,7 +92,7 @@ Oversees all job cards in their department. Enforces data quality for operators 
 
 Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, enables/disables modules (Waste Management, Fleet Maintenance), and has access to all data across all departments.
 
-**Key Screens:** Admin Screen · Geofence Editor · Employee Management · Settings (Modules)
+**Key Screens:** Admin Screen · Geofence Editor · User Feedback · Employee Management · Settings (Modules)
 
 > **Admin access is controlled per user in Firestore.** Set `isAdmin: true` on an employee's Firestore document to grant Admin. No code change required — takes effect on next app launch by that user.
 
@@ -441,6 +441,8 @@ Admins have access to all data across all departments plus system configuration 
 - **Comms** — Broadcast an update notification to all employees. A pre-filled message template is provided and can be edited. After sending, a result summary shows sent / parked (off-site users) / no-token counts. Recent broadcasts are listed at the bottom of the tab.
 
 **Geofence Editor** — Separate screen accessible from Admin → Settings for drawing the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
+
+**User Feedback** — Admin-only screen accessible from Admin → Settings → Feedback. Lists everything staff have submitted via the **Give Feedback** button on the Home screen, and lets an admin track each item through **New → Planned → Implemented → Declined** and attach private implementation notes. Filter chips with live counts show at a glance what's still outstanding versus done. It's an internal tracking tool — only admins can see it; staff just get a confirmation when they submit.
 
 ### Technology Stack
 

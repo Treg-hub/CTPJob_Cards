@@ -339,12 +339,13 @@ The control panel. Six scrollable tabs with outlined icons.
 
 #### Tab: Settings
 
-Four grouped cards:
+Grouped cards:
 
 - **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking update screen is shown with the download URL before Home is reached. Works independently of Remote Config.
 - **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
 - **Access** — **Escalation Config** per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option). Writes to `notification_configs/global`. Prompts to confirm when re-enabling stages so open jobs aren't flooded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled. **Reset Escalation Stamps** calls `clearEscalationStamps` CF.
 - **Modules** — enable/disable Waste Management and Fleet Maintenance
+- **Feedback** — opens the **User Feedback** admin board (see [User Feedback](#user-feedback)) for reviewing and triaging feedback submitted from the Home screen FAB
 
 #### Tab: Job Cards
 
@@ -377,6 +378,21 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 - Save writes `config/geofence` with the new `center.lat`, `center.lng`, `radius_meters`
 
 > **Warning:** Changing the geofence affects every employee's `isOnSite` on their next location check. If you shrink the radius, people currently inside the old boundary may flip to `isOnSite: false` within minutes.
+
+### User Feedback
+
+`lib/screens/feedback_admin_screen.dart` — **Roles:** Admin only
+
+Internal triage board for the feedback employees submit via the **Give Feedback** FAB on the Home screen (written to the `feedback` collection). Reached from **Admin → Settings → Feedback**. Gated on `Employee.isAdmin` — regular staff never see it; they only get the "feedback submitted" confirmation.
+
+#### Capabilities
+
+- **Status workflow** — set each item to `New → Planned → Implemented → Declined`. Legacy items submitted before this screen existed show as `New` until triaged.
+- **Implementation notes** — attach private notes to any item (what was done, what's planned, or why it was declined), edited in a dialog.
+- **Filter bar** — per-status chips with live counts (`All`, `New`, `Planned`, `Implemented`, `Declined`) to separate outstanding from done.
+- **Delete** — remove a submission via the per-card overflow menu.
+
+> **Info:** Triage actions add `status`, `statusUpdatedAt`, `statusUpdatedByClockNo`, `adminNotes`, `adminNotesUpdatedAt`, and `adminNotesByClockNo` to the feedback document — the original `feedback` / `userName` / `clockNo` / `timestamp` fields are never modified. Filtering is client-side, so no Firestore composite index is required.
 
 ---
 

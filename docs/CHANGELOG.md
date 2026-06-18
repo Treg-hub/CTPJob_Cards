@@ -6,6 +6,21 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-18 — Admin: user feedback tracking board
+
+Admins can now review and track the feedback that staff submit from the **Give Feedback** button on the Home screen.
+
+A new **User Feedback** screen — reached from **Admin → Settings → Feedback** — lists every submission with who sent it and when. For each one you can:
+
+- Set a tracking status: **New → Planned → Implemented → Declined**. Anything submitted before this feature shows as **New** until you triage it.
+- Add private **implementation notes** — what you did, what's planned, or why it was declined.
+- Filter by status, with live counts, to see at a glance what's still outstanding versus done.
+- Delete a submission you no longer need.
+
+The board is **admin-only** — regular staff never see it; they just get the confirmation that their feedback was submitted.
+
+---
+
 ## 2026-06-18 — Ink Factory: combined daily readings screen + recovery history
 
 Two quality-of-life improvements for Ink Factory and Lurgi staff.
