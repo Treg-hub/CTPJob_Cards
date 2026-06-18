@@ -12,9 +12,8 @@ import 'ink_corrections_screen.dart';
 import 'ink_flagged_review_screen.dart';
 import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
-import 'ink_meter_point_entry_screen.dart';
+import 'ink_daily_readings_screen.dart';
 import 'ink_meter_point_management_screen.dart';
-import 'ink_meter_readings_grid_screen.dart';
 import 'ink_month_end_count_screen.dart';
 import 'ink_month_end_report_screen.dart';
 import 'ink_pending_costs_screen.dart';
@@ -61,15 +60,13 @@ class InkHomeScreen extends ConsumerWidget {
             _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
                 builder: () => const InkReceiveIbcScreen()),
             _Action(Icons.speed_outlined, 'Meter Readings',
-                builder: () => const InkMeterReadingsGridScreen()),
+                builder: () => const InkDailyReadingsScreen()),
             _Action(Icons.swap_horiz_outlined, 'Consume IBC',
                 builder: () => const InkIbcTransferScreen()),
             _Action(Icons.science_outlined, 'Production Run',
                 builder: () => const InkProductionRunScreen()),
             _Action(Icons.recycling_outlined, 'Toloul Recovery',
                 builder: () => const InkTolulRecoveryScreen()),
-            _Action(Icons.water_outlined, 'Toloul Meters',
-                builder: () => const InkMeterPointEntryScreen()),
             _Action(Icons.inventory_2_outlined, 'IBC Register',
                 builder: () => const InkIbcRegisterScreen()),
           ]),

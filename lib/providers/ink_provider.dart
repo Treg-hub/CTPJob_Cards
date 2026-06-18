@@ -98,6 +98,11 @@ final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
   (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
 );
 
+/// Recent toloul recovery transactions (newest first, non-voided).
+final inkRecentRecoveriesProvider = StreamProvider<List<InkTransaction>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecentRecoveries(),
+);
+
 /// Active toloul meter points (for the reading screen).
 final inkActiveMeterPointsProvider = StreamProvider<List<InkMeterPoint>>(
   (ref) => ref.watch(inkServiceProvider).watchMeterPoints(activeOnly: true),

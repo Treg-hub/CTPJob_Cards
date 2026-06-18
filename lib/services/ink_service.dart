@@ -414,6 +414,20 @@ class InkService {
         return l;
       });
 
+  /// Recent toloul recovery transactions (newest-first, non-voided).
+  Stream<List<InkTransaction>> watchRecentRecoveries({int limit = 15}) => _db
+      .collection(Collections.inkTransactions)
+      .where('type', isEqualTo: InkTxnType.recovery.value)
+      .snapshots()
+      .map((s) {
+        final l = s.docs
+            .map(InkTransaction.fromFirestore)
+            .where((t) => !t.voided)
+            .toList()
+          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
+        return l.take(limit).toList();
+      });
+
   /// Records a production run: a `consumption_production` txn per input (valued
   /// at current WAC) and one `manufacture` txn for the output whose total_cost
   /// is the summed input cost (matches the legacy month-end model). All share a

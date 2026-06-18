@@ -56,6 +56,7 @@ Live:
 - Copper Inventory module (clock-number restricted)
 - WasteTrack module (Security department)
 - Fleet Maintenance module (Hyster forklifts & grabs)
+- Ink Factory module (production stock inventory)
 
 Planned:
 - Predictive maintenance AI
@@ -482,6 +483,55 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 ### On the management dashboard (CTP Pulse)
 
 Managers with the Fleet module on the web board see a **Fleet Maintenance** section: open issues (live), maintenance hours this month, cost this month, and average issue resolution time — plus a dedicated Fleet page with cost-per-asset and cost-by-category charts and a live list of open issues.
+
+---
+
+## Ink Factory
+
+*Production stock-inventory data entry for the Ink Factory department — a separate module from plant job cards.*
+
+The Ink Factory module is a full stock-inventory system for raw materials, solvents, and manufactured inks. It tracks purchases, production runs, meter consumption, Toloul recovery, and month-end reporting. It is only visible to staff with `department == "Ink Factory"` and to admins.
+
+### What it does
+
+- **Stock on hand** — Live balances and weighted-average costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105, Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue, Black — received as IBCs, never manufactured), and manufactured products (CoverWax, Gravure Binder).
+- **Receive stock (raw materials)** — Operator records incoming raw materials from a supplier. Cost is entered later by a manager when the invoice arrives (deferred-cost pattern).
+- **Receive ink IBCs** — Operator scans the IBC barcode (GS1-128 / SSCC label), weight and colour are auto-filled from the scan. The audit register records every IBC number received.
+- **Consume IBC** — Transfers an IBC from the audit register into the tank. Records the Toloul wash consumption used during the transfer.
+- **Daily Readings** — Combined screen for ink meters and Toloul meter points. Enter all readings on one page with one submit.
+- **Production Run** — Operator picks a recipe (CoverWax or Gravure Binder) and a pot count. The screen previews inputs consumed and output produced; the run is recorded as consumption transactions for each input and a manufacture transaction for the output.
+- **Toloul Recovery** — Records solvent recovered from the Lurgi distillation. Previous recovery entries are shown below the form for context.
+- **IBC Register** — Searchable register of all ink IBCs with colour tabs (Yellow / Red / Blue / Black), receive date, order number, and CGNA number.
+
+### Daily Readings — ink meters + Toloul meters on one screen
+
+The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter points and all Toloul meter points on a single scrollable page. The Lurgi operator enters both in one sitting at 06:00 each morning.
+
+- **Ink meters** — cumulative reading entry for Yellow, Red, Blue, Black, and Gravure Binder. Each card shows the last few readings as a history strip. The delta (litres consumed since the last reading) is computed automatically and converted to kg using a conversion factor. If the new reading is below the last, a "meter was reset" checkbox appears.
+- **Toloul meters** — the same entry pattern for the Toloul Recovery and Toloul Usage meter points. These record how much solvent each press consumed and are used for month-end Toloul reporting. They do not affect stock levels.
+- One date at the top (editable by managers), one **Record readings** button at the bottom.
+
+### Roles
+
+| Role | How you're recognised | What you can do |
+|------|----------------------|-----------------|
+| **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
+| **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator actions + pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
+| **Lurgi operator** | `department == "Lurgi"` | Daily Readings screen only (ink + Toloul meters) |
+| **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
+
+> **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
+
+### Manager tools
+
+- **Pending Costs** — after a purchase is received, the manager enters the total cost from the invoice to finalise the weighted-average cost calculation.
+- **Recipes** — define input quantities and output per pot for CoverWax and Gravure Binder recipes.
+- **Conversion Factors** — set the kg-per-litre factor for each metered ink so meter readings convert to stock consumption correctly.
+- **Toloul Meter Points** — manage the list of meter points (Lurgi recovery points and press usage points) shown on the Daily Readings screen.
+- **Month-end Count** — enter a physical stock count; the system auto-generates an adjustment transaction per item (count minus ledger balance).
+- **Month-end Report** — free date-range report (count-to-count) with opening balance, all movements, and closing balance per item, exportable as CSV and PDF.
+- **Stock Adjustment / Value Adjustment / Revaluation** — manager-only corrections.
+- **Corrections** — void a transaction and re-enter corrected values (void-and-reenter pattern, preserved for audit).
 
 ---
 
