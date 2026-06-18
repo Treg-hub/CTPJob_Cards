@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-06-16 (Phase 8 polish: added cross-links to small focused notes (admins-collection, notification-inbox-specifics, deploy-discipline), POLISH-CHECKLIST.md, new Canvases Excalidraw specs (auth/gating, geofence-inbox, numbering, ink-replay, module-gating), Instructions/ARCHITECTURE/COLLECTIONS/REAME sync, dupe note reinforced, update discipline ref)._
+_Last updated: 2026-06-18 (added the admin-only **User Feedback** triage board — `feedback_admin_screen.dart`, reached from Admin → Settings → Feedback; see "Admin Screens (Job Cards core)" below). Prior: 2026-06-16 Phase 8 polish — cross-links to small focused notes (admins-collection, notification-inbox-specifics, deploy-discipline), POLISH-CHECKLIST.md, new Canvases Excalidraw specs (auth/gating, geofence-inbox, numbering, ink-replay, module-gating), Instructions/ARCHITECTURE/COLLECTIONS/REAME sync, dupe note reinforced, update discipline ref._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -272,6 +272,21 @@ App entry (home_screen.dart)
 | `fleet_audit` | Immutable audit trail. |
 
 Cloud Functions (`createFleetWorkRecord`, `onFleetIssueCreated`, `onFleetIssueUpdated`) live in the **monorepo** `firebase/functions/src/index.ts`, not this repo. See `docs/COLLECTIONS.md` for full field schemas.
+
+---
+
+## Admin Screens (Job Cards core)
+
+Admin-only screens reached from the Home **Admin** tile / Admin Settings. All gated on `Employee.isAdmin`.
+
+| File | Access | Purpose |
+|---|---|---|
+| `admin_screen.dart` | admin | 6-tab control panel: Employees, Structures, Settings, Job Cards, On Site, Comms |
+| `geofence_editor_screen.dart` | admin | Map editor for the site geofence boundary (`config/geofence`) |
+| `copper_dashboard_screen.dart` | admin (clock 22) | Copper inventory dashboard (whitelist-gated) |
+| `feedback_admin_screen.dart` | admin | **User Feedback triage board** — reviews `feedback` submissions; sets status `New → Planned → Implemented → Declined` + private notes. Reached from Settings → Feedback. |
+
+**User Feedback board (`feedback` collection)**: employees submit via the Home-screen "Give Feedback" FAB (`feedback`/`userName`/`clockNo`/`timestamp`). The admin board writes triage fields onto each doc — `status`, `statusUpdatedAt`, `statusUpdatedByClockNo`, `adminNotes`, `adminNotesUpdatedAt`, `adminNotesByClockNo` — and never touches the submitter's fields. Status filtering is client-side, so no composite index is needed. The rule stays `match /feedback/{docId} { allow read, write: if isSignedIn(); }` — admin-only access is enforced in the UI, not in rules.
 
 ---
 
