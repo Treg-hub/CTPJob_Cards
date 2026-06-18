@@ -1104,7 +1104,10 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
 }, async () => {
   console.log("escalateNotifications: started");
   const config = await getNotificationConfig();
-  const allEmps = await getAllEmployeesCached();
+  // Lazy: only read employees when a stage actually has jobs to route.
+  // Cold-start instances would otherwise read the entire employees collection
+  // on every 5-min tick even during quiet overnight periods with zero open jobs.
+  let allEmps = null;
   const now = admin.firestore.FieldValue.serverTimestamp();
 
   for (let stageNum = 1; stageNum <= 4; stageNum++) {
@@ -1170,6 +1173,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
       const rules = getStageRecipients(config, stageNum, job.type);
       if (rules.length === 0) continue;
 
+      if (!allEmps) allEmps = await getAllEmployeesCached();
       const resolvedRecipients = await resolveRecipientsFromRules(rules, job.type, job.department, job.operatorClockNo, allEmps);
       console.log(`Stage ${stageNum} job #${job.jobCardNumber || doc.id}: type=${job.type}, dept=${job.department}, recipients=${resolvedRecipients.length}`);
 
