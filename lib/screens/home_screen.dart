@@ -74,6 +74,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   StreamSubscription<Employee>? _employeeSubscription;
   bool _testMode = false;
   Timer? _testModeTimer;
+  // Debounces on/off-site snackbars so GPS jitter at the fence boundary can't
+  // spam them — the notice only fires once the new state has held briefly.
+  Timer? _presenceNoticeDebounce;
   int _pendingReviewCount = 0;
   StreamSubscription<List<JobCard>>? _reviewCountSubscription;
   StreamSubscription<RemoteMessage>? _messagingSubscription;
@@ -164,22 +167,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int? _lastClaimsVersion;
 
   void _setupEmployeeStream(String clockNo) {
+    // Cancel any existing subscription first — reassigning without cancelling
+    // leaks the old listener, which would fire the presence snackbars again
+    // per orphaned stream. Also drop any pending presence notice so a debounce
+    // armed for the previous user/clockNo can't fire after a switch.
+    _employeeSubscription?.cancel();
+    _presenceNoticeDebounce?.cancel();
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
         .listen((emp) {
       if (!mounted) return;
-      final wasOffsite = _previousIsOnSite == false;
-      final wasOnsite = _previousIsOnSite == true;
+      final prevIsOnSite = _previousIsOnSite;
       final isNowOnsite = emp.isOnSite;
       setState(() {
         currentEmployee = emp;
         isOnSite = emp.isOnSite;
         _previousIsOnSite = emp.isOnSite;
       });
-      if (wasOffsite && isNowOnsite) {
-        _checkInboxOnReturn(clockNo);
-      } else if (wasOnsite && !isNowOnsite) {
-        _showOffSiteNotice();
+      // React only to a genuine change, and debounce it: GPS jitter at the
+      // fence boundary flips isOnSite back and forth, which previously fired a
+      // snackbar on every flip. Wait for the new state to settle, and if it
+      // oscillated back in the meantime, fire nothing.
+      if (prevIsOnSite != null && prevIsOnSite != isNowOnsite) {
+        _presenceNoticeDebounce?.cancel();
+        _presenceNoticeDebounce = Timer(const Duration(seconds: 45), () {
+          if (!mounted || isOnSite != isNowOnsite) return;
+          if (isNowOnsite) {
+            _checkInboxOnReturn(clockNo);
+          } else {
+            _showOffSiteNotice();
+          }
+        });
       }
       // Claims plumbing (Phase 3 readiness): the server bumps claimsVersion
       // after minting custom auth claims; refresh the ID token so rules see
@@ -526,6 +544,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _reviewCountSubscription?.cancel();
     _messagingSubscription?.cancel();
     _testModeTimer?.cancel();
+    _presenceNoticeDebounce?.cancel();
     super.dispose();
   }
 

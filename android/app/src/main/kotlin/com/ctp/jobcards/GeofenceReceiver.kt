@@ -110,12 +110,21 @@ class GeofenceReceiver : BroadcastReceiver() {
                     }
                 }
 
-                // Notify the Dart side only when the Flutter engine is running (foreground).
-                notifyDart(isEntering, clockNo)
-
-                // Always show a local notification so the user is informed even when the
-                // app is killed and the Dart notification path is unavailable.
-                sendLocalNotification(context, isEntering)
+                // Only notify on a REAL transition — suppresses INITIAL_TRIGGER_ENTER
+                // on re-registration and GPS boundary-oscillation re-fires, which
+                // were spamming the on/off-site notifications + the home snackbar.
+                //
+                // Wave B: this txn touches only the 5 presence keys, which the
+                // firestore.rules `isOwnPresenceWrite` carve-out permits for the user
+                // whose clockNum claim == this doc id. So the direct write keeps
+                // working under the employees lock and didTransition stays accurate.
+                // (Users without the clockNum claim — pre-Wave-B APK — are handled by
+                // the rollout gate: force_update + readiness check before the lock
+                // deploys.)
+                if (didTransition) {
+                    notifyDart(isEntering, clockNo)
+                    sendLocalNotification(context, isEntering)
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Exception in GeofenceReceiver: ${e.message}")
