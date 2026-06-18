@@ -1124,14 +1124,14 @@ class FirestoreService {
 
   // ==================== CENTRAL GEOFENCE/PRESENCE EVENT LOGGING ====================
   // Single source of truth: Collections.appGeofence ('app_geofence'). Used for
-  // 'check' heartbeats (WorkManager no-change ticks), manual tests, and the
-  // web inactivity guard. Enter/exit transitions routed through the CF are
-  // logged server-side by updateEmployeePresence; native enter/exit are logged
-  // by GeofenceReceiver.kt directly.
+  // 'check' heartbeats (WorkManager no-change ticks) and manual tests. Enter/exit
+  // transitions routed through the CF are logged server-side by
+  // updateEmployeePresence; native enter/exit are logged by GeofenceReceiver.kt
+  // directly.
   Future<void> logGeoFenceEvent({
     required String clockNo,
     required String eventType, // 'enter' | 'exit' | 'check'
-    required String source,    // 'workmanager_30min', 'app_open_check', 'web_inactivity', 'manual_test', 'admin_manual', …
+    required String source,    // 'workmanager_30min', 'app_open_check', 'manual_test', 'admin_manual', …
     double? latitude,
     double? longitude,
     double? accuracy,

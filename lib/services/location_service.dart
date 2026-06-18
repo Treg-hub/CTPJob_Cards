@@ -243,9 +243,8 @@ class LocationService {
   // Also syncs WorkManager: running only when on-site.
   // ---------------------------------------------------------------------------
   Future<void> checkCurrentLocation() async {
-    // Web presence is driven by WebPresenceService (inactivity), never by
-    // browser geolocation — guard so the web build doesn't prompt for location
-    // or flip isOnSite from an inaccurate web fix.
+    // The web build has no geofence and never writes presence — mobile is the
+    // sole source of truth. Guard so the web build doesn't prompt for location.
     if (kIsWeb) return;
     try {
       debugPrint('📍 checkCurrentLocation() called');

@@ -16,7 +16,7 @@ class Employee {
   /// employee update can never clobber it.
   final int? claimsVersion;
 
-  /// Presence transition timestamps, written by the geofence/WorkManager/web
+  /// Presence transition timestamps, written by the native geofence/WorkManager
   /// paths and the updateEmployeePresence Cloud Function. Read-only on the
   /// client (NOT in toFirestore) so admin edits / CSV import never clobber them.
   /// `lastOnSiteAt` is the start of the current on-site session — used by the

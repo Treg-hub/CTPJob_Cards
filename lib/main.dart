@@ -24,7 +24,6 @@ import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/location_service.dart';
-import 'services/web_presence_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 Employee? currentEmployee;
@@ -266,9 +265,9 @@ void main() async {
         if (!kIsWeb) {
           NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
         }
-        // Claims (role/department/isAdmin/clockNum) are platform-agnostic and are
-        // required for Wave B writes — including the web inactivity presence
-        // write — so refresh on web too. Fire-and-forget; never blocks startup.
+        // Claims (role/department/isAdmin/clockNum) are platform-agnostic and
+        // gate Wave B reads/writes, so refresh on web too. Fire-and-forget;
+        // never blocks startup.
         AuthClaimsService.refreshClaims();
       }
 
@@ -451,10 +450,6 @@ class CtpJobCardsApp extends ConsumerWidget {
         ),
         extensions: const [darkAppColors],
       ),
-      // Web-only inactivity guard (passthrough on mobile): marks managers who
-      // leave the web app open as off-site after 60 min idle or on tab hide.
-      builder: (context, child) =>
-          WebPresenceGuard(child: child ?? const SizedBox.shrink()),
       home: initialScreen,
       debugShowCheckedModeBanner: false,
     );
