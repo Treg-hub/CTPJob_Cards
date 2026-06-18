@@ -115,13 +115,25 @@ class InkService {
   /// Records a transaction. The [InkTransaction.idempotencyKey] is used as the
   /// document id so an offline replay / retry never duplicates the entry.
   /// Server-computed fields (seq, balance, WAC) are filled by the trigger.
+  ///
+  /// For named idempotency keys, uses a Firestore transaction to check
+  /// existence before writing — prevents a permission-denied error when a
+  /// retry hits an existing doc (rules treat .set() on existing as UPDATE,
+  /// which is blocked by the hasOnly whitelist).
   Future<void> recordTransaction(InkTransaction txn) async {
     final key =
         txn.idempotencyKey.isNotEmpty ? txn.idempotencyKey : _uuid.v4();
-    await _db
-        .collection(Collections.inkTransactions)
-        .doc(key)
-        .set(txn.toFirestore());
+    final ref = _db.collection(Collections.inkTransactions).doc(key);
+
+    if (txn.idempotencyKey.isNotEmpty) {
+      await _db.runTransaction((txnObj) async {
+        final snap = await txnObj.get(ref);
+        if (snap.exists) return; // already recorded — idempotent skip
+        txnObj.set(ref, txn.toFirestore());
+      });
+    } else {
+      await ref.set(txn.toFirestore());
+    }
   }
 
   /// Manager: enter/correct the cost on a pending receipt → flips to `costed`
@@ -224,34 +236,41 @@ class InkService {
         return list;
       });
 
-  /// Every transaction (for the month-end report, which rolls the ledger
-  /// forward per item). Fine at this volume; revisit if it grows large.
-  Stream<List<InkTransaction>> watchAllTransactions() => _db
-      .collection(Collections.inkTransactions)
-      .snapshots()
-      .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+  /// Every transaction in the current reporting month (for the month-end report,
+  /// which rolls the ledger forward per item). Bounded to the current month so
+  /// the stream doesn't grow unboundedly as the ledger accumulates over time.
+  Stream<List<InkTransaction>> watchAllTransactions() {
+    final now = DateTime.now();
+    final monthStart =
+        Timestamp.fromDate(DateTime(now.year, now.month, 1));
+    return _db
+        .collection(Collections.inkTransactions)
+        .where('effective_at', isGreaterThanOrEqualTo: monthStart)
+        .snapshots()
+        .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+  }
 
   /// Manager "pending costs" queue — receipts awaiting a cost.
+  /// Ordered by recorded_at DESC (matches existing composite index) with a cap
+  /// of 50 so the stream doesn't scan the full ledger history.
   Stream<List<InkTransaction>> watchPendingCosts() => _db
       .collection(Collections.inkTransactions)
       .where('cost_status', isEqualTo: InkCostStatus.pending.value)
+      .orderBy('recorded_at', descending: true)
+      .limit(50)
       .snapshots()
-      .map((s) {
-        final list = s.docs.map(InkTransaction.fromFirestore).toList()
-          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
-        return list;
-      });
+      .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
 
   /// Manager review queue — flagged (e.g. negative-balance) movements.
+  /// Ordered by recorded_at DESC (matches existing composite index) with a cap
+  /// of 50 so the stream doesn't scan the full ledger history.
   Stream<List<InkTransaction>> watchFlagged() => _db
       .collection(Collections.inkTransactions)
       .where('flagged_for_review', isEqualTo: true)
+      .orderBy('recorded_at', descending: true)
+      .limit(50)
       .snapshots()
-      .map((s) {
-        final list = s.docs.map(InkTransaction.fromFirestore).toList()
-          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
-        return list;
-      });
+      .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
 
   // ---------------------------------------------------------------------------
   // OTHER METERS (report-only capture — factory toloul meters, no stock impact)
@@ -332,47 +351,61 @@ class InkService {
       );
 
   /// Latest cumulative meter value per item (from `consumption_meter` txns), so
-  /// the meter screen can compute the next reading's delta.
-  Stream<Map<String, double>> watchLatestMeterReadings() => _db
-      .collection(Collections.inkTransactions)
-      .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
-      .snapshots()
-      .map((s) {
-        final latest = <String, ({DateTime at, double reading})>{};
-        for (final doc in s.docs) {
-          final t = InkTransaction.fromFirestore(doc);
-          if (t.meterReading == null) continue;
-          final cur = latest[t.stockItemCode];
-          if (cur == null || t.effectiveAt.isAfter(cur.at)) {
-            latest[t.stockItemCode] =
-                (at: t.effectiveAt, reading: t.meterReading!);
+  /// the meter screen can compute the next reading's delta. Bounded to the last
+  /// 180 days — any item without a reading in 6 months is effectively dormant.
+  Stream<Map<String, double>> watchLatestMeterReadings() {
+    final cutoff = Timestamp.fromDate(
+      DateTime.now().subtract(const Duration(days: 180)),
+    );
+    return _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at', isGreaterThanOrEqualTo: cutoff)
+        .snapshots()
+        .map((s) {
+          final latest = <String, ({DateTime at, double reading})>{};
+          for (final doc in s.docs) {
+            final t = InkTransaction.fromFirestore(doc);
+            if (t.meterReading == null) continue;
+            final cur = latest[t.stockItemCode];
+            if (cur == null || t.effectiveAt.isAfter(cur.at)) {
+              latest[t.stockItemCode] =
+                  (at: t.effectiveAt, reading: t.meterReading!);
+            }
           }
-        }
-        return {for (final e in latest.entries) e.key: e.value.reading};
-      });
+          return {for (final e in latest.entries) e.key: e.value.reading};
+        });
+  }
 
   /// The most recent [limit] meter readings per item (newest first) — for the
   /// grid view that shows the previous few days alongside the entry field.
+  /// Bounded to the last 90 days so the stream doesn't scan the full ledger.
   Stream<Map<String, List<({DateTime at, double reading})>>>
-      watchRecentMeterReadings({int limit = 4}) => _db
-          .collection(Collections.inkTransactions)
-          .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
-          .snapshots()
-          .map((s) {
-            final byItem = <String, List<({DateTime at, double reading})>>{};
-            for (final doc in s.docs) {
-              final t = InkTransaction.fromFirestore(doc);
-              if (t.meterReading == null) continue;
-              (byItem[t.stockItemCode] ??= [])
-                  .add((at: t.effectiveAt, reading: t.meterReading!));
-            }
-            for (final key in byItem.keys.toList()) {
-              final list = byItem[key]!
-                ..sort((a, b) => b.at.compareTo(a.at)); // newest first
-              if (list.length > limit) byItem[key] = list.sublist(0, limit);
-            }
-            return byItem;
-          });
+      watchRecentMeterReadings({int limit = 4}) {
+    final cutoff = Timestamp.fromDate(
+      DateTime.now().subtract(const Duration(days: 90)),
+    );
+    return _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at', isGreaterThanOrEqualTo: cutoff)
+        .snapshots()
+        .map((s) {
+          final byItem = <String, List<({DateTime at, double reading})>>{};
+          for (final doc in s.docs) {
+            final t = InkTransaction.fromFirestore(doc);
+            if (t.meterReading == null) continue;
+            (byItem[t.stockItemCode] ??= [])
+                .add((at: t.effectiveAt, reading: t.meterReading!));
+          }
+          for (final key in byItem.keys.toList()) {
+            final list = byItem[key]!
+              ..sort((a, b) => b.at.compareTo(a.at)); // newest first
+            if (list.length > limit) byItem[key] = list.sublist(0, limit);
+          }
+          return byItem;
+        });
+  }
 
   // ---------------------------------------------------------------------------
   // RECIPES + PRODUCTION
@@ -565,6 +598,10 @@ class InkService {
   /// Transfers an IBC to a tank: marks it transferred and records the toloul
   /// used to wash it as a `consumption_toloul_wash` (ink stock is unaffected —
   /// the ink was already counted at receipt).
+  ///
+  /// Uses a Firestore transaction so both writes are atomic and idempotent:
+  /// the wash transaction doc is only created if it doesn't already exist,
+  /// preventing a permission-denied error when retrying a partial failure.
   Future<void> transferIbc({
     required InkIbc ibc,
     required String tolulItemCode,
@@ -573,24 +610,43 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
-    await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set({
-      'status': InkIbcStatus.transferred.value,
-      'transferred_date': Timestamp.fromDate(effectiveAt),
-      'wash_toloul_litres': washLitres,
-    }, SetOptions(merge: true));
-    if (washLitres > 0) {
-      await recordTransaction(InkTransaction(
-        type: InkTxnType.consumptionTolulWash,
-        stockItemCode: tolulItemCode,
-        quantityDelta: -washLitres,
-        effectiveAt: effectiveAt,
-        costStatus: InkCostStatus.na,
-        ibcNumber: ibc.ibcNumber,
-        actorClockNo: actorClockNo,
-        actorName: actorName,
-        idempotencyKey: 'ibcwash_${ibc.ibcNumber}',
-      ));
-    }
+    final ibcRef = _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber);
+    final washKey = 'ibcwash_${ibc.ibcNumber}';
+    final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
+
+    await _db.runTransaction((txn) async {
+      // Check idempotency: only read wash doc if we'd need to write it.
+      final washSnap = washLitres > 0 ? await txn.get(washRef) : null;
+
+      // Always update IBC status (merge = safe on retry).
+      txn.set(
+        ibcRef,
+        {
+          'status': InkIbcStatus.transferred.value,
+          'transferred_date': Timestamp.fromDate(effectiveAt),
+          'wash_toloul_litres': washLitres,
+        },
+        SetOptions(merge: true),
+      );
+
+      // Only create the wash transaction if it doesn't already exist.
+      if (washSnap != null && !washSnap.exists) {
+        txn.set(
+          washRef,
+          InkTransaction(
+            type: InkTxnType.consumptionTolulWash,
+            stockItemCode: tolulItemCode,
+            quantityDelta: -washLitres,
+            effectiveAt: effectiveAt,
+            costStatus: InkCostStatus.na,
+            ibcNumber: ibc.ibcNumber,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+            idempotencyKey: washKey,
+          ).toFirestore(),
+        );
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

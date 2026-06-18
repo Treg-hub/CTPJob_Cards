@@ -29,6 +29,15 @@ class GeofenceConfig {
 const GeofenceConfig kDefaultGeofence =
     GeofenceConfig(-29.994938052011612, 30.939421740548614, 800.0);
 
+/// Hysteresis margin (metres) for the off-site decision. Presence is sticky:
+/// you become on-site within [GeofenceConfig.radius], but only flip back to
+/// off-site once you are clearly beyond `radius + this margin`. The dead-band
+/// between the two stops GPS jitter at the boundary from oscillating isOnSite
+/// (the bug that spammed the on/off-site notice). Errs toward on-site, since a
+/// false off-site is the harmful case — it parks notifications to the inbox and
+/// blocks on-site-only job creation.
+const double kGeofenceHysteresisMargin = 150.0;
+
 /// Reads the central geofence barrier from `settings/geofence`, falling back to
 /// [kDefaultGeofence]. Top-level so the WorkManager isolate can call it too.
 Future<GeofenceConfig> loadGeofenceConfig() async {
@@ -82,14 +91,20 @@ void callbackDispatcher() {
         ),
       );
 
-      final onSite = Geolocator.distanceBetween(
-              cfg.latitude, cfg.longitude, pos.latitude, pos.longitude) <=
-          cfg.radius;
+      final dist = Geolocator.distanceBetween(
+          cfg.latitude, cfg.longitude, pos.latitude, pos.longitude);
 
       final firestore = FirestoreService();
       final emp = await firestore.getEmployee(clockNo);
 
       if (emp == null) return Future.value(true);
+
+      // Hysteresis dead-band: once on-site, only flip off-site beyond
+      // radius+margin; once off-site, only flip on-site within radius. Stops
+      // boundary jitter from oscillating isOnSite.
+      final onSite = emp.isOnSite
+          ? dist <= cfg.radius + kGeofenceHysteresisMargin
+          : dist <= cfg.radius;
 
       if (emp.isOnSite != onSite) {
         // Transition — the CF stamps the timestamps and logs the enter/exit to
@@ -158,7 +173,11 @@ class LocationService {
         'clockNo': clockNo,
         'lat': cfg.latitude,
         'lng': cfg.longitude,
-        'radius': cfg.radius,
+        // Register at the outer (exit) band so the native EXIT only fires once
+        // clearly off-site — hysteresis against boundary jitter while the app is
+        // backgrounded/killed. The precise on-site radius is enforced by the
+        // polling checks (app-open + 30-min WorkManager).
+        'radius': cfg.radius + kGeofenceHysteresisMargin,
       });
 
       debugPrint('✅ Native geofence registered');
@@ -240,17 +259,24 @@ class LocationService {
         ),
       );
 
-      final onSite = Geolocator.distanceBetween(
-              cfg.latitude, cfg.longitude, pos.latitude, pos.longitude) <=
-          cfg.radius;
-      debugPrint('📍 App-open check → onSite=$onSite');
+      final dist = Geolocator.distanceBetween(
+          cfg.latitude, cfg.longitude, pos.latitude, pos.longitude);
 
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
       if (clockNo == null) return;
 
       final emp = await _firestoreService.getEmployee(clockNo);
-      if (emp != null && emp.isOnSite != onSite) {
+      if (emp == null) return;
+
+      // Hysteresis dead-band (see callbackDispatcher) — sticky presence so a
+      // single jittery fix near the boundary can't flip isOnSite.
+      final onSite = emp.isOnSite
+          ? dist <= cfg.radius + kGeofenceHysteresisMargin
+          : dist <= cfg.radius;
+      debugPrint('📍 App-open check → dist=${dist.toStringAsFixed(0)} onSite=$onSite');
+
+      if (emp.isOnSite != onSite) {
         // Firestore disagrees with GPS — a geofence event was missed. Correct it
         // via the CF (which stamps timestamps + logs the enter/exit).
         await _firestoreService.updateMyPresence(
