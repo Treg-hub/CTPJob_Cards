@@ -14,6 +14,7 @@ import '../models/employee.dart';
 import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
+import 'feedback_admin_screen.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 
@@ -1605,6 +1606,17 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               _showError('Admin access required');
             }
           },
+        )),
+
+        // ── Feedback ────────────────────────────────────────────────────────
+        _sectionHeader('FEEDBACK'),
+        _settingsCard(child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.feedback_outlined, color: kBrandOrange),
+          title: const Text('User Feedback', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          subtitle: Text('Review and track feedback submitted from the app', style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedbackAdminScreen())),
         )),
 
         // ── Escalation ──────────────────────────────────────────────────────
