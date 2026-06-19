@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/ink_ibc.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/ink_period_guard.dart';
+import '../utils/role.dart' as role_utils;
 
 
 /// IBC register — colour tabs (Yellow | Red | Blue | Black), each with a
@@ -36,9 +39,71 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
     super.dispose();
   }
 
+  Future<void> _voidIbc(InkIbc ibc) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Void IBC consumption?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('IBC ${ibc.ibcNumber} returns to "received" and its wash '
+                'toloul is reversed.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Reason *'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Void')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final reason = reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a reason for the void.')));
+      return;
+    }
+    final allowed = await confirmClosedPeriodOverride(
+        context, ref, ibc.transferredDate ?? ibc.receivedDate);
+    if (!allowed || !mounted) return;
+    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    try {
+      await ref.read(inkServiceProvider).voidIbcTransfer(
+            ibc,
+            reason: reason,
+            actorClockNo: emp?.clockNo ?? '',
+            actorName: emp?.name ?? '',
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('IBC consumption voided — back to received.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ibcsAsync = ref.watch(inkAllIbcsProvider);
+    final isManager =
+        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(
@@ -95,6 +160,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
                         colourLabel:
                             c[0].toUpperCase() + c.substring(1),
                         statusFilter: _filter,
+                        onVoid: isManager ? _voidIbc : null,
                       ),
                   ],
                 );
@@ -133,11 +199,15 @@ class _RegisterColourTab extends StatefulWidget {
     required this.ibcs,
     required this.colourLabel,
     required this.statusFilter,
+    this.onVoid,
   });
 
   final List<InkIbc> ibcs;
   final String colourLabel;
   final InkIbcStatus? statusFilter;
+
+  /// When set, consumed IBCs are tappable to void the transfer.
+  final void Function(InkIbc)? onVoid;
 
   @override
   State<_RegisterColourTab> createState() => _RegisterColourTabState();
@@ -245,7 +315,7 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                     final consumed =
                         ibc.status == InkIbcStatus.transferred;
 
-                    return Padding(
+                    final row = Padding(
                       padding:
                           const EdgeInsets.symmetric(vertical: 8),
                       child: Row(
@@ -356,6 +426,12 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                         ],
                       ),
                     );
+                    return (consumed && widget.onVoid != null)
+                        ? InkWell(
+                            onTap: () => widget.onVoid!(ibc),
+                            child: row,
+                          )
+                        : row;
                   },
                 ),
         ),

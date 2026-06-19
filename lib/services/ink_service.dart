@@ -709,6 +709,46 @@ class InkService {
     });
   }
 
+  /// Voids an IBC transfer (consumption): returns the IBC to `received` and voids
+  /// its linked `consumption_toloul_wash` transaction so the wash toloul is added
+  /// back to stock on replay. Atomic batch; the wash row is flagged (not deleted)
+  /// for audit. The caller must already have cleared the closed-period guard for
+  /// the transfer date.
+  Future<void> voidIbcTransfer(
+    InkIbc ibc, {
+    required String reason,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    final washRef =
+        _db.collection(Collections.inkTransactions).doc('ibcwash_${ibc.ibcNumber}');
+    final washSnap = await washRef.get();
+    final batch = _db.batch();
+    if (washSnap.exists) {
+      batch.set(
+        washRef,
+        {
+          'voided': true,
+          'void_reason': reason,
+          'voided_by_clock_no': actorClockNo,
+          'voided_by_name': actorName,
+          'voided_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+    batch.set(
+      _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber),
+      {
+        'status': InkIbcStatus.received.value,
+        'transferred_date': FieldValue.delete(),
+        'wash_toloul_litres': FieldValue.delete(),
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   // ---------------------------------------------------------------------------
   // METER POINTS (aux toloul meters — recovery/usage; NO stock impact)
   // ---------------------------------------------------------------------------
