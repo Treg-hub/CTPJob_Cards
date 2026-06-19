@@ -12,6 +12,7 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
+import 'ink_meter_sessions_screen.dart';
 
 const _maxConsumptionByKeyword = <String, double>{
   'black': 1500,
@@ -286,7 +287,20 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     final df = DateFormat('EEE d MMM HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Daily Readings')),
+      appBar: AppBar(
+        title: const Text('Daily Readings'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Meter sessions (void)',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const InkMeterSessionsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(

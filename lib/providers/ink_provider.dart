@@ -150,6 +150,11 @@ final inkTodayToloulMeterDoneProvider = StreamProvider<bool>(
   (ref) => ref.watch(inkServiceProvider).watchTodayToloulMeterStatus(),
 );
 
+/// Recent ink meter-reading sessions (grouped by session_id) for the void list.
+final inkRecentMeterSessionsProvider = StreamProvider<List<InkMeterSession>>(
+  (ref) => ref.watch(inkServiceProvider).watchRecentMeterSessions(),
+);
+
 /// All month-end count sessions, newest first.
 final inkCountEventsProvider = StreamProvider<List<InkCountEvent>>(
   (ref) => ref.watch(inkServiceProvider).watchCountEvents(),

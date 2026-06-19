@@ -892,4 +892,113 @@ class InkService {
                       DateTime(2000),
                 );
               }).toList());
+
+  /// Recent ink meter-reading SESSIONS (grouped by session_id), newest first —
+  /// for the void list. Each daily submit shares one session_id across its ink
+  /// `consumption_meter` rows; this rolls them up so a whole session can be voided.
+  Stream<List<InkMeterSession>> watchRecentMeterSessions({int days = 90}) => _db
+      .collection(Collections.inkTransactions)
+      .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+      .where('effective_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(
+              DateTime.now().subtract(Duration(days: days))))
+      .snapshots()
+      .map((s) {
+        final bySession = <String, InkMeterSession>{};
+        for (final doc in s.docs) {
+          final d = doc.data();
+          final sid = d['session_id'] as String?;
+          if (sid == null || sid.isEmpty) continue;
+          final date = (d['reading_date'] as Timestamp?)?.toDate() ??
+              (d['effective_at'] as Timestamp?)?.toDate() ??
+              DateTime(2000);
+          final voided = d['voided'] as bool? ?? false;
+          final cur = bySession[sid];
+          if (cur == null) {
+            bySession[sid] = InkMeterSession(
+              sessionId: sid,
+              readingDate: date,
+              actorName: d['actor_name'] as String? ?? '',
+              itemCount: 1,
+              allVoided: voided,
+            );
+          } else {
+            bySession[sid] = cur.copyWith(
+              itemCount: cur.itemCount + 1,
+              allVoided: cur.allVoided && voided,
+            );
+          }
+        }
+        final list = bySession.values.toList()
+          ..sort((a, b) => b.readingDate.compareTo(a.readingDate));
+        return list;
+      });
+
+  /// Voids a whole meter-reading session: flags every ink `consumption_meter`
+  /// row with [sessionId] voided (preserved for audit; the server re-replays so
+  /// the stock is restored) and DELETES the report-only toloul meter-point
+  /// readings captured at [readingDate] (aux data with no stock impact — removed
+  /// so the operator can re-enter the session with the correct date). The caller
+  /// must already have cleared the closed-period guard for [readingDate].
+  Future<void> voidMeterSession(
+    String sessionId,
+    DateTime readingDate, {
+    required String reason,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    // A meter session's id is unique to its consumption_meter rows, so an
+    // equality on session_id alone is correct (and needs no composite index).
+    final txnsSnap = await _db
+        .collection(Collections.inkTransactions)
+        .where('session_id', isEqualTo: sessionId)
+        .get();
+    final tolSnap = await _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date', isEqualTo: Timestamp.fromDate(readingDate))
+        .get();
+    final batch = _db.batch();
+    for (final d in txnsSnap.docs) {
+      batch.set(
+        d.reference,
+        {
+          'voided': true,
+          'void_reason': reason,
+          'voided_by_clock_no': actorClockNo,
+          'voided_by_name': actorName,
+          'voided_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+    for (final d in tolSnap.docs) {
+      batch.delete(d.reference);
+    }
+    await batch.commit();
+  }
+}
+
+/// A rolled-up ink meter-reading session (one daily submit) for the void list.
+class InkMeterSession {
+  const InkMeterSession({
+    required this.sessionId,
+    required this.readingDate,
+    required this.actorName,
+    required this.itemCount,
+    required this.allVoided,
+  });
+
+  final String sessionId;
+  final DateTime readingDate;
+  final String actorName;
+  final int itemCount;
+  final bool allVoided;
+
+  InkMeterSession copyWith({int? itemCount, bool? allVoided}) => InkMeterSession(
+        sessionId: sessionId,
+        readingDate: readingDate,
+        actorName: actorName,
+        itemCount: itemCount ?? this.itemCount,
+        allVoided: allVoided ?? this.allVoided,
+      );
 }
