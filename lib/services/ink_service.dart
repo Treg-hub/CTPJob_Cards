@@ -546,6 +546,46 @@ class InkService {
     return runId;
   }
 
+  /// Voids an entire production run: marks the run doc and EVERY linked
+  /// transaction (the consumption_production inputs + the manufacture output)
+  /// voided so the replay reverses the whole batch. Atomic (single batch); the
+  /// server re-replays each affected stock item. Preserved for audit (the rows
+  /// are flagged, never deleted). The caller must already have cleared the
+  /// closed-period guard for [InkProductionRun.effectiveAt].
+  Future<void> voidProductionRun(
+    String runId, {
+    required String reason,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    final txnsSnap = await _db
+        .collection(Collections.inkTransactions)
+        .where('production_run_id', isEqualTo: runId)
+        .get();
+    final batch = _db.batch();
+    final voidMeta = {
+      'voided': true,
+      'void_reason': reason,
+      'voided_by_clock_no': actorClockNo,
+      'voided_by_name': actorName,
+      'voided_at': FieldValue.serverTimestamp(),
+    };
+    for (final d in txnsSnap.docs) {
+      batch.set(d.reference, voidMeta, SetOptions(merge: true));
+    }
+    batch.set(
+      _db.collection(Collections.inkProductionRuns).doc(runId),
+      {
+        'voided': true,
+        'void_reason': reason,
+        'voided_by_name': actorName,
+        'voided_at': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   // ---------------------------------------------------------------------------
   // IBCs (ink received in containers)
   // ---------------------------------------------------------------------------

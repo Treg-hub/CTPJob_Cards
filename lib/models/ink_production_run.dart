@@ -13,6 +13,7 @@ class InkProductionRun {
     required this.totalInputCost,
     required this.effectiveAt,
     this.actorName,
+    this.voided = false,
   });
 
   final String id;
@@ -23,6 +24,10 @@ class InkProductionRun {
   final double totalInputCost;
   final DateTime effectiveAt;
   final String? actorName;
+
+  /// True once the run has been voided — its linked consumption/manufacture
+  /// transactions are voided and excluded from the replay (preserved for audit).
+  final bool voided;
 
   factory InkProductionRun.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
@@ -35,6 +40,7 @@ class InkProductionRun {
       totalInputCost: (d['total_input_cost'] as num?)?.toDouble() ?? 0,
       effectiveAt: (d['effective_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
       actorName: d['actor_name'] as String?,
+      voided: d['voided'] as bool? ?? false,
     );
   }
 }
