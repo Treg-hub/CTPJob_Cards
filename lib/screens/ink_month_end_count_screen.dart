@@ -44,7 +44,8 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
   }
 
   Future<void> _submit(List<InkStockItem> items) async {
-    final lines = <({String itemCode, double counted, double ledgerBalance})>[];
+    final lines =
+        <({String itemCode, double counted, double ledgerBalance, double wac})>[];
     for (final item in items) {
       final raw = _ctrl(item.itemCode).text.trim();
       if (raw.isEmpty) continue;
@@ -54,6 +55,9 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
         itemCode: item.itemCode,
         counted: counted,
         ledgerBalance: item.currentBalance,
+        // Snapshot the current WAC so this count can seed the next period's
+        // replay (count adjustment moves qty at the current WAC, so it's unchanged).
+        wac: item.weightedAverageCost,
       ));
     }
     if (lines.isEmpty) {

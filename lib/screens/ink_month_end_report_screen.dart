@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../models/ink_count_event.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
@@ -101,7 +102,8 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       t.isAfter(_from) && t.isBefore(_periodEnd);
 
   // ── Summary roll-forward (per item) ───────────────────────────────────────
-  List<_Row> _build(List<InkStockItem> items, List<InkTransaction> txns) {
+  List<_Row> _build(List<InkStockItem> items, List<InkTransaction> txns,
+      Map<String, ({double balance, double wac})>? snapshot) {
     final byItem = <String, List<InkTransaction>>{};
     for (final t in txns) {
       (byItem[t.stockItemCode] ??= []).add(t);
@@ -109,21 +111,44 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     final rows = <_Row>[];
     for (final item in items) {
       final its = byItem[item.itemCode] ?? const [];
-      // Opening balance includes everything up to and including _from so the
-      // previous count's adjustments are reflected in opening stock, not movements.
-      final before = its
-          .where((t) => !t.effectiveAt.isAfter(_from))
-          .map((t) => t.toLedgerEntry())
-          .toList();
-      final upToEnd = its
-          .where((t) => t.effectiveAt.isBefore(_periodEnd))
-          .map((t) => t.toLedgerEntry())
-          .toList();
-      final opening = replayLedger(entries: before);
-      final result = replayLedger(entries: upToEnd);
+      final snap = snapshot?[item.itemCode];
+
+      double openBal;
+      double openWac;
+      LedgerResult result;
+      if (snap != null) {
+        // Opening comes from the month-end count snapshot at _from — NO genesis
+        // replay. Replay only this period's movements (strictly after _from; the
+        // count's own adjustment is already baked into the snapshot balance/WAC).
+        openBal = snap.balance;
+        openWac = snap.wac;
+        final period = its
+            .where((t) =>
+                t.effectiveAt.isAfter(_from) && t.effectiveAt.isBefore(_periodEnd))
+            .map((t) => t.toLedgerEntry())
+            .toList();
+        result = replayLedger(
+            openingBalance: openBal, openingWac: openWac, entries: period);
+      } else {
+        // Legacy fallback (count predates the snapshot): replay from genesis.
+        // Opening includes everything up to and including _from so the previous
+        // count's adjustments are reflected in opening stock, not movements.
+        final before = its
+            .where((t) => !t.effectiveAt.isAfter(_from))
+            .map((t) => t.toLedgerEntry())
+            .toList();
+        final upToEnd = its
+            .where((t) => t.effectiveAt.isBefore(_periodEnd))
+            .map((t) => t.toLedgerEntry())
+            .toList();
+        final opening = replayLedger(entries: before);
+        openBal = opening.balance;
+        openWac = opening.wac;
+        result = replayLedger(entries: upToEnd);
+      }
       final row = _Row(item)
-        ..openBal = opening.balance
-        ..openWac = opening.wac
+        ..openBal = openBal
+        ..openWac = openWac
         ..closeBal = result.balance
         ..closeWac = result.wac;
       for (final step in result.steps) {
@@ -417,7 +442,6 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final txnsAsync = ref.watch(inkAllTransactionsProvider);
     final settings = ref.watch(inkSettingsProvider).valueOrNull;
     final emp = ref.watch(currentEmployeeProvider).valueOrNull;
     final isManager = role_utils.isInkManager(emp);
@@ -429,8 +453,31 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
       );
     }
 
-    final countDates = ref.watch(inkMonthEndCountDatesProvider);
+    final countEvents = ref.watch(inkCountEventsProvider).valueOrNull ?? [];
+    final countDates = [for (final e in countEvents) e.countDate]..sort();
     _initPeriodFromCounts(countDates);
+
+    // Opening baseline: if the count at _from carries a WAC/value snapshot, use
+    // it as opening and replay only this period's transactions (since _from)
+    // instead of the whole ledger. Legacy counts (no snapshot) fall back to the
+    // current-month stream + a genesis replay.
+    InkCountEvent? fromCount;
+    for (final e in countEvents) {
+      if (e.countDate.isAtSameMomentAs(_from)) {
+        fromCount = e;
+        break;
+      }
+    }
+    final Map<String, ({double balance, double wac})>? snapshot =
+        (fromCount != null && fromCount.hasSnapshot)
+            ? {
+                for (final l in fromCount.lines)
+                  l.itemCode: (balance: l.counted, wac: l.wac)
+              }
+            : null;
+    final txnsAsync = snapshot != null
+        ? ref.watch(inkTransactionsSinceProvider(_from))
+        : ref.watch(inkAllTransactionsProvider);
 
     final rf = DateFormat('d MMM yyyy');
     final rfTime = DateFormat('d MMM yyyy HH:mm');
@@ -457,7 +504,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
     final isLoading = itemsAsync.isLoading || txnsAsync.isLoading;
     final items = itemsAsync.valueOrNull ?? [];
     final txns = txnsAsync.valueOrNull ?? [];
-    final rows = isLoading ? <_Row>[] : _build(items, txns);
+    final rows = isLoading ? <_Row>[] : _build(items, txns, snapshot);
 
     return Scaffold(
       appBar: AppBar(

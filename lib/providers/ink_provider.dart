@@ -36,9 +36,18 @@ final inkPendingCostsProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchPendingCosts(),
 );
 
-/// Every transaction (month-end report).
+/// Every transaction in the current month (month-end report, legacy/no-snapshot
+/// fallback path).
 final inkAllTransactionsProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchAllTransactions(),
+);
+
+/// Transactions on/after a given date — the month-end report watches this keyed
+/// by the opening count date when that count carries a WAC/value snapshot, so it
+/// replays from the last count instead of from genesis.
+final inkTransactionsSinceProvider =
+    StreamProvider.family<List<InkTransaction>, DateTime>(
+  (ref, from) => ref.watch(inkServiceProvider).watchTransactionsSince(from),
 );
 
 /// Manager review queue (flagged movements).

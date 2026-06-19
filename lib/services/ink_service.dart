@@ -164,7 +164,8 @@ class InkService {
   /// transaction is written; all share the same sessionId.
   Future<void> recordMonthEndCount({
     required DateTime countDate,
-    required List<({String itemCode, double counted, double ledgerBalance})>
+    required List<
+            ({String itemCode, double counted, double ledgerBalance, double wac})>
         lines,
     required String actorClockNo,
     required String actorName,
@@ -173,7 +174,10 @@ class InkService {
     final adjustments = lines.where((l) => (l.counted - l.ledgerBalance).abs() >= 1e-9).toList();
 
     // Write the count-event record unconditionally — even a zero-variance count
-    // needs to be visible as a period boundary in the month-end report.
+    // needs to be visible as a period boundary in the month-end report. Each line
+    // carries the WAC + value snapshot (snapshotVersion 1) so the report can use
+    // this count as the opening baseline for the next period instead of replaying
+    // the ledger from genesis.
     await _db.collection(Collections.inkCountEvents).doc(sessionId).set(
           InkCountEvent(
             countDate: countDate,
@@ -181,12 +185,17 @@ class InkService {
             actorClockNo: actorClockNo,
             actorName: actorName,
             adjustmentCount: adjustments.length,
+            snapshotVersion: 1,
             lines: [
               for (final l in lines)
                 InkCountLine(
                   itemCode: l.itemCode,
                   counted: l.counted,
                   ledgerBalance: l.ledgerBalance,
+                  // The count adjustment moves quantity at the current WAC, so the
+                  // post-count WAC equals the WAC captured here.
+                  wac: l.wac,
+                  value: l.counted * l.wac,
                 )
             ],
             createdAt: DateTime.now(),
@@ -249,6 +258,17 @@ class InkService {
         .snapshots()
         .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
   }
+
+  /// Transactions effective on/after [from] — used by the month-end report when
+  /// the period's opening count carries a WAC/value snapshot, so the report
+  /// replays only from the last count instead of the whole ledger history. The
+  /// window is bounded by the count cadence (~one period), not genesis.
+  Stream<List<InkTransaction>> watchTransactionsSince(DateTime from) => _db
+      .collection(Collections.inkTransactions)
+      .where('effective_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+      .snapshots()
+      .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
 
   /// Manager "pending costs" queue — receipts awaiting a cost.
   /// Ordered by recorded_at DESC (matches existing composite index) with a cap
