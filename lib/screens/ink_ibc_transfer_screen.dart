@@ -6,8 +6,10 @@ import '../models/ink_ibc.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../services/ink_barcode_parser.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import 'ink_barcode_scan_screen.dart';
 
 
 /// Phase 1c — Consume IBC (transfer IBC → tank). Colour tabs let the operator
@@ -54,6 +56,37 @@ class _State extends ConsumerState<InkIbcTransferScreen>
     if (dt != null) setState(() => _effectiveAt = dt);
   }
 
+  /// Scan an IBC barcode to pick the IBC being consumed: selects it and switches
+  /// to its colour tab. Only IBCs awaiting consumption (status received) match.
+  Future<void> _scan() async {
+    final res = await Navigator.push<IbcScanResult>(
+      context,
+      MaterialPageRoute(builder: (_) => const InkBarcodeScanScreen()),
+    );
+    if (res == null || res.ibcNumber == null || !mounted) return;
+    final number = res.ibcNumber!;
+    final received = ref.read(inkReceivedIbcsProvider).valueOrNull ?? [];
+    InkIbc? match;
+    for (final i in received) {
+      if (i.ibcNumber == number) {
+        match = i;
+        break;
+      }
+    }
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('IBC "$number" is not awaiting consumption.')));
+      return;
+    }
+    final tabIdx = kInkColourCodes.indexOf(match.itemCode);
+    setState(() {
+      _selectedNumber = number;
+      if (tabIdx >= 0) _tab.animateTo(tabIdx);
+    });
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('IBC $number selected.')));
+  }
+
   Future<void> _submit(InkIbc ibc, String tolulItemCode) async {
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
@@ -97,6 +130,13 @@ class _State extends ConsumerState<InkIbcTransferScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Consume IBC'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan IBC',
+            onPressed: _scan,
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           labelColor: Colors.black,

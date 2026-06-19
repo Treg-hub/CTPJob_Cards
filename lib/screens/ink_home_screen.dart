@@ -44,6 +44,9 @@ class InkHomeScreen extends ConsumerWidget {
     final emp = ref.watch(currentEmployeeProvider).valueOrNull;
     final isManager = role_utils.isInkManager(emp);
     final itemsAsync = ref.watch(inkStockItemsProvider);
+    // Default to "done" while the status loads so the banner doesn't flash.
+    final inkMeterDone =
+        ref.watch(inkTodayInkMeterDoneProvider).valueOrNull ?? true;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
@@ -51,6 +54,10 @@ class InkHomeScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
           _StockValueSummary(itemsAsync: itemsAsync, showMoney: isManager),
+          if (!inkMeterDone) ...[
+            const SizedBox(height: 12),
+            const _MeterReminderBanner(),
+          ],
           const SizedBox(height: 16),
           _sectionLabel(context, 'Capture'),
           const SizedBox(height: 8),
@@ -254,6 +261,57 @@ class _StockValueSummary extends StatelessWidget {
               Text('$count items',
                   style: TextStyle(color: scheme.onPrimaryContainer)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Banner shown on the hub when no ink meter reading has been captured today.
+/// Tapping opens the daily readings screen. Surfaces the daily-reading gap at a
+/// glance (whole-day flag — not per individual meter).
+class _MeterReminderBanner extends StatelessWidget {
+  const _MeterReminderBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const InkDailyReadingsScreen())),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: scheme.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('No meter reading captured today',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(
+                                color: scheme.onErrorContainer,
+                                fontWeight: FontWeight.w600)),
+                    Text("Tap to record today's ink meter readings.",
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: scheme.onErrorContainer)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: scheme.onErrorContainer),
+            ],
+          ),
         ),
       ),
     );
