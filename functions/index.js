@@ -229,23 +229,154 @@ let _configCache = null;
 let _configCachedAt = 0;
 const CONFIG_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-// Employee cache: employee records change rarely; isOnSite changes when clocking in/out.
-// 5-minute TTL ensures onsite/offsite split stays accurate within one escalation cycle.
+// Employee roster cache. The source is directory/roster — ONE denormalised doc
+// kept in sync by onEmployeeWritten — so a refresh is a single read regardless of
+// headcount (was: one read per employee, the dominant Firestore read cost). Short
+// 60s TTL keeps the onsite/offsite split fresh (presence flips land on the roster
+// within ~2s of a clock-in/out) while still deduping rapid successive calls.
 let _employeeCache = null;
 let _employeeCachedAt = 0;
-const EMPLOYEE_TTL_MS = 5 * 60 * 1000; // 5 minutes — bounded by isOnSite change frequency
+const EMPLOYEE_TTL_MS = 60 * 1000; // 60s — roster reads are 1 doc, so favour freshness
 
 async function getAllEmployeesCached() {
   if (_employeeCache && (Date.now() - _employeeCachedAt) < EMPLOYEE_TTL_MS) {
     return _employeeCache;
   }
-  const snap = await db.collection("employees").get();
-  // Normalise to plain objects; clockNo = document ID (employees collection uses clockNo as doc ID)
-  _employeeCache = snap.docs.map((d) => ({ clockNo: d.id, token: d.data().fcmToken, ...d.data() }));
+  // Fast path: read the denormalised roster doc (1 read). Falls back to a full
+  // collection scan if the roster is ever missing or empty (first deploy before
+  // backfill, or a manual delete) so routing is NEVER wrong — in that case this
+  // behaves exactly as the original full-scan implementation.
+  let emps = null;
+  try {
+    const rosterSnap = await db.collection("directory").doc("roster").get();
+    if (rosterSnap.exists) {
+      const map = rosterSnap.data().emps || {};
+      const entries = Object.entries(map);
+      if (entries.length > 0) {
+        // Reconstruct the EXACT shape the full-scan produced:
+        //   { clockNo: <docId>, token: <fcmToken>, ...<full employee data> }
+        emps = entries.map(([clockNo, d]) => ({ clockNo, token: d.fcmToken, ...d }));
+      }
+    }
+  } catch (e) {
+    console.warn("getAllEmployeesCached: roster read failed, falling back to full scan:", e);
+  }
+  if (!emps) {
+    const snap = await db.collection("employees").get();
+    emps = snap.docs.map((d) => ({ clockNo: d.id, token: d.data().fcmToken, ...d.data() }));
+    console.log(`getAllEmployeesCached: FULL-SCAN fallback (${emps.length} employees)`);
+  } else {
+    console.log(`getAllEmployeesCached: roster doc (${emps.length} employees)`);
+  }
+  _employeeCache = emps;
   _employeeCachedAt = Date.now();
-  console.log(`getAllEmployeesCached: refreshed (${_employeeCache.length} employees)`);
   return _employeeCache;
 }
+
+// ==================== EMPLOYEE ROSTER MIRROR (read-cost reduction) ====================
+// directory/roster mirrors every employee as a map keyed by clockNo, letting the
+// escalation loop (and any other recipient routing) load the whole roster in ONE
+// document read instead of one read per employee. It is purely an optimisation:
+// getAllEmployeesCached falls back to a full scan whenever the doc is missing/empty,
+// so escalation can never break or route to the wrong people.
+//
+// Freshness: every presence writer (native-geofence transaction, updateEmployeePresence,
+// admin manual toggle) writes the employees doc, so this trigger fires on every
+// isOnSite change and the roster's onsite/offsite split is as live as the source.
+
+// Rebuild the entire roster from a single full scan. Used by the admin callable
+// and the nightly self-heal. This is the ONLY place that still scans all employees,
+// and it runs at most ~once/day.
+async function rebuildEmployeeRoster() {
+  const snap = await db.collection("employees").get();
+  const emps = {};
+  snap.docs.forEach((d) => { emps[d.id] = d.data(); });
+  await db.collection("directory").doc("roster").set({
+    emps,
+    count: snap.size,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    rebuiltAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  console.log(`rebuildEmployeeRoster: wrote ${snap.size} employees to directory/roster`);
+  return snap.size;
+}
+
+// onEmployeeWritten — incrementally sync ONE employee into directory/roster on
+// every create/update/delete. No full-collection read: it patches just that
+// employee's entry from the trigger payload.
+// Timestamp/audit fields that change on presence heartbeats but never affect
+// recipient routing — a write touching only these is skipped to avoid roster churn.
+const ROSTER_NOISE_FIELDS = new Set([
+  "presenceUpdatedAt", "presenceSource", "fcmTokenUpdatedAt",
+  "lastOnSiteAt", "lastOffSiteAt", "lastUpdatedAt", "updatedAt", "lastSeenAt",
+]);
+
+exports.onEmployeeWritten = functions.firestore.onDocumentWritten(
+  { document: "employees/{clockNo}" },
+  async (event) => {
+    const clockNo = String(event.params.clockNo);
+    const before = event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data.after.exists ? event.data.after.data() : null;
+
+    // On a plain update, skip if only noise/timestamp fields changed (e.g. a
+    // heartbeat re-asserting the same isOnSite) — mirrors onJobCardWritten.
+    if (before && after) {
+      const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+      let relevantChange = false;
+      for (const key of keys) {
+        if (ROSTER_NOISE_FIELDS.has(key)) continue;
+        if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) { relevantChange = true; break; }
+      }
+      if (!relevantChange) return;
+    }
+
+    const rosterRef = db.collection("directory").doc("roster");
+    // FieldPath (not a dotted string) so any clock-number character is safe, and
+    // update() REPLACES emps.<clockNo> wholesale — no stale fields linger.
+    const empField = new admin.firestore.FieldPath("emps", clockNo);
+    const value = after ? after : admin.firestore.FieldValue.delete();
+    try {
+      await rosterRef.update(
+        empField, value,
+        "updatedAt", admin.firestore.FieldValue.serverTimestamp(),
+      );
+    } catch (e) {
+      // NOT_FOUND → roster not built yet. Do NOT seed a partial doc here: a roster
+      // containing only some employees would make getAllEmployeesCached trust an
+      // incomplete list and silently drop everyone else from escalation. Leave it
+      // absent so the read path keeps doing the full-scan fallback until
+      // rebuildEmployeeRoster (post-deploy callable or nightly) builds the COMPLETE
+      // doc. After that, this update() path keeps it in sync.
+      if (e.code === 5 || /NOT_FOUND|No document to update/i.test(e.message || "")) {
+        console.log(`onEmployeeWritten: roster not built yet — skipping ${clockNo} (awaiting rebuild)`);
+      } else {
+        // A roster sync failure must NEVER break the employee/presence write that
+        // triggered it. Swallow; the nightly rebuild self-corrects any drift.
+        console.error(`onEmployeeWritten: roster sync failed for ${clockNo}:`, e);
+      }
+    }
+  },
+);
+
+// rebuildEmployeeRoster (callable) — admin-triggered backfill / manual self-heal.
+// Run this ONCE right after first deploy to seed directory/roster.
+exports.rebuildEmployeeRoster = onCall(async (request) => {
+  await assertAdmin(request);
+  const count = await rebuildEmployeeRoster();
+  return { success: true, count };
+});
+
+// rebuildEmployeeRosterDaily — nightly self-heal so the roster can never drift
+// from the employees collection (e.g. a transient onEmployeeWritten failure or a
+// raw console edit). One full scan/day is a negligible read cost. europe-west1 to
+// satisfy the scheduled-function region policy.
+exports.rebuildEmployeeRosterDaily = functions.scheduler.onSchedule({
+  schedule: "30 3 * * *",
+  region: "europe-west1",
+  timeZone: "Africa/Johannesburg",
+}, async () => {
+  await rebuildEmployeeRoster();
+});
 
 // ==================== HELPER: Log to notifications collection ====================
 async function logNotification({
