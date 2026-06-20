@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
@@ -37,6 +38,22 @@ class _InkReceiveRawMaterialScreenState
   DateTime _effectiveAt = DateTime.now();
   bool _submitting = false;
 
+  /// When set, receiving against this Pulse-created pallet shipment: supplier
+  /// is Siegwerk and the item list is restricted to its lines.
+  InkShipment? _shipment;
+
+  void _selectShipment(InkShipment? s) {
+    setState(() {
+      _shipment = s;
+      if (s != null) {
+        _supplier = 'Siegwerk';
+        if (_itemCode != null && !s.itemCodes.contains(_itemCode)) {
+          _itemCode = null;
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _qtyCtrl.dispose();
@@ -68,9 +85,12 @@ class _InkReceiveRawMaterialScreenState
       actorName: emp?.name ?? '',
       idempotencyKey: const Uuid().v4(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      shipmentId: _shipment?.id,
     );
     try {
-      await ref.read(inkServiceProvider).recordTransaction(txn);
+      await ref
+          .read(inkServiceProvider)
+          .recordRawMaterialReceipt(txn: txn, shipmentId: _shipment?.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Receipt recorded — cost pending manager entry.')));
@@ -95,20 +115,59 @@ class _InkReceiveRawMaterialScreenState
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (allItems) {
-          final items = allItems
+          var items = allItems
               .where((i) =>
                   i.itemClass == InkItemClass.raw ||
                   i.itemClass == InkItemClass.solvent)
               .toList();
+          if (_shipment != null) {
+            final codes = _shipment!.itemCodes.toSet();
+            final filtered =
+                items.where((i) => codes.contains(i.itemCode)).toList();
+            if (filtered.isNotEmpty) items = filtered;
+          }
           InkStockItem? selected;
           for (final i in items) {
             if (i.itemCode == _itemCode) selected = i;
           }
+          double? expectedKg;
+          if (_shipment != null) {
+            for (final l in _shipment!.lines) {
+              if (l.itemCode == _itemCode) {
+                expectedKg = l.expectedKg;
+                break;
+              }
+            }
+          }
+          final shipments =
+              ref.watch(inkOpenPalletShipmentsProvider).valueOrNull ?? [];
           return Form(
             key: _formKey,
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (shipments.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    // ignore: deprecated_member_use
+                    value: _shipment?.id,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Shipment (optional)',
+                        helperText: 'Link this receipt to a pallet shipment'),
+                    items: [
+                      const DropdownMenuItem(
+                          value: null, child: Text('None — free text')),
+                      for (final s in shipments)
+                        DropdownMenuItem(value: s.id, child: Text(s.id)),
+                    ],
+                    onChanged: (id) {
+                      final match =
+                          shipments.where((s) => s.id == id).toList();
+                      _selectShipment(match.isEmpty ? null : match.first);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<String>(
                   // ignore: deprecated_member_use
                   value: _itemCode,
@@ -141,6 +200,16 @@ class _InkReceiveRawMaterialScreenState
                     return null;
                   },
                 ),
+                if (expectedKg != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Expected on shipment: '
+                      '${NumberFormat('#,##0.##').format(expectedKg)} '
+                      '${selected?.unit ?? 'KG'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 suppliersAsync.when(
                   loading: () => const LinearProgressIndicator(),

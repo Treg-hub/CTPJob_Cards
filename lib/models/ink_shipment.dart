@@ -1,0 +1,113 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Lifecycle of an import shipment (mirrors `ink_shipments.status` in Pulse).
+enum InkShipmentStatus {
+  awaitingReceipt('awaiting_receipt'),
+  receiving('receiving'),
+  received('received'),
+  awaitingGrn('awaiting_grn'),
+  costed('costed');
+
+  const InkShipmentStatus(this.value);
+  final String value;
+
+  static InkShipmentStatus fromValue(String? v) =>
+      InkShipmentStatus.values.firstWhere((s) => s.value == v,
+          orElse: () => InkShipmentStatus.awaitingReceipt);
+}
+
+/// An expected unit (IBC serial / pallet) from the packing list.
+class InkExpectedUnit {
+  const InkExpectedUnit({
+    required this.sscc,
+    required this.itemCode,
+    this.batch,
+    required this.netKg,
+  });
+
+  final String sscc;
+  final String itemCode;
+  final String? batch;
+  final double netKg;
+
+  /// The 8-digit IBC number an operator scans/types is the last 8 of the SSCC
+  /// (the GS1 barcode parser derives it the same way).
+  String get ibcNumber =>
+      sscc.length >= 8 ? sscc.substring(sscc.length - 8) : sscc;
+
+  factory InkExpectedUnit.fromMap(Map<String, dynamic> m) => InkExpectedUnit(
+        sscc: m['sscc'] as String? ?? '',
+        itemCode: m['item_code'] as String? ?? '',
+        batch: m['batch'] as String?,
+        netKg: (m['net_kg'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// An invoice line (colour / material) expected on the shipment.
+class InkShipmentLine {
+  const InkShipmentLine({
+    required this.itemCode,
+    required this.expectedKg,
+    this.description,
+  });
+
+  final String itemCode;
+  final double expectedKg;
+  final String? description;
+
+  factory InkShipmentLine.fromMap(Map<String, dynamic> m) => InkShipmentLine(
+        itemCode: m['item_code'] as String? ?? '',
+        expectedKg: (m['expected_kg'] as num?)?.toDouble() ?? 0,
+        description: m['description'] as String?,
+      );
+}
+
+/// A Siegwerk import shipment (`ink_shipments`). Created + costed in Pulse;
+/// read-only on mobile where an operator receives stock against it. The
+/// document id is `{orderNumber}-{containerLetter}` (e.g. `51993-K`).
+class InkShipment {
+  const InkShipment({
+    required this.id,
+    required this.orderNumber,
+    required this.containerLetter,
+    required this.packagingMode,
+    required this.status,
+    this.cgnaNumber,
+    this.containerNumber,
+    this.lines = const [],
+    this.expectedUnits = const [],
+  });
+
+  final String id;
+  final String orderNumber;
+  final String containerLetter;
+  final String packagingMode; // 'ibc' | 'pallet'
+  final InkShipmentStatus status;
+  final String? cgnaNumber;
+  final String? containerNumber;
+  final List<InkShipmentLine> lines;
+  final List<InkExpectedUnit> expectedUnits;
+
+  bool get isIbc => packagingMode == 'ibc';
+
+  /// Distinct item codes expected on this shipment (for the colour dropdown).
+  List<String> get itemCodes =>
+      {for (final l in lines) l.itemCode}.toList(growable: false);
+
+  factory InkShipment.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>? ?? {};
+    List<Map<String, dynamic>> maps(String k) =>
+        ((d[k] as List?) ?? []).whereType<Map<String, dynamic>>().toList();
+    return InkShipment(
+      id: doc.id,
+      orderNumber: d['order_number'] as String? ?? '',
+      containerLetter: d['container_letter'] as String? ?? '',
+      packagingMode: d['packaging_mode'] as String? ?? 'ibc',
+      status: InkShipmentStatus.fromValue(d['status'] as String?),
+      cgnaNumber: d['cgna_number'] as String?,
+      containerNumber: d['container_number'] as String?,
+      lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
+      expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
+    );
+  }
+}

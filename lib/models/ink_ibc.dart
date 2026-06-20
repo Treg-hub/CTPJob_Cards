@@ -37,6 +37,7 @@ class InkIbc {
     this.orderNumber,
     this.cgnaNumber,
     this.chargeNumber,
+    this.shipmentId,
   });
 
   final String? id;
@@ -58,6 +59,10 @@ class InkIbc {
   /// Siegwerk batch/lot ("Charge"), from the GS1 barcode (AI 10).
   final String? chargeNumber;
 
+  /// Links this receipt to its `ink_shipments` doc ({order}-{letter}) when the
+  /// operator received against a selected shipment. Null for free-text receipts.
+  final String? shipmentId;
+
   factory InkIbc.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkIbc(
@@ -74,6 +79,7 @@ class InkIbc {
       orderNumber: d['order_number'] as String?,
       cgnaNumber: d['cgna_number'] as String?,
       chargeNumber: d['charge_number'] as String?,
+      shipmentId: d['shipment_id'] as String?,
     );
   }
 
@@ -90,5 +96,6 @@ class InkIbc {
         if (orderNumber != null) 'order_number': orderNumber,
         if (cgnaNumber != null) 'cgna_number': cgnaNumber,
         if (chargeNumber != null) 'charge_number': chargeNumber,
+        if (shipmentId != null) 'shipment_id': shipmentId,
       };
 }

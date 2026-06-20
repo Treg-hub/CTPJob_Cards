@@ -8,6 +8,7 @@ import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
+import '../models/ink_shipment.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -602,10 +603,33 @@ class InkService {
         return list;
       });
 
+  /// Open shipments (status awaiting_receipt / receiving) for a packaging mode
+  /// the operator can receive against. Created + costed in Pulse; read-only here.
+  Stream<List<InkShipment>> _watchOpenShipments(String mode) => _db
+      .collection(Collections.inkShipments)
+      .where('packaging_mode', isEqualTo: mode)
+      .where('status', whereIn: ['awaiting_receipt', 'receiving'])
+      .snapshots()
+      .map((s) {
+        final list = s.docs.map(InkShipment.fromFirestore).toList();
+        list.sort((a, b) => a.id.compareTo(b.id));
+        return list;
+      });
+
+  /// Open IBC shipments (inks, per-serial receiving).
+  Stream<List<InkShipment>> watchOpenIbcShipments() =>
+      _watchOpenShipments('ibc');
+
+  /// Open pallet shipments (raw materials, aggregate-tally receiving).
+  Stream<List<InkShipment>> watchOpenPalletShipments() =>
+      _watchOpenShipments('pallet');
+
   /// Receiving ink via IBC: registers each IBC (doc id = number) and records
   /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
   /// idempotent (IBC docs keyed by number; purchase key derived from the
-  /// numbers), so an offline replay won't duplicate.
+  /// numbers), so an offline replay won't duplicate. When [shipmentId] is given
+  /// the IBCs + purchases are stamped with it and the shipment is advanced
+  /// (received_units appended, status → received).
   Future<void> recordIbcReceipt({
     required List<InkIbc> ibcs,
     required String supplierName,
@@ -614,6 +638,7 @@ class InkService {
     required String actorName,
     String? orderNumber,
     String? cgnaNumber,
+    String? shipmentId,
   }) async {
     for (final ibc in ibcs) {
       await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
@@ -626,6 +651,7 @@ class InkService {
               orderNumber: orderNumber,
               cgnaNumber: cgnaNumber,
               chargeNumber: ibc.chargeNumber,
+              shipmentId: shipmentId,
             ).toFirestore(),
             SetOptions(merge: true),
           );
@@ -651,7 +677,51 @@ class InkService {
         actorClockNo: actorClockNo,
         actorName: actorName,
         idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
+        shipmentId: shipmentId,
       ));
+    }
+    if (shipmentId != null && shipmentId.isNotEmpty) {
+      final received = [
+        for (final ibc in ibcs)
+          {
+            'ref': ibc.ibcNumber,
+            'item_code': ibc.itemCode,
+            'net_kg': ibc.kg,
+            'scanned_by': actorClockNo,
+            'scanned_at': Timestamp.fromDate(effectiveAt),
+          },
+      ];
+      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
+        'received_units': FieldValue.arrayUnion(received),
+        'status': 'received',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  /// Receiving a raw material / solvent (one item per call). Records the
+  /// cost-pending `purchase` and, when [shipmentId] is given, stamps it and
+  /// appends an aggregate received line to the pallet shipment (status →
+  /// receiving — pallet shipments carry several items, each received separately).
+  Future<void> recordRawMaterialReceipt({
+    required InkTransaction txn,
+    String? shipmentId,
+  }) async {
+    await recordTransaction(txn);
+    if (shipmentId != null && shipmentId.isNotEmpty) {
+      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
+        'received_units': FieldValue.arrayUnion([
+          {
+            'ref': 'bulk:${txn.stockItemCode}',
+            'item_code': txn.stockItemCode,
+            'net_kg': txn.quantityDelta,
+            'scanned_by': txn.actorClockNo,
+            'scanned_at': Timestamp.fromDate(txn.effectiveAt),
+          }
+        ]),
+        'status': 'receiving',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 
