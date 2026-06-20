@@ -603,11 +603,11 @@ class InkService {
         return list;
       });
 
-  /// Open IBC shipments (status awaiting_receipt / receiving) the operator can
-  /// receive against. Created + costed in Pulse; read-only here.
-  Stream<List<InkShipment>> watchOpenIbcShipments() => _db
+  /// Open shipments (status awaiting_receipt / receiving) for a packaging mode
+  /// the operator can receive against. Created + costed in Pulse; read-only here.
+  Stream<List<InkShipment>> _watchOpenShipments(String mode) => _db
       .collection(Collections.inkShipments)
-      .where('packaging_mode', isEqualTo: 'ibc')
+      .where('packaging_mode', isEqualTo: mode)
       .where('status', whereIn: ['awaiting_receipt', 'receiving'])
       .snapshots()
       .map((s) {
@@ -615,6 +615,14 @@ class InkService {
         list.sort((a, b) => a.id.compareTo(b.id));
         return list;
       });
+
+  /// Open IBC shipments (inks, per-serial receiving).
+  Stream<List<InkShipment>> watchOpenIbcShipments() =>
+      _watchOpenShipments('ibc');
+
+  /// Open pallet shipments (raw materials, aggregate-tally receiving).
+  Stream<List<InkShipment>> watchOpenPalletShipments() =>
+      _watchOpenShipments('pallet');
 
   /// Receiving ink via IBC: registers each IBC (doc id = number) and records
   /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
@@ -686,6 +694,32 @@ class InkService {
       await _db.collection(Collections.inkShipments).doc(shipmentId).set({
         'received_units': FieldValue.arrayUnion(received),
         'status': 'received',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  /// Receiving a raw material / solvent (one item per call). Records the
+  /// cost-pending `purchase` and, when [shipmentId] is given, stamps it and
+  /// appends an aggregate received line to the pallet shipment (status →
+  /// receiving — pallet shipments carry several items, each received separately).
+  Future<void> recordRawMaterialReceipt({
+    required InkTransaction txn,
+    String? shipmentId,
+  }) async {
+    await recordTransaction(txn);
+    if (shipmentId != null && shipmentId.isNotEmpty) {
+      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
+        'received_units': FieldValue.arrayUnion([
+          {
+            'ref': 'bulk:${txn.stockItemCode}',
+            'item_code': txn.stockItemCode,
+            'net_kg': txn.quantityDelta,
+            'scanned_by': txn.actorClockNo,
+            'scanned_at': Timestamp.fromDate(txn.effectiveAt),
+          }
+        ]),
+        'status': 'receiving',
         'updated_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }

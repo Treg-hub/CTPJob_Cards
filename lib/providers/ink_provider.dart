@@ -108,6 +108,11 @@ final inkOpenShipmentsProvider = StreamProvider<List<InkShipment>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenIbcShipments(),
 );
 
+/// Open pallet shipments (raw materials) to receive against.
+final inkOpenPalletShipmentsProvider = StreamProvider<List<InkShipment>>(
+  (ref) => ref.watch(inkServiceProvider).watchOpenPalletShipments(),
+);
+
 /// Production run history (newest first).
 final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
   (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
