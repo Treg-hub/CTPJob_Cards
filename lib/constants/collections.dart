@@ -81,5 +81,6 @@ class Collections {
   static const String inkMeterPoints = 'ink_meter_points'; // aux toloul meters (recovery/usage), no stock impact
   static const String inkMeterPointReadings = 'ink_meter_point_readings';
   static const String inkCountEvents = 'ink_count_events'; // one doc per month-end count session
+  static const String inkShipments = 'ink_shipments'; // import shipment + landed cost (doc id = {order}-{letter})
   static const String inkAudit = 'ink_audit';
 }

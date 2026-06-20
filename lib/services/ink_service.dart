@@ -8,6 +8,7 @@ import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
+import '../models/ink_shipment.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -602,10 +603,25 @@ class InkService {
         return list;
       });
 
+  /// Open IBC shipments (status awaiting_receipt / receiving) the operator can
+  /// receive against. Created + costed in Pulse; read-only here.
+  Stream<List<InkShipment>> watchOpenIbcShipments() => _db
+      .collection(Collections.inkShipments)
+      .where('packaging_mode', isEqualTo: 'ibc')
+      .where('status', whereIn: ['awaiting_receipt', 'receiving'])
+      .snapshots()
+      .map((s) {
+        final list = s.docs.map(InkShipment.fromFirestore).toList();
+        list.sort((a, b) => a.id.compareTo(b.id));
+        return list;
+      });
+
   /// Receiving ink via IBC: registers each IBC (doc id = number) and records
   /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
   /// idempotent (IBC docs keyed by number; purchase key derived from the
-  /// numbers), so an offline replay won't duplicate.
+  /// numbers), so an offline replay won't duplicate. When [shipmentId] is given
+  /// the IBCs + purchases are stamped with it and the shipment is advanced
+  /// (received_units appended, status → received).
   Future<void> recordIbcReceipt({
     required List<InkIbc> ibcs,
     required String supplierName,
@@ -614,6 +630,7 @@ class InkService {
     required String actorName,
     String? orderNumber,
     String? cgnaNumber,
+    String? shipmentId,
   }) async {
     for (final ibc in ibcs) {
       await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
@@ -626,6 +643,7 @@ class InkService {
               orderNumber: orderNumber,
               cgnaNumber: cgnaNumber,
               chargeNumber: ibc.chargeNumber,
+              shipmentId: shipmentId,
             ).toFirestore(),
             SetOptions(merge: true),
           );
@@ -651,7 +669,25 @@ class InkService {
         actorClockNo: actorClockNo,
         actorName: actorName,
         idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
+        shipmentId: shipmentId,
       ));
+    }
+    if (shipmentId != null && shipmentId.isNotEmpty) {
+      final received = [
+        for (final ibc in ibcs)
+          {
+            'ref': ibc.ibcNumber,
+            'item_code': ibc.itemCode,
+            'net_kg': ibc.kg,
+            'scanned_by': actorClockNo,
+            'scanned_at': Timestamp.fromDate(effectiveAt),
+          },
+      ];
+      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
+        'received_units': FieldValue.arrayUnion(received),
+        'status': 'received',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 

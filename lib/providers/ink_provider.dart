@@ -7,6 +7,7 @@ import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
+import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
@@ -100,6 +101,11 @@ final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
 /// All IBCs across all statuses (register view).
 final inkAllIbcsProvider = StreamProvider<List<InkIbc>>(
   (ref) => ref.watch(inkServiceProvider).watchIbcs(),
+);
+
+/// Open IBC shipments (awaiting_receipt / receiving) to receive against.
+final inkOpenShipmentsProvider = StreamProvider<List<InkShipment>>(
+  (ref) => ref.watch(inkServiceProvider).watchOpenIbcShipments(),
 );
 
 /// Production run history (newest first).

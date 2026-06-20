@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/ink_ibc.dart';
+import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_barcode_parser.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/ink_receipt_validation.dart';
 import 'ink_barcode_scan_screen.dart';
 
 class _IbcRow {
@@ -40,6 +42,22 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   DateTime _effectiveAt = DateTime.now();
   final List<_IbcRow> _rows = [_IbcRow()];
   bool _submitting = false;
+
+  /// When set, the operator is receiving against this Pulse-created shipment:
+  /// order/CGNA are prefilled, the colour list is restricted to its lines, and
+  /// every IBC number is validated against its packing list.
+  InkShipment? _shipment;
+
+  void _selectShipment(InkShipment? s) {
+    setState(() {
+      _shipment = s;
+      if (s != null) {
+        _supplier = 'Siegwerk';
+        _orderCtrl.text = s.orderNumber;
+        _cgnaCtrl.text = s.cgnaNumber ?? '';
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -131,6 +149,21 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Add at least one complete IBC (number, colour, kg).')));
       return null;
+    }
+    // When receiving against a shipment, every IBC must be on its packing list.
+    if (_shipment != null) {
+      final errors = validateIbcRowsAgainstShipment(
+        shipment: _shipment!,
+        rows: [
+          for (final ibc in ibcs)
+            IbcReceiptRow(ibcNumber: ibc.ibcNumber, itemCode: ibc.itemCode),
+        ],
+      );
+      if (errors.isNotEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(errors.first.message)));
+        return null;
+      }
     }
     return ibcs;
   }
@@ -276,6 +309,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             actorName: emp?.name ?? '',
             orderNumber: _orderCtrl.text.trim(),
             cgnaNumber: _cgnaCtrl.text.trim(),
+            shipmentId: _shipment?.id,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -299,8 +333,13 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     });
 
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
-    final inks =
-        items.where((i) => i.itemClass == InkItemClass.ink).toList();
+    var inks = items.where((i) => i.itemClass == InkItemClass.ink).toList();
+    if (_shipment != null) {
+      final codes = _shipment!.itemCodes.toSet();
+      final filtered = inks.where((i) => codes.contains(i.itemCode)).toList();
+      if (filtered.isNotEmpty) inks = filtered;
+    }
+    final shipments = ref.watch(inkOpenShipmentsProvider).valueOrNull ?? [];
     final suppliers = ref.watch(inkActiveSuppliersProvider).valueOrNull ?? [];
     final df = DateFormat('EEE d MMM yyyy HH:mm');
     final totalKg = _rows.fold<double>(
@@ -311,6 +350,28 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (shipments.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              // ignore: deprecated_member_use
+              value: _shipment?.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Shipment (optional)',
+                  helperText: 'Validates IBCs against the packing list'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('None — free text')),
+                for (final s in shipments)
+                  DropdownMenuItem(
+                      value: s.id,
+                      child: Text('${s.id} · ${s.expectedUnits.length} IBC')),
+              ],
+              onChanged: (id) {
+                final match = shipments.where((s) => s.id == id).toList();
+                _selectShipment(match.isEmpty ? null : match.first);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<String>(
             // ignore: deprecated_member_use
             value: _supplier,
@@ -338,8 +399,10 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
               Expanded(
                 child: TextField(
                   controller: _orderCtrl,
-                  decoration: const InputDecoration(
+                  readOnly: _shipment != null,
+                  decoration: InputDecoration(
                       labelText: 'Order number',
+                      filled: _shipment != null,
                       isDense: true),
                 ),
               ),
@@ -347,8 +410,10 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
               Expanded(
                 child: TextField(
                   controller: _cgnaCtrl,
-                  decoration: const InputDecoration(
+                  readOnly: _shipment != null,
+                  decoration: InputDecoration(
                       labelText: 'CGNA number',
+                      filled: _shipment != null,
                       isDense: true),
                 ),
               ),
