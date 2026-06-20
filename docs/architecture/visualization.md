@@ -46,7 +46,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 - Job Cards core: always (mobile branding primary).
 - Waste / Fleet: gated by settings flags + role derivation (see permission matrices below + role.dart).
 - Copper: hardcoded whitelist (clock 22/5421/20) in role.dart + HomeScreen tab visibility. Part of "copper service".
-- Ink Factory: `department == "Ink Factory"` (mobile-only per migration plan; no web). Gated module tile like Fleet.
+- Ink Factory: mobile data entry gated by `department == "Ink Factory"` (tile like Fleet). **Pulse** also has an Ink module (claims `boardModules: 'ink'`, manager/admin): read-only stock/ledger/report KPIs **plus** the manager Shipments + landed-cost flow (`/ink/shipments` → upload supplier PDFs → `parseInkShipmentDoc` → review → rate/duty → push per-colour cost to Pending Costs). See `docs/Ink_Receiving_Costing_Plan.md`.
 - Geofence / Notifications / Presence (core services): always-on for signed-in (geofence auto in background, presence updates employees.isOnSite/fcm, feeds notification_inbox + escalation). See rules + geofence_editor in Admin.
 
 **Detailed Module Screens & User Flows (Phase 8 map enhancement)**:
