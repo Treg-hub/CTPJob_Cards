@@ -6,6 +6,45 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-18 — Admin: user feedback tracking board
+
+Admins can now review and track the feedback that staff submit from the **Give Feedback** button on the Home screen.
+
+A new **User Feedback** screen — reached from **Admin → Settings → Feedback** — lists every submission with who sent it and when. For each one you can:
+
+- Set a tracking status: **New → Planned → Implemented → Declined**. Anything submitted before this feature shows as **New** until you triage it.
+- Add private **implementation notes** — what you did, what's planned, or why it was declined.
+- Filter by status, with live counts, to see at a glance what's still outstanding versus done.
+- Delete a submission you no longer need.
+
+The board is **admin-only** — regular staff never see it; they just get the confirmation that their feedback was submitted.
+
+---
+
+## 2026-06-18 — Ink Factory: combined daily readings screen + recovery history
+
+Two quality-of-life improvements for Ink Factory and Lurgi staff.
+
+### Ink meters and Toloul meters combined on one screen
+
+The daily meter capture flow has been simplified. Previously the **Daily Readings** hub showed two separate cards — one for ink meters and one for Toloul meter points — and each opened its own screen. You now land directly on a **single scrollable screen** that shows all ink meters (Yellow, Red, Blue, Black, Gravure Binder) and all Toloul meter points (Recovery and Usage) together.
+
+- One reading date at the top, shared across all entries.
+- Enter whichever readings you have — fields you leave blank are skipped, so you can still submit ink-only or Toloul-only readings when needed.
+- One **Record readings** button at the bottom submits everything in a single tap.
+- The history strip on each card (showing the last few readings) works as before.
+- The reset checkbox (for when a meter was zeroed) works as before.
+
+The **Daily Readings** tile on the Lurgi home screen opens this combined screen directly. The **Meter Readings** tile in the Ink Factory hub does the same.
+
+### Toloul Recovery — previous entries shown below the form
+
+The **Toloul Recovery** screen now shows your most recent recovery entries directly below the capture form, so you can see at a glance what was last entered without leaving the screen. Each entry shows the volume, the Lurgi source, the date, and who entered it.
+
+The form also stays open after a successful submit — fields clear and the date resets to now — so back-to-back entries (e.g. morning and afternoon recovery from the same Lurgi) can be captured without navigating away.
+
+---
+
 ## 2026-06-17 — More reliable on-site detection + required security update (v2.1.1)
 
 A focused update that makes on-site / off-site detection dependable, gives you a one-tap fix for the phone settings that silently block job alerts, and prepares the app for a server-side security tightening. **This is a required update** — see the note at the end.
