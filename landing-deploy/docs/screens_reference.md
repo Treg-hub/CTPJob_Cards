@@ -339,12 +339,13 @@ The control panel. Six scrollable tabs with outlined icons.
 
 #### Tab: Settings
 
-Four grouped cards:
+Grouped cards:
 
 - **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking update screen is shown with the download URL before Home is reached. Works independently of Remote Config.
 - **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
 - **Access** — **Escalation Config** per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option). Writes to `notification_configs/global`. Prompts to confirm when re-enabling stages so open jobs aren't flooded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled. **Reset Escalation Stamps** calls `clearEscalationStamps` CF.
 - **Modules** — enable/disable Waste Management and Fleet Maintenance
+- **Feedback** — opens the **User Feedback** admin board (see [User Feedback](#user-feedback)) for reviewing and triaging feedback submitted from the Home screen FAB
 
 #### Tab: Job Cards
 
@@ -377,6 +378,21 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 - Save writes `config/geofence` with the new `center.lat`, `center.lng`, `radius_meters`
 
 > **Warning:** Changing the geofence affects every employee's `isOnSite` on their next location check. If you shrink the radius, people currently inside the old boundary may flip to `isOnSite: false` within minutes.
+
+### User Feedback
+
+`lib/screens/feedback_admin_screen.dart` — **Roles:** Admin only
+
+Internal triage board for the feedback employees submit via the **Give Feedback** FAB on the Home screen (written to the `feedback` collection). Reached from **Admin → Settings → Feedback**. Gated on `Employee.isAdmin` — regular staff never see it; they only get the "feedback submitted" confirmation.
+
+#### Capabilities
+
+- **Status workflow** — set each item to `New → Planned → Implemented → Declined`. Legacy items submitted before this screen existed show as `New` until triaged.
+- **Implementation notes** — attach private notes to any item (what was done, what's planned, or why it was declined), edited in a dialog.
+- **Filter bar** — per-status chips with live counts (`All`, `New`, `Planned`, `Implemented`, `Declined`) to separate outstanding from done.
+- **Delete** — remove a submission via the per-card overflow menu.
+
+> **Info:** Triage actions add `status`, `statusUpdatedAt`, `statusUpdatedByClockNo`, `adminNotes`, `adminNotesUpdatedAt`, and `adminNotesByClockNo` to the feedback document — the original `feedback` / `userName` / `clockNo` / `timestamp` fields are never modified. Filtering is client-side, so no Firestore composite index is required.
 
 ---
 
@@ -594,6 +610,140 @@ Configuration panel for the WasteTrack module. Three tabs:
 | **Contractors** | Add/edit contractor records used when scheduling loads |
 
 Writes to `waste_types`, `waste_rates`, and `waste_contractors` collections.
+
+---
+
+## Ink Factory Module
+
+Screens for the Ink Factory stock-inventory module. Accessible via the **Ink Factory** home tile (Ink Factory department staff) and the **Daily Readings** home tile (Lurgi department staff). Roles: Ink operator (`department == "Ink Factory"`), Ink manager (position contains "manager" in the Ink Factory department), Lurgi user (`department == "Lurgi"`), and Admin. Other employees do not see these tiles.
+
+### Ink Home
+
+`lib/screens/ink_home_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Module hub. Shows a live stock-on-hand summary card (total value for managers, item count for operators), an action grid for data capture, and a manager-only action grid. Below the grids the full stock list is shown with current balance and unit, tappable to open the item ledger detail.
+
+#### Capture tiles
+
+| Tile | Screen |
+|------|--------|
+| Receive Stock | `InkReceiveRawMaterialScreen` |
+| Receive Ink (IBC) | `InkReceiveIbcScreen` |
+| Meter Readings | `InkDailyReadingsScreen` (combined ink + Toloul) |
+| Consume IBC | `InkIbcTransferScreen` |
+| Production Run | `InkProductionRunScreen` |
+| Toloul Recovery | `InkTolulRecoveryScreen` |
+| IBC Register | `InkIbcRegisterScreen` |
+
+#### Manager tiles
+
+Pending Costs · Month-end Count · Stock Adjustment · Month-end Report · Suppliers · Recipes · Conversion Factors · Toloul Meter Points · Production History · Revaluation · Value Adjustment · Corrections · Flagged
+
+> **Money gating:** WAC, stock value, and cost fields are hidden from operators throughout the module. Managers and admins see all financial figures.
+
+---
+
+### Daily Readings (combined meter screen)
+
+`lib/screens/ink_daily_readings_screen.dart` — **Roles:** Ink operator, Ink manager, Lurgi user, Admin
+
+Single combined screen for all daily meter readings. Shown via the **Daily Readings** home tile for Lurgi staff and via the **Meter Readings** capture tile in the Ink hub for Ink Factory staff.
+
+#### Layout
+
+- **Reading date** — shared date/time for all entries. Managers and admins can edit it; operators see it as a read-only label.
+- **INK METERS section** — one card per metered stock item (Yellow, Red, Blue, Black, Gravure Binder). Each card shows a horizontal history strip of the last four readings, a new-reading text field, a live preview of litres consumed and kg deducted, an over-max warning if the consumption exceeds the configured daily limit, and a "meter was reset" checkbox when the reading drops below the last.
+- **TOLOUL METERS section** — same card pattern for each active Toloul meter point (Recovery and Usage points). These record cumulative meter readings; consumption is the delta and is used for month-end Toloul totals only — no stock effect.
+- **Record readings** button at the bottom submits all filled entries in one tap. Blank fields are skipped — partial submissions are allowed.
+
+#### Submission
+
+Ink meter entries are written as `consumption_meter` transactions to the ink ledger. Toloul meter entries are written to `ink_meter_point_readings`. Both are submitted in a single handler. Closed-period override check runs once before either batch is written.
+
+---
+
+### Toloul Recovery
+
+`lib/screens/ink_toloul_recovery_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Captures a Toloul recovery event — solvent recovered from the Lurgi distillation and returned to stock. Written as a `recovery` transaction (additive, at the current WAC — recovery never changes WAC).
+
+#### Fields
+
+- **Solvent** — dropdown of active solvent items (auto-selects Toloul when it's the only one)
+- **Volume recovered** — quantity in the item's unit (LTS)
+- **Lurgi / source** — free-text note, optional (e.g. "Lurgi 2")
+- **Effective date** — date/time picker
+
+#### Recent Recoveries
+
+The last 15 non-voided recovery entries are shown below the form. Each row shows volume, source, date, and actor name. The INK#### sequence number appears when the server has assigned it. This list updates live — entries appear immediately after a successful submit.
+
+The form stays open after submit (fields clear, date resets to now) to allow back-to-back entries without navigation.
+
+---
+
+### Ink Meter Point Entry (standalone)
+
+`lib/screens/ink_meter_point_entry_screen.dart` — **Roles:** Ink operator, Ink manager, Lurgi user, Admin
+
+Standalone Toloul meter point entry screen, available as a fallback but no longer linked from the main navigation. The combined `InkDailyReadingsScreen` is the primary path for Toloul meter entry.
+
+---
+
+### Ink Meter Readings Grid (standalone)
+
+`lib/screens/ink_meter_readings_grid_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Standalone ink meter readings screen, available as a fallback. The combined `InkDailyReadingsScreen` is the primary path for daily ink meter entry.
+
+---
+
+### Production Run
+
+`lib/screens/ink_production_run_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Operator picks a recipe (CoverWax or Gravure Binder) and a pot count (1 / 2 / 3). The screen previews the inputs consumed and the output produced with an estimated cost (managers only). Submitting records a `consumption_production` transaction per input and a `manufacture` transaction for the output. The 10 most recent production runs are shown below the form as a history list.
+
+---
+
+### Receive Ink (IBC)
+
+`lib/screens/ink_receive_ibc_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Scans ink IBCs (GS1-128 barcode labels). The barcode parser reads the SSCC (IBC number), weight, charge number, and colour from the label. Multiple IBCs can be scanned and batched before submitting. On submit, one cost-pending `purchase` transaction is written per colour for the total kg received, and each IBC is registered in the IBC audit register.
+
+---
+
+### IBC Register
+
+`lib/screens/ink_ibc_register_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs.
+
+---
+
+### Pending Costs
+
+`lib/screens/ink_pending_costs_screen.dart` — **Roles:** Ink manager, Admin
+
+Lists all `purchase` transactions still in `cost_status: pending` (invoice not yet received). Manager enters the total cost; the server re-runs the WAC replay from that transaction forward to incorporate the finalised cost.
+
+---
+
+### Month-end Report
+
+`lib/screens/ink_month_end_report_screen.dart` — **Roles:** Ink manager, Admin
+
+Free date-range report using count events as period boundaries. Shows opening WAC/balance/value, purchases, manufacturing, consumption, recovery, adjustments, revaluations, and closing balance per item. Exports as Summary CSV, Summary PDF, or full Transaction-list PDF. Toloul Recovery and Toloul Usage totals for the period are shown at the bottom.
+
+---
+
+### Stock Item Detail
+
+`lib/screens/ink_stock_item_detail_screen.dart` — **Roles:** Ink operator (qty only), Ink manager (qty + money), Admin
+
+Full ledger for one item, oldest-effective first. Shows balance and WAC after each transaction. Flagged transactions are highlighted. Accessible by tapping any item in the Ink hub stock list.
 
 ---
 

@@ -56,6 +56,7 @@ Live:
 - Copper Inventory module (clock-number restricted)
 - WasteTrack module (Security department)
 - Fleet Maintenance module (Hyster forklifts & grabs)
+- Ink Factory module (production stock inventory)
 
 Planned:
 - Predictive maintenance AI
@@ -91,7 +92,7 @@ Oversees all job cards in their department. Enforces data quality for operators 
 
 Full system access. Manages employee accounts, configures geofence boundaries, adjusts escalation rules, enables/disables modules (Waste Management, Fleet Maintenance), and has access to all data across all departments.
 
-**Key Screens:** Admin Screen · Geofence Editor · Employee Management · Settings (Modules)
+**Key Screens:** Admin Screen · Geofence Editor · User Feedback · Employee Management · Settings (Modules)
 
 > **Admin access is controlled per user in Firestore.** Set `isAdmin: true` on an employee's Firestore document to grant Admin. No code change required — takes effect on next app launch by that user.
 
@@ -441,6 +442,8 @@ Admins have access to all data across all departments plus system configuration 
 
 **Geofence Editor** — Separate screen accessible from Admin → Settings for drawing the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
 
+**User Feedback** — Admin-only screen accessible from Admin → Settings → Feedback. Lists everything staff have submitted via the **Give Feedback** button on the Home screen, and lets an admin track each item through **New → Planned → Implemented → Declined** and attach private implementation notes. Filter chips with live counts show at a glance what's still outstanding versus done. It's an internal tracking tool — only admins can see it; staff just get a confirmation when they submit.
+
 ### Technology Stack
 
 | Component | Provider | Properties |
@@ -466,7 +469,7 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 
 - **Issue reporting** — Operators and shift leads (in the departments an admin enables) report a problem on a specific forklift or grab: severity (Low / Medium / High / Out of Service), shift (auto-detected as day / night / weekend), a description, and up to three photos.
 - **Out-of-service alerts** — Reporting an asset *out of service* immediately push-notifies the Hyster mechanic and the cost manager(s) — or holds it in their notification inbox if they're off-site — and flags the asset with an orange **OOS** badge until the issue is resolved. High-severity issues go to the inbox without a push.
-- **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note (out-of-service issues must be closed with a work record — a note alone is not accepted). Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, are numbered `FM-NNNN` (short global sequence; legacy records keep `FM-YYYYMMDD-NNN`), and lock from editing 14 days after creation. The hour-meter reading is propagated to the asset so the next mechanic sees the last recorded hours.
+- **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note (out-of-service issues must be closed with a work record — a note alone is not accepted). Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, are numbered `FM-NNNN` (short global sequence; legacy records keep `FM-YYYYMMDD-NNN`), and lock from editing 7 days after creation. The hour-meter reading is propagated to the asset so the next mechanic sees the last recorded hours.
 - **Cost tracking (managers only)** — The overseeing manager enters cost lines against an asset (parts / labour / invoice / other, with amount, invoice reference, and supplier), sees month and year-to-date spend per machine, and exports a full CSV. **The mechanic never sees cost amounts** — only a "Costs pending / Costs entered" label.
 - **Admin** — The forklift/grab register, the list of reporter departments, the cost-manager clock numbers, the asset and work types, and the module on/off switch are all managed in Fleet Settings.
 
@@ -482,6 +485,55 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 ### On the management dashboard (CTP Pulse)
 
 Managers with the Fleet module on the web board see a **Fleet Maintenance** section: open issues (live), maintenance hours this month, cost this month, and average issue resolution time — plus a dedicated Fleet page with cost-per-asset and cost-by-category charts and a live list of open issues.
+
+---
+
+## Ink Factory
+
+*Production stock-inventory data entry for the Ink Factory department — a separate module from plant job cards.*
+
+The Ink Factory module is a full stock-inventory system for raw materials, solvents, and manufactured inks. It tracks purchases, production runs, meter consumption, Toloul recovery, and month-end reporting. It is only visible to staff with `department == "Ink Factory"` and to admins.
+
+### What it does
+
+- **Stock on hand** — Live balances and weighted-average costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105, Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue, Black — received as IBCs, never manufactured), and manufactured products (CoverWax, Gravure Binder).
+- **Receive stock (raw materials)** — Operator records incoming raw materials from a supplier. Cost is entered later by a manager when the invoice arrives (deferred-cost pattern).
+- **Receive ink IBCs** — Operator scans the IBC barcode (GS1-128 / SSCC label), weight and colour are auto-filled from the scan. The audit register records every IBC number received.
+- **Consume IBC** — Transfers an IBC from the audit register into the tank. Records the Toloul wash consumption used during the transfer.
+- **Daily Readings** — Combined screen for ink meters and Toloul meter points. Enter all readings on one page with one submit.
+- **Production Run** — Operator picks a recipe (CoverWax or Gravure Binder) and a pot count. The screen previews inputs consumed and output produced; the run is recorded as consumption transactions for each input and a manufacture transaction for the output.
+- **Toloul Recovery** — Records solvent recovered from the Lurgi distillation. Previous recovery entries are shown below the form for context.
+- **IBC Register** — Searchable register of all ink IBCs with colour tabs (Yellow / Red / Blue / Black), receive date, order number, and CGNA number.
+
+### Daily Readings — ink meters + Toloul meters on one screen
+
+The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter points and all Toloul meter points on a single scrollable page. The Lurgi operator enters both in one sitting at 06:00 each morning.
+
+- **Ink meters** — cumulative reading entry for Yellow, Red, Blue, Black, and Gravure Binder. Each card shows the last few readings as a history strip. The delta (litres consumed since the last reading) is computed automatically and converted to kg using a conversion factor. If the new reading is below the last, a "meter was reset" checkbox appears.
+- **Toloul meters** — the same entry pattern for the Toloul Recovery and Toloul Usage meter points. These record how much solvent each press consumed and are used for month-end Toloul reporting. They do not affect stock levels.
+- One date at the top (editable by managers), one **Record readings** button at the bottom.
+
+### Roles
+
+| Role | How you're recognised | What you can do |
+|------|----------------------|-----------------|
+| **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
+| **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator actions + pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
+| **Lurgi operator** | `department == "Lurgi"` | Daily Readings screen only (ink + Toloul meters) |
+| **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
+
+> **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
+
+### Manager tools
+
+- **Pending Costs** — after a purchase is received, the manager enters the total cost from the invoice to finalise the weighted-average cost calculation.
+- **Recipes** — define input quantities and output per pot for CoverWax and Gravure Binder recipes.
+- **Conversion Factors** — set the kg-per-litre factor for each metered ink so meter readings convert to stock consumption correctly.
+- **Toloul Meter Points** — manage the list of meter points (Lurgi recovery points and press usage points) shown on the Daily Readings screen.
+- **Month-end Count** — enter a physical stock count; the system auto-generates an adjustment transaction per item (count minus ledger balance).
+- **Month-end Report** — free date-range report (count-to-count) with opening balance, all movements, and closing balance per item, exportable as CSV and PDF.
+- **Stock Adjustment / Value Adjustment / Revaluation** — manager-only corrections.
+- **Corrections** — void a transaction and re-enter corrected values (void-and-reenter pattern, preserved for audit).
 
 ---
 
