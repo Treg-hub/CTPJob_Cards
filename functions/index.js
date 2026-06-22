@@ -197,19 +197,22 @@ exports.linkEmployeeAccount = onCall(async (request) => {
 
 /**
  * setDeviceFcmToken — points an employee's notifications at the caller's device
- * by writing ONLY the fcmToken on employees/{clockNo}. Used by the shared-device
- * "switch user" flow, where the signed-in account stays the same but the active
- * employee changes, so the target's notifications must route to this handset.
+ * by writing ONLY the fcmToken on employees/{clockNo}. Used by the "switch user"
+ * flow, where the signed-in account stays the same but the active employee
+ * changes, so the target's notifications must route to this handset.
  *
- * Any signed-in user may call it — the same capability the switch-user feature
- * has always had — but it can change nothing except the token. (Fully removing
- * this "redirect notifications" capability would require reworking switch-user
- * to re-authenticate per employee; tracked as a follow-up.)
+ * ADMIN-ONLY (Security Phase B1). Redirecting another employee's notifications
+ * is privileged: the only caller is the in-app Switch User dialog, which is
+ * already gated to admins (home_screen._handleTitleTap) and keeps the admin's
+ * OWN Firebase identity across the switch. So the caller here is always an
+ * admin — assertAdmin() changes nothing for the legitimate flow while closing
+ * the hole where any signed-in employee could redirect anyone's notifications
+ * via a direct (non-UI) call. Requires the caller's uid in admins/{uid} — the
+ * sole live admin (clock 22) is already seeded; any future admin must be too
+ * (see scripts/seed_admins.js) or switch-user will fail for them.
  */
 exports.setDeviceFcmToken = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await assertAdmin(request);
   const innerData = request.data;
   const clockNo = String(innerData.clockNo || "");
   const fcmToken = innerData.fcmToken;
