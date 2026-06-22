@@ -13,6 +13,13 @@ These rules apply whenever working on code that will be committed or pushed to t
 - Before suggesting a push, provide: clear summary + exact git commands + good commit message.
 - For PRs, provide complete description including testing steps.
 
+## Build Number (automatic)
+- Every commit **auto-bumps** the Flutter build number (`pubspec.yaml` `+N` suffix) via `githooks/pre-commit`.
+- **Do not** manually bump the build number in commits — the hook handles it.
+- After clone (or if hooks are missing), run once:
+  - Windows: `pwsh scripts/setup-githooks.ps1`
+  - macOS/Linux: `sh scripts/setup-githooks.sh`
+
 ## Code Quality
 - All generated code must pass analysis_options.yaml checks.
 - Suggest running `flutter analyze` and tests before push.

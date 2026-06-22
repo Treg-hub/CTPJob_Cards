@@ -21,6 +21,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Never push implementation commits directly to `master`.** Hotfixes to CLAUDE.md or settings files are the only acceptable direct-to-master commits.
 
+### Build number hook
+Every commit auto-increments the Flutter build number in `pubspec.yaml` (`version: X.Y.Z+N`). Enable once per clone:
+
+```bash
+pwsh scripts/setup-githooks.ps1   # Windows
+sh scripts/setup-githooks.sh      # macOS/Linux
+```
+
+Do not manually bump `+N` — `githooks/pre-commit` stages the updated `pubspec.yaml` for you.
+
 ## Project Overview
 
 CTP Job Cards is a **Flutter + Firebase** mobile app for field technician job card tracking. It targets Android (primary), with iOS/web secondary. The app is production-grade with offline-first sync, real-time push notifications with escalation logic, background geofencing, role-based access, and audit logging.

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Auto-bump Flutter build number (+N) before every commit.
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+node scripts/bump-build-number.js
+git add pubspec.yaml
