@@ -197,19 +197,22 @@ exports.linkEmployeeAccount = onCall(async (request) => {
 
 /**
  * setDeviceFcmToken — points an employee's notifications at the caller's device
- * by writing ONLY the fcmToken on employees/{clockNo}. Used by the shared-device
- * "switch user" flow, where the signed-in account stays the same but the active
- * employee changes, so the target's notifications must route to this handset.
+ * by writing ONLY the fcmToken on employees/{clockNo}. Used by the "switch user"
+ * flow, where the signed-in account stays the same but the active employee
+ * changes, so the target's notifications must route to this handset.
  *
- * Any signed-in user may call it — the same capability the switch-user feature
- * has always had — but it can change nothing except the token. (Fully removing
- * this "redirect notifications" capability would require reworking switch-user
- * to re-authenticate per employee; tracked as a follow-up.)
+ * ADMIN-ONLY (Security Phase B1). Redirecting another employee's notifications
+ * is privileged: the only caller is the in-app Switch User dialog, which is
+ * already gated to admins (home_screen._handleTitleTap) and keeps the admin's
+ * OWN Firebase identity across the switch. So the caller here is always an
+ * admin — assertAdmin() changes nothing for the legitimate flow while closing
+ * the hole where any signed-in employee could redirect anyone's notifications
+ * via a direct (non-UI) call. Requires the caller's uid in admins/{uid} — the
+ * sole live admin (clock 22) is already seeded; any future admin must be too
+ * (see scripts/seed_admins.js) or switch-user will fail for them.
  */
 exports.setDeviceFcmToken = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await assertAdmin(request);
   const innerData = request.data;
   const clockNo = String(innerData.clockNo || "");
   const fcmToken = innerData.fcmToken;
@@ -1400,56 +1403,6 @@ exports.autoCloseMonitoringJobs = functions.scheduler.onSchedule({
   if (closedCount > 0) await batch.commit();
 });
 
-// ==================== COPPER SELL NOTIFICATION ====================
-exports.onCopperTransactionWrite = functions.firestore.onDocumentWritten({ document: "copperTransactions/{docId}" }, async (event) => {
-  const after = event.data.after.data();
-  if (!after) return;
-
-  const sellTypes = ["sellNuggets", "sellRods"];
-  const snapshot = await db.collection("copperTransactions").where("type", "in", sellTypes).get();
-  const sellTotal = snapshot.docs.reduce((sum, d) => sum + (d.data().kg || 0), 0);
-
-  if (sellTotal > 400) {
-    const emp22 = await db.collection("employees").doc("22").get();
-    if (emp22.exists && emp22.data().fcmToken) {
-      const title = "Copper Sell Ready";
-      const body = `Total sell copper: ${sellTotal}kg`;
-
-      if (emp22.data().isOnSite !== true) {
-        console.log(`onCopperTransactionWrite: employee 22 is offsite — parking in inbox`);
-        await db.collection("notification_inbox")
-          .doc("22").collection("items").add({
-            type: "copper_sell",
-            title,
-            body,
-            triggeredBy: "copper_sell",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-            readAt: null,
-          });
-        return;
-      }
-
-      await messaging.send({
-        token: emp22.data().fcmToken,
-        notification: { title, body },
-        data: { click_action: "FLUTTER_NOTIFICATION_CLICK", triggeredBy: "copper_sell" },
-        android: { priority: "high" },
-      });
-
-      await logNotification({
-        triggeredBy: "copper_sell",
-        sentTo: ["22"],
-        level: "normal",
-        title,
-        body,
-        initiatedByClockNo: null,
-        initiatedByName: null,
-      });
-    }
-  }
-});
-
 // ==================== ALERT RESPONSE HANDLER (Busy + Dismissed) ====================
 exports.onAlertResponseCreated = functions.firestore
   .onDocumentCreated("alertResponses/{responseId}", async (event) => {
@@ -1941,39 +1894,6 @@ exports.migrateEmployeeIds = onCall(async (request) => {
   await batch.commit();
   console.log(`Migrated ${migrated.length} employee docs`);
   return { migrated, count: migrated.length };
-});
-
-exports.migrateJobStatuses = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "User must be authenticated");
-  }
-
-  const snapshot = await db.collection("job_cards").get();
-  if (snapshot.empty) return { message: "No job cards found.", updated: 0 };
-
-  const batch = db.batch();
-  let updatedCount = 0;
-
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const currentStatus = data.status;
-    let newStatus = currentStatus;
-
-    if (currentStatus === "completed") newStatus = "closed";
-    else if (currentStatus === "monitoring") newStatus = "monitor";
-
-    if (newStatus !== currentStatus) {
-      batch.update(doc.ref, { status: newStatus });
-      updatedCount++;
-    }
-  }
-
-  if (updatedCount > 0) {
-    await batch.commit();
-    return { message: `Migration completed! Updated ${updatedCount} job cards.`, updated: updatedCount };
-  } else {
-    return { message: "No job cards needed status updates.", updated: 0 };
-  }
 });
 
 // ==================== CLEAR STALE ESCALATION STAMPS (one-time reset) ====================

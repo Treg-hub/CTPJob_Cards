@@ -363,7 +363,9 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                 for (final s in shipments)
                   DropdownMenuItem(
                       value: s.id,
-                      child: Text('${s.id} · ${s.expectedUnits.length} IBC')),
+                      child: Text(
+                          '${s.id}${s.containerNumber != null ? ' · ${s.containerNumber}' : ''}'
+                          ' · ${s.expectedUnits.length} IBC')),
               ],
               onChanged: (id) {
                 final match = shipments.where((s) => s.id == id).toList();
