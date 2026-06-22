@@ -158,7 +158,11 @@ class _InkReceiveRawMaterialScreenState
                       const DropdownMenuItem(
                           value: null, child: Text('None — free text')),
                       for (final s in shipments)
-                        DropdownMenuItem(value: s.id, child: Text(s.id)),
+                        DropdownMenuItem(
+                            value: s.id,
+                            child: Text(s.containerNumber != null
+                                ? '${s.id} · ${s.containerNumber}'
+                                : s.id)),
                     ],
                     onChanged: (id) {
                       final match =
