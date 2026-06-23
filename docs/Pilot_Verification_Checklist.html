@@ -31,26 +31,39 @@
 <h1 class="title">Pilot Verification Checklist</h1>
 </header>
 <h1
-id="pilot-verification-checklist--wastetrack-controlled-rollout-prod-critical-4">Pilot
-Verification Checklist — WasteTrack Controlled Rollout
+id="pilot-verification-checklist--waste-recovery-controlled-rollout-prod-critical-4">Pilot
+Verification Checklist — Waste Recovery Controlled Rollout
 (PROD-CRITICAL-4)</h1>
 <p><strong>Purpose</strong>: Structured verification scaffolding for the
-security team controlled pilot of WasteTrack features inside the live
-CTP Job Cards app.<br />
-<strong>Scope</strong>: Mobile (Flutter) + Web parity, feature flag
-controls, offline resilience, signature capture, deviation detection,
-admin recovery tools, and usage logging.<br />
+security team controlled pilot of Waste Recovery inside CTP Job Cards
+(mobile) + CTP Pulse (web admin).<br />
+<strong>Scope</strong>: Mobile field capture, Pulse weighbridge/cost
+review, feature flag controls, offline resilience, signature capture,
+deviation detection, and usage logging.<br />
 <strong>Target Users</strong>: Security / pilot team (limited clock
-numbers), admins for config.<br />
+numbers), admins for config on Pulse.<br />
 <strong>Environments</strong>: Android release APK + <a
 href="https://ctp-job-cards.web.app">https://ctp-job-cards.web.app</a>
-(WasteTrack section)<br />
+(mobile) · <a
+href="https://ctp-pulse.web.app">https://ctp-pulse.web.app</a> (Pulse
+admin)<br />
 <strong>Risk Posture</strong>: Conservative — master flag + pilot list
 (PROD-CRITICAL-3 infra already in place). All changes behind role gates
 + explicit pilot CSV.<br />
-<strong>Date</strong>: 2026-05-31<br />
-<strong>Version</strong>: v1 (scaffolding for actual pilot
-execution)</p>
+<strong>Date</strong>: 2026-06-23 (updated for mobile/Pulse split)<br />
+<strong>Version</strong>: v2</p>
+<blockquote>
+<p><strong>Architecture (22 June 2026)</strong></p>
+<ul>
+<li><strong>Mobile (Job Cards)</strong> — schedule, stock, collection,
+finish loading only.</li>
+<li><strong>CTP Pulse</strong> — weighbridge, cost review, reports,
+settings, import.</li>
+<li>Removed from mobile: <code>waste_pending_weighbridge_screen</code>,
+<code>waste_review_screen</code>, <code>waste_reports_screen</code>,
+<code>waste_admin_screen</code>.</li>
+</ul>
+</blockquote>
 <blockquote>
 <p><strong>Safety Rules for Pilot</strong></p>
 <ul>
@@ -61,8 +74,8 @@ users).</li>
 <li>Monitor <code>waste_usage_logs</code> collection in Firestore during
 pilot.</li>
 <li>Keep screenshots / notes for every scenario.</li>
-<li>Rollback: Toggle master flag OFF instantly via Admin screen (no app
-restart needed for most paths).</li>
+<li>Rollback: Toggle master flag OFF via Pulse → Settings → Waste (or
+legacy mobile prefs if still wired).</li>
 </ul>
 </blockquote>
 <hr />
@@ -73,376 +86,279 @@ Tools</h2>
 Verified</strong></label></p>
 <ul>
 <li>Login as admin (clock 22 or authorized manager) on mobile +
-web.</li>
-<li>Navigate to Waste Admin (from Waste Home quick action or
-dashboard).</li>
-<li>Confirm "Rollout Safety Flag + Pilot Mode (Production Control)" card
-is visible with amber styling.</li>
+Pulse.</li>
+<li>Pulse: navigate to <strong>Waste → Settings</strong> and confirm
+waste module toggles visible.</li>
+<li>Mobile: confirm <strong>Loads</strong> tab visible for pilot
+users.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Master Flag
 State</strong></label></p>
 <ul>
-<li>Record initial state of master flag (default true via
-SharedPreferences).</li>
-<li>Toggle OFF → confirm WasteTrack entry points show disabled
-messaging.</li>
+<li>Record initial state of master flag (<code>wasteTrackEnabled</code>
+/ Pulse <code>waste_enabled</code>).</li>
+<li>Toggle OFF → confirm Waste entry points show disabled messaging on
+mobile and Pulse.</li>
 <li>Toggle back ON.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Pilot Mode
 Configuration</strong></label></p>
 <ul>
-<li>Enable "Enable Pilot Mode" switch.</li>
-<li>Enter CSV of pilot clocks: <code>22,105,207</code> (include your
-test users + at least one admin recovery clock).</li>
-<li>Tap "Save Pilot Configuration".</li>
-<li>Confirm log entry created in <code>waste_usage_logs</code> with
-action <code>admin_update_pilot_config</code>.</li>
-<li>Note: Changes take effect on next screen load / action
-(SharedPreferences + service check).</li>
+<li>Enable "Enable Pilot Mode" switch (mobile SharedPreferences path if
+still active).</li>
+<li>Enter CSV of pilot clocks: <code>22,105,207</code> (include test
+users + at least one admin recovery clock).</li>
+<li>Save configuration.</li>
+<li>Confirm log entry in <code>waste_usage_logs</code> with action
+<code>admin_update_pilot_config</code> (if logging still wired).</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Pilot User
 Onboarding</strong></label></p>
 <ul>
-<li>For each pilot clock: confirm they see "WasteTrack is in pilot mode"
-banner (not full block) on Waste Home.</li>
-<li>Non-pilot clock (test outside list): confirm hard block with "Your
-clock number ... is not included in the pilot list." + contact admin
-message.</li>
-<li>Admin recovery: non-pilot admin can still enter Admin screen to
-adjust list (graceful degradation).</li>
+<li>Pilot clocks: see Loads tab and can schedule/collect.</li>
+<li>Non-pilot clock: hard block with pilot-list message.</li>
+<li>Admin recovery: admin can adjust pilot list on Pulse settings.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Usage Logging
 Baseline</strong></label></p>
 <ul>
-<li>Open Firestore emulator or console →
-<code>waste_usage_logs</code>.</li>
-<li>Verify entries appear for admin actions
-(<code>admin_update_pilot_config</code>, <code>admin_seed_data</code>,
-<code>admin_set_rate</code>).</li>
-<li>Check <code>platform</code> field (mobile vs web).</li>
+<li>Open Firestore → <code>waste_usage_logs</code>.</li>
+<li>Verify entries for load create/complete and admin config
+actions.</li>
+<li>Check <code>platform</code> field (<code>mobile</code> vs
+<code>web</code>).</li>
 </ul></li>
-<li><p><label><input type="checkbox" /><strong>Seeding / Test Data
-(Admin)</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Seeding / Test
+Data</strong></label></p>
 <ul>
-<li>Use admin "Seed Demo Data" button (if present) or manual create via
-Waste Create Load.</li>
-<li>Confirm contractors, rates, and sample loads appear in
-lists/reports.</li>
-<li>Log action <code>admin_seed_data</code> recorded.</li>
+<li>Configure contractors, waste types, and rates in <strong>Pulse →
+Settings → Waste</strong>.</li>
+<li>Create sample load via mobile schedule or on-the-spot flow.</li>
+<li>Confirm load appears in Pulse <strong>Loads</strong> and pending
+queues as expected.</li>
 </ul></li>
 </ul>
-<p><strong>Pass Criteria</strong>: Admin can fully control access
-without locking themselves out. All config changes logged.</p>
+<p><strong>Pass Criteria</strong>: Admin can control access without
+locking themselves out. Config on Pulse; field capture on mobile.</p>
 <hr />
 <h2 id="2-feature-flag-behavior">2. Feature Flag Behavior</h2>
 <ul class="task-list">
 <li><p><label><input type="checkbox" /><strong>Master Flag OFF (Safety
 Valve)</strong></label></p>
 <ul>
-<li>Any user (pilot or not): Waste Home / Create / Detail show clear
+<li>Any user (pilot or not): Waste tab / Pulse waste module show
 disabled state.</li>
-<li>"WasteTrack is currently disabled by feature flag" messaging.</li>
 <li>No data writes possible (service throws early).</li>
-<li>Toggle back ON → immediate re-enable on next navigation.</li>
+<li>Toggle back ON → re-enable on next navigation.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Pilot Mode ON + Master
 ON</strong></label></p>
 <ul>
-<li>Pilot clocks: full access (home, create load with items+photos,
-pending weighbridge, reports, admin if role allows).</li>
-<li>Non-pilot clocks: blocked at entry with specific pilot-list
-message.</li>
-<li>Mixed: pilot user creates load → non-pilot cannot see or interact
-(enforced at service + UI).</li>
+<li>Pilot clocks: full <strong>mobile field</strong> access (schedule,
+stock, collect, finish loading).</li>
+<li>Pilot managers/admins: Pulse weighbridge + cost review
+(role-gated).</li>
+<li>Non-pilot clocks: blocked at entry with pilot-list message.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Pilot Mode OFF (Full
 Access)</strong></label></p>
 <ul>
-<li>All authenticated users with Waste role see full features (subject
-to existing role gates).</li>
+<li>All authenticated users with Waste role see mobile field features
+(subject to role gates).</li>
+</ul></li>
+<li><p><label><input type="checkbox" /><strong>Photos Required /
+Signature Required (Pulse Settings)</strong></label></p>
+<ul>
+<li>Toggle <strong>Photos Required</strong> ON → mobile item/stock/truck
+photos mandatory; Pulse load + stock forms respect toggle.</li>
+<li>Toggle <strong>Driver Signature Required</strong> ON → signature
+mandatory on finish/submit.</li>
+<li>Toggle OFF → photos/signature optional (loaded-truck photos still
+recommended).</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Persistence &amp;
 Restart</strong></label></p>
 <ul>
-<li>Change flags → kill app / restart → flags persist via
-SharedPreferences.</li>
-<li>Web equivalent: (note localStorage or equivalent in pilot web
-UI).</li>
-</ul></li>
-<li><p><label><input type="checkbox" /><strong>Edge: Empty Pilot
-List</strong></label></p>
-<ul>
-<li>Pilot mode ON + empty CSV → all users blocked except recovery path
-via Admin.</li>
-</ul></li>
-<li><p><label><input type="checkbox" /><strong>Logging on Flag
-Checks</strong></label></p>
-<ul>
-<li>Every entry attempt by pilot/non-pilot logged (action includes
-context).</li>
+<li>Change flags → kill app / restart → mobile prefs persist.</li>
+<li>Pulse settings persist in Firestore
+<code>waste_settings</code>.</li>
 </ul></li>
 </ul>
 <p><strong>Pass Criteria</strong>: Flag system acts as reliable safety
-valve. No way for unauthorized user to bypass via deep link or rapid
-toggle. Logs are tamper-evident for audit.</p>
+valve. Settings toggles affect both platforms.</p>
 <hr />
 <h2 id="3-offline-photo-scenarios">3. Offline Photo Scenarios</h2>
 <ul class="task-list">
 <li><p><label><input type="checkbox" /><strong>Queue Photo While Offline
 (Create Load)</strong></label></p>
 <ul>
-<li>Start new Waste Load on mobile.</li>
-<li>Add Waste Item → take 1+ photo (camera or gallery).</li>
-<li>Go airplane mode / disable WiFi+mobile data.</li>
+<li>Start new load on mobile.</li>
+<li>Add item → take photo; go offline.</li>
 <li>Save item / load.</li>
-<li>Confirm UI shows "Some photos are queued for upload when back
-online." indicator (local path starts with <code>/</code>).</li>
-<li>Confirm no crash, load appears in local/recent lists (Hive
-backed).</li>
+<li>Confirm queued-upload indicator (local path).</li>
+<li>No crash; load appears in local/recent lists.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Process Queue on
 Reconnect</strong></label></p>
 <ul>
-<li>Re-enable network.</li>
-<li>Pull-to-refresh on Waste Home or open detail.</li>
-<li>Observe console / logs:
-<code>[WasteService] Queued offline photo...</code> then processing
-attempt.</li>
-<li>Verify photos eventually appear in Firebase Storage under
-<code>waste/{loadId or itemId}/photos/...</code> and URLs stored in
-doc.</li>
-<li>Confirm Firestore doc updated (no duplicate uploads).</li>
+<li>Re-enable network; pull-to-refresh or open detail.</li>
+<li>Photos upload to Storage; URLs stored in Firestore.</li>
+<li>No duplicate uploads.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Mixed Online/Offline
 Photos</strong></label></p>
 <ul>
-<li>Some items uploaded live, one item queued.</li>
-<li>After reconnect: all photos visible in load detail (horizontal
-scroll / grid).</li>
-<li>No data loss on sync.</li>
+<li>Some items uploaded live, one queued → all visible after sync.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Signature + Photo Offline
 Mix</strong></label></p>
 <ul>
-<li>Complete load with signature while offline (if flow allows queuing)
-or note limitation.</li>
-<li>Verify queued photos still processed independently.</li>
-</ul></li>
-<li><p><label><input type="checkbox" /><strong>Web Offline
-Note</strong></label></p>
-<ul>
-<li>Web is primarily online; note any browser offline behavior as
-"future" in checklist (mobile primary for offline).</li>
+<li>Verify signature/photo queue behaviour; note any limitations.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Resilience: Multiple
 Queued + App Kill</strong></label></p>
 <ul>
-<li>Queue 3+ photos across items.</li>
-<li>Force-close app.</li>
-<li>Reopen + reconnect → all processed successfully.</li>
+<li>Queue 3+ photos; force-close app; reopen + reconnect → all
+processed.</li>
 </ul></li>
 </ul>
-<p><strong>Pass Criteria</strong>: Photos never lost. User always sees
-clear pending state. Sync is idempotent. No impact on core Job Cards
-offline paths.</p>
+<p><strong>Pass Criteria</strong>: Photos never lost. Clear pending
+state. Idempotent sync.</p>
 <hr />
 <h2 id="4-signature-flow">4. Signature Flow</h2>
 <ul class="task-list">
 <li><p><label><input type="checkbox" /><strong>Capture Signature
 (Mobile)</strong></label></p>
 <ul>
-<li>Complete a draft load → enter weighbridge (if required) or mark
-complete flow.</li>
-<li>Tap signature capture (opens
-<code>WasteSignatureScreen</code>).</li>
-<li>Draw signature with finger/stylus (black ink on white, 3px
-stroke).</li>
-<li>Confirm "Clear" and "Save Signature" buttons.</li>
-<li>Empty signature → snackbar "Please provide a signature".</li>
-<li>Valid signature → returns Uint8List PNG bytes, screen pops.</li>
+<li>Finish collection or draft load → signature screen.</li>
+<li>Draw signature; empty → validation error.</li>
+<li>Valid signature → returns PNG, screen pops.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Upload &amp; Persist
 Signature</strong></label></p>
 <ul>
-<li>On save: service calls <code>uploadSignature</code> → stores in
-Storage
-<code>waste_loads/{loadId}/signature/signature_{ts}.png</code>.</li>
-<li>Firestore <code>waste_loads</code> doc updated with
-<code>driver_signature_url</code>.</li>
-<li>Load detail shows signature (image preview) + "Load marked complete
-with signature!" green snackbar.</li>
+<li>Storage path <code>waste_loads/{loadId}/signature/...</code></li>
+<li>Firestore <code>driver_signature_url</code> updated.</li>
+<li>Load detail shows signature preview.</li>
 </ul></li>
-<li><p><label><input type="checkbox" /><strong>Signature in Reports /
-History</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Settings
+Gate</strong></label></p>
 <ul>
-<li>Reports screen / PDF export includes driver signature reference (or
-note if demo-only).</li>
-<li>Completed load in list shows signature indicator.</li>
+<li>With <strong>Signature Required</strong> OFF: can submit without
+signature.</li>
+<li>With ON: blocked until signature captured.</li>
 </ul></li>
-<li><p><label><input type="checkbox" /><strong>Error
-Handling</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Pulse Finish
+Loading</strong></label></p>
 <ul>
-<li>Simulate Storage upload failure (e.g. bad auth) → graceful error,
-load still marked but signature noted as pending?</li>
-<li>Retry path documented or admin recovery.</li>
-</ul></li>
-<li><p><label><input type="checkbox" /><strong>Web
-Parity</strong></label></p>
-<ul>
-<li>If web supports signature capture (canvas), verify same upload path
-+ display.</li>
-<li>If web read-only for pilot: confirm signature visible from
-mobile-created loads.</li>
-</ul></li>
-<li><p><label><input
-type="checkbox" /><strong>Security</strong></label></p>
-<ul>
-<li>Signature bytes never stored locally long-term (ephemeral in
-flow).</li>
-<li>Only authorized roles can trigger completion+signature.</li>
+<li>Draft load finished on Pulse <strong>Loads → Edit</strong> respects
+signature toggle.</li>
 </ul></li>
 </ul>
-<p><strong>Pass Criteria</strong>: Signature is captured cleanly,
-uploaded reliably, visible in detail/reports, tied to specific load.
-Tamper resistant (Storage + URL in doc).</p>
+<p><strong>Pass Criteria</strong>: Signature captured, uploaded,
+visible. Settings gate works on mobile and Pulse.</p>
 <hr />
-<h2 id="5-deviation-alerts">5. Deviation Alerts</h2>
+<h2 id="5-deviation-alerts-pulse-weighbridge">5. Deviation Alerts (Pulse
+Weighbridge)</h2>
 <ul class="task-list">
-<li><p><label><input type="checkbox" /><strong>Deviation Calculation
-(Pure Logic — <code>calculateDeviation</code>)</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Deviation
+Calculation</strong></label></p>
 <ul>
-<li>Use harness or manual: recorded 100kg, actual 90kg → &gt;5% →
-isDeviation true, variance ~ -10kg / -11%.</li>
-<li>recorded 100, actual 160 → &gt;50kg abs → true.</li>
-<li>recorded 100, actual 102 → within both thresholds → false.</li>
-<li>Custom thresholds respected (e.g. 10% / 20kg).</li>
-<li>actual &lt;=0 → no deviation (special case).</li>
+<li>recorded 100kg, actual 90kg → deviation (5% rule).</li>
+<li>recorded 100, actual 160 → deviation (50 kg rule).</li>
+<li>recorded 100, actual 102 → no deviation.</li>
+<li>Custom thresholds from Pulse settings respected.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Weighbridge Entry
-Triggers Alert (Mobile)</strong></label></p>
+Triggers Alert (Pulse)</strong></label></p>
 <ul>
-<li>Create load with recorded items totaling X kg.</li>
-<li>Complete load.</li>
-<li>Later (pending weighbridge screen or detail): enter actual
-weighbridge weight that differs &gt;5% OR &gt;50kg.</li>
-<li>Confirm deviation banner / dialog appears automatically ("Auto-show
-deviation after successful save").</li>
-<li>Notes field or UI flags deviation (demo uses notes containing
-'deviation' + count in reports).</li>
+<li>Mobile: complete load with recorded item weights.</li>
+<li>Pulse → <strong>Weighbridge</strong>: enter actual weight differing
+&gt; threshold.</li>
+<li>Deviation written to <code>waste_audit</code>; visible on load
+detail and reports.</li>
 </ul></li>
-<li><p><label><input type="checkbox" /><strong>Reports
-View</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Quantity-Only
+Skip</strong></label></p>
 <ul>
-<li>Reports screen shows "Deviation Alerts (demo filter): N in current
-view".</li>
-<li>PDF export includes deviation section.</li>
-<li>Filter / search loads by deviation status.</li>
+<li>IBC Bins load: mobile submit → <code>pending_cost_review</code>
+directly (no weighbridge).</li>
+<li>Pulse weighbridge queue does not list quantity-only loads.</li>
 </ul></li>
-<li><p><label><input type="checkbox" /><strong>Threshold Config
-(Admin)</strong></label></p>
+<li><p><label><input type="checkbox" /><strong>Reports View
+(Pulse)</strong></label></p>
 <ul>
-<li>Admin screen mentions "Default deviation thresholds + notification
-config" (Phase 6+).</li>
-<li>For pilot: verify current hard-coded 5% / 50kg used everywhere
-(deviation.dart + reports).</li>
-</ul></li>
-<li><p><label><input type="checkbox" /><strong>Cross Load
-Consistency</strong></label></p>
-<ul>
-<li>Deviation visible in load detail, reports, and (future)
-notifications.</li>
-<li>No false positives on small variances.</li>
+<li><code>/waste/reports</code> shows deviation counts and export
+includes Deviation column.</li>
 </ul></li>
 </ul>
-<p><strong>Pass Criteria</strong>: Deviation detection reliable and
-consistent. Alerts surface at weighbridge entry and in reporting. Pure
-function is deterministic and tested.</p>
+<p><strong>Pass Criteria</strong>: Deviation reliable. Quantity-only
+skips weighbridge. Alerts on Pulse only.</p>
 <hr />
-<h2 id="6-cross-mobile-web-consistency">6. Cross Mobile-Web
+<h2 id="6-cross-mobilepulse-consistency">6. Cross Mobile–Pulse
 Consistency</h2>
 <ul class="task-list">
 <li><p><label><input type="checkbox" /><strong>Feature Parity Matrix
-(Pilot Users)</strong> | Capability | Mobile | Web | Notes |
-|-------------------------|--------|-------|-------| | Waste Home /
-Lists | Full | Full | | | Create Load + Items + Photos | Full | Partial
-(photos upload) | | | Signature Capture | Full | TBD | Mobile primary |
-| Weighbridge / Pending | Full | View | | | Deviation Display | Full |
-Full (demo) | | | Reports + PDF | Full | Full | | | Admin / Pilot Config
-| Full | Read or limited | Admin mobile preferred | | Usage Logs
-(platform field) | mobile | web | Verify in Firestore |</label></p></li>
+(Pilot Users)</strong> | Capability | Mobile | Pulse | Notes |
+|------------|--------|-------|-------| | Schedule / create load | Full
+| Full | Pulse for manager corrections | | Stock capture | Full | Full |
+Paper stock on both | | Collection + items + photos | Full | Partial |
+Pulse new/edit load | | Signature | Full | Partial | Pulse finish
+loading | | Weighbridge | — | Full | Mobile handoff banner only | | Cost
+review | — | Full | Admin only | | Reports + export | — | Full | CSV/PDF
+on Pulse | | Settings / types / rates | — | Full | Pulse only | |
+Pending badges | Handoff banner | Sidebar + Board KPIs | Weighbridge +
+Review counts |</label></p></li>
 <li><p><label><input type="checkbox" /><strong>Data
 Round-Trip</strong></label></p>
 <ul>
-<li>Create load + items + photos on mobile → visible on web within
-seconds (Firestore real-time).</li>
-<li>Enter weighbridge + signature on mobile → web reflects URLs and
-flags.</li>
-<li>Create partial on web → mobile sees it.</li>
+<li>Create load on mobile → visible on Pulse within seconds.</li>
+<li>Weighbridge + approve on Pulse → mobile detail shows completed +
+<code>cost_by_type</code>.</li>
+<li><code>selected_waste_types</code> preserved end-to-end.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Auth / Role / Flag
 Consistency</strong></label></p>
 <ul>
-<li>Same pilot clock list (SharedPreferences on mobile; web should
-respect same Firestore-driven or config).</li>
-<li>Pilot block messaging similar on both platforms.</li>
-<li>Role derivation (department/position → waste access) identical.</li>
+<li>Same pilot clock list enforced.</li>
+<li>Security manager → Pulse weighbridge; admin → cost review.</li>
 </ul></li>
 <li><p><label><input type="checkbox" /><strong>Photo / Signature
 URLs</strong></label></p>
 <ul>
-<li>Same Storage paths used.</li>
-<li>Display works cross-platform (CORS handled for web images).</li>
-</ul></li>
-<li><p><label><input
-type="checkbox" /><strong>Logging</strong></label></p>
-<ul>
-<li>Every action (create, complete, admin config, signature) writes to
-<code>waste_usage_logs</code> with correct <code>platform</code>.</li>
-<li>Pilot team can query by platform during review.</li>
+<li>Same Storage paths; display works cross-platform.</li>
 </ul></li>
 </ul>
 <p><strong>Pass Criteria</strong>: No "works on mobile only" surprises
-for pilot users. Data and controls feel unified. Logs prove
-cross-platform activity.</p>
+for admin steps. Data unified via Firestore.</p>
 <hr />
 <h2 id="7-general-pilot-execution--daily-checks">7. General Pilot
 Execution &amp; Daily Checks</h2>
 <ol type="1">
-<li>Morning: Admin confirms master + pilot config correct. Check recent
+<li>Morning: Admin confirms master + pilot config on Pulse. Check
 <code>waste_usage_logs</code>.</li>
-<li>Pilot users perform 3-5 real or simulated loads (varied contractors,
-photo counts, weights).</li>
-<li>Force offline scenarios at least once per device.</li>
-<li>Capture 1+ signature per day.</li>
-<li>Trigger 2+ deviation cases (high and low actual weights).</li>
-<li>Review reports / PDF exports on both platforms.</li>
-<li>End of day: Admin reviews logs for anomalies, toggles if
-needed.</li>
-<li>Any blocker → immediate master flag OFF + incident note.</li>
+<li>Pilot users perform 3–5 loads (varied types: weight-based,
+quantity-only, multi-type).</li>
+<li>Force offline scenario at least once per device.</li>
+<li>Capture signature per settings.</li>
+<li>Trigger 2+ deviation cases via Pulse weighbridge.</li>
+<li>Admin approves cost on Pulse <strong>Review</strong> — verify
+<code>cost_by_type</code> on load detail.</li>
+<li>Export reports CSV from Pulse for accounts spot-check.</li>
+<li>Any blocker → master flag OFF + incident note.</li>
 </ol>
-<p><strong>Test Users Matrix</strong> (fill during pilot):</p>
-<ul>
-<li>Pilot clocks: 22 (admin), ___, ___</li>
-<li>Non-pilot test: ___</li>
-<li>Devices: Android v___, browser ___</li>
-</ul>
 <hr />
 <h2 id="8-recovery--rollback-procedures">8. Recovery &amp; Rollback
 Procedures</h2>
 <ul>
-<li><strong>Instant Disable</strong>: Admin opens Waste Admin → toggle
-master flag OFF. All users (including in-flight) see disabled state on
-next action.</li>
-<li><strong>Expand Pilot List</strong>: Edit CSV → Save. No
-restart.</li>
-<li><strong>Data Recovery</strong>: If bad load created, use admin "soft
-delete" or future hard delete flow (is_deleted flag).</li>
+<li><strong>Instant Disable</strong>: Pulse Settings → Waste Recovery
+OFF (or mobile master flag).</li>
+<li><strong>Expand Pilot List</strong>: Edit CSV → Save.</li>
+<li><strong>Bad Load</strong>: Admin can cancel before completion;
+soft-delete (<code>is_deleted</code>) supported in backend — UI polish
+pending.</li>
 <li><strong>Signature / Photo Recovery</strong>: Storage objects remain;
-admin can re-link via Firestore edit (emergency).</li>
-<li><strong>Log Tampering</strong>: Logs append-only; monitor for
-unexpected deletes (rules should prevent).</li>
-<li><strong>App Crash / Update During Pilot</strong>: Update check still
-works (Remote Config). Pilot unaffected.</li>
+admin can re-link via Firestore (emergency).</li>
 <li><strong>Escalation</strong>: Contact on-call + screenshot +
 loadNumber + clockNo.</li>
 </ul>
@@ -450,73 +366,87 @@ loadNumber + clockNo.</li>
 <h2 id="9-logging-monitoring--audit">9. Logging, Monitoring &amp;
 Audit</h2>
 <ul>
-<li>Primary collection: <code>waste_usage_logs</code></li>
-<li>Key actions to monitor: <code>admin_update_pilot_config</code>, load
-create/complete, <code>signature_upload</code>, photo queue/process,
-deviation events (future), any errors.</li>
-<li>Fields: action, clockNo, loadId, timestamp, platform, metadata.</li>
-<li>During pilot: security team runs ad-hoc queries or watches
-collection.</li>
-<li>Export logs at pilot end for sign-off report.</li>
+<li>Primary: <code>waste_usage_logs</code>, <code>waste_audit</code>
+(deviations)</li>
+<li>Monitor: load create/complete, weighbridge submit, cost approve,
+photo queue</li>
+<li>Export logs at pilot end for sign-off</li>
 </ul>
 <hr />
-<h2 id="10-sign-off-criteria-for-pilot-completion--promotion">10.
-Sign-Off Criteria (for Pilot Completion / Promotion)</h2>
+<h2 id="10-sign-off-criteria">10. Sign-Off Criteria</h2>
 <ul class="task-list">
-<li><label><input type="checkbox" />All sections above passed with
-evidence (screenshots + log excerpts).</label></li>
+<li><label><input type="checkbox" />All sections passed with evidence
+(screenshots + log excerpts).</label></li>
 <li><label><input type="checkbox" />Zero data loss in offline scenarios
-across 10+ photo queues.</label></li>
-<li><label><input type="checkbox" />Signature flow 100% reliable (5+
-captures).</label></li>
-<li><label><input type="checkbox" />Deviation alerts trigger correctly
-on all threshold cases; no false positives in normal ops.</label></li>
+(10+ photo queues).</label></li>
+<li><label><input type="checkbox" />Signature flow reliable per settings
+(5+ captures).</label></li>
+<li><label><input type="checkbox" />Deviation alerts correct;
+quantity-only skips weighbridge.</label></li>
 <li><label><input type="checkbox" />Feature flag prevents unauthorized
-access 100% of attempts; admin never locked out.</label></li>
-<li><label><input type="checkbox" />Mobile ↔︎ Web data parity verified
-for 20+ loads.</label></li>
-<li><label><input type="checkbox" />Usage logs complete and queryable
-for entire pilot period.</label></li>
-<li><label><input type="checkbox" />No crashes or unhandled errors in
-pilot user sessions.</label></li>
-<li><label><input type="checkbox" />Rollback tested successfully at
-least once.</label></li>
-<li><label><input type="checkbox" />Security team + product owner
-sign-off on this checklist.</label></li>
+access; admin never locked out.</label></li>
+<li><label><input type="checkbox" />Mobile ↔︎ Pulse parity for 20+
+loads.</label></li>
+<li><label><input type="checkbox" />Rollback tested at least
+once.</label></li>
 </ul>
 <p><strong>Pilot Lead Sign-off</strong>: ________________ Date:
 ________<br />
-<strong>Security Reviewer</strong>: ________________ Date:
-________<br />
-<strong>Next Phase Recommendation</strong>: ________________ (e.g.
-expand pilot / full rollout / adjustments)</p>
+<strong>Security Reviewer</strong>: ________________ Date: ________</p>
 <hr />
-<h2 id="appendix-quick-command--navigation-reference">Appendix: Quick
-Command / Navigation Reference</h2>
+<h2 id="appendix-quick-reference">Appendix: Quick Reference</h2>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schedule / collect</td>
+<td>Mobile → Loads tab</td>
+</tr>
+<tr>
+<td>Weighbridge</td>
+<td>Pulse → Waste → Weighbridge</td>
+</tr>
+<tr>
+<td>Cost review</td>
+<td>Pulse → Waste → Review</td>
+</tr>
+<tr>
+<td>Settings / rates</td>
+<td>Pulse → Waste → Settings</td>
+</tr>
+<tr>
+<td>Reports</td>
+<td>Pulse → Waste → Reports</td>
+</tr>
+<tr>
+<td>Field guide</td>
+<td><code>docs/waste_user_guide.md</code></td>
+</tr>
+<tr>
+<td>Pulse guide</td>
+<td><code>docs/waste_pulse_guide.md</code></td>
+</tr>
+</tbody>
+</table>
 <ul>
-<li><strong>Mobile Admin Entry</strong>: Waste Home → "Open Waste Admin
-(pilot list / full controls)"</li>
-<li><strong>Run Existing Tests</strong> (safe):
-<code>cd mobile/CTPJob_Cards &amp;&amp; flutter test test/waste_deviation_test.dart test/waste_widget_smoke_test.dart</code></li>
-<li><strong>Pilot Harness</strong>:
-<code>flutter test test/pilot_verification_harness.dart</code> (see
-harness file for manual scenario runners + pure logic verification)</li>
-<li><strong>Firestore Rules Test</strong> (backend): From repo root
-<code>npm run fb:test</code></li>
-<li><strong>Web</strong>: <a
-href="https://ctp-job-cards.web.app">https://ctp-job-cards.web.app</a> →
-login → Waste sections (role gated)</li>
+<li><strong>Tests</strong>:
+<code>cd mobile/CTPJob_Cards &amp;&amp; flutter test test/waste_deviation_test.dart</code></li>
+<li><strong>Firestore rules</strong>: <code>npm run fb:test</code> from
+monorepo root</li>
+<li><strong>Regenerate HTML guides</strong>:
+<code>pwsh tools/build-docs.ps1</code> in CTPJob_Cards</li>
 </ul>
-<p><strong>Document Control</strong>: This is living scaffolding. Update
-with pilot findings. Do not delete — archive dated copies after each
-pilot phase.</p>
-<p><strong>Related</strong>: See <code>waste_admin_screen.dart</code>,
-<code>waste_service.dart</code> (PROD-CRITICAL-3 rollout infra),
-<code>deviation.dart</code>, <code>waste_signature_screen.dart</code>,
-<code>waste_create_load_screen.dart</code> (offline notes), and
-<code>COLLECTIONS.md</code> for <code>waste_</code> prefix rules.</p>
+<p><strong>Related</strong>: <code>waste_service.dart</code>,
+<code>waste_load_detail_screen.dart</code>, Pulse
+<code>actions.ts</code>, <code>costByType.ts</code>,
+<code>wasteTypeRouting.ts</code>, <code>COLLECTIONS.md</code>.</p>
 <hr />
-<p><em>Generated as part of PROD-CRITICAL-4 verification scaffolding.
-Safe location only (docs/ under mobile). No core files edited.</em></p>
+<p><em>Updated 23 June 2026 for mobile field capture + CTP Pulse admin
+split.</em></p>
 </body>
 </html>

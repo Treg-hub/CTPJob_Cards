@@ -33,11 +33,12 @@
 <h1 id="waste-recovery--full-load-guide">Waste Recovery — Full Load
 Guide</h1>
 <p><em>For Security Managers, Security Guards, and Admins</em></p>
-<p>This guide walks through the <strong>complete waste load
-lifecycle</strong> in WasteTrack — from recording stock on site, through
-scheduling or creating a load, loading capture (items + loaded-truck
-photos + driver signature), <strong>off-site weighbridge
-document</strong> entry, and <strong>admin cost review</strong>.</p>
+<p>This guide walks through <strong>mobile field capture</strong> in
+WasteTrack — recording stock on site, scheduling or creating a load, and
+collection (items + loaded-truck photos + driver signature).
+<strong>Weighbridge, cost review, reports, and settings</strong> are on
+<strong>CTP Pulse</strong> only (see
+<code>waste_pulse_guide.md</code>).</p>
 <blockquote>
 <p><strong>There is no on-site weighbridge.</strong> The truck leaves
 after loading. The certified weight arrives later on a mailed/email
@@ -55,27 +56,26 @@ weighbridge document.</p>
 <tbody>
 <tr>
 <td><strong>Security Manager</strong></td>
-<td>Record paper stock; schedule loads; create on-the-spot loads; link
-stock; capture loaded-truck photos; enter off-site weighbridge
-documents</td>
+<td>Record stock; schedule loads; create on-the-spot loads; link stock;
+capture loaded-truck photos; finish loading</td>
 </tr>
 <tr>
 <td><strong>Security Guard</strong></td>
-<td>Begin scheduled collections; confirm or add waste items;
-loaded-truck photos; driver signature; submit collection</td>
+<td>Same field-capture tasks: schedule, stock, begin collections, items,
+optional photos/signature, submit</td>
 </tr>
 <tr>
 <td><strong>Admin</strong></td>
-<td>Everything above, plus <strong>Review</strong> (approve costs),
-<strong>Settings</strong> (contractors, types, rates). Reports are on
-<strong>CTP Pulse</strong> only.</td>
+<td>Same on mobile. <strong>Weighbridge, cost review, reports, and
+settings</strong> are on <strong>CTP Pulse</strong> only.</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>Guards can schedule loads</strong> only when an admin has
-enabled <em>Guards Can Schedule Loads</em> in CTP Pulse → Waste
-Settings.</p>
+<p><strong>Mobile = field capture.</strong> After collection the load
+stops at <strong>Pending Weighbridge</strong> or <strong>Pending Cost
+Review</strong> — managers and admins complete those steps on CTP
+Pulse.</p>
 </blockquote>
 <hr />
 <h2 id="the-big-picture">The big picture</h2>
@@ -160,10 +160,14 @@ There are three modes:</p>
 <p>The form automatically shows the correct fields for the selected type
 — you do not need to choose a mode manually.</p>
 </blockquote>
-<p><strong>Photos:</strong> Photos are optional per item. For
-quantity-only and no-on-site-weight types, the loaded-truck photo
-captures the visual evidence for the whole load. For weight-based items,
-photographing the material is strongly recommended.</p>
+<p><strong>Photos:</strong> Controlled by <strong>Photos
+Required</strong> in CTP Pulse → Settings → Waste. When off (default),
+item and stock photos are optional; loaded-truck photos are still
+recommended. When on, each manual item needs at least one photo and
+stock items need at least one photo.</p>
+<p><strong>Signature:</strong> Controlled by <strong>Driver Signature
+Required</strong> in the same settings panel. Optional by default at
+launch.</p>
 <hr />
 <h2 id="step-0--record-stock-on-site-optional-but-recommended">Step 0 —
 Record stock on site (optional but recommended)</h2>
@@ -187,7 +191,7 @@ listed as separate chips.</p>
 <h3
 id="option-a--schedule-incoming-load-before-the-truck-arrives">Option A
 — Schedule Incoming Load (before the truck arrives)</h3>
-<p><em>Managers, admins, and guards (if enabled).</em></p>
+<p><em>All waste users (guard, manager, admin).</em></p>
 <ol type="1">
 <li><strong>Contractor</strong> — select who is collecting (e.g.
 Glenpak).</li>
@@ -210,7 +214,7 @@ future dates.</p>
 </blockquote>
 <h3 id="option-b--new-load-on-the-spot-truck-is-here-now">Option B — New
 Load on the spot (truck is here now)</h3>
-<p><em>Managers and admins only.</em></p>
+<p><em>All waste users.</em></p>
 <ol type="1">
 <li><strong>Contractor</strong> — select the collecting company.</li>
 <li><strong>Waste types</strong> — select one or more chips (same
@@ -229,8 +233,9 @@ above for what the form shows.</li>
 </ul></li>
 <li>Tap <strong>Create Load</strong>.</li>
 </ol>
-<p>The load is saved as <strong>Draft</strong>. Open it from Recent
-loads to continue with weighbridge and signature (see Path B below).</p>
+<p>The load is saved as <strong>Draft</strong> with
+<code>selected_waste_types</code> recorded. Open it from Recent loads
+and <strong>Finish Loading</strong> (see Path B below).</p>
 <hr />
 <h2 id="step-2--multi-type-loads-eg-glenpak">Step 2 — Multi-type loads
 (e.g. Glenpak)</h2>
@@ -271,9 +276,10 @@ only — no weight field.</li>
 enter count — weight confirmed at weighbridge.</li>
 </ul></li>
 <li><strong>Loaded truck photos</strong> — photograph the fully loaded
-truck before it leaves. At least one is required.</li>
-<li>Tap <strong>Capture Driver Signature</strong> — pass the phone to
-the driver to sign.</li>
+truck before it leaves (recommended; required when Photos Required is
+on).</li>
+<li><strong>Driver signature</strong> — capture when required by
+settings, or optional when off.</li>
 <li>Tap <strong>Submit Collection</strong>.</li>
 </ol>
 <p><strong>After submission:</strong></p>
@@ -284,72 +290,41 @@ Weighbridge</strong>.</li>
 Review</strong> (weighbridge skipped).</li>
 </ul>
 <hr />
-<h2 id="step-4--off-site-weighbridge-document-manager--admin">Step 4 —
-Off-site weighbridge document (Manager / Admin)</h2>
+<h2
+id="step-4--off-site-weighbridge-document-ctp-pulse--manager--admin">Step
+4 — Off-site weighbridge document (CTP Pulse — Manager / Admin)</h2>
 <p><em>Only applies to weight-based and no-on-site-weight loads.
 Quantity-only loads skip this step.</em></p>
 <p>When the weighbridge ticket arrives (email/photo/PDF — truck does not
-return):</p>
-<h3 id="from-the-weighbridge-tab">From the Weighbridge tab</h3>
+return), use <strong>CTP Pulse → Waste → Weighbridge</strong>:</p>
 <ol type="1">
-<li>Open the <strong>Weighbridge</strong> tab (badge shows how many are
-waiting).</li>
-<li>Tap a load to open its detail.</li>
-<li>Scroll to <strong>Off-site Weighbridge Document</strong>.</li>
-<li>Enter the <strong>ticket/reference number</strong>.</li>
-<li>Photograph the <strong>weighbridge document</strong>.</li>
-<li>Enter the <strong>certified weight in kg</strong>.</li>
-<li>Tap <strong>Submit Weighbridge Document</strong>.</li>
+<li>Open the pending load from the weighbridge queue (sidebar badge
+shows count).</li>
+<li>Enter the <strong>ticket/reference number</strong> and
+<strong>certified weight in kg</strong>.</li>
+<li>Upload or waive the weighbridge document photo.</li>
+<li>Submit — deviation is audited automatically if thresholds are
+exceeded.</li>
 </ol>
-<p>The load moves to <strong>Pending Cost Review</strong> for admin
-approval.</p>
-<h3 id="from-load-detail">From load detail</h3>
-<p>Same steps — open any <strong>Pending Weighbridge</strong> load from
-Recent loads.</p>
+<p>The load moves to <strong>Pending Cost Review</strong>.</p>
 <hr />
-<h2 id="step-5--admin-cost-review">Step 5 — Admin cost review</h2>
+<h2 id="step-5--admin-cost-review-ctp-pulse-only">Step 5 — Admin cost
+review (CTP Pulse only)</h2>
+<p>Use <strong>CTP Pulse → Waste → Review</strong> (admin only):</p>
 <ol type="1">
-<li>Open the <strong>Review</strong> tab (admin only; badge shows
-pending count).</li>
-<li>The review card shows an <strong>itemized cost table</strong>:
-<ul>
-<li>Each waste item on the load is shown with its
-<strong>subtype</strong>, <strong>weight</strong>, an editable
-<strong>R/kg rate</strong>, and a calculated
-<strong>value</strong>.</li>
-<li>For <strong>no-on-site-weight items</strong> (compactor bins etc.),
-the on-site weight column will show zero — the weighbridge ticket weight
-is used for the total cost calculation.</li>
-<li>The <strong>R/kg</strong> field is pre-filled from the contractor's
-rate register where a rate exists. Empty fields show a ⚠ warning — enter
-the rate from the physical document.</li>
-<li>The <strong>Calculated total</strong> (sum of all line values)
-updates live as you edit rates.</li>
-</ul></li>
-<li>The <strong>Approved amount</strong> field defaults to the
-calculated total. Edit it to match the accounts document if they
-differ.</li>
-<li>Tap <strong>Approve</strong> — the system saves both the calculated
-total and the approved amount separately for audit.</li>
+<li>Each load shows <strong>one cost line per waste type</strong> (not
+per item).</li>
+<li>Edit <strong>R/kg</strong> per type; calculated total updates
+live.</li>
+<li>Confirm <strong>Approved amount</strong> and tap
+<strong>Approve</strong> — load becomes <strong>Completed</strong> with
+<code>cost_by_type</code> saved.</li>
 </ol>
-<blockquote>
-<p>Rates entered or corrected during review are saved back to the rate
-register — the same contractor + subtype pair will be pre-filled
-automatically on future collections.</p>
-</blockquote>
-<p>Reports and exports are available on <strong>CTP Pulse → Waste →
-Reports</strong>.</p>
+<p>Reports and exports: <strong>CTP Pulse → Waste</strong>.</p>
 <hr />
-<h2 id="sharing-a-load-summary-pdf">Sharing a load summary (PDF)</h2>
-<p>On any <strong>completed</strong> load, tap the <strong>↑ share
-icon</strong> in the app bar to generate a PDF summary containing:</p>
-<ul>
-<li>Load number, date, contractor, driver, vehicle</li>
-<li>Itemised waste items (subtype, weight, rate, value)</li>
-<li>Weighbridge weight and deviation</li>
-<li>Calculated and approved cost</li>
-</ul>
-<p>Share or print directly from your phone.</p>
+<h2 id="after-mobile--use-ctp-pulse">After mobile — use CTP Pulse</h2>
+<p>See <strong><code>waste_pulse_guide.md</code></strong> for
+weighbridge, cost review, reports, and settings on Pulse.</p>
 <hr />
 <h2 id="path-b--on-the-spot-load-draft-finish-loading">Path B —
 On-the-spot load (Draft) finish loading</h2>
@@ -389,12 +364,12 @@ signature)</td>
 <tr>
 <td><strong>Pending Weighbridge</strong></td>
 <td>Loading finished; awaiting off-site document</td>
-<td>Manager: photograph ticket + enter certified weight</td>
+<td>Manager on <strong>CTP Pulse → Weighbridge</strong></td>
 </tr>
 <tr>
 <td><strong>Pending Cost Review</strong></td>
-<td>Weighbridge document captured (or quantity-only load submitted)</td>
-<td>Admin: approve cost in <strong>Review</strong> tab</td>
+<td>Weighbridge captured (or quantity-only load)</td>
+<td>Admin on <strong>CTP Pulse → Review</strong></td>
 </tr>
 <tr>
 <td><strong>Completed</strong></td>
@@ -418,7 +393,7 @@ on-site</li>
 </ul>
 <p>A <strong>deviation</strong> is flagged if the difference exceeds
 <strong>5%</strong> or <strong>50 kg</strong> (whichever applies first).
-Flagged loads show an amber warning in detail view and in
+Flagged loads show on Pulse weighbridge/review and in
 <strong>Reports</strong>. This is for management review — not an
 automatic rejection.</p>
 <blockquote>
@@ -434,33 +409,28 @@ is used for cost calculations.</p>
 shows how many items are on site and the total estimated weight. Tap it
 to open the stock inventory.</p>
 <hr />
-<h2 id="admin--manage-waste-types">Admin — Manage waste types</h2>
-<p>Go to <strong>Waste → Admin → Manage Waste Types</strong> to
-configure types and their weight mode.</p>
-<p>Each type has two toggles:</p>
+<h2 id="waste-type-modes-admin">Waste type modes (admin)</h2>
+<p>Configure types in <strong>CTP Pulse → Settings → Waste → Waste
+Types</strong> (Firestore <code>waste_types</code> documents).</p>
 <table>
 <thead>
 <tr>
-<th>Toggle</th>
+<th>Flag</th>
 <th>Behaviour</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Quantity only (no weight)</strong></td>
-<td>Guard enters count only; weighbridge step skipped; priced per unit
-(e.g. IBC Bins)</td>
+<td><strong>Quantity only</strong> (<code>isQuantityOnly</code>)</td>
+<td>Count only on mobile; skips weighbridge → cost review</td>
 </tr>
 <tr>
-<td><strong>No on-site weight</strong></td>
-<td>Guard enters count only; weighbridge still required; weight
-confirmed on ticket (e.g. compactor bins)</td>
+<td><strong>No on-site weight</strong> (<code>noSiteWeight</code>)</td>
+<td>Count on mobile; weighbridge still required on Pulse</td>
 </tr>
 </tbody>
 </table>
-<p>The two toggles are mutually exclusive — turning one on clears the
-other. Leave both off for standard weight-based types (paper waste,
-copper offcuts).</p>
+<p>Leave both off for standard weight-based types.</p>
 <hr />
 <h2 id="tips--troubleshooting">Tips &amp; troubleshooting</h2>
 <p><strong>Stock not showing when I select waste types</strong></p>
@@ -472,18 +442,18 @@ on another truck are excluded.</li>
 </ul>
 <p><strong>Cannot submit collection</strong></p>
 <ul>
-<li>Need: driver name, vehicle reg, at least one item, at least one
-<strong>loaded-truck photo</strong>, and a driver signature.</li>
-<li>Weight-based items need a weight entered. Quantity-only and
-no-on-site-weight items need a count entered.</li>
-<li>Per-item photos are optional — the truck photo is the primary
-evidence.</li>
+<li>Need: driver name, vehicle reg, at least one item.</li>
+<li>When <strong>Photos Required</strong> is on: each manual item needs
+a photo; loaded-truck photo required.</li>
+<li>When <strong>Signature Required</strong> is on: driver signature
+required.</li>
+<li>Weight-based items need weight; quantity-only / no-site-weight items
+need count.</li>
 </ul>
-<p><strong>Weighbridge tab is empty</strong></p>
+<p><strong>Where is weighbridge / cost review on mobile?</strong></p>
 <ul>
-<li>Only loads in <strong>Pending Weighbridge</strong> appear.
-Quantity-only loads (IBC Bins) go straight to Cost Review and will not
-appear here.</li>
+<li>Removed from the app (2026-06-22). Use <strong>CTP Pulse</strong>.
+Pending loads show a handoff banner on mobile load detail.</li>
 </ul>
 <p><strong>Load went straight to Cost Review — no weighbridge
 step</strong></p>
@@ -539,18 +509,19 @@ signature</label></li>
 <li><label><input type="checkbox" />Enter weighbridge document when it
 arrives <em>(not needed for IBC Bins)</em></label></li>
 </ul>
-<h3 id="admin">Admin</h3>
+<h3 id="admin-ctp-pulse">Admin (CTP Pulse)</h3>
 <ul class="task-list">
-<li><label><input type="checkbox" />Review tab: enter/confirm R/kg rates
-for each item</label></li>
+<li><label><input type="checkbox" />Review queue: confirm R/kg
+<strong>per waste type</strong></label></li>
 <li><label><input type="checkbox" />Check calculated total; edit
 Approved amount if accounts differ</label></li>
-<li><label><input type="checkbox" />Tap Approve → Completed</label></li>
-<li><label><input type="checkbox" />Share PDF from load detail if needed
-for accounts filing</label></li>
+<li><label><input type="checkbox" />Approve → Completed
+(<code>cost_by_type</code> saved)</label></li>
+<li><label><input type="checkbox" />Reports export if needed for
+accounts</label></li>
 </ul>
 <hr />
-<p><em>CTP WasteTrack · Waste Recovery Load Guide · Updated 16 June
-2026</em></p>
+<p><em>CTP Waste Recovery · Mobile Field Guide · Updated 22 June 2026 ·
+Pulse steps: waste_pulse_guide.md</em></p>
 </body>
 </html>
