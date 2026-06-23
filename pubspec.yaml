@@ -2,7 +2,7 @@ name: ctp_job_cards
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.1.3+44
+version: 2.1.3+45
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
@@ -80,6 +80,8 @@ flutter:
     - docs/screens_reference.md
     - docs/troubleshooting.md
     - docs/waste_user_guide.md
+    - docs/waste_pulse_guide.md
+    - docs/Pilot_Verification_Checklist.md
     - docs/fleet_user_guide.md
     - docs/fleet_mechanic_guide.md
     - docs/fleet_reporter_guide.md
