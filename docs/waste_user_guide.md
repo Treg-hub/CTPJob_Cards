@@ -2,7 +2,7 @@
 
 *For Security Managers, Security Guards, and Admins*
 
-This guide walks through the **complete waste load lifecycle** in WasteTrack — from recording stock on site, through scheduling or creating a load, loading capture (items + loaded-truck photos + driver signature), **off-site weighbridge document** entry, and **admin cost review**.
+This guide walks through **mobile field capture** in WasteTrack — recording stock on site, scheduling or creating a load, and collection (items + loaded-truck photos + driver signature). **Weighbridge, cost review, reports, and settings** are on **CTP Pulse** only (see `waste_pulse_guide.md`).
 
 > **There is no on-site weighbridge.** The truck leaves after loading. The certified weight arrives later on a mailed/email weighbridge document.
 
@@ -78,7 +78,9 @@ When adding an item to a load, the form adapts to the waste type. There are thre
 
 > The form automatically shows the correct fields for the selected type — you do not need to choose a mode manually.
 
-**Photos:** Photos are optional per item. For quantity-only and no-on-site-weight types, the loaded-truck photo captures the visual evidence for the whole load. For weight-based items, photographing the material is strongly recommended.
+**Photos:** Controlled by **Photos Required** in CTP Pulse → Settings → Waste. When off (default), item and stock photos are optional; loaded-truck photos are still recommended. When on, each manual item needs at least one photo and stock items need at least one photo.
+
+**Signature:** Controlled by **Driver Signature Required** in the same settings panel. Optional by default at launch.
 
 ---
 
@@ -100,7 +102,7 @@ Tap **+ New / Schedule** on the Loads tab.
 
 ### Option A — Schedule Incoming Load (before the truck arrives)
 
-*Managers, admins, and guards (if enabled).*
+*All waste users (guard, manager, admin).*
 
 1. **Contractor** — select who is collecting (e.g. Glenpak).
 2. **Waste types** — tap one or more chips. All contractor types are pre-selected; deselect any you do not need. Stock and new items are **filtered to your selection**.
@@ -115,7 +117,7 @@ The load appears under **Incoming** on the Loads tab with status **Scheduled**.
 
 ### Option B — New Load on the spot (truck is here now)
 
-*Managers and admins only.*
+*All waste users.*
 
 1. **Contractor** — select the collecting company.
 2. **Waste types** — select one or more chips (same multi-select behaviour as scheduling).
@@ -126,7 +128,7 @@ The load appears under **Incoming** on the Loads tab with status **Scheduled**.
    - **Capture new item** — see *Waste item types* above for what the form shows.
 6. Tap **Create Load**.
 
-The load is saved as **Draft**. Open it from Recent loads to continue with weighbridge and signature (see Path B below).
+The load is saved as **Draft** with `selected_waste_types` recorded. Open it from Recent loads and **Finish Loading** (see Path B below).
 
 ---
 
@@ -155,8 +157,8 @@ When the contractor arrives:
    - **Weight-based items:** enter weight in kg. Photos recommended.
    - **Quantity-only items** (e.g. IBC Bins): enter count only — no weight field.
    - **No-on-site-weight items** (e.g. compactor bins): enter count — weight confirmed at weighbridge.
-5. **Loaded truck photos** — photograph the fully loaded truck before it leaves. At least one is required.
-6. Tap **Capture Driver Signature** — pass the phone to the driver to sign.
+5. **Loaded truck photos** — photograph the fully loaded truck before it leaves (recommended; required when Photos Required is on).
+6. **Driver signature** — capture when required by settings, or optional when off.
 7. Tap **Submit Collection**.
 
 **After submission:**
@@ -192,15 +194,9 @@ Reports and exports: **CTP Pulse → Waste**.
 
 ---
 
-## Sharing a load summary (PDF)
+## After mobile — use CTP Pulse
 
-On any **completed** load, tap the **↑ share icon** in the app bar to generate a PDF summary containing:
-- Load number, date, contractor, driver, vehicle
-- Itemised waste items (subtype, weight, rate, value)
-- Weighbridge weight and deviation
-- Calculated and approved cost
-
-Share or print directly from your phone.
+See **`waste_pulse_guide.md`** for weighbridge, cost review, reports, and settings on Pulse.
 
 ---
 
@@ -235,7 +231,7 @@ When the weighbridge weight is saved, the app compares:
 - **Recorded weight** — sum of item weights entered on-site
 - **Actual weight** — certified weighbridge reading
 
-A **deviation** is flagged if the difference exceeds **5%** or **50 kg** (whichever applies first). Flagged loads show an amber warning in detail view and in **Reports**. This is for management review — not an automatic rejection.
+A **deviation** is flagged if the difference exceeds **5%** or **50 kg** (whichever applies first). Flagged loads show on Pulse weighbridge/review and in **Reports**. This is for management review — not an automatic rejection.
 
 > For **no-on-site-weight items** (compactor bins, copper skins), the on-site recorded weight is zero by design — only the weighbridge total is meaningful. Deviation will appear as 100% for these items; this is expected and can be ignored. Only the weighbridge weight is used for cost calculations.
 
@@ -247,18 +243,16 @@ On the Loads tab, the green **Paper Waste Stock** banner shows how many items ar
 
 ---
 
-## Admin — Manage waste types
+## Waste type modes (admin)
 
-Go to **Waste → Admin → Manage Waste Types** to configure types and their weight mode.
+Configure types in **CTP Pulse → Settings → Waste → Waste Types** (Firestore `waste_types` documents).
 
-Each type has two toggles:
+| Flag | Behaviour |
+|------|-----------|
+| **Quantity only** (`isQuantityOnly`) | Count only on mobile; skips weighbridge → cost review |
+| **No on-site weight** (`noSiteWeight`) | Count on mobile; weighbridge still required on Pulse |
 
-| Toggle | Behaviour |
-|--------|-----------|
-| **Quantity only (no weight)** | Guard enters count only; weighbridge step skipped; priced per unit (e.g. IBC Bins) |
-| **No on-site weight** | Guard enters count only; weighbridge still required; weight confirmed on ticket (e.g. compactor bins) |
-
-The two toggles are mutually exclusive — turning one on clears the other. Leave both off for standard weight-based types (paper waste, copper offcuts).
+Leave both off for standard weight-based types.
 
 ---
 
@@ -269,9 +263,10 @@ The two toggles are mutually exclusive — turning one on clears the other. Leav
 - Only **on-site** stock appears — items already loaded on another truck are excluded.
 
 **Cannot submit collection**
-- Need: driver name, vehicle reg, at least one item, at least one **loaded-truck photo**, and a driver signature.
-- Weight-based items need a weight entered. Quantity-only and no-on-site-weight items need a count entered.
-- Per-item photos are optional — the truck photo is the primary evidence.
+- Need: driver name, vehicle reg, at least one item.
+- When **Photos Required** is on: each manual item needs a photo; loaded-truck photo required.
+- When **Signature Required** is on: driver signature required.
+- Weight-based items need weight; quantity-only / no-site-weight items need count.
 
 **Where is weighbridge / cost review on mobile?**
 - Removed from the app (2026-06-22). Use **CTP Pulse**. Pending loads show a handoff banner on mobile load detail.
@@ -309,12 +304,12 @@ The two toggles are mutually exclusive — turning one on clears the other. Leav
 - [ ] Finish loading: truck photos + signature
 - [ ] Enter weighbridge document when it arrives *(not needed for IBC Bins)*
 
-### Admin
-- [ ] Review tab: enter/confirm R/kg rates for each item
+### Admin (CTP Pulse)
+- [ ] Review queue: confirm R/kg **per waste type**
 - [ ] Check calculated total; edit Approved amount if accounts differ
-- [ ] Tap Approve → Completed
-- [ ] Share PDF from load detail if needed for accounts filing
+- [ ] Approve → Completed (`cost_by_type` saved)
+- [ ] Reports export if needed for accounts
 
 ---
 
-*CTP WasteTrack · Waste Recovery Load Guide · Updated 16 June 2026*
+*CTP Waste Recovery · Mobile Field Guide · Updated 22 June 2026 · Pulse steps: waste_pulse_guide.md*

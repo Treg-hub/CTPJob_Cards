@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Waste Pulse Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Waste Pulse Guide</h1>
+</header>
+<h1 id="waste-recovery--ctp-pulse-guide-managers--admins">Waste Recovery
+— CTP Pulse Guide (Managers &amp; Admins)</h1>
+<p><em>For Security Managers and Admins using <strong>CTP Pulse</strong>
+after mobile field capture.</em></p>
+<p>Mobile (Job Cards app) handles <strong>schedule, stock, collection,
+and finish loading</strong>. Pulse handles <strong>queues, weighbridge,
+cost approval, reports, and settings</strong>.</p>
+<hr />
+<h2 id="who-does-what-after-22-june-2026">Who does what (after 22 June
+2026)</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Mobile (Job Cards)</th>
+<th>CTP Pulse</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Security Guard</strong></td>
+<td>Schedule, stock, begin collection, submit</td>
+<td>View loads only (if <code>waste</code> board claim)</td>
+</tr>
+<tr>
+<td><strong>Security Manager</strong></td>
+<td>Same field capture as guard</td>
+<td>Weighbridge, schedule/edit loads, overview queues</td>
+</tr>
+<tr>
+<td><strong>Admin</strong></td>
+<td>Same field capture</td>
+<td>Weighbridge + <strong>cost review</strong> + settings + reports</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="finding-your-queues">Finding your queues</h2>
+<h3 id="board-overview-waste">Board overview (<code>/waste</code>)</h3>
+<ul>
+<li><strong>Pending Weighbridge</strong> and <strong>Pending Cost
+Review</strong> KPI cards link directly to the queue pages.</li>
+<li>The action strip below the KPIs repeats the same counts with
+one-click navigation.</li>
+</ul>
+<h3 id="sidebar-badges">Sidebar badges</h3>
+<ul>
+<li><strong>Weighbridge</strong> — count of loads in
+<code>pending_weighbridge</code> (manager+).</li>
+<li><strong>Review</strong> — count of loads in
+<code>pending_cost_review</code> (admin only).</li>
+</ul>
+<hr />
+<h2 id="weighbridge-manager--admin">Weighbridge (Manager / Admin)</h2>
+<p><strong>Path:</strong> CTP Pulse → Waste →
+<strong>Weighbridge</strong></p>
+<p>Applies to weight-based and no-on-site-weight loads. Quantity-only
+types (e.g. IBC Bins) skip this step on mobile and arrive straight in
+cost review.</p>
+<ol type="1">
+<li>Open a pending load from the queue.</li>
+<li>Enter <strong>ticket/reference number</strong> and <strong>certified
+weight (kg)</strong>.</li>
+<li>Upload the weighbridge document photo, or waive the ticket (manager
+audit).</li>
+<li>Submit.</li>
+</ol>
+<p><strong>On submit:</strong></p>
+<ul>
+<li>Load moves to <strong>Pending Cost Review</strong>.</li>
+<li>Deviation is calculated (default <strong>5%</strong> or <strong>50
+kg</strong>, whichever triggers first).</li>
+<li>Deviations are written to <code>waste_audit</code> for admin
+visibility.</li>
+</ul>
+<p>Suggested cost lines are pre-calculated using live
+<code>waste_types</code> and contractor rates.</p>
+<hr />
+<h2 id="cost-review-admin-only">Cost review (Admin only)</h2>
+<p><strong>Path:</strong> CTP Pulse → Waste →
+<strong>Review</strong></p>
+<p>Cost is approved <strong>per waste type on the load</strong>, not per
+item.</p>
+<ol type="1">
+<li>Each pending load shows a table: waste type, weight (kg), editable
+<strong>R/kg</strong>, line value.</li>
+<li><strong>Calculated total</strong> sums the lines; <strong>Approved
+total</strong> defaults to the calculated value (edit to match accounts
+if needed).</li>
+<li>Tap <strong>Approve</strong> — load becomes
+<strong>Completed</strong> with <code>cost_by_type</code> saved.</li>
+<li>Rates entered during review are upserted to <code>waste_rates</code>
+keyed by <strong>waste_type</strong>.</li>
+</ol>
+<p>Open <strong>Details</strong> to see the full load including
+<code>cost_by_type</code> breakdown after completion.</p>
+<hr />
+<h2 id="settings-admin">Settings (Admin)</h2>
+<p><strong>Path:</strong> CTP Pulse → <strong>Settings</strong> → Waste
+section</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Waste Recovery Enabled</strong></td>
+<td>Master toggle for mobile tab + Pulse module</td>
+</tr>
+<tr>
+<td><strong>Photos Required</strong></td>
+<td>When on, item/stock/truck photos mandatory at collection (mobile +
+Pulse load forms)</td>
+</tr>
+<tr>
+<td><strong>Driver Signature Required</strong></td>
+<td>When on, signature mandatory when finishing collection</td>
+</tr>
+<tr>
+<td><strong>Waste Types</strong></td>
+<td>Master type list; link types to contractors</td>
+</tr>
+<tr>
+<td><strong>Contractors</strong></td>
+<td>Approved collectors + linked waste types</td>
+</tr>
+<tr>
+<td><strong>Rates</strong></td>
+<td>R/kg per contractor + <strong>waste type</strong> (not per item
+subtype)</td>
+</tr>
+<tr>
+<td><strong>Deviation Thresholds</strong></td>
+<td>% and kg for weighbridge flags</td>
+</tr>
+<tr>
+<td><strong>Permissions</strong></td>
+<td>Manager and guard clock numbers</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="reports--audit">Reports &amp; audit</h2>
+<ul>
+<li><strong>Reports:</strong> <code>/waste/reports</code> — date range,
+contractor/type filters, PDF export.</li>
+<li><strong>Audit log:</strong> <code>/waste/audit</code> — weighbridge
+deviations and system events (admin).</li>
+</ul>
+<hr />
+<h2 id="finish-loading-on-pulse-draft-loads">Finish loading on Pulse
+(draft loads)</h2>
+<p>Managers can finish draft loads on <strong>Loads → Edit</strong> as
+well as on mobile:</p>
+<ul>
+<li>Optional truck photos and driver signature (respects settings
+toggles).</li>
+<li><strong>Quantity-only</strong> waste types automatically skip
+weighbridge (<code>skip_weighbridge</code>) and go to cost review.</li>
+</ul>
+<hr />
+<h2 id="quick-manager-day">Quick manager day</h2>
+<ol type="1">
+<li>Check <strong>Board</strong> or sidebar badges for pending
+counts.</li>
+<li>When tickets arrive → <strong>Weighbridge</strong> queue.</li>
+<li>Hand off to admin for <strong>Review</strong> (or approve yourself
+if admin).</li>
+<li>Use <strong>Reports</strong> for month-end accounts.</li>
+</ol>
+<hr />
+<p><em>CTP Waste Recovery · Pulse Guide · Updated 22 June 2026</em></p>
+</body>
+</html>
