@@ -178,10 +178,26 @@ subtype)</td>
 <h2 id="reports--audit">Reports &amp; audit</h2>
 <ul>
 <li><strong>Reports:</strong> <code>/waste/reports</code> — date range,
-contractor/type filters, PDF export.</li>
+status/deviation filters, CSV (loads + cost lines), PDF with
+<code>cost_by_type</code> summary. Board charts drill down via
+<code>?month=YYYY-MM&amp;type=…</code> query params.</li>
 <li><strong>Audit log:</strong> <code>/waste/audit</code> — weighbridge
-deviations and system events (admin).</li>
+deviations, soft deletes, historic imports (admin).</li>
 </ul>
+<h2 id="historic-import-admin">Historic import (Admin)</h2>
+<p><strong>Path:</strong> CTP Pulse → Waste →
+<strong>Import</strong></p>
+<p>Upload the legacy Excel register (sheets named <em>Waste</em> /
+<em>Waste Reels</em>). Preview rows before import; duplicates (same
+sheet + Doc Num) are auto-skipped. Imported loads are
+<code>completed</code> with <code>source: historic_import</code> and
+<code>cost_by_type</code> when rate/value columns are present.</p>
+<h2 id="soft-delete-admin">Soft delete (Admin)</h2>
+<p><strong>Path:</strong> CTP Pulse → Waste → <strong>Loads →
+Edit</strong> → Admin — Soft Delete</p>
+<p>Hides the load from all queues and lists. Full snapshot archived to
+<code>waste_deleted_loads</code>; linked stock returns to on-site.
+Logged in <code>waste_audit</code> as <code>soft_delete</code>.</p>
 <hr />
 <h2 id="finish-loading-on-pulse-draft-loads">Finish loading on Pulse
 (draft loads)</h2>

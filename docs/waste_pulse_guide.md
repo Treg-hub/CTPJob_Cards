@@ -84,8 +84,20 @@ Open **Details** to see the full load including `cost_by_type` breakdown after c
 
 ## Reports & audit
 
-- **Reports:** `/waste/reports` — date range, contractor/type filters, PDF export.
-- **Audit log:** `/waste/audit` — weighbridge deviations and system events (admin).
+- **Reports:** `/waste/reports` — date range, status/deviation filters, CSV (loads + cost lines), PDF with `cost_by_type` summary. Board charts drill down via `?month=YYYY-MM&type=…` query params.
+- **Audit log:** `/waste/audit` — weighbridge deviations, soft deletes, historic imports (admin).
+
+## Historic import (Admin)
+
+**Path:** CTP Pulse → Waste → **Import**
+
+Upload the legacy Excel register (sheets named *Waste* / *Waste Reels*). Preview rows before import; duplicates (same sheet + Doc Num) are auto-skipped. Imported loads are `completed` with `source: historic_import` and `cost_by_type` when rate/value columns are present.
+
+## Soft delete (Admin)
+
+**Path:** CTP Pulse → Waste → **Loads → Edit** → Admin — Soft Delete
+
+Hides the load from all queues and lists. Full snapshot archived to `waste_deleted_loads`; linked stock returns to on-site. Logged in `waste_audit` as `soft_delete`.
 
 ---
 
