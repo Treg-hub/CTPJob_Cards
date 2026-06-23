@@ -324,12 +324,14 @@ class WasteService {
     required String scheduledByName,
     String? scheduledNotes,
     List<String> selectedStockIds = const [],
+    List<String> selectedWasteTypes = const [],
   }) async {
     final payload = {
       'load_number': '',
       'contractor_id': contractorId,
       if (contractorName != null) 'contractor_name': contractorName,
       'main_waste_type': mainWasteType,
+      if (selectedWasteTypes.isNotEmpty) 'selected_waste_types': selectedWasteTypes,
       'date_time': Timestamp.fromDate(scheduledFor),
       'createdAt': FieldValue.serverTimestamp(),
       'scheduled_for': Timestamp.fromDate(scheduledFor),

@@ -39,6 +39,7 @@ class WasteAddItemSheet extends StatefulWidget {
     this.quantityOnlyTypeNames = const {},
     this.noSiteWeightTypeNames = const {},
     this.quantityLabelByType = const {},
+    this.photosRequired = false,
   });
 
   final List<String> types;
@@ -49,6 +50,7 @@ class WasteAddItemSheet extends StatefulWidget {
   /// but the weighbridge step is still required.
   final Set<String> noSiteWeightTypeNames;
   final Map<String, String> quantityLabelByType;
+  final bool photosRequired;
 
   @override
   State<WasteAddItemSheet> createState() => _WasteAddItemSheetState();
@@ -93,6 +95,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
 
   bool get _valid {
     if (_wasteType == null) return false;
+    if (widget.photosRequired && _photos.isEmpty) return false;
     if (_hideWeight) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
     return (double.tryParse(_weightCtrl.text) ?? 0) > 0;
   }
@@ -198,9 +201,12 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                     labelText: 'Notes (optional)', isDense: true),
               ),
               const SizedBox(height: 12),
-              Text('Photos (${_photos.length})',
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+              Text(
+                widget.photosRequired
+                    ? 'Photos * (${_photos.length})'
+                    : 'Photos (optional, ${_photos.length})',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+              ),
               const SizedBox(height: 6),
               Row(
                 children: [

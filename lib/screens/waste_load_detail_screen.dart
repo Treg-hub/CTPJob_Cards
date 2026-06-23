@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,7 +13,6 @@ import 'package:path_provider/path_provider.dart';
 import '../models/waste_load.dart';
 import '../models/waste_item.dart';
 import '../models/waste_type.dart';
-import '../utils/deviation.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
 import '../main.dart' show currentEmployee;
@@ -24,15 +22,13 @@ import '../utils/waste_type_routing.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
-import '../services/sync_service.dart';
 
-import '../constants/collections.dart';
 import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 
 /// View / edit a single Waste Load.
-/// Supports weighbridge entry, deviation display, item deletion (role-gated),
-/// adding items to in-progress loads, and driver-signature completion.
+/// Supports item deletion (role-gated), adding items to in-progress loads,
+/// and driver-signature completion. Weighbridge and cost review are handled in CTP Pulse.
 class WasteLoadDetailScreen extends ConsumerStatefulWidget {
   final WasteLoad load;
 
@@ -45,15 +41,12 @@ class WasteLoadDetailScreen extends ConsumerStatefulWidget {
 class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   final WasteService _wasteService = WasteService();
   late WasteLoad _currentLoad;
-  final _weighbridgeController = TextEditingController();
-  final _weighbridgeRefController = TextEditingController();
-  String? _ticketPhotoPath;
-  bool _noWeighbridgeTicket = false;
   final List<String> _finishLoadPhotoPaths = [];
   bool _addingFinishPhoto = false;
   bool _wasteItemsExpanded = false;
   bool _isAdmin = false;
   bool _isManager = false;
+  bool _photosRequired = false;
   bool _isSaving = false;
   List<WasteType> _wasteTypes = [];
   StreamSubscription<WasteLoad?>? _loadSubscription;
@@ -63,16 +56,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     super.initState();
     _currentLoad = widget.load;
     _isAdmin = role_utils.isWasteAdmin(currentEmployee);
-    if (_currentLoad.actualWeighbridgeWeightKg != null) {
-      _weighbridgeController.text = _currentLoad.actualWeighbridgeWeightKg!.toString();
-    }
-    if (_currentLoad.weighbridgeNumber != null) {
-      _weighbridgeRefController.text = _currentLoad.weighbridgeNumber!;
-    }
     _wasteService.processOfflineWasteQueue();
     _wasteService.getWasteSettings().then((s) {
       if (mounted) {
-        setState(() => _isManager = role_utils.isSecurityManager(currentEmployee, s));
+        setState(() {
+          _isManager = role_utils.isSecurityManager(currentEmployee, s);
+          _photosRequired = s.photosRequired;
+        });
       }
     });
     _wasteService.watchWasteTypes().first.then((types) {
@@ -91,8 +81,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   @override
   void dispose() {
     _loadSubscription?.cancel();
-    _weighbridgeController.dispose();
-    _weighbridgeRefController.dispose();
     super.dispose();
   }
 
@@ -114,164 +102,69 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     return _canManageItems;
   }
 
-  void _calculateAndShowDeviation() {
-    final actual = double.tryParse(_weighbridgeController.text) ?? 0;
-    if (actual <= 0) return;
+  Widget _buildPulseHandoffBanner(WasteLoadStatus status) {
+    final isWeighbridge = status == WasteLoadStatus.pendingWeighbridge;
+    final bg = isWeighbridge ? Colors.amber.shade50 : Colors.purple.shade50;
+    final border = isWeighbridge ? Colors.amber.shade600 : Colors.purple.shade400;
+    final iconColor = isWeighbridge ? Colors.amber.shade800 : Colors.purple.shade700;
+    final titleColor = isWeighbridge ? Colors.amber.shade900 : Colors.purple.shade900;
+    final bodyColor = isWeighbridge ? Colors.amber.shade800 : Colors.purple.shade800;
 
-    final recorded = _currentLoad.recordedWeightKg > 0 ? _currentLoad.recordedWeightKg : 0.0;
-    final result = calculateDeviation(
-      recordedWeightKg: recorded > 0 ? recorded : actual,
-      actualWeightKg: actual,
-    );
-
-    final bool isDev = result.isDeviation;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(isDev ? Icons.warning_amber : Icons.check_circle,
-                color: isDev ? Colors.red : Colors.green),
-            const SizedBox(width: 8),
-            Text(isDev ? 'DEVIATION ALERT' : 'Variance within thresholds'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Recorded (items): ${formatSAWeight(result.recordedWeightKg)}'),
-            Text('Actual (weighbridge): ${formatSAWeight(result.actualWeightKg)}'),
-            const SizedBox(height: 8),
-            Text('Variance: ${formatSAWeight(result.varianceKg)}  (${result.variancePercent.toStringAsFixed(1)}%)'),
-            Text(
-              'Thresholds: ${result.thresholdPercent.toStringAsFixed(0)}% or ${result.thresholdKg.toStringAsFixed(0)} kg',
-              style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isWeighbridge ? Icons.scale : Icons.rate_review,
+            color: iconColor,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isWeighbridge
+                      ? 'Awaiting weighbridge in CTP Pulse'
+                      : 'Awaiting cost review in CTP Pulse',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: titleColor,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isWeighbridge
+                      ? 'Off-site weighbridge entry and deviation checks are completed in CTP Pulse. This load will update here once processed.'
+                      : 'Admin cost review and completion are handled in CTP Pulse. This load will update here once approved.',
+                  style: TextStyle(fontSize: 12, color: bodyColor),
+                ),
+                if (!isWeighbridge && _currentLoad.randValueExVat != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Suggested value: R ${_currentLoad.randValueExVat!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: bodyColor,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (isDev)
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  border: Border.all(color: Colors.red),
-                ),
-                child: const Text(
-                  '⚠️ EXCEEDS THRESHOLDS — Admin review required.',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          ),
         ],
       ),
     );
-  }
-
-  Future<void> _saveWeighbridge() async {
-    if (!_isAdmin && !_isManager) return;
-
-    final weight = double.tryParse(_weighbridgeController.text);
-    if (weight == null || weight <= 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid positive weight')),
-        );
-      }
-      return;
-    }
-
-    final ref = _weighbridgeRefController.text.trim();
-    final clock = currentEmployee?.clockNo ?? '';
-
-    setState(() => _isSaving = true);
-    try {
-      final result = await _wasteService.saveWeighbridgeWeight(
-        loadId: _currentLoad.id!,
-        actualWeightKg: weight,
-        weighbridgeNumber: _noWeighbridgeTicket || ref.isEmpty ? null : ref,
-        ticketPhotoLocalPath: _noWeighbridgeTicket ? null : _ticketPhotoPath,
-        updatedBy: clock,
-        ticketWaived: _noWeighbridgeTicket,
-        ticketWaivedBy: _noWeighbridgeTicket ? clock : null,
-        ticketWaivedByName: _noWeighbridgeTicket ? currentEmployee?.name : null,
-      );
-
-      setState(() {
-        _currentLoad = _currentLoad.copyWith(
-          actualWeighbridgeWeightKg: weight,
-          weighbridgeNumber: _noWeighbridgeTicket ? null : (ref.isEmpty ? null : ref),
-          weighbridgeTicketWaived: _noWeighbridgeTicket,
-          weighbridgeTicketWaivedBy: _noWeighbridgeTicket ? clock : null,
-          weighbridgeTicketWaivedByName: _noWeighbridgeTicket ? currentEmployee?.name : null,
-          weighbridgeTicketWaivedAt: _noWeighbridgeTicket ? DateTime.now() : null,
-          status: WasteLoadStatus.pendingCostReview,
-          pendingCostReviewAt: DateTime.now(),
-          weighbridgeReceivedAt: DateTime.now(),
-        );
-        _ticketPhotoPath = null;
-        _noWeighbridgeTicket = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.queuedOffline
-                  ? 'Weighbridge saved offline — sent to admin review when synced'
-                  : 'Weighbridge captured — load moved to admin cost review',
-            ),
-            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
-          ),
-        );
-        _calculateAndShowDeviation();
-
-        final actual = weight;
-        final recorded = _currentLoad.recordedWeightKg > 0 ? _currentLoad.recordedWeightKg : actual;
-        final dev = calculateDeviation(recordedWeightKg: recorded, actualWeightKg: actual);
-        if (dev.isDeviation) {
-          final auditData = {
-            'load_id': _currentLoad.id,
-            'load_number': _currentLoad.loadNumber,
-            'action': 'weighbridge_deviation',
-            'recorded_weight_kg': recorded,
-            'actual_weight_kg': actual,
-            'variance_kg': dev.varianceKg,
-            'variance_percent': dev.variancePercent,
-            'triggered_by': currentEmployee?.clockNo ?? 'unknown',
-            'created_at': FieldValue.serverTimestamp(),
-          };
-          try {
-            await FirebaseFirestore.instance
-                .collection(Collections.wasteAudit)
-                .add(auditData);
-          } catch (_) {
-            await SyncService().addToQueue(
-              collection: Collections.wasteAudit,
-              operation: 'create',
-              data: {
-                ...auditData.map(
-                  (k, v) => MapEntry(
-                    k,
-                    v is FieldValue ? DateTime.now().toIso8601String() : v,
-                  ),
-                ),
-              },
-            );
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
   }
 
   Future<void> _removePhoto(WasteItem item, String photoUrl) async {
@@ -447,6 +340,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             quantityOnlyTypeNames: _quantityOnlyTypeNames,
             noSiteWeightTypeNames: _noSiteWeightTypeNames,
             quantityLabelByType: _quantityLabelByType,
+            photosRequired: _photosRequired,
           ),
         ),
       ),
@@ -496,11 +390,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     } finally {
       if (mounted) setState(() => _addingFinishPhoto = false);
     }
-  }
-
-  Future<void> _captureTicketPhoto() async {
-    final path = await _wasteService.pickAndCompressPhotoFromSource(ImageSource.camera);
-    if (path != null && mounted) setState(() => _ticketPhotoPath = path);
   }
 
   bool get _canShare => _isCompleted || _isAdmin || _isManager;
@@ -794,7 +683,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canEditWeighbridge = _isAdmin || _isManager;
     final statusColor = _statusColor(_currentLoad.status);
     final recorded = _currentLoad.recordedWeightKg;
     final actual = _currentLoad.actualWeighbridgeWeightKg;
@@ -817,34 +705,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         padding: const EdgeInsets.all(16),
         children: [
 
-          // ── Pending weighbridge action banner ──────────────
-          if (_currentLoad.status == WasteLoadStatus.pendingWeighbridge && canEditWeighbridge)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade600, width: 1.5),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.scale, color: Colors.amber.shade800, size: 22),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Weighbridge entry required',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900, fontSize: 14)),
-                        Text('Enter the certified off-site weight below — admin will approve cost after this.',
-                            style: TextStyle(fontSize: 12, color: Colors.amber.shade800)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          if (_currentLoad.status == WasteLoadStatus.pendingWeighbridge ||
+              _currentLoad.status == WasteLoadStatus.pendingCostReview)
+            _buildPulseHandoffBanner(_currentLoad.status),
 
           // ── Completed lock banner ─────────────────────────
           if (_isCompleted)
@@ -1135,146 +998,6 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
           ),
 
-          // ── Weighbridge entry ─────────────────────────────
-          if (canEditWeighbridge &&
-              _currentLoad.status == WasteLoadStatus.pendingWeighbridge) ...[
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Off-site Weighbridge Document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Enter the certified weight. Ticket reference and photo are optional — check below if no ticket will be received.',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-                    ),
-                    const SizedBox(height: 10),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _noWeighbridgeTicket,
-                      onChanged: _isSaving
-                          ? null
-                          : (v) => setState(() {
-                                _noWeighbridgeTicket = v ?? false;
-                                if (_noWeighbridgeTicket) {
-                                  _ticketPhotoPath = null;
-                                }
-                              }),
-                      title: const Text(
-                        'No weighbridge ticket received',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: Text(
-                        'Records that no off-site ticket is expected (${currentEmployee?.name ?? currentEmployee?.clockNo ?? 'you'}).',
-                        style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
-                      ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _weighbridgeRefController,
-                      enabled: !_noWeighbridgeTicket,
-                      decoration: const InputDecoration(
-                        labelText: 'Ticket / reference number (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _weighbridgeController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Certified weight (kg) *',
-                        border: OutlineInputBorder(),
-                        suffixText: 'kg',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_currentLoad.weighbridgeTicketPhotoUrl != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: CachedNetworkImage(
-                          imageUrl: _currentLoad.weighbridgeTicketPhotoUrl!,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    if (_ticketPhotoPath != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(File(_ticketPhotoPath!), height: 120, width: double.infinity, fit: BoxFit.cover),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    if (!_noWeighbridgeTicket)
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: _isSaving ? null : _captureTicketPhoto,
-                            icon: const Icon(Icons.document_scanner, size: 18),
-                            label: Text(_ticketPhotoPath == null && _currentLoad.weighbridgeTicketPhotoUrl == null
-                                ? 'Photo ticket (optional)' : 'Retake ticket photo'),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _isSaving ? null : _saveWeighbridge,
-                        icon: _isSaving
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.scale),
-                        label: Text(_isSaving ? 'Saving...' : 'Submit Weighbridge Document'),
-                        style: FilledButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          if (_currentLoad.status == WasteLoadStatus.pendingCostReview) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: Colors.purple.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.rate_review, color: Colors.purple.shade700),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Awaiting admin cost review'
-                            '${_currentLoad.randValueExVat != null ? ' — suggested R ${_currentLoad.randValueExVat!.toStringAsFixed(2)}' : ''}',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.purple.shade900),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_currentLoad.weighbridgeTicketWaived) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'No weighbridge ticket — waived by '
-                        '${_currentLoad.weighbridgeTicketWaivedByName ?? _currentLoad.weighbridgeTicketWaivedBy ?? 'unknown'}',
-                        style: TextStyle(fontSize: 12, color: Colors.purple.shade800),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-
           const SizedBox(height: 12),
 
           // ── Finish loading (draft on-the-spot loads) ───────
@@ -1389,8 +1112,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
               result.queuedOffline
                   ? 'Finish loading saved offline — will sync when connection returns'
                   : skipWeighbridge
-                      ? 'Loading finished — awaiting admin cost review'
-                      : 'Loading finished — enter off-site weighbridge document when it arrives',
+                      ? 'Loading finished — complete cost review in CTP Pulse'
+                      : 'Loading finished — complete weighbridge entry in CTP Pulse',
             ),
             backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
           ),
@@ -1413,8 +1136,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
           SnackBar(
             content: Text(
               refreshed.status == WasteLoadStatus.pendingCostReview
-                  ? 'Loading already finished — awaiting admin cost review.'
-                  : 'Loading already finished — signature and photos saved where possible. Enter weighbridge document below.',
+                  ? 'Loading already finished — complete cost review in CTP Pulse.'
+                  : 'Loading already finished — complete weighbridge entry in CTP Pulse.',
             ),
             backgroundColor: Colors.green,
           ),

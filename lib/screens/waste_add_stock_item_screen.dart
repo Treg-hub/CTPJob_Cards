@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
@@ -34,8 +35,10 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   final List<String> _removedPhotoUrls = [];
   bool _addingPhoto = false;
   bool _isSaving = false;
+  WasteSettings? _wasteSettings;
 
   bool get _isEdit => widget.existingItem != null;
+  bool get _photosRequired => _wasteSettings?.photosRequired ?? false;
 
   @override
   void initState() {
@@ -54,6 +57,14 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
       _savedPhotoUrls.addAll(existing.photos);
     }
     _loadWasteTypes();
+    _loadWasteSettings();
+  }
+
+  Future<void> _loadWasteSettings() async {
+    try {
+      final settings = await _wasteService.getWasteSettings();
+      if (mounted) setState(() => _wasteSettings = settings);
+    } catch (_) {}
   }
 
   @override
@@ -91,7 +102,9 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   int get _totalPhotoCount =>
       _savedPhotoUrls.length + _newLocalPhotos.length;
 
-  bool get _isValid => _selectedWasteType != null && _totalPhotoCount >= 1;
+  bool get _isValid =>
+      _selectedWasteType != null &&
+      (!_photosRequired || _totalPhotoCount >= 1);
 
   Future<void> _addPhoto(ImageSource source) async {
     setState(() => _addingPhoto = true);
@@ -273,7 +286,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
             ),
             const SizedBox(height: 20),
             Text(
-              'Photos * (min 1)',
+              _photosRequired ? 'Photos * (min 1)' : 'Photos (optional)',
               style: TextStyle(fontSize: 12, color: appColors.textMuted),
             ),
             const SizedBox(height: 6),
@@ -370,7 +383,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
                 ),
               ),
             ],
-            if (_totalPhotoCount == 0)
+            if (_photosRequired && _totalPhotoCount == 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(

@@ -16,14 +16,10 @@ import '../utils/formatters.dart';
 import 'waste_create_load_screen.dart';
 import 'waste_schedule_load_screen.dart';
 import 'waste_begin_collection_screen.dart';
-import 'waste_admin_screen.dart';
-import 'waste_pending_weighbridge_screen.dart';
-import 'waste_review_screen.dart';
 import 'waste_load_detail_screen.dart';
 import 'waste_stock_inventory_screen.dart';
 import 'waste_guide_screen.dart';
 import 'waste_queued_screen.dart';
-import 'waste_reports_screen.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../theme/app_theme.dart';
@@ -364,8 +360,7 @@ class WasteHomeScreen extends ConsumerStatefulWidget {
   ConsumerState<WasteHomeScreen> createState() => _WasteHomeScreenState();
 }
 
-class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
-    with TickerProviderStateMixin {
+class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   final WasteService _wasteService = WasteService();
   List<WasteLoad> _activeLoads = [];
   List<WasteLoad> _completedLoads = [];
@@ -382,41 +377,12 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   bool _effectiveWasteEnabled = true;
   WasteSettings? _wasteSettings;
 
-  // ── Tab controller + pending weighbridge badge counter ──
-  late TabController _tabController;
-  int _pendingWeighbridgeCount = 0;
-  int _pendingReviewCount = 0;
-  StreamSubscription<List<WasteLoad>>? _pendingCountSub;
-  StreamSubscription<List<WasteLoad>>? _pendingReviewSub;
-
-  int _tabCount() {
-    final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
-    final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-    // Loads + Weighbridge + Reports (manager/admin) + Review + Settings (admin only)
-    return 1 +
-        (isAdmin || isManager ? 1 : 0) +
-        (isAdmin || isManager ? 1 : 0) +
-        (isAdmin ? 2 : 0);
-  }
-
   @override
   void initState() {
     super.initState();
-    // Placeholder single-tab controller until settings load and we know the real count.
-    _tabController = TabController(length: 1, vsync: this);
     _wasteService.processOfflineWasteQueue();
     _subscribeToLoads();
-    _loadFeatureStatus().then((_) {
-      if (!mounted) return;
-      final newLength = _tabCount();
-      if (_tabController.length != newLength) {
-        _tabController.dispose();
-        _tabController = TabController(length: newLength, vsync: this)
-          ..addListener(() { if (mounted) setState(() {}); });
-      }
-      _subscribeToPendingCount();
-      setState(() {});
-    });
+    _loadFeatureStatus();
   }
 
   void _subscribeToLoads() {
@@ -466,27 +432,8 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
     );
   }
 
-  void _subscribeToPendingCount() {
-    final isAdmin   = role_utils.isWasteAdmin(currentEmployee);
-    final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-    if (!isAdmin && !isManager) return;
-    _pendingCountSub = _wasteService.watchPendingWeighbridge().listen(
-      (loads) { if (mounted) setState(() => _pendingWeighbridgeCount = loads.length); },
-      onError: (_) {},
-    );
-    if (isAdmin) {
-      _pendingReviewSub = _wasteService.watchPendingCostReview().listen(
-        (loads) { if (mounted) setState(() => _pendingReviewCount = loads.length); },
-        onError: (_) {},
-      );
-    }
-  }
-
   @override
   void dispose() {
-    _tabController.dispose();
-    _pendingCountSub?.cancel();
-    _pendingReviewSub?.cancel();
     _activeLoadsSubscription?.cancel();
     _completedLoadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
@@ -505,16 +452,8 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
   }
 
   void _showNewLoadMenu(BuildContext context) {
-    final canManageLoads = role_utils.isWasteAdmin(currentEmployee) ||
-        role_utils.isSecurityManager(currentEmployee, _wasteSettings);
-
-    // Guards can schedule if the admin has enabled the toggle in CTP Pulse
-    // Waste Settings → Module → "Guards Can Schedule Loads".
-    final guardCanSchedule =
-        role_utils.isSecurityGuard(currentEmployee, _wasteSettings) &&
-        (_wasteSettings?.guardCanSchedule ?? false);
-
-    final canSchedule = canManageLoads || guardCanSchedule;
+    final isWasteUser = role_utils.isWasteUser(currentEmployee, _wasteSettings);
+    final canSchedule = isWasteUser;
 
     showModalBottomSheet<void>(
       context: context,
@@ -541,7 +480,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
                       MaterialPageRoute(builder: (_) => const WasteScheduleLoadScreen()));
                 },
               ),
-            if (canManageLoads)
+            if (isWasteUser)
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Colors.blueGrey,
@@ -898,80 +837,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen>
       );
     }
 
-    // ── Build role-based tabs ──────────────────────────────────────────────
-    final tabs = <Widget>[
-      const Tab(text: 'Loads'),
-      if (isAdmin || isManager)
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Weighbridge'),
-              if (_pendingWeighbridgeCount > 0) ...[
-                const SizedBox(width: 4),
-                _WasteBadge(_pendingWeighbridgeCount),
-              ],
-            ],
-          ),
-        ),
-      if (isAdmin || isManager) const Tab(text: 'Reports'),
-      if (isAdmin)
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Review'),
-              if (_pendingReviewCount > 0) ...[
-                const SizedBox(width: 4),
-                _WasteBadge(_pendingReviewCount),
-              ],
-            ],
-          ),
-        ),
-      if (isAdmin) const Tab(text: 'Settings'),
-    ];
-
-    final tabViews = <Widget>[
-      _buildLoadsTab(context, isAdmin, isManager),
-      if (isAdmin || isManager) const WastePendingWeighbridgeScreen(embedded: true),
-      if (isAdmin || isManager) const WasteReportsScreen(embedded: true),
-      if (isAdmin) const WasteReviewScreen(embedded: true),
-      if (isAdmin) const WasteAdminScreen(embedded: true),
-    ];
-
-    // Sync controller length if role changes (rare, but guards against assert)
-    if (_tabController.length != tabs.length) {
-      _tabController.dispose();
-      _tabController = TabController(length: tabs.length, vsync: this)
-        ..addListener(() { if (mounted) setState(() {}); });
-    }
-
     return Scaffold(
-      // FAB only visible on the Loads tab
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton.extended(
-              onPressed: () => _showNewLoadMenu(context),
-              icon: const Icon(Icons.add),
-              label: const Text('New / Schedule'),
-              backgroundColor: Theme.of(context).appColors.wasteGreen,
-            )
-          : null,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TabBar(
-            controller: _tabController,
-            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            tabs: tabs,
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: tabViews,
-            ),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showNewLoadMenu(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New / Schedule'),
+        backgroundColor: Theme.of(context).appColors.wasteGreen,
       ),
+      body: _buildLoadsTab(context, isAdmin, isManager),
     );
   }
 }
@@ -1109,17 +982,4 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   }
 }
 
-// Small amber counter badge for the Weighbridge tab.
-class _WasteBadge extends StatelessWidget {
-  final int count;
-  const _WasteBadge(this.count);
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(color: Colors.amber.shade700, borderRadius: BorderRadius.circular(10)),
-      child: Text('$count', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
-    );
-  }
-}

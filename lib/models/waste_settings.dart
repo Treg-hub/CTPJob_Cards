@@ -1,22 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Global WasteTrack configuration stored in waste_settings/config.
-/// Mirrors the FleetSettings pattern exactly.
 class WasteSettings {
   final List<String> managerClockNos;
   final List<String> guardClockNos;
   final bool wasteEnabled;
-
-  /// When true, security guards can schedule an incoming load before the
-  /// contractor arrives — not just begin collections. Controlled from
-  /// CTP Pulse Waste Settings → Module → "Guards Can Schedule Loads".
-  final bool guardCanSchedule;
+  final bool photosRequired;
+  final bool signatureRequired;
 
   const WasteSettings({
     this.managerClockNos = const [],
     this.guardClockNos = const [],
     this.wasteEnabled = true,
-    this.guardCanSchedule = false,
+    this.photosRequired = false,
+    this.signatureRequired = false,
   });
 
   static const WasteSettings defaults = WasteSettings();
@@ -33,7 +30,8 @@ class WasteSettings {
               .toList() ??
           const [],
       wasteEnabled: data['waste_enabled'] as bool? ?? true,
-      guardCanSchedule: data['guard_can_schedule'] as bool? ?? false,
+      photosRequired: data['photos_required'] as bool? ?? false,
+      signatureRequired: data['signature_required'] as bool? ?? false,
     );
   }
 
@@ -42,7 +40,8 @@ class WasteSettings {
       'manager_clock_nos': managerClockNos,
       'guard_clock_nos': guardClockNos,
       'waste_enabled': wasteEnabled,
-      'guard_can_schedule': guardCanSchedule,
+      'photos_required': photosRequired,
+      'signature_required': signatureRequired,
     };
   }
 
@@ -50,13 +49,15 @@ class WasteSettings {
     List<String>? managerClockNos,
     List<String>? guardClockNos,
     bool? wasteEnabled,
-    bool? guardCanSchedule,
+    bool? photosRequired,
+    bool? signatureRequired,
   }) {
     return WasteSettings(
       managerClockNos: managerClockNos ?? this.managerClockNos,
       guardClockNos: guardClockNos ?? this.guardClockNos,
       wasteEnabled: wasteEnabled ?? this.wasteEnabled,
-      guardCanSchedule: guardCanSchedule ?? this.guardCanSchedule,
+      photosRequired: photosRequired ?? this.photosRequired,
+      signatureRequired: signatureRequired ?? this.signatureRequired,
     );
   }
 }

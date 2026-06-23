@@ -75,14 +75,12 @@ For exact screens per module, what each does (purpose, reads/writes, UI), and us
 |---|---|---|---|---|
 | WasteHomeScreen — view | ✅ | ✅ | ✅ | ❌ |
 | WasteHomeScreen — Incoming section | ✅ | ✅ | ✅ | ❌ |
-| WasteScheduleLoadScreen (new) | ✅ | ✅ | ❌ | ❌ |
+| WasteScheduleLoadScreen | ✅ | ✅ | ✅ | ❌ |
 | WasteBeginCollectionScreen (new) | ✅ | ✅ | ✅ | ❌ |
 | WasteCreateLoadScreen (legacy) | ✅ | ✅ | ✅ | ❌ |
 | WasteLoadDetailScreen — view | ✅ | ✅ | ✅ (read-only) | ❌ |
-| WasteLoadDetailScreen — weighbridge | ✅ | ✅ | ❌ | ❌ |
-| WastePendingWeighbridgeScreen | ✅ | ✅ | ❌ | ❌ |
-| WasteReportsScreen | ✅ | ✅ | ❌ | ❌ |
-| WasteAdminScreen | ✅ | ❌ | ❌ | ❌ |
+| WasteLoadDetailScreen — finish loading | ✅ | ✅ | ✅ | ❌ |
+| Weighbridge / Cost review / Reports / Settings | ❌ | ❌ | ❌ | ❌ (Pulse only, 2026-06-22) |
 | Cancel scheduled load | ✅ | ✅ | ❌ | ❌ |
 | Edit scheduled load date/notes | ✅ | ✅ | ❌ | ❌ |
 
@@ -101,19 +99,25 @@ Manager creates scheduled load
            │ [Firestore transaction — prevents double-collection]
            ▼
 ┌─────────────────────────┐
-│   pending_weighbridge   │  ← Guard submitted; manager sees this in Pending Weighbridge screen
+│   pending_weighbridge   │  ← Hand off to CTP Pulse Weighbridge (manager/admin)
 └──────────┬──────────────┘
-           │ Manager enters weighbridge weight (WasteLoadDetailScreen)
+           │ Off-site ticket + deviation audit on Pulse
+           ▼
+┌─────────────────────────┐
+│  pending_cost_review    │  ← Admin cost approval per waste type on Pulse
+└──────────┬──────────────┘
            ▼
     ┌───────────┐
     │ completed │
     └───────────┘
 
-From scheduled only:
-    scheduled → cancelled  (Manager cancels before guard begins)
+Quantity-only types (e.g. IBC Bins): skip pending_weighbridge → pending_cost_review directly.
 
-Legacy path (preserved):
-    [guard creates from scratch] → draft → completed
+From scheduled only:
+    scheduled → cancelled  (Manager/admin on mobile or Pulse)
+
+On-the-spot create:
+    draft → pending_weighbridge | pending_cost_review (finish loading on mobile)
 ```
 
 ---
@@ -122,21 +126,16 @@ Legacy path (preserved):
 
 ```
 App entry (home_screen.dart)
-  └─ [if isWasteUser] → Waste tab → WasteHomeScreen
+  └─ [if isWasteUser] → Waste tab (single Loads view) → WasteHomeScreen
         ├─ Incoming section (scheduled loads)
         │    └─ "Begin Collection" → WasteBeginCollectionScreen
-        │         └─ WasteSignatureScreen (signature capture)
-        ├─ Recent loads list (draft, completed, pending_weighbridge)
-        │    └─ tap → WasteLoadDetailScreen
-        │         ├─ [manager/admin] Weighbridge entry
-        │         └─ [manager/admin] Mark complete
-        ├─ FAB [guard]:    "New Load" → WasteCreateLoadScreen
-        ├─ FAB [manager]:  bottom sheet →
-        │    ├─ "Schedule Incoming" → WasteScheduleLoadScreen
-        │    └─ "New Load (on the spot)" → WasteCreateLoadScreen
-        ├─ AppBar [manager/admin] → WastePendingWeighbridgeScreen
-        ├─ AppBar [manager/admin] → WasteReportsScreen
-        └─ AppBar [admin]         → WasteAdminScreen
+        ├─ Stock → WasteStockInventoryScreen
+        ├─ Recent loads (draft, scheduled, pending_*, completed)
+        │    └─ tap → WasteLoadDetailScreen (finish loading; Pulse handoff banner)
+        ├─ FAB: Schedule / New load / Stock (all waste users)
+        │    ├─ WasteScheduleLoadScreen (selected_waste_types + stock links)
+        │    └─ WasteCreateLoadScreen (on-the-spot)
+        └─ Weighbridge, cost review, reports, admin → CTP Pulse only
 ```
 
 ---

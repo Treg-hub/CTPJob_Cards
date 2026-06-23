@@ -555,14 +555,13 @@ Full detail view of a single waste load.
 
 #### Layout (top to bottom)
 
-1. **Amber action banner** — shown only when `status == pendingWeighbridge` and the user is Admin or Manager. Prompts immediate weighbridge entry.
-2. **Status stepper** — 4-step horizontal progress bar showing current lifecycle position. Steps vary by flow: `scheduled` loads show (Scheduled → Collecting → Weighbridge → Complete); direct loads show (Created → Signature → Weighbridge → Complete).
+1. **Pulse handoff banner** — when `status == pendingWeighbridge` or `pendingCostReview`, directs manager/admin to CTP Pulse (weighbridge + cost review are not on mobile).
+2. **Status stepper** — lifecycle position; mobile stops at pending queues.
 3. **Status banner** — coloured icon + type name + status label.
 4. **Info card** — driver, vehicle, contractor name (`contractorName` field; falls back to `contractorId`), date, and collector name (`collectedByName` field; falls back to clock number).
 5. **Items card** — live `StreamBuilder` on `WasteService.watchItemsForLoad()`. Lists each item: subtype, weight, quantity, photo count.
 6. **Weight card** — recorded weight vs. actual weighbridge weight with inline variance row (green if within thresholds, red if deviation).
-7. **Weighbridge entry** *(Admin/Manager only, non-terminal status)* — text field + save button.
-8. **Mark Complete & Signature button** *(draft status only)* — navigates to **Waste Signature**, then marks load complete.
+7. **Finish loading** *(draft status)* — optional truck photos + signature per `photos_required` / `signature_required` settings.
 
 #### Status actions available per role
 
@@ -570,46 +569,17 @@ Full detail view of a single waste load.
 |----------------|-------------|----------------|
 | Scheduled | Begin Collection | Edit / Cancel |
 | Draft / In Progress | Capture Signature | View |
-| Pending Weighbridge | View | Enter Weighbridge Weight (amber banner) |
+| Pending Weighbridge | View (Pulse handoff) | View (Pulse handoff) |
+| Pending Cost Review | View (Pulse handoff) | View (Pulse handoff) |
 | Completed | View only | View only |
 
-### Waste Pending Weighbridge
-
-`lib/screens/waste_pending_weighbridge_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
-
-List screen showing all loads in `pending_weighbridge` status. Guard or manager enters the actual weighbridge weight. On save, `WasteService.saveWeighbridgeWeight` computes the deviation, writes the result to `waste_loads`, and triggers a deviation flag if thresholds are exceeded (> 5% or > 50 kg).
+> **Removed 2026-06-22:** `waste_pending_weighbridge_screen`, `waste_review_screen`, `waste_reports_screen`, `waste_admin_screen` — weighbridge, cost review, reports, and settings live on **CTP Pulse** only.
 
 ### Waste Queued
 
 `lib/screens/waste_queued_screen.dart` — **Roles:** Security Guard, Admin
 
 Shows loads that are queued locally (created or updated offline and not yet synced to Firestore). Reflects the Hive `sync_queue` entries for WasteTrack operations. Guard can review pending items and manually trigger a sync flush.
-
-### Waste Reports
-
-`lib/screens/waste_reports_screen.dart` — **Roles:** Security Manager, Admin
-
-Date-range report of completed loads. Filterable by contractor and waste type.
-
-#### Capabilities
-
-- **Run Report** — queries `waste_loads` with server-side date and status filters
-- **Export CSV** — pure-Dart CSV generation, written to device storage
-- Deviation-flagged loads are highlighted in the results table
-
-### Waste Admin
-
-`lib/screens/waste_admin_screen.dart` — **Roles:** Admin only
-
-Configuration panel for the WasteTrack module. Three tabs:
-
-| Tab | What it manages |
-|-----|-----------------|
-| **Manage Types** | Create waste type categories; add sub-types; set active/inactive |
-| **Manage Rates** | Set cost rate per kg per waste type; view current rate list |
-| **Contractors** | Add/edit contractor records used when scheduling loads |
-
-Writes to `waste_types`, `waste_rates`, and `waste_contractors` collections.
 
 ---
 
