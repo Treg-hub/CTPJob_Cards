@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/contractor.dart';
+import '../models/waste_settings.dart';
 import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
@@ -54,10 +55,15 @@ class _WasteBeginCollectionScreenState
   final List<String> _loadPhotoPaths = [];
   bool _addingLoadPhoto = false;
   bool _isSubmitting = false;
+  WasteSettings? _wasteSettings;
+
+  bool get _photosRequired => _wasteSettings?.photosRequired ?? false;
+  bool get _signatureRequired => _wasteSettings?.signatureRequired ?? false;
 
   @override
   void initState() {
     super.initState();
+    _loadWasteSettings();
     _loadWasteTypes();
     if (widget.load.selectedStockIds.isNotEmpty) {
       _loadPrelinkedStock();
@@ -69,6 +75,13 @@ class _WasteBeginCollectionScreenState
     _driverCtrl.dispose();
     _regCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadWasteSettings() async {
+    try {
+      final settings = await _wasteService.getWasteSettings();
+      if (mounted) setState(() => _wasteSettings = settings);
+    } catch (_) {}
   }
 
   Future<void> _loadWasteTypes() async {
@@ -135,16 +148,33 @@ class _WasteBeginCollectionScreenState
     }
   }
 
-  bool get _canSubmit =>
-      _driverCtrl.text.trim().isNotEmpty &&
-      _regCtrl.text.trim().isNotEmpty &&
-      _items.isNotEmpty &&
-      // Per-item photos not required for quantity-only or no-site-weight types
-      // (truck-level photo covers these).
-      _items.every((i) => i.photoPaths.isNotEmpty || i.isQuantityOnly || i.isNoSiteWeight) &&
-      _loadPhotoPaths.isNotEmpty &&
-      _signatureBytes != null &&
-      !_isSubmitting;
+  bool get _canSubmit {
+    if (_driverCtrl.text.trim().isEmpty ||
+        _regCtrl.text.trim().isEmpty ||
+        _items.isEmpty ||
+        _isSubmitting) {
+      return false;
+    }
+    if (_photosRequired) {
+      final itemsHavePhotos = _items.every(
+        (i) =>
+            i.photoPaths.isNotEmpty || i.isQuantityOnly || i.isNoSiteWeight,
+      );
+      if (!itemsHavePhotos || _loadPhotoPaths.isEmpty) return false;
+    }
+    if (_signatureRequired && _signatureBytes == null) return false;
+    return true;
+  }
+
+  String get _submitHelperText {
+    final parts = <String>['Complete driver details and add at least one item'];
+    if (_photosRequired) {
+      parts.add('add photos where required');
+      parts.add('capture loaded-truck photos');
+    }
+    if (_signatureRequired) parts.add('capture driver signature');
+    return '${parts.join(', ')}.';
+  }
 
   Future<void> _addLoadPhoto(ImageSource source) async {
     setState(() => _addingLoadPhoto = true);
@@ -239,6 +269,7 @@ class _WasteBeginCollectionScreenState
             quantityOnlyTypeNames: _quantityOnlyTypeNames,
             noSiteWeightTypeNames: _noSiteWeightTypeNames,
             quantityLabelByType: _quantityLabelByType,
+            photosRequired: _photosRequired,
           ),
         ),
       ),
@@ -509,7 +540,9 @@ class _WasteBeginCollectionScreenState
                   border: Border.all(color: Theme.of(context).colorScheme.outline),
                 ),
                 child: Text(
-                  'At least one item with a photo is required.',
+                  _photosRequired
+                      ? 'At least one item with a photo is required.'
+                      : 'At least one item is required.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
@@ -558,12 +591,13 @@ class _WasteBeginCollectionScreenState
                               Text(item.isQuantityOnly
                                   ? '${item.quantity ?? 0} ${_unitFor(item.subtype)}'
                                   : '${item.weightKg.toStringAsFixed(1)} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
-                              if (item.photoPaths.isNotEmpty)
-                                Text('${item.photoPaths.length} photo(s)',
-                                    style: TextStyle(fontSize: 12, color: appColors.wasteGreen))
-                              else
+                              if (_photosRequired && item.photoPaths.isEmpty &&
+                                  !item.isQuantityOnly && !item.isNoSiteWeight)
                                 Text('⚠ Photo required',
-                                    style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                                    style: TextStyle(fontSize: 12, color: Colors.red.shade700))
+                              else if (item.photoPaths.isNotEmpty)
+                                Text('${item.photoPaths.length} photo(s)',
+                                    style: TextStyle(fontSize: 12, color: appColors.wasteGreen)),
                             ],
                           ),
                         ),
@@ -627,7 +661,7 @@ class _WasteBeginCollectionScreenState
                 ],
               ],
             ),
-            if (_loadPhotoPaths.isEmpty)
+            if (_photosRequired && _loadPhotoPaths.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text('⚠ At least one loaded-truck photo required',
@@ -668,7 +702,9 @@ class _WasteBeginCollectionScreenState
                 child: OutlinedButton.icon(
                   onPressed: _captureSignature,
                   icon: const Icon(Icons.draw),
-                  label: const Text('Capture Driver Signature *'),
+                  label: Text(_signatureRequired
+                      ? 'Capture Driver Signature *'
+                      : 'Capture Driver Signature (optional)'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -697,7 +733,7 @@ class _WasteBeginCollectionScreenState
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Complete all fields, add items with photos, capture loaded-truck photos, and driver signature.',
+                  _submitHelperText,
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: appColors.textMuted),
                 ),

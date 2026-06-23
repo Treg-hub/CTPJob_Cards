@@ -12,11 +12,11 @@ This guide walks through the **complete waste load lifecycle** in WasteTrack —
 
 | Role | Typical tasks |
 |------|----------------|
-| **Security Manager** | Record paper stock; schedule loads; create on-the-spot loads; link stock; capture loaded-truck photos; enter off-site weighbridge documents |
-| **Security Guard** | Begin scheduled collections; confirm or add waste items; loaded-truck photos; driver signature; submit collection |
-| **Admin** | Everything above, plus **Review** (approve costs), **Settings** (contractors, types, rates). Reports are on **CTP Pulse** only. |
+| **Security Manager** | Record stock; schedule loads; create on-the-spot loads; link stock; capture loaded-truck photos; finish loading |
+| **Security Guard** | Same field-capture tasks: schedule, stock, begin collections, items, optional photos/signature, submit |
+| **Admin** | Same on mobile. **Weighbridge, cost review, reports, and settings** are on **CTP Pulse** only. |
 
-> **Guards can schedule loads** only when an admin has enabled *Guards Can Schedule Loads* in CTP Pulse → Waste Settings.
+> **Mobile = field capture.** After collection the load stops at **Pending Weighbridge** or **Pending Cost Review** — managers and admins complete those steps on CTP Pulse.
 
 ---
 
@@ -165,44 +165,30 @@ When the contractor arrives:
 
 ---
 
-## Step 4 — Off-site weighbridge document (Manager / Admin)
+## Step 4 — Off-site weighbridge document (CTP Pulse — Manager / Admin)
 
 *Only applies to weight-based and no-on-site-weight loads. Quantity-only loads skip this step.*
 
-When the weighbridge ticket arrives (email/photo/PDF — truck does not return):
+When the weighbridge ticket arrives (email/photo/PDF — truck does not return), use **CTP Pulse → Waste → Weighbridge**:
 
-### From the Weighbridge tab
+1. Open the pending load from the weighbridge queue (sidebar badge shows count).
+2. Enter the **ticket/reference number** and **certified weight in kg**.
+3. Upload or waive the weighbridge document photo.
+4. Submit — deviation is audited automatically if thresholds are exceeded.
 
-1. Open the **Weighbridge** tab (badge shows how many are waiting).
-2. Tap a load to open its detail.
-3. Scroll to **Off-site Weighbridge Document**.
-4. Enter the **ticket/reference number**.
-5. Photograph the **weighbridge document**.
-6. Enter the **certified weight in kg**.
-7. Tap **Submit Weighbridge Document**.
-
-The load moves to **Pending Cost Review** for admin approval.
-
-### From load detail
-
-Same steps — open any **Pending Weighbridge** load from Recent loads.
+The load moves to **Pending Cost Review**.
 
 ---
 
-## Step 5 — Admin cost review
+## Step 5 — Admin cost review (CTP Pulse only)
 
-1. Open the **Review** tab (admin only; badge shows pending count).
-2. The review card shows an **itemized cost table**:
-   - Each waste item on the load is shown with its **subtype**, **weight**, an editable **R/kg rate**, and a calculated **value**.
-   - For **no-on-site-weight items** (compactor bins etc.), the on-site weight column will show zero — the weighbridge ticket weight is used for the total cost calculation.
-   - The **R/kg** field is pre-filled from the contractor's rate register where a rate exists. Empty fields show a ⚠ warning — enter the rate from the physical document.
-   - The **Calculated total** (sum of all line values) updates live as you edit rates.
-3. The **Approved amount** field defaults to the calculated total. Edit it to match the accounts document if they differ.
-4. Tap **Approve** — the system saves both the calculated total and the approved amount separately for audit.
+Use **CTP Pulse → Waste → Review** (admin only):
 
-> Rates entered or corrected during review are saved back to the rate register — the same contractor + subtype pair will be pre-filled automatically on future collections.
+1. Each load shows **one cost line per waste type** (not per item).
+2. Edit **R/kg** per type; calculated total updates live.
+3. Confirm **Approved amount** and tap **Approve** — load becomes **Completed** with `cost_by_type` saved.
 
-Reports and exports are available on **CTP Pulse → Waste → Reports**.
+Reports and exports: **CTP Pulse → Waste**.
 
 ---
 
@@ -235,8 +221,8 @@ When a manager creates a **New Load on the spot**:
 |--------|---------|-----------------|
 | **Scheduled** | Manager scheduled the collection; truck not yet processed | Guard taps **Begin Collection** when contractor arrives |
 | **Draft** | On-the-spot load created; truck still loading | Manager: **Finish Loading** (truck photos + signature) |
-| **Pending Weighbridge** | Loading finished; awaiting off-site document | Manager: photograph ticket + enter certified weight |
-| **Pending Cost Review** | Weighbridge document captured (or quantity-only load submitted) | Admin: approve cost in **Review** tab |
+| **Pending Weighbridge** | Loading finished; awaiting off-site document | Manager on **CTP Pulse → Weighbridge** |
+| **Pending Cost Review** | Weighbridge captured (or quantity-only load) | Admin on **CTP Pulse → Review** |
 | **Completed** | Admin approved cost | Record is locked |
 | **Cancelled** | Load was cancelled before collection | No further action |
 
@@ -287,8 +273,8 @@ The two toggles are mutually exclusive — turning one on clears the other. Leav
 - Weight-based items need a weight entered. Quantity-only and no-on-site-weight items need a count entered.
 - Per-item photos are optional — the truck photo is the primary evidence.
 
-**Weighbridge tab is empty**
-- Only loads in **Pending Weighbridge** appear. Quantity-only loads (IBC Bins) go straight to Cost Review and will not appear here.
+**Where is weighbridge / cost review on mobile?**
+- Removed from the app (2026-06-22). Use **CTP Pulse**. Pending loads show a handoff banner on mobile load detail.
 
 **Load went straight to Cost Review — no weighbridge step**
 - This is correct for quantity-only types (IBC Bins). The cost is calculated by count × rate, not by weight.

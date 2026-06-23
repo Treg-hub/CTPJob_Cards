@@ -97,15 +97,9 @@ class _WasteScheduleLoadScreenState
       .toList();
   bool get _usesPaperStock =>
       selectedChipsUsePaperStock(_selectedTypes, _wasteTypes);
-  bool get _canAccess =>
-      isWasteAdmin(currentEmployee) ||
-      isSecurityManager(currentEmployee, _wasteSettings) ||
-      (isSecurityGuard(currentEmployee, _wasteSettings) &&
-          (_wasteSettings?.guardCanSchedule ?? false));
+  bool get _canAccess => isWasteUser(currentEmployee, _wasteSettings);
 
-  bool get _canSelectStock =>
-      isSecurityManager(currentEmployee, _wasteSettings) ||
-      isWasteAdmin(currentEmployee);
+  bool get _canSelectStock => isWasteUser(currentEmployee, _wasteSettings);
   List<WasteStockItem> get _filteredOnSiteStock =>
       filterStockByChipSubtypes(_onSiteStock, _selectedTypes, _wasteTypes);
 
@@ -212,6 +206,7 @@ class _WasteScheduleLoadScreenState
             : _notesController.text.trim(),
         // Store IDs on the load — stock is NOT marked loaded until the guard confirms
         selectedStockIds: List.of(_selectedStockIds),
+        selectedWasteTypes: _selectedTypes.map((t) => t.mainType).toList(),
       );
 
       if (mounted) {
@@ -243,7 +238,7 @@ class _WasteScheduleLoadScreenState
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Access denied. Security Manager, Admin, or an authorised Guard may schedule loads.',
+              'Access denied. Waste module access is required to schedule loads.',
               textAlign: TextAlign.center,
             ),
           ),

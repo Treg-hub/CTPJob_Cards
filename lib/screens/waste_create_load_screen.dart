@@ -55,8 +55,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
   }
 
   bool get _canAccess =>
-      role_utils.isWasteAdmin(currentEmployee) ||
-      role_utils.isSecurityManager(currentEmployee, _wasteSettings);
+      role_utils.isWasteUser(currentEmployee, _wasteSettings);
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +101,7 @@ class _WasteCreateLoadScreenState extends ConsumerState<WasteCreateLoadScreen> {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Access denied. On-the-spot load creation is for Security Managers and Admins.',
+              'Access denied. Waste module access is required to create loads.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -345,7 +344,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddWasteItemSheet(availableTypes: typeNames),
+          child: _AddWasteItemSheet(
+            availableTypes: typeNames,
+            photosRequired: _wasteSettings?.photosRequired ?? false,
+          ),
         ),
       ),
     );
@@ -386,6 +388,19 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       return;
     }
 
+    final photosRequired = _wasteSettings?.photosRequired ?? false;
+    if (photosRequired) {
+      final missingPhotos = _items.where((i) => i.photos.isEmpty).toList();
+      if (missingPhotos.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Each manual item needs at least one photo.'),
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -395,6 +410,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           'contractor_name': _selectedContractor!.name,
           'main_waste_type':
               resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
+          'selected_waste_types':
+              _selectedTypes.map((t) => t.mainType).toList(),
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
           'paper_document_ref': _paperDocumentRef,
@@ -820,8 +837,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 // ---------------------------------------------------------------------------
 
 class _AddWasteItemSheet extends StatefulWidget {
-  const _AddWasteItemSheet({required this.availableTypes});
+  const _AddWasteItemSheet({
+    required this.availableTypes,
+    this.photosRequired = false,
+  });
   final List<String> availableTypes;
+  final bool photosRequired;
 
   @override
   State<_AddWasteItemSheet> createState() => _AddWasteItemSheetState();
@@ -848,10 +869,12 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
     super.dispose();
   }
 
-  bool get _valid =>
-      _wasteType.isNotEmpty &&
-      (double.tryParse(_weightCtrl.text) ?? 0) > 0 &&
-      _photos.isNotEmpty;
+  bool get _valid {
+    if (_wasteType.isEmpty) return false;
+    if ((double.tryParse(_weightCtrl.text) ?? 0) <= 0) return false;
+    if (widget.photosRequired && _photos.isEmpty) return false;
+    return true;
+  }
 
   Future<void> _addPhoto(ImageSource source) async {
     setState(() => _addingPhoto = true);
@@ -918,7 +941,12 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
                 decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
               ),
               const SizedBox(height: 12),
-              Text('Photos * (${_photos.length})', style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+              Text(
+                widget.photosRequired
+                    ? 'Photos * (${_photos.length})'
+                    : 'Photos (optional, ${_photos.length})',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
+              ),
               const SizedBox(height: 6),
               Row(
                 children: [
