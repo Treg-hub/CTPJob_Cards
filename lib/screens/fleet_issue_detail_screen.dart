@@ -14,7 +14,7 @@ import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
-import 'fleet_log_work_screen.dart';
+import 'fleet_mark_fixed_screen.dart';
 import 'fleet_work_record_detail_screen.dart';
 
 /// Detailed view of a single fleet issue.
@@ -68,10 +68,10 @@ class _FleetIssueDetailScreenState
       if (!mounted) return;
       final fixed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => FleetLogWorkScreen(
+          builder: (_) => FleetMarkFixedScreen(
             preSelectedAssetId: issue.assetId,
             preSelectedAssetName: issue.assetName,
-            linkedIssueId: issue.id,
+            linkedIssueId: issue.id!,
           ),
         ),
       );

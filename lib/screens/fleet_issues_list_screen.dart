@@ -9,7 +9,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import 'fleet_issue_detail_screen.dart';
-import 'fleet_log_work_screen.dart';
+import 'fleet_mark_fixed_screen.dart';
 
 /// Full list of fleet issues with status filter chips.
 /// Visible to reporters (transparency), mechanics, cost managers, and admins.
@@ -43,7 +43,7 @@ class _FleetIssuesListScreenState
       onTap: () {
         if (widget.mechanicMode && issue.status.isOpen) {
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => FleetLogWorkScreen(
+            builder: (_) => FleetMarkFixedScreen(
               preSelectedAssetId: issue.assetId,
               preSelectedAssetName: issue.assetName,
               linkedIssueId: issue.id!,

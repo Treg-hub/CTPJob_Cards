@@ -239,10 +239,12 @@ class FleetIssueTile extends StatelessWidget {
     required this.issue,
     required this.onTap,
     this.mechanicMode = false,
+    this.subtitleOverride,
   });
   final FleetIssue issue;
   final VoidCallback onTap;
   final bool mechanicMode;
+  final String? subtitleOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -288,7 +290,16 @@ class FleetIssueTile extends StatelessWidget {
                 const SizedBox(width: 8),
                 FleetSeverityBadge(severity: issue.severity),
                 const Spacer(),
-                if (mechanicMode && issue.status.isOpen)
+                if (subtitleOverride != null)
+                  Text(
+                    subtitleOverride!,
+                    style: TextStyle(
+                      color: kBrandOrange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (mechanicMode && issue.status.isOpen)
                   Text(
                     mechanicIssueActionHint(issue.status),
                     style: TextStyle(
