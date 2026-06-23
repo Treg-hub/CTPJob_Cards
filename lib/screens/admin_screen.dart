@@ -11,111 +11,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
-import '../models/job_card.dart';
 import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
 import 'feedback_admin_screen.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
-
-// ---------------------------------------------------------------------------
-// Data-table source (unchanged — keeps the Job Cards tab paginated)
-// ---------------------------------------------------------------------------
-
-class JobCardsDataTableSource extends DataTableSource {
-  final List<JobCard> jobCards;
-  final Set<int> selectedRows;
-  final int? editingIndex;
-  final Function(int) onSelectChanged;
-  final Function(int) onEditToggle;
-  final Function(JobCard) onDelete;
-  final TextEditingController priorityController;
-  final TextEditingController statusController;
-  final TextEditingController descriptionController;
-
-  JobCardsDataTableSource({
-    required this.jobCards,
-    required this.selectedRows,
-    required this.editingIndex,
-    required this.onSelectChanged,
-    required this.onEditToggle,
-    required this.onDelete,
-    required this.priorityController,
-    required this.statusController,
-    required this.descriptionController,
-  });
-
-  static Color _getPriorityColor(int p) {
-    switch (p) {
-      case 1: return const Color(0xFF2E7D32);
-      case 2: return const Color(0xFF33691E);
-      case 3: return const Color(0xFFBF360C);
-      case 4: return const Color(0xFFC62828);
-      case 5: return const Color(0xFFB71C1C);
-      default: return Colors.grey;
-    }
-  }
-
-  static Color _getStatusColor(JobStatus s) {
-    switch (s) {
-      case JobStatus.open: return const Color(0xFF1565C0);
-      case JobStatus.inProgress: return const Color(0xFFE65100);
-      case JobStatus.monitor: return Colors.orange;
-      case JobStatus.closed: return const Color(0xFF2E7D32);
-    }
-  }
-
-  @override
-  DataRow getRow(int index) {
-    final jc = jobCards[index];
-    final isEditing = editingIndex == index;
-    return DataRow(
-      selected: selectedRows.contains(index),
-      onSelectChanged: (selected) => onSelectChanged(index),
-      cells: [
-        DataCell(Checkbox(value: selectedRows.contains(index), onChanged: (v) => onSelectChanged(index))),
-        DataCell(Text(jc.jobCardNumber?.toString() ?? '')),
-        DataCell(isEditing
-            ? DropdownButton<int>(
-                value: jc.priority,
-                items: [1, 2, 3, 4, 5].map((p) => DropdownMenuItem(value: p, child: Text('P$p'))).toList(),
-                onChanged: (v) => priorityController.text = v.toString())
-            : Chip(
-                label: Text('P${jc.priority}', style: TextStyle(color: onColor(_getPriorityColor(jc.priority)), fontSize: 12)),
-                backgroundColor: _getPriorityColor(jc.priority),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              )),
-        DataCell(isEditing
-            ? DropdownButton<JobStatus>(
-                value: jc.status,
-                items: JobStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.displayName))).toList(),
-                onChanged: (v) => statusController.text = v?.name ?? '')
-            : Chip(
-                label: Text(jc.status.displayName, style: TextStyle(color: onColor(_getStatusColor(jc.status)), fontSize: 12)),
-                backgroundColor: _getStatusColor(jc.status),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              )),
-        DataCell(Text(jc.type.displayName)),
-        DataCell(Text('${jc.department} › ${jc.area} › ${jc.machine}')),
-        DataCell(isEditing
-            ? TextField(controller: descriptionController)
-            : Text(jc.description.length > 50 ? '${jc.description.substring(0, 50)}…' : jc.description)),
-        DataCell(Text(jc.operator)),
-        DataCell(Text(jc.assignedClockNos?.length.toString() ?? '0')),
-        DataCell(Row(children: [
-          IconButton(icon: Icon(isEditing ? Icons.save : Icons.edit, size: 18), onPressed: () => onEditToggle(index)),
-          IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), onPressed: () => onDelete(jc)),
-        ])),
-      ],
-    );
-  }
-
-  @override int get rowCount => jobCards.length;
-  @override bool get isRowCountApproximate => false;
-  @override int get selectedRowCount => selectedRows.length;
-}
 
 // ---------------------------------------------------------------------------
 // AdminScreen
@@ -192,29 +92,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   Set<String> _stage3Recipients = {};
   Set<String> _stage4Recipients = {};
 
-  // ── Employees spreadsheet inline-edit ─────────────────────────────────────
-  final Set<int> _selectedRows = {};
-  int? _editingIndex;
-  final TextEditingController _clockNoController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _positionController = TextEditingController();
-  final TextEditingController _departmentController = TextEditingController();
-  final TextEditingController _fcmController = TextEditingController();
-
-  // ── Job Cards tab ─────────────────────────────────────────────────────────
-  final TextEditingController _jobCardSearchController = TextEditingController();
-  // Paginated state — 50 records per page, cursor-based "Load More"
-  List<JobCard> _jobCardPage = [];
-  DocumentSnapshot? _lastJobCardDoc;
-  bool _jobCardLoadingMore = false;
-  bool _jobCardHasMore = true;
-  bool _jobCardsLoaded = false;
-  JobStatus? _jobCardStatusFilter;      // client-side chip filter on current page
-  int? _editingJobCardIndex;
-  final TextEditingController _jobCardPriorityController = TextEditingController();
-  final TextEditingController _jobCardStatusController = TextEditingController();
-  final TextEditingController _jobCardDescriptionController = TextEditingController();
-  final Set<int> _selectedJobCardRows = {};
+  // ── Employees ─────────────────────────────────────────────────────────────
+  final Set<String> _selectedClockNos = {};
+  bool _employeesLoaded = false;
 
   // ── Comms tab ─────────────────────────────────────────────────────────────
   final TextEditingController _broadcastTitleController = TextEditingController(
@@ -231,23 +111,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 5, vsync: this, initialIndex: 0);
     _tabController.addListener(_onTabChanged);
     _loadStructure();
     _loadKillSwitch();
     _loadNotificationConfig();
     _loadCurrentClockNo();
-    // Employees tab (index 0) loads eagerly — it's the landing tab.
-    // Job Cards tab (index 3) loads lazily on first visit to avoid
-    // downloading 1000 docs on every admin screen open.
-    _loadEmployees();
   }
 
   void _onTabChanged() {
     setState(() {});
-    if (_tabController.index == 3 && !_jobCardsLoaded) {
-      _jobCardsLoaded = true;
-      _fetchJobCardsPage(reset: true);
+    if (_tabController.index == 1 && !_employeesLoaded) {
+      _employeesLoaded = true;
+      _loadEmployees();
     }
   }
 
@@ -265,15 +141,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _stage2MinController.dispose();
     _stage3MinController.dispose();
     _stage4MinController.dispose();
-    _clockNoController.dispose();
-    _nameController.dispose();
-    _positionController.dispose();
-    _departmentController.dispose();
-    _fcmController.dispose();
-    _jobCardSearchController.dispose();
-    _jobCardPriorityController.dispose();
-    _jobCardStatusController.dispose();
-    _jobCardDescriptionController.dispose();
     _broadcastTitleController.dispose();
     _broadcastBodyController.dispose();
     super.dispose();
@@ -305,51 +172,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       e.position.toLowerCase().contains(q) ||
       e.clockNo.toLowerCase().contains(q),
     ).toList();
-  }
-
-  /// Fetches the next page of job cards (newest first, 50 per page).
-  /// Pass [reset] = true to restart from the beginning (e.g. after a delete).
-  Future<void> _fetchJobCardsPage({bool reset = false}) async {
-    if (!reset && (!_jobCardHasMore || _jobCardLoadingMore)) return;
-    setState(() {
-      _jobCardLoadingMore = true;
-      if (reset) {
-        _jobCardPage = [];
-        _lastJobCardDoc = null;
-        _jobCardHasMore = true;
-        _selectedJobCardRows.clear();
-        _editingJobCardIndex = null;
-      }
-    });
-    try {
-      final result = await _firestoreService.fetchAdminJobCardsPage(
-        startAfter: reset ? null : _lastJobCardDoc,
-      );
-      if (!mounted) return;
-      setState(() {
-        _jobCardPage = reset ? result.cards : [..._jobCardPage, ...result.cards];
-        _lastJobCardDoc = result.lastDoc;
-        _jobCardHasMore = result.hasMore;
-        _jobCardLoadingMore = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _jobCardLoadingMore = false);
-      _showError('Error loading job cards: $e');
-    }
-  }
-
-  /// Client-side filter applied on top of the current page.
-  List<JobCard> get _displayedJobCards {
-    final q = _jobCardSearchController.text.toLowerCase();
-    return _jobCardPage.where((jc) {
-      if (_jobCardStatusFilter != null && jc.status != _jobCardStatusFilter) return false;
-      if (q.isEmpty) return true;
-      return jc.description.toLowerCase().contains(q) ||
-             jc.operator.toLowerCase().contains(q) ||
-             jc.machine.toLowerCase().contains(q) ||
-             (jc.jobCardNumber?.toString() ?? '').contains(q);
-    }).toList();
   }
 
   Future<void> _loadStructure() async {
@@ -661,34 +483,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   // ── Employee CRUD ─────────────────────────────────────────────────────────
 
-  void _toggleEdit(int index) {
-    if (_editingIndex == index) {
-      final emp = _allEmployees[index];
-      _firestoreService.updateEmployee(emp.copyWith(
-        clockNo: _clockNoController.text,
-        name: _nameController.text,
-        position: _positionController.text,
-        department: _departmentController.text,
-        fcmToken: _fcmController.text.isEmpty ? null : _fcmController.text,
-      ));
-      _editingIndex = null;
-    } else {
-      _editingIndex = index;
-      final emp = _allEmployees[index];
-      _clockNoController.text = emp.clockNo;
-      _nameController.text = emp.name;
-      _positionController.text = emp.position;
-      _departmentController.text = emp.department;
-      _fcmController.text = emp.fcmToken ?? '';
-    }
-    setState(() {});
-  }
-
   void _bulkDelete() async {
-    for (final i in _selectedRows) {
-      await _firestoreService.deleteEmployee(_allEmployees[i].clockNo);
+    for (final clockNo in _selectedClockNos) {
+      await _firestoreService.deleteEmployee(clockNo);
     }
-    _selectedRows.clear();
+    _selectedClockNos.clear();
     setState(() {});
   }
 
@@ -774,67 +573,161 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void _deleteDepartment(String dept) async {
     final ok = await _confirmDialog('Delete Department', 'This deletes all areas and machines in $dept.');
     if (!ok) return;
-    _structure.remove(dept);
-    await _firestoreService.updateFactoryStructure(_structure);
-    setState(() {});
+    final updated = Map<String, dynamic>.from(_structure);
+    updated.remove(dept);
+    await _firestoreService.updateFactoryStructure(updated);
+    if (selectedDeptForArea == dept) selectedDeptForArea = null;
+    if (selectedDeptForMachine == dept) {
+      selectedDeptForMachine = null;
+      selectedAreaForMachine = null;
+    }
+    await _loadStructure();
   }
 
   void _deleteArea(String dept, String area) async {
     final ok = await _confirmDialog('Delete Area', 'This deletes all machines in $area.');
     if (!ok) return;
-    (_structure[dept] as Map).remove(area);
-    await _firestoreService.updateFactoryStructure(_structure);
-    setState(() {});
+    final updated = Map<String, dynamic>.from(_structure);
+    final deptMap = Map<String, dynamic>.from(updated[dept] as Map<String, dynamic>);
+    deptMap.remove(area);
+    updated[dept] = deptMap;
+    await _firestoreService.updateFactoryStructure(updated);
+    if (selectedAreaForMachine == area && selectedDeptForMachine == dept) {
+      selectedAreaForMachine = null;
+    }
+    await _loadStructure();
   }
 
   void _deleteMachine(String dept, String area, String machine) async {
     final ok = await _confirmDialog('Delete Machine', 'Remove $machine?');
     if (!ok) return;
-    (_structure[dept][area] as List).remove(machine);
-    await _firestoreService.updateFactoryStructure(_structure);
-    setState(() {});
+    final updated = Map<String, dynamic>.from(_structure);
+    final deptMap = Map<String, dynamic>.from(updated[dept] as Map<String, dynamic>);
+    final machines = List<dynamic>.from(deptMap[area] as List<dynamic>);
+    machines.remove(machine);
+    deptMap[area] = machines;
+    updated[dept] = deptMap;
+    await _firestoreService.updateFactoryStructure(updated);
+    await _loadStructure();
   }
 
-  // ── Job Card CRUD ─────────────────────────────────────────────────────────
-
-  void _toggleJobCardEdit(int index) {
-    final displayed = _displayedJobCards;
-    if (_editingJobCardIndex == index) {
-      final jc = displayed[index];
-      _firestoreService.updateJobCard(jc.id!, jc.copyWith(
-        priority: int.tryParse(_jobCardPriorityController.text) ?? jc.priority,
-        status: JobStatusExtension.fromString(_jobCardStatusController.text),
-        description: _jobCardDescriptionController.text,
-      ));
-      _editingJobCardIndex = null;
-    } else {
-      _editingJobCardIndex = index;
-      final jc = displayed[index];
-      _jobCardPriorityController.text = jc.priority.toString();
-      _jobCardStatusController.text = jc.status.name;
-      _jobCardDescriptionController.text = jc.description;
-    }
-    setState(() {});
+  List<String> get _structureDepartments {
+    final depts = _structure.keys.map((e) => e.toString()).toList()..sort();
+    return depts;
   }
 
-  void _deleteJobCard(JobCard jc) async {
-    final ok = await _confirmDialog('Delete Job Card', '#${jc.jobCardNumber} — ${jc.description.substring(0, jc.description.length.clamp(0, 60))}');
-    if (!ok) return;
-    try {
-      await _firestoreService.deleteJobCard(jc.id!);
-      _fetchJobCardsPage(reset: true);
-      if (mounted) _showSuccess('Job card deleted');
-    } catch (e) { _showError('Error: $e'); }
+  List<String> _areasForDepartment(String? dept) {
+    if (dept == null || !_structure.containsKey(dept)) return [];
+    final areas = (_structure[dept] as Map<String, dynamic>).keys.map((e) => e.toString()).toList()..sort();
+    return areas;
   }
 
-  void _bulkDeleteJobCards() async {
-    final displayed = _displayedJobCards;
-    for (final i in _selectedJobCardRows) {
-      if (i < displayed.length) {
-        await _firestoreService.deleteJobCard(displayed[i].id!);
+  ({int departments, int areas, int machines}) _structureStats() {
+    var areaCount = 0;
+    var machineCount = 0;
+    _structure.forEach((_, areas) {
+      if (areas is Map) {
+        (areas as Map<String, dynamic>).forEach((_, machines) {
+          areaCount++;
+          if (machines is List) machineCount += machines.length;
+        });
       }
+    });
+    return (departments: _structure.length, areas: areaCount, machines: machineCount);
+  }
+
+  Widget _structureStatChip(String label, int value) {
+    final colors = Theme.of(context).appColors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.inputFill,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.inputFill),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 10, color: colors.textMuted, letterSpacing: 0.8)),
+        const SizedBox(height: 2),
+        Text('$value', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  Widget _structureChoiceChips({
+    required List<String> options,
+    required String? selected,
+    required ValueChanged<String> onSelected,
+  }) {
+    if (options.isEmpty) {
+      return Text(
+        'No departments yet — add one below.',
+        style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+      );
     }
-    _fetchJobCardsPage(reset: true);
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: options.map((option) => ChoiceChip(
+        label: Text(option, style: const TextStyle(fontSize: 12)),
+        selected: selected == option,
+        onSelected: (_) => onSelected(option),
+        selectedColor: kBrandOrange,
+        labelStyle: TextStyle(color: selected == option ? Colors.white : Theme.of(context).appColors.chipUnselectedLabel),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        visualDensity: VisualDensity.compact,
+      )).toList(),
+    );
+  }
+
+  Future<void> _addDepartment() async {
+    final name = deptController.text.trim();
+    if (name.isEmpty) return;
+    if (_structure.containsKey(name)) {
+      _showError('Department already exists');
+      return;
+    }
+    final updated = Map<String, dynamic>.from(_structure);
+    updated[name] = <String, dynamic>{};
+    await _firestoreService.updateFactoryStructure(updated);
+    deptController.clear();
+    await _loadStructure();
+    if (mounted) _showSuccess('Department added');
+  }
+
+  Future<void> _addArea() async {
+    if (selectedDeptForArea == null || areaController.text.trim().isEmpty) return;
+    final areaName = areaController.text.trim();
+    final updated = Map<String, dynamic>.from(_structure);
+    final deptMap = Map<String, dynamic>.from(updated[selectedDeptForArea] as Map<String, dynamic>);
+    if (deptMap.containsKey(areaName)) {
+      _showError('Area already exists in this department');
+      return;
+    }
+    deptMap[areaName] = <String>[];
+    updated[selectedDeptForArea!] = deptMap;
+    await _firestoreService.updateFactoryStructure(updated);
+    areaController.clear();
+    await _loadStructure();
+    if (mounted) _showSuccess('Area added');
+  }
+
+  Future<void> _addMachine() async {
+    if (selectedDeptForMachine == null || selectedAreaForMachine == null || machineController.text.trim().isEmpty) return;
+    final machineName = machineController.text.trim();
+    final updated = Map<String, dynamic>.from(_structure);
+    final deptMap = Map<String, dynamic>.from(updated[selectedDeptForMachine] as Map<String, dynamic>);
+    final machines = List<dynamic>.from(deptMap[selectedAreaForMachine] as List<dynamic>);
+    if (machines.map((e) => e.toString()).contains(machineName)) {
+      _showError('Machine / part already exists in this area');
+      return;
+    }
+    machines.add(machineName);
+    deptMap[selectedAreaForMachine!] = machines;
+    updated[selectedDeptForMachine!] = deptMap;
+    await _firestoreService.updateFactoryStructure(updated);
+    machineController.clear();
+    await _loadStructure();
+    if (mounted) _showSuccess('Machine added');
   }
 
   // ── CSV ────────────────────────────────────────────────────────────────────
@@ -845,21 +738,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       ['', '', '', '', 'true', ''],
     ]);
     _shareOrDownload(csv, 'employees_template.csv');
-  }
-
-  void _exportJobCardsCsv() {
-    // Exports the currently loaded page (up to 50 records per page).
-    // Use "Load More" to accumulate more records before exporting.
-    final rows = _displayedJobCards;
-    final csv = Csv().encode([
-      ['Job #', 'Priority', 'Status', 'Type', 'Department', 'Area', 'Machine', 'Part', 'Description', 'Operator', 'Assigned', 'Created'],
-      ...rows.map((jc) => [
-        jc.jobCardNumber?.toString() ?? '', jc.priority.toString(), jc.status.displayName,
-        jc.type.displayName, jc.department, jc.area, jc.machine, jc.part, jc.description,
-        jc.operator, jc.assignedClockNos?.length.toString() ?? '0', jc.createdAt?.toString() ?? '',
-      ]),
-    ]);
-    _shareOrDownload(csv, 'job_cards_${rows.length}.csv');
   }
 
   void _shareOrDownload(String csv, String filename) {
@@ -1057,10 +935,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           labelColor: kBrandOrange,
           unselectedLabelColor: Theme.of(context).appColors.textMuted,
           tabs: const [
+            Tab(icon: Icon(Icons.tune, size: 18), text: 'Settings'),
             Tab(icon: Icon(Icons.people_outline, size: 18), text: 'Employees'),
             Tab(icon: Icon(Icons.account_tree_outlined, size: 18), text: 'Structures'),
-            Tab(icon: Icon(Icons.tune, size: 18), text: 'Settings'),
-            Tab(icon: Icon(Icons.assignment_outlined, size: 18), text: 'Job Cards'),
             Tab(icon: Icon(Icons.location_on_outlined, size: 18), text: 'On Site'),
             Tab(icon: Icon(Icons.campaign_outlined, size: 18), text: 'Comms'),
           ],
@@ -1069,15 +946,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
+          _buildSettingsTab(),
           _buildEmployeesTab(),
           _buildStructuresTab(),
-          _buildSettingsTab(),
-          _buildJobCardsTab(),
           _buildOnsiteTab(),
           _buildCommsTab(),
         ],
       ),
-      floatingActionButton: _tabController.index == 0
+      floatingActionButton: _tabController.index == 1
           ? FloatingActionButton(
               onPressed: _showEmployeeDialog,
               backgroundColor: kBrandOrange,
@@ -1208,33 +1084,71 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   // ── Employees tab ─────────────────────────────────────────────────────────
 
+  Widget _buildPresencePill(Employee emp) {
+    final colors = Theme.of(context).appColors;
+    return GestureDetector(
+      onTap: () => _firestoreService.adminSetPresence(emp.clockNo, !emp.isOnSite),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: emp.isOnSite ? colors.wasteGreenSurface : colors.inputFill,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: emp.isOnSite ? colors.wasteGreen.withValues(alpha: 0.35) : colors.inputFill,
+          ),
+        ),
+        child: Text(
+          emp.isOnSite ? 'On Site' : 'Off Site',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: emp.isOnSite ? colors.wasteGreenDark : colors.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmployeesTab() {
     final colors = Theme.of(context).appColors;
+    if (!_employeesLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Column(children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _employeeSearchController,
-              decoration: _inputDecoration('Search employees', hint: 'Name, clock no, department…'),
-              onChanged: (_) => setState(() {}),
-            ),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: _employeeSearchController,
+            decoration: _inputDecoration('Search employees', hint: 'Name, clock no, department…'),
+            onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(onPressed: _exportTemplate, icon: const Icon(Icons.download, size: 16), label: const Text('Template')),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(onPressed: _importCsv, icon: const Icon(Icons.upload, size: 16), label: const Text('Import')),
-          if (_selectedRows.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: _bulkDelete,
-              icon: const Icon(Icons.delete, size: 16),
-              label: Text('Delete ${_selectedRows.length}'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
-            ),
-          ],
-        ]),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _exportTemplate,
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Template'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _importCsv,
+                icon: const Icon(Icons.upload_outlined, size: 16),
+                label: const Text('Import'),
+              ),
+              if (_selectedClockNos.isNotEmpty)
+                ElevatedButton.icon(
+                  onPressed: _bulkDelete,
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: Text('Delete ${_selectedClockNos.length}'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+                ),
+            ],
+          ),
+        ])),
       ),
       Expanded(
         child: StreamBuilder<List<Employee>>(
@@ -1243,77 +1157,99 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             if (snapshot.connectionState == ConnectionState.waiting && _allEmployees.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
-            // Plain assignment only — no setState here. Calling setState
-            // inside a builder marks the screen dirty mid-build and rebuilds
-            // this StreamBuilder, which loops forever and freezes the app.
             _allEmployees = snapshot.data ?? _allEmployees;
             final displayed = _displayedEmployees;
-            return SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  dataRowMinHeight: 40,
-                  dataRowMaxHeight: 48,
-                  headingRowColor: WidgetStateProperty.all(colors.inputFill),
-                  columns: const [
-                    DataColumn(label: Text('', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('Clock No', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('Name', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('Position', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('Department', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('On Site', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('FCM Token', style: TextStyle(fontSize: 12))),
-                    DataColumn(label: Text('Actions', style: TextStyle(fontSize: 12))),
-                  ],
-                  rows: displayed.map((emp) {
-                    final index = _allEmployees.indexOf(emp);
-                    final isEditing = _editingIndex == index;
-                    return DataRow(
-                      selected: _selectedRows.contains(index),
-                      onSelectChanged: (v) => setState(() => v! ? _selectedRows.add(index) : _selectedRows.remove(index)),
-                      cells: [
-                        DataCell(Checkbox(value: _selectedRows.contains(index), onChanged: (v) => setState(() => v! ? _selectedRows.add(index) : _selectedRows.remove(index)))),
-                        DataCell(isEditing ? SizedBox(width: 70, child: TextField(controller: _clockNoController, style: const TextStyle(fontSize: 13))) : Text(emp.clockNo, style: const TextStyle(fontSize: 13))),
-                        DataCell(isEditing ? SizedBox(width: 120, child: TextField(controller: _nameController, style: const TextStyle(fontSize: 13))) : Text(emp.name, style: const TextStyle(fontSize: 13))),
-                        DataCell(isEditing ? SizedBox(width: 120, child: TextField(controller: _positionController, style: const TextStyle(fontSize: 13))) : Text(emp.position, style: const TextStyle(fontSize: 13))),
-                        DataCell(isEditing ? SizedBox(width: 120, child: TextField(controller: _departmentController, style: const TextStyle(fontSize: 13))) : Text(emp.department, style: const TextStyle(fontSize: 13))),
-                        DataCell(
-                          GestureDetector(
-                            onTap: () => _firestoreService.adminSetPresence(emp.clockNo, !emp.isOnSite),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            if (displayed.isEmpty) {
+              return Center(
+                child: Text(
+                  _employeeSearchController.text.isEmpty
+                      ? 'No employees found'
+                      : 'No employees match your search',
+                  style: TextStyle(color: colors.textMuted),
+                ),
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+              itemCount: displayed.length,
+              itemBuilder: (context, index) {
+                final emp = displayed[index];
+                final selected = _selectedClockNos.contains(emp.clockNo);
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: colors.cardSurface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: selected ? kBrandOrange.withValues(alpha: 0.45) : colors.inputFill,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Checkbox(
+                        value: selected,
+                        activeColor: kBrandOrange,
+                        onChanged: (v) => setState(() {
+                          if (v == true) {
+                            _selectedClockNos.add(emp.clockNo);
+                          } else {
+                            _selectedClockNos.remove(emp.clockNo);
+                          }
+                        }),
+                      ),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: emp.isOnSite ? colors.wasteGreenSurface : colors.inputFill,
-                                borderRadius: BorderRadius.circular(12),
+                                color: colors.inputFill,
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                emp.isOnSite ? 'On Site' : 'Off Site',
-                                style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w600,
-                                  color: emp.isOnSite ? colors.wasteGreenDark : colors.textMuted,
-                                ),
+                                '#${emp.clockNo}',
+                                style: const TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w600),
                               ),
                             ),
-                          ),
-                        ),
-                        DataCell(isEditing
-                            ? SizedBox(width: 120, child: TextField(controller: _fcmController, style: const TextStyle(fontSize: 12)))
-                            : SizedBox(width: 120, child: Text(
-                                emp.fcmToken != null ? (emp.fcmToken!.length > 20 ? '${emp.fcmToken!.substring(0, 20)}…' : emp.fcmToken!) : '—',
-                                style: TextStyle(fontSize: 11, color: colors.textMuted, fontFamily: 'monospace'),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                emp.name,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                              ))),
-                        DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(icon: Icon(isEditing ? Icons.save : Icons.edit_outlined, size: 16), onPressed: () => _toggleEdit(index), visualDensity: VisualDensity.compact),
-                          IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red), onPressed: () => _deleteEmployee(emp.clockNo), visualDensity: VisualDensity.compact),
-                          IconButton(icon: const Icon(Icons.open_in_new, size: 16), onPressed: () => _showEmployeeDialog(emp), visualDensity: VisualDensity.compact),
-                        ])),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
+                              ),
+                            ),
+                            _buildPresencePill(emp),
+                          ]),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${emp.position} · ${emp.department}',
+                            style: TextStyle(fontSize: 12, color: colors.textMuted),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ]),
+                      ),
+                      Column(children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Edit',
+                          onPressed: () => _showEmployeeDialog(emp),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                          tooltip: 'Delete',
+                          onPressed: () => _deleteEmployee(emp.clockNo),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ]),
+                    ]),
+                  ),
+                );
+              },
             );
           },
         ),
@@ -1324,142 +1260,127 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   // ── Structures tab ────────────────────────────────────────────────────────
 
   Widget _buildStructuresTab() {
-    return Padding(
+    final colors = Theme.of(context).appColors;
+    final stats = _structureStats();
+    final structureList = _buildStructureList();
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        TextField(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _settingsCard(child: TextField(
           controller: structureSearchController,
           decoration: _inputDecoration('Search structures', hint: 'Department, area, machine…'),
           onChanged: (_) => setState(() {}),
-        ),
+        )),
         const SizedBox(height: 12),
-        Expanded(
-          child: ListView(children: [
-            _sectionHeader('CURRENT STRUCTURE'),
-            ..._buildStructureList(),
-            const SizedBox(height: 8),
-            _sectionHeader('ADD DEPARTMENT'),
-            TextField(controller: deptController, decoration: _inputDecoration('Department name')),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (deptController.text.trim().isEmpty) return;
-                  final structure = await _firestoreService.getFactoryStructure();
-                  structure[deptController.text.trim()] = {};
-                  await _firestoreService.updateFactoryStructure(structure);
-                  deptController.clear();
-                  _loadStructure();
-                  if (mounted) _showSuccess('Department added');
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
-                child: const Text('Add Department'),
+        Row(
+          children: [
+            Expanded(child: _structureStatChip('Departments', stats.departments)),
+            const SizedBox(width: 8),
+            Expanded(child: _structureStatChip('Areas', stats.areas)),
+            const SizedBox(width: 8),
+            Expanded(child: _structureStatChip('Machines', stats.machines)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _sectionHeader('FACTORY STRUCTURE'),
+        if (structureList.isEmpty)
+          _settingsCard(child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                structureSearchController.text.isEmpty
+                    ? 'No structure defined yet'
+                    : 'No matches for your search',
+                style: TextStyle(color: colors.textMuted, fontSize: 13),
               ),
             ),
-            const SizedBox(height: 16),
-            _sectionHeader('ADD AREA'),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _firestoreService.getFactoryStructure(),
-              builder: (context, snap) {
-                if (!snap.hasData) return const SizedBox.shrink();
-                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(
-                    spacing: 6, runSpacing: 4,
-                    children: snap.data!.keys.map((dept) => ChoiceChip(
-                      label: Text(dept, style: const TextStyle(fontSize: 12)),
-                      selected: selectedDeptForArea == dept,
-                      onSelected: (_) => setState(() => selectedDeptForArea = dept),
-                      selectedColor: kBrandOrange,
-                      labelStyle: TextStyle(color: selectedDeptForArea == dept ? Colors.white : Theme.of(context).appColors.chipUnselectedLabel),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      visualDensity: VisualDensity.compact,
-                    )).toList(),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(controller: areaController, decoration: _inputDecoration('Area name')),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        if (selectedDeptForArea == null || areaController.text.trim().isEmpty) return;
-                        final structure = await _firestoreService.getFactoryStructure();
-                        (structure[selectedDeptForArea] as Map<String, dynamic>)[areaController.text.trim()] = [];
-                        await _firestoreService.updateFactoryStructure(structure);
-                        areaController.clear();
-                        _loadStructure();
-                        if (mounted) _showSuccess('Area added');
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
-                      child: const Text('Add Area'),
-                    ),
-                  ),
-                ]);
-              },
-            ),
-            const SizedBox(height: 16),
-            _sectionHeader('ADD MACHINE / PART'),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _firestoreService.getFactoryStructure(),
-              builder: (context, snap) {
-                if (!snap.hasData) return const SizedBox.shrink();
-                final data = snap.data!;
-                final areas = selectedDeptForMachine != null
-                    ? (data[selectedDeptForMachine] as Map<String, dynamic>? ?? {}).keys.toList()
-                    : <String>[];
-                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(
-                    spacing: 6, runSpacing: 4,
-                    children: data.keys.map((dept) => ChoiceChip(
-                      label: Text(dept, style: const TextStyle(fontSize: 12)),
-                      selected: selectedDeptForMachine == dept,
-                      onSelected: (_) => setState(() { selectedDeptForMachine = dept; selectedAreaForMachine = null; }),
-                      selectedColor: kBrandOrange,
-                      labelStyle: TextStyle(color: selectedDeptForMachine == dept ? Colors.white : Theme.of(context).appColors.chipUnselectedLabel),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      visualDensity: VisualDensity.compact,
-                    )).toList(),
-                  ),
-                  if (selectedDeptForMachine != null) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6, runSpacing: 4,
-                      children: areas.map((area) => ChoiceChip(
-                        label: Text(area, style: const TextStyle(fontSize: 12)),
-                        selected: selectedAreaForMachine == area,
-                        onSelected: (_) => setState(() => selectedAreaForMachine = area),
-                        selectedColor: kBrandOrange,
-                        labelStyle: TextStyle(color: selectedAreaForMachine == area ? Colors.white : Theme.of(context).appColors.chipUnselectedLabel),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        visualDensity: VisualDensity.compact,
-                      )).toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  TextField(controller: machineController, decoration: _inputDecoration('Machine / Part name')),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        if (selectedDeptForMachine == null || selectedAreaForMachine == null || machineController.text.trim().isEmpty) return;
-                        final structure = await _firestoreService.getFactoryStructure();
-                        (structure[selectedDeptForMachine]![selectedAreaForMachine] as List<dynamic>).add(machineController.text.trim());
-                        await _firestoreService.updateFactoryStructure(structure);
-                        machineController.clear();
-                        _loadStructure();
-                        if (mounted) _showSuccess('Machine added');
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
-                      child: const Text('Add Machine / Part'),
-                    ),
-                  ),
-                ]);
-              },
-            ),
+          ))
+        else
+          ...structureList,
+        const SizedBox(height: 8),
+        _sectionHeader('ADD NEW'),
+        _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.domain_outlined, color: kBrandOrange, size: 18),
+            const SizedBox(width: 8),
+            const Text('Department', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           ]),
-        ),
+          const SizedBox(height: 10),
+          TextField(controller: deptController, decoration: _inputDecoration('Department name')),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _addDepartment,
+              style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+              child: const Text('Add Department'),
+            ),
+          ),
+        ])),
+        const SizedBox(height: 12),
+        _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.layers_outlined, color: kBrandOrange, size: 18),
+            const SizedBox(width: 8),
+            const Text('Area', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Select a department, then enter the area name.', style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          const SizedBox(height: 10),
+          _structureChoiceChips(
+            options: _structureDepartments,
+            selected: selectedDeptForArea,
+            onSelected: (dept) => setState(() => selectedDeptForArea = dept),
+          ),
+          const SizedBox(height: 10),
+          TextField(controller: areaController, decoration: _inputDecoration('Area name')),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _addArea,
+              style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+              child: const Text('Add Area'),
+            ),
+          ),
+        ])),
+        const SizedBox(height: 12),
+        _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.precision_manufacturing_outlined, color: kBrandOrange, size: 18),
+            const SizedBox(width: 8),
+            const Text('Machine / Part', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Select department and area, then add the machine or part.', style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          const SizedBox(height: 10),
+          _structureChoiceChips(
+            options: _structureDepartments,
+            selected: selectedDeptForMachine,
+            onSelected: (dept) => setState(() { selectedDeptForMachine = dept; selectedAreaForMachine = null; }),
+          ),
+          if (selectedDeptForMachine != null) ...[
+            const SizedBox(height: 8),
+            _structureChoiceChips(
+              options: _areasForDepartment(selectedDeptForMachine),
+              selected: selectedAreaForMachine,
+              onSelected: (area) => setState(() => selectedAreaForMachine = area),
+            ),
+          ],
+          const SizedBox(height: 10),
+          TextField(controller: machineController, decoration: _inputDecoration('Machine / Part name')),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _addMachine,
+              style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+              child: const Text('Add Machine / Part'),
+            ),
+          ),
+        ])),
+        const SizedBox(height: 16),
       ]),
     );
   }
@@ -1481,25 +1402,75 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       }
     });
 
-    return filtered.entries.map((deptEntry) => ExpansionTile(
-      title: Row(children: [
-        Text(deptEntry.key, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const Spacer(),
-        IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18), onPressed: () => _deleteDepartment(deptEntry.key), visualDensity: VisualDensity.compact),
-      ]),
-      children: (deptEntry.value as Map<String, dynamic>).entries.map((areaEntry) => ExpansionTile(
-        title: Row(children: [
-          Text(areaEntry.key, style: const TextStyle(fontSize: 14)),
-          const Spacer(),
-          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16), onPressed: () => _deleteArea(deptEntry.key, areaEntry.key), visualDensity: VisualDensity.compact),
-        ]),
-        children: (areaEntry.value as List).map((machine) => ListTile(
-          dense: true,
-          title: Text(machine.toString(), style: const TextStyle(fontSize: 13)),
-          trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16), onPressed: () => _deleteMachine(deptEntry.key, areaEntry.key, machine.toString()), visualDensity: VisualDensity.compact),
-        )).toList(),
-      )).toList(),
-    )).toList();
+    final colors = Theme.of(context).appColors;
+    return filtered.entries.map((deptEntry) {
+      final areaMap = deptEntry.value as Map<String, dynamic>;
+      final machineCount = areaMap.values
+          .whereType<List>()
+          .fold<int>(0, (total, machines) => total + machines.length);
+      return Card(
+        margin: const EdgeInsets.only(bottom: 10),
+        color: colors.cardSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            leading: CircleAvatar(
+              radius: 16,
+              backgroundColor: kBrandOrange.withValues(alpha: 0.12),
+              child: const Icon(Icons.domain_outlined, size: 16, color: kBrandOrange),
+            ),
+            title: Text(deptEntry.key, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            subtitle: Text(
+              '${areaMap.length} area${areaMap.length == 1 ? '' : 's'} · $machineCount machine${machineCount == 1 ? '' : 's'}',
+              style: TextStyle(fontSize: 11, color: colors.textMuted),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+              onPressed: () => _deleteDepartment(deptEntry.key),
+              visualDensity: VisualDensity.compact,
+            ),
+            children: areaMap.entries.map((areaEntry) {
+              final machines = areaEntry.value as List;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 6),
+                color: colors.inputFill.withValues(alpha: 0.35),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+                    title: Text(areaEntry.key, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text(
+                      '${machines.length} machine${machines.length == 1 ? '' : 's'} / parts',
+                      style: TextStyle(fontSize: 11, color: colors.textMuted),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
+                      onPressed: () => _deleteArea(deptEntry.key, areaEntry.key),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    children: machines.map((machine) => ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      leading: const Icon(Icons.precision_manufacturing_outlined, size: 16, color: kBrandOrange),
+                      title: Text(machine.toString(), style: const TextStyle(fontSize: 13)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
+                        onPressed: () => _deleteMachine(deptEntry.key, areaEntry.key, machine.toString()),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   // ── Settings tab ──────────────────────────────────────────────────────────
@@ -1717,151 +1688,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       ),
     );
   }
-
-  // ── Job Cards tab ─────────────────────────────────────────────────────────
-
-  Widget _buildJobCardsTab() {
-    if (!_jobCardsLoaded) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final colors = Theme.of(context).appColors;
-    final displayed = _displayedJobCards;
-
-    return Column(children: [
-      // ── Toolbar ────────────────────────────────────────────────────────────
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _jobCardSearchController,
-              decoration: _inputDecoration('Search description, machine, operator, job #'),
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: _exportJobCardsCsv,
-            icon: const Icon(Icons.download, size: 16),
-            label: Text('Export (${displayed.length})'),
-          ),
-          if (_selectedJobCardRows.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: _bulkDeleteJobCards,
-              icon: const Icon(Icons.delete, size: 16),
-              label: Text('Delete ${_selectedJobCardRows.length}'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
-            ),
-          ],
-        ]),
-      ),
-
-      // ── Status filter chips ────────────────────────────────────────────────
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            _statusChip(null, 'All'),
-            const SizedBox(width: 6),
-            _statusChip(JobStatus.open, 'Open'),
-            const SizedBox(width: 6),
-            _statusChip(JobStatus.inProgress, 'In Progress'),
-            const SizedBox(width: 6),
-            _statusChip(JobStatus.monitor, 'Monitor'),
-            const SizedBox(width: 6),
-            _statusChip(JobStatus.closed, 'Closed'),
-            const SizedBox(width: 12),
-            Text(
-              '${_jobCardPage.length} loaded${_jobCardHasMore ? ' — more available' : ' (all)'}',
-              style: TextStyle(fontSize: 12, color: colors.textMuted),
-            ),
-          ]),
-        ),
-      ),
-
-      // ── Data table ─────────────────────────────────────────────────────────
-      Expanded(
-        child: _jobCardLoadingMore && _jobCardPage.isEmpty
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                child: Column(children: [
-                  PaginatedDataTable(
-                    header: Text('${displayed.length} shown', style: const TextStyle(fontSize: 14)),
-                    rowsPerPage: 15,
-                    headingRowColor: WidgetStateProperty.all(colors.inputFill),
-                    columns: const [
-                      DataColumn(label: Text('')),
-                      DataColumn(label: Text('Job #')),
-                      DataColumn(label: Text('Priority')),
-                      DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Type')),
-                      DataColumn(label: Text('Location')),
-                      DataColumn(label: Text('Description')),
-                      DataColumn(label: Text('Operator')),
-                      DataColumn(label: Text('Assigned')),
-                      DataColumn(label: Text('Actions')),
-                    ],
-                    source: JobCardsDataTableSource(
-                      jobCards: displayed,
-                      selectedRows: _selectedJobCardRows,
-                      editingIndex: _editingJobCardIndex,
-                      onSelectChanged: (i) => setState(() =>
-                          _selectedJobCardRows.contains(i)
-                              ? _selectedJobCardRows.remove(i)
-                              : _selectedJobCardRows.add(i)),
-                      onEditToggle: _toggleJobCardEdit,
-                      onDelete: _deleteJobCard,
-                      priorityController: _jobCardPriorityController,
-                      statusController: _jobCardStatusController,
-                      descriptionController: _jobCardDescriptionController,
-                    ),
-                  ),
-
-                  // ── Load More ───────────────────────────────────────────────
-                  if (_jobCardHasMore || _jobCardLoadingMore)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: _jobCardLoadingMore
-                          ? const CircularProgressIndicator()
-                          : OutlinedButton.icon(
-                              onPressed: () => _fetchJobCardsPage(),
-                              icon: const Icon(Icons.expand_more, size: 18),
-                              label: const Text('Load next 50'),
-                            ),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        'All ${_jobCardPage.length} records loaded',
-                        style: TextStyle(fontSize: 12, color: colors.textMuted),
-                      ),
-                    ),
-                ]),
-              ),
-      ),
-    ]);
-  }
-
-  Widget _statusChip(JobStatus? status, String label) {
-    final selected = _jobCardStatusFilter == status;
-    return FilterChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      selected: selected,
-      onSelected: (_) => setState(() {
-        _jobCardStatusFilter = status;
-        _selectedJobCardRows.clear();
-        _editingJobCardIndex = null;
-      }),
-      selectedColor: kBrandOrange.withValues(alpha: 0.2),
-      checkmarkColor: kBrandOrange,
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-    );
-  }
-
   // ── Comms tab ─────────────────────────────────────────────────────────────
 
   Widget _buildCommsTab() {

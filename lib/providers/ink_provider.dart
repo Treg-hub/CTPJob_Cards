@@ -26,10 +26,17 @@ final inkStockItemsProvider = StreamProvider<List<InkStockItem>>(
   (ref) => ref.watch(inkServiceProvider).watchStockItems(),
 );
 
-/// One stock item's ledger, oldest-effective first.
+/// One stock item's ledger, oldest-effective first (manager / Pulse only).
 final inkItemLedgerProvider =
     StreamProvider.family<List<InkTransaction>, String>(
   (ref, itemCode) => ref.watch(inkServiceProvider).watchItemLedger(itemCode),
+);
+
+/// Operator stock detail — last 20 qty movements only.
+final inkItemLedgerRecentProvider =
+    StreamProvider.family<List<InkTransaction>, String>(
+  (ref, itemCode) =>
+      ref.watch(inkServiceProvider).watchItemLedgerRecent(itemCode),
 );
 
 /// Manager "pending costs" queue.

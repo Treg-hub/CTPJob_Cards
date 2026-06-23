@@ -4,10 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../models/ink_stock_item.dart';
 import '../models/ink_txn_type.dart';
-import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../theme/app_theme.dart';
-import '../utils/role.dart' as role_utils;
 
 String inkTxnLabel(InkTxnType t) => switch (t) {
       InkTxnType.purchase => 'Purchase',
@@ -32,7 +30,6 @@ class InkStockItemDetailScreen extends ConsumerWidget {
   final String itemCode;
 
   static final _qty = NumberFormat('#,##0.##');
-  static final _money = NumberFormat.currency(symbol: 'R ', decimalDigits: 2);
   static final _df = DateFormat('d MMM yyyy');
 
   @override
@@ -43,11 +40,9 @@ class InkStockItemDetailScreen extends ConsumerWidget {
     for (final i in items) {
       if (i.itemCode == itemCode) item = i;
     }
-    final ledgerAsync = ref.watch(inkItemLedgerProvider(itemCode));
     final scheme = Theme.of(context).colorScheme;
-    // Operators see quantities only — never WAC / value (cost is manager-only).
-    final isManager =
-        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    // Mobile: qty-only recent ledger; full ledger + costs are on CTP Pulse.
+    final ledgerAsync = ref.watch(inkItemLedgerRecentProvider(itemCode));
 
     return Scaffold(
       appBar: AppBar(title: Text(item?.displayName ?? itemCode)),
@@ -72,11 +67,6 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                   children: [
                     _stat(context, 'Balance',
                         '${_qty.format(item.currentBalance)} ${item.unit}'),
-                    if (isManager)
-                      _stat(context, 'WAC',
-                          _money.format(item.weightedAverageCost)),
-                    if (isManager)
-                      _stat(context, 'Value', _money.format(item.value)),
                   ],
                 ),
               ),
@@ -115,8 +105,7 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                       subtitle: Text(
                         '${_df.format(t.effectiveAt)}'
                         '${t.seqNumber != null ? ' · ${t.seqNumber}' : ' · pending #'}'
-                        '${t.voided ? ' · VOIDED' : ' · bal ${_qty.format(t.balanceAfter)}'}'
-                        '${!t.voided && isManager ? ' @ ${_money.format(t.wacAtTime)}' : ''}',
+                        '${t.voided ? ' · VOIDED' : ' · bal ${_qty.format(t.balanceAfter)}'}',
                         style: t.voided
                             ? TextStyle(color: scheme.onSurfaceVariant)
                             : null,

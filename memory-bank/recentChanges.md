@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Admin UI refresh + Firebase read optimization — ink operator / Pulse manager split (2026-06-23)**:
+  - **Admin screen** (`admin_screen.dart`): 5 tabs, Settings-first (`initialIndex: 0`); **Job Cards tab removed** (use CTP Pulse `/jobs`); Employees → searchable card list with toolbar (template/import/bulk delete), on-site pill, FCM in edit dialog only; Structures → stats chips, search, expansion cards, add forms in settings cards, duplicate validation; Employees lazy-load on first tab visit.
+  - **Ink hub** (`ink_home_screen.dart`): capture-only; **Management & costing** card opens CTP Pulse `/ink`; removed manager tile grid; stock summary shows item count only.
+  - **Reads**: merged `getActiveJobCards()` listener; 45-day bounded toloul meter-point reads; `watchItemLedgerRecent(limit: 20)` on stock detail; waste load detail no longer shows suggested rand.
+  - **Docs**: `docs/CHANGELOG.md`, `docs/screens_reference.md`, `docs/app_features.md` updated for 5-tab admin and Pulse ink manager split.
+  - CTP Pulse (monorepo): shared singleton listeners (ink pending, OT approval queue, fleet open issues); ledger defaults to one-time `getDocs` + Refresh; waste active loads `limit(200)`; manager routes `/ink/count`, `/ink/manage`, `/ink/adjustment`, `/ink/revaluation`, `/ink/value-adjustment`, `/ink/corrections`; closed-period guard (`useInkPeriodGuard` mirrors `ink_period_guard.dart`).
 - **Added Agentic Development Infrastructure (2026-05-13)**:  
   Created two new mandatory Memory Bank files to significantly improve autonomous building capability while staying fully compliant with all rules:
   - `memory-bank/dependencies.md` — Complete reference for correct usage, parameters, and platform setup of every dependency in `pubspec.yaml` (prevents any future wrong API calls or deprecated methods).

@@ -1,50 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/ink_stock_item.dart';
-import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
-import '../utils/role.dart' as role_utils;
-import 'ink_adjustment_screen.dart';
-import 'ink_conversion_factor_screen.dart';
-import 'ink_corrections_screen.dart';
-import 'ink_flagged_review_screen.dart';
+import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
-import 'ink_daily_readings_screen.dart';
-import 'ink_meter_point_management_screen.dart';
-import 'ink_month_end_count_screen.dart';
-import 'ink_month_end_report_screen.dart';
-import 'ink_pending_costs_screen.dart';
-import 'ink_production_history_screen.dart';
 import 'ink_production_run_screen.dart';
 import 'ink_receive_ibc_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
-import 'ink_recipe_management_screen.dart';
-import 'ink_revaluation_screen.dart';
-import 'ink_value_adjustment_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
-import 'ink_stock_screen.dart';
-import 'ink_supplier_management_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
 
-/// Ink Factory module hub — the landing screen for the production stock-inventory
-/// module. Shows live stock-on-hand (from the ledger cache) and the data-entry
-/// actions. Operator actions are open to any Ink Factory user; cost/value and
-/// month-end actions are gated to managers (Phase 1 screens are stubbed for now).
+/// Ink Factory module hub — operator capture only. Management, costing and
+/// month-end workflows live in CTP Pulse (web).
 class InkHomeScreen extends ConsumerWidget {
   const InkHomeScreen({super.key});
 
-  static final _money = NumberFormat.currency(symbol: 'R ', decimalDigits: 2);
   static final _qty = NumberFormat('#,##0.##');
+
+  static const _pulseInkUrl = 'https://ctp-pulse.web.app/ink';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
-    final isManager = role_utils.isInkManager(emp);
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    // Default to "done" while the status loads so the banner doesn't flash.
     final inkMeterDone =
         ref.watch(inkTodayInkMeterDoneProvider).valueOrNull ?? true;
 
@@ -53,7 +34,9 @@ class InkHomeScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          _StockValueSummary(itemsAsync: itemsAsync, showMoney: isManager),
+          _StockQtySummary(itemsAsync: itemsAsync),
+          const SizedBox(height: 12),
+          _PulseManageCard(pulseUrl: _pulseInkUrl),
           if (!inkMeterDone) ...[
             const SizedBox(height: 12),
             const _MeterReminderBanner(),
@@ -77,41 +60,6 @@ class InkHomeScreen extends ConsumerWidget {
             _Action(Icons.inventory_2_outlined, 'IBC Register',
                 builder: () => const InkIbcRegisterScreen()),
           ]),
-          if (isManager) ...[
-            const SizedBox(height: 16),
-            _sectionLabel(context, 'Manager'),
-            const SizedBox(height: 8),
-            _ActionGrid(actions: [
-              _Action(Icons.bar_chart_outlined, 'Stock',
-                  builder: () => const InkStockScreen()),
-              _Action(Icons.store_outlined, 'Suppliers',
-                  builder: () => const InkSupplierManagementScreen()),
-              _Action(Icons.fact_check_outlined, 'Month-end Count',
-                  builder: () => const InkMonthEndCountScreen()),
-              _Action(Icons.tune_outlined, 'Stock Adjustment',
-                  builder: () => const InkAdjustmentScreen()),
-              _Action(Icons.payments_outlined, 'Pending Costs',
-                  builder: () => const InkPendingCostsScreen()),
-              _Action(Icons.summarize_outlined, 'Month-end Report',
-                  builder: () => const InkMonthEndReportScreen()),
-              _Action(Icons.menu_book_outlined, 'Recipes',
-                  builder: () => const InkRecipeManagementScreen()),
-              _Action(Icons.straighten, 'Conversion Factors',
-                  builder: () => const InkConversionFactorScreen()),
-              _Action(Icons.opacity, 'Toloul Meter Points',
-                  builder: () => const InkMeterPointManagementScreen()),
-              _Action(Icons.history, 'Production History',
-                  builder: () => const InkProductionHistoryScreen()),
-              _Action(Icons.price_change_outlined, 'Revaluation',
-                  builder: () => const InkRevaluationScreen()),
-              _Action(Icons.currency_exchange_outlined, 'Value Adjustment',
-                  builder: () => const InkValueAdjustmentScreen()),
-              _Action(Icons.edit_note_outlined, 'Corrections',
-                  builder: () => const InkCorrectionsScreen()),
-              _Action(Icons.flag_outlined, 'Flagged',
-                  builder: () => const InkFlaggedReviewScreen()),
-            ]),
-          ],
           const SizedBox(height: 20),
           _sectionLabel(context, 'Stock on hand'),
           const SizedBox(height: 4),
@@ -123,8 +71,7 @@ class InkHomeScreen extends ConsumerWidget {
                   )
                 : Column(
                     children: [
-                      for (final i in items)
-                        _StockTile(item: i, showMoney: isManager)
+                      for (final i in items) _StockTile(item: i),
                     ],
                   ),
             loading: () => const Padding(
@@ -151,12 +98,43 @@ class InkHomeScreen extends ConsumerWidget {
       );
 }
 
+class _PulseManageCard extends StatelessWidget {
+  const _PulseManageCard({required this.pulseUrl});
+  final String pulseUrl;
+
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.parse(pulseUrl);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open CTP Pulse.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(Icons.open_in_browser, color: scheme.primary),
+        title: const Text('Management & costing'),
+        subtitle: const Text(
+          'Month-end, pending costs, recipes and reports — CTP Pulse',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _open(context),
+      ),
+    );
+  }
+}
+
 class _Action {
   const _Action(this.icon, this.label, {this.builder});
   final IconData icon;
   final String label;
-
-  /// When set, tapping pushes this screen; otherwise shows a "later phase" hint.
   final Widget Function()? builder;
 }
 
@@ -196,10 +174,6 @@ class _ActionCard extends StatelessWidget {
           if (action.builder != null) {
             Navigator.push(
                 context, MaterialPageRoute(builder: (_) => action.builder!()));
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${action.label} — coming in a later phase')),
-            );
           }
         },
         child: Padding(
@@ -221,17 +195,13 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _StockValueSummary extends StatelessWidget {
-  const _StockValueSummary({required this.itemsAsync, required this.showMoney});
+class _StockQtySummary extends StatelessWidget {
+  const _StockQtySummary({required this.itemsAsync});
   final AsyncValue<List<InkStockItem>> itemsAsync;
-  final bool showMoney;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final total = itemsAsync.valueOrNull
-            ?.fold<double>(0, (sum, i) => sum + i.value) ??
-        0;
     final count = itemsAsync.valueOrNull?.length ?? 0;
     return Card(
       color: scheme.primaryContainer,
@@ -245,21 +215,17 @@ class _StockValueSummary extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(showMoney ? 'Total stock value' : 'Stock on hand',
+                Text('Stock on hand',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: scheme.onPrimaryContainer)),
                 Text(
-                  showMoney ? InkHomeScreen._money.format(total) : '$count items',
+                  '$count items',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: scheme.onPrimaryContainer,
                       fontWeight: FontWeight.bold),
                 ),
               ],
             ),
-            const Spacer(),
-            if (showMoney)
-              Text('$count items',
-                  style: TextStyle(color: scheme.onPrimaryContainer)),
           ],
         ),
       ),
@@ -267,9 +233,6 @@ class _StockValueSummary extends StatelessWidget {
   }
 }
 
-/// Banner shown on the hub when no ink meter reading has been captured today.
-/// Tapping opens the daily readings screen. Surfaces the daily-reading gap at a
-/// glance (whole-day flag — not per individual meter).
 class _MeterReminderBanner extends StatelessWidget {
   const _MeterReminderBanner();
 
@@ -281,32 +244,22 @@ class _MeterReminderBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const InkDailyReadingsScreen())),
+        onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const InkDailyReadingsScreen())),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              Icon(Icons.warning_amber_rounded,
-                  color: scheme.onErrorContainer),
+              Icon(Icons.speed, color: scheme.onErrorContainer),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('No meter reading captured today',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
-                                color: scheme.onErrorContainer,
-                                fontWeight: FontWeight.w600)),
-                    Text("Tap to record today's ink meter readings.",
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: scheme.onErrorContainer)),
-                  ],
+                child: Text(
+                  'Daily meter reading not captured yet today.',
+                  style: TextStyle(
+                      color: scheme.onErrorContainer,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
               Icon(Icons.chevron_right, color: scheme.onErrorContainer),
@@ -319,45 +272,22 @@ class _MeterReminderBanner extends StatelessWidget {
 }
 
 class _StockTile extends StatelessWidget {
-  const _StockTile({required this.item, required this.showMoney});
+  const _StockTile({required this.item});
   final InkStockItem item;
-  final bool showMoney;
-
-  IconData get _icon => switch (item.itemClass) {
-        InkItemClass.ink => Icons.water_drop_outlined,
-        InkItemClass.solvent => Icons.opacity_outlined,
-        InkItemClass.manufactured => Icons.blender_outlined,
-        InkItemClass.raw => Icons.inventory_outlined,
-      };
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final negative = item.currentBalance < 0;
     return ListTile(
-      dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => InkStockItemDetailScreen(itemCode: item.itemCode))),
-      leading: Icon(_icon, color: scheme.primary),
       title: Text(item.displayName),
       subtitle: Text(
-        '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}'
-        '${showMoney ? '  @ ${InkHomeScreen._money.format(item.weightedAverageCost)}' : ''}',
-        style: TextStyle(color: negative ? scheme.error : null),
+        '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}',
       ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (showMoney)
-            Text(InkHomeScreen._money.format(item.value),
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          if (negative)
-            Text('negative', style: TextStyle(color: scheme.error, fontSize: 11)),
-        ],
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => InkStockItemDetailScreen(itemCode: item.itemCode)),
       ),
     );
   }

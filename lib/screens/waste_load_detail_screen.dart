@@ -148,17 +148,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                       : 'Admin cost review and completion are handled in CTP Pulse. This load will update here once approved.',
                   style: TextStyle(fontSize: 12, color: bodyColor),
                 ),
-                if (!isWeighbridge && _currentLoad.randValueExVat != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Suggested value: R ${_currentLoad.randValueExVat!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: bodyColor,
-                    ),
-                  ),
-                ],
+
               ],
             ),
           ),

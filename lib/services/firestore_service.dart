@@ -390,6 +390,16 @@ class FirestoreService {
     return _firestore.collection(Collections.jobCards).doc(jobCardId).snapshots().map((doc) => JobCard.fromFirestore(doc));
   }
 
+  /// Open + in-progress job cards in one listener (halves Firestore reads vs
+  /// separate status streams). Matches CTP Pulse [useOpenJobCards] pattern.
+  Stream<List<JobCard>> getActiveJobCards() {
+    return _firestore
+        .collection(Collections.jobCards)
+        .where('status', whereIn: ['open', 'inProgress'])
+        .snapshots()
+        .map((snapshot) => parseJobCards(snapshot.docs));
+  }
+
   Stream<List<JobCard>> getOpenJobCards() {
     return _firestore
         .collection(Collections.jobCards)

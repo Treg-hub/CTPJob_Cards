@@ -470,40 +470,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     try {
-      // Use open+inProgress streams (server-filtered) instead of getAllJobCards()
-      // to avoid downloading all closed/monitor docs just to count two statuses.
-      StreamSubscription<List<JobCard>>? openSub;
-      StreamSubscription<List<JobCard>>? inProgressSub;
-      List<JobCard> openJobs = [];
-      List<JobCard> inProgressJobs = [];
-
-      void recount() {
+      // Single open+inProgress listener (one Firestore query vs two).
+      _countSubscription = _firestoreService.getActiveJobCards().listen((jobs) {
         if (!mounted) return;
-        final allActive = [...openJobs, ...inProgressJobs];
-        final filtered = allActive.where(_isInManagerScope).toList();
+        final filtered = jobs.where(_isInManagerScope).toList();
         setState(() {
-          _openJobCount = filtered.where((j) => j.status == JobStatus.open).length;
-          _inProgressCount = filtered.where((j) => j.status == JobStatus.inProgress).length;
+          _openJobCount =
+              filtered.where((j) => j.status == JobStatus.open).length;
+          _inProgressCount = filtered
+              .where((j) => j.status == JobStatus.inProgress)
+              .length;
         });
-      }
-
-      openSub = _firestoreService.getOpenJobCards().listen((jobs) {
-        openJobs = jobs;
-        recount();
       }, onError: (e) {
-        debugPrint('HomeScreen: open jobs stream error: $e');
+        debugPrint('HomeScreen: active jobs stream error: $e');
       });
-      inProgressSub = _firestoreService.getInProgressJobCards().listen((jobs) {
-        inProgressJobs = jobs;
-        recount();
-      }, onError: (e) {
-        debugPrint('HomeScreen: in-progress jobs stream error: $e');
-      });
-
-      // Merge both subscriptions under _countSubscription via a combined cancel
-      _countSubscription = openSub;
-      // Store inProgress sub separately so dispose() cancels it too
-      _inProgressSub = inProgressSub;
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
     }
@@ -991,21 +971,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // Combine open + inProgress streams (server-filtered) and merge client-side.
     // This avoids streaming the entire collection (including all closed jobs).
     return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getOpenJobCards(),
-      builder: (context, openSnap) {
-        return StreamBuilder<List<JobCard>>(
-          stream: _firestoreService.getInProgressJobCards(),
-          builder: (context, inProgressSnap) {
-            if (openSnap.hasError || inProgressSnap.hasError) {
+      stream: _firestoreService.getActiveJobCards(),
+      builder: (context, activeSnap) {
+            if (activeSnap.hasError) {
               return Card(
                 elevation: 4,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Center(child: Text('Error: ${openSnap.error ?? inProgressSnap.error}', style: const TextStyle(color: Colors.red))),
+                  child: Center(child: Text('Error: ${activeSnap.error}', style: const TextStyle(color: Colors.red))),
                 ),
               );
             }
-            if (!openSnap.hasData && !inProgressSnap.hasData) {
+            if (!activeSnap.hasData) {
               return const Card(
                 elevation: 4,
                 child: Padding(
@@ -1025,10 +1002,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               );
             }
 
-            final allJobs = <JobCard>[
-              ...(openSnap.data ?? const <JobCard>[]),
-              ...(inProgressSnap.data ?? const <JobCard>[]),
-            ];
+            final allJobs = activeSnap.data ?? const <JobCard>[];
 
             if (allJobs.isEmpty) {
               return Card(
@@ -1115,8 +1089,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           );
         }
-          },
-        );
       },
     );
   }

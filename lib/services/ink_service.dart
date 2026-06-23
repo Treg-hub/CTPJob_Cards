@@ -246,6 +246,24 @@ class InkService {
         return list;
       });
 
+  /// Recent ledger lines for operators (qty audit only) — bounded read.
+  Stream<List<InkTransaction>> watchItemLedgerRecent(
+    String itemCode, {
+    int limit = 20,
+  }) =>
+      _db
+          .collection(Collections.inkTransactions)
+          .where('stock_item_code', isEqualTo: itemCode)
+          .orderBy('effective_at', descending: true)
+          .limit(limit)
+          .snapshots()
+          .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+
+  static DateTime _meterPointReadingsSince() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day).subtract(const Duration(days: 45));
+  }
+
   /// Every transaction in the current reporting month (for the month-end report,
   /// which rolls the ledger forward per item). Bounded to the current month so
   /// the stream doesn't grow unboundedly as the ledger accumulates over time.
@@ -877,12 +895,15 @@ class InkService {
   }
 
   /// The most recent [limit] readings per meter point (newest first) — for the
-  /// history strip in the entry grid.
+  /// history strip in the entry grid. Bounded to the last 45 days.
   Stream<Map<String, List<({DateTime at, double reading})>>>
-      watchRecentMeterPointReadings({int limit = 4}) => _db
-          .collection(Collections.inkMeterPointReadings)
-          .snapshots()
-          .map((s) {
+      watchRecentMeterPointReadings({int limit = 4}) {
+    final since = Timestamp.fromDate(_meterPointReadingsSince());
+    return _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date', isGreaterThanOrEqualTo: since)
+        .snapshots()
+        .map((s) {
             final byPoint = <String, List<({DateTime at, double reading})>>{};
             for (final doc in s.docs) {
               final d = doc.data();
@@ -900,12 +921,17 @@ class InkService {
             }
             return byPoint;
           });
+  }
 
   /// Latest cumulative reading per meter point (for delta computation).
-  Stream<Map<String, double>> watchLatestMeterPointReadings() => _db
-      .collection(Collections.inkMeterPointReadings)
-      .snapshots()
-      .map((s) {
+  /// Uses a 45-day window; daily readings always fall inside this window.
+  Stream<Map<String, double>> watchLatestMeterPointReadings() {
+    final since = Timestamp.fromDate(_meterPointReadingsSince());
+    return _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date', isGreaterThanOrEqualTo: since)
+        .snapshots()
+        .map((s) {
         final latest = <String, ({DateTime at, double reading})>{};
         for (final doc in s.docs) {
           final d = doc.data();
@@ -921,6 +947,7 @@ class InkService {
         }
         return {for (final e in latest.entries) e.key: e.value.reading};
       });
+  }
 
   /// True if at least one ink-meter (consumptionMeter) transaction was recorded
   /// today (midnight → now). Used by the daily-readings hub to lock the tile.
