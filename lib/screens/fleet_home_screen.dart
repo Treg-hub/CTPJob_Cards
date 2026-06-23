@@ -13,10 +13,11 @@ import '../utils/role.dart' as role_utils;
 import 'fleet_add_cost_screen.dart';
 import 'fleet_assets_screen.dart' show FleetAssetsScreen, FleetAssetFormScreen;
 import 'fleet_issues_list_screen.dart';
-import 'fleet_log_work_screen.dart';
+import 'fleet_log_other_work_screen.dart';
+import 'fleet_mechanic_home_screen.dart';
 import 'fleet_queued_screen.dart';
-import 'fleet_report_issue_screen.dart';
-import '../widgets/fleet_quick_report_sheet.dart';
+import 'fleet_report_wizard_screen.dart';
+import 'fleet_reporter_home_screen.dart';
 import 'fleet_reports_screen.dart';
 import 'fleet_settings_screen.dart';
 import 'fleet_work_records_list_screen.dart';
@@ -89,8 +90,17 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     final isAdmin    = role_utils.isFleetAdmin(emp);
     final isReporter = role_utils.isFleetReporter(emp, settings);
     final mechanicUx = isMechanic && !isAdmin;
+    final reporterOnly =
+        isReporter && !isMechanic && !isCostMgr && !isAdmin;
 
-    // ── Build role-based tab list ──────────────────────────────────────────
+    if (reporterOnly) {
+      return const FleetReporterHomeScreen();
+    }
+    if (mechanicUx && !isCostMgr) {
+      return const FleetMechanicHomeScreen();
+    }
+
+    // ── Build role-based tab list (admin / cost mgr / mixed roles) ───────
     final tabs = <Widget>[
       Tab(
         child: Row(
@@ -138,17 +148,7 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
     if (tabIdx == 0 && role_utils.canReportFleetIssue(emp, settings)) {
       final reporterFab = isReporter && !isAdmin && !isCostMgr && !isMechanic;
       fab = FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await showFleetQuickReportSheet(context);
-          if (result != null && context.mounted) {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => FleetReportIssueScreen(
-                preSelectedAsset: result.asset,
-                preSelectedSeverity: result.severity,
-              ),
-            ));
-          }
-        },
+        onPressed: () => openFleetReportWizard(context),
         icon: const Icon(Icons.report_problem_outlined),
         label: Text(reporterFab ? 'Report Problem' : 'Report Issue'),
         backgroundColor: kBrandOrange,
@@ -156,7 +156,8 @@ class _FleetHomeScreenState extends ConsumerState<FleetHomeScreen>
       );
     } else if ((isMechanic || isAdmin) && _tabIndexOf('Work', isMechanic, isCostMgr, isAdmin) == tabIdx) {
       fab = FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FleetLogWorkScreen())),
+        onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const FleetLogOtherWorkScreen())),
         icon: const Icon(Icons.build_outlined),
         label: Text(mechanicUx ? 'Log other work' : 'Log Work'),
         backgroundColor: kBrandOrange,

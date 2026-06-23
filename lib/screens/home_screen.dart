@@ -35,10 +35,10 @@ import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
-import 'fleet_report_issue_screen.dart';
+import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
-import '../widgets/fleet_quick_report_sheet.dart';
+
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/ink_provider.dart';
@@ -356,20 +356,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           'title': FleetLabels.reportProblem,
           'icon': Icons.forklift,
           'color': kBrandOrange,
-          'onTap': () async {
-            final result = await showFleetQuickReportSheet(context);
-            if (result != null && mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FleetReportIssueScreen(
-                    preSelectedAsset: result.asset,
-                    preSelectedSeverity: result.severity,
-                  ),
-                ),
-              );
-            }
-          },
+          'onTap': () => openFleetReportWizard(context),
         },
       ];
     }

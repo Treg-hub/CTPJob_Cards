@@ -15,9 +15,10 @@ Your main tabs:
 | Tab | What it is |
 |-----|------------|
 | **To Fix** | Open problems waiting for you (not yet started) |
-| **In progress** | Problems you have already opened — work is underway |
-| **Fixed** | Problems you have closed with a logged fix |
+| **In progress** | Problems you have already opened — tap to **finish the repair** |
 | **History** | All work records you have logged |
+
+**Service due** machines appear at the top with a **Log service** button — use this for scheduled maintenance.
 
 ---
 
@@ -37,13 +38,12 @@ Your main tabs:
 
 1. Open **Fleet** → **To Fix**
 2. Tap the problem — the **Mark as Fixed** form opens and the problem is automatically logged as *In progress*
-3. The original fault report is shown at the top — read-only. Fill in:
-   - **What you did to fix it** (required) — describe **your** work
-   - **Hour-meter reading** (required) — number on the hour meter on the machine
-   - **Labour hours** — optional
-   - **Parts** and **photos** — optional
-   - **Also fixes…** — if other open problems on the same machine were fixed by this job, tick them and they will close too
+3. The original fault report is shown at the top — read-only. Fill in the two required fields:
+   - **What you did to fix it**
+   - **Hour-meter reading**
 4. Tap **Mark as Fixed**
+
+Optional extras (labour hours, parts, photos, work date, closing other faults on the same machine) are under **More details** if you need them.
 
 Done. The problem disappears from **To Fix** / **In progress** and the job appears in **History**.
 

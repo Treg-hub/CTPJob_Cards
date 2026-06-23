@@ -8,13 +8,14 @@
 
 When a **machine (forks, grab or BT)** has a fault, you report it here so the **mechanic** knows what to fix. You do not log repairs or costs — you only describe the problem.
 
-**Your report is permanent.** Once sent, nobody — not even the mechanic — can change what you wrote. The fix is recorded separately, in the mechanic's own words, so the report and the repair always stay distinct.
+**Your report is permanent.** Once sent, nobody — not even the mechanic — can change what you wrote. The fix is recorded separately, in the mechanic's own words.
 
-Your main tab:
+Your Fleet screen:
 
-| Tab | What it is |
-|-----|------------|
-| **Issues** (or **To Fix** if you are also a mechanic) | All open problems — yours and others' (for transparency) |
+| View | What it is |
+|------|------------|
+| **My reports** (default) | Problems you have reported — any status |
+| **All open** (optional) | Every open fault on the floor — for awareness |
 
 Tap **Report Problem** to submit a new fault.
 
@@ -22,15 +23,16 @@ Tap **Report Problem** to submit a new fault.
 
 ## Reporting a problem — step by step
 
-1. Open **Fleet** → tap **Report Problem**
-2. **Which machine (forks, grab or BT)?** — pick the machine from the list
-3. **How urgent is it?** — pick one level (see table below)
-4. **What's wrong?** — describe clearly what happened (at least a short sentence)
-5. **Which part is affected?** — tap a saved part or type a new one (required)
-6. **Photos** — optional, but a picture helps the mechanic
-7. Tap **Send report**
+One screen — no duplicate questions:
 
-Report time is saved automatically — you do not pick a date.
+1. Open **Fleet** → tap **Report Problem** (or the home-screen **Report Problem** tile)
+2. **Which machine?** — tap the machine tile
+3. **How urgent is it?** — pick one level (see table below)
+4. **What's wrong?** — describe clearly (at least a short sentence)
+5. **Photo** — optional, one picture helps
+6. Tap **Send report**
+
+Report time is saved automatically — you do not pick a date. The app remembers your last machine for next time.
 
 ---
 
@@ -43,64 +45,24 @@ Report time is saved automatically — you do not pick a date.
 | **Urgent** | Serious fault — mechanic should prioritise this |
 | **Out of service** | Machine **cannot be used** until fixed — mechanic is notified immediately |
 
-When you pick **Out of service**, the machine is flagged across the app until the mechanic fixes it and closes the report.
-
 ---
 
 ## What happens after you send
 
-- Your report appears in the **Issues** list for everyone with Fleet access
+- Your report appears under **My reports**
 - The mechanic sees it under **To Fix**
-- For **Out of service** and **Urgent** reports, the mechanic (and managers) may get a notification
-- You can tap your report later to see status: *Needs fixing* → *In progress* → *Fixed*
+- Tap your report to see progress: *Needs fixing* → *In progress* → *Fixed*
+- When fixed, a green **The fix** card shows what the mechanic did
 
 ---
 
 ## Writing a good description
 
-Include:
+Include what you heard, saw, or felt, what the machine was doing, and whether it is safe to keep using.
 
-- What you heard, saw, or felt (noise, leak, warning light, won't start)
-- What the machine was doing when it happened
-- Whether it is safe to keep using
+**Good:** "Loud grinding from mast when lifting above 2 m. Feels unsafe to keep using."
 
-**Good example:** "Loud grinding from mast when lifting above 2 m. Happened twice this shift. Feels unsafe to keep using."
-
-**Weak example:** "Broken" — too vague for the mechanic to prepare.
-
----
-
-## Affected parts
-
-You must pick at least one part — e.g. Mast chain, Hydraulic hose, Tyre, Battery.
-
-- Tap a **saved part** chip if it matches
-- Or type a new part name and tap **Add**
-
-This helps the mechanic know what to bring.
-
----
-
-## Photos
-
-Up to 3 photos. Useful for:
-
-- Leaks or damage
-- Warning lights on the dash
-- Worn tyres or chains
-
----
-
-## Tracking your reports
-
-Open the **Issues** tab and tap any report to see:
-
-- A **progress timeline**: Reported → Started → Fixed
-- **The fix** — once fixed, a green card shows exactly what the mechanic
-  did, who did it, when, and which parts were used
-- Your report is marked with a **Your report** chip when it is yours
-
-All reporters can see all open issues — this is intentional for transparency across shifts.
+**Weak:** "Broken"
 
 ---
 
@@ -110,9 +72,9 @@ All reporters can see all open issues — this is intentional for transparency a
 |------------|---------|
 | Report a new fault | **Report Problem** |
 | Machine cannot be used | Pick **Out of service** |
-| See my past reports | **Issues** → filter **Fixed** |
-| See if mechanic started | Status shows **In progress** |
-| False alarm / duplicate | Ask mechanic to close with a note |
+| See my reports | **My reports** (default) |
+| See all open faults | Switch to **All open** |
+| Check if fixed | Tap report → **The fix** card |
 
 ---
 
