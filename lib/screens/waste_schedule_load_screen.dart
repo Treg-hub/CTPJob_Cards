@@ -27,6 +27,7 @@ class _WasteScheduleLoadScreenState
     extends ConsumerState<WasteScheduleLoadScreen> {
   final WasteService _wasteService = WasteService();
   final _notesController = TextEditingController();
+  final _paperDocController = TextEditingController();
 
   List<Contractor> _contractors = [];
   List<WasteType> _wasteTypes = [];
@@ -55,6 +56,7 @@ class _WasteScheduleLoadScreenState
   @override
   void dispose() {
     _notesController.dispose();
+    _paperDocController.dispose();
     super.dispose();
   }
 
@@ -204,6 +206,9 @@ class _WasteScheduleLoadScreenState
         scheduledNotes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        paperDocumentRef: _paperDocController.text.trim().isEmpty
+            ? null
+            : _paperDocController.text.trim(),
         // Store IDs on the load — stock is NOT marked loaded until the guard confirms
         selectedStockIds: List.of(_selectedStockIds),
         selectedWasteTypes: _selectedTypes.map((t) => t.mainType).toList(),
@@ -535,6 +540,19 @@ class _WasteScheduleLoadScreenState
                       child: Text(
                         DateFormat('EEE d MMM yyyy').format(_scheduledFor),
                       ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Text('Paper document reference (optional)',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _paperDocController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Physical docket / gate pass number',
                     ),
                   ),
 

@@ -42,6 +42,9 @@ class _WasteBeginCollectionScreenState
   final WasteService _wasteService = WasteService();
   final _driverCtrl = TextEditingController();
   final _regCtrl = TextEditingController();
+  late final TextEditingController _paperDocCtrl;
+  TimeOfDay _timeIn = TimeOfDay.now();
+  TimeOfDay? _timeOut;
 
   List<WasteType> _wasteTypes = [];
   List<Contractor> _contractors = [];
@@ -60,9 +63,27 @@ class _WasteBeginCollectionScreenState
   bool get _photosRequired => _wasteSettings?.photosRequired ?? false;
   bool get _signatureRequired => _wasteSettings?.signatureRequired ?? false;
 
+  String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime({required bool isTimeIn}) async {
+    final initial = isTimeIn ? _timeIn : (_timeOut ?? TimeOfDay.now());
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null && mounted) {
+      setState(() {
+        if (isTimeIn) {
+          _timeIn = picked;
+        } else {
+          _timeOut = picked;
+        }
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _paperDocCtrl = TextEditingController(text: widget.load.paperDocumentRef ?? '');
     _loadWasteSettings();
     _loadWasteTypes();
     if (widget.load.selectedStockIds.isNotEmpty) {
@@ -74,6 +95,7 @@ class _WasteBeginCollectionScreenState
   void dispose() {
     _driverCtrl.dispose();
     _regCtrl.dispose();
+    _paperDocCtrl.dispose();
     super.dispose();
   }
 
@@ -151,6 +173,7 @@ class _WasteBeginCollectionScreenState
   bool get _canSubmit {
     if (_driverCtrl.text.trim().isEmpty ||
         _regCtrl.text.trim().isEmpty ||
+        _paperDocCtrl.text.trim().isEmpty ||
         _items.isEmpty ||
         _isSubmitting) {
       return false;
@@ -167,7 +190,9 @@ class _WasteBeginCollectionScreenState
   }
 
   String get _submitHelperText {
-    final parts = <String>['Complete driver details and add at least one item'];
+    final parts = <String>[
+      'Complete driver details, paper document reference, and add at least one item',
+    ];
     if (_photosRequired) {
       parts.add('add photos where required');
       parts.add('capture loaded-truck photos');
@@ -312,6 +337,7 @@ class _WasteBeginCollectionScreenState
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
+    _timeOut ??= TimeOfDay.now();
     final skipWeighbridge = loadSkipsWeighbridge(
       mainWasteType: widget.load.mainWasteType,
       allTypes: _wasteTypes,
@@ -343,6 +369,10 @@ class _WasteBeginCollectionScreenState
         vehicleReg: _regCtrl.text.trim(),
         collectedBy: currentEmployee?.clockNo ?? '',
         collectedByName: currentEmployee?.name,
+        securityName: currentEmployee?.name,
+        timeIn: _formatTime(_timeIn),
+        timeOut: _formatTime(_timeOut!),
+        paperDocumentRef: _paperDocCtrl.text.trim(),
         itemsData: itemsData,
         loadPhotoPaths: _loadPhotoPaths,
         signatureLocalPath: _signatureTempPath,
@@ -483,6 +513,51 @@ class _WasteBeginCollectionScreenState
                 prefixIcon: Icon(Icons.local_shipping),
               ),
               onChanged: (_) => setState(() {}),
+            ),
+
+            const SizedBox(height: 14),
+
+            TextField(
+              controller: _paperDocCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Paper document reference *',
+                hintText: 'Number from the physical gate docket',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.description_outlined),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+
+            const SizedBox(height: 14),
+
+            if (currentEmployee?.name != null)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Security Officer'),
+                subtitle: Text(currentEmployee!.name!),
+              ),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isTimeIn: true),
+                    child: Text('Time in: ${_formatTime(_timeIn)}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isTimeIn: false),
+                    child: Text(
+                      _timeOut != null
+                          ? 'Time out: ${_formatTime(_timeOut!)}'
+                          : 'Set time out',
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 24),

@@ -132,6 +132,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   String _vehicleReg = '';
   String? _paperDocumentRef;
   String? _notes;
+  TimeOfDay _timeIn = TimeOfDay.now();
+  TimeOfDay? _timeOut;
 
   // Data
   List<Contractor> _contractors = [];
@@ -166,6 +168,23 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     final c = _selectedContractor;
     if (c == null || c.wasteTypeIds.isEmpty) return const [];
     return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+  }
+
+  String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime({required bool isTimeIn}) async {
+    final initial = isTimeIn ? _timeIn : (_timeOut ?? TimeOfDay.now());
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null && mounted) {
+      setState(() {
+        if (isTimeIn) {
+          _timeIn = picked;
+        } else {
+          _timeOut = picked;
+        }
+      });
+    }
   }
 
   void _onContractorChanged(Contractor? contractor) {
@@ -402,6 +421,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     }
 
     setState(() => _isLoading = true);
+    _timeOut ??= TimeOfDay.now();
 
     try {
       final result = await _wasteService.saveCompleteWasteLoad(
@@ -415,6 +435,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
           'paper_document_ref': _paperDocumentRef,
+          'security_name': currentEmployee?.name,
+          'time_in': _formatTime(_timeIn),
+          if (_timeOut != null) 'time_out': _formatTime(_timeOut!),
           'notes': _notes,
           'date_time': DateTime.now(),
         },
@@ -738,6 +761,35 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             TextFormField(
               decoration: const InputDecoration(labelText: 'Paper Document Reference'),
               onChanged: (v) => _paperDocumentRef = v,
+            ),
+            const SizedBox(height: 8),
+            if (currentEmployee?.name != null)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Security Officer'),
+                subtitle: Text(currentEmployee!.name!),
+              ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isTimeIn: true),
+                    child: Text('Time in: ${_formatTime(_timeIn)}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _pickTime(isTimeIn: false),
+                    child: Text(
+                      _timeOut != null
+                          ? 'Time out: ${_formatTime(_timeOut!)}'
+                          : 'Set time out',
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             TextFormField(

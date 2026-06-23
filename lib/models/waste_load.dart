@@ -56,6 +56,11 @@ class WasteLoad {
   final String driverName;
   final String vehicleReg;
   final String? paperDocumentRef;
+  /// Gate security officer — autofilled from creator or collector.
+  final String? securityName;
+  /// HH:mm gate times (Pulse parity + historic imports).
+  final String? timeIn;
+  final String? timeOut;
   final String? weighbridgeNumber;
   final double? actualWeighbridgeWeightKg;
   final String? weighbridgeTicketPhotoUrl;
@@ -116,6 +121,9 @@ class WasteLoad {
     required this.driverName,
     required this.vehicleReg,
     this.paperDocumentRef,
+    this.securityName,
+    this.timeIn,
+    this.timeOut,
     this.weighbridgeNumber,
     this.actualWeighbridgeWeightKg,
     this.weighbridgeTicketPhotoUrl,
@@ -180,6 +188,9 @@ class WasteLoad {
       driverName: data['driver_name'] as String? ?? '',
       vehicleReg: data['vehicle_reg'] as String? ?? '',
       paperDocumentRef: data['paper_document_ref'] as String?,
+      securityName: data['security_name'] as String?,
+      timeIn: data['time_in'] as String?,
+      timeOut: data['time_out'] as String?,
       weighbridgeNumber: data['weighbridge_number'] as String?,
       actualWeighbridgeWeightKg:
           (data['actual_weighbridge_weight_kg'] as num?)?.toDouble(),
@@ -232,6 +243,9 @@ class WasteLoad {
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
       'paper_document_ref': paperDocumentRef,
+      if (securityName != null) 'security_name': securityName,
+      if (timeIn != null) 'time_in': timeIn,
+      if (timeOut != null) 'time_out': timeOut,
       'weighbridge_number': weighbridgeNumber,
       'actual_weighbridge_weight_kg': actualWeighbridgeWeightKg,
       'weighbridge_ticket_photo_url': weighbridgeTicketPhotoUrl,
@@ -278,6 +292,9 @@ class WasteLoad {
     String? driverName,
     String? vehicleReg,
     String? paperDocumentRef,
+    String? securityName,
+    String? timeIn,
+    String? timeOut,
     String? weighbridgeNumber,
     double? actualWeighbridgeWeightKg,
     String? weighbridgeTicketPhotoUrl,
@@ -321,6 +338,9 @@ class WasteLoad {
       driverName: driverName ?? this.driverName,
       vehicleReg: vehicleReg ?? this.vehicleReg,
       paperDocumentRef: paperDocumentRef ?? this.paperDocumentRef,
+      securityName: securityName ?? this.securityName,
+      timeIn: timeIn ?? this.timeIn,
+      timeOut: timeOut ?? this.timeOut,
       weighbridgeNumber: weighbridgeNumber ?? this.weighbridgeNumber,
       actualWeighbridgeWeightKg:
           actualWeighbridgeWeightKg ?? this.actualWeighbridgeWeightKg,

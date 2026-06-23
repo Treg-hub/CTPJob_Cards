@@ -323,6 +323,7 @@ class WasteService {
     required String scheduledBy,
     required String scheduledByName,
     String? scheduledNotes,
+    String? paperDocumentRef,
     List<String> selectedStockIds = const [],
     List<String> selectedWasteTypes = const [],
   }) async {
@@ -337,8 +338,11 @@ class WasteService {
       'scheduled_for': Timestamp.fromDate(scheduledFor),
       'scheduled_by': scheduledBy,
       'scheduled_by_name': scheduledByName,
+      if (scheduledByName.isNotEmpty) 'security_name': scheduledByName,
       if (scheduledNotes != null && scheduledNotes.isNotEmpty)
         'scheduled_notes': scheduledNotes,
+      if (paperDocumentRef != null && paperDocumentRef.isNotEmpty)
+        'paper_document_ref': paperDocumentRef,
       'status': WasteLoadStatus.scheduled.value,
       'driver_name': '',
       'vehicle_reg': '',
@@ -460,6 +464,10 @@ class WasteService {
     String? signatureLocalPath,
     String? contractorId,
     bool isQuantityOnly = false,
+    String? securityName,
+    String? timeIn,
+    String? timeOut,
+    String? paperDocumentRef,
   }) async {
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
     final online = await _checkOnline();
@@ -485,6 +493,11 @@ class WasteService {
       'vehicle_reg': vehicleReg,
       'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
+      if (securityName != null && securityName.isNotEmpty) 'security_name': securityName,
+      if (timeIn != null && timeIn.isNotEmpty) 'time_in': timeIn,
+      if (timeOut != null && timeOut.isNotEmpty) 'time_out': timeOut,
+      if (paperDocumentRef != null && paperDocumentRef.isNotEmpty)
+        'paper_document_ref': paperDocumentRef,
       'recorded_weight_kg': recordedWeightKg,
       timestampKey: now.toIso8601String(),
     };
