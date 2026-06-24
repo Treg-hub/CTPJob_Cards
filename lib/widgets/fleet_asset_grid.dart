@@ -4,21 +4,25 @@ import '../models/fleet_asset.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 
+/// Informational badge for today's daily safety check (non-blocking).
+enum FleetCheckBadge { none, checkDue, endShift, done }
+
 /// Reusable grid of fleet machine tiles (forklift, grab, BT).
-/// [requiresDailyCheck] marks machines missing today's start check (reporter gate).
 class FleetAssetGrid extends StatelessWidget {
   const FleetAssetGrid({
     super.key,
-    required this.selectedAsset,
+    this.selectedAsset,
     required this.onAssetSelected,
-    this.requiresDailyCheck,
+    this.checkBadgeFor,
     this.maxHeight,
+    this.selectable = true,
   });
 
   final FleetAsset? selectedAsset;
   final ValueChanged<FleetAsset> onAssetSelected;
-  final bool Function(FleetAsset asset)? requiresDailyCheck;
+  final FleetCheckBadge Function(FleetAsset asset)? checkBadgeFor;
   final double? maxHeight;
+  final bool selectable;
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +63,8 @@ class FleetAssetGrid extends StatelessWidget {
               final asset = assets[index];
               return FleetAssetTile(
                 asset: asset,
-                isSelected: selectedAsset?.id == asset.id,
-                needsCheck: requiresDailyCheck?.call(asset) ?? false,
+                isSelected: selectable && selectedAsset?.id == asset.id,
+                checkBadge: checkBadgeFor?.call(asset) ?? FleetCheckBadge.none,
                 onTap: () => onAssetSelected(asset),
               );
             },
@@ -77,13 +81,13 @@ class FleetAssetTile extends StatelessWidget {
     required this.asset,
     required this.isSelected,
     required this.onTap,
-    this.needsCheck = false,
+    this.checkBadge = FleetCheckBadge.none,
   });
 
   final FleetAsset asset;
   final bool isSelected;
   final VoidCallback onTap;
-  final bool needsCheck;
+  final FleetCheckBadge checkBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -139,13 +143,13 @@ class FleetAssetTile extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ] else if (needsCheck) ...[
+            ] else if (checkBadge != FleetCheckBadge.none) ...[
               const SizedBox(height: 2),
               Text(
-                'Check due',
+                _badgeLabel(checkBadge),
                 style: TextStyle(
                   fontSize: 9,
-                  color: Colors.amber.shade800,
+                  color: _badgeColor(context, checkBadge),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -154,5 +158,22 @@ class FleetAssetTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _badgeLabel(FleetCheckBadge badge) => switch (badge) {
+        FleetCheckBadge.checkDue => 'Check due',
+        FleetCheckBadge.endShift => 'End shift',
+        FleetCheckBadge.done => 'Done',
+        FleetCheckBadge.none => '',
+      };
+
+  static Color _badgeColor(BuildContext context, FleetCheckBadge badge) {
+    final theme = Theme.of(context);
+    return switch (badge) {
+      FleetCheckBadge.checkDue => kBrandOrange,
+      FleetCheckBadge.endShift => theme.colorScheme.tertiary,
+      FleetCheckBadge.done => theme.appColors.statusCompleted,
+      FleetCheckBadge.none => theme.appColors.textMuted,
+    };
   }
 }
