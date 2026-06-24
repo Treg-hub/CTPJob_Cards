@@ -6,6 +6,43 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-24 — Fleet daily safety check UX (build 50)
+
+### Fleet — safety checklist decoupled from fault reporting
+
+Reporter departments now get a **machine grid** on the Fleet home screen. Tap a machine to choose **Daily safety check** or **Report a problem** — reporting a fault no longer forces you through the checklist first.
+
+The daily safety check uses **simple checkboxes** (tick when verified safe). Unchecked items at submit ask for a **required fault comment** so mechanics can follow up. **Start and end hour meters** are recorded on one screen; badges (**Check due**, **End shift**, **Done**) are reminders only.
+
+---
+
+## 2026-06-23 — Admin layout refresh, Ink capture on mobile, read optimisations
+
+### Admin — Settings first, five tabs, no Job Cards tab
+
+The Admin screen now opens on **Settings** (the tab you use most often). There are **five** tabs — **Settings**, **Employees**, **Structures**, **On Site**, and **Comms** — in that order.
+
+The old **Job Cards** tab (spreadsheet export and bulk delete) has been **removed from the mobile app**. Job card browsing, history, and KPIs live on **CTP Pulse** (`/jobs`) — use the web board for read-only oversight and exports. Mobile Admin stays focused on people, structure, escalation, and comms.
+
+**Employees** is no longer a wide spreadsheet. You get a searchable **card list**: clock number, name, position, department, and an on-site / off-site pill you can tap to toggle. CSV template download, import, and bulk delete sit in a toolbar card at the top. FCM token editing moved into the **Edit employee** dialog (not shown on every row).
+
+**Structures** has a stats row (department / area / machine counts), a search box, and expandable cards per department. Add-new forms for departments, areas, and machines sit in the same card style as Settings. Duplicate names are blocked with a clear message.
+
+### Ink Factory — operators capture on mobile; managers use CTP Pulse
+
+The Ink Factory hub on mobile is **capture-only**: receive stock, meter readings, production, Toloul recovery, IBC register, and stock balances. The old manager tile grid (pending costs, month-end, recipes, corrections, and so on) is **gone from the app**.
+
+Everyone with Ink access now sees a **Management & costing** card that opens **CTP Pulse** (`https://ctp-pulse.web.app/ink`) in the browser — month-end, pending costs, recipes, reports, and adjustments live there. Operators still never see money on mobile; managers do that work on Pulse.
+
+Stock item detail shows a **bounded recent ledger** (last 20 movements) so opening an item does not pull the full transaction history.
+
+### Other user-visible tweaks
+
+- **Waste load detail** — removed the suggested rand estimate; only approved cost values are shown where relevant.
+- **Home / job lists** — active job card listening is merged into one stream where possible, reducing duplicate Firestore reads when the home screen is open.
+
+---
+
 ## 2026-06-18 — Admin: user feedback tracking board
 
 Admins can now review and track the feedback that staff submit from the **Give Feedback** button on the Home screen.

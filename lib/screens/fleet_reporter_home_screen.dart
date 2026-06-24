@@ -2,21 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart' show currentEmployee;
+import '../models/fleet_asset.dart';
+import '../models/fleet_daily_check.dart';
+import '../models/fleet_daily_checklist_config.dart';
 import '../models/fleet_issue.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_daily_check_gate.dart';
+import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_issue_widgets.dart';
+import '../widgets/fleet_machine_action_sheet.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_reporter_widgets.dart';
-import '../models/fleet_daily_check.dart';
-import 'fleet_daily_check_end_screen.dart';
 import 'fleet_queued_screen.dart';
 import 'fleet_report_wizard_screen.dart';
 import 'fleet_reporter_issue_detail_screen.dart';
 
-/// Reporter-only Fleet shell — My reports default, optional all-open view.
+/// Reporter-only Fleet shell — machines, my reports, optional all-open view.
 class FleetReporterHomeScreen extends ConsumerStatefulWidget {
   const FleetReporterHomeScreen({super.key});
 
@@ -25,9 +29,27 @@ class FleetReporterHomeScreen extends ConsumerStatefulWidget {
       _FleetReporterHomeScreenState();
 }
 
-class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScreen> {
+class _FleetReporterHomeScreenState
+    extends ConsumerState<FleetReporterHomeScreen> {
   final _service = FleetService();
   bool _showAllOpen = false;
+  FleetDailyChecklistConfig _checklistConfig =
+      FleetDailyChecklistConfig.defaults;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChecklistConfig();
+  }
+
+  Future<void> _loadChecklistConfig() async {
+    final config = await _service.getDailyChecklistConfig();
+    if (mounted) setState(() => _checklistConfig = config);
+  }
+
+  void _onMachineTap(FleetAsset asset) {
+    showFleetMachineActionSheet(context, asset: asset);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +118,7 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Text(
               'Hyster / Fleet',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -104,6 +126,50 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
                   ),
             ),
           ),
+          if (_checklistConfig.enabled) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Machines',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Text(
+                'Tap a machine for daily safety check or to report a problem.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).appColors.textMuted,
+                ),
+              ),
+            ),
+            StreamBuilder<List<FleetDailyCheck>>(
+              stream: _service.watchDailyChecksForDate(),
+              builder: (context, checkSnap) {
+                final checks = checkSnap.data ?? [];
+                final checkByAsset = {for (final c in checks) c.assetId: c};
+                return FleetAssetGrid(
+                  maxHeight: 200,
+                  selectable: false,
+                  selectedAsset: null,
+                  onAssetSelected: _onMachineTap,
+                  checkBadgeFor: (asset) {
+                    if (asset.id == null) return FleetCheckBadge.none;
+                    return fleetCheckBadgeForAsset(
+                      asset: asset,
+                      todayCheck: checkByAsset[asset.id],
+                      checklistConfig: _checklistConfig,
+                      settings: settings,
+                    );
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SegmentedButton<bool>(
@@ -120,8 +186,6 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
               ),
             ),
           ),
-          if (emp != null)
-            _EndShiftBanner(service: _service, clockNo: emp.clockNo),
           const SizedBox(height: 8),
           Expanded(
             child: _showAllOpen
@@ -168,10 +232,11 @@ class _MyReportsList extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap Report Problem below when something goes wrong.',
+                    'Tap a machine above or Report Problem when something goes wrong.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 13, color: Theme.of(context).appColors.textMuted),
+                        fontSize: 13,
+                        color: Theme.of(context).appColors.textMuted),
                   ),
                 ],
               ),
@@ -238,98 +303,6 @@ class _AllOpenList extends StatelessWidget {
           },
         );
       },
-    );
-  }
-}
-
-class _EndShiftBanner extends StatelessWidget {
-  const _EndShiftBanner({required this.service, required this.clockNo});
-  final FleetService service;
-  final String clockNo;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<FleetDailyCheck>>(
-      stream: service.watchOpenDailyChecksForDriver(clockNo),
-      builder: (context, snapshot) {
-        final open = snapshot.data ?? [];
-        if (open.isEmpty) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Material(
-            color: Colors.teal.shade50,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: open.length == 1
-                  ? () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) =>
-                            FleetDailyCheckEndScreen(check: open.first),
-                      ))
-                  : () => _showEndShiftPicker(context, open),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.teal.shade800, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        open.length == 1
-                            ? 'End shift — ${open.first.assetName}'
-                            : 'End shift — ${open.length} machines open',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          color: Colors.teal.shade900,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.chevron_right, color: Colors.teal.shade800),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showEndShiftPicker(BuildContext context, List<FleetDailyCheck> open) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Which machine are you finishing?',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-            ...open.map(
-              (check) => ListTile(
-                leading: const Icon(Icons.forklift),
-                title: Text(check.assetName),
-                subtitle: Text(
-                  'Started ${check.start?.hourMeter.toStringAsFixed(1) ?? '—'} h',
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => FleetDailyCheckEndScreen(check: check),
-                  ));
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

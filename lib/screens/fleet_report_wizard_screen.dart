@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_daily_check.dart';
+import '../models/fleet_daily_checklist_config.dart';
 import '../models/fleet_issue.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
@@ -16,7 +17,6 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_form_fields.dart';
 import '../utils/fleet_daily_check_gate.dart';
-import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_reporter_widgets.dart';
 
 const _kLastReportAssetKey = 'fleet_last_report_asset_id';
@@ -54,7 +54,7 @@ class _FleetReportWizardScreenState
   final List<String> _pendingPhotoPaths = [];
   bool _submitting = false;
   bool _showGuide = true;
-  bool _checklistEnabled = false;
+  FleetDailyChecklistConfig _checklistConfig = FleetDailyChecklistConfig.defaults;
 
   @override
   void initState() {
@@ -71,12 +71,10 @@ class _FleetReportWizardScreenState
 
   Future<void> _loadChecklistState() async {
     final config = await _service.getDailyChecklistConfig();
-    if (mounted) setState(() => _checklistEnabled = config.enabled);
+    if (mounted) setState(() => _checklistConfig = config);
   }
 
-  Future<void> _onAssetSelected(FleetAsset asset) async {
-    final ok = await ensureFleetDailyCheckGate(context, ref, asset);
-    if (!ok || !mounted) return;
+  void _onAssetSelected(FleetAsset asset) {
     setState(() => _selectedAsset = asset);
   }
 
@@ -152,12 +150,6 @@ class _FleetReportWizardScreenState
       _showError('Please pick which machine has the problem.');
       return;
     }
-    final gateOk = await ensureFleetDailyCheckGate(
-      context,
-      ref,
-      _selectedAsset!,
-    );
-    if (!gateOk) return;
     final desc = _descCtrl.text.trim();
     if (desc.length < 10) {
       _showError('Please describe the problem (at least 10 characters).');
@@ -273,26 +265,25 @@ class _FleetReportWizardScreenState
             stream: _service.watchDailyChecksForDate(),
             builder: (context, checkSnap) {
               final checks = checkSnap.data ?? [];
-              final withStart = checks
-                  .where((c) => c.hasStart)
-                  .map((c) => c.assetId)
-                  .toSet();
+              final checkByAsset = {
+                for (final c in checks) c.assetId: c,
+              };
               final settings = ref.watch(fleetSettingsProvider).valueOrNull;
-              final emp = currentEmployee;
               return FleetAssetGrid(
                 selectedAsset: _selectedAsset,
                 onAssetSelected: _onAssetSelected,
-                requiresDailyCheck: (asset) {
-                  if (!_checklistEnabled ||
+                checkBadgeFor: (asset) {
+                  if (!_checklistConfig.enabled ||
                       settings == null ||
-                      emp == null ||
                       asset.id == null) {
-                    return false;
+                    return FleetCheckBadge.none;
                   }
-                  if (!role_utils.isFleetReporter(emp, settings)) {
-                    return false;
-                  }
-                  return !withStart.contains(asset.id);
+                  return fleetCheckBadgeForAsset(
+                    asset: asset,
+                    todayCheck: checkByAsset[asset.id],
+                    checklistConfig: _checklistConfig,
+                    settings: settings,
+                  );
                 },
               );
             },

@@ -431,14 +431,15 @@ Every action taken on a job card — creation, status change, assignment, notifi
 
 *Full system control — accounts, geofences, escalation rules, communications*
 
-Admins have access to all data across all departments plus system configuration tools not available to any other role. Admin Settings has six tabs.
+Admins have access to all data across all departments plus system configuration tools not available to any other role. Admin Settings has **five tabs** and opens on **Settings** by default: **Settings → Employees → Structures → On Site → Comms**.
 
-- **Employees** — Create, edit, and deactivate employee accounts. Set roles, departments, and trade types. Link accounts to clock numbers. The `isOnSite` column shows a tappable green/grey chip — tap to toggle an employee's on-site status directly.
-- **Structures** — Manage the department → area → machine hierarchy. Cascading deletes with confirmation.
-- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls. Includes **App Update Control**: set a minimum supported build number and download URL. Any device running an older build sees a blocking update screen on next launch — a server-side kill-switch independent of Remote Config.
-- **Job Cards** — Spreadsheet-style export and bulk-delete tooling for the `job_cards` collection.
+- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls, and the User Feedback board link. Includes **App Update Control**: set a minimum supported build number and download URL. Any device running an older build sees a blocking update screen on next launch — a server-side kill-switch independent of Remote Config.
+- **Employees** — Searchable card list with add / edit / bulk-delete. On-site status is a tappable pill on each card. CSV template and import in the toolbar. FCM token is edited in the employee dialog, not on the list.
+- **Structures** — Manage the department → area → machine hierarchy with search, count stats, and expandable cards. Cascading deletes with confirmation.
 - **On Site** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave.
 - **Comms** — Broadcast an update notification to all employees. A pre-filled message template is provided and can be edited. After sending, a result summary shows sent / parked (off-site users) / no-token counts. Recent broadcasts are listed at the bottom of the tab.
+
+> **Job card export and bulk delete** are not in the mobile Admin screen. Use **CTP Pulse** for job history, KPIs, and read-only oversight.
 
 **Geofence Editor** — Separate screen accessible from Admin → Settings for drawing the site boundary polygon on a live map. Changes take effect immediately for all users without a software update.
 
@@ -467,6 +468,7 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 
 ### What it does
 
+- **Daily safety check** — Reporter departments complete a pre-use checklist before operating a machine: tick each item when verified safe, record start hour meter, and close the shift with an end hour meter. Unchecked items require a fault comment. This is separate from reporting a problem — you can report a fault without doing the check first.
 - **Issue reporting** — Operators and shift leads (in the departments an admin enables) report a problem on a specific forklift or grab: severity (Low / Medium / High / Out of Service), shift (auto-detected as day / night / weekend), a description, and up to three photos.
 - **Out-of-service alerts** — Reporting an asset *out of service* immediately push-notifies the Hyster mechanic and the cost manager(s) — or holds it in their notification inbox if they're off-site — and flags the asset with an orange **OOS** badge until the issue is resolved. High-severity issues go to the inbox without a push.
 - **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note (out-of-service issues must be closed with a work record — a note alone is not accepted). Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, are numbered `FM-NNNN` (short global sequence; legacy records keep `FM-YYYYMMDD-NNN`), and lock from editing 7 days after creation. The hour-meter reading is propagated to the asset so the next mechanic sees the last recorded hours.
@@ -518,13 +520,15 @@ The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter poi
 | Role | How you're recognised | What you can do |
 |------|----------------------|-----------------|
 | **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
-| **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator actions + pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
+| **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator capture on mobile + full management on **CTP Pulse** (`/ink`): pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
 | **Lurgi operator** | `department == "Lurgi"` | Daily Readings screen only (ink + Toloul meters) |
 | **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
 
 > **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
 
-### Manager tools
+### Manager tools (CTP Pulse — not mobile)
+
+Ink managers open **CTP Pulse** from the **Management & costing** card on the Ink Factory hub (`https://ctp-pulse.web.app/ink`). The mobile app no longer shows a manager tile grid.
 
 - **Pending Costs** — after a purchase is received, the manager enters the total cost from the invoice to finalise the weighted-average cost calculation.
 - **Recipes** — define input quantities and output per pot for CoverWax and Gravure Binder recipes.
