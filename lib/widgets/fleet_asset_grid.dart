@@ -5,7 +5,7 @@ import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 
 /// Reusable grid of fleet machine tiles (forklift, grab, BT).
-/// [requiresDailyCheck] is a Phase 3 hook — always false until daily checks ship.
+/// [requiresDailyCheck] marks machines missing today's start check (reporter gate).
 class FleetAssetGrid extends StatelessWidget {
   const FleetAssetGrid({
     super.key,

@@ -711,6 +711,9 @@ class SyncService {
           type = 'Cost entry';
           ref = (item.data['description'] as String?) ??
               (item.data['asset_name'] as String?);
+        } else if (item.collection == Collections.fleetDailyChecks) {
+          type = item.operation == 'update' ? 'End shift check' : 'Daily check';
+          ref = (item.data['asset_name'] as String?);
         } else {
           type = 'Other (${item.collection.substring('fleet_'.length)})';
           ref = null;

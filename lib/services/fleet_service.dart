@@ -11,6 +11,8 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/fleet_asset.dart';
 import '../models/fleet_cost_line.dart';
+import '../models/fleet_daily_check.dart';
+import '../models/fleet_daily_checklist_config.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_type.dart';
@@ -1085,5 +1087,260 @@ class FleetService {
       documentId: queueId,
     );
     return (id: recordId, workNumber: workNumber, queuedOffline: false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // DAILY CHECKS (fleet_daily_checks)
+  // ---------------------------------------------------------------------------
+
+  Future<FleetDailyChecklistConfig> getDailyChecklistConfig() async {
+    final snap = await _db
+        .collection(Collections.fleetSettings)
+        .doc('daily_checklist')
+        .get();
+    if (!snap.exists) return FleetDailyChecklistConfig.defaults;
+    final config = FleetDailyChecklistConfig.fromFirestore(snap);
+    if (config.items.isEmpty) {
+      return FleetDailyChecklistConfig.defaults.copyWithEnabled(config.enabled);
+    }
+    return config;
+  }
+
+  Stream<FleetDailyChecklistConfig> watchDailyChecklistConfig() {
+    return _db
+        .collection(Collections.fleetSettings)
+        .doc('daily_checklist')
+        .snapshots()
+        .map((snap) {
+      if (!snap.exists) return FleetDailyChecklistConfig.defaults;
+      final config = FleetDailyChecklistConfig.fromFirestore(snap);
+      if (config.items.isEmpty) {
+        return FleetDailyChecklistConfig.defaults.copyWithEnabled(config.enabled);
+      }
+      return config;
+    });
+  }
+
+  Future<FleetDailyCheck?> getDailyCheck(String assetId, [DateTime? date]) async {
+    final docId = FleetDailyCheck.docIdFor(assetId, date);
+    final snap =
+        await _db.collection(Collections.fleetDailyChecks).doc(docId).get();
+    if (!snap.exists) return null;
+    return FleetDailyCheck.fromFirestore(snap);
+  }
+
+  Stream<List<FleetDailyCheck>> watchDailyChecksForDate([DateTime? date]) {
+    final today = FleetDailyCheck.checkDateString(date);
+    return _db
+        .collection(Collections.fleetDailyChecks)
+        .where('check_date', isEqualTo: today)
+        .snapshots()
+        .map((s) => s.docs.map(FleetDailyCheck.fromFirestore).toList());
+  }
+
+  Stream<FleetDailyCheck?> watchDailyCheck(String assetId, [DateTime? date]) {
+    final docId = FleetDailyCheck.docIdFor(assetId, date);
+    return _db
+        .collection(Collections.fleetDailyChecks)
+        .doc(docId)
+        .snapshots()
+        .map((snap) =>
+            snap.exists ? FleetDailyCheck.fromFirestore(snap) : null);
+  }
+
+  /// Open starts (no end) for today by driver clock number.
+  Stream<List<FleetDailyCheck>> watchOpenDailyChecksForDriver(String clockNo) {
+    final today = FleetDailyCheck.checkDateString();
+    return _db
+        .collection(Collections.fleetDailyChecks)
+        .where('check_date', isEqualTo: today)
+        .snapshots()
+        .map((s) {
+      final checks = s.docs.map(FleetDailyCheck.fromFirestore).toList();
+      return checks
+          .where((c) => c.isOpen && c.start?.driverClockNo == clockNo)
+          .toList()
+        ..sort((a, b) => a.assetName.compareTo(b.assetName));
+    });
+  }
+
+  Future<void> propagateMachineHoursIfHigher(
+    String assetId,
+    double reading, {
+    String? actorClockNo,
+    String? actorName,
+  }) async {
+    final asset = await getAsset(assetId);
+    if (asset == null) return;
+    final current = asset.currentMachineHours;
+    if (current != null && reading < current) return;
+    await _db.collection(Collections.fleetAssets).doc(assetId).set(
+      {'current_machine_hours': reading},
+      SetOptions(merge: true),
+    );
+    if (actorClockNo != null) {
+      logAudit('asset_hours_updated',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          details: {
+            'asset_id': assetId,
+            'reading': reading,
+            'source': 'daily_check',
+          });
+    }
+  }
+
+  Future<({String id, bool queuedOffline})> createDailyCheckStartResilient({
+    required String assetId,
+    required String assetName,
+    required String assetTag,
+    required String driverClockNo,
+    required String driverName,
+    String? department,
+    required List<FleetDailyCheckItem> items,
+    required double hourMeter,
+    String? generalComment,
+  }) async {
+    final docId = FleetDailyCheck.docIdFor(assetId);
+    final checkDate = FleetDailyCheck.checkDateString();
+    final hasFaulty = items.any((i) => i.isFaulty);
+    final clientRef = const Uuid().v4();
+
+    final start = FleetDailyCheckStart(
+      hourMeter: hourMeter,
+      driverClockNo: driverClockNo,
+      driverName: driverName,
+      department: department,
+      items: items,
+      generalComment: generalComment,
+    );
+
+    final payload = {
+      'asset_id': assetId,
+      'asset_name': assetName,
+      'asset_tag': assetTag,
+      'check_date': checkDate,
+      'start': {
+        ...start.toMap(),
+        'at': DateTime.now().toIso8601String(),
+        'items': items.map((i) => i.toMap()).toList(),
+      },
+      'has_faulty_items': hasFaulty,
+      'client_ref': clientRef,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    final online = await _checkOnline();
+    await SyncService().addToQueue(
+      collection: Collections.fleetDailyChecks,
+      operation: 'create',
+      data: SyncService.sanitizeForHive(payload),
+      documentId: docId,
+    );
+
+    logAudit('daily_check_started',
+        actorClockNo: driverClockNo,
+        actorName: driverName,
+        details: {
+          'check_id': docId,
+          'asset_name': assetName,
+          'has_faulty_items': hasFaulty,
+        });
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        await _db.collection(Collections.fleetDailyChecks).doc(docId).set({
+          'asset_id': assetId,
+          'asset_name': assetName,
+          'asset_tag': assetTag,
+          'check_date': checkDate,
+          'start': start.toMap(),
+          'has_faulty_items': hasFaulty,
+          'client_ref': clientRef,
+          'created_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        }).timeout(_firestoreWriteTimeout);
+        await propagateMachineHoursIfHigher(
+          assetId,
+          hourMeter,
+          actorClockNo: driverClockNo,
+          actorName: driverName,
+        );
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetDailyChecks,
+          documentId: docId,
+        );
+      } catch (_) {
+        queuedOffline = true;
+        unawaited(SyncService().processNow());
+      }
+    }
+
+    return (id: docId, queuedOffline: queuedOffline);
+  }
+
+  Future<({bool queuedOffline})> completeDailyCheckEndResilient({
+    required String checkDocId,
+    required String assetId,
+    required double endHourMeter,
+    required double startHourMeter,
+    String? comment,
+    required String driverClockNo,
+    String? driverName,
+  }) async {
+    final hoursUsed = endHourMeter - startHourMeter;
+    final end = FleetDailyCheckEnd(hourMeter: endHourMeter, comment: comment);
+    final payload = {
+      'end': {
+        ...end.toMap(),
+        'at': DateTime.now().toIso8601String(),
+      },
+      'hours_used': hoursUsed >= 0 ? hoursUsed : 0,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    final online = await _checkOnline();
+    await SyncService().addToQueue(
+      collection: Collections.fleetDailyChecks,
+      operation: 'update',
+      data: SyncService.sanitizeForHive(payload),
+      documentId: checkDocId,
+    );
+
+    logAudit('daily_check_ended',
+        actorClockNo: driverClockNo,
+        actorName: driverName,
+        details: {
+          'check_id': checkDocId,
+          'hours_used': hoursUsed,
+        });
+
+    var queuedOffline = !online;
+    if (online) {
+      try {
+        await _db.collection(Collections.fleetDailyChecks).doc(checkDocId).update({
+          'end': end.toMap(),
+          'hours_used': hoursUsed >= 0 ? hoursUsed : 0,
+          'updated_at': FieldValue.serverTimestamp(),
+        }).timeout(_firestoreWriteTimeout);
+        await propagateMachineHoursIfHigher(
+          assetId,
+          endHourMeter,
+          actorClockNo: driverClockNo,
+          actorName: driverName,
+        );
+        await SyncService().removeQueuedItem(
+          collection: Collections.fleetDailyChecks,
+          documentId: checkDocId,
+        );
+      } catch (_) {
+        queuedOffline = true;
+        unawaited(SyncService().processNow());
+      }
+    }
+
+    return (queuedOffline: queuedOffline);
   }
 }
