@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
+import '../models/fleet_daily_check.dart';
 import '../models/fleet_issue.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
@@ -14,6 +15,8 @@ import '../theme/app_theme.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_form_fields.dart';
+import '../utils/fleet_daily_check_gate.dart';
+import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_reporter_widgets.dart';
 
 const _kLastReportAssetKey = 'fleet_last_report_asset_id';
@@ -51,6 +54,7 @@ class _FleetReportWizardScreenState
   final List<String> _pendingPhotoPaths = [];
   bool _submitting = false;
   bool _showGuide = true;
+  bool _checklistEnabled = false;
 
   @override
   void initState() {
@@ -62,6 +66,18 @@ class _FleetReportWizardScreenState
     }
     _restoreLastAsset();
     _loadGuidePref();
+    _loadChecklistState();
+  }
+
+  Future<void> _loadChecklistState() async {
+    final config = await _service.getDailyChecklistConfig();
+    if (mounted) setState(() => _checklistEnabled = config.enabled);
+  }
+
+  Future<void> _onAssetSelected(FleetAsset asset) async {
+    final ok = await ensureFleetDailyCheckGate(context, ref, asset);
+    if (!ok || !mounted) return;
+    setState(() => _selectedAsset = asset);
   }
 
   Future<void> _restoreLastAsset() async {
@@ -136,6 +152,12 @@ class _FleetReportWizardScreenState
       _showError('Please pick which machine has the problem.');
       return;
     }
+    final gateOk = await ensureFleetDailyCheckGate(
+      context,
+      ref,
+      _selectedAsset!,
+    );
+    if (!gateOk) return;
     final desc = _descCtrl.text.trim();
     if (desc.length < 10) {
       _showError('Please describe the problem (at least 10 characters).');
@@ -247,9 +269,33 @@ class _FleetReportWizardScreenState
           ],
 
           const FleetSectionLabel('1. Which machine? *'),
-          FleetAssetGrid(
-            selectedAsset: _selectedAsset,
-            onAssetSelected: (asset) => setState(() => _selectedAsset = asset),
+          StreamBuilder<List<FleetDailyCheck>>(
+            stream: _service.watchDailyChecksForDate(),
+            builder: (context, checkSnap) {
+              final checks = checkSnap.data ?? [];
+              final withStart = checks
+                  .where((c) => c.hasStart)
+                  .map((c) => c.assetId)
+                  .toSet();
+              final settings = ref.watch(fleetSettingsProvider).valueOrNull;
+              final emp = currentEmployee;
+              return FleetAssetGrid(
+                selectedAsset: _selectedAsset,
+                onAssetSelected: _onAssetSelected,
+                requiresDailyCheck: (asset) {
+                  if (!_checklistEnabled ||
+                      settings == null ||
+                      emp == null ||
+                      asset.id == null) {
+                    return false;
+                  }
+                  if (!role_utils.isFleetReporter(emp, settings)) {
+                    return false;
+                  }
+                  return !withStart.contains(asset.id);
+                },
+              );
+            },
           ),
           const SizedBox(height: 20),
 

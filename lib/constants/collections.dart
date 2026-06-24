@@ -45,6 +45,7 @@ class Collections {
   static const String fleetSettings = 'fleet_settings';
   static const String fleetCounters = 'fleet_counters';
   static const String fleetAudit = 'fleet_audit';
+  static const String fleetDailyChecks = 'fleet_daily_checks';
 
   // ----- Waste Management / WasteTrack (waste_ prefix) -----
   // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.

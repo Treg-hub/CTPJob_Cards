@@ -21,6 +21,22 @@ Tap **Report Problem** to submit a new fault.
 
 ---
 
+## Daily pre-use check (before you use a machine)
+
+Before you report a problem or use a machine for the first time today, you may need to complete the **daily check**:
+
+1. Tap the machine — if it shows **Check due**, the start check opens automatically
+2. Read the **Instructions** at the top
+3. For each of the **14 items**, tap **OK** when you have verified it (every row starts as **Faulty** until you confirm)
+4. Enter the **hour meter** at start
+5. Tap **Complete start check**
+
+When you finish your shift, tap **End shift** on the Fleet home screen (if shown) and enter the end hour meter.
+
+If you marked any item **Faulty**, you can still continue — but consider tapping **Report a problem** so the mechanic knows.
+
+---
+
 ## Reporting a problem — step by step
 
 One screen — no duplicate questions:
