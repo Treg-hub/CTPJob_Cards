@@ -117,6 +117,10 @@ class FleetIssue {
   final DateTime? cancelledAt;
   final String? cancelReason;
 
+  /// Optional provenance — e.g. `daily_check` when auto-created from checklist.
+  final String? source;
+  final String? dailyCheckId;
+
   const FleetIssue({
     this.id,
     required this.assetId,
@@ -142,6 +146,8 @@ class FleetIssue {
     this.cancelledByName,
     this.cancelledAt,
     this.cancelReason,
+    this.source,
+    this.dailyCheckId,
   });
 
   /// "Name (clock)" when both are known, otherwise whichever exists.
@@ -188,6 +194,8 @@ class FleetIssue {
       cancelledByName: data['cancelled_by_name'] as String?,
       cancelledAt: (data['cancelled_at'] as Timestamp?)?.toDate(),
       cancelReason: data['cancel_reason'] as String?,
+      source: data['source'] as String?,
+      dailyCheckId: data['daily_check_id'] as String?,
     );
   }
 
@@ -210,6 +218,9 @@ class FleetIssue {
       if (resolutionType != null) 'resolution_type': resolutionType!.value,
       if (resolutionNote != null) 'resolution_note': resolutionNote,
       if (linkedWorkRecordId != null) 'linked_work_record_id': linkedWorkRecordId,
+      if (source != null && source!.isNotEmpty) 'source': source,
+      if (dailyCheckId != null && dailyCheckId!.isNotEmpty)
+        'daily_check_id': dailyCheckId,
     };
   }
 
@@ -244,6 +255,8 @@ class FleetIssue {
     String? cancelledByName,
     DateTime? cancelledAt,
     String? cancelReason,
+    String? source,
+    String? dailyCheckId,
   }) {
     return FleetIssue(
       id: id ?? this.id,
@@ -270,6 +283,8 @@ class FleetIssue {
       cancelledByName: cancelledByName ?? this.cancelledByName,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       cancelReason: cancelReason ?? this.cancelReason,
+      source: source ?? this.source,
+      dailyCheckId: dailyCheckId ?? this.dailyCheckId,
     );
   }
 }

@@ -139,7 +139,7 @@ class _FleetReporterHomeScreenState
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
               child: Text(
-                'Tap a machine for daily safety check or to report a problem.',
+                'Tap a machine for pre-use safety check or to report a problem.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).appColors.textMuted,

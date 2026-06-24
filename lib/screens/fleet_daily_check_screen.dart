@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,16 +8,16 @@ import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_daily_check.dart';
 import '../models/fleet_daily_checklist_config.dart';
+import '../models/fleet_issue.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_daily_checklist_rows.dart';
 import '../widgets/fleet_form_fields.dart';
-import 'fleet_report_wizard_screen.dart';
 
-enum _CheckMode { loading, start, end, done, blocked }
+enum _CheckMode { loading, start, done }
 
-/// Unified daily safety check — pre-use start, end-of-shift close, hour meters.
+/// Pre-use daily safety check — verify machine safe before use; hour meter snapshot.
 class FleetDailyCheckScreen extends ConsumerStatefulWidget {
   const FleetDailyCheckScreen({super.key, required this.asset});
 
@@ -30,6 +32,9 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
   final _service = FleetService();
   final _hourCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+
+  StreamSubscription<FleetDailyCheck?>? _checkSub;
 
   FleetDailyChecklistConfig _config = FleetDailyChecklistConfig.defaults;
   List<FleetDailyCheckItem> _items = [];
@@ -49,6 +54,22 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
           ? hours.toStringAsFixed(0)
           : hours.toStringAsFixed(1);
     }
+    final assetId = widget.asset.id;
+    if (assetId != null) {
+      _checkSub = _service.watchDailyCheck(assetId).listen(_onCheckUpdate);
+    } else {
+      _mode = _CheckMode.start;
+    }
+  }
+
+  void _onCheckUpdate(FleetDailyCheck? check) {
+    if (!mounted) return;
+    final newMode =
+        (check == null || !check.hasStart) ? _CheckMode.start : _CheckMode.done;
+    setState(() {
+      _todayCheck = check;
+      _mode = newMode;
+    });
   }
 
   Future<void> _loadConfig() async {
@@ -65,27 +86,10 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     });
   }
 
-  void _applyCheck(FleetDailyCheck? check) {
-    final emp = currentEmployee;
-    _todayCheck = check;
-
-    if (check == null || !check.hasStart) {
-      _mode = _CheckMode.start;
-      return;
-    }
-    if (check.hasEnd) {
-      _mode = _CheckMode.done;
-      return;
-    }
-    if (emp != null && check.start?.driverClockNo == emp.clockNo) {
-      _mode = _CheckMode.end;
-      return;
-    }
-    _mode = _CheckMode.blocked;
-  }
-
   @override
   void dispose() {
+    _checkSub?.cancel();
+    _scrollCtrl.dispose();
     _hourCtrl.dispose();
     _commentCtrl.dispose();
     super.dispose();
@@ -154,7 +158,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
                 if (text.isEmpty) return;
                 Navigator.pop(ctx, text);
               },
-              child: const Text('Save as faulty'),
+              child: const Text('Save & notify mechanic'),
             ),
           ],
         );
@@ -164,16 +168,34 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     return result;
   }
 
-  Future<void> _submitStart() async {
+  String _issueDescription({
+    required List<FleetDailyCheckItem> faultyItems,
+    required String faultComment,
+    String? generalComment,
+  }) {
+    final lines = <String>[
+      'Daily safety check — items not verified safe:',
+      ...faultyItems.map((i) => '• ${i.label}'),
+      '',
+      faultComment,
+    ];
+    if (generalComment != null && generalComment.isNotEmpty) {
+      lines.addAll(['', 'Operator note: $generalComment']);
+    }
+    return lines.join('\n');
+  }
+
+  Future<void> _submit() async {
     final emp = currentEmployee;
     if (emp == null) return;
 
     var items = List<FleetDailyCheckItem>.from(_items);
-    final unchecked = items.where((i) => !i.isOk || !i.reviewed).toList();
+    final faultyItems =
+        items.where((i) => !i.isOk || !i.reviewed).toList();
 
     String? faultComment;
-    if (unchecked.isNotEmpty) {
-      faultComment = await _promptFaultComment(unchecked);
+    if (faultyItems.isNotEmpty) {
+      faultComment = await _promptFaultComment(faultyItems);
       if (faultComment == null) return;
       items = items
           .map(
@@ -187,19 +209,19 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     final hourText = _hourCtrl.text.trim();
     final hourMeter = double.tryParse(hourText.replaceAll(',', '.'));
     if (hourMeter == null) {
-      _showMessage('Enter the hour meter reading at start.');
+      _showMessage('Enter the hour meter reading.');
       return;
     }
 
-    final generalParts = <String>[];
-    final baseComment = _commentCtrl.text.trim();
-    if (baseComment.isNotEmpty) generalParts.add(baseComment);
-    if (faultComment != null) generalParts.add('Faults: $faultComment');
+    final generalComment = _commentCtrl.text.trim();
+    final checkCommentParts = <String>[];
+    if (generalComment.isNotEmpty) checkCommentParts.add(generalComment);
+    if (faultComment != null) checkCommentParts.add('Faults: $faultComment');
 
     setState(() => _submitting = true);
     try {
       final hasFaulty = items.any((i) => i.isFaulty);
-      final result = await _service.createDailyCheckStartResilient(
+      final checkResult = await _service.createDailyCheckStartResilient(
         assetId: widget.asset.id!,
         assetName: widget.asset.name,
         assetTag: widget.asset.assetTag,
@@ -209,93 +231,47 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
         items: items,
         hourMeter: hourMeter,
         generalComment:
-            generalParts.isEmpty ? null : generalParts.join('\n'),
+            checkCommentParts.isEmpty ? null : checkCommentParts.join('\n'),
       );
 
+      if (hasFaulty && faultComment != null) {
+        await _service.createIssueResilient(
+          FleetIssue(
+            assetId: widget.asset.id!,
+            assetName: widget.asset.name,
+            description: _issueDescription(
+              faultyItems: faultyItems,
+              faultComment: faultComment,
+              generalComment:
+                  generalComment.isEmpty ? null : generalComment,
+            ),
+            severity: FleetIssueSeverity.medium,
+            reportedByClockNo: emp.clockNo,
+            reportedByName: emp.name,
+            source: 'daily_check',
+            dailyCheckId: checkResult.id,
+          ),
+        );
+      }
+
       if (!mounted) return;
-      final queued = result.queuedOffline;
+      final queued = checkResult.queuedOffline;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             queued
                 ? 'Check saved offline — will sync when connection returns.'
                 : hasFaulty
-                    ? 'Check saved. Unsafe items recorded — mechanic may follow up.'
+                    ? 'Check saved. Problem sent to the mechanic.'
                     : 'Safety check complete. Machine cleared for use.',
           ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
-          action: hasFaulty
-              ? SnackBarAction(
-                  label: 'Report problem',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => FleetReportWizardScreen(
-                          preSelectedAsset: widget.asset,
-                        ),
-                      ),
-                    );
-                  },
-                )
-              : null,
         ),
       );
       Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) _showMessage('Could not save check: $e');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _submitEnd() async {
-    final emp = currentEmployee;
-    if (emp == null || _todayCheck?.start == null) return;
-
-    final start = _todayCheck!.start!;
-    final hourText = _hourCtrl.text.trim();
-    final endHour = double.tryParse(hourText.replaceAll(',', '.'));
-    if (endHour == null) {
-      _showMessage('Enter the hour meter reading at end of shift.');
-      return;
-    }
-    if (endHour < start.hourMeter) {
-      _showMessage(
-        'End reading must be at least the start reading (${start.hourMeter}).',
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-    try {
-      final result = await _service.completeDailyCheckEndResilient(
-        checkDocId: _todayCheck!.id!,
-        assetId: _todayCheck!.assetId,
-        endHourMeter: endHour,
-        startHourMeter: start.hourMeter,
-        comment: _commentCtrl.text.trim().isEmpty
-            ? null
-            : _commentCtrl.text.trim(),
-        driverClockNo: emp.clockNo,
-        driverName: emp.name,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.queuedOffline
-                ? 'End shift saved offline — will sync when connection returns.'
-                : 'Shift ended for ${widget.asset.name}.',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (mounted) _showMessage('Could not save: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -314,23 +290,14 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
       );
     }
 
-    return StreamBuilder<FleetDailyCheck?>(
-      stream: _service.watchDailyCheck(widget.asset.id!),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return Scaffold(
-            appBar: const FleetAppBar(title: 'Daily Safety Check'),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
+    if (_loadingConfig || _mode == _CheckMode.loading) {
+      return Scaffold(
+        appBar: const FleetAppBar(title: 'Daily Safety Check'),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-        if (_mode == _CheckMode.loading || snap.hasData) {
-          _applyCheck(snap.data);
-        }
-
-        return _buildScaffold(context);
-      },
-    );
+    return _buildScaffold(context);
   }
 
   Widget _buildScaffold(BuildContext context) {
@@ -340,36 +307,18 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     final now = DateTime.now();
     final timeFmt = DateFormat('dd MMM yyyy · HH:mm');
 
-    if (_loadingConfig) {
-      return Scaffold(
-        appBar: const FleetAppBar(title: 'Daily Safety Check'),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final title = switch (_mode) {
-      _CheckMode.start => 'Daily Safety Check',
-      _CheckMode.end => 'End Shift',
-      _CheckMode.done => 'Check Complete',
-      _CheckMode.blocked => 'Check In Progress',
-      _CheckMode.loading => 'Daily Safety Check',
-    };
-
-    final canSubmitStart = _mode == _CheckMode.start && !_submitting;
-    final canSubmitEnd = _mode == _CheckMode.end && !_submitting;
+    final title = _mode == _CheckMode.done
+        ? 'Check Complete'
+        : 'Daily Safety Check';
 
     return Scaffold(
       appBar: FleetAppBar(title: title),
-      bottomNavigationBar: (_mode == _CheckMode.start || _mode == _CheckMode.end)
+      bottomNavigationBar: _mode == _CheckMode.start
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: FilledButton.icon(
-                  onPressed: _submitting
-                      ? null
-                      : _mode == _CheckMode.start
-                          ? _submitStart
-                          : _submitEnd,
+                  onPressed: _submitting ? null : _submit,
                   icon: _submitting
                       ? SizedBox(
                           width: 18,
@@ -379,15 +328,9 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
                             color: theme.colorScheme.onPrimary,
                           ),
                         )
-                      : Icon(_mode == _CheckMode.end
-                          ? Icons.logout
-                          : Icons.check_circle_outline),
+                      : const Icon(Icons.check_circle_outline),
                   label: Text(
-                    _submitting
-                        ? 'Saving…'
-                        : _mode == _CheckMode.end
-                            ? 'Complete end shift'
-                            : 'Complete safety check',
+                    _submitting ? 'Saving…' : 'Complete safety check',
                   ),
                   style: FilledButton.styleFrom(
                     backgroundColor: kBrandOrange,
@@ -399,6 +342,8 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
             )
           : null,
       body: ListView(
+        controller: _scrollCtrl,
+        primary: false,
         padding: const EdgeInsets.all(16),
         children: [
           if (_mode == _CheckMode.start) ...[
@@ -442,7 +387,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
             const SizedBox(height: 16),
             Text(
               'Tick each item when verified safe. Unchecked items will be '
-              'recorded as faults at submit.',
+              'recorded as faults and sent to the mechanic.',
               style: TextStyle(fontSize: 12, color: colors.textMuted),
             ),
             const SizedBox(height: 8),
@@ -476,12 +421,12 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
               controller: _commentCtrl,
               maxLines: 2,
               decoration: fleetDropdownDecoration(
-                hintText: 'Notes at start of shift',
+                hintText: 'Any notes before using the machine',
               ),
             ),
             const SizedBox(height: 16),
             const Text(
-              'Hour meter at start *',
+              'Hour meter *',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
             if (widget.asset.currentMachineHours != null) ...[
@@ -497,83 +442,15 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: fleetDropdownDecoration(hintText: 'e.g. 10450.5'),
-              enabled: canSubmitStart || canSubmitEnd,
-            ),
-          ],
-
-          if (_mode == _CheckMode.end && _todayCheck?.start != null) ...[
-            _buildStartSummary(context, _todayCheck!),
-            const SizedBox(height: 20),
-            const Text(
-              'Hour meter at end *',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _hourCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: fleetDropdownDecoration(
-                hintText:
-                    'Must be ≥ ${_todayCheck!.start!.hourMeter.toStringAsFixed(1)}',
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'End comment (optional)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _commentCtrl,
-              maxLines: 3,
-              decoration: fleetDropdownDecoration(
-                hintText: 'Anything to note at end of shift',
-              ),
             ),
           ],
 
           if (_mode == _CheckMode.done && _todayCheck != null) ...[
-            _buildStartSummary(context, _todayCheck!),
-            if (_todayCheck!.end != null) ...[
-              const SizedBox(height: 16),
-              Card(
-                color: colors.cardSurface,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Shift closed',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'End: ${_todayCheck!.end!.hourMeter.toStringAsFixed(1)} h'
-                        '${_todayCheck!.hoursUsed != null ? ' · ${_todayCheck!.hoursUsed!.toStringAsFixed(1)} h used' : ''}',
-                        style: TextStyle(fontSize: 13, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            _buildDoneSummary(context, _todayCheck!),
             const SizedBox(height: 12),
             Text(
-              'Today\'s safety check and hour meter are recorded.',
-              style: TextStyle(fontSize: 13, color: colors.textMuted),
-            ),
-          ],
-
-          if (_mode == _CheckMode.blocked && _todayCheck?.start != null) ...[
-            _buildStartSummary(context, _todayCheck!),
-            const SizedBox(height: 16),
-            Text(
-              'This machine was checked in by ${_todayCheck!.start!.driverName}. '
-              'Only that driver can end the shift.',
+              'This machine was already checked today. '
+              'Only one pre-use check per machine per day.',
               style: TextStyle(fontSize: 13, color: colors.textMuted),
             ),
           ],
@@ -584,7 +461,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     );
   }
 
-  Widget _buildStartSummary(BuildContext context, FleetDailyCheck check) {
+  Widget _buildDoneSummary(BuildContext context, FleetDailyCheck check) {
     final start = check.start!;
     final theme = Theme.of(context);
     final colors = theme.appColors;
@@ -605,20 +482,28 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Driver: ${start.driverName} (#${start.driverClockNo})',
+              'Checked by: ${start.driverName} (#${start.driverClockNo})',
               style: TextStyle(fontSize: 13, color: colors.textMuted),
             ),
             if (start.at != null) ...[
               const SizedBox(height: 4),
               Text(
-                'Started: ${timeFmt.format(start.at!)} · ${start.hourMeter} h',
+                'Time: ${timeFmt.format(start.at!)} · ${start.hourMeter} h',
+                style: TextStyle(fontSize: 13, color: colors.textMuted),
+              ),
+            ],
+            if (start.generalComment != null &&
+                start.generalComment!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                start.generalComment!,
                 style: TextStyle(fontSize: 13, color: colors.textMuted),
               ),
             ],
             if (check.hasFaultyItems) ...[
               const SizedBox(height: 8),
               Text(
-                '${check.faultyCount} item(s) flagged at start',
+                '${check.faultyCount} item(s) flagged — mechanic notified',
                 style: TextStyle(
                   fontSize: 12,
                   color: theme.colorScheme.error,
@@ -626,7 +511,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
                 ),
               ),
             ],
-            if (_mode == _CheckMode.done && start.items.isNotEmpty) ...[
+            if (start.items.isNotEmpty) ...[
               const SizedBox(height: 12),
               FleetDailyChecklistRows(
                 items: start.items,

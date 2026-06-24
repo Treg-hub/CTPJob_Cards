@@ -5,7 +5,7 @@ import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 
 /// Informational badge for today's daily safety check (non-blocking).
-enum FleetCheckBadge { none, checkDue, endShift, done }
+enum FleetCheckBadge { none, checkDue, done }
 
 /// Reusable grid of fleet machine tiles (forklift, grab, BT).
 class FleetAssetGrid extends StatelessWidget {
@@ -162,7 +162,6 @@ class FleetAssetTile extends StatelessWidget {
 
   static String _badgeLabel(FleetCheckBadge badge) => switch (badge) {
         FleetCheckBadge.checkDue => 'Check due',
-        FleetCheckBadge.endShift => 'End shift',
         FleetCheckBadge.done => 'Done',
         FleetCheckBadge.none => '',
       };
@@ -171,7 +170,6 @@ class FleetAssetTile extends StatelessWidget {
     final theme = Theme.of(context);
     return switch (badge) {
       FleetCheckBadge.checkDue => kBrandOrange,
-      FleetCheckBadge.endShift => theme.colorScheme.tertiary,
       FleetCheckBadge.done => theme.appColors.statusCompleted,
       FleetCheckBadge.none => theme.appColors.textMuted,
     };
