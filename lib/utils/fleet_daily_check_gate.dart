@@ -6,7 +6,7 @@ import '../models/fleet_settings.dart';
 import '../widgets/fleet_asset_grid.dart';
 import 'role.dart' as role_utils;
 
-/// Returns true when the reporter has not completed today's start check.
+/// Returns true when the reporter has not completed today's pre-use check.
 bool fleetAssetNeedsDailyCheck({
   required FleetAsset asset,
   required FleetDailyCheck? todayCheck,
@@ -21,7 +21,7 @@ bool fleetAssetNeedsDailyCheck({
   return true;
 }
 
-/// Badge for today's check state (informational only — does not block reporting).
+/// Badge for today's pre-use check (informational only).
 FleetCheckBadge fleetCheckBadgeForAsset({
   required FleetAsset asset,
   required FleetDailyCheck? todayCheck,
@@ -36,11 +36,5 @@ FleetCheckBadge fleetCheckBadgeForAsset({
   if (todayCheck == null || !todayCheck.hasStart) {
     return FleetCheckBadge.checkDue;
   }
-  if (todayCheck.hasEnd) {
-    return FleetCheckBadge.done;
-  }
-  if (todayCheck.start?.driverClockNo == emp.clockNo) {
-    return FleetCheckBadge.endShift;
-  }
-  return FleetCheckBadge.none;
+  return FleetCheckBadge.done;
 }
