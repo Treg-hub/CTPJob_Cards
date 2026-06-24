@@ -14,6 +14,7 @@ import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../models/waste_stock_source.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
@@ -224,19 +225,21 @@ class _WasteBeginCollectionScreenState
         .toList();
   }
 
-  bool get _usesPaperStock =>
-      loadUsesPaperStock(widget.load.mainWasteType, _wasteTypes);
+  bool get _canLinkOnSiteStock =>
+      loadCanLinkOnSiteStock(widget.load.mainWasteType, _wasteTypes);
 
   Future<void> _addFromStock() async {
-    if (!_usesPaperStock) return;
+    if (!_canLinkOnSiteStock) return;
     final alreadyOnLoad =
         _items.where((i) => i.stockId != null).map((i) => i.stockId!).toSet();
     final picked = await WasteStockLinkSheet.show(
       context,
-      wasteType: kPaperWasteStockParent,
-      subtypeFilter:
-          stockSubtypeFilterForChips(_contractorLinkedTypes, _wasteTypes),
+      wasteType: stockLinkParentType(widget.load.mainWasteType),
+      subtypeFilter: widget.load.mainWasteType == WasteStockTypes.copperWaste
+          ? {WasteStockTypes.copperRods, WasteStockTypes.copperNuggets}
+          : stockSubtypeFilterForChips(_contractorLinkedTypes, _wasteTypes),
       initialSelectedIds: alreadyOnLoad.toList(),
+      includeManagerOnlyStock: true,
       title: 'Add saved stock',
       subtitle:
           'Select on-site stock to include. Pre-linked items are already listed — add any extra stock found at the gate.',
@@ -571,7 +574,7 @@ class _WasteBeginCollectionScreenState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (_usesPaperStock)
+                    if (_canLinkOnSiteStock)
                       TextButton.icon(
                         onPressed: _addFromStock,
                         icon: const Icon(Icons.layers_outlined, size: 18),
@@ -586,12 +589,11 @@ class _WasteBeginCollectionScreenState
                 ),
               ],
             ),
-            if (_usesPaperStock)
+            if (_canLinkOnSiteStock)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Saved stock appears automatically when pre-linked. '
-                  'Add more saved stock or capture fresh items with new photos.',
+                  'Link saved on-site stock on collection day, or capture fresh items with new photos.',
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -879,9 +881,10 @@ class _ItemEntry {
   /// Photos are the stock item's existing URLs (stored as paths for display).
   factory _ItemEntry.fromStock(WasteStockItem stock, {bool isQuantityOnly = false, bool isNoSiteWeight = false}) {
     return _ItemEntry(
-      subtype: stock.subtype,
+      subtype: stock.subtype.isNotEmpty ? stock.subtype : stock.wasteType,
       weightKg: stock.estimatedWeightKg ?? 0.0,
-      notes: stock.notes,
+      quantity: isQuantityOnly ? stock.quantity : null,
+      notes: stock.notes ?? (stock.ibcNumber != null ? 'IBC ${stock.ibcNumber}' : null),
       photoPaths: stock.photos,
       stockId: stock.id,
       isQuantityOnly: isQuantityOnly,

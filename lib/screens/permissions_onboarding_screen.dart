@@ -346,25 +346,25 @@ class _YourRolePageState extends State<_YourRolePage> {
     if (_isSecurityManager) {
       return const [
         _RoleBullet(Icons.add_box_outlined,
-            "Schedule waste collections: pick contractor, waste type, date and time"),
+            "Schedule waste collections: contractor, waste types, and expected date"),
+        _RoleBullet(Icons.inventory_2,
+            "Browse on-site stock and Copper ready to sell — IBC bins and copper appear here when thresholds are met"),
+        _RoleBullet(Icons.link,
+            "On collection day, link saved stock via Begin Collection → From stock"),
         _RoleBullet(Icons.checklist,
-            "Review live load status in the Waste tab — Scheduled, Pending Weighbridge, Pending Cost Review, Completed"),
-        _RoleBullet(Icons.scale,
-            "Enter off-site weighbridge weights when tickets arrive — the Weighbridge tab shows what's waiting"),
-        _RoleBullet(Icons.bar_chart,
-            "Open the Reports tab to check weights, flag deviations, and export CSV or PDF"),
+            "Pending weighbridge and cost review are completed on CTP Pulse, not mobile"),
       ];
     }
     if (_isSecurityGuard) {
       return const [
         _RoleBullet(Icons.local_shipping,
             "When a contractor arrives, find their scheduled load in the Waste tab and tap Begin Collection"),
+        _RoleBullet(Icons.link,
+            "Link saved stock on collection day with From stock — you won't browse the stock inventory list"),
         _RoleBullet(Icons.photo_camera,
-            "Record each item with photos — weighted types need kg; quantity-only types need a count instead"),
+            "Record each item with photos — weighted types need kg; IBC bins and quantity-only types need a count"),
         _RoleBullet(Icons.draw,
-            "Capture the contractor driver's signature before the truck leaves the gate"),
-        _RoleBullet(Icons.inventory_2,
-            "Use On-site Stock to log material accumulating before a collection is scheduled"),
+            "Capture the contractor driver's signature before the truck leaves when required"),
       ];
     }
     if (_isFleetMechanic) {

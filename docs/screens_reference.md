@@ -482,21 +482,22 @@ Screens for the waste management feature. Accessible via the **Waste** tab in th
 
 `lib/screens/waste_home_screen.dart` — **Roles:** Security Manager, Security Guard, Admin
 
-Entry point for WasteTrack (single **Loads** tab). Shows load cards grouped by status: **Incoming** (scheduled), **Recent** (draft, pending queues, completed), and a **Paper Waste Stock** banner with on-site inventory count.
+Entry point for WasteTrack (single **Loads** tab). Shows load cards grouped by status: **Incoming** (scheduled), **Recent** (draft, pending queues, completed). **Security managers and admins** also see a **Copper ready to sell** panel and an **on-site stock** banner (guards do not — they link stock at collection only).
 
 Load list is driven by live streams on `watchLoads()` and `watchScheduledLoads()` — updates reflect in real time without manual refresh. Pending weighbridge and cost-review loads show a **CTP Pulse handoff** banner on detail — those queues are not processed on mobile.
 
 #### Role-based differences
 
-- **Security Manager** — full field capture: schedule, on-the-spot loads, stock, finish loading
-- **Security Guard** — same field capture: begin collection, items, photos, signature, submit
-- **Admin** — same mobile field capture; admin workflows (weighbridge, cost review, settings) are on **CTP Pulse**
+- **Security Manager** — schedule, on-the-spot loads, browse on-site stock inventory, copper ready panel, link stock at collection, finish loading
+- **Security Guard** — schedule, begin collection, **From stock** at collection (no inventory browse), items, photos, signature, submit
+- **Admin** — same as manager on mobile; weighbridge, cost review, settings on **CTP Pulse**
 
 #### Key Actions
 
 - **+ New / Schedule** *(FAB)* — bottom sheet: "Schedule Incoming Load" or "New Load (on the spot)"
 - **Begin Collection** — opens **Waste Begin Collection** for a scheduled load
-- **Paper Waste Stock** banner — opens on-site stock inventory
+- **On-site stock** banner *(manager/admin)* — opens stock inventory
+- **Copper ready to sell** panel *(manager/admin)* — live copper sell bucket + on-site copper waste stock after 400 kg threshold
 - **⋮ More actions** — cloud sync retry when offline queue is non-empty (weighbridge/reports/admin removed 2026-06-22)
 - **All / Today / This Week** filter chips — apply to scheduled and recent loads
 
@@ -517,7 +518,7 @@ Form for scheduling an incoming load before the truck arrives. Saves to `waste_l
 
 `lib/screens/waste_begin_collection_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
 
-Opens when a user taps **Begin Collection** on a scheduled load. On submission: weight-based / no-on-site-weight loads → `pending_weighbridge`; quantity-only loads → `pending_cost_review` (weighbridge skipped). Respects `photos_required` and `signature_required` from Pulse settings.
+Opens when a user taps **Begin Collection** on a scheduled load. Supports **From stock** for paper, **IBC Bins**, and **Copper Waste** (guards can link here without browsing inventory). On submission: weight-based / no-on-site-weight loads → `pending_weighbridge`; quantity-only loads → `pending_cost_review` (weighbridge skipped). Respects `photos_required` and `signature_required` from Pulse settings.
 
 Add-item uses a `showModalBottomSheet` (not a dialog) for camera stability. Calls `WasteService.submitCollection` which stores `collectedByName` from `currentEmployee.name` on the load document.
 
@@ -573,6 +574,12 @@ Full detail view of a single waste load.
 | Completed | View only | View only |
 
 > **Removed 2026-06-22:** `waste_pending_weighbridge_screen`, `waste_review_screen`, `waste_reports_screen`, `waste_admin_screen` — weighbridge, cost review, reports, and settings live on **CTP Pulse** only.
+
+### Waste Stock Inventory
+
+`lib/screens/waste_stock_inventory_screen.dart` — **Roles:** Security Manager, Admin *(not Security Guard)*
+
+Lists on-site `waste_stock` items: manual paper stock, auto **IBC Bins** from ink consume (`stock_ibc_{n}`), and auto **Copper Waste** after the 400 kg threshold (`visibility: manager_only`). Guards are directed to link stock at collection instead.
 
 ### Waste Queued
 
@@ -692,7 +699,13 @@ Scans ink IBCs (GS1-128 barcode labels). The barcode parser reads the SSCC (IBC 
 
 `lib/screens/ink_ibc_register_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs.
+Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs. Managers can **void consumption** — this auto-disposes the linked `waste_stock` item if still on site.
+
+### Consume IBC (Waste cross-link)
+
+`lib/screens/ink_ibc_transfer_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Marks an IBC as consumed (transferred to tank). Atomically creates `waste_stock/stock_ibc_{number}` as an **IBC Bins** on-site item (qty 1, no stock photo). Security links it to a waste load on **collection day** via **Begin Collection → From stock**.
 
 ---
 

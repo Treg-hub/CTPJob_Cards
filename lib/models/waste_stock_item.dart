@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'waste_stock_source.dart';
+
 /// Status of a waste stock item before and after it is dispatched on a load.
 enum WasteStockStatus {
   onSite('on_site'),
@@ -44,6 +46,12 @@ class WasteStockItem {
   final String subtype;
   final List<String> photos;
   final double? estimatedWeightKg;
+  final int quantity;
+  final String? ibcNumber;
+  final WasteStockSource source;
+  final String? sourceRef;
+  final WasteStockVisibility visibility;
+  final bool autoCreated;
   final WasteStockStatus status;
   final String? loadId;
   final String createdBy;
@@ -59,6 +67,12 @@ class WasteStockItem {
     required this.subtype,
     this.photos = const [],
     this.estimatedWeightKg,
+    this.quantity = 1,
+    this.ibcNumber,
+    this.source = WasteStockSource.manual,
+    this.sourceRef,
+    this.visibility = WasteStockVisibility.all,
+    this.autoCreated = false,
     this.status = WasteStockStatus.onSite,
     this.loadId,
     required this.createdBy,
@@ -113,6 +127,12 @@ class WasteStockItem {
       estimatedWeightKg: _parseDouble(
         data['estimated_weight_kg'] ?? data['estimatedWeightKg'],
       ),
+      quantity: _parseDouble(data['quantity'])?.round() ?? 1,
+      ibcNumber: (data['ibc_number'] ?? data['ibcNumber']) as String?,
+      source: WasteStockSource.fromString(data['source'] as String?),
+      sourceRef: (data['source_ref'] ?? data['sourceRef']) as String?,
+      visibility: WasteStockVisibility.fromString(data['visibility'] as String?),
+      autoCreated: _parseBool(data['auto_created'] ?? data['autoCreated']),
       status: WasteStockStatus.fromString(data['status'] as String?),
       loadId: (data['load_id'] ?? data['loadId']) as String?,
       createdBy: (data['created_by'] ?? data['createdBy'] ?? '') as String,
@@ -131,6 +151,12 @@ class WasteStockItem {
       'subtype': subtype,
       'photos': photos,
       if (estimatedWeightKg != null) 'estimated_weight_kg': estimatedWeightKg,
+      'quantity': quantity,
+      if (ibcNumber != null) 'ibc_number': ibcNumber,
+      'source': source.value,
+      if (sourceRef != null) 'source_ref': sourceRef,
+      'visibility': visibility.value,
+      'auto_created': autoCreated,
       'status': status.value,
       if (loadId != null) 'load_id': loadId,
       'created_by': createdBy,
@@ -140,12 +166,20 @@ class WasteStockItem {
     };
   }
 
+  bool get isQuantityOnlyType => wasteType == WasteStockTypes.ibcBins;
+
   WasteStockItem copyWith({
     String? id,
     String? wasteType,
     String? subtype,
     List<String>? photos,
     double? estimatedWeightKg,
+    int? quantity,
+    String? ibcNumber,
+    WasteStockSource? source,
+    String? sourceRef,
+    WasteStockVisibility? visibility,
+    bool? autoCreated,
     WasteStockStatus? status,
     String? loadId,
     String? createdBy,
@@ -161,6 +195,12 @@ class WasteStockItem {
       subtype: subtype ?? this.subtype,
       photos: photos ?? this.photos,
       estimatedWeightKg: estimatedWeightKg ?? this.estimatedWeightKg,
+      quantity: quantity ?? this.quantity,
+      ibcNumber: ibcNumber ?? this.ibcNumber,
+      source: source ?? this.source,
+      sourceRef: sourceRef ?? this.sourceRef,
+      visibility: visibility ?? this.visibility,
+      autoCreated: autoCreated ?? this.autoCreated,
       status: status ?? this.status,
       loadId: loadId ?? this.loadId,
       createdBy: createdBy ?? this.createdBy,

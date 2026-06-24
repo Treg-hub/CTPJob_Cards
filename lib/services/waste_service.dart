@@ -20,6 +20,8 @@ import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
 import '../utils/waste_type_routing.dart';
+import '../models/waste_stock_source.dart';
+import 'copper_service.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
 ///
@@ -1759,6 +1761,50 @@ class WasteService {
     if (queued) {
       unawaited(SyncService().processNow());
     }
+
+    await _recordCopperSalesIfNeeded(loadId: loadId, reviewedBy: reviewedBy);
+  }
+
+  /// When a Copper Waste load completes, record commercial sale in copper_transactions.
+  Future<void> _recordCopperSalesIfNeeded({
+    required String loadId,
+    required String reviewedBy,
+  }) async {
+    try {
+      final loadSnap =
+          await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
+      if (!loadSnap.exists) return;
+      final load = WasteLoad.fromFirestore(loadSnap);
+      if (load.mainWasteType != WasteStockTypes.copperWaste) return;
+
+      final itemsSnap = await _firestore
+          .collection(Collections.wasteItems)
+          .where('load_id', isEqualTo: loadId)
+          .get();
+      final copperService = CopperService();
+      for (final doc in itemsSnap.docs) {
+        final data = doc.data();
+        if (data['is_deleted'] == true) continue;
+        final subtype = (data['subtype'] as String?) ?? '';
+        if (subtype != WasteStockTypes.copperRods &&
+            subtype != WasteStockTypes.copperNuggets) {
+          continue;
+        }
+        final weight = (data['weight_kg'] as num?)?.toDouble() ?? 0.0;
+        final rate = (data['rate_per_kg'] as num?)?.toDouble() ?? 0.0;
+        if (weight <= 0 || rate <= 0) continue;
+        await copperService.recordSaleFromWasteLoad(
+          loadId: loadId,
+          loadNumber: load.loadNumber,
+          subtype: subtype,
+          amountKg: weight,
+          rPerKg: rate,
+          userId: reviewedBy,
+        );
+      }
+    } catch (_) {
+      // Non-fatal: waste load completion must not fail on copper audit write.
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -2271,6 +2317,7 @@ class WasteService {
           });
         }
         await batch.commit().timeout(_firestoreWriteTimeout);
+        await CopperService().clearActiveBatchIfNoOnSiteThresholdStock();
         return;
       } catch (_) {
         // Fall through to queue below.
@@ -2286,6 +2333,7 @@ class WasteService {
         documentId: id,
       );
     }
+    await CopperService().clearActiveBatchIfNoOnSiteThresholdStock();
   }
 
   /// Force-queues stock-loaded updates without a connectivity check.

@@ -22,6 +22,8 @@ import 'waste_guide_screen.dart';
 import 'waste_queued_screen.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../widgets/waste_stock_link_sheet.dart';
+import '../widgets/waste_copper_ready_panel.dart';
+import '../models/waste_stock_source.dart';
 import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
@@ -494,19 +496,20 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                       MaterialPageRoute(builder: (_) => const WasteCreateLoadScreen()));
                 },
               ),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(context).appColors.wasteGreen,
-                child: const Icon(Icons.layers, color: Colors.white),
+            if (role_utils.canViewWasteStockInventory(currentEmployee, _wasteSettings))
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).appColors.wasteGreen,
+                  child: const Icon(Icons.layers, color: Colors.white),
+                ),
+                title: const Text('On-site Stock'),
+                subtitle: const Text('View or record items accumulating on site'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()));
+                },
               ),
-              title: const Text('On-site Stock'),
-              subtitle: const Text('View or record items accumulating on site'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()));
-              },
-            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -566,8 +569,11 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
             ),
           ),
 
-        // On-site stock summary banner
-        if (role_utils.isWasteUser(currentEmployee, _wasteSettings))
+        if (role_utils.canViewCopperReadyPanel(currentEmployee, _wasteSettings))
+          WasteCopperReadyPanel(wasteService: _wasteService),
+
+        // On-site stock summary banner (managers/admins only — guards link at collection)
+        if (role_utils.canViewWasteStockInventory(currentEmployee, _wasteSettings))
           _OnSiteStockBanner(wasteService: _wasteService, wasteTypes: _wasteTypes),
 
         // Help icon + quick filter chips in one row
@@ -888,8 +894,9 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
         int qtyCount = 0;
         double totalKg = 0;
         for (final i in items) {
+          if (i.visibility == WasteStockVisibility.managerOnly) continue;
           if (qtyTypes.contains(i.wasteType) || qtyTypes.contains(i.subtype)) {
-            qtyCount++;
+            qtyCount += i.quantity;
           } else {
             wtCount++;
             totalKg += i.estimatedWeightKg ?? 0.0;
@@ -922,7 +929,7 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
       final wtPart = _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '$_weightedCount item${_weightedCount == 1 ? '' : 's'}';
       return '$wtPart  +  $_qtyOnlyCount bin${_qtyOnlyCount == 1 ? '' : 's'}';
     }
-    if (_qtyOnlyCount > 0) return '';
+    if (_qtyOnlyCount > 0) return '$_qtyOnlyCount bin${_qtyOnlyCount == 1 ? '' : 's'} ready';
     return _totalKg > 0 ? '~${formatSAWeight(_totalKg)}' : '';
   }
 

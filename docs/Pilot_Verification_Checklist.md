@@ -155,6 +155,16 @@
   - IBC Bins load: mobile submit → `pending_cost_review` directly (no weighbridge).
   - Pulse weighbridge queue does not list quantity-only loads.
 
+- [ ] **Ink IBC → Waste stock**
+  - Ink operator consumes IBC → `waste_stock/stock_ibc_{n}` created (IBC Bins, qty 1).
+  - Manager sees bin in on-site stock; guard does not browse inventory but can **From stock** on collection.
+  - Void ink consumption → stock auto-disposed if still on site.
+
+- [ ] **Copper 400 kg → Waste stock**
+  - Copper sell bucket ≥400 kg → auto Copper Waste stock (manager_only); copper sell buckets zeroed.
+  - Manager sees copper panel + stock; guard links at collection only.
+  - Cost review approve on Copper Waste load → `record_sale_from_waste` in `copper_transactions`.
+
 - [ ] **Reports View (Pulse)**
   - `/waste/reports` shows deviation counts and export includes Deviation column.
 
@@ -168,7 +178,7 @@
   | Capability | Mobile | Pulse | Notes |
   |------------|--------|-------|-------|
   | Schedule / create load | Full | Full | Pulse for manager corrections |
-  | Stock capture | Full | Full | Paper stock on both |
+  | Stock capture | Manager browse; guard link at collection | Manager browse | IBC auto from ink; copper at 400 kg |
   | Collection + items + photos | Full | Partial | Pulse new/edit load |
   | Signature | Full | Partial | Pulse finish loading |
   | Weighbridge | — | Full | Mobile handoff banner only |

@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../constants/collections.dart';
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
+import '../models/waste_stock_source.dart';
 import '../services/connectivity_service.dart';
 
 class CopperService {
@@ -24,6 +26,8 @@ class CopperService {
         sortKg: 0.0,
         reuseKg: 0.0,
         sellKg: 0.0,
+        sellRodsKg: 0.0,
+        sellNuggetsKg: 0.0,
         currentRPerKg: 0.0,
         lastUpdated: Timestamp.now(),
       ).toFirestore());
@@ -76,7 +80,11 @@ class CopperService {
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      final newInv = inv.copyWith(sellKg: inv.sellKg + amountKg, lastUpdated: now);
+      final newInv = inv.copyWith(
+        sellKg: inv.sellKg + amountKg,
+        sellRodsKg: inv.sellRodsKg + amountKg,
+        lastUpdated: now,
+      );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
         id: id,
@@ -88,6 +96,7 @@ class CopperService {
         comments: comments,
         userId: userId,
       ).toFirestore());
+      await _maybeCreateCopperWasteStock(tx, newInv, userId, now);
     });
   }
 
@@ -104,6 +113,7 @@ class CopperService {
         sortKg: inv.sortKg - totalKg,
         reuseKg: inv.reuseKg + reuseKg,
         sellKg: inv.sellKg + sellKg,
+        sellNuggetsKg: inv.sellNuggetsKg + sellKg,
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
@@ -117,6 +127,7 @@ class CopperService {
          comments: comments,
          userId: userId,
        ).toFirestore());
+      await _maybeCreateCopperWasteStock(tx, newInv, userId, now);
     });
   }
 
@@ -164,6 +175,161 @@ class CopperService {
         totalValueR: totalValueR,
         userId: userId,
       ).toFirestore());
+    });
+  }
+
+  /// Records commercial sale when a Copper Waste load completes. Does not touch sell buckets.
+  Future<void> recordSaleFromWasteLoad({
+    required String loadId,
+    required String? loadNumber,
+    required String subtype,
+    required double amountKg,
+    required double rPerKg,
+    required String userId,
+    String comments = '',
+  }) async {
+    if (amountKg <= 0 || rPerKg <= 0) return;
+    final docId = 'waste_sale_${loadId}_${subtype.toLowerCase()}';
+    final now = Timestamp.now();
+    final totalValueR = amountKg * rPerKg;
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper sale recording requires online connection');
+    }
+
+    await _firestore.runTransaction((tx) async {
+      final existing = await tx.get(_firestore.collection(transCollection).doc(docId));
+      if (existing.exists) return;
+
+      tx.set(_firestore.collection(transCollection).doc(docId), CopperTransaction(
+        id: docId,
+        type: CopperTransaction.recordSaleFromWaste,
+        amountKg: amountKg,
+        fromBucket: 'waste_load',
+        toBucket: 'sold',
+        timestamp: now,
+        comments: comments.isNotEmpty
+            ? comments
+            : 'Recorded from waste load ${loadNumber ?? loadId}',
+        rPerKg: rPerKg,
+        totalValueR: totalValueR,
+        userId: userId,
+        wasteLoadId: loadId,
+        wasteLoadNumber: loadNumber,
+        copperSubtype: subtype,
+      ).toFirestore());
+
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      tx.update(_firestore.doc(inventoryPath), inv.copyWith(
+        currentRPerKg: rPerKg,
+        lastUpdated: now,
+      ).toFirestore());
+    });
+  }
+
+  Future<void> _maybeCreateCopperWasteStock(
+    Transaction tx,
+    CopperInventory inv,
+    String userId,
+    Timestamp now,
+  ) async {
+    if (inv.sellKg < kCopperWasteStockThresholdKg) return;
+    if (inv.activeCopperWasteBatchId != null &&
+        inv.activeCopperWasteBatchId!.isNotEmpty) {
+      return;
+    }
+
+    final batchId = _uuid.v4();
+    final stockIds = <String>[];
+
+    if (inv.sellRodsKg > 0) {
+      final stockId = 'copper_stock_rods_$batchId';
+      stockIds.add(stockId);
+      tx.set(_firestore.collection(Collections.wasteStock).doc(stockId), {
+        'waste_type': WasteStockTypes.copperWaste,
+        'subtype': WasteStockTypes.copperRods,
+        'photos': <String>[],
+        'quantity': 1,
+        'estimated_weight_kg': inv.sellRodsKg,
+        'source': WasteStockSource.copperThreshold.value,
+        'source_ref': 'copper_batch:$batchId',
+        'visibility': WasteStockVisibility.managerOnly.value,
+        'auto_created': true,
+        'status': 'on_site',
+        'created_by': userId,
+        'created_by_name': 'System (copper threshold)',
+        'is_deleted': false,
+        'created_at': now,
+        'updated_at': now,
+        'notes': 'Auto-created when copper sell bucket reached ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg',
+      });
+    }
+
+    if (inv.sellNuggetsKg > 0) {
+      final stockId = 'copper_stock_nuggets_$batchId';
+      stockIds.add(stockId);
+      tx.set(_firestore.collection(Collections.wasteStock).doc(stockId), {
+        'waste_type': WasteStockTypes.copperWaste,
+        'subtype': WasteStockTypes.copperNuggets,
+        'photos': <String>[],
+        'quantity': 1,
+        'estimated_weight_kg': inv.sellNuggetsKg,
+        'source': WasteStockSource.copperThreshold.value,
+        'source_ref': 'copper_batch:$batchId',
+        'visibility': WasteStockVisibility.managerOnly.value,
+        'auto_created': true,
+        'status': 'on_site',
+        'created_by': userId,
+        'created_by_name': 'System (copper threshold)',
+        'is_deleted': false,
+        'created_at': now,
+        'updated_at': now,
+        'notes': 'Auto-created when copper sell bucket reached ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg',
+      });
+    }
+
+    if (stockIds.isEmpty) return;
+
+    tx.update(_firestore.doc(inventoryPath), inv.copyWith(
+      sellKg: 0,
+      sellRodsKg: 0,
+      sellNuggetsKg: 0,
+      activeCopperWasteBatchId: batchId,
+      lastUpdated: now,
+    ).toFirestore());
+
+    final auditId = 'copper_prepare_$batchId';
+    tx.set(_firestore.collection(transCollection).doc(auditId), CopperTransaction(
+      id: auditId,
+      type: CopperTransaction.prepareForCollection,
+      amountKg: inv.sellKg,
+      fromBucket: 'sell',
+      toBucket: 'waste_stock:${stockIds.join(',')}',
+      timestamp: now,
+      comments: 'Auto-created waste stock at ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg threshold',
+      userId: userId,
+    ).toFirestore());
+  }
+
+  /// Clears [activeCopperWasteBatchId] when all threshold stock has left on_site.
+  Future<void> clearActiveBatchIfNoOnSiteThresholdStock() async {
+    final invSnap = await _firestore.doc(inventoryPath).get();
+    final inv = CopperInventory.fromFirestore(invSnap);
+    if (inv.activeCopperWasteBatchId == null) return;
+
+    final stockSnap = await _firestore
+        .collection(Collections.wasteStock)
+        .where('source', isEqualTo: WasteStockSource.copperThreshold.value)
+        .where('status', isEqualTo: 'on_site')
+        .limit(1)
+        .get();
+
+    final hasOnSite = stockSnap.docs.any((d) => d.data()['is_deleted'] != true);
+    if (hasOnSite) return;
+
+    await _firestore.doc(inventoryPath).update({
+      'active_copper_waste_batch_id': FieldValue.delete(),
+      'last_updated': FieldValue.serverTimestamp(),
     });
   }
 }

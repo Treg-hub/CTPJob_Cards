@@ -6,6 +6,8 @@ class CopperTransaction {
   static const String sort = 'sort';
   static const String useReuse = 'use_reuse';
   static const String recordSale = 'record_sale';
+  static const String prepareForCollection = 'prepare_for_collection';
+  static const String recordSaleFromWaste = 'record_sale_from_waste';
 
   final String id;
   final String type;
@@ -17,6 +19,9 @@ class CopperTransaction {
   final double? rPerKg;
   final double? totalValueR;
   final String userId;
+  final String? wasteLoadId;
+  final String? wasteLoadNumber;
+  final String? copperSubtype;
 
   const CopperTransaction({
     required this.id,
@@ -29,6 +34,9 @@ class CopperTransaction {
     this.rPerKg,
     this.totalValueR,
     required this.userId,
+    this.wasteLoadId,
+    this.wasteLoadNumber,
+    this.copperSubtype,
   });
 
   factory CopperTransaction.fromFirestore(DocumentSnapshot doc) {
@@ -44,6 +52,9 @@ class CopperTransaction {
       rPerKg: (data['r_per_kg'] as num?)?.toDouble(),
       totalValueR: (data['total_value_r'] as num?)?.toDouble(),
       userId: data['user_id'] as String? ?? '',
+      wasteLoadId: data['waste_load_id'] as String?,
+      wasteLoadNumber: data['waste_load_number'] as String?,
+      copperSubtype: data['copper_subtype'] as String?,
     );
   }
 
@@ -55,9 +66,12 @@ class CopperTransaction {
       'to_bucket': toBucket,
       'timestamp': timestamp,
       'comments': comments,
-      'r_per_kg': rPerKg,
-      'total_value_r': totalValueR,
+      if (rPerKg != null) 'r_per_kg': rPerKg,
+      if (totalValueR != null) 'total_value_r': totalValueR,
       'user_id': userId,
+      if (wasteLoadId != null) 'waste_load_id': wasteLoadId,
+      if (wasteLoadNumber != null) 'waste_load_number': wasteLoadNumber,
+      if (copperSubtype != null) 'copper_subtype': copperSubtype,
     };
   }
 

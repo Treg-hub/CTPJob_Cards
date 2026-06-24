@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
+
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart';
@@ -37,6 +38,22 @@ class _WasteStockInventoryScreenState
   Widget build(BuildContext context) {
     final appColors = Theme.of(context).appColors;
     final canAdd = isWasteUser(currentEmployee, _wasteSettings);
+
+    if (!canViewWasteStockInventory(currentEmployee, _wasteSettings)) {
+      return Scaffold(
+        appBar: WasteAppBar(title: 'On-site Stock', isOnSite: currentEmployee?.isOnSite),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'On-site stock inventory is for security managers. '
+              'Link stock when you begin collection on collection day.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: WasteAppBar(
@@ -88,7 +105,13 @@ class _WasteStockInventoryScreenState
                     !snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final items = snap.data ?? [];
+                final items = (snap.data ?? [])
+                    .where((i) => canViewWasteStockInInventory(
+                          employee: currentEmployee,
+                          settings: _wasteSettings,
+                          visibility: i.visibility.value,
+                        ))
+                    .toList();
                 if (items.isEmpty) {
                   return const _EmptyState();
                 }
@@ -258,10 +281,13 @@ class _StockItemCard extends StatelessWidget {
               )
             : _DefaultLeadingIcon(appColors: appColors),
         title: Text(
-            item.subtype.isNotEmpty ? item.subtype : item.wasteType,
+            item.ibcNumber != null
+                ? 'IBC ${item.ibcNumber}'
+                : (item.subtype.isNotEmpty ? item.subtype : item.wasteType),
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
         subtitle: Text(
-          '${formatSADate(item.createdAt)} · ${item.createdByName}',
+          '${formatSADate(item.createdAt)} · ${item.createdByName}'
+          '${item.isQuantityOnlyType ? ' · qty ${item.quantity}' : ''}',
           style: TextStyle(fontSize: 12, color: appColors.textMuted),
         ),
         trailing: Column(
@@ -269,9 +295,11 @@ class _StockItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              item.estimatedWeightKg != null
-                  ? '~${formatSAWeight(item.estimatedWeightKg!)}'
-                  : '—',
+              item.isQuantityOnlyType
+                  ? '${item.quantity} bin${item.quantity == 1 ? '' : 's'}'
+                  : (item.estimatedWeightKg != null
+                      ? '~${formatSAWeight(item.estimatedWeightKg!)}'
+                      : '—'),
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 2),
