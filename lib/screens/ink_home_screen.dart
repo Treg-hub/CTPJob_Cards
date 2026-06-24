@@ -9,7 +9,7 @@ import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_production_run_screen.dart';
-import 'ink_receive_ibc_screen.dart';
+import 'ink_select_ibc_shipment_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
@@ -48,7 +48,7 @@ class InkHomeScreen extends ConsumerWidget {
             _Action(Icons.local_shipping_outlined, 'Receive Stock',
                 builder: () => const InkReceiveRawMaterialScreen()),
             _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
-                builder: () => const InkReceiveIbcScreen()),
+                builder: () => const InkSelectIbcShipmentScreen()),
             _Action(Icons.speed_outlined, 'Meter Readings',
                 builder: () => const InkDailyReadingsScreen()),
             _Action(Icons.swap_horiz_outlined, 'Consume IBC',
