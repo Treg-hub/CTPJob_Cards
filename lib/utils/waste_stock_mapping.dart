@@ -1,4 +1,5 @@
 import '../models/waste_stock_item.dart';
+import '../models/waste_stock_source.dart';
 import '../models/waste_type.dart';
 
 /// Parent [waste_type] on legacy stock records for paper-family material.
@@ -74,6 +75,27 @@ bool loadUsesPaperStock(String? mainWasteType, List<WasteType> allTypes) {
   if (mainWasteType == kPaperWasteStockParent) return true;
   return chipIsPaperFamily(mainWasteType) ||
       flatWasteTypeNames(allTypes).contains(mainWasteType);
+}
+
+/// Loads that support linking on-site stock at collection (not only at schedule).
+bool loadCanLinkOnSiteStock(String? mainWasteType, List<WasteType> allTypes) {
+  if (mainWasteType == null || mainWasteType.isEmpty) return false;
+  if (loadUsesPaperStock(mainWasteType, allTypes)) return true;
+  if (mainWasteType == WasteStockTypes.ibcBins) return true;
+  if (mainWasteType == WasteStockTypes.copperWaste) return true;
+  return flatWasteTypeNames(allTypes).contains(mainWasteType);
+}
+
+String stockLinkParentType(String? mainWasteType) {
+  if (mainWasteType == null || mainWasteType.isEmpty) {
+    return kPaperWasteStockParent;
+  }
+  if (mainWasteType == kPaperWasteStockParent ||
+      mainWasteType == WasteStockTypes.ibcBins ||
+      mainWasteType == WasteStockTypes.copperWaste) {
+    return mainWasteType;
+  }
+  return mainWasteType;
 }
 
 Set<String> expandStockFilter(Iterable<String> names) {

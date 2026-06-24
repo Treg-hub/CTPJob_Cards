@@ -83,6 +83,26 @@ bool isWasteUser(Employee? employee, WasteSettings? settings) {
       isSecurityGuard(employee, settings);
 }
 
+/// Browse on-site stock inventory (list screen, banner). Guards link at collection only.
+bool canViewWasteStockInventory(Employee? employee, WasteSettings? settings) {
+  return isWasteAdmin(employee) || isSecurityManager(employee, settings);
+}
+
+/// Manager-only copper ready-to-sell panel on the Waste tab.
+bool canViewCopperReadyPanel(Employee? employee, WasteSettings? settings) {
+  return canViewWasteStockInventory(employee, settings);
+}
+
+/// Filter stock rows in inventory views. Collection-day link sheets may show more.
+bool canViewWasteStockInInventory({
+  required Employee? employee,
+  required WasteSettings? settings,
+  required String visibility,
+}) {
+  if (visibility != 'manager_only') return isWasteUser(employee, settings);
+  return canViewWasteStockInventory(employee, settings);
+}
+
 // =============================================================================
 // FLEET MAINTENANCE role helpers
 // =============================================================================

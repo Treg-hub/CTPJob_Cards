@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/waste_stock_item.dart';
+import '../models/waste_stock_source.dart';
 import '../services/waste_service.dart';
 import '../utils/formatters.dart';
 import '../utils/waste_stock_mapping.dart';
@@ -12,6 +13,7 @@ class WasteStockLinkSheet extends StatefulWidget {
     this.wasteType = 'Paper Waste',
     this.subtypeFilter,
     this.initialSelectedIds = const [],
+    this.includeManagerOnlyStock = false,
     this.title = 'Link on-site stock',
     this.subtitle =
         'Select items for this load. For scheduled loads the guard sees them at collection.',
@@ -20,6 +22,8 @@ class WasteStockLinkSheet extends StatefulWidget {
   final String wasteType;
   final Set<String>? subtypeFilter;
   final List<String> initialSelectedIds;
+  /// Collection-day linking may include manager-only stock (e.g. copper) for guards.
+  final bool includeManagerOnlyStock;
   final String title;
   final String subtitle;
 
@@ -28,6 +32,7 @@ class WasteStockLinkSheet extends StatefulWidget {
     String wasteType = 'Paper Waste',
     Set<String>? subtypeFilter,
     List<String> initialSelectedIds = const [],
+    bool includeManagerOnlyStock = false,
     String title = 'Link on-site stock',
     String? subtitle,
   }) {
@@ -43,6 +48,7 @@ class WasteStockLinkSheet extends StatefulWidget {
           wasteType: wasteType,
           subtypeFilter: subtypeFilter,
           initialSelectedIds: initialSelectedIds,
+          includeManagerOnlyStock: includeManagerOnlyStock,
           title: title,
           subtitle: subtitle ??
               'Select items for this load. For scheduled loads the guard sees them at collection.',
@@ -76,10 +82,16 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
           .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
         final filter = widget.subtypeFilter;
+        var visible = items;
+        if (!widget.includeManagerOnlyStock) {
+          visible = visible
+              .where((i) => i.visibility != WasteStockVisibility.managerOnly)
+              .toList();
+        }
         setState(() {
           _stock = filter == null || filter.isEmpty
-              ? items
-              : items
+              ? visible
+              : visible
                   .where((i) => stockItemMatchesFilter(i, filter))
                   .toList();
           _loading = false;
@@ -173,11 +185,18 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.subtype,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600)),
+                                  Text(
+                                    item.ibcNumber != null
+                                        ? 'IBC ${item.ibcNumber}'
+                                        : (item.subtype.isNotEmpty
+                                            ? item.subtype
+                                            : item.wasteType),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
                                   Text(
                                     '${formatSADate(item.createdAt)} · ${item.createdByName}'
+                                    '${item.isQuantityOnlyType ? ' · qty ${item.quantity}' : ''}'
                                     '${item.estimatedWeightKg != null ? ' · ~${formatSAWeight(item.estimatedWeightKg!)}' : ''}',
                                     style: TextStyle(
                                         fontSize: 11,

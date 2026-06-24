@@ -14,6 +14,7 @@ import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import 'waste_stock_crosslink.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
 /// singleton pattern.
@@ -765,16 +766,26 @@ class InkService {
     await _db.runTransaction((txn) async {
       // Check idempotency: only read wash doc if we'd need to write it.
       final washSnap = washLitres > 0 ? await txn.get(washRef) : null;
+      final transferredAt = Timestamp.fromDate(effectiveAt);
 
       // Always update IBC status (merge = safe on retry).
       txn.set(
         ibcRef,
         {
           'status': InkIbcStatus.transferred.value,
-          'transferred_date': Timestamp.fromDate(effectiveAt),
+          'transferred_date': transferredAt,
           'wash_toloul_litres': washLitres,
         },
         SetOptions(merge: true),
+      );
+
+      await WasteStockCrosslink.writeIbcStockOnConsume(
+        txn: txn,
+        db: _db,
+        ibcNumber: ibc.ibcNumber,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        createdAt: transferredAt,
       );
 
       // Only create the wash transaction if it doesn't already exist.
@@ -808,10 +819,13 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    await WasteStockCrosslink.assertIbcStockVoidable(_db, ibc.ibcNumber);
+
     final washRef =
         _db.collection(Collections.inkTransactions).doc('ibcwash_${ibc.ibcNumber}');
     final washSnap = await washRef.get();
     final batch = _db.batch();
+    final now = Timestamp.now();
     if (washSnap.exists) {
       batch.set(
         washRef,
@@ -833,6 +847,12 @@ class InkService {
         'wash_toloul_litres': FieldValue.delete(),
       },
       SetOptions(merge: true),
+    );
+    await WasteStockCrosslink.disposeIbcStockOnVoid(
+      batch: batch,
+      db: _db,
+      ibcNumber: ibc.ibcNumber,
+      updatedAt: now,
     );
     await batch.commit();
   }

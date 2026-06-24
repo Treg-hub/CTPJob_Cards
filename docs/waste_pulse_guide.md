@@ -10,8 +10,8 @@ Mobile (Job Cards app) handles **schedule, stock, collection, and finish loading
 
 | Role | Mobile (Job Cards) | CTP Pulse |
 |------|-------------------|-----------|
-| **Security Guard** | Schedule, stock, begin collection, submit | View loads only (if `waste` board claim) |
-| **Security Manager** | Same field capture as guard | Weighbridge, schedule/edit loads, overview queues |
+| **Security Guard** | Schedule, begin collection, link stock at collection, submit | View loads only (if `waste` board claim); **no on-site stock inventory page** |
+| **Security Manager** | Browse on-site stock + copper ready panel; link stock at collection | Weighbridge, schedule/edit loads, overview queues, stock page |
 | **Admin** | Same field capture | Weighbridge + **cost review** + settings + reports |
 
 ---
@@ -60,6 +60,7 @@ Cost is approved **per waste type on the load**, not per item.
 2. **Calculated total** sums the lines; **Approved total** defaults to the calculated value (edit to match accounts if needed).
 3. Tap **Approve** — load becomes **Completed** with `cost_by_type` saved.
 4. Rates entered during review are upserted to `waste_rates` keyed by **waste_type**.
+5. **Copper Waste loads:** approval also writes `record_sale_from_waste` in `copper_transactions` (linked to load id; audit only).
 
 Open **Details** to see the full load including `cost_by_type` breakdown after completion.
 
