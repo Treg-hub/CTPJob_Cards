@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink Factory mobile — IBC receive UX + production run operator polish (2026-06-24)**:
+  - **Receive Ink flow**: hub → `ink_select_ibc_shipment_screen` (outstanding `ink_shipments`) → `ink_receive_ibc_screen` with optional `initialShipment`.
+  - **Receive screen**: scan moved to AppBar; live capture summary strip; locked compact IBC rows (tap bottom sheet to edit/remove); shipment progress when receiving against packing list; pre-fill colour/kg from expected unit when scan matches SSCC.
+  - **Barcode scanner**: centre guide overlay; torch toggle + auto-enable in low light; duplicate IBC warning for current receipt; haptic on complete/duplicate.
+  - **Production run**: removed all rand/WAC display on mobile (operators see quantities only).
+  - Build **2.1.4+53**.
 - **Admin UI refresh + Firebase read optimization — ink operator / Pulse manager split (2026-06-23)**:
   - **Admin screen** (`admin_screen.dart`): 5 tabs, Settings-first (`initialIndex: 0`); **Job Cards tab removed** (use CTP Pulse `/jobs`); Employees → searchable card list with toolbar (template/import/bulk delete), on-site pill, FCM in edit dialog only; Structures → stats chips, search, expansion cards, add forms in settings cards, duplicate validation; Employees lazy-load on first tab visit.
   - **Ink hub** (`ink_home_screen.dart`): capture-only; **Management & costing** card opens CTP Pulse `/ink`; removed manager tile grid; stock summary shows item count only.

@@ -9,12 +9,10 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
-import '../utils/role.dart' as role_utils;
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
 /// 1/2 also allowed); the screen previews inputs consumed and output produced
-/// (with an estimated cost from current WACs) and records the run: a
-/// consumption per input + a manufacture of the output.
+/// (quantities only — costing lives in CTP Pulse) and records the run.
 ///
 /// Below the form the 10 most recent production runs are shown as a quick
 /// history so the operator can confirm what was last made.
@@ -26,7 +24,6 @@ class InkProductionRunScreen extends ConsumerStatefulWidget {
 }
 
 class _State extends ConsumerState<InkProductionRunScreen> {
-  static final _money = NumberFormat.currency(symbol: 'R ', decimalDigits: 2);
   static final _qty = NumberFormat('#,##0.##');
   String? _recipeId;
   int _pots = 3;
@@ -73,8 +70,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     final byCode = {for (final i in items) i.itemCode: i};
     final wacByItem = {for (final i in items) i.itemCode: i.weightedAverageCost};
     final df = DateFormat('EEE d MMM yyyy HH:mm');
-    final isManager =
-        role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Production Run')),
@@ -96,20 +92,11 @@ class _State extends ConsumerState<InkProductionRunScreen> {
             if (r.id == _recipeId) recipe = r;
           }
 
-          double totalInputCost = 0;
-          if (recipe != null) {
-            for (final l in recipe.inputs) {
-              totalInputCost +=
-                  l.qtyPerPot * _pots * (wacByItem[l.itemCode] ?? 0);
-            }
-          }
           final outputQty = (recipe?.outputPerPot ?? 0) * _pots;
-          final scheme = Theme.of(context).colorScheme;
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ── Recipe picker ───────────────────────────────────────────
               DropdownButtonFormField<String>(
                 // ignore: deprecated_member_use
                 value: _recipeId,
@@ -123,7 +110,6 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 onChanged: (v) => setState(() => _recipeId = v),
               ),
               const SizedBox(height: 16),
-              // ── Pot count ───────────────────────────────────────────────
               Row(
                 children: [
                   const Text('Pots: '),
@@ -141,7 +127,6 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // ── Effective date ──────────────────────────────────────────
               OutlinedButton.icon(
                 onPressed: _pickDate,
                 icon: const Icon(Icons.event),
@@ -151,14 +136,12 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                     alignment: Alignment.centerLeft),
               ),
 
-              // ── Recipe preview ──────────────────────────────────────────
               if (recipe != null) ...[
                 const SizedBox(height: 20),
                 Text('Consumes',
                     style: Theme.of(context).textTheme.titleMedium),
                 for (final l in recipe.inputs)
-                  _line(context, byCode[l.itemCode], l.qtyPerPot * _pots,
-                      wacByItem[l.itemCode] ?? 0, isManager),
+                  _line(context, byCode[l.itemCode], l.qtyPerPot * _pots),
                 const Divider(height: 24),
                 Text('Produces',
                     style: Theme.of(context).textTheme.titleMedium),
@@ -170,22 +153,6 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                   trailing: Text('${_qty.format(outputQty)} '
                       '${byCode[recipe.outputItemCode]?.unit ?? 'kg'}'),
                 ),
-                if (isManager)
-                  Card(
-                    color: scheme.surfaceContainerHighest,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Estimated input cost'),
-                          Text(_money.format(totalInputCost),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _submitting
@@ -203,7 +170,6 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                 ),
               ],
 
-              // ── Recent production runs ──────────────────────────────────
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 4),
@@ -235,9 +201,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                       _RunTile(
                         run: run,
                         byCode: byCode,
-                        isManager: isManager,
                         qty: _qty,
-                        money: _money,
                       ),
                   ];
                 },
@@ -250,8 +214,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     );
   }
 
-  Widget _line(BuildContext context, InkStockItem? item, double qty,
-      double wac, bool showMoney) {
+  Widget _line(BuildContext context, InkStockItem? item, double qty) {
     final negative = item != null && item.currentBalance < qty;
     return ListTile(
       dense: true,
@@ -263,30 +226,23 @@ class _State extends ConsumerState<InkProductionRunScreen> {
               style: TextStyle(
                   color: Theme.of(context).colorScheme.error))
           : null,
-      trailing: Text('${_qty.format(qty)} ${item?.unit ?? ''}'
-          '${showMoney ? '  ·  ${_money.format(qty * wac)}' : ''}'),
+      trailing: Text('${_qty.format(qty)} ${item?.unit ?? ''}'),
     );
   }
 }
-
-// ── Recent production run tile ───────────────────────────────────────────────
 
 class _RunTile extends StatelessWidget {
   const _RunTile({
     required this.run,
     required this.byCode,
-    required this.isManager,
     required this.qty,
-    required this.money,
   });
 
   static final _df = DateFormat('d MMM yy HH:mm');
 
   final InkProductionRun run;
   final Map<String, InkStockItem> byCode;
-  final bool isManager;
   final NumberFormat qty;
-  final NumberFormat money;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +255,6 @@ class _RunTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Pot-count badge
           Container(
             width: 30,
             height: 30,
@@ -322,29 +277,13 @@ class _RunTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Recipe + output
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${run.recipeName} — ${qty.format(run.outputQty)} kg $outputName',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                Text(
+                  '${run.recipeName} — ${qty.format(run.outputQty)} kg $outputName',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    if (isManager && run.totalInputCost > 0)
-                      Text(
-                        money.format(run.totalInputCost),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
                 ),
                 const SizedBox(height: 2),
-                // Date + actor
                 Text(
                   [
                     _df.format(run.effectiveAt),

@@ -15,13 +15,36 @@ import '../utils/ink_receipt_validation.dart';
 import 'ink_barcode_scan_screen.dart';
 
 class _IbcRow {
-  _IbcRow({String number = '', this.itemCode, String kg = '', this.charge})
-      : numberCtrl = TextEditingController(text: number),
+  _IbcRow({
+    String number = '',
+    this.itemCode,
+    String kg = '',
+    this.charge,
+    this.locked = false,
+  })  : numberCtrl = TextEditingController(text: number),
         kgCtrl = TextEditingController(text: kg);
+
   final TextEditingController numberCtrl;
   String? itemCode;
   final TextEditingController kgCtrl;
-  String? charge; // Siegwerk batch/lot from the GS1 barcode
+  String? charge;
+  bool locked;
+
+  bool get hasContent =>
+      numberCtrl.text.trim().isNotEmpty ||
+      itemCode != null ||
+      kgCtrl.text.trim().isNotEmpty;
+
+  bool get isComplete {
+    final numText = numberCtrl.text.trim();
+    final kg = double.tryParse(kgCtrl.text.trim());
+    return numText.length == 8 && itemCode != null && kg != null && kg > 0;
+  }
+
+  void dispose() {
+    numberCtrl.dispose();
+    kgCtrl.dispose();
+  }
 }
 
 /// Phase 1b — Receive Ink via IBC. Scan (Code-128) or type each IBC's number,
@@ -29,7 +52,10 @@ class _IbcRow {
 /// stock is raised as ONE cost-pending `purchase` per colour for the total kg
 /// (e.g. 10 IBCs → 11,403 kg as a single receipt); a manager enters the cost later.
 class InkReceiveIbcScreen extends ConsumerStatefulWidget {
-  const InkReceiveIbcScreen({super.key});
+  const InkReceiveIbcScreen({super.key, this.initialShipment});
+
+  /// Shipment chosen on [InkSelectIbcShipmentScreen]; packing-list validation applies.
+  final InkShipment? initialShipment;
 
   @override
   ConsumerState<InkReceiveIbcScreen> createState() => _State();
@@ -40,30 +66,229 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   final _orderCtrl = TextEditingController();
   final _cgnaCtrl = TextEditingController();
   DateTime _effectiveAt = DateTime.now();
-  final List<_IbcRow> _rows = [_IbcRow()];
+  final List<_IbcRow> _rows = [];
   bool _submitting = false;
+  late InkShipment? _shipment;
 
-  /// When set, the operator is receiving against this Pulse-created shipment:
-  /// order/CGNA are prefilled, the colour list is restricted to its lines, and
-  /// every IBC number is validated against its packing list.
-  InkShipment? _shipment;
+  @override
+  void initState() {
+    super.initState();
+    _shipment = widget.initialShipment;
+    if (_shipment != null) {
+      _supplier = 'Siegwerk';
+      _orderCtrl.text = _shipment!.orderNumber;
+      _cgnaCtrl.text = _shipment!.cgnaNumber ?? '';
+    }
+  }
 
-  void _selectShipment(InkShipment? s) {
-    setState(() {
-      _shipment = s;
-      if (s != null) {
-        _supplier = 'Siegwerk';
-        _orderCtrl.text = s.orderNumber;
-        _cgnaCtrl.text = s.cgnaNumber ?? '';
+  Set<String> get _scannedIbcNumbers => {
+        for (final r in _rows)
+          if (r.numberCtrl.text.trim().length == 8) r.numberCtrl.text.trim(),
+      };
+
+  InkExpectedUnit? _expectedUnitFor(String ibcNumber) {
+    if (_shipment == null) return null;
+    for (final u in _shipment!.expectedUnits) {
+      if (u.ibcNumber == ibcNumber) return u;
+    }
+    return null;
+  }
+
+  String _kgText(double kg) =>
+      kg % 1 == 0 ? kg.toInt().toString() : kg.toString();
+
+  void _applyScanResult(IbcScanResult res, {required bool lock}) {
+    var itemCode = res.colour?.toLowerCase();
+    var kg = res.weightKg == null
+        ? ''
+        : _kgText(res.weightKg!);
+    final ibcNum = res.ibcNumber;
+
+    if (ibcNum != null) {
+      final expected = _expectedUnitFor(ibcNum);
+      if (expected != null) {
+        itemCode ??= expected.itemCode;
+        if (kg.isEmpty && expected.netKg > 0) {
+          kg = _kgText(expected.netKg);
+        }
       }
+    }
+
+    setState(() {
+      _rows.add(_IbcRow(
+        number: ibcNum ?? '',
+        itemCode: itemCode,
+        kg: kg,
+        charge: res.charge,
+        locked: lock,
+      ));
+    });
+  }
+
+  Future<void> _scan() async {
+    final res = await Navigator.push<IbcScanResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InkBarcodeScanScreen(
+          existingIbcNumbers: _scannedIbcNumbers,
+        ),
+      ),
+    );
+    if (res == null || !res.hasAnything) return;
+    _applyScanResult(res, lock: true);
+  }
+
+  Future<void> _editRow(_IbcRow row, {required bool isNew}) async {
+    final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
+    var inks = items.where((i) => i.itemClass == InkItemClass.ink).toList();
+    if (_shipment != null) {
+      final codes = _shipment!.itemCodes.toSet();
+      final filtered = inks.where((i) => codes.contains(i.itemCode)).toList();
+      if (filtered.isNotEmpty) inks = filtered;
+    }
+    final numberCtrl = TextEditingController(text: row.numberCtrl.text);
+    String? itemCode = row.itemCode;
+    final kgCtrl = TextEditingController(text: row.kgCtrl.text);
+    var charge = row.charge;
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setSheetState) {
+              final duplicate = numberCtrl.text.trim().length == 8 &&
+                  _scannedIbcNumbers.contains(numberCtrl.text.trim()) &&
+                  numberCtrl.text.trim() != row.numberCtrl.text.trim();
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    isNew ? 'Add IBC' : 'Edit IBC',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: numberCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    maxLength: 8,
+                    decoration: InputDecoration(
+                      labelText: 'IBC number',
+                      helperText: charge != null ? 'Charge $charge' : null,
+                      counterText: '${numberCtrl.text.length}/8',
+                    ),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  if (duplicate)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'This IBC is already on the receipt.',
+                        style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    // ignore: deprecated_member_use
+                    value: itemCode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Colour'),
+                    items: [
+                      for (final i in inks)
+                        DropdownMenuItem(
+                          value: i.itemCode,
+                          child: Text(i.displayName),
+                        ),
+                    ],
+                    onChanged: (v) => setSheetState(() => itemCode = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: kgCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'kg'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (!isNew)
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx, false);
+                            setState(() {
+                              row.dispose();
+                              _rows.remove(row);
+                            });
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Remove'),
+                        ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: duplicate
+                            ? null
+                            : () => Navigator.pop(ctx, true),
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (saved != true || !mounted) {
+      if (isNew && !_rows.contains(row)) row.dispose();
+      return;
+    }
+
+    final numText = numberCtrl.text.trim();
+    final kg = double.tryParse(kgCtrl.text.trim());
+    if (numText.length != 8 || itemCode == null || kg == null || kg <= 0) {
+      if (isNew && !_rows.contains(row)) row.dispose();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Enter a valid 8-digit IBC, colour and weight.'),
+      ));
+      return;
+    }
+
+    setState(() {
+      row.numberCtrl.text = numText;
+      row.itemCode = itemCode;
+      row.kgCtrl.text = _kgText(kg);
+      row.charge = charge;
+      row.locked = true;
+      if (isNew) _rows.add(row);
     });
   }
 
   @override
   void dispose() {
     for (final r in _rows) {
-      r.numberCtrl.dispose();
-      r.kgCtrl.dispose();
+      r.dispose();
     }
     _orderCtrl.dispose();
     _cgnaCtrl.dispose();
@@ -75,36 +300,6 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     if (dt != null) setState(() => _effectiveAt = dt);
   }
 
-  Future<void> _scan() async {
-    final res = await Navigator.push<IbcScanResult>(context,
-        MaterialPageRoute(builder: (_) => const InkBarcodeScanScreen()));
-    if (res == null || !res.hasAnything) return;
-    final itemCode = res.colour?.toLowerCase();
-    final kg = res.weightKg == null
-        ? ''
-        : (res.weightKg! % 1 == 0
-            ? res.weightKg!.toInt().toString()
-            : res.weightKg!.toString());
-    setState(() {
-      // Fill the first empty row, otherwise add a new prefilled one.
-      final empties = _rows.where((r) =>
-          r.numberCtrl.text.trim().isEmpty && r.kgCtrl.text.trim().isEmpty);
-      if (empties.isNotEmpty) {
-        final r = empties.first;
-        if (res.ibcNumber != null) r.numberCtrl.text = res.ibcNumber!;
-        if (itemCode != null) r.itemCode = itemCode;
-        if (kg.isNotEmpty) r.kgCtrl.text = kg;
-        r.charge = res.charge;
-      } else {
-        _rows.add(_IbcRow(
-            number: res.ibcNumber ?? '',
-            itemCode: itemCode,
-            kg: kg,
-            charge: res.charge));
-      }
-    });
-  }
-
   /// Validates all rows and returns the complete IBC list, or null if invalid
   /// (shows a snackbar describing the first error found).
   List<InkIbc>? _buildValidIbcs() {
@@ -114,43 +309,26 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       return null;
     }
     final ibcs = <InkIbc>[];
-    for (var i = 0; i < _rows.length; i++) {
-      final r = _rows[i];
+    final completeRows = _rows.where((r) => r.isComplete).toList();
+    for (var i = 0; i < completeRows.length; i++) {
+      final r = completeRows[i];
       final numText = r.numberCtrl.text.trim();
-      final kgText = r.kgCtrl.text.trim();
-      final kg = double.tryParse(kgText);
+      final kg = double.parse(r.kgCtrl.text.trim());
 
-      // Skip completely blank rows silently.
-      if (numText.isEmpty && r.itemCode == null && kgText.isEmpty) continue;
-
-      if (numText.length != 8) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Row ${i + 1}: IBC number must be exactly 8 digits.')));
-        return null;
-      }
-      if (r.itemCode == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Row ${i + 1}: select a colour.')));
-        return null;
-      }
-      if (kg == null || kg <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Row ${i + 1}: enter a valid weight.')));
-        return null;
-      }
       ibcs.add(InkIbc(
-          ibcNumber: numText,
-          itemCode: r.itemCode!,
-          kg: kg,
-          receivedDate: _effectiveAt,
-          chargeNumber: r.charge));
+        ibcNumber: numText,
+        itemCode: r.itemCode!,
+        kg: kg,
+        receivedDate: _effectiveAt,
+        chargeNumber: r.charge,
+      ));
     }
     if (ibcs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Add at least one complete IBC (number, colour, kg).')));
+        content: Text('Scan or add at least one complete IBC.'),
+      ));
       return null;
     }
-    // When receiving against a shipment, every IBC must be on its packing list.
     if (_shipment != null) {
       final errors = validateIbcRowsAgainstShipment(
         shipment: _shipment!,
@@ -168,30 +346,34 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     return ibcs;
   }
 
+  ({List<MapEntry<String, ({int count, double kg})>> entries, double totalKg})
+      _liveSummary(List<InkStockItem> items) {
+    final summary = <String, ({int count, double kg})>{};
+    for (final r in _rows.where((row) => row.isComplete)) {
+      final code = r.itemCode!;
+      final kg = double.parse(r.kgCtrl.text.trim());
+      final prev = summary[code];
+      summary[code] = prev == null
+          ? (count: 1, kg: kg)
+          : (count: prev.count + 1, kg: prev.kg + kg);
+    }
+    final orderOf = {for (final i in items) i.itemCode: i.displayOrder};
+    final entries = summary.entries.toList()
+      ..sort((a, b) =>
+          (orderOf[a.key] ?? 9999).compareTo(orderOf[b.key] ?? 9999));
+    final totalKg =
+        entries.fold<double>(0, (s, e) => s + e.value.kg);
+    return (entries: entries, totalKg: totalKg);
+  }
+
   Future<void> _confirmAndSubmit() async {
     final ibcs = _buildValidIbcs();
     if (ibcs == null) return;
 
     final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
     final displayName = {for (final i in items) i.itemCode: i.displayName};
-
-    // Group by colour for the summary.
-    final summary = <String, ({int count, double kg})>{};
-    for (final ibc in ibcs) {
-      final prev = summary[ibc.itemCode];
-      summary[ibc.itemCode] = prev == null
-          ? (count: 1, kg: ibc.kg)
-          : (count: prev.count + 1, kg: prev.kg + ibc.kg);
-    }
-
-    // Sort entries by the stock item displayOrder so the table is always consistent.
-    final orderOf = {for (final i in items) i.itemCode: i.displayOrder};
-    final sortedEntries = summary.entries.toList()
-      ..sort((a, b) =>
-          (orderOf[a.key] ?? 9999).compareTo(orderOf[b.key] ?? 9999));
-
+    final live = _liveSummary(items);
     final nf = NumberFormat('#,##0.##');
-    final totalKg = ibcs.fold<double>(0, (s, i) => s + i.kg);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -201,55 +383,70 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
                   Expanded(
-                      flex: 4,
-                      child: Text('Colour',
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(fontWeight: FontWeight.bold))),
+                    flex: 4,
+                    child: Text(
+                      'Colour',
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   SizedBox(
-                      width: 44,
-                      child: Text('IBCs',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(fontWeight: FontWeight.bold))),
+                    width: 44,
+                    child: Text(
+                      'IBCs',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   SizedBox(
-                      width: 76,
-                      child: Text('Total kg',
-                          textAlign: TextAlign.right,
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(fontWeight: FontWeight.bold))),
+                    width: 76,
+                    child: Text(
+                      'Total kg',
+                      textAlign: TextAlign.right,
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
               ),
             ),
             const Divider(height: 1),
             const SizedBox(height: 4),
-            for (final entry in sortedEntries)
+            for (final entry in live.entries)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
                   children: [
                     Expanded(
-                        flex: 4,
-                        child: Text(displayName[entry.key] ?? entry.key)),
+                      flex: 4,
+                      child: Text(displayName[entry.key] ?? entry.key),
+                    ),
                     SizedBox(
-                        width: 44,
-                        child: Text('${entry.value.count}',
-                            textAlign: TextAlign.center)),
+                      width: 44,
+                      child: Text(
+                        '${entry.value.count}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                     SizedBox(
-                        width: 76,
-                        child: Text(nf.format(entry.value.kg),
-                            textAlign: TextAlign.right)),
+                      width: 76,
+                      child: Text(
+                        nf.format(entry.value.kg),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -259,33 +456,44 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             Row(
               children: [
                 Expanded(
-                    flex: 4,
-                    child: Text('Total',
-                        style: Theme.of(ctx)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold))),
+                  flex: 4,
+                  child: Text(
+                    'Total',
+                    style: Theme.of(ctx)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 SizedBox(
-                    width: 44,
-                    child: Text('${ibcs.length}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                  width: 44,
+                  child: Text(
+                    '${ibcs.length}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 SizedBox(
-                    width: 76,
-                    child: Text(nf.format(totalKg),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                  width: 76,
+                  child: Text(
+                    nf.format(live.totalKg),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ],
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Receive IBCs')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Receive IBCs'),
+          ),
         ],
       ),
     );
@@ -313,7 +521,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${ibcs.length} IBC(s) received — cost pending.')));
+        content: Text('${ibcs.length} IBC(s) received — cost pending.'),
+      ));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -333,207 +542,228 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     });
 
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
-    var inks = items.where((i) => i.itemClass == InkItemClass.ink).toList();
-    if (_shipment != null) {
-      final codes = _shipment!.itemCodes.toSet();
-      final filtered = inks.where((i) => codes.contains(i.itemCode)).toList();
-      if (filtered.isNotEmpty) inks = filtered;
-    }
-    final shipments = ref.watch(inkOpenShipmentsProvider).valueOrNull ?? [];
+    final displayName = {for (final i in items) i.itemCode: i.displayName};
     final suppliers = ref.watch(inkActiveSuppliersProvider).valueOrNull ?? [];
     final df = DateFormat('EEE d MMM yyyy HH:mm');
-    final totalKg = _rows.fold<double>(
-        0, (s, r) => s + (double.tryParse(r.kgCtrl.text.trim()) ?? 0));
+    final nf = NumberFormat('#,##0.##');
+    final live = _liveSummary(items);
+    final completeCount = _rows.where((r) => r.isComplete).length;
+    final scheme = Theme.of(context).colorScheme;
+    final expectedCount = _shipment?.expectedUnits.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Receive Ink (IBC)')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      appBar: AppBar(
+        title: const Text('Receive Ink (IBC)'),
+        actions: [
+          IconButton(
+            onPressed: _scan,
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan IBC',
+          ),
+        ],
+      ),
+      body: Column(
         children: [
-          if (shipments.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: _shipment?.id,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Shipment (optional)',
-                  helperText: 'Validates IBCs against the packing list'),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('None — free text')),
-                for (final s in shipments)
-                  DropdownMenuItem(
-                      value: s.id,
-                      child: Text(
-                          '${s.id}${s.containerNumber != null ? ' · ${s.containerNumber}' : ''}'
-                          ' · ${s.expectedUnits.length} IBC')),
-              ],
-              onChanged: (id) {
-                final match = shipments.where((s) => s.id == id).toList();
-                _selectShipment(match.isEmpty ? null : match.first);
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-          DropdownButtonFormField<String>(
-            // ignore: deprecated_member_use
-            value: _supplier,
-            isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: 'Supplier'),
-            items: [
-              for (final s in suppliers)
-                DropdownMenuItem(value: s.name, child: Text(s.name)),
-            ],
-            onChanged: (v) => setState(() => _supplier = v),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _pickDate,
-            icon: const Icon(Icons.event),
-            label: Text('Received: ${df.format(_effectiveAt)}'),
-            style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                alignment: Alignment.centerLeft),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _orderCtrl,
-                  readOnly: _shipment != null,
-                  decoration: InputDecoration(
-                      labelText: 'Order number',
-                      filled: _shipment != null,
-                      isDense: true),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _cgnaCtrl,
-                  readOnly: _shipment != null,
-                  decoration: InputDecoration(
-                      labelText: 'CGNA number',
-                      filled: _shipment != null,
-                      isDense: true),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text('IBCs (${_rows.length})',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              Text('Total: ${NumberFormat('#,##0.##').format(totalKg)} kg'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          for (var idx = 0; idx < _rows.length; idx++)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
+          if (completeCount > 0)
+            Material(
+              color: scheme.primaryContainer,
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      controller: _rows[idx].numberCtrl,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      maxLength: 8,
-                      decoration: InputDecoration(
-                          labelText: 'IBC number',
-                          helperText: _rows[idx].charge != null
-                              ? 'Charge ${_rows[idx].charge}'
-                              : null,
-                          counterText:
-                              '${_rows[idx].numberCtrl.text.length}/8',
-                          isDense: true),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(
-                          flex: 3,
-                          child: DropdownButtonFormField<String>(
-                            // ignore: deprecated_member_use
-                            value: _rows[idx].itemCode,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                                labelText: 'Colour',
-                                isDense: true),
-                            items: [
-                              for (final i in inks)
-                                DropdownMenuItem(
-                                    value: i.itemCode,
-                                    child: Text(i.displayName)),
-                            ],
-                            onChanged: (v) =>
-                                setState(() => _rows[idx].itemCode = v),
-                          ),
+                        Text(
+                          'Captured',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(color: scheme.onPrimaryContainer),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _rows[idx].kgCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                                labelText: 'kg',
-                                isDense: true),
+                        const Spacer(),
+                        Text(
+                          '$completeCount IBC${completeCount == 1 ? '' : 's'}'
+                          ' · ${nf.format(live.totalKg)} kg',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: scheme.onPrimaryContainer,
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: _rows.length == 1
-                              ? null
-                              : () => setState(() {
-                                    _rows[idx].numberCtrl.dispose();
-                                    _rows[idx].kgCtrl.dispose();
-                                    _rows.removeAt(idx);
-                                  }),
                         ),
                       ],
                     ),
+                    if (live.entries.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      for (final e in live.entries)
+                        Text(
+                          '${displayName[e.key] ?? e.key}: '
+                          '${e.value.count} × ${nf.format(e.value.kg)} kg',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: scheme.onPrimaryContainer,
+                          ),
+                        ),
+                    ],
+                    if (expectedCount != null && expectedCount > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Shipment progress: $completeCount / $expectedCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onPrimaryContainer.withValues(
+                            alpha: 0.85,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _rows.add(_IbcRow())),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (_shipment != null)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const Icon(Icons.local_shipping_outlined),
+                      title: Text(_shipment!.id),
+                      subtitle: Text(
+                        [
+                          'Order ${_shipment!.orderNumber}',
+                          if (_shipment!.containerNumber != null)
+                            'Container ${_shipment!.containerNumber}',
+                          if (expectedCount != null)
+                            '$expectedCount IBCs on packing list',
+                        ].join(' · '),
+                      ),
+                    ),
+                  ),
+                DropdownButtonFormField<String>(
+                  // ignore: deprecated_member_use
+                  value: _supplier,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Supplier'),
+                  items: [
+                    for (final s in suppliers)
+                      DropdownMenuItem(value: s.name, child: Text(s.name)),
+                  ],
+                  onChanged: (v) => setState(() => _supplier = v),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.event),
+                  label: Text('Received: ${df.format(_effectiveAt)}'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    alignment: Alignment.centerLeft,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _orderCtrl,
+                        readOnly: _shipment != null,
+                        decoration: InputDecoration(
+                          labelText: 'Order number',
+                          filled: _shipment != null,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _cgnaCtrl,
+                        readOnly: _shipment != null,
+                        decoration: InputDecoration(
+                          labelText: 'CGNA number',
+                          filled: _shipment != null,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Text(
+                      'IBCs',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    Text(
+                      completeCount == 0
+                          ? 'Tap scan or add'
+                          : '$completeCount captured',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_rows.where((r) => r.isComplete).isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Scan IBC labels with the button above. '
+                      'Captured rows lock to prevent accidental edits.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                for (final row in _rows.where((r) => r.isComplete))
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      leading: Icon(
+                        row.locked ? Icons.lock_outline : Icons.edit_outlined,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      title: Text(
+                        row.numberCtrl.text,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        [
+                          displayName[row.itemCode] ?? row.itemCode ?? '?',
+                          '${nf.format(double.parse(row.kgCtrl.text.trim()))} kg',
+                          if (row.charge != null) 'Charge ${row.charge}',
+                        ].join(' · '),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, size: 20),
+                      onTap: () => _editRow(row, isNew: false),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _editRow(_IbcRow(), isNew: true),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add IBC'),
+                  label: const Text('Add IBC manually'),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: _scan,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan'),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed:
+                      _submitting || completeCount == 0 ? null : _confirmAndSubmit,
+                  icon: _submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check),
+                  label: const Text('Receive IBCs'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _submitting ? null : _confirmAndSubmit,
-            icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.check),
-            label: const Text('Receive IBCs'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              ],
+            ),
           ),
         ],
       ),
