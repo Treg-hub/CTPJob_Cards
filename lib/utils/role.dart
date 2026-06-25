@@ -142,18 +142,22 @@ bool isFleetCostManager(Employee? employee, FleetSettings? settings) {
 /// True when the employee has full fleet admin rights (reuses global isAdmin).
 bool isFleetAdmin(Employee? employee) => isAdmin(employee);
 
-/// Convenience: any Fleet user (shows Fleet tab when true).
-bool isFleetUser(Employee? employee, FleetSettings? settings) {
-  return isFleetMechanic(employee, settings) ||
-      isFleetAdmin(employee) ||
-      isFleetReporter(employee, settings) ||
-      isFleetCostManager(employee, settings);
+/// Floor fleet roles — reporters and mechanics (mobile Fleet tab).
+bool isFleetMobileUser(Employee? employee, FleetSettings? settings) {
+  if (settings == null || !settings.fleetEnabled) return false;
+  return isFleetReporter(employee, settings) ||
+      isFleetMechanic(employee, settings);
 }
 
-/// Any fleet role can report faults (reporters, mechanics, cost managers, admins).
+/// Convenience: shows Fleet tab on mobile when true.
+bool isFleetUser(Employee? employee, FleetSettings? settings) {
+  return isFleetMobileUser(employee, settings);
+}
+
+/// Report faults from the home quick action or fleet flows.
 bool canReportFleetIssue(Employee? employee, FleetSettings? settings) {
   if (settings == null || !settings.fleetEnabled) return false;
-  return isFleetUser(employee, settings);
+  return isFleetMobileUser(employee, settings);
 }
 
 // =============================================================================

@@ -36,6 +36,23 @@ class SyncService {
   // queue item concurrently.
   bool _isProcessing = false;
 
+  /// Last sync error per queued fleet item (`collection:id` → message).
+  /// In-memory only — cleared on success or when the item leaves the queue.
+  final Map<String, String> _fleetQueueLastErrors = {};
+
+  String _fleetQueueErrorKey(String collection, String documentId) =>
+      '$collection:$documentId';
+
+  void _setFleetQueueError(SyncQueueItem item, Object error) {
+    if (!item.collection.startsWith('fleet_')) return;
+    _fleetQueueLastErrors[_fleetQueueErrorKey(item.collection, item.id)] =
+        error.toString();
+  }
+
+  void _clearFleetQueueError(SyncQueueItem item) {
+    _fleetQueueLastErrors.remove(_fleetQueueErrorKey(item.collection, item.id));
+  }
+
   Future<void> init() async {
     _queueBox = Hive.box<SyncQueueItem>('sync_queue');
     _startListening();
@@ -221,32 +238,7 @@ class SyncService {
             }
           }
         } else if (item.collection.startsWith('fleet_')) {
-          if (item.collection == 'fleet_photos' && item.operation == 'upload') {
-            await _processFleetPhotoUpload(item);
-          } else if (item.collection == Collections.fleetWorkRecords &&
-              item.operation == 'create_cf') {
-            await _processFleetWorkRecordCreate(item);
-          } else {
-            final docRef = firestore.collection(item.collection).doc(item.id);
-            final payload = _restoreFleetTimestamps(item.data);
-            if (item.operation == 'create') {
-              // Fleet creates are immutable once written — if the direct write
-              // already landed, replaying the set() would be denied. Skip it.
-              // Also safe for work records whose photo URLs/status may have
-              // changed since the queue entry was written.
-              final existing = await docRef.get();
-              if (!existing.exists) {
-                await docRef.set(payload);
-              }
-            } else if (item.operation == 'update' || item.operation == 'set') {
-              await docRef.set(
-                payload,
-                SetOptions(merge: item.operation == 'update'),
-              );
-            } else if (item.operation == 'delete') {
-              await docRef.delete();
-            }
-          }
+          await _processFleetQueueItem(item, firestore);
         } else {
           final docRef = firestore.collection(item.collection).doc(item.id);
           // Job cards: queue sanitisation turned every Timestamp into an
@@ -269,9 +261,15 @@ class SyncService {
         }
 
         await item.delete();
+        if (item.collection.startsWith('fleet_')) {
+          _clearFleetQueueError(item);
+        }
         debugPrint('✅ Synced from queue: ${item.operation} ${item.collection}');
       } catch (e) {
         debugPrint('❌ Failed to sync item: $e');
+        if (item.collection.startsWith('fleet_')) {
+          _setFleetQueueError(item, e);
+        }
       }
     }
   }
@@ -700,17 +698,12 @@ class SyncService {
               (item.data['asset_name'] as String?);
         } else if (item.collection == Collections.fleetWorkRecords) {
           type = 'Work record update';
-          ref = item.data.keys.contains('has_cost_lines')
-              ? 'cost status flag'
-              : null;
+          ref = (item.data['title'] as String?) ??
+              (item.data['asset_name'] as String?);
         } else if (item.collection == Collections.fleetIssues) {
           type = 'Problem report';
           ref = (item.data['asset_name'] as String?) ??
               (item.data['description'] as String?);
-        } else if (item.collection == Collections.fleetCostLines) {
-          type = 'Cost entry';
-          ref = (item.data['description'] as String?) ??
-              (item.data['asset_name'] as String?);
         } else if (item.collection == Collections.fleetDailyChecks) {
           type = item.operation == 'update' ? 'End shift check' : 'Daily check';
           ref = (item.data['asset_name'] as String?);
@@ -718,6 +711,7 @@ class SyncService {
           type = 'Other (${item.collection.substring('fleet_'.length)})';
           ref = null;
         }
+        final errorKey = _fleetQueueErrorKey(item.collection, item.id);
         details.add({
           'id': item.id,
           'type': type,
@@ -726,6 +720,8 @@ class SyncService {
           'createdAt': item.createdAt,
           'collection': item.collection,
           'operation': item.operation,
+          if (_fleetQueueLastErrors.containsKey(errorKey))
+            'lastError': _fleetQueueLastErrors[errorKey],
         });
       }
       details.sort((a, b) =>
@@ -733,6 +729,73 @@ class SyncService {
       return details;
     } catch (_) {
       return [];
+    }
+  }
+
+  /// Targeted retry for a single queued fleet item (FleetQueuedScreen).
+  /// On success: deletes the queue entry. On failure: records [lastError].
+  Future<bool> retrySpecificQueuedFleetItem(Map<String, dynamic> detail) async {
+    try {
+      if (!_queueBox.isOpen) return false;
+      final targetId = detail['id'] as String?;
+      final targetCollection = detail['collection'] as String?;
+      final targetOp = detail['operation'] as String?;
+      final targetCreated = detail['createdAt'] as DateTime?;
+
+      for (final item in _queueBox.values.toList()) {
+        if (item.collection != targetCollection ||
+            item.id != targetId ||
+            item.operation != targetOp ||
+            (targetCreated != null && item.createdAt != targetCreated)) {
+          continue;
+        }
+        try {
+          await _processFleetQueueItem(
+              item, FirebaseFirestore.instance);
+          await item.delete();
+          _clearFleetQueueError(item);
+          debugPrint(
+              '✅ Fleet targeted retry succeeded: ${item.collection}/${item.id}');
+          return true;
+        } catch (e) {
+          debugPrint(
+              '❌ Fleet targeted retry failed for ${item.collection}/${item.id}: $e');
+          _setFleetQueueError(item, e);
+          return false;
+        }
+      }
+      return false;
+    } catch (e) {
+      debugPrint('⚠️ retrySpecificQueuedFleetItem error: $e');
+      return false;
+    }
+  }
+
+  Future<void> _processFleetQueueItem(
+    SyncQueueItem item,
+    FirebaseFirestore firestore,
+  ) async {
+    if (item.collection == 'fleet_photos' && item.operation == 'upload') {
+      await _processFleetPhotoUpload(item);
+    } else if (item.collection == Collections.fleetWorkRecords &&
+        item.operation == 'create_cf') {
+      await _processFleetWorkRecordCreate(item);
+    } else {
+      final docRef = firestore.collection(item.collection).doc(item.id);
+      final payload = _restoreFleetTimestamps(item.data);
+      if (item.operation == 'create') {
+        final existing = await docRef.get();
+        if (!existing.exists) {
+          await docRef.set(payload);
+        }
+      } else if (item.operation == 'update' || item.operation == 'set') {
+        await docRef.set(
+          payload,
+          SetOptions(merge: item.operation == 'update'),
+        );
+      } else if (item.operation == 'delete') {
+        await docRef.delete();
+      }
     }
   }
 

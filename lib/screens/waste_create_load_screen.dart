@@ -767,7 +767,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Security Officer'),
-                subtitle: Text(currentEmployee!.name!),
+                subtitle: Text(currentEmployee!.name),
               ),
             const SizedBox(height: 4),
             Row(

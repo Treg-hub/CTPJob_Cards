@@ -18,6 +18,7 @@ import '../models/assignment_event.dart';
 import '../models/job_card.dart';
 import '../constants/collections.dart';
 import '../screens/job_card_detail_screen.dart';
+import '../utils/fleet_navigation.dart';
 import 'firestore_service.dart';
 
 // Channel IDs — must match those declared on the native side (FirebaseMessagingService.kt).
@@ -135,6 +136,22 @@ class NotificationService {
 
     final String? actionId = response.actionId;
     final String? payload = response.payload;
+
+    if (payload != null && payload.startsWith('fleet:')) {
+      final issueId = payload.substring('fleet:'.length);
+      if (issueId.isNotEmpty) {
+        await navigateToFleetIssue(issueId);
+      }
+      return;
+    }
+
+    if ((actionId == null || actionId.isEmpty) && payload != null) {
+      final jobNum = int.tryParse(payload);
+      if (jobNum != null) {
+        await _navigateToJobDetail(payload);
+        return;
+      }
+    }
 
     if (actionId == null || payload == null) {
       debugPrint('   actionId or payload is null → returning early');
@@ -444,6 +461,25 @@ class NotificationService {
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    final type = message.data['type'] as String? ?? '';
+    if (type.startsWith('fleet_')) {
+      final issueId = message.data['issueId'] as String? ?? '';
+      final title = message.notification?.title ??
+          message.data['title'] as String? ??
+          'Fleet notification';
+      final body = message.notification?.body ??
+          message.data['body'] as String? ??
+          'A fleet issue needs attention.';
+      final level = message.data['level'] as String? ?? 'medium-high';
+      await _showLocalNotification(
+        title: title,
+        body: body,
+        level: level == 'normal' ? 'normal' : 'medium-high',
+        jobCardNumber: issueId.isEmpty ? 'fleet:unknown' : 'fleet:$issueId',
+      );
+      return;
+    }
+
     final level = message.data['notificationLevel'] ?? 'normal';
     final title = message.data['title'] ?? message.notification?.title ?? 'New Job Notification';
     final body = message.data['body'] ?? message.notification?.body ?? 'You have a new job assignment';
@@ -453,11 +489,33 @@ class NotificationService {
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {
+    final type = message.data['type'] as String? ?? '';
+    if (type.startsWith('fleet_')) {
+      final issueId = message.data['issueId'] as String?;
+      if (issueId != null && issueId.isNotEmpty) {
+        // ignore: discarded_futures
+        _storeAndNavigateFleetIssue(issueId);
+      }
+      return;
+    }
+
     final jobCardNumber = message.data['jobCardNumber'];
     if (jobCardNumber != null) {
       // ignore: discarded_futures
       _navigateToJobDetail(jobCardNumber);
     }
+  }
+
+  Future<void> _storeAndNavigateFleetIssue(String issueId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pendingFleetIssueId', issueId);
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      debugPrint('navigateToFleetIssue: navigator not ready, stored pending $issueId');
+      return;
+    }
+    await navigateToFleetIssue(issueId);
+    await prefs.remove('pendingFleetIssueId');
   }
 
   // ==================== NAVIGATE TO JOB DETAIL ====================
@@ -526,6 +584,33 @@ class NotificationService {
     if (pending != null && pending.isNotEmpty) {
       debugPrint('checkPendingJobNavigation: found pending job #$pending');
       await _navigateToJobDetail(pending);
+    }
+  }
+
+  Future<void> checkPendingFleetNavigation() async {
+    try {
+      final initial = await _messaging.getInitialMessage();
+      if (initial != null) {
+        final type = initial.data['type'] as String? ?? '';
+        if (type.startsWith('fleet_')) {
+          final issueId = initial.data['issueId'] as String?;
+          if (issueId != null && issueId.isNotEmpty) {
+            debugPrint('checkPendingFleetNavigation: cold-start fleet issue $issueId');
+            await _storeAndNavigateFleetIssue(issueId);
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('checkPendingFleetNavigation initial message error: $e');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final pending = prefs.getString('pendingFleetIssueId');
+    if (pending != null && pending.isNotEmpty) {
+      debugPrint('checkPendingFleetNavigation: found pending fleet issue $pending');
+      await navigateToFleetIssue(pending);
+      await prefs.remove('pendingFleetIssueId');
     }
   }
 

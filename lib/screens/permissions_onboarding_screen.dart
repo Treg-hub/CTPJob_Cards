@@ -372,7 +372,7 @@ class _YourRolePageState extends State<_YourRolePage> {
         _RoleBullet(Icons.list_alt,
             "Your Fleet tab shows all open issues sorted by severity — Out of Service jobs appear first"),
         _RoleBullet(Icons.touch_app,
-            "Tap an issue to Log Work — acknowledgement happens when you start, then resolve it by saving the job"),
+            "Tap a fault in To Fix to Mark as Fixed — the issue is acknowledged when you open it, then resolved when you save the fix"),
         _RoleBullet(Icons.engineering,
             "Work records capture labour hours, machine hour-meter reading, parts used, and photos — numbered FM-####"),
         _RoleBullet(Icons.money_off,

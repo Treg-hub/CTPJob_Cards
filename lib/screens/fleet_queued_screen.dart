@@ -6,7 +6,7 @@ import '../widgets/fleet_app_bar.dart';
 
 /// Lightweight view of fleet items waiting in the offline sync queue.
 /// Mirrors WasteQueuedScreen: list with type/reference/age, retry all,
-/// and per-item remove (with confirmation).
+/// per-item error + manual retry, and per-item remove (with confirmation).
 class FleetQueuedScreen extends StatefulWidget {
   const FleetQueuedScreen({super.key});
 
@@ -17,6 +17,7 @@ class FleetQueuedScreen extends StatefulWidget {
 class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
   List<Map<String, dynamic>> _items = [];
   bool _retrying = false;
+  String? _retryingItemId;
 
   @override
   void initState() {
@@ -50,6 +51,38 @@ class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
         backgroundColor: synced > 0 || _items.isEmpty ? Colors.green : null,
       ),
     );
+  }
+
+  Future<void> _retryItem(Map<String, dynamic> item) async {
+    if (_retrying) return;
+    final itemId = item['id'] as String;
+    setState(() {
+      _retrying = true;
+      _retryingItemId = itemId;
+    });
+    try {
+      final ok = await SyncService().retrySpecificQueuedFleetItem(item);
+      if (!mounted) return;
+      _loadItems();
+      final type = item['type'] as String;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Synced: $type'
+                : 'Retry failed for $type — see error below.',
+          ),
+          backgroundColor: ok ? Colors.green : Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _retrying = false;
+          _retryingItemId = null;
+        });
+      }
+    }
   }
 
   Future<void> _removeItem(Map<String, dynamic> item) async {
@@ -111,7 +144,7 @@ class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: FilledButton.icon(
                   onPressed: _retrying ? null : _retryAll,
-                  icon: _retrying
+                  icon: _retrying && _retryingItemId == null
                       ? const SizedBox(
                           width: 18,
                           height: 18,
@@ -121,7 +154,9 @@ class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
                           ),
                         )
                       : const Icon(Icons.cloud_sync_outlined),
-                  label: Text(_retrying ? 'Syncing…' : 'Retry sync now'),
+                  label: Text(_retrying && _retryingItemId == null
+                      ? 'Syncing…'
+                      : 'Retry sync now'),
                   style: FilledButton.styleFrom(
                     backgroundColor: kBrandOrange,
                     foregroundColor: Colors.white,
@@ -163,30 +198,104 @@ class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
                 final item = _items[index];
                 final type = item['type'] as String;
                 final ref = item['ref'] as String?;
+                final lastError = item['lastError'] as String?;
+                final itemId = item['id'] as String;
+                final isRetryingThis =
+                    _retrying && _retryingItemId == itemId;
+
                 return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: kBrandOrange.withValues(alpha: 0.15),
-                      foregroundColor: kBrandOrange,
-                      child: Icon(_iconFor(type), size: 20),
-                    ),
-                    title: Text(
-                      type,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      [
-                        if (ref != null && ref.isNotEmpty) ref,
-                        'queued ${item['age']}',
-                      ].join('  •  '),
-                      style: TextStyle(fontSize: 12, color: muted),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      tooltip: 'Remove from queue',
-                      onPressed: () => _removeItem(item),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              backgroundColor:
+                                  kBrandOrange.withValues(alpha: 0.15),
+                              foregroundColor: kBrandOrange,
+                              child: Icon(_iconFor(type), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    type,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    [
+                                      if (ref != null && ref.isNotEmpty) ref,
+                                      'queued ${item['age']}',
+                                    ].join('  •  '),
+                                    style:
+                                        TextStyle(fontSize: 12, color: muted),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              tooltip: 'Remove from queue',
+                              onPressed: _retrying ? null : () => _removeItem(item),
+                            ),
+                          ],
+                        ),
+                        if (lastError != null && lastError.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: Colors.red.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    size: 16, color: Colors.red),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    lastError,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: _retrying
+                                ? null
+                                : () => _retryItem(item),
+                            icon: isRetryingThis
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.refresh, size: 16),
+                            label: Text(isRetryingThis
+                                ? 'Retrying…'
+                                : 'Retry this item'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

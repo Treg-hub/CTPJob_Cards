@@ -73,10 +73,10 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                record.costStatus == FleetCostStatus.pending
-                    ? 'This job is locked — jobs can be edited for '
-                        '${FleetWorkRecord.editLockDays} days.'
-                    : 'This job is locked because costs have been entered.',
+                record.hasLinkedCosts
+                    ? 'This job is locked because costs have been linked.'
+                    : 'This job is locked — jobs can be edited for '
+                        '${FleetWorkRecord.editLockDays} days.',
               ),
               backgroundColor: Colors.orange,
             ),
@@ -209,7 +209,13 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
     setState(() => _saving = true);
     try {
       final fresh = await _service.getWorkRecord(widget.workRecordId);
-      if (fresh == null || fresh.hasCostLines || fresh.isEditLocked) {
+      final settings = await _service.getSettings();
+      final canEdit = fresh?.canEdit(
+            isMechanic: role_utils.isFleetMechanic(currentEmployee, settings),
+            isAdmin: role_utils.isFleetAdmin(currentEmployee),
+          ) ??
+          false;
+      if (fresh == null || !canEdit) {
         _showError('This job can no longer be edited.');
         return;
       }

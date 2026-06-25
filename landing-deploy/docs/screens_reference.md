@@ -321,25 +321,13 @@ Visibility into the "Monitoring" state — jobs that were marked completed but k
 
 `lib/screens/admin_screen.dart` — **Roles:** Admin only
 
-The control panel. Six scrollable tabs with outlined icons.
+The control panel. Five scrollable tabs with outlined icons. Opens on **Settings** by default (`initialIndex: 0`). Tab order: **Settings → Employees → Structures → On Site → Comms**.
 
-#### Tab: Employees
-
-- Spreadsheet-style editor for the `employees` collection
-- Add / edit / bulk-delete employees
-- `isOnSite` column shows a tappable green **"On Site"** / grey **"Off Site"** chip — tap to toggle the employee's status directly
-- FCM token visible and editable (for debugging)
-- CSV import / export with template download
-
-#### Tab: Structures
-
-- Manages the factory hierarchy stored under `factoryStructure`
-- Add/delete Departments, Areas, and Machine/Parts
-- Cascading deletes with confirmation dialogs
+> **Job card export / bulk delete** is not in Admin on mobile. Use **CTP Pulse** (`/jobs`) for read-only job oversight, history, and exports.
 
 #### Tab: Settings
 
-Grouped cards:
+Grouped cards (default tab):
 
 - **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking update screen is shown with the download URL before Home is reached. Works independently of Remote Config.
 - **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
@@ -347,11 +335,21 @@ Grouped cards:
 - **Modules** — enable/disable Waste Management and Fleet Maintenance
 - **Feedback** — opens the **User Feedback** admin board (see [User Feedback](#user-feedback)) for reviewing and triaging feedback submitted from the Home screen FAB
 
-#### Tab: Job Cards
+#### Tab: Employees
 
-- Spreadsheet-style export and delete tooling for the `job_cards` collection
-- CSV export with full filter applied
-- Bulk delete with confirmation
+- Searchable **card list** for the `employees` collection (lazy-loaded on first visit to the tab)
+- Toolbar card: search field, CSV template download, import, bulk delete when rows are selected
+- Each card: clock number badge, name, position · department, on-site / off-site pill (tap to toggle), edit and delete actions
+- Add / edit via dialog; FCM token editable in the edit dialog only (not on the list row)
+- Checkbox per card for bulk delete selection
+
+#### Tab: Structures
+
+- Manages the factory hierarchy stored under `factoryStructure`
+- Search box and stats chips (department / area / machine counts)
+- Expandable department cards with nested areas and machines/parts
+- Add-new department, area, and machine forms in `_settingsCard` panels; duplicate-name validation
+- Delete with cascading confirmation dialogs; structure reloads after deletes
 
 #### Tab: On Site
 
@@ -484,21 +482,22 @@ Screens for the waste management feature. Accessible via the **Waste** tab in th
 
 `lib/screens/waste_home_screen.dart` — **Roles:** Security Manager, Security Guard, Admin
 
-Entry point for WasteTrack (single **Loads** tab). Shows load cards grouped by status: **Incoming** (scheduled), **Recent** (draft, pending queues, completed), and a **Paper Waste Stock** banner with on-site inventory count.
+Entry point for WasteTrack (single **Loads** tab). Shows load cards grouped by status: **Incoming** (scheduled), **Recent** (draft, pending queues, completed). **Security managers and admins** also see a **Copper ready to sell** panel and an **on-site stock** banner (guards do not — they link stock at collection only).
 
 Load list is driven by live streams on `watchLoads()` and `watchScheduledLoads()` — updates reflect in real time without manual refresh. Pending weighbridge and cost-review loads show a **CTP Pulse handoff** banner on detail — those queues are not processed on mobile.
 
 #### Role-based differences
 
-- **Security Manager** — full field capture: schedule, on-the-spot loads, stock, finish loading
-- **Security Guard** — same field capture: begin collection, items, photos, signature, submit
-- **Admin** — same mobile field capture; admin workflows (weighbridge, cost review, settings) are on **CTP Pulse**
+- **Security Manager** — schedule, on-the-spot loads, browse on-site stock inventory, copper ready panel, link stock at collection, finish loading
+- **Security Guard** — schedule, begin collection, **From stock** at collection (no inventory browse), items, photos, signature, submit
+- **Admin** — same as manager on mobile; weighbridge, cost review, settings on **CTP Pulse**
 
 #### Key Actions
 
 - **+ New / Schedule** *(FAB)* — bottom sheet: "Schedule Incoming Load" or "New Load (on the spot)"
 - **Begin Collection** — opens **Waste Begin Collection** for a scheduled load
-- **Paper Waste Stock** banner — opens on-site stock inventory
+- **On-site stock** banner *(manager/admin)* — opens stock inventory
+- **Copper ready to sell** panel *(manager/admin)* — live copper sell bucket + on-site copper waste stock after 400 kg threshold
 - **⋮ More actions** — cloud sync retry when offline queue is non-empty (weighbridge/reports/admin removed 2026-06-22)
 - **All / Today / This Week** filter chips — apply to scheduled and recent loads
 
@@ -519,7 +518,7 @@ Form for scheduling an incoming load before the truck arrives. Saves to `waste_l
 
 `lib/screens/waste_begin_collection_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
 
-Opens when a user taps **Begin Collection** on a scheduled load. On submission: weight-based / no-on-site-weight loads → `pending_weighbridge`; quantity-only loads → `pending_cost_review` (weighbridge skipped). Respects `photos_required` and `signature_required` from Pulse settings.
+Opens when a user taps **Begin Collection** on a scheduled load. Supports **From stock** for paper, **IBC Bins**, and **Copper Waste** (guards can link here without browsing inventory). On submission: weight-based / no-on-site-weight loads → `pending_weighbridge`; quantity-only loads → `pending_cost_review` (weighbridge skipped). Respects `photos_required` and `signature_required` from Pulse settings.
 
 Add-item uses a `showModalBottomSheet` (not a dialog) for camera stability. Calls `WasteService.submitCollection` which stores `collectedByName` from `currentEmployee.name` on the load document.
 
@@ -576,6 +575,12 @@ Full detail view of a single waste load.
 
 > **Removed 2026-06-22:** `waste_pending_weighbridge_screen`, `waste_review_screen`, `waste_reports_screen`, `waste_admin_screen` — weighbridge, cost review, reports, and settings live on **CTP Pulse** only.
 
+### Waste Stock Inventory
+
+`lib/screens/waste_stock_inventory_screen.dart` — **Roles:** Security Manager, Admin *(not Security Guard)*
+
+Lists on-site `waste_stock` items: manual paper stock, auto **IBC Bins** from ink consume (`stock_ibc_{n}`), and auto **Copper Waste** after the 400 kg threshold (`visibility: manager_only`). Guards are directed to link stock at collection instead.
+
 ### Waste Queued
 
 `lib/screens/waste_queued_screen.dart` — **Roles:** Security Guard, Admin
@@ -590,9 +595,17 @@ Screens for the Ink Factory stock-inventory module. Accessible via the **Ink Fac
 
 ### Ink Home
 
-`lib/screens/ink_home_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+`lib/screens/ink_home_screen.dart` — **Roles:** Ink operator, Ink manager, Admin, Lurgi (via Daily Readings tile only — not this hub)
 
-Module hub. Shows a live stock-on-hand summary card (total value for managers, item count for operators), an action grid for data capture, and a manager-only action grid. Below the grids the full stock list is shown with current balance and unit, tappable to open the item ledger detail.
+Operator **capture hub** on mobile. Management, costing, and month-end workflows live on **CTP Pulse** (`https://ctp-pulse.web.app/ink`), opened via the **Management & costing** card.
+
+#### Layout
+
+- **Stock on hand** summary — item count (not total rand value on mobile)
+- **Management & costing** — opens CTP Pulse in the browser (month-end, pending costs, recipes, reports, adjustments)
+- **Meter reminder banner** — shown when today's ink meter readings are not yet recorded (links to Daily Readings)
+- **Capture** action grid (seven tiles below)
+- **Stock on hand** list — each row shows balance and unit; tap opens item ledger detail (recent movements only, bounded query)
 
 #### Capture tiles
 
@@ -606,11 +619,7 @@ Module hub. Shows a live stock-on-hand summary card (total value for managers, i
 | Toloul Recovery | `InkTolulRecoveryScreen` |
 | IBC Register | `InkIbcRegisterScreen` |
 
-#### Manager tiles
-
-Pending Costs · Month-end Count · Stock Adjustment · Month-end Report · Suppliers · Recipes · Conversion Factors · Toloul Meter Points · Production History · Revaluation · Value Adjustment · Corrections · Flagged
-
-> **Money gating:** WAC, stock value, and cost fields are hidden from operators throughout the module. Managers and admins see all financial figures.
+> **Money gating:** WAC, stock value, and cost fields are hidden from operators on mobile. Managers enter costs, run month-end, and adjust stock on **CTP Pulse**, not in the Job Cards app.
 
 ---
 
@@ -690,7 +699,13 @@ Scans ink IBCs (GS1-128 barcode labels). The barcode parser reads the SSCC (IBC 
 
 `lib/screens/ink_ibc_register_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs.
+Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs. Managers can **void consumption** — this auto-disposes the linked `waste_stock` item if still on site.
+
+### Consume IBC (Waste cross-link)
+
+`lib/screens/ink_ibc_transfer_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
+
+Marks an IBC as consumed (transferred to tank). Atomically creates `waste_stock/stock_ibc_{number}` as an **IBC Bins** on-site item (qty 1, no stock photo). Security links it to a waste load on **collection day** via **Begin Collection → From stock**.
 
 ---
 

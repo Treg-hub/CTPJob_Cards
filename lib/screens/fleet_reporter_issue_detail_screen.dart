@@ -227,12 +227,26 @@ class _ReporterFixCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        record.description,
+                        record.title,
                         style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w500),
+                            fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  record.workNumber,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  record.description,
+                  style: const TextStyle(fontSize: 13, height: 1.35),
                 ),
                 StreamBuilder<List<FleetWorkPart>>(
                   stream: service.watchParts(workRecordId),
@@ -248,10 +262,29 @@ class _ReporterFixCard extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Fixed by ${record.loggedByName} · ${fmt.format(record.endDate)}',
-                  style: TextStyle(fontSize: 11, color: colors.textMuted),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.engineering_outlined,
+                        size: 14, color: colors.textMuted),
+                    const SizedBox(width: 4),
+                    Text(
+                      record.loggedByName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 12, color: colors.textMuted),
+                    const SizedBox(width: 4),
+                    Text(
+                      fmt.format(record.endDate),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
                 ),
               ],
             ),

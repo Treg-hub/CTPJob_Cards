@@ -1,23 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Costing state of a work record. Drives the cost manager's
-/// "needs costing" queue and locks mechanic edits once set.
-enum FleetCostStatus {
-  pending('pending'),
-  costed('costed'),
-  noCost('no_cost');
-
-  final String value;
-  const FleetCostStatus(this.value);
-
-  static FleetCostStatus fromValue(String? value) {
-    return FleetCostStatus.values.firstWhere(
-      (s) => s.value == value,
-      orElse: () => FleetCostStatus.pending,
-    );
-  }
-}
-
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
 
@@ -38,8 +20,7 @@ class FleetWorkRecord {
   final String loggedByName;
   final DateTime? createdAt;
   final List<String> linkedIssueIds;
-  final FleetCostStatus costStatus;
-  final bool hasCostLines;
+  final bool hasLinkedCosts;
 
   /// Days a mechanic may edit a record after it was created.
   static const int editLockDays = 7;
@@ -62,8 +43,7 @@ class FleetWorkRecord {
     required this.loggedByName,
     this.createdAt,
     this.linkedIssueIds = const [],
-    this.costStatus = FleetCostStatus.pending,
-    this.hasCostLines = false,
+    this.hasLinkedCosts = false,
   });
 
   /// Whether the record is still inside the [editLockDays] window.
@@ -77,12 +57,25 @@ class FleetWorkRecord {
   bool get isEditLocked => !isWithinEditWindow;
 
   /// Edit rule shared across screens: admins always; mechanics only
-  /// while uncosted and inside the edit window.
+  /// while no costs are linked and inside the edit window.
   bool canEdit({required bool isMechanic, required bool isAdmin}) {
     if (isAdmin) return true;
-    return isMechanic &&
-        costStatus == FleetCostStatus.pending &&
-        isWithinEditWindow;
+    return isMechanic && !hasLinkedCosts && isWithinEditWindow;
+  }
+
+  /// Supplementary comments on the fix — allowed within [editLockDays] from
+  /// [createdAt] even when [hasLinkedCosts] blocks field edits.
+  bool canAddComment({required bool isMechanic, required bool isAdmin}) {
+    if (isAdmin) return true;
+    if (!isMechanic) return false;
+    return isWithinCommentWindow;
+  }
+
+  /// Same 7-day window as edit, but ignores linked costs.
+  bool get isWithinCommentWindow {
+    final created = createdAt;
+    if (created == null) return true;
+    return DateTime.now().difference(created).inDays < editLockDays;
   }
 
   static DateTime _parseDate(dynamic value) {
@@ -93,6 +86,14 @@ class FleetWorkRecord {
       if (parsed != null) return parsed;
     }
     return DateTime.now();
+  }
+
+  static bool _parseHasLinkedCosts(Map<String, dynamic> data) {
+    if (data['has_linked_costs'] == true) return true;
+    // Legacy fields from pre-greenfield pilot data.
+    if (data['has_cost_lines'] == true) return true;
+    final status = data['cost_status'] as String?;
+    return status == 'costed';
   }
 
   factory FleetWorkRecord.fromFirestore(DocumentSnapshot doc) {
@@ -118,15 +119,7 @@ class FleetWorkRecord {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
-      costStatus: data['cost_status'] != null
-          ? FleetCostStatus.fromValue(data['cost_status'] as String?)
-          // Legacy docs predate cost_status and used a boolean flag.
-          : (data['has_cost_lines'] == true
-              ? FleetCostStatus.costed
-              : FleetCostStatus.pending),
-      hasCostLines: data['has_cost_lines'] == true ||
-          (data['cost_status'] != null &&
-              data['cost_status'] != FleetCostStatus.pending.value),
+      hasLinkedCosts: _parseHasLinkedCosts(data),
     );
   }
 
@@ -147,7 +140,7 @@ class FleetWorkRecord {
       'logged_by_clock_no': loggedByClockNo,
       'logged_by_name': loggedByName,
       'linked_issue_ids': linkedIssueIds,
-      'cost_status': costStatus.value,
+      if (hasLinkedCosts) 'has_linked_costs': true,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
@@ -170,7 +163,7 @@ class FleetWorkRecord {
     String? loggedByName,
     DateTime? createdAt,
     List<String>? linkedIssueIds,
-    FleetCostStatus? costStatus,
+    bool? hasLinkedCosts,
   }) {
     return FleetWorkRecord(
       id: id ?? this.id,
@@ -190,7 +183,7 @@ class FleetWorkRecord {
       loggedByName: loggedByName ?? this.loggedByName,
       createdAt: createdAt ?? this.createdAt,
       linkedIssueIds: linkedIssueIds ?? this.linkedIssueIds,
-      costStatus: costStatus ?? this.costStatus,
+      hasLinkedCosts: hasLinkedCosts ?? this.hasLinkedCosts,
     );
   }
 }

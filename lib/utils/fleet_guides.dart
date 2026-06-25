@@ -11,7 +11,7 @@ DocEntry? _catalogEntry(String id) {
   return null;
 }
 
-/// Fleet role guides visible to this user (mechanic, reporter, cost manager).
+/// Fleet floor guides visible on mobile (mechanic + reporter).
 List<DocEntry> fleetGuidesFor(Employee? employee, FleetSettings settings) {
   final guides = <DocEntry>[];
   void add(String id) {
@@ -19,16 +19,6 @@ List<DocEntry> fleetGuidesFor(Employee? employee, FleetSettings settings) {
     if (entry != null) guides.add(entry);
   }
 
-  if (role_utils.isFleetAdmin(employee)) {
-    add('fleet_user_guide');
-    add('fleet_mechanic_guide');
-    add('fleet_reporter_guide');
-    add('fleet_cost_manager_guide');
-    return guides;
-  }
-  if (role_utils.isFleetCostManager(employee, settings)) {
-    add('fleet_cost_manager_guide');
-  }
   if (role_utils.isFleetMechanic(employee, settings)) {
     add('fleet_mechanic_guide');
   }
@@ -46,12 +36,7 @@ DocEntry? primaryFleetGuideFor(Employee? employee, FleetSettings settings) {
   final guides = fleetGuidesFor(employee, settings);
   if (guides.isEmpty) return null;
   if (guides.length == 1) return guides.first;
-  if (role_utils.isFleetCostManager(employee, settings) &&
-      !role_utils.isFleetAdmin(employee)) {
-    return _catalogEntry('fleet_cost_manager_guide') ?? guides.first;
-  }
-  if (role_utils.isFleetMechanic(employee, settings) &&
-      !role_utils.isFleetAdmin(employee)) {
+  if (role_utils.isFleetMechanic(employee, settings)) {
     return _catalogEntry('fleet_mechanic_guide') ?? guides.first;
   }
   if (role_utils.isFleetReporter(employee, settings)) {

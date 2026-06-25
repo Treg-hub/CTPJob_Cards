@@ -128,6 +128,7 @@ class FleetWorkPartsSection extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: availableChips
+                      .take(8)
                       .map((name) => ActionChip(
                             label: Text(name,
                                 style: const TextStyle(fontSize: 11)),
@@ -151,15 +152,14 @@ class FleetWorkPartsSection extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   flex: 3,
-                  child: TextField(
+                  child: _FleetPartNameField(
                     controller: row.nameCtrl,
-                    decoration: fleetDropdownDecoration(
-                      hintText: 'Part name',
-                      isDense: true,
-                    ),
+                    suggestedPartNames: suggestedPartNames,
+                    usedNames: usedNames,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -181,6 +181,103 @@ class FleetWorkPartsSection extends StatelessWidget {
             ),
           );
         }),
+      ],
+    );
+  }
+}
+
+/// Part name field with autocomplete chips filtered as the user types.
+class _FleetPartNameField extends StatefulWidget {
+  const _FleetPartNameField({
+    required this.controller,
+    required this.suggestedPartNames,
+    required this.usedNames,
+  });
+
+  final TextEditingController controller;
+  final List<String> suggestedPartNames;
+  final Set<String> usedNames;
+
+  @override
+  State<_FleetPartNameField> createState() => _FleetPartNameFieldState();
+}
+
+class _FleetPartNameFieldState extends State<_FleetPartNameField> {
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _query = widget.controller.text;
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final next = widget.controller.text;
+    if (next != _query) setState(() => _query = next);
+  }
+
+  List<String> get _matches {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    return widget.suggestedPartNames
+        .where((name) {
+          final lower = name.toLowerCase();
+          return lower.contains(q) &&
+              lower != q &&
+              !widget.usedNames.contains(name);
+        })
+        .take(6)
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = _matches;
+    final muted = Theme.of(context).appColors.textMuted;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: widget.controller,
+          decoration: fleetDropdownDecoration(
+            hintText: 'Part name',
+            isDense: true,
+          ),
+        ),
+        if (matches.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: matches
+                .map((name) => ActionChip(
+                      label: Text(name, style: const TextStyle(fontSize: 11)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 0),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        widget.controller.text = name;
+                        widget.controller.selection = TextSelection.collapsed(
+                            offset: name.length);
+                        setState(() => _query = name);
+                      },
+                    ))
+                .toList(),
+          ),
+          Text(
+            'Suggestions from past jobs',
+            style: TextStyle(fontSize: 10, color: muted),
+          ),
+        ],
       ],
     );
   }

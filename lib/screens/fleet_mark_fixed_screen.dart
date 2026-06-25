@@ -50,6 +50,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
   bool _moreExpanded = false;
+  bool _alsoFixesExpanded = false;
 
   @override
   void initState() {
@@ -97,6 +98,9 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
       _otherOpenIssues = issues
           .where((i) => i.status.isOpen && i.id != widget.linkedIssueId)
           .toList();
+      if (_otherOpenIssues.isNotEmpty) {
+        _alsoFixesExpanded = true;
+      }
     });
   }
 
@@ -360,36 +364,46 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
             ),
           const SizedBox(height: 16),
 
-          ExpansionTile(
-            initiallyExpanded: _moreExpanded,
-            onExpansionChanged: (v) => setState(() => _moreExpanded = v),
-            title: const Text(
-              'More details (optional)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            subtitle: const Text(
-              'Labour hours, parts, photos, work date, other faults',
-              style: TextStyle(fontSize: 12),
-            ),
-            children: [
-              const SizedBox(height: 8),
-              FleetWorkDatesCard(
-                workCarriedOut: _workCarriedOut,
-                dateFmt: dateFmt,
-                workDateIsToday: workDateIsToday,
-                onEdit: _pickWorkDate,
+          if (_otherOpenIssues.isNotEmpty)
+            ExpansionTile(
+              initiallyExpanded: _alsoFixesExpanded,
+              onExpansionChanged: (v) =>
+                  setState(() => _alsoFixesExpanded = v),
+              tilePadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Also fixes these reported problems?',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: kBrandOrange,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_otherOpenIssues.length}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              const FleetSectionLabel('Labour hours (optional)'),
-              TextField(
-                controller: _labourHoursCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
+              subtitle: Text(
+                _linkedIssueIds.length > 1
+                    ? '${_linkedIssueIds.length - 1} selected to close with this fix'
+                    : 'Tick any other open problems this job also fixes',
+                style: const TextStyle(fontSize: 12),
               ),
-              const SizedBox(height: 16),
-              if (_otherOpenIssues.isNotEmpty) ...[
-                const FleetSectionLabel('Also fixes these reported problems?'),
+              children: [
                 ..._otherOpenIssues.map((issue) {
                   final ticked = _linkedIssueIds.contains(issue.id);
                   return CheckboxListTile(
@@ -421,6 +435,36 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
                 }),
                 const SizedBox(height: 8),
               ],
+            ),
+
+          ExpansionTile(
+            initiallyExpanded: _moreExpanded,
+            onExpansionChanged: (v) => setState(() => _moreExpanded = v),
+            title: const Text(
+              'More details (optional)',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            subtitle: const Text(
+              'Labour hours, parts, photos, work date',
+              style: TextStyle(fontSize: 12),
+            ),
+            children: [
+              const SizedBox(height: 8),
+              FleetWorkDatesCard(
+                workCarriedOut: _workCarriedOut,
+                dateFmt: dateFmt,
+                workDateIsToday: workDateIsToday,
+                onEdit: _pickWorkDate,
+              ),
+              const SizedBox(height: 16),
+              const FleetSectionLabel('Labour hours (optional)'),
+              TextField(
+                controller: _labourHoursCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
+              ),
+              const SizedBox(height: 16),
               FleetWorkPartsSection(
                 parts: _parts,
                 optional: true,
