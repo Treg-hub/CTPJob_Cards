@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_form_fields.dart';
+import '../utils/fleet_asset_filter.dart';
 import '../utils/fleet_daily_check_gate.dart';
 import '../widgets/fleet_reporter_widgets.dart';
 
@@ -84,7 +85,10 @@ class _FleetReportWizardScreenState
     final lastId = prefs.getString(_kLastReportAssetKey);
     if (lastId == null) return;
     final asset = await _service.getAsset(lastId);
-    if (asset != null && mounted) {
+    final dept = currentEmployee?.department;
+    if (asset != null &&
+        fleetAssetVisibleToReporter(asset, dept) &&
+        mounted) {
       setState(() => _selectedAsset = asset);
     }
   }
@@ -271,6 +275,7 @@ class _FleetReportWizardScreenState
               final settings = ref.watch(fleetSettingsProvider).valueOrNull;
               return FleetAssetGrid(
                 selectedAsset: _selectedAsset,
+                reporterDepartment: currentEmployee?.department,
                 onAssetSelected: _onAssetSelected,
                 checkBadgeFor: (asset) {
                   if (!_checklistConfig.enabled ||

@@ -155,6 +155,7 @@ class _FleetReporterHomeScreenState
                   maxHeight: 200,
                   selectable: false,
                   selectedAsset: null,
+                  reporterDepartment: emp?.department,
                   onAssetSelected: _onMachineTap,
                   checkBadgeFor: (asset) {
                     if (asset.id == null) return FleetCheckBadge.none;

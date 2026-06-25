@@ -22,6 +22,10 @@ class FleetAsset {
   final double? lastServiceMachineHours;
   final DateTime? lastServiceDate;
 
+  /// Reporter departments that may pick this machine (daily check, report fault).
+  /// Empty = all reporter departments.
+  final List<String> departments;
+
   const FleetAsset({
     this.id,
     required this.typeId,
@@ -37,6 +41,7 @@ class FleetAsset {
     this.serviceIntervalDays,
     this.lastServiceMachineHours,
     this.lastServiceDate,
+    this.departments = const [],
   });
 
   /// Hour-based service due: interval set, and the meter has advanced past
@@ -98,7 +103,16 @@ class FleetAsset {
       lastServiceMachineHours:
           (data['last_service_machine_hours'] as num?)?.toDouble(),
       lastServiceDate: (data['last_service_date'] as Timestamp?)?.toDate(),
+      departments: _parseDepartments(data['departments']),
     );
+  }
+
+  static List<String> _parseDepartments(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .map((e) => e?.toString().trim() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   Map<String, dynamic> toFirestore() {
@@ -120,6 +134,7 @@ class FleetAsset {
       'last_service_date': lastServiceDate != null
           ? Timestamp.fromDate(lastServiceDate!)
           : null,
+      'departments': departments,
     };
   }
 
@@ -138,6 +153,7 @@ class FleetAsset {
     int? serviceIntervalDays,
     double? lastServiceMachineHours,
     DateTime? lastServiceDate,
+    List<String>? departments,
   }) {
     return FleetAsset(
       id: id ?? this.id,
@@ -155,6 +171,7 @@ class FleetAsset {
       lastServiceMachineHours:
           lastServiceMachineHours ?? this.lastServiceMachineHours,
       lastServiceDate: lastServiceDate ?? this.lastServiceDate,
+      departments: departments ?? this.departments,
     );
   }
 }
