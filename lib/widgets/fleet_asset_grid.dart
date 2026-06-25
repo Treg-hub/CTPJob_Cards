@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/fleet_asset.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_asset_filter.dart';
 
 /// Informational badge for today's daily safety check (non-blocking).
 enum FleetCheckBadge { none, checkDue, done }
@@ -16,6 +17,7 @@ class FleetAssetGrid extends StatelessWidget {
     this.checkBadgeFor,
     this.maxHeight,
     this.selectable = true,
+    this.reporterDepartment,
   });
 
   final FleetAsset? selectedAsset;
@@ -23,6 +25,8 @@ class FleetAssetGrid extends StatelessWidget {
   final FleetCheckBadge Function(FleetAsset asset)? checkBadgeFor;
   final double? maxHeight;
   final bool selectable;
+  /// When set, only assets visible to this reporter department are shown.
+  final String? reporterDepartment;
 
   @override
   Widget build(BuildContext context) {
@@ -33,8 +37,10 @@ class FleetAssetGrid extends StatelessWidget {
       child: StreamBuilder<List<FleetAsset>>(
         stream: FleetService().watchAssets(activeOnly: true),
         builder: (context, snapshot) {
-          final assets = List<FleetAsset>.from(snapshot.data ?? [])
-            ..sort((a, b) => a.name.compareTo(b.name));
+          final assets = filterAssetsForReporter(
+            snapshot.data ?? const [],
+            reporterDepartment,
+          )..sort((a, b) => a.name.compareTo(b.name));
 
           if (snapshot.connectionState == ConnectionState.waiting &&
               assets.isEmpty) {
@@ -43,9 +49,17 @@ class FleetAssetGrid extends StatelessWidget {
 
           if (assets.isEmpty) {
             return Center(
-              child: Text(
-                'No machines available.',
-                style: TextStyle(color: Theme.of(context).appColors.textMuted),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  reporterDepartment != null
+                      ? 'No machines for your department — ask admin to assign departments on the register.'
+                      : 'No machines available.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).appColors.textMuted,
+                  ),
+                ),
               ),
             );
           }

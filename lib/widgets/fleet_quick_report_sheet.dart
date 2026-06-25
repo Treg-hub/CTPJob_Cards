@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
+import '../utils/fleet_asset_filter.dart';
 import '../models/fleet_issue.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
@@ -77,8 +79,10 @@ class _FleetQuickReportSheetState extends State<_FleetQuickReportSheet> {
             child: StreamBuilder<List<FleetAsset>>(
               stream: FleetService().watchAssets(activeOnly: true),
               builder: (context, snapshot) {
-                final assets = List<FleetAsset>.from(snapshot.data ?? [])
-                  ..sort((a, b) => a.name.compareTo(b.name));
+                final assets = filterAssetsForReporter(
+                  snapshot.data ?? const [],
+                  currentEmployee?.department,
+                )..sort((a, b) => a.name.compareTo(b.name));
 
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     assets.isEmpty) {
@@ -87,9 +91,13 @@ class _FleetQuickReportSheetState extends State<_FleetQuickReportSheet> {
 
                 if (assets.isEmpty) {
                   return Center(
-                    child: Text(
-                      'No assets available.',
-                      style: TextStyle(color: colors.textMuted),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'No machines for your department — ask admin to assign departments on the register.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: colors.textMuted),
+                      ),
                     ),
                   );
                 }
