@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
 import '../theme/app_theme.dart';
 
@@ -67,6 +68,101 @@ class FleetMechanicGuideBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Prominent count banner — tap scrolls to [FleetServiceDueCard] list below.
+class FleetServiceDueBanner extends StatelessWidget {
+  const FleetServiceDueBanner({
+    super.key,
+    required this.count,
+    required this.onTap,
+  });
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.amber.shade100,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.notifications_active_outlined,
+                  color: Colors.amber.shade900, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  count == 1
+                      ? '1 machine due for service'
+                      : '$count machines due for service',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+              ),
+              Text(
+                'View',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.amber.shade800,
+                ),
+              ),
+              Icon(Icons.keyboard_arrow_down,
+                  color: Colors.amber.shade800, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Per-asset service-due card with Log service action.
+class FleetServiceDueCard extends StatelessWidget {
+  const FleetServiceDueCard({
+    super.key,
+    required this.asset,
+    required this.onLogService,
+  });
+
+  final FleetAsset asset;
+  final void Function(FleetAsset asset) onLogService;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      color: Colors.amber.withValues(alpha: 0.12),
+      child: ListTile(
+        dense: true,
+        leading:
+            Icon(Icons.build_circle_outlined, color: Colors.amber.shade800),
+        title: Text(
+          '${asset.name} — service due',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: Colors.amber.shade900,
+          ),
+        ),
+        subtitle: Text(
+          asset.serviceDueReason ?? 'Scheduled service',
+          style: TextStyle(fontSize: 11, color: Colors.amber.shade800),
+        ),
+        trailing: TextButton(
+          onPressed: () => onLogService(asset),
+          child: const Text('Log service'),
+        ),
       ),
     );
   }

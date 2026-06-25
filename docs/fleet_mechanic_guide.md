@@ -115,7 +115,7 @@ When the last open out-of-service problem on a machine is fixed, the red warning
 
 - **Costs / invoices** — managers enter these; you only see "costs pending" on a job
 - **Work record numbers** — the system creates these automatically
-- **"Close with a note only"** — if a report is a false alarm, ask an admin or manager to cancel it
+- **"Close with a note only"** — if a report is a false alarm, ask an admin or manager to cancel it. Admins handle cancellations and Fleet settings in **Pulse** (the web admin app), not in this mobile app.
 
 ---
 

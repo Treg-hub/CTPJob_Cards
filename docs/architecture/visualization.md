@@ -37,7 +37,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 | **Pre Press Specialist** | dept=`Pre Press`, pos contains `specialist` | Receives Pre Press Spec type job cards |
 | **Fleet Mechanic** | dept=`Workshop`, pos=`Hyster Mechanic` | Log work, acknowledge/resolve issues (no cost amounts) |
 | **Fleet Reporter** | dept ∈ `fleet_settings.reporter_departments` | Report fleet issues, view own issues |
-| **Fleet Cost Manager** | `clockNo` ∈ `fleet_settings.cost_manager_clock_nos` | Enter costs, cost reports, CSV export |
+| **Fleet Cost Manager** | `clockNo` ∈ `fleet_settings.cost_manager_clock_nos` | **Pulse only** — optional cost linking, reports, CSV (no mobile Fleet tab) |
 | **Fleet Admin** | `Employee.isAdmin == true` | Manage asset register + Fleet settings + all of the above |
 
 > **To grant Admin:** Set `isAdmin: true` on the employee's Firestore document. No code change or app release required.
@@ -170,23 +170,17 @@ App entry (home_screen.dart)
 
 ---
 
-## Permission Matrix — Fleet Maintenance
+## Permission Matrix — Fleet Maintenance (Mobile)
 
 | Screen / Action | Fleet Admin | Cost Manager | Mechanic | Reporter | Others |
 |---|---|---|---|---|---|
-| FleetHomeScreen — view | ✅ | ✅ | ✅ | ✅ | ❌ |
-| FleetReportIssueScreen | ✅ | ✅ | ✅ | ✅ | ❌ |
-| FleetIssuesListScreen | ✅ | ✅ | ✅ | ❌ | ❌ |
-| FleetIssueDetail — acknowledge / resolve | ✅ | ❌ | ✅ | ❌ | ❌ |
-| FleetIssueDetail — cancel | ✅ | ✅ | ✅ | ❌ | ❌ |
-| FleetLogWorkScreen | ✅ | ❌ | ✅ | ❌ | ❌ |
-| FleetWorkRecordDetail — cost amounts | ✅ | ✅ | ❌ (label only) | ❌ | ❌ |
-| FleetAddCostScreen | ✅ | ✅ | ❌ | ❌ | ❌ |
-| FleetReportsScreen + CSV export | ✅ | ✅ | ❌ | ❌ | ❌ |
-| FleetAssetsScreen (manage register) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| FleetSettingsScreen | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Fleet tab — view | ✅ (if also mobile role) | ❌ Pulse only | ✅ | ✅ | ❌ |
+| Reporter shell / Report wizard | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Mechanic shell — Mark as Fixed / Log work | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Work record detail — any cost UI | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Costing / Reports / Settings | ❌ (Pulse) | ❌ (Pulse) | ❌ | ❌ | ❌ |
 
-The whole module is also gated behind the `fleet_settings.fleet_enabled` flag — when off, the Fleet tab is hidden for everyone.
+Cost managers use **CTP Pulse** (`boardModules: fleet`) for optional cost linking, reports, and settings. The whole mobile module is gated behind `fleet_settings.fleet_enabled` + `isFleetMobileUser` (reporter OR mechanic).
 
 ---
 
@@ -217,43 +211,32 @@ Any open/acknowledged issue → cancelled  (mechanic / cost manager / admin)
 
 ---
 
-## Navigation Flow (Fleet Maintenance)
+## Navigation Flow (Fleet Maintenance — Mobile)
 
 ```
 App entry (home_screen.dart)
-  └─ [if fleet_enabled && isFleetUser] → Fleet tab → FleetHomeScreen
-        ├─ OOS alert banner (assets with has_open_oos_issue)
-        ├─ Open Issues [mechanic/cost mgr]   → FleetIssueDetail
-        ├─ Recent Work [mechanic]            → FleetWorkRecordDetail
-        ├─ My Reported Issues [reporter]     → FleetIssueDetail (read-only)
-        ├─ Costs Pending [cost mgr]          → FleetWorkRecordDetail
-        └─ Quick Actions (role-based):
-             ├─ Report Issue   → FleetReportIssueScreen
-             ├─ Log Work       → FleetLogWorkScreen           [mechanic/admin]
-             ├─ Open Issues    → FleetIssuesListScreen        [mechanic/admin]
-             ├─ Add Cost       → FleetAddCostScreen           [cost mgr/admin]
-             ├─ Reports        → FleetReportsScreen           [cost mgr/admin]
-             ├─ Manage Assets  → FleetAssetsScreen            [admin]
-             └─ Fleet Settings → FleetSettingsScreen          [admin]
+  └─ [if fleet_enabled && isFleetMobileUser] → Fleet tab
+        ├─ Reporter → FleetReporterHomeScreen (grid, wizard, daily check)
+        └─ Mechanic → FleetMechanicHomeScreen (To Fix / In progress / History)
+              └─ Mark as Fixed / Log other work → createFleetWorkRecord CF
 ```
+
+Desk costing: see Pulse `/fleet` (Costs, Reports, Assets) — `Canvases/08-fleet-floor-to-desk-flow.excalidraw.md`.
 
 ---
 
-## Fleet Screens
+## Fleet Screens (Mobile)
 
 | File | Access | Purpose |
 |---|---|---|
-| `fleet_home_screen.dart` | all fleet roles | Role-based dashboard + quick actions |
-| `fleet_report_issue_screen.dart` | reporter+ | Asset picker, severity, shift, description, photos |
-| `fleet_issues_list_screen.dart` | mechanic, cost mgr, admin | Status-filtered issue queue (severity-sorted) |
-| `fleet_issue_detail_screen.dart` | role-aware | Acknowledge / resolve / cancel actions |
-| `fleet_log_work_screen.dart` | mechanic, admin | Work type, hours, parts rows, photos; calls `createFleetWorkRecord` |
-| `fleet_work_record_detail_screen.dart` | role-aware | Mechanic sees no costs; cost mgr/admin see + add cost lines |
-| `fleet_work_records_list_screen.dart` | mechanic, cost mgr, admin | Work record list with "Costed" badge |
-| `fleet_add_cost_screen.dart` | cost mgr, admin | Cost line entry (category, amount, invoice, supplier) |
-| `fleet_reports_screen.dart` | cost mgr, admin | Month/YTD KPIs, spend-per-asset, CSV export |
-| `fleet_assets_screen.dart` | admin | Manage forklift/grab register |
-| `fleet_settings_screen.dart` | admin | Reporter depts, cost-manager clock nos, asset/work types, feature flag |
+| `fleet_home_screen.dart` | reporter OR mechanic | Routes to persona shell only |
+| `fleet_reporter_home_screen.dart` | reporter | Machine grid, report wizard entry |
+| `fleet_mechanic_home_screen.dart` | mechanic | To Fix / In progress / History |
+| `fleet_mark_fixed_screen.dart` | mechanic | Minimal fix form → CF |
+| `fleet_work_record_detail_screen.dart` | mechanic | Work detail — zero cost UI |
+| `fleet_work_records_list_screen.dart` | mechanic | History list — no cost badges |
+
+Removed from mobile (2026-06-25): `fleet_add_cost_screen`, `fleet_reports_screen`, `fleet_settings_screen`, `fleet_assets_screen`, `fleet_cost_widgets`.
 
 ---
 
@@ -264,7 +247,7 @@ App entry (home_screen.dart)
 | `fleet_assets` | Forklift/grab register. `has_open_oos_issue` denormalised for picker badges. |
 | `fleet_issues` | Reported problems (the mechanic's queue). |
 | `fleet_work_records` | Maintenance log. `fleet_work_parts` sub-collection holds part rows. |
-| `fleet_cost_lines` | Manager-entered costs (never shown to mechanic). |
+| `fleet_cost_lines` | Pulse-only optional costs (never shown on mobile). `has_linked_costs` on work records when linked. |
 | `fleet_types` | Configurable asset types + work types. |
 | `fleet_settings` | `config` doc: reporter depts, cost-manager clock nos, feature flag. |
 | `fleet_counters` | Global `FM-NNNN` sequence at `fleet_counters/global`, never resets (Admin SDK only). |

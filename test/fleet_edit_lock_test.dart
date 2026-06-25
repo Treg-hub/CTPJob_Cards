@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 FleetWorkRecord _record({
   DateTime? createdAt,
-  FleetCostStatus costStatus = FleetCostStatus.pending,
+  bool hasLinkedCosts = false,
 }) {
   return FleetWorkRecord(
     workNumber: 'FM-0001',
@@ -19,13 +19,13 @@ FleetWorkRecord _record({
     loggedByClockNo: '7',
     loggedByName: 'Mechanic',
     createdAt: createdAt,
-    costStatus: costStatus,
+    hasLinkedCosts: hasLinkedCosts,
   );
 }
 
 void main() {
   group('FleetWorkRecord.canEdit', () {
-    test('mechanic can edit an uncosted record inside the window', () {
+    test('mechanic can edit when no costs linked inside the window', () {
       final r = _record(
           createdAt: DateTime.now().subtract(const Duration(days: 1)));
       expect(r.canEdit(isMechanic: true, isAdmin: false), isTrue);
@@ -38,18 +38,10 @@ void main() {
       expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
     });
 
-    test('mechanic cannot edit once costed, even inside the window', () {
+    test('mechanic cannot edit once costs are linked, even inside the window', () {
       final r = _record(
         createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        costStatus: FleetCostStatus.costed,
-      );
-      expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
-    });
-
-    test('mechanic cannot edit a no-cost record, even inside the window', () {
-      final r = _record(
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        costStatus: FleetCostStatus.noCost,
+        hasLinkedCosts: true,
       );
       expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
     });
@@ -60,11 +52,11 @@ void main() {
     });
 
     test('admin can always edit', () {
-      final costedOld = _record(
+      final linkedOld = _record(
         createdAt: DateTime.now().subtract(const Duration(days: 365)),
-        costStatus: FleetCostStatus.costed,
+        hasLinkedCosts: true,
       );
-      expect(costedOld.canEdit(isMechanic: false, isAdmin: true), isTrue);
+      expect(linkedOld.canEdit(isMechanic: false, isAdmin: true), isTrue);
       final noCreated = _record(createdAt: null);
       expect(noCreated.canEdit(isMechanic: false, isAdmin: true), isTrue);
     });
@@ -75,13 +67,35 @@ void main() {
     });
   });
 
-  group('FleetCostStatus.fromValue', () {
-    test('parses known values and defaults to pending', () {
-      expect(FleetCostStatus.fromValue('pending'), FleetCostStatus.pending);
-      expect(FleetCostStatus.fromValue('costed'), FleetCostStatus.costed);
-      expect(FleetCostStatus.fromValue('no_cost'), FleetCostStatus.noCost);
-      expect(FleetCostStatus.fromValue('garbage'), FleetCostStatus.pending);
-      expect(FleetCostStatus.fromValue(null), FleetCostStatus.pending);
+  group('FleetWorkRecord.canAddComment', () {
+    test('mechanic can comment inside window even when costs linked', () {
+      final r = _record(
+        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        hasLinkedCosts: true,
+      );
+      expect(r.canAddComment(isMechanic: true, isAdmin: false), isTrue);
+      expect(r.canEdit(isMechanic: true, isAdmin: false), isFalse);
+    });
+
+    test('mechanic cannot comment after 7 days', () {
+      final r = _record(
+        createdAt: DateTime.now().subtract(
+          Duration(days: FleetWorkRecord.editLockDays, hours: 1),
+        ),
+      );
+      expect(r.canAddComment(isMechanic: true, isAdmin: false), isFalse);
+    });
+
+    test('admin can always comment', () {
+      final r = _record(
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+      );
+      expect(r.canAddComment(isMechanic: false, isAdmin: true), isTrue);
+    });
+
+    test('non-mechanic non-admin cannot comment', () {
+      final r = _record(createdAt: DateTime.now());
+      expect(r.canAddComment(isMechanic: false, isAdmin: false), isFalse);
     });
   });
 }

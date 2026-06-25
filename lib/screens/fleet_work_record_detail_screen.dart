@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
-import '../models/fleet_cost_line.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_work_comment.dart';
@@ -15,13 +14,10 @@ import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_photo_viewer.dart';
-import 'fleet_add_cost_screen.dart';
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_log_work_screen.dart';
 
-/// Detail view of a single work record.
-/// - Mechanic: sees all fields except cost amounts; can edit if no cost lines.
-/// - Cost manager/admin: sees full detail including costs; can add cost lines.
+/// Mechanic detail view of a single work record (no costing UI).
 class FleetWorkRecordDetailScreen extends ConsumerStatefulWidget {
   final String workRecordId;
   final bool mechanicMode;
@@ -40,51 +36,6 @@ class _FleetWorkRecordDetailScreenState
     extends ConsumerState<FleetWorkRecordDetailScreen> {
   final _service = FleetService();
 
-  Future<void> _markNoCost(FleetWorkRecord record) async {
-    final emp = currentEmployee;
-    if (emp == null || record.id == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('No cost needed?'),
-        content: const Text(
-          'This marks the job as needing no spend (e.g. an adjustment or '
-          'inspection). It will leave the costing queue and the mechanic '
-          'can no longer edit it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('No cost needed'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await _service.markWorkRecordNoCost(record.id!, emp.clockNo, emp.name);
-      if (mounted) {
-        setState(() {}); // re-fetch the record
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Job marked as no cost needed.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final emp = currentEmployee;
@@ -92,17 +43,12 @@ class _FleetWorkRecordDetailScreenState
     final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
 
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
-    final isCostMgr = role_utils.isFleetCostManager(emp, settings);
     final isAdmin = role_utils.isFleetAdmin(emp);
-    final canSeeCosts = isCostMgr || isAdmin;
-    final canComment = isMechanic || isAdmin || isCostMgr;
-
-    final mechanicView = widget.mechanicMode || (isMechanic && !canSeeCosts);
+    final mechanicView = widget.mechanicMode || isMechanic;
 
     return Scaffold(
       appBar: FleetAppBar(title: mechanicView ? 'Job Details' : 'Work Record'),
-      // Stream so offline-synced photos, edits, and the costed flag update
-      // live — a FutureBuilder here showed stale data next to live sub-streams.
+      // Stream so offline-synced photos and edits update live.
       body: StreamBuilder<FleetWorkRecord?>(
         stream: _service.watchWorkRecord(widget.workRecordId),
         builder: (context, snapshot) {
@@ -119,21 +65,11 @@ class _FleetWorkRecordDetailScreenState
             isMechanic: isMechanic,
             isAdmin: isAdmin,
             mechanicView: mechanicView,
-            canSeeCosts: canSeeCosts,
-            canComment: canComment,
+            canComment: record.canAddComment(isMechanic: isMechanic, isAdmin: isAdmin),
             service: _service,
-            onMarkNoCost: () => _markNoCost(record),
             onEdit: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => FleetLogWorkScreen(
                 workRecordId: record.id,
-              ),
-            )),
-            onAddCost: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => FleetAddCostScreen(
-                preSelectedAssetId: record.assetId,
-                preSelectedAssetName: record.assetName,
-                preSelectedWorkRecordId: record.id,
-                preSelectedWorkNumber: record.workNumber,
               ),
             )),
           );
@@ -143,30 +79,39 @@ class _FleetWorkRecordDetailScreenState
   }
 }
 
+String _mechanicLockMessage(FleetWorkRecord record, bool canComment) {
+  if (record.isEditLocked && !canComment) {
+    return 'Locked — this job is read-only after '
+        '${FleetWorkRecord.editLockDays} days.';
+  }
+  if (record.hasLinkedCosts && canComment) {
+    return 'Edit locked — costs linked. You can still add comments for '
+        '${FleetWorkRecord.editLockDays} days after the job was saved.';
+  }
+  if (record.isEditLocked) {
+    return 'Locked — jobs can be edited for ${FleetWorkRecord.editLockDays} days.';
+  }
+  return 'Locked — costs have been linked to this job.';
+}
+
 class _RecordBody extends ConsumerWidget {
   const _RecordBody({
     required this.record,
     required this.isMechanic,
     required this.isAdmin,
     required this.mechanicView,
-    required this.canSeeCosts,
     required this.canComment,
     required this.service,
     required this.onEdit,
-    required this.onAddCost,
-    required this.onMarkNoCost,
   });
 
   final FleetWorkRecord record;
   final bool isMechanic;
   final bool isAdmin;
   final bool mechanicView;
-  final bool canSeeCosts;
   final bool canComment;
   final FleetService service;
   final VoidCallback onEdit;
-  final VoidCallback onAddCost;
-  final VoidCallback onMarkNoCost;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -308,97 +253,6 @@ class _RecordBody extends ConsumerWidget {
 
         const Divider(),
 
-        // ── Costs section (cost manager/admin only) ───────────────────────
-        if (canSeeCosts) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Cost Lines',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13)),
-              Row(
-                children: [
-                  if (record.costStatus == FleetCostStatus.pending)
-                    TextButton(
-                      onPressed: onMarkNoCost,
-                      child: const Text('No cost needed',
-                          style: TextStyle(fontSize: 12)),
-                    ),
-                  TextButton.icon(
-                    icon:
-                        const Icon(Icons.add, size: 18, color: kBrandOrange),
-                    label: const Text('Add Cost',
-                        style: TextStyle(color: kBrandOrange)),
-                    onPressed: onAddCost,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (record.costStatus == FleetCostStatus.noCost)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Marked as no cost needed.',
-                style: TextStyle(color: colors?.textMuted, fontSize: 12),
-              ),
-            ),
-          StreamBuilder<List<FleetCostLine>>(
-            stream: service.watchCostLines(assetId: record.assetId),
-            builder: (context, snapshot) {
-              final allLines = snapshot.data ?? [];
-              final lines = allLines
-                  .where((l) => l.workRecordId == record.id)
-                  .toList();
-              if (lines.isEmpty) {
-                return Text('No costs entered yet.',
-                    style: TextStyle(color: colors?.textMuted));
-              }
-              double total = 0;
-              for (final l in lines) {
-                total += l.amountZar;
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...lines.map((l) => ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l.description),
-                        subtitle: Text(
-                            '${l.category.displayLabel}'
-                            '${l.invoiceRef != null ? '  •  ${l.invoiceRef}' : ''}',
-                            style: const TextStyle(fontSize: 11)),
-                        trailing: Text(
-                          'R ${l.amountZar.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600),
-                        ),
-                      )),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Total: R ${total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ] else ...[
-          // Mechanic sees a neutral cost status — never amounts
-          Text(
-            switch (record.costStatus) {
-              FleetCostStatus.pending => 'Costs pending review.',
-              FleetCostStatus.costed => '✓ Costs entered by manager.',
-              FleetCostStatus.noCost => 'Reviewed — no costs for this job.',
-            },
-            style: TextStyle(color: colors?.textMuted, fontSize: 13),
-          ),
-        ],
-
         // ── Comments ─────────────────────────────────────────────────────
         const Divider(),
         const Text('Comments',
@@ -422,17 +276,13 @@ class _RecordBody extends ConsumerWidget {
         ] else if (isMechanic) ...[
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.lock_outline, size: 16, color: colors?.textMuted),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  record.costStatus == FleetCostStatus.pending
-                      ? 'Locked — jobs can be edited for '
-                          '${FleetWorkRecord.editLockDays} days. '
-                          'Use comments for corrections.'
-                      : 'Locked — costs have been reviewed. '
-                          'Use comments for corrections.',
+                  _mechanicLockMessage(record, canComment),
                   style: TextStyle(color: colors?.textMuted, fontSize: 12),
                 ),
               ),
@@ -526,6 +376,14 @@ class _CommentsSectionState extends State<_CommentsSection> {
             );
           },
         ),
+        if (!widget.canComment) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Comment period ended — job is read-only after '
+            '${FleetWorkRecord.editLockDays} days.',
+            style: TextStyle(color: colors?.textMuted, fontSize: 12),
+          ),
+        ],
         if (widget.canComment) ...[
           const SizedBox(height: 12),
           Row(

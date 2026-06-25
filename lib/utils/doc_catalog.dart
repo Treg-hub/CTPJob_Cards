@@ -105,14 +105,6 @@ const List<DocEntry> docCatalog = [
     roles: _allUserFacingRoles,
     requiresFleet: true,
   ),
-  DocEntry(
-    id: 'fleet_cost_manager_guide',
-    title: 'Cost Manager Guide',
-    description: 'Costs tab job queue, general cost, and spend reports.',
-    icon: Icons.receipt_long_outlined,
-    roles: _allUserFacingRoles,
-    requiresFleet: true,
-  ),
 ];
 
 /// Returns the docs visible to [employee] given their inferred role,
@@ -161,8 +153,6 @@ bool _canSeeFleetRoleGuide(
       return admin || isFleetMechanic(employee, settings);
     case 'fleet_reporter_guide':
       return admin || isFleetReporter(employee, settings);
-    case 'fleet_cost_manager_guide':
-      return admin || isFleetCostManager(employee, settings);
     default:
       return true;
   }

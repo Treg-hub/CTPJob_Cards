@@ -193,6 +193,30 @@ class _FleetLogOtherWorkScreenState
       return;
     }
 
+    final lastReading = _selectedAsset?.currentMachineHours;
+    if (lastReading != null && machineHours < lastReading) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reading lower than last recorded'),
+          content: Text(
+            'Last recorded: ${fleetFormatHours(lastReading)} h\n'
+            'You entered: ${fleetFormatHours(machineHours)} h\n\n'
+            'Save anyway?',
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Go back')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save anyway')),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+
     setState(() => _saving = true);
     try {
       final labourHours = _labourHoursCtrl.text.trim().isEmpty

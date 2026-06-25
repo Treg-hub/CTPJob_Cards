@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../main.dart' show currentEmployee;
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_navigation.dart';
 import 'job_card_detail_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -58,7 +59,20 @@ class _NotificationInboxScreenState
     if (mounted) setState(() => _markingAllRead = false);
   }
 
-  Future<void> _openJobCard(BuildContext ctx, String? jobCardId) async {
+  Future<void> _openNotificationTarget(
+    BuildContext ctx,
+    Map<String, dynamic> data,
+  ) async {
+    final issueId = data['issueId'] as String?;
+    final type = data['type'] as String? ?? '';
+    if (issueId != null &&
+        issueId.isNotEmpty &&
+        type.startsWith('fleet_')) {
+      await openFleetIssue(ctx, issueId);
+      return;
+    }
+
+    final jobCardId = data['jobCardId'] as String?;
     if (jobCardId == null || jobCardId.isEmpty) return;
     try {
       final job = await _firestoreService.getJobCard(jobCardId);
@@ -180,8 +194,8 @@ class _NotificationInboxScreenState
                           onTap: () async {
                             await _markRead(doc.id);
                             if (context.mounted) {
-                              await _openJobCard(
-                                  context, doc.data()['jobCardId'] as String?);
+                              await _openNotificationTarget(
+                                  context, doc.data());
                             }
                           },
                           onMarkRead: () => _markRead(doc.id),
@@ -200,8 +214,8 @@ class _NotificationInboxScreenState
                       ),
                       ...read.map((doc) => _NotifTile(
                             doc: doc,
-                            onTap: () => _openJobCard(
-                                context, doc.data()['jobCardId'] as String?),
+                            onTap: () => _openNotificationTarget(
+                                context, doc.data()),
                             onMarkRead: null,
                           )),
                     ],
@@ -371,6 +385,16 @@ class _NotifTile extends StatelessWidget {
         return Icons.do_not_disturb_on;
       case 'copper_sell':
         return Icons.monetization_on;
+      case 'fleet_oos_issue':
+        return Icons.warning_amber_rounded;
+      case 'fleet_high_issue':
+      case 'fleet_medium_issue':
+      case 'fleet_low_issue':
+      case 'fleet_daily_check_issue':
+      case 'fleet_issue':
+        return Icons.build_circle_outlined;
+      case 'fleet_issue_resolved':
+        return Icons.check_circle_outline;
       default:
         return Icons.notifications;
     }
@@ -391,6 +415,17 @@ class _NotifTile extends StatelessWidget {
         return Colors.red;
       case 'copper_sell':
         return Colors.amber.shade700;
+      case 'fleet_oos_issue':
+        return Colors.red.shade700;
+      case 'fleet_high_issue':
+        return Colors.orange.shade800;
+      case 'fleet_medium_issue':
+      case 'fleet_low_issue':
+      case 'fleet_daily_check_issue':
+      case 'fleet_issue':
+        return const Color(0xFF2A9D9F);
+      case 'fleet_issue_resolved':
+        return Colors.green.shade700;
       default:
         return const Color(0xFFFF8C42);
     }

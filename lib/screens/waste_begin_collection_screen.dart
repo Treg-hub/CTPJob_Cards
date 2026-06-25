@@ -538,7 +538,7 @@ class _WasteBeginCollectionScreenState
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Security Officer'),
-                subtitle: Text(currentEmployee!.name!),
+                subtitle: Text(currentEmployee!.name),
               ),
 
             Row(

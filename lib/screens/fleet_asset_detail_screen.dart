@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
-import '../models/fleet_cost_line.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
 import '../models/fleet_work_record.dart';
@@ -14,7 +13,6 @@ import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
-import 'fleet_assets_screen.dart' show FleetAssetFormScreen;
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_work_records_list_screen.dart' show WorkRecordTile;
 
@@ -42,8 +40,6 @@ class _FleetAssetDetailScreenState
     final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isAdmin = role_utils.isFleetAdmin(emp);
-    final canSeeCosts =
-        role_utils.isFleetCostManager(emp, settings) || isAdmin;
 
     return Scaffold(
       appBar: const FleetAppBar(title: 'Hyster Details'),
@@ -63,7 +59,6 @@ class _FleetAssetDetailScreenState
             service: _service,
             isMechanic: isMechanic,
             isAdmin: isAdmin,
-            canSeeCosts: canSeeCosts,
           );
         },
       ),
@@ -77,14 +72,12 @@ class _AssetBody extends StatelessWidget {
     required this.service,
     required this.isMechanic,
     required this.isAdmin,
-    required this.canSeeCosts,
   });
 
   final FleetAsset asset;
   final FleetService service;
   final bool isMechanic;
   final bool isAdmin;
-  final bool canSeeCosts;
 
   static String _fmtHours(double h) =>
       h % 1 == 0 ? h.toStringAsFixed(0) : h.toStringAsFixed(1);
@@ -93,34 +86,12 @@ class _AssetBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).appColors;
     final dateFmt = DateFormat('d MMM yyyy');
-    final moneyFmt = NumberFormat('#,##0.00');
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // ── Header ─────────────────────────────────────────────────────
-        Row(
-          children: [
-            Expanded(
-              child: Text(asset.name,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            if (isAdmin)
-              TextButton.icon(
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => FleetAssetFormScreen(
-                      service: service,
-                      asset: asset,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+        Text(asset.name,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -281,45 +252,6 @@ class _AssetBody extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // ── Costs (cost manager / admin only) ──────────────────────────
-        if (canSeeCosts) ...[
-          const Text('Spend',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 8),
-          StreamBuilder<List<FleetCostLine>>(
-            stream: service.watchCostLines(assetId: asset.id, limit: 500),
-            builder: (context, snapshot) {
-              final lines = snapshot.data ?? [];
-              double total = 0;
-              for (final l in lines) {
-                total += l.amountZar;
-              }
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'R ${moneyFmt.format(total)}',
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Text(
-                        '${lines.length} cost entr${lines.length == 1 ? 'y' : 'ies'}',
-                        style: TextStyle(
-                            fontSize: 12, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-
         // ── Work history ───────────────────────────────────────────────
         const Text('Work history',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
@@ -350,7 +282,7 @@ class _AssetBody extends StatelessWidget {
                 for (final record in records)
                   WorkRecordTile(
                     record: record,
-                    mechanicMode: isMechanic && !canSeeCosts,
+                    mechanicMode: isMechanic,
                   ),
               ],
             );

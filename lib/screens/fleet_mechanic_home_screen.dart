@@ -191,7 +191,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
   }
 }
 
-class _ServiceDueStrip extends StatelessWidget {
+class _ServiceDueStrip extends StatefulWidget {
   const _ServiceDueStrip({
     required this.service,
     required this.onLogService,
@@ -201,47 +201,51 @@ class _ServiceDueStrip extends StatelessWidget {
   final void Function(FleetAsset asset) onLogService;
 
   @override
+  State<_ServiceDueStrip> createState() => _ServiceDueStripState();
+}
+
+class _ServiceDueStripState extends State<_ServiceDueStrip> {
+  final _cardsKey = GlobalKey();
+
+  void _scrollToCards() {
+    final ctx = _cardsKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.0,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<FleetAsset>>(
-      stream: service.watchAssets(activeOnly: true),
+      stream: widget.service.watchAssets(activeOnly: true),
       builder: (context, snapshot) {
         final due = (snapshot.data ?? [])
             .where((a) => a.serviceDue && !a.hasOpenOosIssue)
             .toList();
         if (due.isEmpty) return const SizedBox.shrink();
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: due.map((asset) {
-              return Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                color: Colors.amber.withValues(alpha: 0.12),
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.build_circle_outlined,
-                      color: Colors.amber.shade800),
-                  title: Text(
-                    '${asset.name} — service due',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: Colors.amber.shade900,
-                    ),
-                  ),
-                  subtitle: Text(
-                    asset.serviceDueReason ?? 'Scheduled service',
-                    style: TextStyle(fontSize: 11, color: Colors.amber.shade800),
-                  ),
-                  trailing: TextButton(
-                    onPressed: () => onLogService(asset),
-                    child: const Text('Log service'),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FleetServiceDueBanner(count: due.length, onTap: _scrollToCards),
+            Padding(
+              key: _cardsKey,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: due
+                    .map((asset) => FleetServiceDueCard(
+                          asset: asset,
+                          onLogService: widget.onLogService,
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
         );
       },
     );

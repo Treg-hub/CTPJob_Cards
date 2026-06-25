@@ -453,6 +453,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         } catch (e) {
           debugPrint('Pending job navigation error: $e');
         }
+        try {
+          await NotificationService().checkPendingFleetNavigation();
+        } catch (e) {
+          debugPrint('Pending fleet navigation error: $e');
+        }
       });
     }
 

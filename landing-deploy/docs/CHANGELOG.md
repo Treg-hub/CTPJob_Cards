@@ -6,13 +6,20 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## 2026-06-24 — Fleet daily safety check UX (build 50)
+## 2026-06-24 — Waste cross-links (IBC bins + copper) and stock visibility
 
-### Fleet — safety checklist decoupled from fault reporting
+### Waste — IBC bins from Ink Factory
 
-Reporter departments now get a **machine grid** on the Fleet home screen. Tap a machine to choose **Daily safety check** or **Report a problem** — reporting a fault no longer forces you through the checklist first.
+When an ink operator **consumes an IBC**, the app now auto-adds one **IBC Bins** row to on-site waste stock (identified by IBC number). Security links it on **collection day** via **Begin Collection → From stock**. Voiding ink consumption removes the stock item if it is still on site.
 
-The daily safety check uses **simple checkboxes** (tick when verified safe). Unchecked items at submit ask for a **required fault comment** so mechanics can follow up. **Start and end hour meters** are recorded on one screen; badges (**Check due**, **End shift**, **Done**) are reminders only.
+### Waste — Copper ready to sell (managers only)
+
+When copper in the sell bucket reaches **400 kg**, the system auto-creates **Copper Waste** on-site stock (rods/nuggets). Security **managers** see a **Copper ready to sell** panel and the stock inventory; **guards** do not browse inventory but can still **From stock** at collection. Completing cost review on Pulse for a Copper Waste load records the sale in copper transactions.
+
+### Docs & onboarding
+
+- **Waste Recovery Guide** (`waste_user_guide.md`) — updated roles, IBC/copper flows, collection-day linking.
+- **Permissions onboarding** — manager vs guard bullets aligned with stock visibility.
 
 ---
 

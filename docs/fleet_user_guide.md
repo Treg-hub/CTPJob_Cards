@@ -19,7 +19,7 @@ This guide covers the four roles that operate Fleet Maintenance day-to-day:
 | **Cost Manager** | Record costs per asset, view spend reports, export CSV |
 | **Fleet Admin** | Manage the asset register and all Fleet settings |
 
-> **Admin** users have full access to every Fleet screen plus the Fleet Settings configuration panel.
+> **Admin** users have full access to every Fleet screen plus the Fleet Settings configuration panel. Day-to-day Fleet settings and cancelling false-alarm reports are done in **Pulse** (the web admin app); mechanics and reporters use this mobile app only.
 
 ---
 

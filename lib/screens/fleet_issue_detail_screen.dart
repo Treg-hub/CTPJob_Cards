@@ -238,10 +238,9 @@ class _FleetIssueDetailScreenState
     final settings = settingsAsync.asData?.value ?? FleetSettings.defaults;
 
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
-    final isCostMgr = role_utils.isFleetCostManager(emp, settings);
     final isAdmin = role_utils.isFleetAdmin(emp);
     final isReporter = role_utils.isFleetReporter(emp, settings);
-    final canCancel = isMechanic || isCostMgr || isAdmin;
+    final canCancel = isMechanic || isAdmin;
 
     final mechanicView = widget.mechanicMode || isMechanic;
 

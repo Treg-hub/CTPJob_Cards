@@ -468,7 +468,6 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 
 ### What it does
 
-- **Daily safety check** — Reporter departments complete a pre-use checklist before operating a machine: tick each item when verified safe, record start hour meter, and close the shift with an end hour meter. Unchecked items require a fault comment. This is separate from reporting a problem — you can report a fault without doing the check first.
 - **Issue reporting** — Operators and shift leads (in the departments an admin enables) report a problem on a specific forklift or grab: severity (Low / Medium / High / Out of Service), shift (auto-detected as day / night / weekend), a description, and up to three photos.
 - **Out-of-service alerts** — Reporting an asset *out of service* immediately push-notifies the Hyster mechanic and the cost manager(s) — or holds it in their notification inbox if they're off-site — and flags the asset with an orange **OOS** badge until the issue is resolved. High-severity issues go to the inbox without a push.
 - **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note (out-of-service issues must be closed with a work record — a note alone is not accepted). Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, are numbered `FM-NNNN` (short global sequence; legacy records keep `FM-YYYYMMDD-NNN`), and lock from editing 7 days after creation. The hour-meter reading is propagated to the asset so the next mechanic sees the last recorded hours.
@@ -501,7 +500,7 @@ The Ink Factory module is a full stock-inventory system for raw materials, solve
 - **Stock on hand** — Live balances and weighted-average costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105, Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue, Black — received as IBCs, never manufactured), and manufactured products (CoverWax, Gravure Binder).
 - **Receive stock (raw materials)** — Operator records incoming raw materials from a supplier. Cost is entered later by a manager when the invoice arrives (deferred-cost pattern).
 - **Receive ink IBCs** — Operator scans the IBC barcode (GS1-128 / SSCC label), weight and colour are auto-filled from the scan. The audit register records every IBC number received.
-- **Consume IBC** — Transfers an IBC from the audit register into the tank. Records the Toloul wash consumption used during the transfer.
+- **Consume IBC** — Transfers an IBC from the audit register into the tank. Records Toloul wash consumption and **auto-creates an IBC Bins on-site waste stock item** (by IBC number) for security to collect on a later load.
 - **Daily Readings** — Combined screen for ink meters and Toloul meter points. Enter all readings on one page with one submit.
 - **Production Run** — Operator picks a recipe (CoverWax or Gravure Binder) and a pot count. The screen previews inputs consumed and output produced; the run is recorded as consumption transactions for each input and a manufacture transaction for the output.
 - **Toloul Recovery** — Records solvent recovered from the Lurgi distillation. Previous recovery entries are shown below the form for context.
