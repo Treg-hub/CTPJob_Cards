@@ -62,6 +62,20 @@ class Collections {
   static const String wasteCounters = 'waste_counters';
   static const String wasteStock = 'waste_stock';
 
+  // ----- Site Security (security_ prefix) -----
+  // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.
+  static const String securityEntries = 'security_entries';
+  static const String securitySettings = 'security_settings';
+  static const String securityGates = 'security_gates';
+  static const String securityVehicles = 'security_vehicles';
+  static const String securityVehicleTrips = 'security_vehicle_trips';
+  static const String securityVehicleCosts = 'security_vehicle_costs';
+  static const String securityContractors = 'security_contractors';
+  static const String securityLookupOptions = 'security_lookup_options';
+  static const String securityDenyList = 'security_deny_list';
+  static const String securityCounters = 'security_counters';
+  static const String securityAudit = 'security_audit';
+
   // ----- Ink Factory (ink_ prefix) -----
   // Full production stock-inventory data-entry system, integrated inside this
   // app as a gated module (department == "Ink Factory"). No data link to Job
@@ -84,4 +98,9 @@ class Collections {
   static const String inkCountEvents = 'ink_count_events'; // one doc per month-end count session
   static const String inkShipments = 'ink_shipments'; // import shipment + landed cost (doc id = {order}-{letter})
   static const String inkAudit = 'ink_audit';
+
+  // ----- CTP Pulse (pulse_ prefix) -----
+  // Admin scan-tester captures — raw barcode payloads for parser development.
+  // Written from Job Cards mobile (Scan Tester); reviewed in Pulse Settings.
+  static const String pulseScanSamples = 'pulse_scan_samples';
 }

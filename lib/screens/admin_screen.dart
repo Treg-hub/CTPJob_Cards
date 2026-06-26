@@ -14,6 +14,7 @@ import '../models/employee.dart';
 import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
 import 'feedback_admin_screen.dart';
+import 'scan_tester_screen.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 
@@ -1576,6 +1577,36 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             } else {
               _showError('Admin access required');
             }
+          },
+        )),
+
+        // ── Scan Tester ─────────────────────────────────────────────────────
+        _sectionHeader('DEVELOPER'),
+        _settingsCard(child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.qr_code_scanner, color: kBrandOrange),
+          title: const Text('Scan Tester', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          subtitle: Text(
+            'Capture raw barcodes on-device for parser development',
+            style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            final clockNo = _currentClockNo;
+            if (clockNo == null) {
+              _showError('Employee not loaded');
+              return;
+            }
+            final emp = await _firestoreService.getEmployee(clockNo);
+            if (!mounted) return;
+            if (emp == null) {
+              _showError('Employee record not found');
+              return;
+            }
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)),
+            );
           },
         )),
 

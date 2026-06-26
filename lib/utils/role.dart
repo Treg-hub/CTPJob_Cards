@@ -1,5 +1,6 @@
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 
 enum UserRole { technician, manager, admin, operator }
@@ -64,16 +65,50 @@ bool isWasteAdmin(Employee? employee) {
   return isAdmin(employee);
 }
 
-/// Returns true if the employee's clock number is in the manager allow-list.
-bool isSecurityManager(Employee? employee, WasteSettings? settings) {
-  if (employee == null || settings == null) return false;
-  return settings.managerClockNos.contains(employee.clockNo);
+bool _clockNoInSecurityAllowList(String? clockNo, List<String> allowList) {
+  final normalized = SecuritySettings.normalizeClockNo(clockNo);
+  if (normalized.isEmpty) return false;
+  return allowList.any(
+    (allowed) => SecuritySettings.normalizeClockNo(allowed) == normalized,
+  );
 }
 
-/// Returns true if the employee's clock number is in the guard allow-list.
+/// Security department + position Guard (WasteTrack / Site Security dept check).
+bool isSecurityDeptGuard(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department.trim() == 'Security' &&
+      employee.position.toLowerCase().contains('guard');
+}
+
+/// Security department + position contains manager.
+bool isSecurityDeptManager(Employee? employee) {
+  if (employee == null) return false;
+  return employee.department.trim() == 'Security' &&
+      employee.position.toLowerCase().contains('manager');
+}
+
+/// WasteTrack Security Manager — dept/position OR waste_settings clock list.
+bool isSecurityManager(Employee? employee, WasteSettings? settings) {
+  if (employee == null) return false;
+  if (isWasteAdmin(employee)) return true;
+  if (isSecurityDeptManager(employee)) return true;
+  if (settings == null) return false;
+  return _clockNoInSecurityAllowList(
+    employee.clockNo,
+    settings.managerClockNos,
+  );
+}
+
+/// WasteTrack Security Guard — manager, dept/position, OR waste_settings list.
 bool isSecurityGuard(Employee? employee, WasteSettings? settings) {
-  if (employee == null || settings == null) return false;
-  return settings.guardClockNos.contains(employee.clockNo);
+  if (employee == null) return false;
+  if (isSecurityManager(employee, settings)) return true;
+  if (isSecurityDeptGuard(employee)) return true;
+  if (settings == null) return false;
+  return _clockNoInSecurityAllowList(
+    employee.clockNo,
+    settings.guardClockNos,
+  );
 }
 
 /// Convenience: any WasteTrack user (Admin, Security Manager, or Security Guard).
@@ -91,6 +126,48 @@ bool canViewWasteStockInventory(Employee? employee, WasteSettings? settings) {
 /// Manager-only copper ready-to-sell panel on the Waste tab.
 bool canViewCopperReadyPanel(Employee? employee, WasteSettings? settings) {
   return canViewWasteStockInventory(employee, settings);
+}
+
+// =============================================================================
+// SITE SECURITY module role helpers (security_settings/config)
+// =============================================================================
+
+bool _isSiteSecurityManager(Employee? employee, SecuritySettings? settings) {
+  if (employee == null || settings == null) return false;
+  if (isAdmin(employee)) return true;
+  if (isSecurityDeptManager(employee)) return true;
+  return _clockNoInSecurityAllowList(
+    employee.clockNo,
+    settings.managerClockNos,
+  );
+}
+
+bool _isSiteSecurityGuard(Employee? employee, SecuritySettings? settings) {
+  if (employee == null || settings == null) return false;
+  if (_isSiteSecurityManager(employee, settings)) return true;
+  if (isSecurityDeptGuard(employee)) return true;
+  return _clockNoInSecurityAllowList(
+    employee.clockNo,
+    settings.guardClockNos,
+  );
+}
+
+/// Any Site Security user (admin, manager, or guard).
+bool isSecurityUser(Employee? employee, SecuritySettings? settings) {
+  return isAdmin(employee) ||
+      _isSiteSecurityManager(employee, settings) ||
+      _isSiteSecurityGuard(employee, settings);
+}
+
+/// Manager or admin — vehicle cost entry, etc.
+bool isSecurityCostManager(Employee? employee, SecuritySettings? settings) {
+  return isAdmin(employee) || _isSiteSecurityManager(employee, settings);
+}
+
+/// Gate for showing the Security tab and quick actions.
+bool canUseSecurityModule(Employee? employee, SecuritySettings? settings) {
+  if (settings == null || !settings.securityEnabled) return false;
+  return isSecurityUser(employee, settings);
 }
 
 /// Filter stock rows in inventory views. Collection-day link sheets may show more.

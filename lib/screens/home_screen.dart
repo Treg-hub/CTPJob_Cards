@@ -38,12 +38,20 @@ import 'fleet_home_screen.dart';
 import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
+import 'security_home_screen.dart';
+import 'security_vehicle_scan_in_screen.dart';
+import 'security_vehicle_scan_out_screen.dart';
+import 'scan_tester_screen.dart';
+import 'security_company_car_screen.dart';
+import 'security_on_foot_visitor_screen.dart';
 
 import '../models/fleet_settings.dart';
+import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/ink_provider.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
+import '../services/security_service.dart';
 import '../services/waste_service.dart';
 import '../utils/fleet_labels.dart';
 
@@ -91,6 +99,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Waste Track — cached settings loaded once in initState
   WasteSettings? _cachedWasteSettings;
 
+  // Site Security — cached settings loaded once in initState
+  SecuritySettings? _cachedSecuritySettings;
+
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -109,6 +120,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get _canReportFleetIssue =>
       role_utils.canReportFleetIssue(currentEmployee, _cachedFleetSettings);
 
+  bool get _isSecurityUser =>
+      role_utils.canUseSecurityModule(
+        currentEmployee,
+        _cachedSecuritySettings,
+      );
+
   bool _fleetMechanicNavDone = false;
 
   /// Returns true when the currently visible tab is the Waste tab.
@@ -126,8 +143,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return _selectedIndex == idx;
   }
 
-  int _fleetTabIndex() {
-    if (!_isFleetUser) return -1;
+  int _moduleTabBaseIndex() {
     int idx = 2; // 0=Home, 1=MyWork
     if (currentEmployee != null &&
         currentEmployee!.position.toLowerCase().contains('manager')) {
@@ -141,9 +157,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return idx;
   }
 
+  int _fleetTabIndex() {
+    if (!_isFleetUser) return -1;
+    return _moduleTabBaseIndex();
+  }
+
+  int _securityTabIndex() {
+    if (!_isSecurityUser) return -1;
+    var idx = _moduleTabBaseIndex();
+    if (_isFleetUser) idx++;
+    return idx;
+  }
+
   /// Returns true when the currently visible tab is the Fleet tab.
   bool get _isOnFleetTab {
     final idx = _fleetTabIndex();
+    return idx >= 0 && _selectedIndex == idx;
+  }
+
+  /// Returns true when the currently visible tab is the Security tab.
+  bool get _isOnSecurityTab {
+    final idx = _securityTabIndex();
     return idx >= 0 && _selectedIndex == idx;
   }
 
@@ -161,6 +195,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   String get _appBarTitle {
     if (_isOnWasteTab) return 'Waste Recovery';
     if (_isOnFleetTab) return 'Fleet Maintenance';
+    if (_isOnSecurityTab) return 'Site Security';
     return 'CTP Job Cards';
   }
 
@@ -393,6 +428,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         },
       ];
     }
+    if (_isSecurityUser) {
+      result = [
+        ...result,
+        {
+          'title': 'Vehicle Scan In',
+          'icon': Icons.login,
+          'color': kBrandOrange,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SecurityVehicleScanInScreen()),
+              ),
+        },
+        {
+          'title': 'Scan Out',
+          'icon': Icons.logout,
+          'color': kBrandOrange,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SecurityVehicleScanOutScreen()),
+              ),
+        },
+        {
+          'title': 'Company Car',
+          'icon': Icons.directions_car,
+          'color': kBrandOrange,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SecurityCompanyCarScreen()),
+              ),
+        },
+        {
+          'title': 'On-Foot Visitor',
+          'icon': Icons.directions_walk,
+          'color': kBrandOrange,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SecurityOnFootVisitorScreen()),
+              ),
+        },
+      ];
+    }
+    if (role_utils.isAdmin(currentEmployee)) {
+      result = [
+        ...result,
+        {
+          'title': 'Scan Tester',
+          'icon': Icons.qr_code_scanner,
+          'color': const Color(0xFF3B82F6),
+          'onTap': () {
+            final emp = currentEmployee;
+            if (emp == null) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)),
+            );
+          },
+        },
+      ];
+    }
     return result;
   }
 
@@ -423,6 +521,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  Future<void> _loadSecuritySettings() async {
+    try {
+      final settings = await SecurityService().getSettings();
+      if (mounted) setState(() => _cachedSecuritySettings = settings);
+    } catch (e) {
+      debugPrint('Security settings load error: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -432,6 +539,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadTestMode();
     _loadFleetSettings();
     _loadWasteSettings();
+    _loadSecuritySettings();
 
     if (currentEmployee != null) {
       _setupEmployeeStream(currentEmployee!.clockNo);
@@ -1693,6 +1801,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
+      if (_isSecurityUser)
+        _buildSecurityTab(),
     ];
 
     if (index >= children.length) return;
@@ -1715,6 +1825,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // ---------------------------------------------------------------------------
   Widget _buildFleetTab() {
     return const FleetHomeScreen();
+  }
+
+  Widget _buildSecurityTab() {
+    return const SecurityHomeScreen();
   }
 
   @override
@@ -1746,6 +1860,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
       if (_isFleetUser)
         const BottomNavigationBarItem(icon: Icon(Icons.forklift), label: 'Fleet'),
+      if (_isSecurityUser)
+        const BottomNavigationBarItem(icon: Icon(Icons.shield_outlined), label: 'Security'),
     ];
 
     final List<Widget> children = [
@@ -1759,6 +1875,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
+      if (_isSecurityUser)
+        _buildSecurityTab(),
     ];
 
     if (_selectedIndex >= children.length) {
@@ -1841,7 +1959,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: (_isOnWasteTab || _isOnFleetTab)
+      floatingActionButton: (_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab)
           ? null
           : FloatingActionButton(
               onPressed: _showFeedbackDialog,

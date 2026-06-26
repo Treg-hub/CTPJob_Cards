@@ -19,6 +19,7 @@ class SyncService {
   // Matches new-format W-NNNN numbers; legacy WT-YYYYMMDD-NNN treated as valid too.
   static final RegExp _properLoadNumber = RegExp(r'^W-\d{4,}$');
   static final RegExp _legacyLoadNumber  = RegExp(r'^WT-\d{8}-\d{3}$');
+  static final RegExp _properSecurityEntryNumber = RegExp(r'^SEC-\d{4,}$');
   // Lazy: resolving the Firebase app at singleton construction breaks any
   // context without an initialized app (the offline-resilience test harness).
   late final FirebaseFunctions _functions =
@@ -239,6 +240,8 @@ class SyncService {
           }
         } else if (item.collection.startsWith('fleet_')) {
           await _processFleetQueueItem(item, firestore);
+        } else if (item.collection.startsWith('security_')) {
+          await _processSecurityQueueItem(item, firestore);
         } else {
           final docRef = firestore.collection(item.collection).doc(item.id);
           // Job cards: queue sanitisation turned every Timestamp into an
@@ -1072,5 +1075,140 @@ class SyncService {
     }
 
     debugPrint('✅ Fleet work record synced via CF → $recordId');
+  }
+
+  // ---------------------------------------------------------------------------
+  // SITE SECURITY queue processing
+  // ---------------------------------------------------------------------------
+
+  bool _needsSecurityEntryNumber(String? entryNumber) {
+    if (entryNumber == null || entryNumber.trim().isEmpty) return true;
+    if (_properSecurityEntryNumber.hasMatch(entryNumber)) return false;
+    return entryNumber.startsWith('OFFLINE-SEC-');
+  }
+
+  Future<void> _assignSecurityEntryNumberIfNeeded(
+    String entryId,
+    Map<String, dynamic> data,
+  ) async {
+    final entryNumber = data['entry_number'] as String?;
+    if (!_needsSecurityEntryNumber(entryNumber)) return;
+
+    final callable = _functions.httpsCallable('assignSecurityEntryNumber');
+    final result = await callable.call({'entryId': entryId});
+    final assigned = (result.data as Map?)?['entry_number'] as String?;
+    debugPrint(
+      assigned != null
+          ? '✅ Assigned security entry number $assigned for $entryId'
+          : '✅ Security entry number confirmed for $entryId',
+    );
+  }
+
+  Future<void> _processSecurityQueueItem(
+    SyncQueueItem item,
+    FirebaseFirestore firestore,
+  ) async {
+    if (item.collection == 'security_photos' && item.operation == 'upload') {
+      await _processSecurityPhotoUpload(item);
+    } else if (item.collection == Collections.securityEntries &&
+        item.operation == 'create_cf') {
+      await _processSecurityEntryCreate(item);
+    } else {
+      final docRef = firestore.collection(item.collection).doc(item.id);
+      final payload = _restoreFirestoreTimestamps(item.data);
+      if (item.operation == 'create' ||
+          item.operation == 'update' ||
+          item.operation == 'set') {
+        await docRef.set(
+          payload,
+          SetOptions(merge: item.operation == 'update'),
+        );
+        if (item.collection == Collections.securityEntries &&
+            (item.operation == 'set' || item.operation == 'create')) {
+          await _assignSecurityEntryNumberIfNeeded(item.id, item.data);
+        }
+      } else if (item.operation == 'delete') {
+        await docRef.delete();
+      }
+    }
+  }
+
+  Future<void> _processSecurityPhotoUpload(SyncQueueItem item) async {
+    final data = item.data;
+    final String? localPath = data['localPath'] as String?;
+    final String? entryId = data['entryId'] as String?;
+
+    if (localPath == null || entryId == null) {
+      debugPrint('⚠️ Invalid security_photos queue entry, skipping: ${item.id}');
+      return;
+    }
+
+    final file = File(localPath);
+    if (!file.existsSync()) {
+      debugPrint(
+          '⚠️ Local security photo no longer exists for queue item ${item.id}');
+      return;
+    }
+
+    final fileName = '${const Uuid().v4()}.jpg';
+    final storagePath = 'security_entries/$entryId/$fileName';
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    final snapshot = await ref.putFile(file);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    await FirebaseFirestore.instance
+        .collection(Collections.securityEntries)
+        .doc(entryId)
+        .update({
+      'photos': FieldValue.arrayUnion([downloadUrl]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    debugPrint('✅ Security photo synced from queue → security_entries/$entryId');
+  }
+
+  Future<void> _processSecurityEntryCreate(SyncQueueItem item) async {
+    final raw = Map<String, dynamic>.from(item.data);
+    final createdEntryId = raw.remove('_created_entry_id') as String?;
+    final photoPaths =
+        (raw.remove('_pending_photo_paths') as List?)?.cast<String>() ?? [];
+
+    String entryId;
+    if (createdEntryId != null) {
+      entryId = createdEntryId;
+    } else {
+      raw.putIfAbsent('client_ref', () => item.id);
+      final callable = _functions.httpsCallable('createSecurityEntry');
+      final result = await callable.call(raw);
+      final resultData = Map<String, dynamic>.from(result.data as Map);
+      if (resultData['success'] != true) {
+        throw Exception(resultData['error'] ?? 'createSecurityEntry failed');
+      }
+      entryId = resultData['id'] as String;
+      item.data['_created_entry_id'] = entryId;
+      await item.save();
+    }
+
+    for (final path in photoPaths) {
+      final file = File(path);
+      if (file.existsSync()) {
+        final fileName = '${const Uuid().v4()}.jpg';
+        final ref = FirebaseStorage.instance
+            .ref('security_entries/$entryId/$fileName');
+        final snapshot = await ref.putFile(file);
+        final url = await snapshot.ref.getDownloadURL();
+        await FirebaseFirestore.instance
+            .collection(Collections.securityEntries)
+            .doc(entryId)
+            .update({
+          'photos': FieldValue.arrayUnion([url]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      (item.data['_pending_photo_paths'] as List?)?.remove(path);
+      await item.save();
+    }
+
+    debugPrint('✅ Security entry synced via CF → $entryId');
   }
 }

@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-06-18 (added the admin-only **User Feedback** triage board — `feedback_admin_screen.dart`, reached from Admin → Settings → Feedback; see "Admin Screens (Job Cards core)" below). Prior: 2026-06-16 Phase 8 polish — cross-links to small focused notes (admins-collection, notification-inbox-specifics, deploy-discipline), POLISH-CHECKLIST.md, new Canvases Excalidraw specs (auth/gating, geofence-inbox, numbering, ink-replay, module-gating), Instructions/ARCHITECTURE/COLLECTIONS/REAME sync, dupe note reinforced, update discipline ref._
+_Last updated: 2026-06-26 (Site Security gate flows wired — disc+driver licence+occupants scan-in; disc scan-out; company car exit/return; `docs/security-scanning-flows.md`; v2.2.0+65)._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -267,6 +267,10 @@ Admin-only screens reached from the Home **Admin** tile / Admin Settings. All ga
 | `geofence_editor_screen.dart` | admin | Map editor for the site geofence boundary (`config/geofence`) |
 | `copper_dashboard_screen.dart` | admin (clock 22) | Copper inventory dashboard (whitelist-gated) |
 | `feedback_admin_screen.dart` | admin | **User Feedback triage board** — reviews `feedback` submissions; sets status `New → Planned → Implemented → Declined` + private notes. Reached from Settings → Feedback. |
+| `scan_tester_screen.dart` | admin | **Scan Tester** — PDF417 capture to `pulse_scan_samples`. Driver licence RSA decrypt. Review in Pulse Settings. |
+| `security_vehicle_scan_in_screen.dart` | security | **Vehicle scan in** — licence disc + driver licence (back PDF417) + occupant count (default 1). Visitor/contractor/transporter. |
+| `security_vehicle_scan_out_screen.dart` | security | **Vehicle scan out** — licence disc on departing vehicle; match on-site session. |
+| `security_company_car_screen.dart` | security | **Company car** — exit: driver licence + clock no + odometer + purpose + address; return: disc + mileage. |
 
 **User Feedback board (`feedback` collection)**: employees submit via the Home-screen "Give Feedback" FAB (`feedback`/`userName`/`clockNo`/`timestamp`). The admin board writes triage fields onto each doc — `status`, `statusUpdatedAt`, `statusUpdatedByClockNo`, `adminNotes`, `adminNotesUpdatedAt`, `adminNotesByClockNo` — and never touches the submitter's fields. Status filtering is client-side, so no composite index is needed. The rule stays `match /feedback/{docId} { allow read, write: if isSignedIn(); }` — admin-only access is enforced in the UI, not in rules.
 
