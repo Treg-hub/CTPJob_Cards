@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>CTP Job Cards — Workshop Briefing</title>
+<title>CTP Job Cards &amp; Fleet — Workshop Briefing</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root {
@@ -479,10 +479,10 @@
 <section class="slide active">
   <div class="slide-body center">
     <div class="hero-quote">
-      Every job card you fill in today<br>
-      becomes the <span class="brand">brain</span> of tomorrow's<br>
-      preventive maintenance.
-      <small>CTP Job Cards — Workshop Briefing</small>
+      Every job card — and every fleet report —<br>
+      you fill in today becomes the <span class="brand">brain</span><br>
+      of tomorrow's preventive maintenance.
+      <small>CTP Job Cards &amp; Fleet — Workshop Briefing</small>
     </div>
   </div>
 </section>
@@ -490,33 +490,28 @@
 <!-- ============ SLIDE 2 — Roles ============ -->
 <section class="slide">
   <header class="slide-header">
-    <div class="slide-title">The Four Roles</div>
+    <div class="slide-title">The Three Roles on the Floor</div>
     <div class="slide-tag">Who's who</div>
   </header>
   <div class="slide-body">
-    <div class="roles">
+    <div class="roles" style="grid-template-columns: repeat(3, 1fr);">
       <div class="role-card">
         <h3>Operator</h3>
-        <div class="who">You run a machine</div>
-        <div class="what">You <strong>report faults</strong> — create job cards.</div>
+        <div class="who">You run a production machine</div>
+        <div class="what">You <strong>report faults</strong> — create job cards for the technicians.</div>
       </div>
       <div class="role-card">
         <h3>Technician</h3>
         <div class="who">Mechanical, Electrical, or both</div>
-        <div class="what">You <strong>receive</strong>, <strong>accept</strong>, and <strong>fix</strong> jobs.</div>
+        <div class="what">You <strong>receive</strong>, <strong>accept</strong>, and <strong>fix</strong> job cards.</div>
       </div>
       <div class="role-card">
-        <h3>Manager</h3>
-        <div class="who">Dept / Workshop / Mech / Elec</div>
-        <div class="what">Oversee jobs, monitor escalations, review quality.</div>
-      </div>
-      <div class="role-card">
-        <h3>Admin</h3>
-        <div class="who">System administrator</div>
-        <div class="what">Configures employees, geofence, escalation rules.</div>
+        <h3>Fleet Reporter</h3>
+        <div class="who">You drive a forklift or use site plant</div>
+        <div class="what">You <strong>report problems</strong> on the vehicles — the mechanic picks them up.</div>
       </div>
     </div>
-    <div class="callout">Operator and Technician are <strong>separate roles</strong>. Operators find faults. Technicians fix them.</div>
+    <div class="callout">Operators and Fleet Reporters are the <strong>eyes on the floor</strong>. See it, report it — that's how every fix starts.</div>
   </div>
 </section>
 
@@ -597,11 +592,11 @@
         <p>Lets P5 alarms bypass DND during night shifts and breaks.</p>
       </div></div>
       <div class="perm"><div class="perm-num">6</div><div class="perm-text">
-        <h4>Schedule Exact Alarms</h4>
-        <p>Uses the phone's real alarm system so P5 fires on time even in deep sleep.</p>
+        <h4>Camera</h4>
+        <p>Attach before/after photos straight onto a job card or fleet report. Never used in the background.</p>
       </div></div>
     </div>
-    <div class="callout">Five of six permissions exist <strong>specifically</strong> to make sure a P5 actually reaches you.</div>
+    <div class="callout">Most of these exist for one reason — making sure a <strong>P5 alarm</strong> actually reaches you. (Android 14+ may also ask you to allow full-screen alerts.)</div>
   </div>
 </section>
 
@@ -613,7 +608,7 @@
   </header>
   <div class="slide-body">
     <div class="notif-flow">
-      <div class="flow-node">Cloud Function (Belgium)</div>
+      <div class="flow-node">Cloud Function (Johannesburg)</div>
       <div class="flow-arrow">▼</div>
       <div class="flow-node">Firebase Cloud Messaging (Google)</div>
       <div class="flow-arrow">▼</div>
@@ -660,7 +655,7 @@
         <p style="margin-top:1.2vh;">It only ever checks: <strong>inside the boundary</strong> or <strong>outside the boundary</strong>. That's it.</p>
       </div>
     </div>
-    <div class="callout">Two reasons it exists: A technician at home shouldn't be assigned a breakdown. And a <strong>P5 cannot be assigned to anyone off site</strong> — the server refuses to send it.</div>
+    <div class="callout">Two reasons it exists: a technician at home shouldn't be alerted to a breakdown. And if you're <strong>off site, job alerts wait in your in-app inbox</strong> instead of pushing — the server won't fire a P5 alarm at someone who can't attend.</div>
   </div>
 </section>
 
@@ -730,7 +725,7 @@
     </div>
     <div class="grid-3" style="margin-top:1vh;">
       <div class="card"><h3>Assign Self</h3><p>You take it. Status flips to In-Progress. Escalation <strong>stops</strong>.</p></div>
-      <div class="card"><h3>I'm Busy</h3><p style="color:var(--p4);"><strong>After-hours only</strong> — night shifts, Saturday, Sunday.</p><p style="margin-top:0.6vh;">Acknowledges the job but you can't take it. Operator notified. Escalation <strong>stops</strong>. System finds someone else.</p></div>
+      <div class="card"><h3>Busy</h3><p style="color:var(--p4);">Use it <strong>after hours</strong> — night shifts, weekends.</p><p style="margin-top:0.6vh;">Acknowledges the job when you can't take it. Operator notified. Escalation <strong>stops</strong>. System finds someone else.</p></div>
       <div class="card"><h3>Dismiss</h3><p>You dismiss the alert. Escalation <strong>continues</strong>. Logged against you.</p></div>
     </div>
     <div class="callout">A closed job <strong>requires</strong> a closure note. It is the maintenance record managers, engineers, and future technicians will rely on.</div>
@@ -781,8 +776,8 @@
         <tr><td><strong style="color:var(--text-muted);">Stage 4</strong></td><td>60 min after creation</td><td class="no">OFF by default</td><td>Admin-configurable — final tier</td></tr>
       </tbody>
     </table>
-    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 2 minutes</strong>, in a Google data centre in Belgium. It does not forget. It does not sleep.</p>
-    <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>I'm Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log.</div>
+    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 5 minutes</strong>, in a Google data centre in Belgium. It does not forget. It does not sleep.</p>
+    <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log.</div>
   </div>
 </section>
 
@@ -797,11 +792,11 @@
       <thead><tr><th>Notification</th><th>Operator</th><th>Technician</th></tr></thead>
       <tbody>
         <tr><td><strong>New job created</strong> — matching trade, on site</td><td class="no">—</td><td class="yes">✓ Level by priority</td></tr>
-        <tr><td><strong>Manual assignment</strong> — assigned to you</td><td class="no">—</td><td class="yes">✓ P5 blocked if off-site</td></tr>
+        <tr><td><strong>Manual assignment</strong> — assigned to you</td><td class="no">—</td><td class="yes">✓ Held in inbox if off-site</td></tr>
         <tr><td><strong>Self-Assigned</strong> — someone took your job</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Job Completed</strong> — your reported job closed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Job Updated</strong> — note added, status changed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
-        <tr><td><strong>I'm Busy response</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
+        <tr><td><strong>Busy response</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Alert Dismissed</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Job auto-closed</strong> — sat in Monitor too long</td><td class="yes">✓</td><td class="yes">✓ Assignee</td></tr>
         <tr><td><strong>Arrived On-Site / Left Site Area</strong></td><td class="yes">✓ You</td><td class="yes">✓ You</td></tr>
@@ -811,24 +806,77 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 12b — Notification matrix: manager side ============ -->
+<!-- ============ SLIDE 13 — Fleet reporting: 3 steps ============ -->
 <section class="slide">
   <header class="slide-header">
-    <div class="slide-title">What Notifications You Get — Managers &amp; Admin</div>
-    <div class="slide-tag">From the live code</div>
+    <div class="slide-title">Reporting a Fleet Problem — 3 Taps</div>
+    <div class="slide-tag demo">▶ LIVE DEMO</div>
   </header>
   <div class="slide-body">
-    <table>
-      <thead><tr><th>Notification</th><th>Foreman / Dept Manager</th><th>Workshop Manager</th><th>Admin</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Stage 1 escalation</strong> — 5 min</td><td class="yes">✓ On-site, by dept</td><td class="no">—</td><td class="no">—</td></tr>
-        <tr><td><strong>Stage 2 escalation</strong> — 10 min</td><td class="yes">✓ On-site dept managers</td><td class="yes">✓ On-site</td><td class="no">—</td></tr>
-        <tr><td><strong>Stage 3 escalation</strong> — 30 min</td><td colspan="3" class="no" style="text-align:center;">OFF by default — admin-configurable</td></tr>
-        <tr><td><strong>Stage 4 escalation</strong> — 60 min</td><td colspan="3" class="no" style="text-align:center;">OFF by default — admin-configurable</td></tr>
-        <tr><td><strong>Arrived On-Site / Left Site Area</strong></td><td class="yes">✓ You</td><td class="yes">✓ You</td><td class="yes">✓ You</td></tr>
-      </tbody>
-    </table>
-    <div class="callout">Off-site = no jobs. <strong>P5 cannot be sent to anyone off-site</strong> — the Cloud Function refuses. Maintenance jobs never escalate.</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-text">
+          <h4>Pick the machine</h4>
+          <p>Tap the forklift, grab, or BT that has the problem. The app remembers the last one you reported.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-text">
+          <h4>Say how urgent it is</h4>
+          <p>Minor, Normal, Urgent, or Out of Service. The app explains what each one means as you tap it.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-text">
+          <h4>Describe what's wrong</h4>
+          <p>What you heard or saw, and whether the machine is safe to use. Add a photo if it helps.</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout">Hit <strong>Send</strong> and it lands on the mechanic's <strong>To Fix</strong> list straight away. No paper, no chasing. Offline? It saves and syncs the moment you're back in signal.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 14 — Fleet urgency scale ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">How Urgent Is It? — Be Straight</div>
+    <div class="slide-tag">Fleet reports</div>
+  </header>
+  <div class="slide-body">
+    <div class="priority-list">
+      <div class="pri-row p1"><div class="pri-label p1" style="font-size:1.5vw;">Minor</div><div class="pri-text">Small fault — the machine can still be used.</div></div>
+      <div class="pri-row p3"><div class="pri-label p3" style="font-size:1.5vw;">Normal</div><div class="pri-text">Needs attention soon — can still work for now.</div></div>
+      <div class="pri-row p4"><div class="pri-label p4" style="font-size:1.5vw;">Urgent</div><div class="pri-text">Serious fault — the mechanic should prioritise it.</div></div>
+      <div class="pri-row p5"><div class="pri-label p5" style="font-size:1.35vw;">Out of Service</div><div class="pri-text"><strong>Machine cannot be used until fixed.</strong> Mechanic alerted straight away; machine marked down for everyone.</div></div>
+    </div>
+    <div class="callout"><strong>Out of Service</strong> is for "this machine isn't safe or won't run." Use it honestly — it pulls the mechanic immediately and stops anyone else taking the machine.</div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 15 — Daily check + what happens next ============ -->
+<section class="slide">
+  <header class="slide-header">
+    <div class="slide-title">The Daily Check &amp; What Happens Next</div>
+    <div class="slide-tag">Fleet reports</div>
+  </header>
+  <div class="slide-body">
+    <div class="grid-2">
+      <div class="card" style="border-top:4px solid var(--info);">
+        <h3 style="color:var(--info);">Before you use a machine</h3>
+        <p>A quick <strong>pre-use safety check</strong> — tyres, forks, brakes, leaks — plus the hour-meter reading.</p>
+        <p style="margin-top:1vh;">Tick anything as faulty and it becomes a <strong>report automatically</strong>. No double work.</p>
+      </div>
+      <div class="card" style="border-top:4px solid var(--good);">
+        <h3 style="color:var(--good);">After you send a report</h3>
+        <p>It appears on the mechanic's <strong>To Fix</strong> list. <strong>Out of Service</strong> marks the machine down so no one else takes it.</p>
+        <p style="margin-top:1vh;">You can see the <strong>status</strong> of everything you've reported — open, in hand, or fixed.</p>
+      </div>
+    </div>
+    <div class="callout">Your report and your daily check are the machine's <strong>logbook</strong>. A "grinding noise" today is the bearing we catch <strong>before</strong> it strands the forklift next week.</div>
   </div>
 </section>
 
@@ -936,16 +984,16 @@
   </header>
   <div class="slide-body">
     <div class="stats">
-      <div class="stat"><div class="n">18,800</div><div class="l">Lines of code</div></div>
-      <div class="stat"><div class="n">19</div><div class="l">Screens</div></div>
-      <div class="stat"><div class="n">13</div><div class="l">Cloud functions</div></div>
-      <div class="stat"><div class="n">360</div><div class="l">Code improvements</div></div>
-      <div class="stat"><div class="n">7</div><div class="l">Weeks of build time</div></div>
+      <div class="stat"><div class="n">60,000+</div><div class="l">Lines of code</div></div>
+      <div class="stat"><div class="n">90</div><div class="l">Screens</div></div>
+      <div class="stat"><div class="n">20+</div><div class="l">Cloud functions</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">Modules in one app</div></div>
+      <div class="stat"><div class="n">&lt;2s</div><div class="l">Server to your pocket</div></div>
       <div class="stat"><div class="n">3x</div><div class="l">Backups, automatic</div></div>
     </div>
     <ul class="checks">
       <li>The escalation engine runs in a Google data centre in <strong>Belgium</strong>. The database lives in <strong>Johannesburg</strong>. Two continents — under 2 seconds to your pocket.</li>
-      <li>One cloud function's <strong>only</strong> job is to wake up every 2 minutes and check whether a job is sitting open — and shout at someone.</li>
+      <li>One cloud function's <strong>only</strong> job is to wake up every 5 minutes and check whether a job is sitting open — and shout at someone.</li>
       <li>Every photo, every note, every tap is backed up <strong>three times</strong> automatically. We could lose the entire workshop and not lose a single job card.</li>
     </ul>
   </div>
@@ -960,8 +1008,8 @@
   <div class="slide-body" style="justify-content:center;">
     <div class="asks">
       <div class="ask"><div class="ask-n">1</div><div class="ask-text"><strong>Grant every permission.</strong> All six. No exceptions.</div></div>
-      <div class="ask"><div class="ask-n">2</div><div class="ask-text"><strong>Respond to every notification.</strong> Assign Self, I'm Busy, or Dismiss — but respond.</div></div>
-      <div class="ask"><div class="ask-n">3</div><div class="ask-text"><strong>Fill in every closure note like the AI is reading it.</strong> Because in a few weeks, it will be.</div></div>
+      <div class="ask"><div class="ask-n">2</div><div class="ask-text"><strong>See it, report it. Get a notification, respond to it.</strong> A fault, a fleet problem, an alert — don't let it sit.</div></div>
+      <div class="ask"><div class="ask-n">3</div><div class="ask-text"><strong>Write every note and report like the AI is reading it.</strong> Because in a few weeks, it will be.</div></div>
     </div>
     <div class="callout" style="margin-top:2vh; text-align:center;">Garbage in, garbage out. <strong>Truth in</strong> — and the workshop starts to feel different.</div>
   </div>
@@ -971,7 +1019,7 @@
 
 <div class="deck-footer">
   <div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> navigate · <kbd>F</kbd> fullscreen · <kbd>Esc</kbd> exit</div>
-  <div id="counter">1 / 19</div>
+  <div id="counter">1 / 21</div>
 </div>
 <div class="progress-bar" id="progress" style="width:5%"></div>
 
