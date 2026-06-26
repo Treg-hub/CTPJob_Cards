@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/parsed_document.dart';
 import '../services/security_document_parser.dart';
 import '../utils/barcode_payload_util.dart';
+import '../utils/screen_insets.dart';
 
 /// PDF417 scanner for SA license disc and ID documents.
 class SecurityDocumentScanScreen extends StatefulWidget {
@@ -213,68 +214,64 @@ class _SecurityDocumentScanScreenState
           TextButton(onPressed: _manualEntry, child: const Text('Manual')),
         ],
       ),
-      body: Column(
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(controller: _controller, onDetect: _onDetect),
-                const _Pdf417GuideOverlay(),
-              ],
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: scheme.surfaceContainerHighest,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  switch (widget.expectedType) {
-                    SecurityDocumentType.licenseDisc =>
-                      'Vehicle licence disc: aim at the PDF417 barcode. '
-                          'Not the thin 1D barcode on the edge. Hold steady.',
-                    SecurityDocumentType.driverLicence =>
-                      "Driver's licence card: flip to the back and scan the "
-                          'PDF417 barcode there. The front 1D barcode does not '
-                          'contain name/ID data.',
-                    _ =>
-                      'Aim at the PDF417 on the back of the ID card. '
-                          'Hold steady, use torch in low light.',
-                  },
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                if (r != null) ...[
-                  if (r.vehicleReg != null)
-                    Text('Reg: ${r.vehicleReg}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                  if (r.expiryDate != null)
-                    Text('Expiry: ${r.expiryDate!.toLocal().toString().split(' ').first}'),
-                  if (r.vehicleMake != null) Text('Make: ${r.vehicleMake}'),
-                  if (r.vehicleModel != null) Text('Model: ${r.vehicleModel}'),
-                  if (r.fullName != null) Text('Name: ${r.fullName}'),
-                  if (r.idNumber != null) Text('ID: ${r.idNumber}'),
-                  if (r.manualEntry)
-                    Text('Manual entry',
-                        style: TextStyle(color: scheme.primary, fontSize: 12)),
-                ] else
-                  const Text('Waiting for scan…'),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: r != null ? _use : null,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Use'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          const _Pdf417GuideOverlay(),
         ],
+      ),
+      bottomNavigationBar: Material(
+        color: scheme.surfaceContainerHighest,
+        child: SafeBottomBar(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                switch (widget.expectedType) {
+                  SecurityDocumentType.licenseDisc =>
+                    'Vehicle licence disc: aim at the PDF417 barcode. '
+                        'Not the thin 1D barcode on the edge. Hold steady.',
+                  SecurityDocumentType.driverLicence =>
+                    "Driver's licence card: flip to the back and scan the "
+                        'PDF417 barcode there. The front 1D barcode does not '
+                        'contain name/ID data.',
+                  _ =>
+                    'Aim at the PDF417 on the back of the ID card. '
+                        'Hold steady, use torch in low light.',
+                },
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              if (r != null) ...[
+                if (r.vehicleReg != null)
+                  Text('Reg: ${r.vehicleReg}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                if (r.expiryDate != null)
+                  Text('Expiry: ${r.expiryDate!.toLocal().toString().split(' ').first}'),
+                if (r.vehicleMake != null) Text('Make: ${r.vehicleMake}'),
+                if (r.vehicleModel != null) Text('Model: ${r.vehicleModel}'),
+                if (r.fullName != null) Text('Name: ${r.fullName}'),
+                if (r.idNumber != null) Text('ID: ${r.idNumber}'),
+                if (r.manualEntry)
+                  Text('Manual entry',
+                      style: TextStyle(color: scheme.primary, fontSize: 12)),
+              ] else
+                const Text('Waiting for scan…'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: r != null ? _use : null,
+                icon: const Icon(Icons.check),
+                label: const Text('Use'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

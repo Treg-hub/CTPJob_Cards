@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/security_entry.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 /// Lists vehicles currently on site (latest direction per reg is in).
 class SecurityOnSiteScreen extends StatelessWidget {
@@ -35,7 +36,12 @@ class SecurityOnSiteScreen extends StatelessWidget {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              12,
+              12,
+              ScreenInsets.scrollBottomFullScreen(context),
+            ),
             itemCount: onSite.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {

@@ -6,6 +6,7 @@ Append-only change log of completed work, in reverse-chronological order (newest
   - **Assign sheet**: `SafeBottomBar` on Cancel/Assign row; 88% sheet height; selected-count chip; paired clock/name toggle (index-based); clock subtitle on rows; button label "Unassign all" when empty.
   - **Ink IBC receive**: pinned `Receive` CTA in `bottomNavigationBar`; safe padding on list + edit sheet; incomplete scan rows surfaced with warning card.
   - **Ink IBC scan** (`ink_barcode_scan_screen`): capture panel + **Use** button moved to `bottomNavigationBar` with `SafeBottomBar` (fixes gesture-nav overlap).
+  - **Site Security module**: same safe-area pattern on document scan (**Use** bar), vehicle scan in/out, on-foot visitor, company car, add cost (pinned submit bars); on-site list bottom padding. Fixed dead `idScanRequired` reference on on-foot visitor (ID scan stays optional).
 - **Mobile safe-area + job card tile polish (2026-06-26)**:
   - **`screen_insets.dart`**: shared bottom safe-area + FAB clearance helpers (`ScreenInsets`, `SafeBottomBar`).
   - **`main.dart`**: edge-to-edge on Android/iOS with MediaQuery builder preserving system insets.
