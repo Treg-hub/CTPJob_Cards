@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/ink_shipment.dart';
 import '../providers/ink_provider.dart';
 import 'ink_receive_ibc_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Lists outstanding IBC shipments (awaiting receipt in Pulse) so the operator
 /// picks one before capturing IBCs against its packing list.
@@ -66,7 +67,12 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
           }
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              12,
+              12,
+              ScreenInsets.scrollBottomFullScreen(context),
+            ),
             children: [
               Text(
                 'Select the shipment you are unloading',

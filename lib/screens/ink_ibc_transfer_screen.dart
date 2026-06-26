@@ -10,6 +10,8 @@ import '../services/ink_barcode_parser.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import 'ink_barcode_scan_screen.dart';
+import '../utils/screen_insets.dart';
+import '../utils/user_facing_error.dart';
 
 
 /// Phase 1c — Consume IBC (transfer IBC → tank). Colour tabs let the operator
@@ -90,12 +92,15 @@ class _State extends ConsumerState<InkIbcTransferScreen>
   Future<void> _submit(InkIbc ibc, String tolulItemCode) async {
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
-    final allowed =
-        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
-    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {
+      final allowed =
+          await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+      if (!allowed) {
+        if (mounted) setState(() => _submitting = false);
+        return;
+      }
       await ref.read(inkServiceProvider).transferIbc(
             ibc: ibc,
             tolulItemCode: tolulItemCode,
@@ -111,9 +116,117 @@ class _State extends ConsumerState<InkIbcTransferScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingError(
+              e,
+              actionFallback:
+                  'Could not consume this IBC. Check your connection and try again.',
+            ),
+          ),
+        ),
+      );
     }
+  }
+
+  InkIbc? _findSelected(List<InkIbc> all) {
+    for (final ibc in all) {
+      if (ibc.ibcNumber == _selectedNumber) return ibc;
+    }
+    return null;
+  }
+
+  Widget? _buildActionBar({
+    required InkIbc selected,
+    required String? tolulItemCode,
+    required ColorScheme scheme,
+  }) {
+    return Material(
+      color: scheme.surfaceContainerLow,
+      child: SafeBottomBar(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.propane_tank_outlined, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'IBC ${selected.ibcNumber} · ${_qty.format(selected.kg)} kg',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() => _selectedNumber = null),
+                  tooltip: 'Deselect',
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _washCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Toloul wash',
+                      suffixText: 'LTS',
+                      helperText: 'Leave blank if no wash used',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.event, size: 16),
+                  label: Text(
+                    _df.format(_effectiveAt),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+                  ),
+                ),
+              ],
+            ),
+            if (tolulItemCode == null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'No toloul item found — wash cannot be recorded.',
+                style: TextStyle(fontSize: 12, color: scheme.error),
+              ),
+            ],
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: (_submitting || tolulItemCode == null)
+                  ? null
+                  : () => _submit(selected, tolulItemCode),
+              icon: _submitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              label: const Text('Consume IBC'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -124,8 +237,14 @@ class _State extends ConsumerState<InkIbcTransferScreen>
 
     String? tolulItemCode;
     for (final i in items) {
-      if (i.itemClass == InkItemClass.solvent) { tolulItemCode = i.itemCode; break; }
+      if (i.itemClass == InkItemClass.solvent) {
+        tolulItemCode = i.itemCode;
+        break;
+      }
     }
+
+    final allIbcs = ibcsAsync.valueOrNull;
+    final selected = allIbcs == null ? null : _findSelected(allIbcs);
 
     return Scaffold(
       appBar: AppBar(
@@ -147,134 +266,56 @@ class _State extends ConsumerState<InkIbcTransferScreen>
       ),
       body: ibcsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (all) {
-          InkIbc? selected;
-          for (final ibc in all) {
-            if (ibc.ibcNumber == _selectedNumber) selected = ibc;
-          }
-
-          return Column(
-            children: [
-              // ── Colour tabs ───────────────────────────────────────────────
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: [
-                    for (final c in kInkColourCodes)
-                      _IbcPickList(
-                        ibcs: all.where((i) => i.itemCode == c).toList()
-                          ..sort((a, b) => a.ibcNumber.compareTo(b.ibcNumber)),
-                        selectedNumber: _selectedNumber,
-                        onTap: _toggleSelect,
-                        qty: _qty,
-                        emptyLabel:
-                            'No ${c[0].toUpperCase()}${c.substring(1)} IBCs awaiting consumption.',
-                      ),
-                  ],
-                ),
-              ),
-
-              // ── Action panel (visible when an IBC is selected) ────────────
-              if (selected != null) ...[
-                const Divider(height: 1),
-                ColoredBox(
-                  color: scheme.surfaceContainerLow,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Selected IBC heading
-                        Row(
-                          children: [
-                            Icon(Icons.propane_tank_outlined,
-                                size: 18, color: scheme.primary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'IBC ${selected.ibcNumber} · ${_qty.format(selected.kg)} kg',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () =>
-                                  setState(() => _selectedNumber = null),
-                              tooltip: 'Deselect',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        // Toloul + date row
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _washCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration: const InputDecoration(
-                                  labelText: 'Toloul wash',
-                                  suffixText: 'LTS',
-                                  helperText: 'Leave blank if no wash used',
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: _pickDate,
-                              icon: const Icon(Icons.event, size: 16),
-                              label: Text(
-                                _df.format(_effectiveAt),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (tolulItemCode == null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'No toloul item found — wash cannot be recorded.',
-                            style: TextStyle(
-                                fontSize: 12, color: scheme.error),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        FilledButton.icon(
-                          onPressed:
-                              (_submitting || tolulItemCode == null)
-                                  ? null
-                                  : () => _submit(selected!, tolulItemCode!),
-                          icon: _submitting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2))
-                              : const Icon(Icons.check),
-                          label: const Text('Consume IBC'),
-                          style: FilledButton.styleFrom(
-                              minimumSize:
-                                  const Size(double.infinity, 44)),
-                        ),
-                      ],
-                    ),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: scheme.error),
+                const SizedBox(height: 16),
+                Text(
+                  userFacingError(
+                    e,
+                    loadFallback:
+                        'Could not load IBCs. Check your connection and tap Retry.',
                   ),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => ref.invalidate(inkReceivedIbcsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
                 ),
               ],
-            ],
-          );
-        },
+            ),
+          ),
+        ),
+        data: (all) => TabBarView(
+          controller: _tab,
+          children: [
+            for (final c in kInkColourCodes)
+              _IbcPickList(
+                ibcs: all.where((i) => i.itemCode == c).toList()
+                  ..sort((a, b) => a.ibcNumber.compareTo(b.ibcNumber)),
+                selectedNumber: _selectedNumber,
+                onTap: _toggleSelect,
+                qty: _qty,
+                emptyLabel:
+                    'No ${c[0].toUpperCase()}${c.substring(1)} IBCs awaiting consumption.',
+              ),
+          ],
+        ),
       ),
+      bottomNavigationBar: selected != null
+          ? _buildActionBar(
+              selected: selected,
+              tolulItemCode: tolulItemCode,
+              scheme: scheme,
+            )
+          : null,
     );
   }
 }
@@ -388,7 +429,7 @@ class _IbcPickListState extends State<_IbcPickList>
                   ),
                 )
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 120),
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, indent: 52),

@@ -25,6 +25,7 @@ import '../widgets/waste_stock_link_sheet.dart';
 import '../widgets/waste_copper_ready_panel.dart';
 import '../models/waste_stock_source.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 // ---------------------------------------------------------------------------
 // Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
@@ -619,6 +620,12 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : ListView(
+                  padding: EdgeInsets.only(
+                    bottom: ScreenInsets.scrollBottomInHomeShell(
+                      clearFab: true,
+                      extendedFab: true,
+                    ),
+                  ),
                   children: [
                     // ── Incoming (scheduled) ──────────────────────────────────
                     ...() {

@@ -8,20 +8,19 @@ import '../models/waste_stock_source.dart';
 abstract final class WasteStockCrosslink {
   static String ibcStockDocId(String ibcNumber) => 'stock_ibc_$ibcNumber';
 
-  /// Creates or no-ops an IBC Bins stock row inside an existing Firestore transaction.
-  static Future<void> writeIbcStockOnConsume({
+  /// Creates or no-ops an IBC Bins stock row inside an existing Firestore
+  /// transaction. [stockSnap] must be read before any writes in the txn.
+  static void writeIbcStockOnConsumeFromSnap({
     required Transaction txn,
-    required FirebaseFirestore db,
+    required DocumentReference<Map<String, dynamic>> stockRef,
+    required DocumentSnapshot<Map<String, dynamic>> stockSnap,
     required String ibcNumber,
     required String actorClockNo,
     required String actorName,
     required Timestamp createdAt,
-  }) async {
-    final stockRef =
-        db.collection(Collections.wasteStock).doc(ibcStockDocId(ibcNumber));
-    final existing = await txn.get(stockRef);
-    if (existing.exists) {
-      final data = existing.data();
+  }) {
+    if (stockSnap.exists) {
+      final data = stockSnap.data();
       final status = (data?['status'] as String?) ?? 'on_site';
       final deleted = data?['is_deleted'] == true;
       if (!deleted && status == 'loaded') {
@@ -50,6 +49,29 @@ abstract final class WasteStockCrosslink {
       'updated_at': createdAt,
       'notes': 'Auto-created when IBC consumed in Ink Factory',
     });
+  }
+
+  /// Creates or no-ops an IBC Bins stock row inside an existing Firestore transaction.
+  static Future<void> writeIbcStockOnConsume({
+    required Transaction txn,
+    required FirebaseFirestore db,
+    required String ibcNumber,
+    required String actorClockNo,
+    required String actorName,
+    required Timestamp createdAt,
+  }) async {
+    final stockRef =
+        db.collection(Collections.wasteStock).doc(ibcStockDocId(ibcNumber));
+    final existing = await txn.get(stockRef);
+    writeIbcStockOnConsumeFromSnap(
+      txn: txn,
+      stockRef: stockRef,
+      stockSnap: existing,
+      ibcNumber: ibcNumber,
+      actorClockNo: actorClockNo,
+      actorName: actorName,
+      createdAt: createdAt,
+    );
   }
 
   /// Disposes linked IBC stock when ink consumption is voided.

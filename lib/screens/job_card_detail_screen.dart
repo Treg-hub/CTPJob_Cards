@@ -17,6 +17,7 @@ import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -91,6 +92,31 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   // ==================== NEW TABBED ASSIGNMENT SHEET ====================
+  void _toggleAssigneeSelection({
+    required List<String> selectedClockNos,
+    required List<String> selectedNames,
+    required Employee emp,
+    required bool selected,
+    required StateSetter setDialogState,
+  }) {
+    setDialogState(() {
+      if (selected) {
+        if (!selectedClockNos.contains(emp.clockNo)) {
+          selectedClockNos.add(emp.clockNo);
+          selectedNames.add(emp.name);
+        }
+      } else {
+        final idx = selectedClockNos.indexOf(emp.clockNo);
+        if (idx >= 0) {
+          selectedClockNos.removeAt(idx);
+          if (idx < selectedNames.length) {
+            selectedNames.removeAt(idx);
+          }
+        }
+      }
+    });
+  }
+
   void _showAssignCompleteDialog(BuildContext context, JobCard job) {
     String searchQuery = '';
     List<String> selectedClockNos = [];
@@ -105,22 +131,37 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.92 - MediaQuery.of(context).viewInsets.bottom,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: StatefulBuilder(
+      useSafeArea: true,
+      builder: (context) {
+        final sheetHeight = MediaQuery.sizeOf(context).height * 0.88;
+        return SizedBox(
+          height: sheetHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: StatefulBuilder(
           builder: (context, setDialogState) => DefaultTabController(
             length: 2,
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
                       const Text('Assign Employees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      Chip(
+                        label: Text('${selectedClockNos.length} selected'),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: const Color(0xFFFF8C42).withValues(alpha: 0.15),
+                        labelStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFF8C42),
+                        ),
+                      ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => setDialogState(() {
@@ -181,8 +222,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.all(16),
+                SafeBottomBar(
                   child: Row(
                     children: [
                       Expanded(
@@ -254,7 +294,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                                 },
                           child: isSaving
                               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Text('Assign'),
+                              : Text(selectedClockNos.isEmpty ? 'Unassign all' : 'Assign'),
                         ),
                       ),
                     ],
@@ -263,8 +303,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
               ],
             ),
           ),
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -298,18 +340,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
             return CheckboxListTile(
               value: isSelected,
-              onChanged: (val) {
-                setDialogState(() {
-                  if (val == true) {
-                    selectedClockNos.add(emp.clockNo);
-                    selectedNames.add(emp.name);
-                  } else {
-                    selectedClockNos.remove(emp.clockNo);
-                    selectedNames.remove(emp.name);
-                  }
-                });
-              },
-              title: Text('${emp.name} - ${emp.position}'),
+              onChanged: (val) => _toggleAssigneeSelection(
+                selectedClockNos: selectedClockNos,
+                selectedNames: selectedNames,
+                emp: emp,
+                selected: val == true,
+                setDialogState: setDialogState,
+              ),
+              title: Text('${emp.name} — ${emp.position}'),
+              subtitle: Text('Clock ${emp.clockNo}', style: const TextStyle(fontSize: 12)),
               secondary: Icon(
                 emp.isOnSite ? Icons.location_on : Icons.location_off,
                 color: emp.isOnSite ? Colors.green : Colors.red[400],
@@ -359,18 +398,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
             return CheckboxListTile(
               value: isSelected,
-              onChanged: (val) {
-                setDialogState(() {
-                  if (val == true) {
-                    selectedClockNos.add(emp.clockNo);
-                    selectedNames.add(emp.name);
-                  } else {
-                    selectedClockNos.remove(emp.clockNo);
-                    selectedNames.remove(emp.name);
-                  }
-                });
-              },
-              title: Text('${emp.name} - ${emp.position} (${emp.department})'),
+              onChanged: (val) => _toggleAssigneeSelection(
+                selectedClockNos: selectedClockNos,
+                selectedNames: selectedNames,
+                emp: emp,
+                selected: val == true,
+                setDialogState: setDialogState,
+              ),
+              title: Text('${emp.name} — ${emp.position}'),
+              subtitle: Text('${emp.department} · Clock ${emp.clockNo}', style: const TextStyle(fontSize: 12)),
               secondary: Icon(
                 emp.isOnSite ? Icons.location_on : Icons.location_off,
                 color: emp.isOnSite ? Colors.green : Colors.red[400],
@@ -529,6 +565,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -623,6 +660,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1138,10 +1176,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     if (buttons.isEmpty) return const SizedBox.shrink();
 
-    return SafeArea(
-      top: false,
+    return SafeBottomBar(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Theme.of(context).appColors.cardSurface,
           border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),

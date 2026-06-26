@@ -9,6 +9,7 @@ import '../providers/security_provider.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import 'security_document_scan_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Scan-out: disc scan or manual on-site pick; confirm occupants leaving; flag discrepancies.
 class SecurityVehicleScanOutScreen extends ConsumerStatefulWidget {
@@ -339,24 +340,26 @@ class _SecurityVehicleScanOutScreenState
                   ),
                 );
               }),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _submitting || gate == null ? null : _submit,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: kBrandOrange,
-                ),
-                child: _submitting
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Log vehicle out'),
-              ),
             ],
           );
         },
+      ),
+      bottomNavigationBar: SafeBottomBar(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: FilledButton(
+          onPressed: _submitting || gate == null ? null : _submit,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            backgroundColor: kBrandOrange,
+          ),
+          child: _submitting
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Log vehicle out'),
+        ),
       ),
     );
   }

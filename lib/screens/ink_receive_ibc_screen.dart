@@ -13,6 +13,7 @@ import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/ink_receipt_validation.dart';
 import 'ink_barcode_scan_screen.dart';
+import '../utils/screen_insets.dart';
 
 class _IbcRow {
   _IbcRow({
@@ -154,6 +155,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       builder: (ctx) {
         return Padding(
@@ -161,7 +163,8 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             left: 16,
             right: 16,
             top: 8,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom +
+                ScreenInsets.scrollBottomFullScreen(ctx, extra: 8),
           ),
           child: StatefulBuilder(
             builder: (ctx, setSheetState) {
@@ -622,7 +625,12 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                ScreenInsets.scrollBottomFullScreen(context, extra: 8),
+              ),
               children: [
                 if (_shipment != null)
                   Card(
@@ -707,13 +715,28 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                if (_rows.where((r) => r.isComplete).isEmpty)
+                if (_rows.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Text(
                       'Scan IBC labels with the button above. '
                       'Captured rows lock to prevent accidental edits.',
                       style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                for (final row in _rows.where((r) => r.hasContent && !r.isComplete))
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    color: scheme.errorContainer.withValues(alpha: 0.35),
+                    child: ListTile(
+                      leading: Icon(Icons.warning_amber_outlined, color: scheme.error, size: 20),
+                      title: Text(
+                        row.numberCtrl.text.isEmpty ? 'Incomplete scan' : row.numberCtrl.text,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text('Tap to complete colour and weight'),
+                      trailing: const Icon(Icons.chevron_right, size: 20),
+                      onTap: () => _editRow(row, isNew: false),
                     ),
                   ),
                 for (final row in _rows.where((r) => r.isComplete))
@@ -746,26 +769,31 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                   icon: const Icon(Icons.add),
                   label: const Text('Add IBC manually'),
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed:
-                      _submitting || completeCount == 0 ? null : _confirmAndSubmit,
-                  icon: _submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check),
-                  label: const Text('Receive IBCs'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
-                ),
               ],
             ),
           ),
         ],
+      ),
+      bottomNavigationBar: SafeBottomBar(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: FilledButton.icon(
+          onPressed: _submitting || completeCount == 0 ? null : _confirmAndSubmit,
+          icon: _submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check),
+          label: Text(
+            completeCount == 0
+                ? 'Receive IBCs'
+                : 'Receive $completeCount IBC${completeCount == 1 ? '' : 's'}',
+          ),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+        ),
       ),
     );
   }

@@ -13,6 +13,7 @@ import 'ink_select_ibc_shipment_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Ink Factory module hub — operator capture only. Management, costing and
 /// month-end workflows live in CTP Pulse (web).
@@ -32,7 +33,12 @@ class InkHomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          12,
+          12,
+          ScreenInsets.scrollBottomFullScreen(context),
+        ),
         children: [
           _StockQtySummary(itemsAsync: itemsAsync),
           const SizedBox(height: 12),

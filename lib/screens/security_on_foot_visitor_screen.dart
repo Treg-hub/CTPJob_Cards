@@ -11,6 +11,7 @@ import '../providers/security_provider.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import 'security_document_scan_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// On-foot visitor entry — optional ID scan, purpose, deny check by name.
 class SecurityOnFootVisitorScreen extends ConsumerStatefulWidget {
@@ -76,10 +77,7 @@ class _SecurityOnFootVisitorScreenState
       return;
     }
 
-    if (settings.idScanRequired && _idDoc == null) {
-      _showError('ID scan is required.');
-      return;
-    }
+    // Visitor ID scan is optional on mobile — no separate settings flag yet.
 
     final deny = _service.matchDenyList(
       denyList,
@@ -191,7 +189,6 @@ class _SecurityOnFootVisitorScreenState
           : StreamBuilder<List<SecurityDenyEntry>>(
               stream: _service.watchDenyList(),
               builder: (context, snap) {
-                final denyList = snap.data ?? [];
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
@@ -206,9 +203,7 @@ class _SecurityOnFootVisitorScreenState
                     OutlinedButton.icon(
                       onPressed: _scanId,
                       icon: const Icon(Icons.badge_outlined),
-                      label: Text(settings.idScanRequired
-                          ? 'Scan ID *'
-                          : 'Scan ID (optional)'),
+                      label: const Text('Scan ID (optional)'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -245,25 +240,33 @@ class _SecurityOnFootVisitorScreenState
                       ),
                       maxLines: 2,
                     ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _submitting || gate == null
-                          ? null
-                          : () => _submit(settings, gate, denyList),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        backgroundColor: kBrandOrange,
-                      ),
-                      child: _submitting
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Log visitor in'),
-                    ),
                   ],
+                );
+              },
+            ),
+      bottomNavigationBar: settings == null
+          ? null
+          : StreamBuilder<List<SecurityDenyEntry>>(
+              stream: _service.watchDenyList(),
+              builder: (context, snap) {
+                return SafeBottomBar(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: FilledButton(
+                    onPressed: _submitting || gate == null
+                        ? null
+                        : () => _submit(settings, gate, snap.data ?? []),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: kBrandOrange,
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Log visitor in'),
+                  ),
                 );
               },
             ),

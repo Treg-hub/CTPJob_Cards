@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main.dart' show currentEmployee;
 import '../providers/security_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/security_widgets.dart';
 import 'security_add_cost_screen.dart';
@@ -61,7 +62,12 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
 
     return Scaffold(
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          ScreenInsets.scrollBottomInHomeShell(),
+        ),
         children: [
           Text(
             'Site Security',

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/ink_barcode_parser.dart';
+import '../utils/screen_insets.dart';
 
 /// Code-128 IBC scanner. Accumulates every barcode seen and merges them through
 /// [parseIbcBarcodeSet], so the operator can point at the single GS1 + SSCC label
@@ -161,85 +162,78 @@ class _InkBarcodeScanScreenState extends State<InkBarcodeScanScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(controller: _controller, onDetect: _onDetect),
-                const _ScanGuideOverlay(),
-                if (_isDuplicate)
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: Material(
-                      color: scheme.errorContainer,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded,
-                                color: scheme.onErrorContainer),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'IBC ${r.ibcNumber} already scanned on this receipt',
-                                style: TextStyle(
-                                  color: scheme.onErrorContainer,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          const _ScanGuideOverlay(),
+          if (_isDuplicate)
+            Positioned(
+              top: 12,
+              left: 12,
+              right: 12,
+              child: Material(
+                color: scheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: scheme.onErrorContainer),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'IBC ${r.ibcNumber} already scanned on this receipt',
+                          style: TextStyle(
+                            color: scheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: scheme.surfaceContainerHighest,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Centre the barcode in the frame',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                field('IBC no.', r.ibcNumber),
-                field('Colour', r.colour),
-                field('Weight', r.weightKg == null ? null : '${r.weightKg} kg'),
-                field('Charge', r.charge),
-                if (r.weightTruncated)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Weight may be partial — check it.',
-                      style: TextStyle(color: scheme.error, fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: r.hasAnything && !_isDuplicate ? _use : null,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Use'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
+      ),
+      bottomNavigationBar: Material(
+        color: scheme.surfaceContainerHighest,
+        child: SafeBottomBar(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Centre the barcode in the frame',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              field('IBC no.', r.ibcNumber),
+              field('Colour', r.colour),
+              field('Weight', r.weightKg == null ? null : '${r.weightKg} kg'),
+              field('Charge', r.charge),
+              if (r.weightTruncated)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Weight may be partial — check it.',
+                    style: TextStyle(color: scheme.error, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: r.hasAnything && !_isDuplicate ? _use : null,
+                icon: const Icon(Icons.check),
+                label: const Text('Use'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

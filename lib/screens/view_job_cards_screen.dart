@@ -5,6 +5,7 @@ import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/job_card_tile.dart';
+import '../utils/screen_insets.dart';
 
 class ViewJobCardsScreen extends StatefulWidget {
   const ViewJobCardsScreen({
@@ -404,7 +405,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           child: jobs.isEmpty
               ? Center(child: Text('No jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)))
               : ListView.builder(
-                  padding: const EdgeInsets.all(8),
+                  padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
                   itemCount: jobs.length,
                   itemBuilder: (context, index) => JobCardTile(
                     job: jobs[index],

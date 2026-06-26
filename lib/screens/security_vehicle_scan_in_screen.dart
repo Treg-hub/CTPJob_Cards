@@ -16,6 +16,7 @@ import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/security_suggestion_field.dart';
 import 'security_document_scan_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Vehicle scan-in: licence disc + driver licence + occupant count.
 class SecurityVehicleScanInScreen extends ConsumerStatefulWidget {
@@ -414,6 +415,29 @@ class _SecurityVehicleScanInScreenState
     final settings = ref.watch(securitySettingsProvider).valueOrNull;
     final gate = ref.watch(selectedSecurityGateProvider);
 
+    Widget submitBar(SecuritySettings s, List<SecurityDenyEntry> denyList,
+        List<SecurityVehicle> vehicles) {
+      return SafeBottomBar(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: FilledButton(
+          onPressed: _submitting || gate == null
+              ? null
+              : () => _submit(s, gate, denyList, vehicles),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            backgroundColor: kBrandOrange,
+          ),
+          child: _submitting
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Log vehicle in'),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Vehicle Scan In')),
       body: settings == null
@@ -433,8 +457,6 @@ class _SecurityVehicleScanInScreenState
                             return StreamBuilder<List<SecurityContractor>>(
                               stream: _service.watchContractors(),
                               builder: (context, contractorSnap) {
-                                final denyList = denySnap.data ?? [];
-                                final vehicles = vehicleSnap.data ?? [];
                                 final contractors = contractorSnap.data ?? [];
                                 final hostSuggestions = hostSnap.data ?? [];
                                 final companySuggestions =
@@ -719,31 +741,6 @@ class _SecurityVehicleScanInScreenState
                                             : '${_photoPaths.length} photo(s) attached',
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
-                                    FilledButton(
-                                      onPressed: _submitting || gate == null
-                                          ? null
-                                          : () => _submit(
-                                                settings,
-                                                gate,
-                                                denyList,
-                                                vehicles,
-                                              ),
-                                      style: FilledButton.styleFrom(
-                                        minimumSize:
-                                            const Size.fromHeight(48),
-                                        backgroundColor: kBrandOrange,
-                                      ),
-                                      child: _submitting
-                                          ? const SizedBox(
-                                              height: 22,
-                                              width: 22,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Text('Log vehicle in'),
-                                    ),
                                   ],
                                 );
                               },
@@ -751,6 +748,23 @@ class _SecurityVehicleScanInScreenState
                           },
                         );
                       },
+                    );
+                  },
+                );
+              },
+            ),
+      bottomNavigationBar: settings == null
+          ? null
+          : StreamBuilder<List<SecurityDenyEntry>>(
+              stream: _service.watchDenyList(),
+              builder: (context, denySnap) {
+                return StreamBuilder<List<SecurityVehicle>>(
+                  stream: _service.watchVehicles(),
+                  builder: (context, vehicleSnap) {
+                    return submitBar(
+                      settings,
+                      denySnap.data ?? [],
+                      vehicleSnap.data ?? [],
                     );
                   },
                 );

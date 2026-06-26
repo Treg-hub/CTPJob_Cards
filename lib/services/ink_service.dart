@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
@@ -157,7 +158,21 @@ class InkService {
       .collection(Collections.inkCountEvents)
       .orderBy('count_date', descending: true)
       .snapshots()
-      .map((s) => s.docs.map(InkCountEvent.fromFirestore).toList());
+      .map((s) {
+        final list = <InkCountEvent>[];
+        for (final doc in s.docs) {
+          final event = InkCountEvent.tryFromFirestore(doc);
+          if (event != null) {
+            list.add(event);
+          } else {
+            assert(() {
+              debugPrint('Skipping unparseable ink_count_events/${doc.id}');
+              return true;
+            }());
+          }
+        }
+        return list;
+      });
 
   /// Records a month-end count on a designated [countDate] (which need not be
   /// the calendar month-end). Always writes a count-event document so the
@@ -614,12 +629,24 @@ class InkService {
       .collection(Collections.inkIbcs)
       .snapshots()
       .map((s) {
-        var list = s.docs.map(InkIbc.fromFirestore).toList();
-        if (status != null) {
-          list = list.where((i) => i.status == status).toList();
+        final list = <InkIbc>[];
+        for (final doc in s.docs) {
+          final ibc = InkIbc.tryFromFirestore(doc);
+          if (ibc != null) {
+            list.add(ibc);
+          } else {
+            assert(() {
+              debugPrint('Skipping unparseable ink_ibcs/${doc.id}');
+              return true;
+            }());
+          }
         }
-        list.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
-        return list;
+        var filtered = list;
+        if (status != null) {
+          filtered = list.where((i) => i.status == status).toList();
+        }
+        filtered.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+        return filtered;
       });
 
   /// Open shipments (status awaiting_receipt / receiving) for a packaging mode
@@ -764,11 +791,24 @@ class InkService {
     final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
 
     await _db.runTransaction((txn) async {
-      // Check idempotency: only read wash doc if we'd need to write it.
+      // Firestore requires every read before any write in a transaction.
       final washSnap = washLitres > 0 ? await txn.get(washRef) : null;
+      final stockRef = _db
+          .collection(Collections.wasteStock)
+          .doc(WasteStockCrosslink.ibcStockDocId(ibc.ibcNumber));
+      final stockSnap = await txn.get(stockRef);
       final transferredAt = Timestamp.fromDate(effectiveAt);
 
-      // Always update IBC status (merge = safe on retry).
+      WasteStockCrosslink.writeIbcStockOnConsumeFromSnap(
+        txn: txn,
+        stockRef: stockRef,
+        stockSnap: stockSnap,
+        ibcNumber: ibc.ibcNumber,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        createdAt: transferredAt,
+      );
+
       txn.set(
         ibcRef,
         {
@@ -779,16 +819,6 @@ class InkService {
         SetOptions(merge: true),
       );
 
-      await WasteStockCrosslink.writeIbcStockOnConsume(
-        txn: txn,
-        db: _db,
-        ibcNumber: ibc.ibcNumber,
-        actorClockNo: actorClockNo,
-        actorName: actorName,
-        createdAt: transferredAt,
-      );
-
-      // Only create the wash transaction if it doesn't already exist.
       if (washSnap != null && !washSnap.exists) {
         txn.set(
           washRef,

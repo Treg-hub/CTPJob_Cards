@@ -18,6 +18,7 @@ import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 class CreateJobCardScreen extends StatefulWidget {
   const CreateJobCardScreen({super.key});
@@ -768,7 +769,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
   Widget _buildNarrowLayout() {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: ScreenInsets.symmetricScroll(context),
       child: Form(
         key: _formKey,
         child: FutureBuilder<Map<String, dynamic>>(

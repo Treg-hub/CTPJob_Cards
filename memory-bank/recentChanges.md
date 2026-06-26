@@ -2,6 +2,28 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Consume IBC — transaction ordering + real error messages (2026-06-26)**:
+  - **Root cause (consume submit)**: `transferIbc` wrote the IBC doc before reading `waste_stock` inside the same Firestore transaction (reads must precede writes). Failure surfaced as Riverpod's opaque "boxed error"; UI mapped it to a misleading "could not load IBC data" snackbar.
+  - **`ink_service.dart`**: read wash + waste-stock docs first, then write IBC / wash txn.
+  - **`waste_stock_crosslink.dart`**: `writeIbcStockOnConsumeFromSnap` for pre-read txn phase.
+  - **`user_facing_error.dart`**: unwrap boxed async errors; distinct load vs action fallbacks.
+  - **`ink_count_event.dart` + `watchCountEvents`**: defensive parse / skip bad docs (period guard on submit).
+- **Consume IBC screen — load error + safe-area fix (2026-06-26)**:
+  - **`ink_ibc.dart`**: defensive `parseTimestamp` / `parseDouble`; `tryFromFirestore` skips bad docs.
+  - **`ink_service.dart`**: `watchIbcs` uses `tryFromFirestore` with debug skip log.
+  - **`ink_ibc_transfer_screen.dart`**: friendly error + Retry; Consume CTA pinned in `bottomNavigationBar` via `SafeBottomBar`.
+  - **Tests**: `ink_ibc_model_test.dart`, `user_facing_error_test.dart`.
+- **Assign employees sheet + Ink IBC receive review fixes (2026-06-26)**:
+  - **Assign sheet**: `SafeBottomBar` on Cancel/Assign row; 88% sheet height; selected-count chip; paired clock/name toggle (index-based); clock subtitle on rows; button label "Unassign all" when empty.
+  - **Ink IBC receive**: pinned `Receive` CTA in `bottomNavigationBar`; safe padding on list + edit sheet; incomplete scan rows surfaced with warning card.
+  - **Ink IBC scan** (`ink_barcode_scan_screen`): capture panel + **Use** button moved to `bottomNavigationBar` with `SafeBottomBar` (fixes gesture-nav overlap).
+  - **Site Security module**: same safe-area pattern on document scan (**Use** bar), vehicle scan in/out, on-foot visitor, company car, add cost (pinned submit bars); on-site list bottom padding. Fixed dead `idScanRequired` reference on on-foot visitor (ID scan stays optional).
+- **Mobile safe-area + job card tile polish (2026-06-26)**:
+  - **`screen_insets.dart`**: shared bottom safe-area + FAB clearance helpers (`ScreenInsets`, `SafeBottomBar`).
+  - **`main.dart`**: edge-to-edge on Android/iOS with MediaQuery builder preserving system insets.
+  - **Home shell**: bottom nav wrapped in `SafeArea`; scroll lists padded for FAB overlap; My Work actions integrated into `JobCardTile`.
+  - **Job cards**: refined tile (priority pill, status chip, optional inline action bar); create/view/detail screens use safe bottom padding; detail bottom sheets use `useSafeArea`.
+  - **Module tabs** (Waste/Fleet/Security/Ink): list bottom padding for nested FABs inside home shell.
 - **Ink Factory mobile — IBC receive UX + production run operator polish (2026-06-24)**:
   - **Receive Ink flow**: hub → `ink_select_ibc_shipment_screen` (outstanding `ink_shipments`) → `ink_receive_ibc_screen` with optional `initialShipment`.
   - **Receive screen**: scan moved to AppBar; live capture summary strip; locked compact IBC rows (tap bottom sheet to edit/remove); shipment progress when receiving against packing list; pre-fill colour/kg from expected unit when scan matches SSCC.
