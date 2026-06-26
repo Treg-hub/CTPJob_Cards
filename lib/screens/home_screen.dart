@@ -54,6 +54,7 @@ import '../services/fleet_service.dart';
 import '../services/security_service.dart';
 import '../services/waste_service.dart';
 import '../utils/fleet_labels.dart';
+import '../utils/screen_insets.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -906,7 +907,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Widget _buildHomeTab() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(_screenPadding),
+      padding: EdgeInsets.fromLTRB(
+        _screenPadding,
+        _screenPadding,
+        _screenPadding,
+        _screenPadding +
+            ScreenInsets.scrollBottomInHomeShell(
+              clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+            ),
+      ),
       child: Column(
         children: [
           // Nudges the user if Location-Always / battery-opt got revoked, which
@@ -1549,23 +1558,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: ScreenInsets.listPadding(
+                    context,
+                    inHomeShell: true,
+                    clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+                  ),
                   itemCount: jobs.length,
                   itemBuilder: (context, index) {
                     final job = jobs[index];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        JobCardTile(
-                          job: job,
-                          onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => JobCardDetailScreen(jobCard: job))),
-                        ),
-                        if (!_operatorRestrictedFor(job))
-                          _buildMyWorkActionButtons(context, job),
-                      ],
+                    return JobCardTile(
+                      job: job,
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => JobCardDetailScreen(jobCard: job))),
+                      actions: !_operatorRestrictedFor(job)
+                          ? _buildMyWorkActionButtons(context, job)
+                          : null,
                     );
                   },
                 ),
@@ -1575,50 +1584,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildMyWorkActionButtons(BuildContext context, JobCard job) {
-    const btnPadding = EdgeInsets.symmetric(vertical: 8);
+    const btnPadding = EdgeInsets.symmetric(vertical: 10);
     if (job.startedAt == null) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+      return SizedBox(
+        width: double.infinity,
         child: ElevatedButton(
           onPressed: () => _startWork(job),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
             foregroundColor: Colors.black,
             padding: btnPadding,
+            minimumSize: const Size(0, 44),
           ),
-          child: const Text('Start'),
+          child: const Text('Start Work'),
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () => _showMyWorkCompleteDialog(context, job),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.black,
-                padding: btnPadding,
-              ),
-              child: const Text('Complete'),
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => _showMyWorkCompleteDialog(context, job),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.black,
+              padding: btnPadding,
+              minimumSize: const Size(0, 44),
             ),
+            child: const Text('Complete'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () => _showMyWorkMonitorDialog(context, job),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.black,
-                padding: btnPadding,
-              ),
-              child: const Text('Monitor'),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => _showMyWorkMonitorDialog(context, job),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.black,
+              padding: btnPadding,
+              minimumSize: const Size(0, 44),
             ),
+            child: const Text('Monitor'),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1951,13 +1960,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        items: items,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: ScreenInsets.spacing),
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          items: items,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+        ),
       ),
       floatingActionButton: (_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab)
           ? null

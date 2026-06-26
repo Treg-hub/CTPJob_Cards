@@ -17,6 +17,7 @@ import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -105,6 +106,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.92 - MediaQuery.of(context).viewInsets.bottom,
         decoration: BoxDecoration(
@@ -529,6 +531,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -623,6 +626,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1138,10 +1142,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
     if (buttons.isEmpty) return const SizedBox.shrink();
 
-    return SafeArea(
-      top: false,
+    return SafeBottomBar(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Theme.of(context).appColors.cardSurface,
           border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline)),

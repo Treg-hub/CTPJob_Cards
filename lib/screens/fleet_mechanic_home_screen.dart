@@ -11,6 +11,7 @@ import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
+import '../utils/screen_insets.dart';
 import 'fleet_log_other_work_screen.dart';
 import 'fleet_mark_fixed_screen.dart';
 import 'fleet_queued_screen.dart';
@@ -162,7 +163,13 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
             ],
           ),
           Expanded(
-            child: TabBarView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: tabIdx == 2
+                    ? ScreenInsets.scrollBottomInHomeShell(clearFab: true, extendedFab: true)
+                    : 0,
+              ),
+              child: TabBarView(
               controller: _tabController,
               children: [
                 _MechanicIssueList(
@@ -183,6 +190,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
                   mechanicMode: true,
                 ),
               ],
+            ),
             ),
           ),
         ],

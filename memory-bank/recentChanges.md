@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Mobile safe-area + job card tile polish (2026-06-26)**:
+  - **`screen_insets.dart`**: shared bottom safe-area + FAB clearance helpers (`ScreenInsets`, `SafeBottomBar`).
+  - **`main.dart`**: edge-to-edge on Android/iOS with MediaQuery builder preserving system insets.
+  - **Home shell**: bottom nav wrapped in `SafeArea`; scroll lists padded for FAB overlap; My Work actions integrated into `JobCardTile`.
+  - **Job cards**: refined tile (priority pill, status chip, optional inline action bar); create/view/detail screens use safe bottom padding; detail bottom sheets use `useSafeArea`.
+  - **Module tabs** (Waste/Fleet/Security/Ink): list bottom padding for nested FABs inside home shell.
 - **Ink Factory mobile — IBC receive UX + production run operator polish (2026-06-24)**:
   - **Receive Ink flow**: hub → `ink_select_ibc_shipment_screen` (outstanding `ink_shipments`) → `ink_receive_ibc_screen` with optional `initialShipment`.
   - **Receive screen**: scan moved to AppBar; live capture summary strip; locked compact IBC rows (tap bottom sheet to edit/remove); shipment progress when receiving against packing list; pre-fill colour/kg from expected unit when scan matches SSCC.

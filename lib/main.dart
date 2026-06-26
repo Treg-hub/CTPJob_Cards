@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,6 +76,11 @@ bool _isRecoverableAsyncError(Object error) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Edge-to-edge on modern Android/iOS — all screens must respect safe areas.
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
 
   await Hive.initFlutter();
   Hive.registerAdapter(SyncQueueItemAdapter());
@@ -314,6 +321,23 @@ class CtpJobCardsApp extends ConsumerWidget {
       navigatorObservers: [TopRouteTracker()],
       title: 'CTP Job Cards',
       themeMode: themeMode,
+      builder: (context, child) {
+        // Preserve system insets so nested Scaffolds and scroll views can read them.
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            padding: EdgeInsets.fromLTRB(
+              mq.padding.left,
+              mq.padding.top,
+              mq.padding.right,
+              mq.viewPadding.bottom > mq.padding.bottom
+                  ? mq.viewPadding.bottom
+                  : mq.padding.bottom,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
