@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
@@ -614,12 +615,24 @@ class InkService {
       .collection(Collections.inkIbcs)
       .snapshots()
       .map((s) {
-        var list = s.docs.map(InkIbc.fromFirestore).toList();
-        if (status != null) {
-          list = list.where((i) => i.status == status).toList();
+        final list = <InkIbc>[];
+        for (final doc in s.docs) {
+          final ibc = InkIbc.tryFromFirestore(doc);
+          if (ibc != null) {
+            list.add(ibc);
+          } else {
+            assert(() {
+              debugPrint('Skipping unparseable ink_ibcs/${doc.id}');
+              return true;
+            }());
+          }
         }
-        list.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
-        return list;
+        var filtered = list;
+        if (status != null) {
+          filtered = list.where((i) => i.status == status).toList();
+        }
+        filtered.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+        return filtered;
       });
 
   /// Open shipments (status awaiting_receipt / receiving) for a packaging mode

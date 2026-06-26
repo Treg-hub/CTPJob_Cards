@@ -63,19 +63,51 @@ class InkIbc {
   /// operator received against a selected shipment. Null for free-text receipts.
   final String? shipmentId;
 
+  /// Accepts [Timestamp], ISO [String], or [DateTime] — one bad legacy field
+  /// must not poison the whole IBC list stream.
+  static DateTime? parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static double parseDouble(dynamic value, {double fallback = 0}) {
+    if (value == null) return fallback;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  static double? parseOptionalDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  /// Returns null when a document cannot be parsed (skipped in list streams).
+  static InkIbc? tryFromFirestore(DocumentSnapshot doc) {
+    try {
+      return InkIbc.fromFirestore(doc);
+    } catch (_) {
+      return null;
+    }
+  }
+
   factory InkIbc.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkIbc(
       id: doc.id,
       ibcNumber: d['ibc_number'] as String? ?? doc.id,
       itemCode: d['item_code'] as String? ?? '',
-      kg: (d['kg'] as num?)?.toDouble() ?? 0,
+      kg: parseDouble(d['kg']),
       status: InkIbcStatus.fromValue(d['status'] as String?),
-      receivedDate:
-          (d['received_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      receivedDate: parseTimestamp(d['received_date']) ?? DateTime.now(),
       supplierName: d['supplier_name'] as String?,
-      transferredDate: (d['transferred_date'] as Timestamp?)?.toDate(),
-      washTolulLitres: (d['wash_toloul_litres'] as num?)?.toDouble(),
+      transferredDate: parseTimestamp(d['transferred_date']),
+      washTolulLitres: parseOptionalDouble(d['wash_toloul_litres']),
       orderNumber: d['order_number'] as String?,
       cgnaNumber: d['cgna_number'] as String?,
       chargeNumber: d['charge_number'] as String?,
