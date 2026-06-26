@@ -61,27 +61,44 @@ class InkCountEvent {
         'created_at': Timestamp.fromDate(createdAt),
       };
 
+  static DateTime? _parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static InkCountEvent? tryFromFirestore(DocumentSnapshot doc) {
+    try {
+      return InkCountEvent.fromFirestore(doc);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static InkCountEvent fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
+    final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkCountEvent(
       id: doc.id,
-      countDate: (d['count_date'] as Timestamp).toDate(),
-      sessionId: d['session_id'] as String? ?? '',
-      actorClockNo: d['actor_clock_no'] as String? ?? '',
-      actorName: d['actor_name'] as String? ?? '',
-      adjustmentCount: d['adjustment_count'] as int? ?? 0,
+      countDate: _parseTimestamp(d['count_date']) ?? DateTime.now(),
+      sessionId: d['session_id']?.toString() ?? '',
+      actorClockNo: d['actor_clock_no']?.toString() ?? '',
+      actorName: d['actor_name']?.toString() ?? '',
+      adjustmentCount: (d['adjustment_count'] as num?)?.toInt() ?? 0,
       snapshotVersion: (d['snapshot_version'] as num?)?.toInt() ?? 0,
       lines: [
         for (final l in (d['lines'] as List<dynamic>? ?? []))
-          InkCountLine(
-            itemCode: (l as Map<String, dynamic>)['item_code'] as String,
-            counted: (l['counted'] as num).toDouble(),
-            ledgerBalance: (l['ledger_balance'] as num).toDouble(),
-            wac: (l['wac'] as num?)?.toDouble() ?? 0,
-            value: (l['value'] as num?)?.toDouble() ?? 0,
-          )
+          if (l is Map<String, dynamic>)
+            InkCountLine(
+              itemCode: l['item_code']?.toString() ?? '',
+              counted: (l['counted'] as num?)?.toDouble() ?? 0,
+              ledgerBalance: (l['ledger_balance'] as num?)?.toDouble() ?? 0,
+              wac: (l['wac'] as num?)?.toDouble() ?? 0,
+              value: (l['value'] as num?)?.toDouble() ?? 0,
+            ),
       ],
-      createdAt: (d['created_at'] as Timestamp? ?? Timestamp.now()).toDate(),
+      createdAt: _parseTimestamp(d['created_at']) ?? DateTime.now(),
     );
   }
 }

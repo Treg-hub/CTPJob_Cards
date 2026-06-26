@@ -2,12 +2,17 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Consume IBC — transaction ordering + real error messages (2026-06-26)**:
+  - **Root cause (consume submit)**: `transferIbc` wrote the IBC doc before reading `waste_stock` inside the same Firestore transaction (reads must precede writes). Failure surfaced as Riverpod's opaque "boxed error"; UI mapped it to a misleading "could not load IBC data" snackbar.
+  - **`ink_service.dart`**: read wash + waste-stock docs first, then write IBC / wash txn.
+  - **`waste_stock_crosslink.dart`**: `writeIbcStockOnConsumeFromSnap` for pre-read txn phase.
+  - **`user_facing_error.dart`**: unwrap boxed async errors; distinct load vs action fallbacks.
+  - **`ink_count_event.dart` + `watchCountEvents`**: defensive parse / skip bad docs (period guard on submit).
 - **Consume IBC screen — load error + safe-area fix (2026-06-26)**:
-  - **Root cause**: malformed `ink_ibcs` docs (e.g. `received_date` as String) crashed `InkIbc.fromFirestore` inside the stream, surfacing Riverpod's opaque "boxed error" message.
   - **`ink_ibc.dart`**: defensive `parseTimestamp` / `parseDouble`; `tryFromFirestore` skips bad docs.
   - **`ink_service.dart`**: `watchIbcs` uses `tryFromFirestore` with debug skip log.
   - **`ink_ibc_transfer_screen.dart`**: friendly error + Retry; Consume CTA pinned in `bottomNavigationBar` via `SafeBottomBar`.
-  - **Test**: `test/ink_ibc_model_test.dart` for date/number coercion.
+  - **Tests**: `ink_ibc_model_test.dart`, `user_facing_error_test.dart`.
 - **Assign employees sheet + Ink IBC receive review fixes (2026-06-26)**:
   - **Assign sheet**: `SafeBottomBar` on Cancel/Assign row; 88% sheet height; selected-count chip; paired clock/name toggle (index-based); clock subtitle on rows; button label "Unassign all" when empty.
   - **Ink IBC receive**: pinned `Receive` CTA in `bottomNavigationBar`; safe padding on list + edit sheet; incomplete scan rows surfaced with warning card.

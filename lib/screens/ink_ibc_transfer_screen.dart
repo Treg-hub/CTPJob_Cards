@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,18 +11,7 @@ import '../utils/ink_period_guard.dart';
 import '../utils/ink_pickers.dart';
 import 'ink_barcode_scan_screen.dart';
 import '../utils/screen_insets.dart';
-
-String _inkUserError(Object error) {
-  if (error is FirebaseException) {
-    return error.message?.isNotEmpty == true ? error.message! : error.code;
-  }
-  if (error is StateError) return error.message;
-  final text = error.toString();
-  if (text.contains('boxed') && text.contains('stack')) {
-    return 'Could not load IBC data. Check your connection and try again.';
-  }
-  return text;
-}
+import '../utils/user_facing_error.dart';
 
 
 /// Phase 1c — Consume IBC (transfer IBC → tank). Colour tabs let the operator
@@ -104,12 +92,15 @@ class _State extends ConsumerState<InkIbcTransferScreen>
   Future<void> _submit(InkIbc ibc, String tolulItemCode) async {
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
-    final allowed =
-        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
-    if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
     try {
+      final allowed =
+          await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+      if (!allowed) {
+        if (mounted) setState(() => _submitting = false);
+        return;
+      }
       await ref.read(inkServiceProvider).transferIbc(
             ibc: ibc,
             tolulItemCode: tolulItemCode,
@@ -126,7 +117,15 @@ class _State extends ConsumerState<InkIbcTransferScreen>
       if (!mounted) return;
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: ${_inkUserError(e)}')),
+        SnackBar(
+          content: Text(
+            userFacingError(
+              e,
+              actionFallback:
+                  'Could not consume this IBC. Check your connection and try again.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -276,7 +275,11 @@ class _State extends ConsumerState<InkIbcTransferScreen>
                 Icon(Icons.error_outline, size: 48, color: scheme.error),
                 const SizedBox(height: 16),
                 Text(
-                  _inkUserError(e),
+                  userFacingError(
+                    e,
+                    loadFallback:
+                        'Could not load IBCs. Check your connection and tap Retry.',
+                  ),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
