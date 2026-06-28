@@ -25,6 +25,7 @@ import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/client_platform_service.dart';
 import 'services/device_health_service.dart';
 import 'services/location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -280,22 +281,30 @@ void main() async {
       }
 
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
-      final locationGranted = kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
-      if ((!permissionsCompleted || !locationGranted) && !kIsWeb) {
+      final locationGranted =
+          kIsWeb ? true : (await Permission.locationAlways.status).isGranted;
+
+      if (!permissionsCompleted && !kIsWeb) {
         initialScreen = const PermissionsOnboardingScreen();
       } else {
         initialScreen = const HomeScreen();
       }
 
-      if (!kIsWeb && permissionsCompleted && locationGranted) {
-        try {
-          await LocationService().startNativeMonitoring(clockNo);
-          debugPrint('✅ Native monitoring started on auto-login');
-        } catch (e) {
-          debugPrint('Location monitoring error on auto-login: $e');
-        }
-        LocationService().checkCurrentLocation();
+      if (kIsWeb || permissionsCompleted) {
+        ClientPlatformService().syncToFirestore();
+      }
+
+      if (!kIsWeb && permissionsCompleted) {
         DeviceHealthService().syncPermissionsToFirestore();
+        if (locationGranted) {
+          try {
+            await LocationService().startNativeMonitoring(clockNo);
+            debugPrint('✅ Native monitoring started on auto-login');
+          } catch (e) {
+            debugPrint('Location monitoring error on auto-login: $e');
+          }
+          LocationService().checkCurrentLocation();
+        }
       }
     }
   } else {

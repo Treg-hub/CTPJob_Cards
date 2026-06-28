@@ -443,6 +443,49 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return clockNo;
   }
 
+  String? _clientDeliveryLabel(Map<String, dynamic> data) {
+    final delivery = data['notificationDelivery'] as String?;
+    final device = data['clientDevice'] as String?;
+    if (delivery == 'inbox_only') {
+      final label = switch (device) {
+        'iphone' => 'iPhone web',
+        'ipad' => 'iPad web',
+        _ => device ?? 'web',
+      };
+      return 'Inbox only · $label';
+    }
+    if (device != null && device != 'android') {
+      return 'Last device: $device';
+    }
+    return null;
+  }
+
+  Widget _inboxOnlyBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.inbox_outlined, size: 12, color: Colors.blue.shade800),
+          const SizedBox(width: 4),
+          Text(
+            'Inbox',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _permissionHealthIcon(Map<String, dynamic> data) {
     final perms = data['permissions'];
     final snap = DeviceHealthSnapshot.fromFirestorePermissions(
@@ -1174,14 +1217,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                         ),
                         title: Text(emp['name'] as String? ?? '—', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                         subtitle: Text(
-                          emp['since'] != null
-                              ? '${emp['position'] as String? ?? '—'}  •  on site ${_onSiteDuration(emp['since'] as DateTime)}'
-                              : (emp['position'] as String? ?? '—'),
+                          [
+                            emp['since'] != null
+                                ? '${emp['position'] as String? ?? '—'}  •  on site ${_onSiteDuration(emp['since'] as DateTime)}'
+                                : (emp['position'] as String? ?? '—'),
+                            if (_clientDeliveryLabel(emp) != null)
+                              _clientDeliveryLabel(emp)!,
+                          ].join('\n'),
                           style: TextStyle(fontSize: 12, color: (emp['stuck'] as bool) ? Colors.red.shade700 : colors.textMuted),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (emp['notificationDelivery'] == 'inbox_only') ...[
+                              _inboxOnlyBadge(),
+                              const SizedBox(width: 6),
+                            ],
                             _permissionHealthIcon(emp),
                             const SizedBox(width: 6),
                             if (emp['stuck'] as bool)
@@ -1351,9 +1402,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                           ]),
                           const SizedBox(height: 4),
                           Text(
-                            '${emp.position} · ${emp.department}',
+                            [
+                              '${emp.position} · ${emp.department}',
+                              if (emp.isInboxOnlyDelivery)
+                                'Inbox only · ${emp.clientDevice ?? 'web'}',
+                            ].join('\n'),
                             style: TextStyle(fontSize: 12, color: colors.textMuted),
-                            maxLines: 2,
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ]),

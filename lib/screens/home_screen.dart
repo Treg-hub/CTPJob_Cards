@@ -17,6 +17,7 @@ import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
+import '../services/client_platform_service.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee;
@@ -673,6 +674,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     if (!kIsWeb) _setupFirebaseMessaging();
+    if (kIsWeb) ClientPlatformService().syncToFirestore();
   }
 
   @override

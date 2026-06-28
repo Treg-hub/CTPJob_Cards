@@ -163,6 +163,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     }
                   } else if (permKey == 'postNotifications') {
                     await Permission.notification.request();
+                    if (!(await Permission.notification.status).isGranted) {
+                      await openAppSettings();
+                    }
                   } else if (permKey == 'systemAlertWindow') {
                     await Permission.systemAlertWindow.request();
                     if (!(await Permission.systemAlertWindow.status).isGranted) {
@@ -440,7 +443,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: () async {
-                                await DeviceHealthService().requestMissing();
+                                await DeviceHealthService().fixMissing();
                                 await DeviceHealthService()
                                     .syncPermissionsToFirestore();
                                 if (mounted) setState(() {});

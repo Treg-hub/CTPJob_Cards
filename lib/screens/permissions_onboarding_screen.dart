@@ -156,10 +156,20 @@ class _PermissionsOnboardingScreenState
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Go back'),
               ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx, false);
+                  await DeviceHealthService().fixMissing();
+                  ref.invalidate(permissionsProvider);
+                },
+                child: const Text('Open Settings'),
+              ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8C42)),
+                  backgroundColor: const Color(0xFFFF8C42),
+                  foregroundColor: Colors.white,
+                ),
                 child: const Text('Continue anyway'),
               ),
             ],
@@ -176,11 +186,8 @@ class _PermissionsOnboardingScreenState
     final locationGranted =
         kIsWeb ? false : (await Permission.locationAlways.status).isGranted;
 
-    // Persist completion when location is granted (main.dart re-routes if not),
-    // or user explicitly continued despite missing core permissions.
-    if (locationGranted || kIsWeb) {
-      await prefs.setBool('permissionsCompleted', true);
-    }
+    // Onboarding is shown once; revoked permissions are handled via Home banner.
+    await prefs.setBool('permissionsCompleted', true);
 
     if (!kIsWeb) {
       await DeviceHealthService().syncPermissionsToFirestore();
@@ -249,17 +256,33 @@ class _PermissionsOnboardingScreenState
                     onPressed:
                         _isLoading ? null : () => _handleNext(pages.length - 1),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8C42),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 40, vertical: 14)),
+                      backgroundColor: const Color(0xFFFF8C42),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                          const Color(0xFFFF8C42).withValues(alpha: 0.6),
+                      disabledForegroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 40, vertical: 14),
+                    ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
                         : Text(
                             _currentPage == pages.length - 1
                                 ? "Let's Get Started"
                                 : "Next",
                             style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ],
               ),
@@ -1072,13 +1095,14 @@ class _PermissionsPage extends ConsumerStatefulWidget {
   ConsumerState<_PermissionsPage> createState() => _PermissionsPageState();
 }
 
-class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
+class _PermissionsPageState extends ConsumerState<_PermissionsPage>
+    with WidgetsBindingObserver {
   bool _checking = false;
 
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) return;
+    if (!kIsWeb) WidgetsBinding.instance.addObserver(this);
     // Every permission was already requested in context on the earlier pages
     // (camera on the Job Card flow, alerts on Priority Levels, location on
     // Escalation). This page is purely a status display — just refresh the
@@ -1088,6 +1112,19 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
     });
   }
 
+  @override
+  void dispose() {
+    if (!kIsWeb) WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(permissionsProvider);
+    }
+  }
+
   // Catch-all used by the "Grant Permissions" button — walks every required
   // permission and requests anything still missing, then opens Settings for
   // SAW if it remains denied after the system dialog.
@@ -1095,19 +1132,10 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
     if (kIsWeb) return;
     setState(() => _checking = true);
     try {
-      if (!(await Permission.locationWhenInUse.status).isGranted) {
-        await Permission.locationWhenInUse.request();
-      }
-      if (!(await Permission.locationAlways.status).isGranted) {
-        await Permission.locationAlways.request();
-      }
-      if (!(await Permission.notification.status).isGranted) {
-        await Permission.notification.request();
-      }
+      await DeviceHealthService().fixMissing();
       if (!(await Permission.camera.status).isGranted) {
-        await Permission.camera.request();
+        await DeviceHealthService().fixPermission(Permission.camera);
       }
-      await NotificationService().requestAllCriticalPermissions();
       await DeviceHealthService().syncPermissionsToFirestore();
     } finally {
       ref.invalidate(permissionsProvider);
@@ -1117,13 +1145,8 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
 
   Future<void> _requestSingle(Permission perm) async {
     if (kIsWeb) return;
-    if (perm == Permission.locationAlways) {
-      final whenInUse = await Permission.locationWhenInUse.status;
-      if (!whenInUse.isGranted) {
-        await Permission.locationWhenInUse.request();
-      }
-    }
-    await perm.request();
+    await DeviceHealthService().fixPermission(perm);
+    await DeviceHealthService().syncPermissionsToFirestore();
     ref.invalidate(permissionsProvider);
   }
 

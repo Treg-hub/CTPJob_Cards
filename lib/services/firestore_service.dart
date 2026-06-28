@@ -163,11 +163,24 @@ class FirestoreService {
   /// `updateEmployeePresence` Cloud Function (the `employees` collection is
   /// locked to admin/CF writes under Wave B). Non-fatal: presence is best-effort
   /// and must never break login, geofencing, or token refresh.
-  Future<void> updateMyPresence({String? fcmToken, bool? isOnSite, Map<String, dynamic>? permissions, String? source}) async {
+  Future<void> updateMyPresence({
+    String? fcmToken,
+    bool? isOnSite,
+    Map<String, dynamic>? permissions,
+    String? source,
+    String? clientPlatform,
+    String? clientDevice,
+    String? notificationDelivery,
+  }) async {
     final payload = <String, dynamic>{};
     if (fcmToken != null) payload['fcmToken'] = fcmToken;
     if (isOnSite != null) payload['isOnSite'] = isOnSite;
     if (permissions != null) payload['permissions'] = permissions;
+    if (clientPlatform != null) payload['clientPlatform'] = clientPlatform;
+    if (clientDevice != null) payload['clientDevice'] = clientDevice;
+    if (notificationDelivery != null) {
+      payload['notificationDelivery'] = notificationDelivery;
+    }
     if (payload.isEmpty) return;
     // `source` tags the presence change in app_geofence (the CF logs the
     // enter/exit). Only meaningful alongside an isOnSite change.

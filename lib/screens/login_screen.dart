@@ -8,6 +8,7 @@ import '../models/employee.dart';
 import '../main.dart' show currentEmployee;
 import '../services/notification_service.dart';
 import '../services/auth_claims_service.dart';
+import '../services/client_platform_service.dart';
 import '../services/firestore_service.dart';
 import 'home_screen.dart';
 import 'registration_screen.dart';
@@ -130,7 +131,9 @@ class _LoginScreenState extends State<LoginScreen> {
       // clockNum, isAdmin from the locked admins/{uid} registry). The presence
       // CF used by the FCM-token save below needs the clockNum claim, and admin
       // config writes need isAdmin. Non-fatal — never blocks login.
-      await AuthClaimsService.refreshClaims();
+        await AuthClaimsService.refreshClaims();
+
+      ClientPlatformService().syncToFirestore();
 
       if (!kIsWeb) {
         // Do not request notification permission here — it fires during the
@@ -147,10 +150,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (mounted) {
+        final onboardingDone =
+            prefs.getBool('permissionsCompleted') ?? false;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => kIsWeb ? const HomeScreen() : const PermissionsOnboardingScreen(),
+            builder: (_) {
+              if (kIsWeb || onboardingDone) return const HomeScreen();
+              return const PermissionsOnboardingScreen();
+            },
           ),
         );
       }

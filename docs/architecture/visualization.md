@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-06-28 (DeviceHealthService — six permission checks synced to employees.permissions; expanded home health banner; admin targeted broadcast via broadcastUpdateNotice clockNos[])._
+_Last updated: 2026-06-28 (iPhone web inbox_only delivery — clientPlatform/clientDevice on employees; CF prefersInboxDelivery parks all job alerts; Android push unchanged)._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -315,7 +315,7 @@ After significant changes to screens, roles, or navigation, update this file man
 ## Core Services Notes (Copper / Geofence / Notifications / Number Assignment) — Map Polish Addition (2026-06-16)
 
 - **Copper**: Transactions + inventory (copper_* collections). Whitelist-gated in mobile (role.dart). Password protected ops. See collections.dart + rules (signed-in) + copper_service.dart.
-- **Geofence + Presence**: geo_fence_logs + employees.isOnSite/fcmTokenUpdatedAt. Background in Job Cards (not web). Drives notification targeting. **Device health (2026-06-28)**: `DeviceHealthService` monitors six Android permissions; `employees.permissions` merged via `updateEmployeePresence`; home `GeofenceHealthBanner` surfaces gaps on resume.
+- **Geofence + Presence**: geo_fence_logs + employees.isOnSite/fcmTokenUpdatedAt. Background in Job Cards (not web). Drives notification targeting. **Device health (2026-06-28)**: `DeviceHealthService` monitors six Android permissions; `employees.permissions` merged via `updateEmployeePresence`; home `GeofenceHealthBanner` surfaces gaps on resume. **Routing**: `permissionsCompleted` gates onboarding once — revoked location/perms send user to **Home** + banner, not full onboarding. **Fix flow**: `fixMissing()` / `openSettingsFor()` request dialogs then open battery/DND/overlay/app Settings as needed (onboarding rows, banner Fix, Settings tiles). **iPhone web (2026-06-28)**: Safari/iPad web reports `clientDevice` + `notificationDelivery: inbox_only` via `ClientPlatformService`; CF `prefersInboxDelivery()` parks job/escalation/broadcast alerts to `notification_inbox` (Settings → Notification Inbox on web). Android APK reports `push` — unchanged FCM behaviour.
 - **Notifications / Inbox**: notifications + notification_configs + notification_inbox/{clockNo}/items/* . CF for escalation + writes. Client clears own. Subcol pattern (see COLLECTIONS.md + rules).
 - **Number Assignment (counters)**: jobCards / overtime / waste / fleet / ink counters. Client read, CF/AdminSDK write only (Wave B). Global sequential never-reset for waste/fleet/ink.
 - **Pulse Job Cards view**: External read-only KPIs (see cross-links above). Not full CRUD. "Job Cards & Machine Health" branding in Pulse.

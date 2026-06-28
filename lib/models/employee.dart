@@ -24,6 +24,11 @@ class Employee {
   final DateTime? lastOnSiteAt;
   final DateTime? lastOffSiteAt;
 
+  /// Last client reported via updateEmployeePresence (web vs android).
+  final String? clientPlatform;
+  final String? clientDevice;
+  final String? notificationDelivery;
+
   const Employee({
     required this.clockNo,
     required this.name,
@@ -36,7 +41,12 @@ class Employee {
     this.claimsVersion,
     this.lastOnSiteAt,
     this.lastOffSiteAt,
+    this.clientPlatform,
+    this.clientDevice,
+    this.notificationDelivery,
   });
+
+  bool get isInboxOnlyDelivery => notificationDelivery == 'inbox_only';
 
   String get displayName => '$name ($clockNo) - $position';
 
@@ -59,6 +69,9 @@ class Employee {
       lastOffSiteAt: data['lastOffSiteAt'] is Timestamp
           ? (data['lastOffSiteAt'] as Timestamp).toDate()
           : null,
+      clientPlatform: data['clientPlatform'] as String?,
+      clientDevice: data['clientDevice'] as String?,
+      notificationDelivery: data['notificationDelivery'] as String?,
     );
   }
 
@@ -89,6 +102,9 @@ class Employee {
     int? claimsVersion,
     DateTime? lastOnSiteAt,
     DateTime? lastOffSiteAt,
+    String? clientPlatform,
+    String? clientDevice,
+    String? notificationDelivery,
   }) {
     return Employee(
       clockNo: clockNo ?? this.clockNo,
@@ -102,6 +118,10 @@ class Employee {
       claimsVersion: claimsVersion ?? this.claimsVersion,
       lastOnSiteAt: lastOnSiteAt ?? this.lastOnSiteAt,
       lastOffSiteAt: lastOffSiteAt ?? this.lastOffSiteAt,
+      clientPlatform: clientPlatform ?? this.clientPlatform,
+      clientDevice: clientDevice ?? this.clientDevice,
+      notificationDelivery:
+          notificationDelivery ?? this.notificationDelivery,
     );
   }
 }

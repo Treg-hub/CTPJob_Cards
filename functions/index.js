@@ -110,6 +110,19 @@ exports.updateEmployeePresence = onCall(async (request) => {
     update.fcmToken = innerData.fcmToken;
     update.fcmTokenUpdatedAt = now;
   }
+  if (typeof innerData.clientPlatform === "string") {
+    update.clientPlatform = innerData.clientPlatform;
+    update.clientReportedAt = now;
+  }
+  if (typeof innerData.clientDevice === "string") {
+    update.clientDevice = innerData.clientDevice;
+  }
+  if (typeof innerData.notificationDelivery === "string") {
+    const mode = innerData.notificationDelivery;
+    if (mode === "push" || mode === "inbox_only") {
+      update.notificationDelivery = mode;
+    }
+  }
   if (innerData.permissions && typeof innerData.permissions === "object") {
     const permSnap = await ref.get();
     const existingPerms =
@@ -655,79 +668,39 @@ exports.sendJobAssignmentNotification = onCall(async (request) => {
     recipientClockNo,
   } = innerData;
 
-  if (!recipientToken) throw new HttpsError("invalid-argument", "Missing recipientToken");
-  
-  if (recipientClockNo) {
-    const empDoc = await db.collection("employees").doc(recipientClockNo).get();
-    if (empDoc.exists && empDoc.data().isOnSite !== true) {
-      console.log(`Assignment blocked - ${recipientClockNo} is off-site, parking in inbox`);
-      await db.collection("notification_inbox")
-        .doc(recipientClockNo).collection("items").add({
-          type: "job_assigned",
-          jobCardId: jobCardId || null,
-          jobCardNumber: jobCardNumber || null,
-          title: `Job Assigned by ${operator || "Unknown"} #${jobCardNumber || "N/A"}`,
-          body: `Created by ${creator || operator || "Unknown"}\nLocation: ${area}\n${description}`,
-          department: department || null,
-          area: area || null,
-          machine: machine || null,
-          part: part || null,
-          priority,
-          triggeredBy: "assignment_callable",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-          readAt: null,
-          initiatedByClockNo: initiatedByClockNo || null,
-          initiatedByName: initiatedByName || null,
-        });
-      return { success: false, reason: "Recipient is off-site", parked: true };
-    }
+  if (!recipientClockNo) {
+    throw new HttpsError("invalid-argument", "Missing recipientClockNo");
   }
 
-  // Manual assignment is a creation-flow alert: the assignee needs to act on it,
-  // so it's priority-based (P5 = full-screen, P4 = loud banner, etc.).
   const level = getCreationLevel(priority);
   const title = `Job Assigned by ${operator} #${jobCardNumber || "N/A"}`;
   const body = `Created by ${creator}\nLocation: ${area}\n${description}`;
-  const isFullLoud = level === "full-loud";
 
-  const messagePayload = {
+  const result = await sendNotification({
     token: recipientToken,
-    data: {
-      click_action: "FLUTTER_NOTIFICATION_CLICK",
-      jobId: jobCardId,
-      jobCardNumber: jobCardNumber?.toString() || "Unknown",
-      notificationType: "assigned",
-      triggeredBy: "job_assigned",
-      notificationLevel: level,
-      title,
-      body,
-    },
-    android: { priority: "high" },
-  };
-
-  if (!isFullLoud) {
-    messagePayload.notification = { title, body };
-  }
-
-  await messaging.send(messagePayload);
-
-  await logNotification({
-    jobCardId,
-    jobCardNumber,
-    triggeredBy: "job_assigned",
-    sentTo: [innerData.recipientClockNo || "unknown"],
-    level,
-    priority,
+    recipientClockNo,
     title,
     body,
-    initiatedByClockNo,
-    initiatedByName,
+    jobCardId,
+    jobCardNumber,
+    level,
+    priority,
+    createdBy: creator || operator || "Unknown",
     department,
     area,
     machine,
     part,
+    triggeredBy: "job_assigned",
+    initiatedByClockNo,
+    initiatedByName,
   });
+
+  if (result?.parked) {
+    return { success: false, reason: "Recipient uses inbox delivery", parked: true };
+  }
+  if (result?.noToken) {
+    return { success: false, reason: "Recipient has no FCM token", parked: false };
+  }
 
   return { success: true };
 });
@@ -752,14 +725,9 @@ exports.sendCreatorNotification = onCall(async (request) => {
     part,
   } = innerData;
 
-  if (!recipientToken || !recipientToken.trim()) {
-    throw new HttpsError("invalid-argument", "Missing or invalid recipientToken");
-  }
-
   // Creator notifications are post-creation updates (self-assigned, completed,
   // updated) — informational only, always normal level regardless of priority.
   const level = getUpdateLevel();
-  const isFullLoud = level === "full-loud";
 
   let title, body, triggeredByValue;
   if (notificationType === "self_assign") {
@@ -787,71 +755,26 @@ exports.sendCreatorNotification = onCall(async (request) => {
       console.warn(`sendCreatorNotification: could not look up job ${jobCardId}:`, e.message);
     }
   }
-  if (creatorClockNo) {
-    const creatorEmp = await db.collection("employees").doc(creatorClockNo).get();
-    if (creatorEmp.exists && creatorEmp.data().isOnSite !== true) {
-      console.log(`sendCreatorNotification: creator ${creatorClockNo} is offsite — parking in inbox (${triggeredByValue})`);
-      await db.collection("notification_inbox")
-        .doc(creatorClockNo).collection("items").add({
-          type: triggeredByValue,
-          jobCardId: jobCardId || null,
-          jobCardNumber: jobCardNumber || null,
-          title,
-          body,
-          department: department || null,
-          area: area || null,
-          machine: machine || null,
-          part: part || null,
-          priority,
-          triggeredBy: triggeredByValue,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-          readAt: null,
-          initiatedByClockNo: initiatedByClockNo || null,
-          initiatedByName: assigneeName || initiatedByName || null,
-        });
-      return { success: true, parked: true };
-    }
-  }
-
-  const messagePayload = {
+  const result = await sendNotification({
     token: recipientToken,
-    data: {
-      click_action: "FLUTTER_NOTIFICATION_CLICK",
-      jobId: jobCardId,
-      notificationType,
-      triggeredBy: triggeredByValue,
-      notificationLevel: level,
-      title,
-      body,
-    },
-    android: { priority: "high" },
-  };
-
-  if (!isFullLoud) {
-    messagePayload.notification = { title, body };
-  }
-
-  await messaging.send(messagePayload);
-
-  await logNotification({
-    jobCardId,
-    jobCardNumber,
-    triggeredBy: triggeredByValue,
-    sentTo: [creatorClockNo || innerData.recipientClockNo || "unknown"],
-    level,
-    priority,
+    recipientClockNo: creatorClockNo,
     title,
     body,
-    initiatedByClockNo,
-    initiatedByName,
+    jobCardId,
+    jobCardNumber,
+    level,
+    priority,
+    createdBy: assigneeName || initiatedByName || "Unknown",
     department,
     area,
     machine,
     part,
+    triggeredBy: triggeredByValue,
+    initiatedByClockNo,
+    initiatedByName: assigneeName || initiatedByName,
   });
 
-  return { success: true };
+  return { success: true, parked: result?.parked === true };
 });
 
 // ==================== DYNAMIC RECIPIENT HELPERS ====================
@@ -937,6 +860,25 @@ async function getOnsiteDeptForemenShiftLeaders(dept, allEmps = null) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
+// ==================== INBOX PARKING (off-site / iPhone web / no token) ====================
+function prefersInboxDelivery(emp) {
+  if (!emp) return false;
+  if (emp.notificationDelivery === "inbox_only") return true;
+  if (emp.isOnSite !== true) return true;
+  if (!emp.fcmToken) return true;
+  return false;
+}
+
+async function parkToInbox(clockNo, item) {
+  if (!clockNo) return;
+  await db.collection("notification_inbox").doc(String(clockNo)).collection("items").add({
+    read: false,
+    readAt: null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...item,
+  });
+}
+
 // ==================== CORE SEND NOTIFICATION ====================
 async function sendNotification({
   token,
@@ -944,6 +886,7 @@ async function sendNotification({
   title,
   body,
   jobCardNumber,
+  jobCardId = null,
   level,
   priority,
   createdBy,
@@ -955,12 +898,49 @@ async function sendNotification({
   initiatedByClockNo = null,
   initiatedByName = null,
 }) {
-  if (!token) return;
+  let emp = null;
+  if (recipientClockNo) {
+    const empDoc = await db.collection("employees").doc(String(recipientClockNo)).get();
+    if (empDoc.exists) {
+      emp = { clockNo: recipientClockNo, ...empDoc.data() };
+    }
+  }
+
+  if (prefersInboxDelivery(emp)) {
+    if (recipientClockNo) {
+      console.log(
+        `sendNotification: parking for ${recipientClockNo} ` +
+        `(delivery=${emp?.notificationDelivery || "default"}, onSite=${emp?.isOnSite})`,
+      );
+      await parkToInbox(recipientClockNo, {
+        type: triggeredBy || "notification",
+        jobCardId: jobCardId || null,
+        jobCardNumber: jobCardNumber || null,
+        title,
+        body,
+        department: department || null,
+        area: area || null,
+        machine: machine || null,
+        part: part || null,
+        priority: priority ?? null,
+        triggeredBy,
+        initiatedByClockNo: initiatedByClockNo || null,
+        initiatedByName: initiatedByName || null,
+      });
+    }
+    return { parked: true };
+  }
+
+  const effectiveToken = token || emp?.fcmToken;
+  if (!effectiveToken) {
+    console.log(`sendNotification: no FCM token for ${recipientClockNo || "unknown"}, skipped`);
+    return { parked: false, noToken: true };
+  }
 
   const isFullLoud = level === "full-loud";
 
   const messagePayload = {
-    token,
+    token: effectiveToken,
     data: {
       click_action: "FLUTTER_NOTIFICATION_CLICK",
       jobCardNumber: jobCardNumber?.toString() || "",
@@ -1185,33 +1165,10 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
       continue;
     }
 
-    if (assigneeDoc.data().isOnSite !== true) {
-      console.log(`onJobCardAssigned: ${clockNo} is offsite — parking in inbox`);
-      await db.collection("notification_inbox")
-        .doc(clockNo).collection("items").add({
-          type: "job_assigned",
-          jobCardId: jobId,
-          jobCardNumber: after.jobCardNumber || jobId,
-          title,
-          body,
-          department: after.department || null,
-          area: after.area || null,
-          machine: after.machine || null,
-          part: after.part || null,
-          priority,
-          triggeredBy: "job_assigned",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-          readAt: null,
-          initiatedByClockNo: after.lastUpdatedBy || null,
-          initiatedByName: after.lastUpdatedByName || null,
-        });
-      continue;
-    }
-
     await sendNotification({
       token: assigneeDoc.data().fcmToken,
       recipientClockNo: clockNo,
+      jobCardId: jobId,
       title,
       body,
       jobCardNumber: after.jobCardNumber || jobId,
@@ -1451,71 +1408,32 @@ exports.onAlertResponseCreated = functions.firestore
       const title = `Busy Response - Job #${jobCardNumber}`;
       const body = `${userName} (${clockNo}) is busy and cannot take this job right now.`;
 
-      if (creatorDoc.data().isOnSite !== true) {
-        console.log(`onAlertResponseCreated: creator ${creatorClockNo} is offsite — parking in inbox`);
-        await db.collection("notification_inbox")
-          .doc(creatorClockNo).collection("items").add({
-            type: "busy_response",
-            jobCardId: jobSnap.docs[0].id,
-            jobCardNumber: parseInt(jobCardNumber),
-            title,
-            body,
-            department: job.department || null,
-            area: job.area || null,
-            machine: job.machine || null,
-            part: job.part || null,
-            triggeredBy: "busy_response",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-            readAt: null,
-            initiatedByClockNo: clockNo,
-            initiatedByName: userName,
-          });
-        await jobSnap.docs[0].ref.update({ escalationStopped: true });
-        return null;
-      }
-
-      if (!creatorDoc.data().fcmToken) {
-        console.error(`Creator ${creatorClockNo} has no FCM token`);
-        return null;
-      }
-
-      const creatorToken = creatorDoc.data().fcmToken;
-
-      await messaging.send({
-        token: creatorToken,
-        notification: { title, body },
-        data: {
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
-          jobCardNumber: jobCardNumber.toString(),
-          triggeredBy: "busy_response",
-          busyClockNo: clockNo,
-          busyUserName: userName,
-        },
-        android: { priority: "high" },
-      });
-
-      await logNotification({
-        jobCardId: jobSnap.docs[0].id,
-        jobCardNumber: parseInt(jobCardNumber),
-        triggeredBy: "busy_response",
-        sentTo: [creatorClockNo],
-        level: "normal",
-        priority: job.priority || null,
+      const busyResult = await sendNotification({
+        token: creatorDoc.data().fcmToken,
+        recipientClockNo: creatorClockNo,
         title,
         body,
-        initiatedByClockNo: clockNo,
-        initiatedByName: userName,
+        jobCardId: jobSnap.docs[0].id,
+        jobCardNumber: parseInt(jobCardNumber),
+        level: "normal",
+        priority: job.priority || null,
+        createdBy: userName,
         department: job.department,
         area: job.area,
         machine: job.machine,
         part: job.part,
+        triggeredBy: "busy_response",
+        initiatedByClockNo: clockNo,
+        initiatedByName: userName,
       });
 
-      // Stop all future escalation — a technician has acknowledged the job.
       await jobSnap.docs[0].ref.update({ escalationStopped: true });
 
-      console.log(`Busy notification sent to creator ${creatorClockNo} for Job #${jobCardNumber}`);
+      if (busyResult?.parked) {
+        console.log(`onAlertResponseCreated: busy response parked for creator ${creatorClockNo}`);
+      } else {
+        console.log(`Busy notification sent to creator ${creatorClockNo} for Job #${jobCardNumber}`);
+      }
       return null;
     }
 
@@ -1757,19 +1675,16 @@ exports.broadcastUpdateNotice = onCall(async (request) => {
 
   for (const doc of employeeDocs) {
     const emp = doc.data();
+    const inboxOnly = emp.notificationDelivery === "inbox_only";
 
-    // Off-site employees also get an inbox item so the notice survives until
-    // they're back even if the push is missed.
-    if (emp.isOnSite !== true) {
+    // Off-site and iPhone-web (inbox_only) employees get an inbox item.
+    if (emp.isOnSite !== true || inboxOnly) {
       try {
-        await db.collection("notification_inbox").doc(doc.id).collection("items").add({
+        await parkToInbox(doc.id, {
           type: "update_notice",
           title,
           body,
           triggeredBy: "update_notice",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-          readAt: null,
           initiatedByClockNo: callerClockNo,
           initiatedByName: callerDoc?.data()?.name || null,
         });
@@ -1779,8 +1694,8 @@ exports.broadcastUpdateNotice = onCall(async (request) => {
       }
     }
 
-    if (!emp.fcmToken) {
-      noToken++;
+    if (!emp.fcmToken || inboxOnly) {
+      if (!emp.fcmToken) noToken++;
       continue;
     }
 

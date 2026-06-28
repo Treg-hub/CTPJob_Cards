@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:android_intent_plus/android_intent.dart' as android_intent;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -148,20 +150,126 @@ class DeviceHealthService {
       await Permission.locationWhenInUse.request();
     }
     if (!(await Permission.locationAlways.status).isGranted) {
-      final res = await Permission.locationAlways.request();
-      final always = await Permission.locationAlways.status;
-      if (!res.isGranted &&
-          (res.isPermanentlyDenied || always.isPermanentlyDenied)) {
-        await openAppSettings();
-      }
+      await Permission.locationAlways.request();
     }
     if ((await Permission.ignoreBatteryOptimizations.status).isDenied) {
       await Permission.ignoreBatteryOptimizations.request();
     }
 
     if (!geofenceOnly) {
-      await _notificationService.requestAllCriticalPermissions();
+      await Permission.notification.request();
+      await Permission.systemAlertWindow.request();
+      await Permission.accessNotificationPolicy.request();
       await _recordFullScreenIntentGrant();
+    }
+  }
+
+  /// Opens the Android settings screen (or app settings) for a single health key.
+  Future<void> openSettingsFor(DeviceHealthKey key) async {
+    if (kIsWeb) return;
+
+    switch (key) {
+      case DeviceHealthKey.ignoreBattery:
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          const intent = android_intent.AndroidIntent(
+            action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+          );
+          await intent.launch();
+        } else {
+          await openAppSettings();
+        }
+      case DeviceHealthKey.notificationPolicy:
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          const intent = android_intent.AndroidIntent(
+            action: 'android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS',
+          );
+          await intent.launch();
+        } else {
+          await openAppSettings();
+        }
+      case DeviceHealthKey.locationAlways:
+        if (!(await Permission.locationWhenInUse.status).isGranted) {
+          await Permission.locationWhenInUse.request();
+        }
+        await Permission.locationAlways.request();
+        if (!(await Permission.locationAlways.status).isGranted) {
+          await openAppSettings();
+        }
+      case DeviceHealthKey.postNotifications:
+        await Permission.notification.request();
+        if (!(await Permission.notification.status).isGranted) {
+          await openAppSettings();
+        }
+      case DeviceHealthKey.systemAlertWindow:
+        await Permission.systemAlertWindow.request();
+        if (!(await Permission.systemAlertWindow.status).isGranted) {
+          await openAppSettings();
+        }
+      case DeviceHealthKey.fullScreenIntent:
+        await _recordFullScreenIntentGrant();
+        if (!(await _fullScreenIntentGranted())) {
+          await openAppSettings();
+        }
+    }
+  }
+
+  /// Request dialogs, then open Settings for the first permission still denied.
+  /// Returns true when all targeted checks pass after the flow.
+  Future<bool> fixMissing({bool geofenceOnly = false}) async {
+    if (kIsWeb) return true;
+
+    await requestMissing(geofenceOnly: geofenceOnly);
+    var snap = await check();
+    final healthy =
+        geofenceOnly ? snap.isGeofenceHealthy : snap.isFullyHealthy;
+    if (healthy) return true;
+
+    final missing = geofenceOnly
+        ? snap.missing
+            .where((k) =>
+                k == DeviceHealthKey.locationAlways ||
+                k == DeviceHealthKey.ignoreBattery)
+            .toList()
+        : snap.missing;
+    if (missing.isNotEmpty) {
+      await openSettingsFor(missing.first);
+    }
+    return false;
+  }
+
+  /// Fix a single permission — used by onboarding row taps.
+  Future<void> fixPermission(Permission perm) async {
+    if (kIsWeb) return;
+
+    if (perm == Permission.locationAlways) {
+      await openSettingsFor(DeviceHealthKey.locationAlways);
+      return;
+    }
+    if (perm == Permission.ignoreBatteryOptimizations) {
+      await openSettingsFor(DeviceHealthKey.ignoreBattery);
+      return;
+    }
+    if (perm == Permission.notification) {
+      await openSettingsFor(DeviceHealthKey.postNotifications);
+      return;
+    }
+    if (perm == Permission.systemAlertWindow) {
+      await openSettingsFor(DeviceHealthKey.systemAlertWindow);
+      return;
+    }
+    if (perm == Permission.accessNotificationPolicy) {
+      await openSettingsFor(DeviceHealthKey.notificationPolicy);
+      return;
+    }
+
+    final status = await perm.status;
+    if (!status.isGranted) {
+      await perm.request();
+      final after = await perm.status;
+      if (!after.isGranted &&
+          (after.isPermanentlyDenied || after.isDenied)) {
+        await openAppSettings();
+      }
     }
   }
 
