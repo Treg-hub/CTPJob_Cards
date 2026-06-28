@@ -9,15 +9,15 @@ import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_issue_sort.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
-import '../utils/screen_insets.dart';
 import 'fleet_log_other_work_screen.dart';
 import 'fleet_mark_fixed_screen.dart';
 import 'fleet_queued_screen.dart';
 import 'fleet_work_records_list_screen.dart';
 
-/// Mechanic-only Fleet shell — To Fix / In progress / History + service-due actions.
+/// Mechanic-only Fleet shell — To Fix / In progress / Log work / History.
 class FleetMechanicHomeScreen extends ConsumerStatefulWidget {
   const FleetMechanicHomeScreen({super.key});
 
@@ -36,7 +36,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this)
+    _tabController = TabController(length: 4, vsync: this)
       ..addListener(() {
         if (mounted) setState(() {});
       });
@@ -89,22 +89,8 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
     }
 
     final queuedFleet = SyncService().getQueuedFleetOperationCount();
-    final tabIdx = _tabController.index;
 
     return Scaffold(
-      floatingActionButton: tabIdx == 2
-          ? FloatingActionButton.extended(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const FleetLogOtherWorkScreen(),
-                ),
-              ),
-              icon: const Icon(Icons.build_outlined),
-              label: const Text('Log other work'),
-              backgroundColor: kBrandOrange,
-              foregroundColor: Colors.white,
-            )
-          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -143,6 +129,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
           const FleetMechanicGuideBanner(),
           TabBar(
             controller: _tabController,
+            isScrollable: true,
             labelStyle:
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             tabs: [
@@ -159,17 +146,12 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
                 ),
               ),
               const Tab(text: 'In progress'),
+              const Tab(text: 'Log work'),
               const Tab(text: 'History'),
             ],
           ),
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: tabIdx == 2
-                    ? ScreenInsets.scrollBottomInHomeShell(clearFab: true, extendedFab: true)
-                    : 0,
-              ),
-              child: TabBarView(
+            child: TabBarView(
               controller: _tabController,
               children: [
                 _MechanicIssueList(
@@ -177,6 +159,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
                   status: 'open',
                   emptyMessage: 'Nothing to fix right now.\nGood job!',
                   onTap: _openFix,
+                  pinOos: true,
                 ),
                 _MechanicIssueList(
                   service: _service,
@@ -185,12 +168,12 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
                   onTap: _openFix,
                   showFinishHint: true,
                 ),
+                const FleetLogOtherWorkScreen(embedded: true),
                 const FleetWorkRecordsListScreen(
                   embedded: true,
                   mechanicMode: true,
                 ),
               ],
-            ),
             ),
           ),
         ],
@@ -213,18 +196,7 @@ class _ServiceDueStrip extends StatefulWidget {
 }
 
 class _ServiceDueStripState extends State<_ServiceDueStrip> {
-  final _cardsKey = GlobalKey();
-
-  void _scrollToCards() {
-    final ctx = _cardsKey.currentContext;
-    if (ctx == null) return;
-    Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      alignment: 0.0,
-    );
-  }
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -239,20 +211,24 @@ class _ServiceDueStripState extends State<_ServiceDueStrip> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FleetServiceDueBanner(count: due.length, onTap: _scrollToCards),
-            Padding(
-              key: _cardsKey,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: due
-                    .map((asset) => FleetServiceDueCard(
-                          asset: asset,
-                          onLogService: widget.onLogService,
-                        ))
-                    .toList(),
-              ),
+            FleetServiceDueBanner(
+              count: due.length,
+              onTap: () => setState(() => _expanded = !_expanded),
+              expanded: _expanded,
             ),
+            if (_expanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: due
+                      .map((asset) => FleetServiceDueCard(
+                            asset: asset,
+                            onLogService: widget.onLogService,
+                          ))
+                      .toList(),
+                ),
+              ),
           ],
         );
       },
@@ -267,6 +243,7 @@ class _MechanicIssueList extends StatelessWidget {
     required this.emptyMessage,
     required this.onTap,
     this.showFinishHint = false,
+    this.pinOos = false,
   });
 
   final FleetService service;
@@ -274,6 +251,7 @@ class _MechanicIssueList extends StatelessWidget {
   final String emptyMessage;
   final void Function(FleetIssue issue) onTap;
   final bool showFinishHint;
+  final bool pinOos;
 
   @override
   Widget build(BuildContext context) {
@@ -283,8 +261,8 @@ class _MechanicIssueList extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final issues = snapshot.data ?? [];
-        if (issues.isEmpty) {
+        final raw = snapshot.data ?? [];
+        if (raw.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -292,22 +270,32 @@ class _MechanicIssueList extends StatelessWidget {
             ),
           );
         }
-        return ListView.separated(
+
+        final pinned = pinOos ? pinnedOpenOosIssues(raw) : <FleetIssue>[];
+        final rest = pinOos
+            ? openIssuesExcludingPinned(raw, pinned)
+            : sortFleetIssuesByPriority(raw);
+
+        return ListView(
           padding: const EdgeInsets.all(12),
-          itemCount: issues.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
-          itemBuilder: (context, index) {
-            final issue = issues[index];
-            return FleetIssueTile(
-              issue: issue,
-              mechanicMode: true,
-              onTap: () => onTap(issue),
-              subtitleOverride: showFinishHint &&
-                      issue.status == FleetIssueStatus.acknowledged
-                  ? 'Tap to finish the repair'
-                  : null,
-            );
-          },
+          children: [
+            if (pinned.isNotEmpty) ...[
+              FleetPinnedOosSection(issues: pinned, onTap: onTap),
+              const SizedBox(height: 8),
+            ],
+            ...rest.map((issue) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: FleetIssueTile(
+                    issue: issue,
+                    mechanicMode: true,
+                    onTap: () => onTap(issue),
+                    subtitleOverride: showFinishHint &&
+                            issue.status == FleetIssueStatus.acknowledged
+                        ? 'Tap to finish the repair'
+                        : null,
+                  ),
+                )),
+          ],
         );
       },
     );

@@ -18,6 +18,7 @@ class FleetAssetGrid extends StatelessWidget {
     this.maxHeight,
     this.selectable = true,
     this.reporterDepartment,
+    this.sortAssets,
   });
 
   final FleetAsset? selectedAsset;
@@ -27,6 +28,8 @@ class FleetAssetGrid extends StatelessWidget {
   final bool selectable;
   /// When set, only assets visible to this reporter department are shown.
   final String? reporterDepartment;
+  /// Optional client-side sort after dept filter (e.g. check-due first).
+  final List<FleetAsset> Function(List<FleetAsset> assets)? sortAssets;
 
   @override
   Widget build(BuildContext context) {
@@ -37,10 +40,15 @@ class FleetAssetGrid extends StatelessWidget {
       child: StreamBuilder<List<FleetAsset>>(
         stream: FleetService().watchAssets(activeOnly: true),
         builder: (context, snapshot) {
-          final assets = filterAssetsForReporter(
+          var assets = filterAssetsForReporter(
             snapshot.data ?? const [],
             reporterDepartment,
-          )..sort((a, b) => a.name.compareTo(b.name));
+          );
+          if (sortAssets != null) {
+            assets = sortAssets!(assets);
+          } else {
+            assets.sort((a, b) => a.name.compareTo(b.name));
+          }
 
           if (snapshot.connectionState == ConnectionState.waiting &&
               assets.isEmpty) {

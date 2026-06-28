@@ -19,16 +19,15 @@ class SecurityAddCostScreen extends ConsumerStatefulWidget {
 
 class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
   final _service = SecurityService();
-  final _regCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
+  String? _selectedReg;
   String? _category;
   DateTime _costDate = DateTime.now();
   bool _submitting = false;
 
   @override
   void dispose() {
-    _regCtrl.dispose();
     _descCtrl.dispose();
     _amountCtrl.dispose();
     super.dispose();
@@ -48,10 +47,14 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
     final emp = currentEmployee;
     if (emp == null) return;
 
-    final reg = _regCtrl.text.trim();
+    final reg = (_selectedReg ?? '').trim();
     final amount = double.tryParse(_amountCtrl.text.trim());
-    if (reg.isEmpty || amount == null || amount <= 0) {
-      _showError('Registration and a valid amount are required.');
+    if (reg.isEmpty) {
+      _showError('Select a company car.');
+      return;
+    }
+    if (amount == null || amount <= 0) {
+      _showError('Enter a valid amount.');
       return;
     }
     if (_category == null) {
@@ -102,7 +105,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
 
     if (settings != null && !canManage) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Add Vehicle Cost')),
+        appBar: AppBar(title: const Text('Add Company Car Cost')),
         body: const Center(
           child: Text('Manager or admin access required.'),
         ),
@@ -110,20 +113,46 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
     }
 
     final categories = settings?.costTypeSuggestions ?? [];
+    final vehiclesAsync = ref.watch(securityVehiclesProvider);
+    final companyCars = vehiclesAsync.valueOrNull
+            ?.where((v) => v.isCompanyCar)
+            .toList() ??
+        [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Vehicle Cost')),
+      appBar: AppBar(title: const Text('Add Company Car Cost')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _regCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Vehicle registration *',
-              border: OutlineInputBorder(),
+          if (companyCars.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'No company cars registered. Add them in Pulse Settings.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            DropdownButtonFormField<String>(
+              value: _selectedReg,
+              decoration: const InputDecoration(
+                labelText: 'Company car *',
+                border: OutlineInputBorder(),
+              ),
+              items: companyCars
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v.vehicleReg,
+                      child: Text(
+                        v.assignedDriver != null && v.assignedDriver!.isNotEmpty
+                            ? '${v.vehicleReg} · ${v.assignedDriver}'
+                            : v.vehicleReg,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedReg = v),
             ),
-            textCapitalization: TextCapitalization.characters,
-          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _category,

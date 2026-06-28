@@ -153,8 +153,8 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
           if (canManageCosts) ...[
             const SizedBox(height: 10),
             SecurityActionCard(
-              title: 'Add Vehicle Cost',
-              subtitle: 'Parking, escort, fuel, and other costs',
+              title: 'Add Company Car Cost',
+              subtitle: 'Fuel, parking, tolls — registered company cars only',
               icon: Icons.payments_outlined,
               onTap: () => Navigator.push(
                 context,

@@ -170,6 +170,12 @@ bool canUseSecurityModule(Employee? employee, SecuritySettings? settings) {
   return isSecurityUser(employee, settings);
 }
 
+/// Site security guard floor role — waste + gate capture; not manager desk or costing.
+bool isSiteSecurityGuardOnly(Employee? employee, SecuritySettings? settings) {
+  if (!canUseSecurityModule(employee, settings)) return false;
+  return !isSecurityCostManager(employee, settings);
+}
+
 /// Filter stock rows in inventory views. Collection-day link sheets may show more.
 bool canViewWasteStockInInventory({
   required Employee? employee,
@@ -231,10 +237,16 @@ bool isFleetUser(Employee? employee, FleetSettings? settings) {
   return isFleetMobileUser(employee, settings);
 }
 
-/// Report faults from the home quick action or fleet flows.
+/// Report faults from the home quick action (reporters only).
 bool canReportFleetIssue(Employee? employee, FleetSettings? settings) {
   if (settings == null || !settings.fleetEnabled) return false;
-  return isFleetMobileUser(employee, settings);
+  return isFleetReporter(employee, settings);
+}
+
+/// Daily pre-use safety check from the home quick action (reporters only).
+bool canDoFleetDailyCheck(Employee? employee, FleetSettings? settings) {
+  if (settings == null || !settings.fleetEnabled) return false;
+  return isFleetReporter(employee, settings);
 }
 
 // =============================================================================

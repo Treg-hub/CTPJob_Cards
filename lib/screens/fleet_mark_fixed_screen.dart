@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
@@ -10,12 +9,13 @@ import '../models/fleet_type.dart';
 import '../models/fleet_work_part.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_work_photo_utils.dart';
 import '../widgets/fleet_app_bar.dart';
-import '../widgets/fleet_form_fields.dart';
 import '../widgets/fleet_issue_summary_card.dart';
+import '../widgets/fleet_work_capture_form.dart';
 import '../widgets/fleet_work_form_sections.dart';
 
-/// Minimal fix-a-fault screen — description + meter required; rest in "More details".
+/// Fix-a-fault screen — Save progress (ack) or Mark as Fixed (work record).
 class FleetMarkFixedScreen extends ConsumerStatefulWidget {
   final String preSelectedAssetId;
   final String? preSelectedAssetName;
@@ -49,6 +49,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   List<String> _suggestedPartNames = [];
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
+  bool _savingProgress = false;
   bool _moreExpanded = false;
   bool _alsoFixesExpanded = false;
 
@@ -60,6 +61,44 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
     _loadLinkedIssue(widget.linkedIssueId);
     _loadSuggestedParts();
     _loadWorkTypes();
+    _descCtrl.addListener(_onFormChanged);
+    _machineHoursCtrl.addListener(_onFormChanged);
+    _labourHoursCtrl.addListener(_onFormChanged);
+  }
+
+  void _onFormChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _formDirty =>
+      _descCtrl.text.trim().isNotEmpty ||
+      _machineHoursCtrl.text.trim().isNotEmpty ||
+      _labourHoursCtrl.text.trim().isNotEmpty ||
+      _pendingPhotoPaths.isNotEmpty ||
+      _parts.isNotEmpty;
+
+  Future<bool> _confirmDiscard() async {
+    if (!_formDirty) return true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave without saving?'),
+        content: const Text(
+          'You have unsaved changes. Use Save progress if you are starting a multi-day job.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    return leave ?? false;
   }
 
   Future<void> _loadAsset() async {
@@ -79,14 +118,6 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
         _workCarriedOut = issue.acknowledgedAt!;
       }
     });
-    if (issue.status == FleetIssueStatus.open) {
-      final emp = currentEmployee;
-      if (emp != null) {
-        _service
-            .acknowledgeIssue(issue.id!, emp.clockNo, emp.name)
-            .catchError((_) {});
-      }
-    }
   }
 
   Future<void> _loadOtherOpenIssues() async {
@@ -146,40 +177,57 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
     if (time == null || !mounted) return;
     setState(() {
       _workCarriedOut = DateTime(
-        date.year, date.month, date.day, time.hour, time.minute,
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
       );
     });
   }
 
   Future<void> _addPhoto() async {
-    if (_pendingPhotoPaths.length >= 5) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    final path = await pickFleetCompressedPhoto(
+      context,
+      _service,
+      currentCount: _pendingPhotoPaths.length,
     );
-    if (source == null) return;
-    final path = await _service.pickAndCompressPhoto(source);
     if (path != null && mounted) setState(() => _pendingPhotoPaths.add(path));
   }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _saveProgress() async {
+    final emp = currentEmployee;
+    final issue = _linkedIssue;
+    if (emp == null || issue?.id == null) return;
+    if (issue!.status != FleetIssueStatus.open) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    setState(() => _savingProgress = true);
+    try {
+      await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Marked in progress — finish the repair when done.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Could not save progress: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _savingProgress = false);
+    }
   }
 
   Future<void> _save() async {
@@ -231,8 +279,9 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
     }
 
     final desc = _descCtrl.text.trim();
-    final title =
-        desc.length > 60 ? desc.substring(0, 60) : 'Fix: ${_selectedAsset!.name}';
+    final title = desc.length > 60
+        ? desc.substring(0, 60)
+        : 'Fix: ${_selectedAsset!.name}';
 
     setState(() => _saving = true);
     try {
@@ -273,13 +322,13 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
       );
 
       if (mounted) {
-        Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Problem marked as fixed.'),
             backgroundColor: Colors.green,
           ),
         );
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -299,207 +348,124 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
     final workDateIsToday = _workCarriedOut.year == now.year &&
         _workCarriedOut.month == now.month &&
         _workCarriedOut.day == now.day;
+    final showSaveProgress =
+        _linkedIssue?.status == FleetIssueStatus.open;
 
-    return Scaffold(
-      appBar: const FleetAppBar(title: 'Mark as Fixed'),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ElevatedButton.icon(
-            onPressed: _saving ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.check_circle_outline),
-            label: Text(_saving ? 'Saving…' : 'Mark as Fixed'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kBrandOrange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (await _confirmDiscard()) {
+          if (context.mounted) Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: const FleetAppBar(title: 'Mark as Fixed'),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showSaveProgress)
+                  OutlinedButton.icon(
+                    onPressed: (_saving || _savingProgress) ? null : _saveProgress,
+                    icon: _savingProgress
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.pause_circle_outline),
+                    label: Text(_savingProgress
+                        ? 'Saving…'
+                        : 'Mark in progress & come back later'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                if (showSaveProgress) const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: (_saving || _savingProgress) ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(_saving ? 'Saving…' : 'Mark as Fixed'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_linkedIssue != null) ...[
-            FleetIssueSummaryCard(issue: _linkedIssue!),
-            const SizedBox(height: 16),
-          ],
-
-          const FleetSectionLabel('What you did to fix it *'),
-          TextField(
-            controller: _descCtrl,
-            maxLines: 4,
-            autofocus: true,
-            decoration: fleetDropdownDecoration(
-              hintText: 'Describe the work YOU did — the fault is shown above.',
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          const FleetSectionLabel('Machine hour-meter reading *'),
-          TextField(
-            controller: _machineHoursCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: fleetDropdownDecoration(
-              hintText: 'Reading on the hour meter',
-            ),
-          ),
-          if (_selectedAsset?.currentMachineHours != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Last recorded: ${fleetFormatHours(_selectedAsset!.currentMachineHours!)} h',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).appColors.textMuted,
-                ),
-              ),
-            ),
-          const SizedBox(height: 16),
-
-          if (_otherOpenIssues.isNotEmpty)
-            ExpansionTile(
-              initiallyExpanded: _alsoFixesExpanded,
-              onExpansionChanged: (v) =>
-                  setState(() => _alsoFixesExpanded = v),
-              tilePadding: EdgeInsets.zero,
-              title: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Also fixes these reported problems?',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: kBrandOrange,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${_otherOpenIssues.length}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              subtitle: Text(
-                _linkedIssueIds.length > 1
-                    ? '${_linkedIssueIds.length - 1} selected to close with this fix'
-                    : 'Tick any other open problems this job also fixes',
-                style: const TextStyle(fontSize: 12),
-              ),
-              children: [
-                ..._otherOpenIssues.map((issue) {
-                  final ticked = _linkedIssueIds.contains(issue.id);
-                  return CheckboxListTile(
-                    value: ticked,
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(issue.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13)),
-                    subtitle: Text(
-                      'Reported by ${issue.reportedByName}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).appColors.textMuted,
-                      ),
-                    ),
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _linkedIssueIds.add(issue.id!);
-                        } else {
-                          _linkedIssueIds.remove(issue.id);
-                        }
-                      });
-                    },
-                  );
-                }),
-                const SizedBox(height: 8),
-              ],
-            ),
-
-          ExpansionTile(
-            initiallyExpanded: _moreExpanded,
-            onExpansionChanged: (v) => setState(() => _moreExpanded = v),
-            title: const Text(
-              'More details (optional)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            subtitle: const Text(
-              'Labour hours, parts, photos, work date',
-              style: TextStyle(fontSize: 12),
-            ),
-            children: [
-              const SizedBox(height: 8),
-              FleetWorkDatesCard(
-                workCarriedOut: _workCarriedOut,
-                dateFmt: dateFmt,
-                workDateIsToday: workDateIsToday,
-                onEdit: _pickWorkDate,
-              ),
-              const SizedBox(height: 16),
-              const FleetSectionLabel('Labour hours (optional)'),
-              TextField(
-                controller: _labourHoursCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
-              ),
-              const SizedBox(height: 16),
-              FleetWorkPartsSection(
-                parts: _parts,
-                optional: true,
-                suggestedPartNames: _suggestedPartNames,
-                onAdd: () => setState(() => _parts.add(FleetWorkPartRow())),
-                onAddSuggestion: (name) {
-                  setState(() {
-                    final row = FleetWorkPartRow();
-                    row.nameCtrl.text = name;
-                    _parts.add(row);
-                  });
-                },
-                onRemove: (i) {
-                  setState(() {
-                    _parts[i].nameCtrl.dispose();
-                    _parts[i].qtyCtrl.dispose();
-                    _parts.removeAt(i);
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              FleetWorkPhotosSection(
-                savedPhotoUrls: const [],
-                pendingPhotoPaths: _pendingPhotoPaths,
-                onAddPhoto: _addPhoto,
-                onRemoveSaved: (_) {},
-                onRemovePending: (path) =>
-                    setState(() => _pendingPhotoPaths.remove(path)),
-                hint: 'Photos of the finished work (optional, max 5).',
-              ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (_linkedIssue != null) ...[
+              FleetIssueSummaryCard(issue: _linkedIssue!),
               const SizedBox(height: 16),
             ],
-          ),
-          const SizedBox(height: 80),
-        ],
+            FleetWorkCaptureForm(
+              descCtrl: _descCtrl,
+              machineHoursCtrl: _machineHoursCtrl,
+              labourHoursCtrl: _labourHoursCtrl,
+              workCarriedOut: _workCarriedOut,
+              dateFmt: dateFmt,
+              workDateIsToday: workDateIsToday,
+              onPickWorkDate: _pickWorkDate,
+              parts: _parts,
+              suggestedPartNames: _suggestedPartNames,
+              onAddPart: () => setState(() => _parts.add(FleetWorkPartRow())),
+              onAddPartSuggestion: (name) {
+                setState(() {
+                  final row = FleetWorkPartRow();
+                  row.nameCtrl.text = name;
+                  _parts.add(row);
+                });
+              },
+              onRemovePart: (i) {
+                setState(() {
+                  _parts[i].nameCtrl.dispose();
+                  _parts[i].qtyCtrl.dispose();
+                  _parts.removeAt(i);
+                });
+              },
+              pendingPhotoPaths: _pendingPhotoPaths,
+              onAddPhoto: _addPhoto,
+              onRemovePendingPhoto: (path) =>
+                  setState(() => _pendingPhotoPaths.remove(path)),
+              lastRecordedHours: _selectedAsset?.currentMachineHours,
+              otherOpenIssues: _otherOpenIssues,
+              linkedIssueIds: _linkedIssueIds,
+              onLinkedIssueToggle: (issue, selected) {
+                setState(() {
+                  if (selected) {
+                    _linkedIssueIds.add(issue.id!);
+                  } else {
+                    _linkedIssueIds.remove(issue.id);
+                  }
+                });
+              },
+              alsoFixesExpanded: _alsoFixesExpanded,
+              onAlsoFixesExpansionChanged: (v) =>
+                  setState(() => _alsoFixesExpanded = v),
+              moreExpanded: _moreExpanded,
+              onMoreExpansionChanged: (v) => setState(() => _moreExpanded = v),
+              descAutofocus: true,
+              descHint:
+                  'Describe the work YOU did — the fault is shown above.',
+            ),
+          ],
+        ),
       ),
     );
   }

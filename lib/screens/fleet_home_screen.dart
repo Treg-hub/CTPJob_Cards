@@ -35,6 +35,8 @@ class FleetHomeScreen extends ConsumerWidget {
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isReporter = role_utils.isFleetReporter(emp, settings);
 
+    // Dual-role (reporter dept + mechanic clock): mechanic shell wins — floor
+    // work is primary; reporters still use home quick-action tiles.
     if (isReporter && !isMechanic) {
       return const FleetReporterHomeScreen();
     }

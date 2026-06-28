@@ -530,8 +530,18 @@ class SecurityService {
     String? contractorId,
     String? receiptPhotoUrl,
   }) async {
+    final reg = SecurityVehicle.normalizeReg(vehicleReg);
+    final vehiclesSnap =
+        await _db.collection(Collections.securityVehicles).get();
+    final vehicles =
+        vehiclesSnap.docs.map(SecurityVehicle.fromFirestore).toList();
+    if (findCompanyVehicle(vehicles, reg) == null) {
+      throw Exception(
+        'Costs can only be recorded for registered company cars.',
+      );
+    }
     await _db.collection(Collections.securityVehicleCosts).add({
-      'vehicle_reg': SecurityVehicle.normalizeReg(vehicleReg),
+      'vehicle_reg': reg,
       'cost_date': Timestamp.fromDate(costDate),
       'category': category,
       'description': description,

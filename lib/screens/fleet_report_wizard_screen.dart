@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart' show currentEmployee;
@@ -13,31 +10,46 @@ import '../models/fleet_issue.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_constants.dart';
+import '../utils/fleet_work_photo_utils.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_form_fields.dart';
-import '../utils/fleet_asset_filter.dart';
 import '../utils/fleet_daily_check_gate.dart';
+import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_reporter_widgets.dart';
+import '../widgets/fleet_work_form_sections.dart';
 
 const _kLastReportAssetKey = 'fleet_last_report_asset_id';
+const _kStepCount = 3;
 
-/// Opens the single-page fleet report wizard (machine → urgency → describe).
-Future<void> openFleetReportWizard(BuildContext context) {
+/// Opens the 3-step fleet report wizard.
+Future<void> openFleetReportWizard(
+  BuildContext context, {
+  bool forceStep1 = false,
+  FleetAsset? preSelectedAsset,
+}) {
   return Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const FleetReportWizardScreen()),
+    MaterialPageRoute(
+      builder: (_) => FleetReportWizardScreen(
+        forceStep1: forceStep1,
+        preSelectedAsset: preSelectedAsset,
+      ),
+    ),
   );
 }
 
-/// Single-screen report flow for reporter departments.
+/// 3-step report flow: machine → urgency → describe + photos.
 class FleetReportWizardScreen extends ConsumerStatefulWidget {
   final FleetAsset? preSelectedAsset;
   final FleetIssueSeverity? preSelectedSeverity;
+  final bool forceStep1;
 
   const FleetReportWizardScreen({
     super.key,
     this.preSelectedAsset,
     this.preSelectedSeverity,
+    this.forceStep1 = false,
   });
 
   @override
@@ -49,13 +61,16 @@ class _FleetReportWizardScreenState
     extends ConsumerState<FleetReportWizardScreen> {
   final _service = FleetService();
   final _descCtrl = TextEditingController();
+  final _pageCtrl = PageController();
 
   FleetAsset? _selectedAsset;
   FleetIssueSeverity _severity = FleetIssueSeverity.medium;
   final List<String> _pendingPhotoPaths = [];
   bool _submitting = false;
   bool _showGuide = true;
-  FleetDailyChecklistConfig _checklistConfig = FleetDailyChecklistConfig.defaults;
+  int _step = 0;
+  FleetDailyChecklistConfig _checklistConfig =
+      FleetDailyChecklistConfig.defaults;
 
   @override
   void initState() {
@@ -65,7 +80,9 @@ class _FleetReportWizardScreenState
     if (widget.preSelectedSeverity != null) {
       _severity = widget.preSelectedSeverity!;
     }
-    _restoreLastAsset();
+    if (!widget.forceStep1) {
+      _restoreLastAsset();
+    }
     _loadGuidePref();
     _loadChecklistState();
   }
@@ -85,10 +102,7 @@ class _FleetReportWizardScreenState
     final lastId = prefs.getString(_kLastReportAssetKey);
     if (lastId == null) return;
     final asset = await _service.getAsset(lastId);
-    final dept = currentEmployee?.department;
-    if (asset != null &&
-        fleetAssetVisibleToReporter(asset, dept) &&
-        mounted) {
+    if (asset != null && mounted) {
       setState(() => _selectedAsset = asset);
     }
   }
@@ -115,35 +129,49 @@ class _FleetReportWizardScreenState
   @override
   void dispose() {
     _descCtrl.dispose();
+    _pageCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _addPhoto() async {
-    if (_pendingPhotoPaths.isNotEmpty) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    final path = await pickFleetCompressedPhoto(
+      context,
+      _service,
+      currentCount: _pendingPhotoPaths.length,
     );
-    if (source == null) return;
-    final localPath = await _service.pickAndCompressPhoto(source);
-    if (localPath == null) return;
-    if (mounted) setState(() => _pendingPhotoPaths.add(localPath));
+    if (path != null && mounted) setState(() => _pendingPhotoPaths.add(path));
+  }
+
+  bool get _canGoNext => switch (_step) {
+        0 => _selectedAsset != null,
+        1 => true,
+        2 => false,
+        _ => false,
+      };
+
+  void _goNext() {
+    if (!_canGoNext || _step >= _kStepCount - 1) return;
+    final next = _step + 1;
+    setState(() => _step = next);
+    _pageCtrl.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _goBack() {
+    if (_step <= 0) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    final prev = _step - 1;
+    setState(() => _step = prev);
+    _pageCtrl.animateToPage(
+      prev,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
   }
 
   Future<void> _submit() async {
@@ -155,8 +183,8 @@ class _FleetReportWizardScreenState
       return;
     }
     final desc = _descCtrl.text.trim();
-    if (desc.length < 10) {
-      _showError('Please describe the problem (at least 10 characters).');
+    if (desc.isEmpty) {
+      _showError('Please describe the problem.');
       return;
     }
 
@@ -221,153 +249,230 @@ class _FleetReportWizardScreenState
     final theme = Theme.of(context);
     final colors = theme.appColors;
     final primary = theme.colorScheme.primary;
+    final isLastStep = _step == _kStepCount - 1;
 
     return Scaffold(
-      appBar: const FleetAppBar(title: 'Report a Problem'),
+      appBar: FleetAppBar(
+        title: 'Report a Problem',
+        actions: [
+          if (_step > 0)
+            TextButton(
+              onPressed: _goBack,
+              child: const Text('Back'),
+            ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: FilledButton.icon(
-            onPressed: _submitting ? null : _submit,
-            icon: _submitting
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.onPrimary,
-                    ),
-                  )
-                : const Icon(Icons.send_outlined),
-            label: Text(_submitting ? 'Sending…' : 'Send report'),
-            style: FilledButton.styleFrom(
-              backgroundColor: kBrandOrange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
+          child: isLastStep
+              ? FilledButton.icon(
+                  onPressed: _submitting ? null : _submit,
+                  icon: _submitting
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.send_outlined),
+                  label: Text(_submitting ? 'Sending…' : 'Send report'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                )
+              : FilledButton(
+                  onPressed: _canGoNext ? _goNext : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Next'),
+                ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_showGuide) ...[
-            const FleetReporterGuideBanner(),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _dismissGuide,
-                child: const Text('Got it — hide tip'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-
-          const FleetSectionLabel('1. Which machine? *'),
-          StreamBuilder<List<FleetDailyCheck>>(
-            stream: _service.watchDailyChecksForDate(),
-            builder: (context, checkSnap) {
-              final checks = checkSnap.data ?? [];
-              final checkByAsset = {
-                for (final c in checks) c.assetId: c,
-              };
-              final settings = ref.watch(fleetSettingsProvider).valueOrNull;
-              return FleetAssetGrid(
-                selectedAsset: _selectedAsset,
-                reporterDepartment: currentEmployee?.department,
-                onAssetSelected: _onAssetSelected,
-                checkBadgeFor: (asset) {
-                  if (!_checklistConfig.enabled ||
-                      settings == null ||
-                      asset.id == null) {
-                    return FleetCheckBadge.none;
-                  }
-                  return fleetCheckBadgeForAsset(
-                    asset: asset,
-                    todayCheck: checkByAsset[asset.id],
-                    checklistConfig: _checklistConfig,
-                    settings: settings,
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-
-          const FleetSectionLabel('2. How urgent is it? *'),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: FleetIssueSeverity.values.map((s) {
-              final isSelected = _severity == s;
-              final chipColor = s == FleetIssueSeverity.outOfService
-                  ? theme.colorScheme.error
-                  : primary;
-              return ChoiceChip(
-                label: Text(reporterSeverityLabel(s)),
-                selected: isSelected,
-                selectedColor: chipColor,
-                labelStyle: TextStyle(
-                  color: isSelected
-                      ? onColor(chipColor)
-                      : colors.chipUnselectedLabel,
-                  fontWeight: FontWeight.w500,
-                ),
-                onSelected: (_) => setState(() => _severity = s),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 8),
-          FleetReporterSeverityHint(severity: _severity),
-          const SizedBox(height: 20),
-
-          const FleetSectionLabel('3. What\'s wrong? *'),
-          Text(
-            'What happened, what you heard or saw, and whether the machine is safe to use.',
-            style: TextStyle(fontSize: 12, color: colors.textMuted),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _descCtrl,
-            maxLines: 4,
-            decoration: fleetDropdownDecoration(
-              hintText: 'e.g. Loud grinding from mast when lifting pallets',
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _pendingPhotoPaths.isEmpty ? _addPhoto : null,
-                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                label: Text(
-                  _pendingPhotoPaths.isEmpty
-                      ? 'Add photo (optional)'
-                      : 'Photo added',
-                ),
-              ),
-              if (_pendingPhotoPaths.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(_pendingPhotoPaths.first),
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: List.generate(_kStepCount, (i) {
+                final active = i <= _step;
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i < _kStepCount - 1 ? 6 : 0),
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? kBrandOrange
+                            : colors.textMuted.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
+                );
+              }),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Step ${_step + 1} of $_kStepCount',
+              style: TextStyle(fontSize: 12, color: colors.textMuted),
+            ),
+          ),
+          Expanded(
+            child: PageView(
+              controller: _pageCtrl,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (i) => setState(() => _step = i),
+              children: [
+                ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_showGuide) ...[
+                      const FleetReporterGuideBanner(),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _dismissGuide,
+                          child: const Text('Got it — hide tip'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    const FleetSectionLabel('Which machine? *'),
+                    StreamBuilder<List<FleetDailyCheck>>(
+                      stream: _service.watchDailyChecksForDate(),
+                      builder: (context, checkSnap) {
+                        final checks = checkSnap.data ?? [];
+                        final checkByAsset = {
+                          for (final c in checks) c.assetId: c,
+                        };
+                        final settings =
+                            ref.watch(fleetSettingsProvider).valueOrNull;
+                        return FleetAssetGrid(
+                          selectedAsset: _selectedAsset,
+                          reporterDepartment: currentEmployee?.department,
+                          onAssetSelected: _onAssetSelected,
+                          checkBadgeFor: (asset) {
+                            if (!_checklistConfig.enabled ||
+                                settings == null ||
+                                asset.id == null) {
+                              return FleetCheckBadge.none;
+                            }
+                            return fleetCheckBadgeForAsset(
+                              asset: asset,
+                              todayCheck: checkByAsset[asset.id],
+                              checklistConfig: _checklistConfig,
+                              settings: settings,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () =>
-                      setState(() => _pendingPhotoPaths.clear()),
+                ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_selectedAsset != null) ...[
+                      Text(
+                        _selectedAsset!.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    const FleetSectionLabel('How urgent is it? *'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: FleetIssueSeverity.values.map((s) {
+                        final isSelected = _severity == s;
+                        final chipColor =
+                            s == FleetIssueSeverity.outOfService
+                                ? theme.colorScheme.error
+                                : primary;
+                        return ChoiceChip(
+                          label: Text(reporterSeverityLabel(s)),
+                          selected: isSelected,
+                          selectedColor: chipColor,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? onColor(chipColor)
+                                : colors.chipUnselectedLabel,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          onSelected: (_) => setState(() => _severity = s),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    FleetReporterSeverityHint(severity: _severity),
+                  ],
+                ),
+                ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_selectedAsset != null) ...[
+                      Text(
+                        _selectedAsset!.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        reporterSeverityLabel(_severity),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: fleetSeverityColor(_severity),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    const FleetSectionLabel('What\'s wrong? *'),
+                    Text(
+                      'What happened, what you heard or saw, and whether the machine is safe to use.',
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _descCtrl,
+                      maxLines: 4,
+                      autofocus: true,
+                      decoration: fleetDropdownDecoration(
+                        hintText:
+                            'e.g. Loud grinding from mast when lifting pallets',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FleetWorkPhotosSection(
+                      savedPhotoUrls: const [],
+                      pendingPhotoPaths: _pendingPhotoPaths,
+                      onAddPhoto: _addPhoto,
+                      onRemoveSaved: (_) {},
+                      onRemovePending: (path) =>
+                          setState(() => _pendingPhotoPaths.remove(path)),
+                      maxPhotos: kFleetMaxPhotos,
+                    ),
+                    const SizedBox(height: 80),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 80),
         ],
       ),
     );

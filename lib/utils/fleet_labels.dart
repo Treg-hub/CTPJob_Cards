@@ -14,6 +14,9 @@ class FleetLabels {
   static const reportHysterProblem = 'Report Machine Problem';
   static const reportProblem = 'Report Problem';
   static const reportIssue = 'Report Issue';
+  static const dailySafetyCheck = 'Daily Safety Check';
+  static const dailySafetyCheckHint =
+      'Pre-use check for machines you plan to use today';
 
   static String assetLabel({required bool plainUx}) =>
       plainUx ? 'Machine' : 'Asset';

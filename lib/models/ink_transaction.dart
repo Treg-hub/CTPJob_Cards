@@ -62,6 +62,7 @@ class InkTransaction {
     this.meterReading,
     this.readingDate,
     this.shipmentId,
+    this.purchaseOrderId,
   });
 
   final String? id;
@@ -129,6 +130,10 @@ class InkTransaction {
   /// received against a shipment. Set at create only (rules forbid updating it).
   final String? shipmentId;
 
+  /// Links a `purchase` to a sent `ink_purchase_orders` doc for local-loop
+  /// fulfillment (deducts remaining_kg_by_item). Set at create only.
+  final String? purchaseOrderId;
+
   /// Bridge to the pure costing engine. A `purchase` still awaiting its cost is
   /// treated as provisional (quantity in at current WAC) until costed.
   LedgerEntry toLedgerEntry() => LedgerEntry(
@@ -179,6 +184,7 @@ class InkTransaction {
       meterReading: num2('meter_reading'),
       readingDate: ts('reading_date'),
       shipmentId: d['shipment_id'] as String?,
+      purchaseOrderId: d['purchase_order_id'] as String?,
     );
   }
 
@@ -215,6 +221,7 @@ class InkTransaction {
         if (meterReading != null) 'meter_reading': meterReading,
         if (readingDate != null) 'reading_date': Timestamp.fromDate(readingDate!),
         if (shipmentId != null) 'shipment_id': shipmentId,
+        if (purchaseOrderId != null) 'purchase_order_id': purchaseOrderId,
       };
 
   /// Partially clones this transaction, overriding only the fields the server
@@ -265,5 +272,6 @@ class InkTransaction {
         meterReading: meterReading,
         readingDate: readingDate,
         shipmentId: shipmentId,
+        purchaseOrderId: purchaseOrderId,
       );
 }

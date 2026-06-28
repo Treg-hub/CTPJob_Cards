@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
@@ -13,6 +12,7 @@ import '../models/fleet_work_record.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/fleet_work_photo_utils.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_selector.dart';
@@ -160,29 +160,11 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
   }
 
   Future<void> _addPhoto() async {
-    if (_savedPhotoUrls.length + _pendingPhotoPaths.length >= 5) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    final path = await pickFleetCompressedPhoto(
+      context,
+      _service,
+      currentCount: _savedPhotoUrls.length + _pendingPhotoPaths.length,
     );
-    if (source == null) return;
-    final path = await _service.pickAndCompressPhoto(source);
     if (path != null && mounted) setState(() => _pendingPhotoPaths.add(path));
   }
 

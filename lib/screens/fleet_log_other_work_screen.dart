@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+import '../utils/fleet_constants.dart';
+import '../utils/fleet_work_photo_utils.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
@@ -25,11 +27,13 @@ import 'fleet_work_record_detail_screen.dart';
 class FleetLogOtherWorkScreen extends ConsumerStatefulWidget {
   final String? preSelectedAssetId;
   final String? preSelectedWorkTypeLabel;
+  final bool embedded;
 
   const FleetLogOtherWorkScreen({
     super.key,
     this.preSelectedAssetId,
     this.preSelectedWorkTypeLabel,
+    this.embedded = false,
   });
 
   @override
@@ -103,6 +107,28 @@ class _FleetLogOtherWorkScreenState
     if (mounted) setState(() => _suggestedPartNames = names);
   }
 
+  void _resetForm() {
+    _titleCtrl.clear();
+    _descCtrl.clear();
+    _labourHoursCtrl.clear();
+    _machineHoursCtrl.clear();
+    for (final p in _parts) {
+      p.nameCtrl.dispose();
+      p.qtyCtrl.dispose();
+    }
+    setState(() {
+      _pendingPhotoPaths.clear();
+      _linkedIssueIds.clear();
+      _parts.clear();
+      _workCarriedOut = DateTime.now();
+      _moreExpanded = false;
+      if (widget.preSelectedAssetId == null) _selectedAsset = null;
+    });
+    if (widget.preSelectedAssetId != null) {
+      _loadOtherOpenIssues();
+    }
+  }
+
   @override
   void dispose() {
     _titleCtrl.dispose();
@@ -137,29 +163,11 @@ class _FleetLogOtherWorkScreenState
   }
 
   Future<void> _addPhoto() async {
-    if (_pendingPhotoPaths.length >= 5) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    final path = await pickFleetCompressedPhoto(
+      context,
+      _service,
+      currentCount: _pendingPhotoPaths.length,
     );
-    if (source == null) return;
-    final path = await _service.pickAndCompressPhoto(source);
     if (path != null && mounted) setState(() => _pendingPhotoPaths.add(path));
   }
 
@@ -266,7 +274,7 @@ class _FleetLogOtherWorkScreenState
           !role_utils.isFleetAdmin(currentEmployee);
 
       if (result.queuedOffline) {
-        Navigator.of(context).pop();
+        if (!widget.embedded) Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -277,14 +285,16 @@ class _FleetLogOtherWorkScreenState
             backgroundColor: Colors.orange,
           ),
         );
+        if (widget.embedded) _resetForm();
       } else if (mechanicUx) {
-        Navigator.of(context).pop();
+        if (!widget.embedded) Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Job saved. See it in History.'),
+            content: Text('Job saved. See it in History tab.'),
             backgroundColor: Colors.green,
           ),
         );
+        if (widget.embedded) _resetForm();
       } else {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -316,44 +326,7 @@ class _FleetLogOtherWorkScreenState
         _workCarriedOut.month == now.month &&
         _workCarriedOut.day == now.day;
 
-    return Scaffold(
-      appBar: FleetAppBar(
-        title: mechanicUx ? 'Log other work' : 'Log Work',
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child: const Text('Save'),
-            ),
-        ],
-      ),
-      bottomNavigationBar: mechanicUx
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: ElevatedButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(_saving ? 'Saving…' : 'Save job'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kBrandOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-            )
-          : null,
-      body: ListView(
+    final body = ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (mechanicUx) ...[
@@ -499,13 +472,77 @@ class _FleetLogOtherWorkScreenState
                 onRemoveSaved: (_) {},
                 onRemovePending: (path) =>
                     setState(() => _pendingPhotoPaths.remove(path)),
+                maxPhotos: kFleetMaxPhotos,
               ),
               const SizedBox(height: 16),
             ],
           ),
           SizedBox(height: mechanicUx ? 100 : 80),
         ],
+      );
+
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: body),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: ElevatedButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving…' : 'Save job'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kBrandOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Scaffold(
+      appBar: FleetAppBar(
+        title: mechanicUx ? 'Log other work' : 'Log Work',
+        actions: [
+          if (_saving)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: _save,
+              child: const Text('Save'),
+            ),
+        ],
       ),
+      bottomNavigationBar: mechanicUx
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: ElevatedButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(_saving ? 'Saving…' : 'Save job'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            )
+          : null,
+      body: body,
     );
   }
 }

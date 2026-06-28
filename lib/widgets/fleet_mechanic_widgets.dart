@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
 import '../theme/app_theme.dart';
+import 'fleet_issue_widgets.dart';
 
 /// Plain-language status for mechanics (not admin jargon).
 String mechanicIssueStatusLabel(FleetIssueStatus status) {
@@ -35,7 +36,7 @@ class FleetMechanicGuideBanner extends StatelessWidget {
   const FleetMechanicGuideBanner({
     super.key,
     this.text =
-        'Tap a problem to open it — it\'s logged as seen automatically. Tap Mark as Fixed when the repair is done.',
+        'Out-of-service problems are pinned at the top. Tap a fault → Save progress if you\'re starting a multi-day job, or Mark as Fixed when done. Planned jobs: Log work tab.',
   });
 
   /// Banner for planned / non-issue work on the Log other work screen.
@@ -74,15 +75,76 @@ class FleetMechanicGuideBanner extends StatelessWidget {
 }
 
 /// Prominent count banner — tap scrolls to [FleetServiceDueCard] list below.
+class FleetPinnedOosSection extends StatelessWidget {
+  const FleetPinnedOosSection({
+    super.key,
+    required this.issues,
+    required this.onTap,
+  });
+
+  final List<FleetIssue> issues;
+  final void Function(FleetIssue issue) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            border: Border.all(color: Colors.red.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: Colors.red.shade700, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  issues.length == 1
+                      ? 'Out of service — fix first'
+                      : '${issues.length} out of service — fix first',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Colors.red.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...issues.map(
+          (issue) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: FleetIssueTile(
+              issue: issue,
+              mechanicMode: true,
+              onTap: () => onTap(issue),
+              subtitleOverride: 'Out of service',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class FleetServiceDueBanner extends StatelessWidget {
   const FleetServiceDueBanner({
     super.key,
     required this.count,
     required this.onTap,
+    this.expanded = false,
   });
 
   final int count;
   final VoidCallback onTap;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -110,15 +172,18 @@ class FleetServiceDueBanner extends StatelessWidget {
                 ),
               ),
               Text(
-                'View',
+                expanded ? 'Hide' : 'View',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: Colors.amber.shade800,
                 ),
               ),
-              Icon(Icons.keyboard_arrow_down,
-                  color: Colors.amber.shade800, size: 20),
+              Icon(
+                expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                color: Colors.amber.shade800,
+                size: 20,
+              ),
             ],
           ),
         ),

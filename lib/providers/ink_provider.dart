@@ -5,6 +5,7 @@ import '../models/ink_count_event.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
+import '../models/ink_purchase_order.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_shipment.dart';
@@ -118,6 +119,11 @@ final inkOpenShipmentsProvider = StreamProvider<List<InkShipment>>(
 /// Open pallet shipments (raw materials) to receive against.
 final inkOpenPalletShipmentsProvider = StreamProvider<List<InkShipment>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenPalletShipments(),
+);
+
+/// Sent / partially fulfilled purchase orders (local-loop receipt linking).
+final inkOpenPurchaseOrdersProvider = StreamProvider<List<InkPurchaseOrder>>(
+  (ref) => ref.watch(inkServiceProvider).watchOpenPurchaseOrders(),
 );
 
 /// Production run history (newest first).

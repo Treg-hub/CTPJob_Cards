@@ -17,7 +17,6 @@ import '../widgets/fleet_machine_action_sheet.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_reporter_widgets.dart';
 import 'fleet_queued_screen.dart';
-import 'fleet_report_wizard_screen.dart';
 import 'fleet_reporter_issue_detail_screen.dart';
 
 /// Reporter-only Fleet shell — machines, my reports, optional all-open view.
@@ -48,7 +47,11 @@ class _FleetReporterHomeScreenState
   }
 
   void _onMachineTap(FleetAsset asset) {
-    showFleetMachineActionSheet(context, asset: asset);
+    showFleetMachineActionSheet(
+      context,
+      asset: asset,
+      checklistEnabled: _checklistConfig.enabled,
+    );
   }
 
   @override
@@ -74,13 +77,6 @@ class _FleetReporterHomeScreenState
     final queuedFleet = SyncService().getQueuedFleetOperationCount();
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => openFleetReportWizard(context),
-        icon: const Icon(Icons.report_problem_outlined),
-        label: const Text('Report Problem'),
-        backgroundColor: kBrandOrange,
-        foregroundColor: Colors.white,
-      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -126,51 +122,52 @@ class _FleetReporterHomeScreenState
                   ),
             ),
           ),
-          if (_checklistConfig.enabled) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Text(
-                'Machines',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Text(
+              'Tap a machine to report a problem or do a daily safety check. '
+              'Use the home screen tiles for quick shortcuts.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).appColors.textMuted,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-              child: Text(
-                'Tap a machine for pre-use safety check or to report a problem.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).appColors.textMuted,
-                ),
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'Machines',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
-            StreamBuilder<List<FleetDailyCheck>>(
-              stream: _service.watchDailyChecksForDate(),
-              builder: (context, checkSnap) {
-                final checks = checkSnap.data ?? [];
-                final checkByAsset = {for (final c in checks) c.assetId: c};
-                return FleetAssetGrid(
-                  maxHeight: 200,
-                  selectable: false,
-                  selectedAsset: null,
-                  reporterDepartment: emp?.department,
-                  onAssetSelected: _onMachineTap,
-                  checkBadgeFor: (asset) {
-                    if (asset.id == null) return FleetCheckBadge.none;
-                    return fleetCheckBadgeForAsset(
-                      asset: asset,
-                      todayCheck: checkByAsset[asset.id],
-                      checklistConfig: _checklistConfig,
-                      settings: settings,
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
+          StreamBuilder<List<FleetDailyCheck>>(
+            stream: _service.watchDailyChecksForDate(),
+            builder: (context, checkSnap) {
+              final checks = checkSnap.data ?? [];
+              final checkByAsset = {for (final c in checks) c.assetId: c};
+              return FleetAssetGrid(
+                maxHeight: 200,
+                selectable: false,
+                selectedAsset: null,
+                reporterDepartment: emp?.department,
+                onAssetSelected: _onMachineTap,
+                checkBadgeFor: (asset) {
+                  if (!_checklistConfig.enabled || asset.id == null) {
+                    return FleetCheckBadge.none;
+                  }
+                  return fleetCheckBadgeForAsset(
+                    asset: asset,
+                    todayCheck: checkByAsset[asset.id],
+                    checklistConfig: _checklistConfig,
+                    settings: settings,
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SegmentedButton<bool>(
@@ -233,7 +230,7 @@ class _MyReportsList extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap a machine above or Report Problem when something goes wrong.',
+                    'Tap a machine above or use Report Problem on the home screen.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 13,

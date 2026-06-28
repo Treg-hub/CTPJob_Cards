@@ -49,8 +49,8 @@ class FleetReporterGuideBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Pick the Hyster, say how urgent it is, and describe what is wrong. '
-              'The mechanic will see it under To Fix.',
+              'Three quick steps: pick the machine, say how urgent, describe the problem. '
+              'Or use Report Problem on the home screen for a shortcut.',
               style: TextStyle(fontSize: 13, height: 1.35),
             ),
           ),

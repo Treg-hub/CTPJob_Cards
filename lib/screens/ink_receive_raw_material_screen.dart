@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/ink_purchase_order.dart';
 import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
@@ -42,12 +43,30 @@ class _InkReceiveRawMaterialScreenState
   /// is Siegwerk and the item list is restricted to its lines.
   InkShipment? _shipment;
 
+  /// When set, links receipt to a sent local PO and deducts inbound remaining.
+  InkPurchaseOrder? _purchaseOrder;
+
   void _selectShipment(InkShipment? s) {
     setState(() {
       _shipment = s;
       if (s != null) {
+        _purchaseOrder = null;
         _supplier = 'Siegwerk';
         if (_itemCode != null && !s.itemCodes.contains(_itemCode)) {
+          _itemCode = null;
+        }
+      }
+    });
+  }
+
+  void _selectPurchaseOrder(InkPurchaseOrder? po) {
+    setState(() {
+      _purchaseOrder = po;
+      if (po != null) {
+        _shipment = null;
+        _supplier = po.supplierName;
+        final codes = {for (final l in po.lines) l.itemCode};
+        if (_itemCode != null && !codes.contains(_itemCode)) {
           _itemCode = null;
         }
       }
@@ -86,11 +105,14 @@ class _InkReceiveRawMaterialScreenState
       idempotencyKey: const Uuid().v4(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       shipmentId: _shipment?.id,
+      purchaseOrderId: _purchaseOrder?.id,
     );
     try {
-      await ref
-          .read(inkServiceProvider)
-          .recordRawMaterialReceipt(txn: txn, shipmentId: _shipment?.id);
+      await ref.read(inkServiceProvider).recordRawMaterialReceipt(
+            txn: txn,
+            shipmentId: _shipment?.id,
+            purchaseOrderId: _purchaseOrder?.id,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Receipt recorded — cost pending manager entry.')));
@@ -125,6 +147,11 @@ class _InkReceiveRawMaterialScreenState
             final filtered =
                 items.where((i) => codes.contains(i.itemCode)).toList();
             if (filtered.isNotEmpty) items = filtered;
+          } else if (_purchaseOrder != null) {
+            final codes = {for (final l in _purchaseOrder!.lines) l.itemCode};
+            final filtered =
+                items.where((i) => codes.contains(i.itemCode)).toList();
+            if (filtered.isNotEmpty) items = filtered;
           }
           InkStockItem? selected;
           for (final i in items) {
@@ -141,11 +168,44 @@ class _InkReceiveRawMaterialScreenState
           }
           final shipments =
               ref.watch(inkOpenPalletShipmentsProvider).valueOrNull ?? [];
+          final allPos =
+              ref.watch(inkOpenPurchaseOrdersProvider).valueOrNull ?? [];
+          final openPos = _itemCode == null
+              ? allPos
+              : allPos
+                  .where((po) => po.remainingFor(_itemCode!) > 0)
+                  .toList();
           return Form(
             key: _formKey,
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (allPos.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    // ignore: deprecated_member_use
+                    value: _purchaseOrder?.id,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Purchase order (optional)',
+                      helperText:
+                          'Link to a sent local PO to deduct inbound qty',
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                          value: null, child: Text('None')),
+                      for (final po in openPos)
+                        DropdownMenuItem(
+                          value: po.id,
+                          child: Text(_poLabel(po, selected?.unit)),
+                        ),
+                    ],
+                    onChanged: (id) {
+                      final match = allPos.where((p) => p.id == id).toList();
+                      _selectPurchaseOrder(match.isEmpty ? null : match.first);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (shipments.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
                     // ignore: deprecated_member_use
@@ -214,6 +274,16 @@ class _InkReceiveRawMaterialScreenState
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
+                if (_purchaseOrder != null && _itemCode != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Remaining on PO: '
+                      '${NumberFormat('#,##0.##').format(_purchaseOrder!.remainingFor(_itemCode!))} '
+                      '${selected?.unit ?? ''}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 suppliersAsync.when(
                   loading: () => const LinearProgressIndicator(),
@@ -228,7 +298,9 @@ class _InkReceiveRawMaterialScreenState
                       for (final s in suppliers)
                         DropdownMenuItem(value: s.name, child: Text(s.name)),
                     ],
-                    onChanged: (v) => setState(() => _supplier = v),
+                    onChanged: _purchaseOrder != null || _shipment != null
+                        ? null
+                        : (v) => setState(() => _supplier = v),
                     validator: (v) => v == null ? 'Select a supplier' : null,
                   ),
                 ),
@@ -283,5 +355,14 @@ class _InkReceiveRawMaterialScreenState
         },
       ),
     );
+  }
+
+  String _poLabel(InkPurchaseOrder po, String? unit) {
+    final rem = _itemCode != null
+        ? po.remainingFor(_itemCode!)
+        : po.remainingKgByItem.values.fold<double>(0, (a, b) => a + b);
+    final u = unit ?? '';
+    return '${po.pulseRef} · ${po.supplierName} · '
+        '${NumberFormat('#,##0').format(rem)} $u remaining';
   }
 }

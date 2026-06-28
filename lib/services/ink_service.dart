@@ -8,8 +8,10 @@ import '../models/ink_count_event.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
+import '../models/ink_purchase_order.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_shipment.dart';
+import '../utils/ink_po_fulfillment.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -670,6 +672,58 @@ class InkService {
   Stream<List<InkShipment>> watchOpenPalletShipments() =>
       _watchOpenShipments('pallet');
 
+  /// Sent / partially fulfilled POs for linking local raw-material receipts.
+  Stream<List<InkPurchaseOrder>> watchOpenPurchaseOrders() => _db
+      .collection(Collections.inkPurchaseOrders)
+      .where('status', whereIn: ['sent', 'partially_fulfilled'])
+      .snapshots()
+      .map((s) {
+        final list = s.docs.map(InkPurchaseOrder.fromFirestore).toList();
+        list.sort((a, b) => b.pulseRef.compareTo(a.pulseRef));
+        return list;
+      });
+
+  /// Deduct receipt qty from PO remaining; idempotent per [receiptKey].
+  Future<void> applyReceiptToPurchaseOrder({
+    required String purchaseOrderId,
+    required String itemCode,
+    required double quantity,
+    required String receiptKey,
+  }) async {
+    if (purchaseOrderId.isEmpty || quantity <= 0 || receiptKey.isEmpty) return;
+
+    final poRef =
+        _db.collection(Collections.inkPurchaseOrders).doc(purchaseOrderId);
+
+    await _db.runTransaction((txn) async {
+      final snap = await txn.get(poRef);
+      if (!snap.exists) {
+        throw StateError('Purchase order $purchaseOrderId not found');
+      }
+      final d = snap.data() ?? {};
+      final applied = (d['applied_receipt_keys'] as List?)?.cast<String>() ?? [];
+      if (applied.contains(receiptKey)) return;
+
+      final po = InkPurchaseOrder.fromFirestore(snap);
+      final result = deductReceiptFromPurchaseOrder(
+        remainingKgByItem: po.remainingKgByItem,
+        itemCode: itemCode,
+        quantity: quantity,
+      );
+
+      txn.set(
+        poRef,
+        {
+          'remaining_kg_by_item': result.remainingKgByItem,
+          'status': result.status,
+          'applied_receipt_keys': FieldValue.arrayUnion([receiptKey]),
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
+
   /// Receiving ink via IBC: registers each IBC (doc id = number) and records
   /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
   /// idempotent (IBC docs keyed by number; purchase key derived from the
@@ -749,9 +803,12 @@ class InkService {
   /// cost-pending `purchase` and, when [shipmentId] is given, stamps it and
   /// appends an aggregate received line to the pallet shipment (status →
   /// receiving — pallet shipments carry several items, each received separately).
+  /// When [purchaseOrderId] is given, deducts [remaining_kg_by_item] on the PO
+  /// (local-loop fulfillment; idempotent via txn idempotency key).
   Future<void> recordRawMaterialReceipt({
     required InkTransaction txn,
     String? shipmentId,
+    String? purchaseOrderId,
   }) async {
     await recordTransaction(txn);
     if (shipmentId != null && shipmentId.isNotEmpty) {
@@ -768,6 +825,14 @@ class InkService {
         'status': 'receiving',
         'updated_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+    }
+    if (purchaseOrderId != null && purchaseOrderId.isNotEmpty) {
+      await applyReceiptToPurchaseOrder(
+        purchaseOrderId: purchaseOrderId,
+        itemCode: txn.stockItemCode,
+        quantity: txn.quantityDelta,
+        receiptKey: txn.idempotencyKey,
+      );
     }
   }
 

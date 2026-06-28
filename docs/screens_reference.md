@@ -57,7 +57,7 @@ Seven-page swipeable walkthrough shown after first login (and after registration
 6. **Escalation** — 4-stage timeline with default timers
 7. **Grant Permissions** — Notifications, System Alert Window, DND override, Battery Unrestricted, Background Location, Exact Alarms
 
-> **Note:** Sets `permissionsCompleted: true` in `SharedPreferences` only if `locationAlways` permission was actually granted — if it is denied, the screen reappears on next launch. Also fires `LocationService.startNativeMonitoring()` and `checkCurrentLocation()` on completion.
+> **Note:** Sets `permissionsCompleted: true` in `SharedPreferences` when the user finishes onboarding (including "Continue anyway"). Revoked permissions after onboarding are surfaced on **Home** via `GeofenceHealthBanner` — not by re-showing this screen. `DeviceHealthService.fixMissing()` / `fixPermission()` open the correct Android Settings screen when a permission cannot be granted in-app. Fires `LocationService.startNativeMonitoring()` and `checkCurrentLocation()` only when `locationAlways` is granted at completion.
 
 ---
 

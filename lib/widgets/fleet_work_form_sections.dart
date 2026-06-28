@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/fleet_constants.dart';
 import 'fleet_form_fields.dart';
 
 /// Shared work-form UI sections used by mark-fixed, log-other, and edit screens.
@@ -292,7 +293,7 @@ class FleetWorkPhotosSection extends StatelessWidget {
     required this.onRemoveSaved,
     required this.onRemovePending,
     this.hint,
-    this.maxPhotos = 5,
+    this.maxPhotos = kFleetMaxPhotos,
   });
 
   final List<String> savedPhotoUrls;
