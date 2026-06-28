@@ -1,25 +1,28 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-/// Home/Settings banner that keeps the two permissions which make background
-/// geofencing work — Location "Allow all the time" and the battery-optimisation
-/// exemption — granted over time, not just at onboarding. Users silently
-/// downgrade these and then stop getting on-site alerts; this surfaces it.
+import '../services/device_health_service.dart';
+
+/// Home banner when any critical device permission is missing — geofence,
+/// battery, notifications, DND, overlay, or P5 full-screen intent.
 ///
-/// Hidden on web and when both are already granted. Re-checks on app resume
-/// (so it disappears as soon as the user fixes it in system Settings).
+/// Re-checks on app resume. Hidden on web and when fully healthy.
 class GeofenceHealthBanner extends StatefulWidget {
   const GeofenceHealthBanner({super.key});
+
+  /// Alias for clearer imports in new code.
+  static const deviceHealth = GeofenceHealthBanner;
 
   @override
   State<GeofenceHealthBanner> createState() => _GeofenceHealthBannerState();
 }
 
+/// Preferred name — same widget as [GeofenceHealthBanner].
+typedef DeviceHealthBanner = GeofenceHealthBanner;
+
 class _GeofenceHealthBannerState extends State<GeofenceHealthBanner>
     with WidgetsBindingObserver {
-  bool _locationAlways = true;
-  bool _batteryOk = true;
+  DeviceHealthSnapshot? _snapshot;
   bool _busy = false;
 
   @override
@@ -43,35 +46,17 @@ class _GeofenceHealthBannerState extends State<GeofenceHealthBanner>
   }
 
   Future<void> _refresh() async {
-    final loc = await Permission.locationAlways.status;
-    final bat = await Permission.ignoreBatteryOptimizations.status;
+    final snap = await DeviceHealthService().check();
     if (!mounted) return;
-    setState(() {
-      _locationAlways = loc.isGranted;
-      _batteryOk = bat.isGranted;
-    });
+    setState(() => _snapshot = snap);
   }
 
   Future<void> _fix() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      // Android 10+: when-in-use must be granted before "always".
-      if (!(await Permission.locationWhenInUse.status).isGranted) {
-        await Permission.locationWhenInUse.request();
-      }
-      final always = await Permission.locationAlways.status;
-      if (!always.isGranted) {
-        final res = await Permission.locationAlways.request();
-        // Android 11+ won't re-prompt for "always" via dialog — open Settings.
-        if (!res.isGranted &&
-            (res.isPermanentlyDenied || always.isPermanentlyDenied)) {
-          await openAppSettings();
-        }
-      }
-      if ((await Permission.ignoreBatteryOptimizations.status).isDenied) {
-        await Permission.ignoreBatteryOptimizations.request();
-      }
+      await DeviceHealthService().requestMissing();
+      await DeviceHealthService().syncPermissionsToFirestore();
     } finally {
       await _refresh();
       if (mounted) setState(() => _busy = false);
@@ -80,13 +65,14 @@ class _GeofenceHealthBannerState extends State<GeofenceHealthBanner>
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || (_locationAlways && _batteryOk)) {
+    final snap = _snapshot;
+    if (kIsWeb || snap == null || snap.isFullyHealthy) {
       return const SizedBox.shrink();
     }
-    final missing = <String>[
-      if (!_locationAlways) 'Location “Allow all the time”',
-      if (!_batteryOk) 'Battery optimisation off',
-    ].join('  +  ');
+    final missing = snap.missingLabels.join('  +  ');
+    final title = snap.isGeofenceHealthy
+        ? 'Some alerts may not reach you'
+        : 'On-site alerts may not work';
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -97,12 +83,12 @@ class _GeofenceHealthBannerState extends State<GeofenceHealthBanner>
         border: Border.all(color: Colors.orange.shade300),
       ),
       child: Row(children: [
-        const Icon(Icons.location_off_outlined, color: Colors.orange, size: 22),
+        const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('On-site alerts may not work',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 2),
             Text('Tap Fix and allow: $missing',
                 style: TextStyle(fontSize: 12, color: Colors.orange.shade900)),

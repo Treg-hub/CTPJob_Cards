@@ -25,6 +25,7 @@ import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/device_health_service.dart';
 import 'services/location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -294,6 +295,7 @@ void main() async {
           debugPrint('Location monitoring error on auto-login: $e');
         }
         LocationService().checkCurrentLocation();
+        DeviceHealthService().syncPermissionsToFirestore();
       }
     }
   } else {

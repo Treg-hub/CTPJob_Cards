@@ -15,6 +15,7 @@ import 'copper_dashboard_screen.dart';
 import 'geofence_editor_screen.dart';
 import 'feedback_admin_screen.dart';
 import 'scan_tester_screen.dart';
+import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 
@@ -106,6 +107,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   );
   bool _isBroadcasting = false;
   Map<String, dynamic>? _lastBroadcastResult;
+  final TextEditingController _targetedClockNosController =
+      TextEditingController();
+  bool _isTargetedBroadcasting = false;
+  Map<String, dynamic>? _lastTargetedBroadcastResult;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -122,7 +127,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   void _onTabChanged() {
     setState(() {});
-    if (_tabController.index == 1 && !_employeesLoaded) {
+    if ((_tabController.index == 1 || _tabController.index == 4) &&
+        !_employeesLoaded) {
       _employeesLoaded = true;
       _loadEmployees();
     }
@@ -144,6 +150,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _stage4MinController.dispose();
     _broadcastTitleController.dispose();
     _broadcastBodyController.dispose();
+    _targetedClockNosController.dispose();
     super.dispose();
   }
 
@@ -421,6 +428,39 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
+  List<String> _parseClockNos(String raw) {
+    return raw
+        .split(RegExp(r'[\s,;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  String _employeeNameForClock(String clockNo) {
+    for (final e in _allEmployees) {
+      if (e.clockNo == clockNo) return e.name;
+    }
+    return clockNo;
+  }
+
+  Widget _permissionHealthIcon(Map<String, dynamic> data) {
+    final perms = data['permissions'];
+    final snap = DeviceHealthSnapshot.fromFirestorePermissions(
+      perms is Map<String, dynamic>
+          ? perms
+          : perms is Map
+              ? Map<String, dynamic>.from(perms)
+              : null,
+    );
+    if (snap == null) {
+      return Icon(Icons.help_outline, size: 16, color: Colors.grey.shade500);
+    }
+    if (snap.isAllGrantedInFirestore) {
+      return const Icon(Icons.verified_outlined, size: 18, color: Colors.green);
+    }
+    return Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade700);
+  }
+
   Future<void> _sendBroadcast() async {
     final title = _broadcastTitleController.text.trim();
     final body = _broadcastBodyController.text.trim();
@@ -478,6 +518,79 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       });
     } catch (e) {
       setState(() => _isBroadcasting = false);
+      _showError('Error: $e');
+    }
+  }
+
+  Future<void> _sendTargetedBroadcast() async {
+    final title = _broadcastTitleController.text.trim();
+    final body = _broadcastBodyController.text.trim();
+    final clockNos = _parseClockNos(_targetedClockNosController.text);
+    if (title.isEmpty || body.isEmpty) {
+      _showError('Title and message are required');
+      return;
+    }
+    if (clockNos.isEmpty) {
+      _showError('Enter at least one clock number');
+      return;
+    }
+
+    final names = clockNos
+        .map((c) => '${_employeeNameForClock(c)} ($c)')
+        .join('\n');
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Send to ${clockNos.length} employee${clockNos.length == 1 ? '' : 's'}?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(body, style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 12),
+              Text(names, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isTargetedBroadcasting = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isTargetedBroadcasting = false);
+        _showError('Session expired. Please log out and log back in.');
+        return;
+      }
+      await user.getIdToken(true);
+      final result = await FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('broadcastUpdateNotice')
+          .call({
+        'callerClockNo': _currentClockNo ?? '22',
+        'title': title,
+        'body': body,
+        'clockNos': clockNos,
+      });
+      setState(() {
+        _lastTargetedBroadcastResult = Map<String, dynamic>.from(result.data as Map);
+        _isTargetedBroadcasting = false;
+      });
+    } catch (e) {
+      setState(() => _isTargetedBroadcasting = false);
       _showError('Error: $e');
     }
   }
@@ -1066,12 +1179,24 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                               : (emp['position'] as String? ?? '—'),
                           style: TextStyle(fontSize: 12, color: (emp['stuck'] as bool) ? Colors.red.shade700 : colors.textMuted),
                         ),
-                        trailing: (emp['stuck'] as bool)
-                            ? const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18)
-                            : Text(
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _permissionHealthIcon(emp),
+                            const SizedBox(width: 6),
+                            if (emp['stuck'] as bool)
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: Colors.red, size: 18)
+                            else
+                              Text(
                                 emp['id'] as String? ?? '',
-                                style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: colors.textMuted),
+                                style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    color: colors.textMuted),
                               ),
+                          ],
+                        ),
                       ),
                     ),
                 ],
@@ -1793,6 +1918,68 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           ],
         ])),
 
+        const SizedBox(height: 16),
+        _sectionHeader('TARGETED MESSAGE'),
+        _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            'Send the title and body above to specific employees by clock number. '
+            'Useful for permission fix reminders or individual follow-ups.',
+            style: TextStyle(fontSize: 13, color: colors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _targetedClockNosController,
+            maxLines: 3,
+            decoration: _inputDecoration(
+              'Clock numbers (comma or newline separated)',
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isTargetedBroadcasting ? null : _sendTargetedBroadcast,
+              icon: _isTargetedBroadcasting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.person_search_outlined),
+              label: Text(_isTargetedBroadcasting ? 'Sending…' : 'Send to Selected'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3D5A80),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor:
+                    const Color(0xFF3D5A80).withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+          if (_lastTargetedBroadcastResult != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.wasteGreenSurface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors.wasteGreen.withValues(alpha: 0.4)),
+              ),
+              child: Row(children: [
+                Icon(Icons.check_circle_outline, color: colors.wasteGreen, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Targeted: sent to ${_lastTargetedBroadcastResult!['sent']} · '
+                    '${_lastTargetedBroadcastResult!['parked']} inbox · '
+                    '${_lastTargetedBroadcastResult!['noToken']} no token',
+                    style: TextStyle(fontSize: 12, color: colors.wasteGreenDark),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ])),
+
         const SizedBox(height: 4),
         _sectionHeader('RECENT BROADCASTS'),
         StreamBuilder<QuerySnapshot>(
@@ -1829,6 +2016,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 DateTime? dt;
                 if (ts is Timestamp) dt = ts.toDate();
                 final sentCount = (data['sentTo'] as List?)?.length ?? 0;
+                final scope = data['broadcastScope'] as String? ?? 'all';
                 final sentBy = data['initiatedByName'] as String? ?? data['initiatedByClockNo'] as String? ?? '—';
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -1853,7 +2041,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'By $sentBy · $sentCount sent',
+                        'By $sentBy · $sentCount sent (${scope == 'targeted' ? 'targeted' : 'all'})',
                         style: TextStyle(fontSize: 11, color: colors.textMuted),
                       ),
                     ]),

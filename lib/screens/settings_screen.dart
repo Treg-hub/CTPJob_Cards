@@ -15,6 +15,7 @@ import '../services/firestore_service.dart';
 import '../services/fleet_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
+import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../services/waste_service.dart';
 import '../utils/role.dart' show isAdmin;
@@ -138,19 +139,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ? null
             : ElevatedButton(
                 onPressed: () async {
-                  if (permKey == 'notification_policy' && defaultTargetPlatform == TargetPlatform.android) {
+                  if (permKey == 'ignoreBattery' &&
+                      defaultTargetPlatform == TargetPlatform.android) {
                     const intent = android_intent.AndroidIntent(
-                      action: 'android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS',
+                      action:
+                          'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
                     );
                     await intent.launch();
-                  } else if (permKey == 'ignore_battery' && defaultTargetPlatform == TargetPlatform.android) {
+                  } else if (permKey == 'notificationPolicy' &&
+                      defaultTargetPlatform == TargetPlatform.android) {
                     const intent = android_intent.AndroidIntent(
-                      action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+                      action:
+                          'android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS',
                     );
                     await intent.launch();
+                  } else if (permKey == 'locationAlways') {
+                    if (!(await Permission.locationWhenInUse.status).isGranted) {
+                      await Permission.locationWhenInUse.request();
+                    }
+                    await Permission.locationAlways.request();
+                    if (!(await Permission.locationAlways.status).isGranted) {
+                      await openAppSettings();
+                    }
+                  } else if (permKey == 'postNotifications') {
+                    await Permission.notification.request();
+                  } else if (permKey == 'systemAlertWindow') {
+                    await Permission.systemAlertWindow.request();
+                    if (!(await Permission.systemAlertWindow.status).isGranted) {
+                      await openAppSettings();
+                    }
+                  } else if (permKey == 'fullScreenIntent') {
+                    await _notificationService.requestAllCriticalPermissions();
                   } else {
                     await openAppSettings();
                   }
+                  await DeviceHealthService().syncPermissionsToFirestore();
                   if (mounted) setState(() {});
                 },
                 child: const Text('Open Settings'),
@@ -393,20 +416,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (!kIsWeb) ...[
                 const SizedBox(height: 16),
                 _SectionHeader('App Permissions'),
-                FutureBuilder<Map<String, bool>>(
-                  future: _notificationService.checkAllCriticalPermissions(),
+                FutureBuilder<DeviceHealthSnapshot>(
+                  future: DeviceHealthService().check(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
-                      return const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())));
+                      return const Card(
+                          child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator())));
                     }
-                    final perms = snapshot.data!;
+                    final health = snapshot.data!;
                     return Column(
                       children: [
-                        _buildPermissionTile('Notifications', perms['post_notifications'] ?? false, 'notification'),
-                        _buildPermissionTile('Display over other apps (Full-screen)', perms['system_alert_window'] ?? false, 'system_alert_window'),
-                        _buildPermissionTile('DND / Notification Policy', perms['notification_policy'] ?? false, 'notification_policy'),
-                        _buildPermissionTile('Ignore Battery Optimization', perms['ignore_battery'] ?? false, 'ignore_battery'),
-                        _buildPermissionTile('Location (Always)', true, 'location'),
+                        for (final key in DeviceHealthKey.values)
+                          _buildPermissionTile(
+                            key.label,
+                            health.isGranted(key),
+                            key.storageKey,
+                          ),
+                        const SizedBox(height: 8),
+                        if (!health.isFullyHealthy)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                await DeviceHealthService().requestMissing();
+                                await DeviceHealthService()
+                                    .syncPermissionsToFirestore();
+                                if (mounted) setState(() {});
+                              },
+                              icon: const Icon(Icons.build_circle_outlined),
+                              label: const Text('Fix all permissions'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8C42),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
                       ],
                     );
                   },

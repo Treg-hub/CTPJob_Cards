@@ -17,6 +17,7 @@ import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
+import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' as role_utils;
@@ -35,6 +36,7 @@ import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
+import 'fleet_daily_check_entry_screen.dart';
 import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
@@ -96,6 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   // Fleet Maintenance — cached settings loaded once in initState
   FleetSettings? _cachedFleetSettings;
+  bool _fleetChecklistEnabled = false;
 
   // Waste Track — cached settings loaded once in initState
   WasteSettings? _cachedWasteSettings;
@@ -121,52 +124,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool get _canReportFleetIssue =>
       role_utils.canReportFleetIssue(currentEmployee, _cachedFleetSettings);
 
+  bool get _canDoFleetDailyCheck =>
+      _fleetChecklistEnabled &&
+      role_utils.canDoFleetDailyCheck(currentEmployee, _cachedFleetSettings);
+
   bool get _isSecurityUser =>
       role_utils.canUseSecurityModule(
         currentEmployee,
         _cachedSecuritySettings,
       );
 
+  /// Guards (not site security managers) — waste + gate are primary; hide job-card home UX.
+  bool get _isSiteSecurityGuardOnly =>
+      role_utils.isSiteSecurityGuardOnly(
+        currentEmployee,
+        _cachedSecuritySettings,
+      );
+
+  bool get _showMyWorkNav => !_isSiteSecurityGuardOnly;
+
   bool _fleetMechanicNavDone = false;
+  bool _securityGuardNavDone = false;
 
-  /// Returns true when the currently visible tab is the Waste tab.
-  bool get _isOnWasteTab {
-    if (!role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) ||
-        !(_cachedWasteSettings?.wasteEnabled ?? true)) {
-      return false;
-    }
-    int idx = 2; // 0=Home, 1=MyWork
-    if (currentEmployee != null &&
-        currentEmployee!.position.toLowerCase().contains('manager')) {
-      idx++;
-    }
-    if (_isCopperAuthorized) { idx++; }
-    return _selectedIndex == idx;
-  }
-
-  int _moduleTabBaseIndex() {
-    int idx = 2; // 0=Home, 1=MyWork
+  int _indexAfterCoreTabs() {
+    var idx = 1; // 0 = Home
+    if (_showMyWorkNav) idx++;
     if (currentEmployee != null &&
         currentEmployee!.position.toLowerCase().contains('manager')) {
       idx++;
     }
     if (_isCopperAuthorized) idx++;
-    if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) &&
-        (_cachedWasteSettings?.wasteEnabled ?? true)) {
-      idx++;
-    }
     return idx;
+  }
+
+  int _wasteTabIndex() {
+    if (!role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) ||
+        !(_cachedWasteSettings?.wasteEnabled ?? true)) {
+      return -1;
+    }
+    return _indexAfterCoreTabs();
+  }
+
+  /// Returns true when the currently visible tab is the Waste tab.
+  bool get _isOnWasteTab {
+    final idx = _wasteTabIndex();
+    return idx >= 0 && _selectedIndex == idx;
   }
 
   int _fleetTabIndex() {
     if (!_isFleetUser) return -1;
-    return _moduleTabBaseIndex();
+    var idx = _indexAfterCoreTabs();
+    if (_wasteTabIndex() >= 0) idx++;
+    return idx;
   }
 
   int _securityTabIndex() {
     if (!_isSecurityUser) return -1;
-    var idx = _moduleTabBaseIndex();
-    if (_isFleetUser) idx++;
+    var idx = _indexAfterCoreTabs();
+    if (_wasteTabIndex() >= 0) idx++;
+    if (_fleetTabIndex() >= 0) idx++;
     return idx;
   }
 
@@ -193,10 +209,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     setState(() => _selectedIndex = idx);
   }
 
+  void _maybeOpenModuleTabForSecurityGuard() {
+    if (_securityGuardNavDone || !mounted || _pendingJobId != null) return;
+    if (!_isSiteSecurityGuardOnly) return;
+
+    final securityIdx = _securityTabIndex();
+    if (securityIdx >= 0) {
+      _securityGuardNavDone = true;
+      setState(() => _selectedIndex = securityIdx);
+      return;
+    }
+
+    final wasteIdx = _wasteTabIndex();
+    if (wasteIdx >= 0) {
+      _securityGuardNavDone = true;
+      setState(() => _selectedIndex = wasteIdx);
+    }
+  }
+
   String get _appBarTitle {
     if (_isOnWasteTab) return 'Waste Recovery';
     if (_isOnFleetTab) return 'Fleet Maintenance';
     if (_isOnSecurityTab) return 'Site Security';
+    if (_isSiteSecurityGuardOnly && _selectedIndex == 0) {
+      return 'Waste & Security';
+    }
     return 'CTP Job Cards';
   }
 
@@ -392,7 +429,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           'title': FleetLabels.reportProblem,
           'icon': Icons.forklift,
           'color': kBrandOrange,
-          'onTap': () => openFleetReportWizard(context),
+          'onTap': () => openFleetReportWizard(context, forceStep1: true),
+        },
+      ];
+    }
+    if (_canDoFleetDailyCheck) {
+      result = [
+        ...result,
+        {
+          'title': FleetLabels.dailySafetyCheck,
+          'icon': Icons.fact_check_outlined,
+          'color': const Color(0xFF3D5A80),
+          'onTap': () => openFleetDailyCheckEntry(context),
         },
       ];
     }
@@ -503,9 +551,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Future<void> _loadFleetSettings() async {
     try {
-      final settings = await FleetService().getSettings();
+      final service = FleetService();
+      final settings = await service.getSettings();
+      final checklist = await service.getDailyChecklistConfig();
       if (mounted) {
-        setState(() => _cachedFleetSettings = settings);
+        setState(() {
+          _cachedFleetSettings = settings;
+          _fleetChecklistEnabled = checklist.enabled;
+        });
         _maybeOpenFleetTabForMechanic();
       }
     } catch (e) {
@@ -516,7 +569,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _loadWasteSettings() async {
     try {
       final settings = await WasteService().getWasteSettings();
-      if (mounted) setState(() => _cachedWasteSettings = settings);
+      if (mounted) {
+        setState(() => _cachedWasteSettings = settings);
+        _maybeOpenModuleTabForSecurityGuard();
+      }
     } catch (e) {
       debugPrint('Waste settings load error: $e');
     }
@@ -525,7 +581,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _loadSecuritySettings() async {
     try {
       final settings = await SecurityService().getSettings();
-      if (mounted) setState(() => _cachedSecuritySettings = settings);
+      if (mounted) {
+        setState(() => _cachedSecuritySettings = settings);
+        _maybeOpenModuleTabForSecurityGuard();
+      }
     } catch (e) {
       debugPrint('Security settings load error: $e');
     }
@@ -633,6 +692,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadFleetSettings();
+      DeviceHealthService().syncPermissionsToFirestore();
       if (!_overrideOnSite && !_testMode) {
         _locationService.checkCurrentLocation();
       }
@@ -905,7 +965,152 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
+  Widget _buildModuleHubCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: color.withValues(alpha: 0.35)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: EdgeInsets.all(_isDesktop ? 24 : 20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: _isDesktop ? 40 : 36, color: color),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: _isDesktop ? 18 : 17,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecurityGuardHomeHub() {
+    final wasteIdx = _wasteTabIndex();
+    final securityIdx = _securityTabIndex();
+    final name = currentEmployee?.name ?? 'Guard';
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const GeofenceHealthBanner(),
+        Text(
+          'Hello, $name',
+          style: TextStyle(
+            fontSize: _isDesktop ? 22 : 20,
+            fontWeight: FontWeight.bold,
+            color: scheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Your work is in Site Security and Waste Recovery. '
+          'Open a module below — the app opens Security by default.',
+          style: TextStyle(
+            fontSize: 14,
+            color: scheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Your modules',
+          style: TextStyle(
+            fontSize: _isDesktop ? 18 : 16,
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (securityIdx >= 0)
+          _buildModuleHubCard(
+            title: 'Site Security',
+            subtitle: 'Gate scans, company cars, visitors',
+            icon: Icons.shield_outlined,
+            color: kBrandOrange,
+            onTap: () => setState(() => _selectedIndex = securityIdx),
+          ),
+        if (wasteIdx >= 0)
+          _buildModuleHubCard(
+            title: 'Waste Recovery',
+            subtitle: 'Incoming loads, begin collections, stock',
+            icon: Icons.delete_outline,
+            color: const Color(0xFF2D6A4F),
+            onTap: () => setState(() => _selectedIndex = wasteIdx),
+          ),
+        if (wasteIdx < 0 && securityIdx < 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Text(
+              'No modules are enabled for your account. Ask an admin to turn on '
+              'Waste or Site Security in CTP Pulse Settings.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildHomeTab() {
+    if (_isSiteSecurityGuardOnly) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          _screenPadding,
+          _screenPadding,
+          _screenPadding,
+          _screenPadding +
+              ScreenInsets.scrollBottomInHomeShell(
+                clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+              ),
+        ),
+        child: _buildSecurityGuardHomeHub(),
+      );
+    }
+
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         _screenPadding,
@@ -1801,7 +2006,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void _onItemTapped(int index) {
     final List<Widget> children = [
       _buildHomeTab(),
-      _buildMyWorkTab(),
+      if (_showMyWorkNav) _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
       if (_isCopperAuthorized)
@@ -1847,6 +2052,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         if (mounted && _cachedFleetSettings != settings) {
           setState(() => _cachedFleetSettings = settings);
           _maybeOpenFleetTabForMechanic();
+          _loadFleetSettings();
         }
       });
     });
@@ -1860,7 +2066,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     final List<BottomNavigationBarItem> items = [
       const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-      const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Work'),
+      if (_showMyWorkNav)
+        const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Work'),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
       if (_isCopperAuthorized)
@@ -1875,7 +2082,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     final List<Widget> children = [
       _buildHomeTab(),
-      _buildMyWorkTab(),
+      if (_showMyWorkNav) _buildMyWorkTab(),
       if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
         _buildDashboardTab(),
       if (_isCopperAuthorized)

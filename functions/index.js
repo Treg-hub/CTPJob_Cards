@@ -111,7 +111,12 @@ exports.updateEmployeePresence = onCall(async (request) => {
     update.fcmTokenUpdatedAt = now;
   }
   if (innerData.permissions && typeof innerData.permissions === "object") {
-    update.permissions = innerData.permissions;
+    const permSnap = await ref.get();
+    const existingPerms =
+      permSnap.exists && permSnap.data().permissions
+        ? permSnap.data().permissions
+        : {};
+    update.permissions = { ...existingPerms, ...innerData.permissions };
   }
 
   // Presence: read the current value so on/off-site timestamps are stamped only
@@ -1710,18 +1715,47 @@ exports.broadcastUpdateNotice = onCall(async (request) => {
   const body = innerData.body ||
     "A required app update is available. Open the app and tap Update Now to install it.";
 
+  const rawClockNos = Array.isArray(innerData.clockNos)
+    ? innerData.clockNos.map(String).map((s) => s.trim()).filter(Boolean)
+    : [];
+  const targeted = rawClockNos.length > 0;
+  const broadcastScope = targeted ? "targeted" : "all";
+
   const callerClockNo = (request.auth.token && request.auth.token.clockNum) || null;
   const callerDoc = callerClockNo
     ? await db.collection("employees").doc(String(callerClockNo)).get()
     : null;
 
-  const snap = await db.collection("employees").get();
+  let employeeDocs = [];
+  if (targeted) {
+    const uniqueClockNos = [...new Set(rawClockNos)];
+    const invalidClockNos = [];
+    for (const clockNo of uniqueClockNos) {
+      const doc = await db.collection("employees").doc(clockNo).get();
+      if (!doc.exists) {
+        invalidClockNos.push(clockNo);
+      } else {
+        employeeDocs.push(doc);
+      }
+    }
+    if (invalidClockNos.length > 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Unknown clock number(s): ${invalidClockNos.join(", ")}`,
+        { invalidClockNos },
+      );
+    }
+  } else {
+    const snap = await db.collection("employees").get();
+    employeeDocs = snap.docs;
+  }
+
   let sent = 0;
   let parked = 0;
   let noToken = 0;
   const sentTo = [];
 
-  for (const doc of snap.docs) {
+  for (const doc of employeeDocs) {
     const emp = doc.data();
 
     // Off-site employees also get an inbox item so the notice survives until
@@ -1790,11 +1824,24 @@ exports.broadcastUpdateNotice = onCall(async (request) => {
     title,
     body,
     initiatedByClockNo: callerClockNo,
-    initiatedByName: callerDoc.data().name || null,
+    initiatedByName: callerDoc?.data()?.name || null,
+    broadcastScope,
+    targetClockNos: targeted ? rawClockNos : null,
   });
 
-  console.log(`broadcastUpdateNotice: sent=${sent} parked=${parked} noToken=${noToken} total=${snap.size}`);
-  return { success: true, sent, parked, noToken, total: snap.size };
+  console.log(
+    `broadcastUpdateNotice: scope=${broadcastScope} sent=${sent} parked=${parked} noToken=${noToken} total=${employeeDocs.length}`,
+  );
+  return {
+    success: true,
+    sent,
+    parked,
+    noToken,
+    total: employeeDocs.length,
+    targeted,
+    broadcastScope,
+    clockNos: targeted ? rawClockNos : null,
+  };
 });
 
 // ==================== AUDIT TRAIL: job_card_audit ====================

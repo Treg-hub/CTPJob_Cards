@@ -19,8 +19,9 @@ This guide covers the most common symptoms users hit in production and the faste
 3. **DND bypass** — for P4/P5 to break through Do Not Disturb, the app needs DND access. Settings → Sound & Vibration → Do Not Disturb → App exceptions.
 4. **FCM token registered** — open Settings inside the app and tap "Refresh FCM Token". If the token is null or stale, the Cloud Function has no way to reach you.
 5. **On-site status** — geofencing only alerts on-site technicians. If you're showing as off-site when you're physically on site, see "Geofence not triggering" below.
+6. **Home health banner** — if orange "On-site alerts may not work" (or "Some alerts may not reach you") appears at the top of Home, tap **Fix** and grant every listed permission. Settings → App Permissions shows the same six checks with a **Fix all permissions** button.
 
-If all of those check out, ask Admin to look at the `notifications` Firestore collection — it logs every send attempt and lists exactly which clock numbers were targeted.
+If all of those check out, ask Admin to look at the `notifications` Firestore collection — it logs every send attempt and lists exactly which clock numbers were targeted. Admin can send a **targeted broadcast** (Admin → Comms → Targeted Message) to specific clock numbers asking users to fix permissions.
 
 ---
 

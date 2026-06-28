@@ -8,6 +8,7 @@ import '../main.dart' show currentEmployee;
 import '../models/employee.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/permissions_provider.dart';
+import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../utils/role.dart';
@@ -137,15 +138,52 @@ class _PermissionsOnboardingScreenState
 
   Future<void> _completeOnboarding() async {
     setState(() => _isLoading = true);
-    final prefs = await SharedPreferences.getInstance();
 
+    if (!kIsWeb) {
+      final health = await DeviceHealthService().check();
+      if (!health.isOnboardingCoreHealthy && mounted) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Some permissions still missing'),
+            content: Text(
+              'Without location, battery, and notification access you may miss '
+              'urgent on-site alerts.\n\nStill missing:\n'
+              '${health.missingLabels.map((l) => '• $l').join('\n')}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Go back'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C42)),
+                child: const Text('Continue anyway'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
     final locationGranted =
         kIsWeb ? false : (await Permission.locationAlways.status).isGranted;
 
-    // Only persist completion when location is actually granted — otherwise
-    // main.dart's startup check will route the user back here on next launch.
+    // Persist completion when location is granted (main.dart re-routes if not),
+    // or user explicitly continued despite missing core permissions.
     if (locationGranted || kIsWeb) {
       await prefs.setBool('permissionsCompleted', true);
+    }
+
+    if (!kIsWeb) {
+      await DeviceHealthService().syncPermissionsToFirestore();
     }
 
     if (!kIsWeb && currentEmployee != null && locationGranted) {
@@ -160,6 +198,7 @@ class _PermissionsOnboardingScreenState
     }
 
     if (mounted) {
+      setState(() => _isLoading = false);
       Navigator.pushReplacement(
           context, MaterialPageRoute(builder: (_) => const HomeScreen()));
     }
@@ -1069,6 +1108,7 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
         await Permission.camera.request();
       }
       await NotificationService().requestAllCriticalPermissions();
+      await DeviceHealthService().syncPermissionsToFirestore();
     } finally {
       ref.invalidate(permissionsProvider);
       if (mounted) setState(() => _checking = false);
@@ -1112,12 +1152,14 @@ class _PermissionsPageState extends ConsumerState<_PermissionsPage> {
             ),
             const SizedBox(height: 20),
             for (final item in items)
-              _buildPermissionRow(
-                item: item,
-                granted: (statusMap[item.permission] ?? PermissionStatus.denied)
-                    .isGranted,
-                onTapGrant: () => _requestSingle(item.permission),
-              ),
+              if (item.permission != null)
+                _buildPermissionRow(
+                  item: item,
+                  granted:
+                      (statusMap[item.permission!] ?? PermissionStatus.denied)
+                          .isGranted,
+                  onTapGrant: () => _requestSingle(item.permission!),
+                ),
             const SizedBox(height: 16),
             if (!allGranted) ...[
               Container(

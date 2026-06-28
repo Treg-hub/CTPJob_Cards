@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-06-26 (Site Security gate flows wired — disc+driver licence+occupants scan-in; disc scan-out; company car exit/return; `docs/security-scanning-flows.md`; v2.2.0+65)._
+_Last updated: 2026-06-28 (DeviceHealthService — six permission checks synced to employees.permissions; expanded home health banner; admin targeted broadcast via broadcastUpdateNotice clockNos[])._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -29,7 +29,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 |---|---|---|
 | **Admin** | `Employee.isAdmin == true` (Firestore field) | Full access to all screens + admin controls, module toggles |
 | **Security Manager** | dept=`security`, pos=`manager` | Schedule loads, view all loads, reports, pending weighbridge, cancel scheduled |
-| **Security Guard** | dept=`security`, pos=`guard` | View incoming (scheduled) loads, begin collection, view recent loads |
+| **Security Guard** | dept=`security`, pos=`guard` (+ `guard_clock_nos`) | Waste + Security tabs only — no job-card home or My Work; Home hub links to modules; auto-lands on Security tab |
 | **Technician** | pos contains `mechanical`/`electrical`/`technician` | Job cards only |
 | **Manager** (job cards) | pos contains `manager` | Job card manager dashboard |
 | **Operator** | neither manager nor technician | Limited job card actions |
@@ -46,7 +46,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 - Job Cards core: always (mobile branding primary).
 - Waste / Fleet: gated by settings flags + role derivation (see permission matrices below + role.dart).
 - Copper: hardcoded whitelist (clock 22/5421/20) in role.dart + HomeScreen tab visibility. Part of "copper service".
-- Ink Factory: mobile data entry gated by `department == "Ink Factory"` (tile like Fleet). **Pulse** also has an Ink module (claims `boardModules: 'ink'`, manager/admin): read-only stock/ledger/report KPIs **plus** the manager Shipments + landed-cost flow (`/ink/shipments` → upload supplier PDFs → `parseInkShipmentDoc` → review → rate/duty → push per-colour cost to Pending Costs). See `docs/Ink_Receiving_Costing_Plan.md`.
+- Ink Factory: mobile data entry gated by `department == "Ink Factory"` (tile like Fleet). **Pulse** also has an Ink module (claims `boardModules: 'ink'`, manager/admin): stock/ledger/report KPIs **plus** shipments + landed-cost (`/ink/shipments` → drag-drop PDFs → `parseInkShipmentDoc` → review; GRN saved to shipment before FX rate via `saveShipmentSourceDocs` → rate/duty → push per-colour cost). Inbound list shows CGNA. See `docs/Ink_Receiving_Costing_Plan.md` + `public/docs/ink/manager.md`.
 - Geofence / Notifications / Presence (core services): always-on for signed-in (geofence auto in background, presence updates employees.isOnSite/fcm, feeds notification_inbox + escalation). See rules + geofence_editor in Admin.
 
 **Detailed Module Screens & User Flows (Phase 8 map enhancement)**:
@@ -80,7 +80,7 @@ For exact screens per module, what each does (purpose, reads/writes, UI), and us
 | WasteCreateLoadScreen (legacy) | ✅ | ✅ | ✅ | ❌ |
 | WasteLoadDetailScreen — view | ✅ | ✅ | ✅ (read-only) | ❌ |
 | WasteLoadDetailScreen — finish loading | ✅ | ✅ | ✅ | ❌ |
-| Weighbridge / Cost review / Reports / Settings | ❌ | ❌ | ❌ | ❌ (Pulse only, 2026-06-22) |
+| Weighbridge / Cost review / Reports / Settings | ❌ | ❌ | ❌ | ✅ managers + admins (`canAccessWastePulse`; guards blocked) |
 | Cancel scheduled load | ✅ | ✅ | ❌ | ❌ |
 | Edit scheduled load date/notes | ✅ | ✅ | ❌ | ❌ |
 
@@ -135,7 +135,7 @@ App entry (home_screen.dart)
         ├─ FAB: Schedule / New load / Stock (all waste users)
         │    ├─ WasteScheduleLoadScreen (selected_waste_types + stock links)
         │    └─ WasteCreateLoadScreen (on-the-spot)
-        └─ Weighbridge, cost review, reports, admin → CTP Pulse only
+        └─ Weighbridge, cost review, reports, admin → CTP Pulse desk hubs (managers + admins only)
 ```
 
 ---
@@ -170,6 +170,23 @@ App entry (home_screen.dart)
 
 ---
 
+## Permission Matrix — Site Security (Mobile + Pulse split)
+
+| Screen / Action | Admin | Security Manager | Security Guard | CTP Pulse desk |
+|---|---|---|---|---|
+| Home — job-card Quick Actions / My Work | ❌ | ✅ | ❌ | ❌ |
+| Home — guard module hub (Waste + Security cards) | ❌ | ❌ | ✅ | ❌ |
+| Security tab / home | ✅ | ✅ | ✅ | ❌ guards never |
+| Scan in / out, on-foot, company car | ✅ | ✅ | ✅ | ❌ (capture is mobile) |
+| On-site list (mobile) | ✅ | ✅ | ✅ | ✅ managers review on Pulse Operations |
+| Add company car cost | ✅ | ✅ | ❌ | ✅ managers (Costing hub) |
+| Deny list, module settings | ✅ (Pulse) | ❌ | ❌ | ✅ admin Setup hub |
+| Gate log / reports / exports | ❌ mobile | ❌ mobile | ❌ | ✅ managers + admins |
+
+Mobile gates: `canUseSecurityModule` + `security_enabled`. Pulse gates: `boardModules 'security'` + `canAccessSecurityPulse` (managers + admins only). Costs validate against `security_vehicles` where `vehicle_type: company_car`.
+
+---
+
 ## Permission Matrix — Fleet Maintenance (Mobile)
 
 | Screen / Action | Fleet Admin | Cost Manager | Mechanic | Reporter | Others |
@@ -187,20 +204,18 @@ Cost managers use **CTP Pulse** (`boardModules: fleet`) for optional cost linkin
 ## Fleet Issue Status Flow
 
 ```
-Reporter submits issue (FleetReportIssueScreen)
+Reporter submits issue (FleetReportWizardScreen — 3 steps)
           │
           ▼
     ┌──────────┐
-    │   open   │  ── (out_of_service) ──► push to mechanic + cost managers, asset flagged OOS
+    │   open   │  ── (out_of_service) ──► push to mechanic + cost managers, asset flagged OOS; pinned in To Fix
     └────┬─────┘
-         │ Mechanic acknowledges (FleetIssueDetail)
+         │ Mechanic Save progress (FleetMarkFixedScreen) OR opens from In progress
          ▼
    ┌──────────────┐
    │ acknowledged │
    └──────┬───────┘
-          │ Mechanic resolves — two paths:
-          │   • "Log Work & Resolve" → FleetLogWorkScreen (creates work record, links issue)
-          │   • "Resolve with Note"  → quick close with a note
+          │ Mechanic Mark as Fixed → createFleetWorkRecord CF
           ▼
     ┌───────────┐
     │ resolved  │  ── clears asset OOS flag if no other open OOS issues
@@ -217,8 +232,9 @@ Any open/acknowledged issue → cancelled  (mechanic / cost manager / admin)
 App entry (home_screen.dart)
   └─ [if fleet_enabled && isFleetMobileUser] → Fleet tab
         ├─ Reporter → FleetReporterHomeScreen (grid, wizard, daily check)
-        └─ Mechanic → FleetMechanicHomeScreen (To Fix / In progress / History)
-              └─ Mark as Fixed / Log other work → createFleetWorkRecord CF
+        └─ Mechanic → FleetMechanicHomeScreen (To Fix / In progress / Log work / History)
+              └─ Mark as Fixed / Log work tab → createFleetWorkRecord CF
+  Home tiles (reporters only): Report Problem → wizard step 1; Daily Safety Check → FleetDailyCheckEntryScreen
 ```
 
 Desk costing: see Pulse `/fleet` (Costs, Reports, Assets) — `Canvases/08-fleet-floor-to-desk-flow.excalidraw.md`.
@@ -230,9 +246,12 @@ Desk costing: see Pulse `/fleet` (Costs, Reports, Assets) — `Canvases/08-fleet
 | File | Access | Purpose |
 |---|---|---|
 | `fleet_home_screen.dart` | reporter OR mechanic | Routes to persona shell only |
-| `fleet_reporter_home_screen.dart` | reporter | Machine grid, report wizard entry |
-| `fleet_mechanic_home_screen.dart` | mechanic | To Fix / In progress / History |
-| `fleet_mark_fixed_screen.dart` | mechanic | Minimal fix form → CF |
+| `fleet_reporter_home_screen.dart` | reporter | Always-on machine grid; My reports / All open (no FAB) |
+| `fleet_daily_check_entry_screen.dart` | reporter | Home tile entry — check-only machine picker |
+| `fleet_report_wizard_screen.dart` | reporter | 3-step report wizard (max 10 photos) |
+| `fleet_mechanic_home_screen.dart` | mechanic | To Fix (pinned OOS) / In progress / Log work / History |
+| `fleet_mark_fixed_screen.dart` | mechanic | Save progress or Mark as Fixed → CF |
+| `fleet_work_capture_form.dart` | mechanic | Shared work form widget |
 | `fleet_work_record_detail_screen.dart` | mechanic | Work detail — zero cost UI |
 | `fleet_work_records_list_screen.dart` | mechanic | History list — no cost badges |
 
@@ -268,9 +287,13 @@ Admin-only screens reached from the Home **Admin** tile / Admin Settings. All ga
 | `copper_dashboard_screen.dart` | admin (clock 22) | Copper inventory dashboard (whitelist-gated) |
 | `feedback_admin_screen.dart` | admin | **User Feedback triage board** — reviews `feedback` submissions; sets status `New → Planned → Implemented → Declined` + private notes. Reached from Settings → Feedback. |
 | `scan_tester_screen.dart` | admin | **Scan Tester** — PDF417 capture to `pulse_scan_samples`. Driver licence RSA decrypt. Review in Pulse Settings. |
-| `security_vehicle_scan_in_screen.dart` | security | **Vehicle scan in** — licence disc + driver licence (back PDF417) + occupant count (default 1). Visitor/contractor/transporter. |
-| `security_vehicle_scan_out_screen.dart` | security | **Vehicle scan out** — licence disc on departing vehicle; match on-site session. |
-| `security_company_car_screen.dart` | security | **Company car** — exit: driver licence + clock no + odometer + purpose + address; return: disc + mileage. |
+| `security_home_screen.dart` | `isSecurityUser` | Site Security hub — gate selector + action cards. Add company car cost tile: `isSecurityCostManager` only. |
+| `security_vehicle_scan_in_screen.dart` | `isSecurityUser` | Vehicle scan in — disc + driver licence + occupants. |
+| `security_vehicle_scan_out_screen.dart` | `isSecurityUser` | Vehicle scan out — disc on departing vehicle. |
+| `security_company_car_screen.dart` | `isSecurityUser` | Company car exit/return — reg must match `vehicle_type: company_car` in register. |
+| `security_on_foot_visitor_screen.dart` | `isSecurityUser` | On-foot visitor entry. |
+| `security_on_site_screen.dart` | `isSecurityUser` | Live on-site vehicle list (operational; managers also use Pulse). |
+| `security_add_cost_screen.dart` | `isSecurityCostManager` | Company car picker + cost line — not visitor/contractor regs. |
 
 **User Feedback board (`feedback` collection)**: employees submit via the Home-screen "Give Feedback" FAB (`feedback`/`userName`/`clockNo`/`timestamp`). The admin board writes triage fields onto each doc — `status`, `statusUpdatedAt`, `statusUpdatedByClockNo`, `adminNotes`, `adminNotesUpdatedAt`, `adminNotesByClockNo` — and never touches the submitter's fields. Status filtering is client-side, so no composite index is needed. The rule stays `match /feedback/{docId} { allow read, write: if isSignedIn(); }` — admin-only access is enforced in the UI, not in rules.
 
@@ -292,7 +315,7 @@ After significant changes to screens, roles, or navigation, update this file man
 ## Core Services Notes (Copper / Geofence / Notifications / Number Assignment) — Map Polish Addition (2026-06-16)
 
 - **Copper**: Transactions + inventory (copper_* collections). Whitelist-gated in mobile (role.dart). Password protected ops. See collections.dart + rules (signed-in) + copper_service.dart.
-- **Geofence + Presence**: geo_fence_logs + employees.isOnSite/fcmTokenUpdatedAt. Background in Job Cards (not web). Drives notification targeting.
+- **Geofence + Presence**: geo_fence_logs + employees.isOnSite/fcmTokenUpdatedAt. Background in Job Cards (not web). Drives notification targeting. **Device health (2026-06-28)**: `DeviceHealthService` monitors six Android permissions; `employees.permissions` merged via `updateEmployeePresence`; home `GeofenceHealthBanner` surfaces gaps on resume.
 - **Notifications / Inbox**: notifications + notification_configs + notification_inbox/{clockNo}/items/* . CF for escalation + writes. Client clears own. Subcol pattern (see COLLECTIONS.md + rules).
 - **Number Assignment (counters)**: jobCards / overtime / waste / fleet / ink counters. Client read, CF/AdminSDK write only (Wave B). Global sequential never-reset for waste/fleet/ink.
 - **Pulse Job Cards view**: External read-only KPIs (see cross-links above). Not full CRUD. "Job Cards & Machine Health" branding in Pulse.

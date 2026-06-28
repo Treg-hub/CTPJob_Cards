@@ -360,8 +360,9 @@ Grouped cards (default tab):
 
 #### Tab: Comms
 
-- **Broadcast Update Notice** card — editable title and body fields (pre-filled with the standard update message); **Send Broadcast** button calls the `broadcastUpdateNotice` Cloud Function (`africa-south1`). Admin-gated (`isAdmin: true` on employee doc). After sending, a result card shows: `sent` (push delivered), `parked` (held in inbox for off-site users), `noToken` (no FCM token registered), `total` counts.
-- **Recent Broadcasts** — live stream from the `notifications` collection filtered to `triggeredBy == 'update_notice'`, sorted by `createdAt` descending, limited to last 10.
+- **Broadcast Update Notice** card — editable title and body fields (pre-filled with the standard update message); **Send to All Employees** calls `broadcastUpdateNotice` (`africa-south1`). Admin-gated via `admins/{uid}`. Result card: `sent`, `parked`, `noToken`, `total`.
+- **Targeted Message** card — same title/body; enter clock numbers (comma or newline separated); **Send to Selected** calls `broadcastUpdateNotice` with `clockNos[]`. Invalid clock numbers are rejected before any send.
+- **Recent Broadcasts** — `notifications` where `triggeredBy == 'update_notice'`; shows `broadcastScope` (`all` vs `targeted`).
 
 ### Geofence Editor
 

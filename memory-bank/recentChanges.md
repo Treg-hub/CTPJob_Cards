@@ -2,6 +2,18 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Permission health + targeted admin broadcast (2026-06-28)**:
+  - **`DeviceHealthService`**: six critical Android checks (location always, battery, notifications, DND, overlay, P5 full-screen intent); syncs merged map to `employees.permissions` via `updateEmployeePresence`.
+  - **Home banner**: `GeofenceHealthBanner` expanded to all six permissions (not just geofence + battery); re-checks on resume.
+  - **Onboarding**: core trio gate (location + battery + notifications) with explicit "Continue anyway"; Settings permission panel shows real statuses + Fix all.
+  - **CF**: `updateEmployeePresence` merges `permissions` sub-map; `broadcastUpdateNotice` accepts optional `clockNos[]` (targeted send, invalid clocks rejected).
+  - **Admin**: On Site tab permission health icons; Comms tab targeted broadcast by clock number.
+  - **Deferred**: server-side off-site write locks (separate future branch).
+  - **Map**: visualization.md, job-cards-core-functions.md, notification-inbox-specifics.md, Canvases/02 + INDEX, troubleshooting.md, screens_reference.md.
+- **Ink local PO loop — mobile receipt fulfillment (2026-06-26)**:
+  - **Pulse**: `/ink/reorder` (reorder at + batch size, local proposed POs); `/ink/forecast` import-only; `/ink/orders/new` supplier-scoped lines; Import/Local badges on orders list; unit-aware RFO/supplier PO PDFs; `poReceiptFulfillment.ts` + tests.
+  - **Mobile**: `ink_purchase_orders` collection constant; `InkPurchaseOrder` model; `purchase_order_id` on `InkTransaction`; `watchOpenPurchaseOrders` + `applyReceiptToPurchaseOrder` in `ink_service.dart`; PO picker on `ink_receive_raw_material_screen.dart`; `test/local_order_fulfillment_test.dart`.
+  - **Map**: `Components/Collections/ink_purchase_orders.md`, `PulseModules.md`, `InkModule.md`, `docs/COLLECTIONS.md`, `Canvases/06-data-flows.canvas.md`, `Canvases/INDEX.md`.
 - **Consume IBC — transaction ordering + real error messages (2026-06-26)**:
   - **Root cause (consume submit)**: `transferIbc` wrote the IBC doc before reading `waste_stock` inside the same Firestore transaction (reads must precede writes). Failure surfaced as Riverpod's opaque "boxed error"; UI mapped it to a misleading "could not load IBC data" snackbar.
   - **`ink_service.dart`**: read wash + waste-stock docs first, then write IBC / wash txn.
