@@ -1,3 +1,6 @@
+// Web-only stub — dart:html until package:web migration.
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 
 import 'client_platform_service.dart';

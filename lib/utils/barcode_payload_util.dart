@@ -14,16 +14,39 @@ class BarcodePayloadUtil {
   BarcodePayloadUtil._();
 
   /// Returns a text or `base64:…` payload, or null if nothing usable was found.
-  static String? extractPayload(Barcode barcode) {
+  ///
+  /// Set [preferBinary] for SA driver's licence PDF417 — scanners often expose a
+  /// useless Latin-1 [Barcode.rawValue] while the decryptable payload is only in
+  /// [Barcode.rawDecodedBytes]. Scan Tester worked because it never preferred
+  /// [rawValue] when bytes looked like an encrypted licence.
+  static String? extractPayload(
+    Barcode barcode, {
+    bool preferBinary = false,
+  }) {
+    final bytes = extractRawBytes(barcode);
     final raw = barcode.rawValue?.trim();
+
+    if (bytes != null &&
+        bytes.isNotEmpty &&
+        (preferBinary || isLikelyEncryptedDriverLicence(bytes))) {
+      return encodeBytesPayload(bytes);
+    }
+
     if (raw != null && raw.isNotEmpty && !_looksLikeBinaryGarbage(raw)) {
       return raw;
     }
 
-    final bytes = extractRawBytes(barcode);
-    if (bytes == null || bytes.isEmpty) return null;
+    if (bytes != null && bytes.isNotEmpty) {
+      return encodeBytesPayload(bytes);
+    }
 
-    return encodeBytesPayload(bytes);
+    return null;
+  }
+
+  /// Encrypted SA driver's licence PDF417 is 720 bytes; decrypted payloads ~684.
+  static bool isLikelyEncryptedDriverLicence(Uint8List bytes) {
+    final len = bytes.length;
+    return len >= 600 && len <= 800;
   }
 
   /// Raw barcode bytes from [Barcode], when the scanner exposes them.

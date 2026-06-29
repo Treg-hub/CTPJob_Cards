@@ -25,19 +25,30 @@ class SecurityDocumentScanScreen extends StatefulWidget {
 
 class _SecurityDocumentScanScreenState
     extends State<SecurityDocumentScanScreen> {
+  /// Match Scan Tester: do not restrict formats on the controller — some devices
+  /// omit [Barcode.rawDecodedBytes] when formats are narrowed to PDF417 only.
   late final MobileScannerController _controller = MobileScannerController(
-    formats: _formatsFor(widget.expectedType),
     returnImage: true,
-    detectionSpeed: widget.expectedType == SecurityDocumentType.driverLicence
-        ? DetectionSpeed.unrestricted
-        : DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.noDuplicates,
   );
 
-  static List<BarcodeFormat> _formatsFor(SecurityDocumentType? type) {
-    if (type == SecurityDocumentType.driverLicence) {
-      return const [BarcodeFormat.pdf417];
-    }
-    return const [BarcodeFormat.pdf417, BarcodeFormat.dataMatrix];
+  static bool _acceptsBarcodeFormat(
+    SecurityDocumentType? expected,
+    BarcodeFormat? format,
+  ) {
+    final name = (format?.name ?? '').toLowerCase();
+    final fmt = name.contains('pdf')
+        ? 'pdf417'
+        : name.contains('data_matrix') || name.contains('datamatrix')
+            ? 'datamatrix'
+            : 'other';
+    return switch (expected) {
+      SecurityDocumentType.driverLicence => fmt == 'pdf417',
+      SecurityDocumentType.licenseDisc ||
+      SecurityDocumentType.idDocument =>
+        fmt == 'pdf417' || fmt == 'datamatrix',
+      _ => true,
+    };
   }
 
   ParsedDocument? _result;
@@ -81,8 +92,16 @@ class _SecurityDocumentScanScreenState
     _maybeAutoTorch(capture.image);
 
     for (final b in capture.barcodes) {
-      final raw = BarcodePayloadUtil.extractPayload(b);
+      if (!_acceptsBarcodeFormat(widget.expectedType, b.format)) continue;
+
+      final preferBinary =
+          widget.expectedType == SecurityDocumentType.driverLicence;
+      final raw = BarcodePayloadUtil.extractPayload(
+        b,
+        preferBinary: preferBinary,
+      );
       if (raw == null || raw.isEmpty) continue;
+
       final parsed = switch (widget.expectedType) {
         SecurityDocumentType.licenseDisc =>
           SecurityDocumentParser.parseLicenseDisc(raw),
@@ -92,15 +111,26 @@ class _SecurityDocumentScanScreenState
           SecurityDocumentParser.parseDriverLicence(raw),
         _ => SecurityDocumentParser.parseBarcode(raw),
       };
-      final accepted = parsed.hasVehicleData ||
-          parsed.hasIdData ||
-          parsed.hasDriverLicenceData;
-      if (!accepted) continue;
+      if (!_acceptsParsedResult(widget.expectedType, parsed, raw)) continue;
       if (!mounted) return;
       setState(() => _result = parsed);
       HapticFeedback.mediumImpact();
       return;
     }
+  }
+
+  static bool _acceptsParsedResult(
+    SecurityDocumentType? expected,
+    ParsedDocument parsed,
+    String raw,
+  ) {
+    if (parsed.hasVehicleData || parsed.hasIdData) return true;
+    if (expected == SecurityDocumentType.driverLicence) {
+      return parsed.documentType == SecurityDocumentType.driverLicence &&
+          (parsed.hasDriverLicenceData ||
+              BarcodePayloadUtil.isBinaryPayload(raw));
+    }
+    return parsed.hasDriverLicenceData;
   }
 
   void _manualEntry() async {
@@ -255,6 +285,17 @@ class _SecurityDocumentScanScreenState
                 if (r.vehicleModel != null) Text('Model: ${r.vehicleModel}'),
                 if (r.fullName != null) Text('Name: ${r.fullName}'),
                 if (r.idNumber != null) Text('ID: ${r.idNumber}'),
+                if (r.fullName == null &&
+                    r.idNumber == null &&
+                    r.rawPayload != null &&
+                    BarcodePayloadUtil.isBinaryPayload(r.rawPayload!))
+                  Text(
+                    BarcodePayloadUtil.displayPayload(r.rawPayload!),
+                    style: TextStyle(
+                      color: scheme.error,
+                      fontSize: 12,
+                    ),
+                  ),
                 if (r.manualEntry)
                   Text('Manual entry',
                       style: TextStyle(color: scheme.primary, fontSize: 12)),

@@ -133,7 +133,10 @@ class _ScanTesterScreenState extends State<ScanTesterScreen> {
 
     for (final b in capture.barcodes) {
       if (!_acceptsBarcodeFormat(b.format)) continue;
-      final raw = BarcodePayloadUtil.extractPayload(b);
+      final raw = BarcodePayloadUtil.extractPayload(
+        b,
+        preferBinary: _useCase == 'driver_licence',
+      );
       if (raw == null || raw.isEmpty) continue;
       final fmt = ScanTesterService.normalizeBarcodeFormat(b.format);
       if (!mounted) return;

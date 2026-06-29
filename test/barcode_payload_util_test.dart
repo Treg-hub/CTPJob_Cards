@@ -29,5 +29,26 @@ void main() {
         contains('Encrypted barcode (720 bytes)'),
       );
     });
+
+    test('isLikelyEncryptedDriverLicence matches SA PDF417 sizes', () {
+      expect(
+        BarcodePayloadUtil.isLikelyEncryptedDriverLicence(
+          Uint8List.fromList(List.filled(720, 0)),
+        ),
+        isTrue,
+      );
+      expect(
+        BarcodePayloadUtil.isLikelyEncryptedDriverLicence(
+          Uint8List.fromList(List.filled(684, 0)),
+        ),
+        isTrue,
+      );
+      expect(
+        BarcodePayloadUtil.isLikelyEncryptedDriverLicence(
+          Uint8List.fromList(List.filled(64, 0)),
+        ),
+        isFalse,
+      );
+    });
   });
 }

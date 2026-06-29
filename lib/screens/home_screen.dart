@@ -42,10 +42,9 @@ import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
 import 'security_home_screen.dart';
-import 'security_vehicle_scan_in_screen.dart';
-import 'security_vehicle_scan_out_screen.dart';
+import 'security_vehicle_gate_screen.dart';
 import 'scan_tester_screen.dart';
-import 'security_company_car_screen.dart';
+
 import 'security_on_foot_visitor_screen.dart';
 
 import '../models/fleet_settings.dart';
@@ -482,33 +481,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       result = [
         ...result,
         {
-          'title': 'Vehicle Scan In',
-          'icon': Icons.login,
+          'title': 'Vehicle at Gate',
+          'icon': Icons.qr_code_scanner,
           'color': kBrandOrange,
           'onTap': () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const SecurityVehicleScanInScreen()),
-              ),
-        },
-        {
-          'title': 'Scan Out',
-          'icon': Icons.logout,
-          'color': kBrandOrange,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const SecurityVehicleScanOutScreen()),
-              ),
-        },
-        {
-          'title': 'Company Car',
-          'icon': Icons.directions_car,
-          'color': kBrandOrange,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const SecurityCompanyCarScreen()),
+                    builder: (_) => const SecurityVehicleGateScreen()),
               ),
         },
         {

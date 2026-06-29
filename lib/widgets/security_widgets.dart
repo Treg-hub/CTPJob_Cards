@@ -27,8 +27,10 @@ class SecurityGateSelector extends ConsumerWidget {
         if (gates.isEmpty) {
           return const Text('No gates configured. Ask an admin to seed security_gates.');
         }
+        final gateValue = selected ?? (gates.length == 1 ? gates.first : null);
         return DropdownButtonFormField<SecurityGate>(
-          value: selected ?? (gates.length == 1 ? gates.first : null),
+          key: ValueKey(gateValue?.id),
+          initialValue: gateValue,
           decoration: InputDecoration(
             labelText: label,
             border: const OutlineInputBorder(),
