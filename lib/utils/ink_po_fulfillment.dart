@@ -28,23 +28,19 @@ PoFulfillmentResult deductReceiptFromPurchaseOrder({
   return (remainingKgByItem: remaining, status: status);
 }
 
-/// Deducts expected kg per shipment line from PO remaining qty.
+/// Deducts received/scanned kg per item from PO remaining qty.
 /// Mirrors Pulse `applyShipmentToPurchaseOrder` deduction logic.
 ShipmentFulfillmentResult applyShipmentDeduction({
   required Map<String, double> remainingKgByItem,
-  required Iterable<({String itemCode, double expectedKg})> lines,
+  required Map<String, double> receivedKgByItem,
   required List<String> linkedShipmentIds,
   required String shipmentId,
 }) {
-  final deduct = <String, double>{};
-  for (final line in lines) {
-    if (line.itemCode.isEmpty) continue;
-    deduct[line.itemCode] =
-        (deduct[line.itemCode] ?? 0) + line.expectedKg;
-  }
+  final deduct = receivedKgByItem;
 
   final remaining = Map<String, double>.from(remainingKgByItem);
   for (final entry in deduct.entries) {
+    if (entry.key.isEmpty || entry.value <= 0) continue;
     remaining[entry.key] =
         ((remaining[entry.key] ?? 0) - entry.value).clamp(0, double.infinity);
   }

@@ -112,6 +112,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
           continue;
         }
       }
+      final didReset = _inkReset[item.itemCode] ?? false;
+      final noChange = lastReading != null && litres == 0 && !didReset;
       toWriteInk.add(InkTransaction(
         type: InkTxnType.consumptionMeter,
         stockItemCode: item.itemCode,
@@ -126,6 +128,7 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
         actorClockNo: emp?.clockNo ?? '',
         actorName: emp?.name ?? '',
         idempotencyKey: '${sessionId}_${item.itemCode}',
+        notes: noChange ? 'No change in meter reading' : null,
       ));
 
       final maxL = _maxInkLitresFor(item);
@@ -136,8 +139,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     }
 
     // ── Toloul meter entries ───────────────────────────────────────────────
-    final toloulLines =
-        <({String pointId, double reading, double consumption, bool reset})>[];
+    final toloulLines = <
+        ({
+          String pointId,
+          double reading,
+          double consumption,
+          bool reset,
+          bool noChange,
+        })>[];
 
     for (final p in toloulPoints) {
       final id = p.id!;
@@ -163,11 +172,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
           continue;
         }
       }
+      final noChange =
+          lastReading != null && consumption == 0 && !didReset;
       toloulLines.add((
         pointId: id,
         reading: entered,
         consumption: consumption,
         reset: didReset,
+        noChange: noChange,
       ));
 
       if (consumption > _maxToloulLitres) {
@@ -490,6 +502,10 @@ class _InkMeterCard extends StatelessWidget {
       } else if (belowLast) {
         preview = 'Below last (${qty.format(last)}). Was the meter reset?';
         color = scheme.error;
+      } else if (entered == last!) {
+        consumptionLitres = 0;
+        preview = 'No change in meter reading';
+        color = scheme.onSurfaceVariant;
       } else {
         final d = entered - last!;
         consumptionLitres = d;
@@ -639,6 +655,10 @@ class _ToloulMeterCard extends StatelessWidget {
       } else if (belowLast) {
         preview = 'Below last (${qty.format(last)}). Was the meter reset?';
         color = scheme.error;
+      } else if (entered == last!) {
+        consumptionLitres = 0;
+        preview = 'No change in meter reading';
+        color = scheme.onSurfaceVariant;
       } else {
         consumptionLitres = entered - last!;
         preview = '${qty.format(consumptionLitres)} L';

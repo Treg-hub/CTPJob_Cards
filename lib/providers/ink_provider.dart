@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_conversion_factor.dart';
+import '../models/ink_daily_readings_status.dart';
 import '../models/ink_count_event.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
@@ -164,14 +165,30 @@ final inkMeterPointReadingsProvider = StreamProvider<
   (ref) => ref.watch(inkServiceProvider).watchMeterPointReadings(),
 );
 
-/// True if the daily ink meter reading has already been entered today.
-final inkTodayInkMeterDoneProvider = StreamProvider<bool>(
-  (ref) => ref.watch(inkServiceProvider).watchTodayInkMeterStatus(),
-);
-
-/// True if the daily toloul meter reading has already been entered today.
-final inkTodayToloulMeterDoneProvider = StreamProvider<bool>(
-  (ref) => ref.watch(inkServiceProvider).watchTodayToloulMeterStatus(),
+/// Combined ink + toloul daily-readings completion for hub / home banners.
+final inkDailyReadingsStatusProvider = StreamProvider<InkDailyReadingsStatus>(
+  (ref) {
+    final allItems = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
+    final factorsMap =
+        ref.watch(inkConversionFactorsProvider).valueOrNull ?? {};
+    final requiredInk = allItems
+        .where((i) =>
+            i.metered &&
+            factorsMap[i.itemCode]?.active == true &&
+            (factorsMap[i.itemCode]?.kgPerLitre ?? 0) > 0)
+        .map((i) => i.itemCode)
+        .toSet();
+    final toloulPoints =
+        ref.watch(inkActiveMeterPointsProvider).valueOrNull ?? [];
+    final requiredToloul = {
+      for (final p in toloulPoints)
+        if (p.id != null) p.id!,
+    };
+    return ref.watch(inkServiceProvider).watchDailyReadingsStatus(
+          requiredInkCodes: requiredInk,
+          requiredToloulPointIds: requiredToloul,
+        );
+  },
 );
 
 /// Recent ink meter-reading sessions (grouped by session_id) for the void list.

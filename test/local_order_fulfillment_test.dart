@@ -45,13 +45,10 @@ void main() {
   });
 
   group('applyShipmentDeduction', () {
-    test('deducts expected kg per shipment line', () {
+    test('deducts received kg per item', () {
       final result = applyShipmentDeduction(
         remainingKgByItem: {'black': 3000, 'yellow': 8000},
-        lines: const [
-          (itemCode: 'black', expectedKg: 1000),
-          (itemCode: 'yellow', expectedKg: 2000),
-        ],
+        receivedKgByItem: {'black': 1000, 'yellow': 2000},
         linkedShipmentIds: const [],
         shipmentId: '51993-K',
       );
@@ -64,7 +61,7 @@ void main() {
     test('clamps remaining at zero and marks fulfilled', () {
       final result = applyShipmentDeduction(
         remainingKgByItem: {'black': 500},
-        lines: const [(itemCode: 'black', expectedKg: 600)],
+        receivedKgByItem: {'black': 600},
         linkedShipmentIds: const ['51993-J'],
         shipmentId: '51993-K',
       );
@@ -73,10 +70,10 @@ void main() {
       expect(result.linkedShipmentIds, containsAll(['51993-J', '51993-K']));
     });
 
-    test('skips lines with empty item code', () {
+    test('ignores empty item keys', () {
       final result = applyShipmentDeduction(
         remainingKgByItem: {'black': 1000},
-        lines: const [(itemCode: '', expectedKg: 500)],
+        receivedKgByItem: {'': 500},
         linkedShipmentIds: const [],
         shipmentId: '51993-K',
       );

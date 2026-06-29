@@ -26,6 +26,7 @@ enum InkIbcStatus {
 class InkIbc {
   const InkIbc({
     this.id,
+    this.sscc,
     required this.ibcNumber,
     required this.itemCode,
     required this.kg,
@@ -41,6 +42,9 @@ class InkIbc {
   });
 
   final String? id;
+  /// Full SSCC when known (18+ digits). Legacy docs may omit this field.
+  final String? sscc;
+  /// Operator-facing number — always the last 8 digits.
   final String ibcNumber;
   final String itemCode; // ink colour
   final double kg;
@@ -100,7 +104,9 @@ class InkIbc {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkIbc(
       id: doc.id,
-      ibcNumber: d['ibc_number'] as String? ?? doc.id,
+      sscc: d['sscc'] as String?,
+      ibcNumber: d['ibc_number'] as String? ??
+          (doc.id.length >= 8 ? doc.id.substring(doc.id.length - 8) : doc.id),
       itemCode: d['item_code'] as String? ?? '',
       kg: parseDouble(d['kg']),
       status: InkIbcStatus.fromValue(d['status'] as String?),
@@ -116,6 +122,7 @@ class InkIbc {
   }
 
   Map<String, dynamic> toFirestore() => {
+        if (sscc != null && sscc!.isNotEmpty) 'sscc': sscc,
         'ibc_number': ibcNumber,
         'item_code': itemCode,
         'kg': kg,

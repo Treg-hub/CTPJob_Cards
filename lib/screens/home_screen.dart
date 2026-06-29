@@ -51,6 +51,7 @@ import '../models/fleet_settings.dart';
 import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/ink_provider.dart';
+import '../widgets/ink_daily_readings_banner.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
 import '../services/security_service.dart';
@@ -1107,6 +1108,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           // Nudges the user if Location-Always / battery-opt got revoked, which
           // silently breaks background geofencing (hidden on web + when healthy).
           const GeofenceHealthBanner(),
+          if (role_utils.isInkMeterUser(currentEmployee)) ...[
+            Builder(
+              builder: (context) {
+                final status =
+                    ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
+                if (status == null || status.complete) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: InkDailyReadingsBanner(status: status),
+                );
+              },
+            ),
+          ],
           Text(
             'Quick Actions',
             style: TextStyle(

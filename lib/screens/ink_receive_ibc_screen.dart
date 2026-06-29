@@ -18,6 +18,7 @@ import '../utils/screen_insets.dart';
 class _IbcRow {
   _IbcRow({
     String number = '',
+    this.sscc,
     this.itemCode,
     String kg = '',
     this.charge,
@@ -26,6 +27,7 @@ class _IbcRow {
         kgCtrl = TextEditingController(text: kg);
 
   final TextEditingController numberCtrl;
+  String? sscc;
   String? itemCode;
   final TextEditingController kgCtrl;
   String? charge;
@@ -118,6 +120,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     setState(() {
       _rows.add(_IbcRow(
         number: ibcNum ?? '',
+        sscc: res.sscc,
         itemCode: itemCode,
         kg: kg,
         charge: res.charge,
@@ -319,6 +322,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       final kg = double.parse(r.kgCtrl.text.trim());
 
       ibcs.add(InkIbc(
+        sscc: r.sscc,
         ibcNumber: numText,
         itemCode: r.itemCode!,
         kg: kg,

@@ -738,19 +738,17 @@ The form stays open after submit (fields clear, date resets to now) to allow bac
 
 ---
 
-### Ink Meter Point Entry (standalone)
+### Deprecated meter / void screens (not linked from navigation)
 
-`lib/screens/ink_meter_point_entry_screen.dart` — **Roles:** Ink operator, Ink manager, Lurgi user, Admin
+| Screen | Status |
+|--------|--------|
+| `ink_daily_readings_screen.dart` | **Canonical** — combined ink + toloul daily readings; home/Ink hub banner via `inkDailyReadingsStatusProvider` |
+| ~~`ink_meter_point_entry_screen.dart`~~ | **Removed** (2026-06-29) — use `InkDailyReadingsScreen` |
+| ~~`ink_meter_readings_grid_screen.dart`~~ | **Removed** (2026-06-29) — use `InkDailyReadingsScreen` |
+| ~~`ink_meter_sessions_screen.dart`~~ | **Removed** (2026-06-29) — void on Pulse `/ink/ledger-tools` |
+| `ink_production_history_screen.dart` | **Deprecated** for voids — read-only on mobile; void on Pulse `/ink/production` |
 
-Standalone Toloul meter point entry screen, available as a fallback but no longer linked from the main navigation. The combined `InkDailyReadingsScreen` is the primary path for Toloul meter entry.
-
----
-
-### Ink Meter Readings Grid (standalone)
-
-`lib/screens/ink_meter_readings_grid_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
-
-Standalone ink meter readings screen, available as a fallback. The combined `InkDailyReadingsScreen` is the primary path for daily ink meter entry.
+`InkDailyReadingsScreen` is the **only** operator meter capture path (ink + toloul, one submit).
 
 ---
 
