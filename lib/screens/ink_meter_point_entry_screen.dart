@@ -143,17 +143,31 @@ class _State extends ConsumerState<InkMeterPointEntryScreen> {
     if (!allowed) return;
     setState(() => _submitting = true);
     final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final svc = ref.read(inkServiceProvider);
     try {
-      await ref.read(inkServiceProvider).recordMeterPointReadings(
-            readingDate: _readingDate,
-            lines: lines,
-            actorClockNo: emp?.clockNo ?? '',
-            actorName: emp?.name ?? '',
-          );
+      await svc.assertNoActiveMeterSessionForCalendarDay(_readingDate);
+      await svc.recordMeterPointReadings(
+        readingDate: _readingDate,
+        lines: lines,
+        actorClockNo: emp?.clockNo ?? '',
+        actorName: emp?.name ?? '',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${lines.length} meter reading(s) recorded.')));
       Navigator.pop(context);
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      final isDuplicateDay = e.message.contains('calendar day');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isDuplicateDay
+            ? 'Ink meter readings already submitted for this day. '
+                'Use Daily Readings or void the session first.'
+            : e.message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);

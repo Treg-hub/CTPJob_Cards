@@ -108,7 +108,7 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
         sessionId: sessionId,
         actorClockNo: emp?.clockNo ?? '',
         actorName: emp?.name ?? '',
-        idempotencyKey: const Uuid().v4(),
+        idempotencyKey: '${sessionId}_${item.itemCode}',
       ));
     }
 
@@ -194,13 +194,30 @@ class _State extends ConsumerState<InkMeterReadingsGridScreen> {
     setState(() => _submitting = true);
     final svc = ref.read(inkServiceProvider);
     try {
-      for (final t in toWrite) {
-        await svc.recordTransaction(t);
-      }
+      await svc.recordDailyMeterSession(
+        sessionId: sessionId,
+        readingDate: _effectiveAt,
+        inkTransactions: toWrite,
+        toloulLines: const [],
+        actorClockNo: emp?.clockNo ?? '',
+        actorName: emp?.name ?? '',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${toWrite.length} reading(s) recorded.')));
       Navigator.pop(context);
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      final isDuplicateDay = e.message.contains('calendar day');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isDuplicateDay
+            ? 'Meter readings already submitted for this day. '
+                'Void the existing session first (Ink hub → Meter Sessions).'
+            : e.message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);

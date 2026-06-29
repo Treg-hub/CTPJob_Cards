@@ -43,4 +43,44 @@ void main() {
       expect(result.status, 'partially_fulfilled');
     });
   });
+
+  group('applyShipmentDeduction', () {
+    test('deducts expected kg per shipment line', () {
+      final result = applyShipmentDeduction(
+        remainingKgByItem: {'black': 3000, 'yellow': 8000},
+        lines: const [
+          (itemCode: 'black', expectedKg: 1000),
+          (itemCode: 'yellow', expectedKg: 2000),
+        ],
+        linkedShipmentIds: const [],
+        shipmentId: '51993-K',
+      );
+      expect(result.remainingKgByItem['black'], 2000);
+      expect(result.remainingKgByItem['yellow'], 6000);
+      expect(result.status, 'partially_fulfilled');
+      expect(result.linkedShipmentIds, ['51993-K']);
+    });
+
+    test('clamps remaining at zero and marks fulfilled', () {
+      final result = applyShipmentDeduction(
+        remainingKgByItem: {'black': 500},
+        lines: const [(itemCode: 'black', expectedKg: 600)],
+        linkedShipmentIds: const ['51993-J'],
+        shipmentId: '51993-K',
+      );
+      expect(result.remainingKgByItem['black'], 0);
+      expect(result.status, 'fulfilled');
+      expect(result.linkedShipmentIds, containsAll(['51993-J', '51993-K']));
+    });
+
+    test('skips lines with empty item code', () {
+      final result = applyShipmentDeduction(
+        remainingKgByItem: {'black': 1000},
+        lines: const [(itemCode: '', expectedKg: 500)],
+        linkedShipmentIds: const [],
+        shipmentId: '51993-K',
+      );
+      expect(result.remainingKgByItem['black'], 1000);
+    });
+  });
 }

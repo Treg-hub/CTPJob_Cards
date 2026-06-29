@@ -683,6 +683,35 @@ class InkService {
         return list;
       });
 
+  static DateTime _calendarDayStart(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  static DateTime _calendarDayEnd(DateTime date) =>
+      DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+
+  /// Throws if a non-voided `consumption_meter` session exists on [date]'s
+  /// calendar day — operators must void the existing session before re-submitting.
+  Future<void> assertNoActiveMeterSessionForCalendarDay(DateTime date) async {
+    final dayStart = _calendarDayStart(date);
+    final dayEnd = _calendarDayEnd(date);
+    final snap = await _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('effective_at', isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
+        .get();
+    final hasActive = snap.docs.any(
+      (d) => !(d.data()['voided'] as bool? ?? false),
+    );
+    if (hasActive) {
+      throw StateError(
+        'A meter reading session already exists for this calendar day. '
+        'Void it first before submitting again.',
+      );
+    }
+  }
+
   /// Deduct receipt qty from PO remaining; idempotent per [receiptKey].
   Future<void> applyReceiptToPurchaseOrder({
     required String purchaseOrderId,
@@ -724,6 +753,74 @@ class InkService {
     });
   }
 
+  /// Deducts shipment manifest lines from PO remaining qty; idempotent per
+  /// shipment via `fulfillment_applied_at`. Called on mobile IBC receive, not
+  /// on Pulse shipment create.
+  Future<void> applyShipmentToPurchaseOrder({
+    required InkShipment shipment,
+    required String purchaseOrderId,
+  }) async {
+    if (purchaseOrderId.isEmpty) return;
+
+    final poRef =
+        _db.collection(Collections.inkPurchaseOrders).doc(purchaseOrderId);
+    final shipRef = _db.collection(Collections.inkShipments).doc(shipment.id);
+
+    await _db.runTransaction((txn) async {
+      final poSnap = await txn.get(poRef);
+      if (!poSnap.exists) {
+        throw StateError('Purchase order $purchaseOrderId not found');
+      }
+
+      final shipSnap = await txn.get(shipRef);
+      if (shipSnap.exists) {
+        final applied = shipSnap.data()?['fulfillment_applied_at'];
+        if (applied != null) return;
+      }
+
+      final poData = poSnap.data() ?? {};
+      final remainingRaw =
+          poData['remaining_kg_by_item'] as Map<String, dynamic>? ?? {};
+      final remaining = <String, double>{
+        for (final e in remainingRaw.entries)
+          e.key: (e.value as num?)?.toDouble() ?? 0,
+      };
+      final linked =
+          (poData['linked_shipment_ids'] as List?)?.cast<String>() ?? [];
+
+      final result = applyShipmentDeduction(
+        remainingKgByItem: remaining,
+        lines: [
+          for (final line in shipment.lines)
+            (itemCode: line.itemCode, expectedKg: line.expectedKg),
+        ],
+        linkedShipmentIds: linked,
+        shipmentId: shipment.id,
+      );
+
+      txn.set(
+        poRef,
+        {
+          'remaining_kg_by_item': result.remainingKgByItem,
+          'linked_shipment_ids': result.linkedShipmentIds,
+          'status': result.status,
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      txn.set(
+        shipRef,
+        {
+          'purchase_order_id': purchaseOrderId,
+          'fulfillment_applied_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
+
   /// Receiving ink via IBC: registers each IBC (doc id = number) and records
   /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
   /// idempotent (IBC docs keyed by number; purchase key derived from the
@@ -740,22 +837,49 @@ class InkService {
     String? cgnaNumber,
     String? shipmentId,
   }) async {
-    for (final ibc in ibcs) {
-      await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
-            InkIbc(
-              ibcNumber: ibc.ibcNumber,
-              itemCode: ibc.itemCode,
-              kg: ibc.kg,
-              receivedDate: effectiveAt,
-              supplierName: supplierName,
-              orderNumber: orderNumber,
-              cgnaNumber: cgnaNumber,
-              chargeNumber: ibc.chargeNumber,
-              shipmentId: shipmentId,
-            ).toFirestore(),
-            SetOptions(merge: true),
-          );
+    InkShipment? shipment;
+    if (shipmentId != null && shipmentId.isNotEmpty) {
+      final shipSnap =
+          await _db.collection(Collections.inkShipments).doc(shipmentId).get();
+      if (!shipSnap.exists) {
+        throw StateError('Shipment $shipmentId not found');
+      }
+      shipment = InkShipment.fromFirestore(shipSnap);
+      if (shipment.status == InkShipmentStatus.received) {
+        throw StateError(
+          'Shipment $shipmentId has already been received',
+        );
+      }
     }
+
+    for (final ibc in ibcs) {
+      final ibcSnap =
+          await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).get();
+      if (ibcSnap.exists) {
+        throw StateError(
+          'IBC ${ibc.ibcNumber} already exists — cannot receive twice',
+        );
+      }
+    }
+
+    final batch = _db.batch();
+    for (final ibc in ibcs) {
+      batch.set(
+        _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber),
+        InkIbc(
+          ibcNumber: ibc.ibcNumber,
+          itemCode: ibc.itemCode,
+          kg: ibc.kg,
+          receivedDate: effectiveAt,
+          supplierName: supplierName,
+          orderNumber: orderNumber,
+          cgnaNumber: cgnaNumber,
+          chargeNumber: ibc.chargeNumber,
+          shipmentId: shipmentId,
+        ).toFirestore(),
+      );
+    }
+
     final byItem = <String, double>{};
     final numbersByItem = <String, List<String>>{};
     for (final ibc in ibcs) {
@@ -764,22 +888,27 @@ class InkService {
     }
     for (final entry in byItem.entries) {
       final nums = numbersByItem[entry.key]!..sort();
-      await recordTransaction(InkTransaction(
-        type: InkTxnType.purchase,
-        stockItemCode: entry.key,
-        quantityDelta: entry.value,
-        effectiveAt: effectiveAt,
-        costStatus: InkCostStatus.pending,
-        supplierName: supplierName,
-        notes: '${nums.length} IBC(s): ${nums.join(', ')}'
-            '${(orderNumber ?? '').isNotEmpty ? ' · Order $orderNumber' : ''}'
-            '${(cgnaNumber ?? '').isNotEmpty ? ' · CGNA $cgnaNumber' : ''}',
-        actorClockNo: actorClockNo,
-        actorName: actorName,
-        idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
-        shipmentId: shipmentId,
-      ));
+      final key = 'ibcrcpt_${entry.key}_${nums.join('_')}';
+      batch.set(
+        _db.collection(Collections.inkTransactions).doc(key),
+        InkTransaction(
+          type: InkTxnType.purchase,
+          stockItemCode: entry.key,
+          quantityDelta: entry.value,
+          effectiveAt: effectiveAt,
+          costStatus: InkCostStatus.pending,
+          supplierName: supplierName,
+          notes: '${nums.length} IBC(s): ${nums.join(', ')}'
+              '${(orderNumber ?? '').isNotEmpty ? ' · Order $orderNumber' : ''}'
+              '${(cgnaNumber ?? '').isNotEmpty ? ' · CGNA $cgnaNumber' : ''}',
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          idempotencyKey: key,
+          shipmentId: shipmentId,
+        ).toFirestore(),
+      );
     }
+
     if (shipmentId != null && shipmentId.isNotEmpty) {
       final received = [
         for (final ibc in ibcs)
@@ -791,11 +920,27 @@ class InkService {
             'scanned_at': Timestamp.fromDate(effectiveAt),
           },
       ];
-      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
-        'received_units': FieldValue.arrayUnion(received),
-        'status': 'received',
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      batch.set(
+        _db.collection(Collections.inkShipments).doc(shipmentId),
+        {
+          'received_units': FieldValue.arrayUnion(received),
+          'status': 'received',
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    await batch.commit();
+
+    final poId = shipment?.purchaseOrderId;
+    if (shipment != null &&
+        poId != null &&
+        poId.isNotEmpty) {
+      await applyShipmentToPurchaseOrder(
+        shipment: shipment,
+        purchaseOrderId: poId,
+      );
     }
   }
 
@@ -985,6 +1130,8 @@ class InkService {
 
   /// Records meter-point readings (no stock effect). Each line carries the
   /// already-computed [consumption] (delta or reset value).
+  /// When [sessionId] is given, doc id is `${sessionId}_${pointId}` and
+  /// readings are linked for void-by-session.
   Future<void> recordMeterPointReadings({
     required DateTime readingDate,
     required List<
@@ -992,12 +1139,15 @@ class InkService {
         lines,
     required String actorClockNo,
     required String actorName,
+    String? sessionId,
   }) async {
-    final minuteKey = readingDate.millisecondsSinceEpoch ~/ 60000;
     for (final l in lines) {
-      final docId = '${l.pointId}_$minuteKey';
+      final docId = sessionId != null && sessionId.isNotEmpty
+          ? '${sessionId}_${l.pointId}'
+          : '${l.pointId}_${readingDate.millisecondsSinceEpoch ~/ 60000}';
       await _db.collection(Collections.inkMeterPointReadings).doc(docId).set({
         'point_id': l.pointId,
+        if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
         'reading': l.reading,
         'consumption': l.consumption,
         'reset': l.reset,
@@ -1007,6 +1157,84 @@ class InkService {
         'actor_name': actorName,
       });
     }
+  }
+
+  /// Atomic daily submit: ink `consumption_meter` rows + toloul meter-point
+  /// readings in one batch, sharing [sessionId]. Blocks duplicate calendar days.
+  Future<void> recordDailyMeterSession({
+    required String sessionId,
+    required DateTime readingDate,
+    required List<InkTransaction> inkTransactions,
+    required List<
+            ({String pointId, double reading, double consumption, bool reset})>
+        toloulLines,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    await assertNoActiveMeterSessionForCalendarDay(readingDate);
+
+    final batch = _db.batch();
+    for (final t in inkTransactions) {
+      final key = t.idempotencyKey.isNotEmpty
+          ? t.idempotencyKey
+          : '${sessionId}_${t.stockItemCode}';
+      batch.set(
+        _db.collection(Collections.inkTransactions).doc(key),
+        InkTransaction(
+          id: t.id,
+          seqNumber: t.seqNumber,
+          type: t.type,
+          stockItemCode: t.stockItemCode,
+          quantityDelta: t.quantityDelta,
+          effectiveAt: t.effectiveAt,
+          recordedAt: t.recordedAt,
+          totalCost: t.totalCost,
+          newWac: t.newWac,
+          costStatus: t.costStatus,
+          voided: t.voided,
+          balanceBefore: t.balanceBefore,
+          balanceAfter: t.balanceAfter,
+          wacAtTime: t.wacAtTime,
+          actorClockNo: t.actorClockNo,
+          actorName: t.actorName,
+          idempotencyKey: key,
+          flaggedForReview: t.flaggedForReview,
+          flagReason: t.flagReason,
+          reason: t.reason,
+          notes: t.notes,
+          relatedTransactionId: t.relatedTransactionId,
+          productionRunId: t.productionRunId,
+          sessionId: sessionId,
+          ibcNumber: t.ibcNumber,
+          lurgiSource: t.lurgiSource,
+          supplierName: t.supplierName,
+          litresEntered: t.litresEntered,
+          conversionFactorUsed: t.conversionFactorUsed,
+          meterReading: t.meterReading,
+          readingDate: t.readingDate,
+          shipmentId: t.shipmentId,
+          purchaseOrderId: t.purchaseOrderId,
+        ).toFirestore(),
+      );
+    }
+    for (final l in toloulLines) {
+      final docId = '${sessionId}_${l.pointId}';
+      batch.set(
+        _db.collection(Collections.inkMeterPointReadings).doc(docId),
+        {
+          'point_id': l.pointId,
+          'session_id': sessionId,
+          'reading': l.reading,
+          'consumption': l.consumption,
+          'reset': l.reset,
+          'reading_date': Timestamp.fromDate(readingDate),
+          'recorded_at': FieldValue.serverTimestamp(),
+          'actor_clock_no': actorClockNo,
+          'actor_name': actorName,
+        },
+      );
+    }
+    await batch.commit();
   }
 
   /// The most recent [limit] readings per meter point (newest first) — for the
@@ -1075,7 +1303,9 @@ class InkService {
         .where('effective_at',
             isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
         .snapshots()
-        .map((s) => s.docs.isNotEmpty);
+        .map((s) => s.docs.any(
+              (d) => !(d.data()['voided'] as bool? ?? false),
+            ));
   }
 
   /// True if at least one toloul meter-point reading was recorded today.
@@ -1148,10 +1378,10 @@ class InkService {
 
   /// Voids a whole meter-reading session: flags every ink `consumption_meter`
   /// row with [sessionId] voided (preserved for audit; the server re-replays so
-  /// the stock is restored) and DELETES the report-only toloul meter-point
-  /// readings captured at [readingDate] (aux data with no stock impact — removed
-  /// so the operator can re-enter the session with the correct date). The caller
-  /// must already have cleared the closed-period guard for [readingDate].
+  /// the stock is restored) and DELETES linked toloul meter-point readings
+  /// (matched by [sessionId]; aux data with no stock impact — removed so the
+  /// operator can re-enter the session). The caller must already have cleared
+  /// the closed-period guard for [readingDate].
   Future<void> voidMeterSession(
     String sessionId,
     DateTime readingDate, {
@@ -1167,7 +1397,7 @@ class InkService {
         .get();
     final tolSnap = await _db
         .collection(Collections.inkMeterPointReadings)
-        .where('reading_date', isEqualTo: Timestamp.fromDate(readingDate))
+        .where('session_id', isEqualTo: sessionId)
         .get();
     final batch = _db.batch();
     for (final d in txnsSnap.docs) {

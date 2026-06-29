@@ -74,6 +74,7 @@ class InkShipment {
     required this.status,
     this.cgnaNumber,
     this.containerNumber,
+    this.purchaseOrderId,
     this.lines = const [],
     this.expectedUnits = const [],
   });
@@ -85,6 +86,7 @@ class InkShipment {
   final InkShipmentStatus status;
   final String? cgnaNumber;
   final String? containerNumber;
+  final String? purchaseOrderId;
   final List<InkShipmentLine> lines;
   final List<InkExpectedUnit> expectedUnits;
 
@@ -106,6 +108,7 @@ class InkShipment {
       status: InkShipmentStatus.fromValue(d['status'] as String?),
       cgnaNumber: d['cgna_number'] as String?,
       containerNumber: d['container_number'] as String?,
+      purchaseOrderId: d['purchase_order_id'] as String?,
       lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
     );
