@@ -45,6 +45,36 @@ void main() {
     });
   });
 
+  group('SecurityDocumentParser — CTP fleet MVL discs (VY0/6BD serial)', () {
+    test('ISUZU D-MAX CH09TJZN', () {
+      const raw =
+          '%MVL1CC96%0137%2055A1M0%1%205500575VY0%CH09TJZN%DFF577X%Pick-up / Bakkie%ISUZU%D-MAX%White / Wit%ACVNRRHR6K4083539%4JK1WM1248%2026-12-31%';
+      final doc = SecurityDocumentParser.parseLicenseDisc(raw);
+      expect(doc.vehicleReg, 'CH09TJZN');
+      expect(doc.vehicleMake, 'ISUZU');
+      expect(doc.vehicleModel, 'D-MAX');
+      expect(doc.expiryDate?.toIso8601String().split('T').first, '2026-12-31');
+    });
+
+    test('Toyota Starlet BX33GPZN', () {
+      const raw =
+          '%MVL1CC54%0146%2055A1N6%1%2055005736BD%BX33GPZN%JCY913L%Hatch back / Luikrug%TOYOTA%STARLET%White / Wit%JTDGWC52S00707410%K14BN4181543%2026-09-30%';
+      final doc = SecurityDocumentParser.parseLicenseDisc(raw);
+      expect(doc.vehicleReg, 'BX33GPZN');
+      expect(doc.vehicleMake, 'TOYOTA');
+      expect(doc.vehicleModel, 'STARLET');
+    });
+
+    test('Hyundai i20 BX33HKZN', () {
+      const raw =
+          '%MVL1CC76%0146%2055A1N6%1%2055005736BN%BX33HKZN%YXB313W%Hatch back / Luikrug%HYUNDAI%I20 IB%Blue / Blou%MALBM51CMKM515507%G4LCHU908942%2026-09-30%';
+      final doc = SecurityDocumentParser.parseLicenseDisc(raw);
+      expect(doc.vehicleReg, 'BX33HKZN');
+      expect(doc.vehicleMake, 'HYUNDAI');
+      expect(doc.vehicleModel, 'I20 IB');
+    });
+  });
+
   group('SecurityDocumentParser — legacy percent sample', () {
     test('last reg token wins in older FORD sample', () {
       const raw =
