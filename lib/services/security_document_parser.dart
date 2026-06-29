@@ -383,9 +383,11 @@ class SecurityDocumentParser {
     );
   }
 
+  /// eNaTIS disc serial — legacy `…LPF` or newer `205500575VY0` / `2055005736BD` style.
   static bool _isDiscSerial(String value) {
-    final upper = value.toUpperCase();
-    return upper.endsWith('LPF') || upper.contains('LICENCE');
+    final upper = value.toUpperCase().trim();
+    if (upper.endsWith('LPF') || upper.contains('LICENCE')) return true;
+    return RegExp(r'^2055\d{5,}[A-Z0-9]{3}$').hasMatch(upper);
   }
 
   static bool _isKnownMake(String value) {
