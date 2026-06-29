@@ -8,11 +8,9 @@ import '../utils/screen_insets.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/security_widgets.dart';
 import 'security_add_cost_screen.dart';
-import 'security_company_car_screen.dart';
 import 'security_on_foot_visitor_screen.dart';
 import 'security_on_site_screen.dart';
-import 'security_vehicle_scan_in_screen.dart';
-import 'security_vehicle_scan_out_screen.dart';
+import 'security_vehicle_gate_screen.dart';
 
 /// Site Security hub — gate selector and action cards.
 class SecurityHomeScreen extends ConsumerStatefulWidget {
@@ -88,40 +86,14 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
           SecurityGateSelector(onChanged: (_) {}),
           const SizedBox(height: 20),
           SecurityActionCard(
-            title: 'Vehicle Scan In',
-            subtitle: 'Disc + driver licence + occupant count',
-            icon: Icons.login,
+            title: 'Vehicle at Gate',
+            subtitle: 'Scan disc first — entry/exit auto-detected, override if needed',
+            icon: Icons.qr_code_scanner,
             enabled: gate != null,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const SecurityVehicleScanInScreen(),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SecurityActionCard(
-            title: 'Vehicle Scan Out',
-            subtitle: 'Scan licence disc on vehicle leaving',
-            icon: Icons.logout,
-            enabled: gate != null,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const SecurityVehicleScanOutScreen(),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SecurityActionCard(
-            title: 'Company Car',
-            subtitle: 'Exit: licence + clock no · Return: disc + mileage',
-            icon: Icons.directions_car,
-            enabled: gate != null,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const SecurityCompanyCarScreen(),
+                builder: (_) => const SecurityVehicleGateScreen(),
               ),
             ),
           ),

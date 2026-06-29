@@ -134,7 +134,8 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
             )
           else
             DropdownButtonFormField<String>(
-              value: _selectedReg,
+              key: ValueKey(_selectedReg),
+              initialValue: _selectedReg,
               decoration: const InputDecoration(
                 labelText: 'Company car *',
                 border: OutlineInputBorder(),
@@ -155,7 +156,8 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
             ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _category,
+            key: ValueKey(_category),
+            initialValue: _category,
             decoration: const InputDecoration(
               labelText: 'Category *',
               border: OutlineInputBorder(),

@@ -153,8 +153,10 @@ class SecurityDocumentParser {
       if (data.length >= 720) {
         return SadlParser.parseLicense(data);
       }
-      // Decrypted payload (post-RSA) — e.g. sa-license-decoder golden sample.
+      // Decrypted payload (post-RSA) — e.g. Scan Tester golden samples.
+      // ignore: deprecated_member_use
       const tool = SadlTool();
+      // ignore: deprecated_member_use
       return tool.parseData(data);
     } catch (_) {
       return null;

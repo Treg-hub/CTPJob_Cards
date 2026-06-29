@@ -6,7 +6,6 @@ class _BoxedError implements Error {
   _BoxedError(this.inner);
   final Object inner;
 
-  @override
   Object get error => inner;
 
   @override
