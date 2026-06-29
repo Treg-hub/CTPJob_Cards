@@ -67,11 +67,27 @@ The screens every technician and most managers use day-to-day.
 
 ### Home
 
-`lib/screens/home_screen.dart` — **Roles:** All logged-in users
+`lib/screens/home_screen.dart` — **Roles:** All logged-in users (two layouts — see below)
 
-The main hub after login. Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a grid of tiles to navigate everywhere else.
+The main hub after login. Layout depends on whether the user is a **site-security guard only** (`isSiteSecurityGuardOnly` in `role.dart` — `canUseSecurityModule` && !`isSecurityCostManager`).
 
-#### Standard Tiles
+#### Site-Security Guard layout (`isSiteSecurityGuardOnly`)
+
+Guards (not security managers) see a **module hub** instead of job-card quick actions:
+
+- **No** `Create Job Card`, `My Assigned Jobs`, `View Job Cards`, or `Job History` tiles
+- **No** `My Work` bottom-nav tab
+- **Home** shows **Your modules** cards: **Site Security** (default — app auto-opens this tab on launch) and **Waste Recovery** when enabled
+- App bar title on Home: **Waste & Security**
+- **Settings** and **Notification Inbox** (bell in AppBar) remain available
+
+> **Info:** Security **managers** and **admins** keep the standard job-card Home layout below, plus Waste and Security tabs.
+
+#### Standard layout (everyone else)
+
+Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a grid of tiles to navigate everywhere else.
+
+##### Standard Tiles
 
 - `Create Job Card` — **hidden when the employee is off-site** (`isOnSite: false`); off-site employees must be on-site to create new jobs
 - `My Assigned Jobs`
@@ -79,13 +95,13 @@ The main hub after login. Shows the logged-in employee, a live **On-Site / Off-S
 - `Job History` — server-filtered search of closed job cards (see [Job Card History](#job-card-history))
 - `Settings`
 
-#### Manager-Only Tiles
+##### Manager-Only Tiles
 
 - `Manager Dashboard` — shown when `position` contains "manager"
 - `Monitoring Dashboard`
 - `Daily Review` with pulse animation when pending count > 5
 
-#### Admin-Only Tiles
+##### Admin-Only Tiles
 
 - `Admin` — shown when the logged-in employee is on the admin whitelist
 
@@ -472,6 +488,64 @@ Developer/admin tool for verifying the notification + geofence stack works end-t
 - **Print current employee state** — dumps clock no, position, isOnSite, fcmToken
 
 > **Tip:** Use this when you need to test the escalation system but the device isn't physically inside the geofence. Hit Test ENTER and the next escalation cycle will treat the user as on-site.
+
+---
+
+## Site Security Module
+
+Gate logging, company cars, and on-site vehicle tracking. Accessible via the **Security** tab when `security_settings/config.security_enabled` is true and `canUseSecurityModule()` returns true (admin, site security manager, or site security guard — dept/position or `manager_clock_nos` / `guard_clock_nos`).
+
+**Pulse desk** (gate log history, reports, deny list, KPIs) is **CTP Pulse only** — guards never use Pulse; managers and admins need the `security` boardModules claim + `canAccessSecurityPulse`.
+
+### Security Home
+
+`lib/screens/security_home_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Hub with gate selector and action cards: vehicle scan in/out, on-foot visitor, company car exit/return, on-site list. **Add company car cost** tile: `isSecurityCostManager` only (security manager or admin).
+
+### Vehicle Scan In
+
+`lib/screens/security_vehicle_scan_in_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Scan vehicle disc (reg auto) + driver licence + occupants. Assigns entry number **SEC-NNNN** via server counter.
+
+### Vehicle Scan Out
+
+`lib/screens/security_vehicle_scan_out_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Scan disc or pick from on-site list. Occupant stepper + partial-exit flags.
+
+### On-Foot Visitor
+
+`lib/screens/security_on_foot_visitor_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Manual visitor entry without a vehicle disc.
+
+### Company Car
+
+`lib/screens/security_company_car_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Exit: licence + clock + odometer + purpose. Return: mileage capture. Reg must match a `vehicle_type: company_car` row in `security_vehicles`.
+
+### On-Site List
+
+`lib/screens/security_on_site_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Live list of vehicles currently on site (operational view; managers also use Pulse Operations hub).
+
+### Add Company Car Cost
+
+`lib/screens/security_add_cost_screen.dart` — **Roles:** Security Manager, Admin
+
+Company car picker + receipt/category. Not available to guards.
+
+### Document Scan (shared)
+
+`lib/screens/security_document_scan_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+
+Camera capture for disc/licence parsing (`security_document_parser.dart`).
+
+> **Manager desk guide:** Weighbridge, cost review, and gate-log reporting for managers live on **CTP Pulse** (`/security/*` hubs), not in this mobile app.
 
 ---
 

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Security Manager Mobile Guide</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Security Manager Mobile Guide</h1>
+</header>
+<h1 id="site-security--manager-mobile-guide">Site Security — Manager
+Mobile Guide</h1>
+<p><em>For Security Managers — mobile capture plus CTP Pulse
+desk</em></p>
+<p>Security managers use <strong>both</strong> surfaces:</p>
+<ul>
+<li><strong>This app (mobile)</strong> — same scan flows as guards, plus
+<strong>add company car cost</strong></li>
+<li><strong>CTP Pulse</strong> (<code>/security/*</code>) — gate log
+history, on-site overview, reports, deny list (requires
+<code>security</code> boardModules claim)</li>
+</ul>
+<p>Guards never use Pulse; you do.</p>
+<hr />
+<h2 id="mobile--what-you-can-do-here">Mobile — what you can do here</h2>
+<h3 id="home-and-tabs">Home and tabs</h3>
+<p>Unlike guards, you keep the <strong>standard job-card Home</strong>
+(quick actions, My Work tab) <strong>plus</strong> Waste and Security
+tabs when those modules are enabled.</p>
+<h3 id="site-security-tab">Site Security tab</h3>
+<p>Same flows as guards:</p>
+<ul>
+<li>Vehicle scan in / out (<strong>SEC-NNNN</strong>)</li>
+<li>On-foot visitor</li>
+<li>Company car exit / return</li>
+<li>On-site list</li>
+</ul>
+<p><strong>Add company car cost</strong> — available to you
+(<code>isSecurityCostManager</code>): pick a registered company car,
+category, receipt.</p>
+<h3 id="waste-recovery-tab">Waste Recovery tab</h3>
+<p>You can browse <strong>on-site stock</strong>, see <strong>Copper
+ready to sell</strong>, schedule loads, and begin collections. Pending
+weighbridge and cost review are completed on <strong>CTP Pulse</strong>
+— see the Waste Pulse guide there.</p>
+<hr />
+<h2 id="ctp-pulse-desk-primary-for-oversight">CTP Pulse desk (primary
+for oversight)</h2>
+<p>Use Pulse for:</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Pulse hub</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gate log + entry detail</td>
+<td>Operations</td>
+</tr>
+<tr>
+<td>Who is on site (desk view)</td>
+<td>Operations → On site</td>
+</tr>
+<tr>
+<td>Company car register + trips</td>
+<td>Vehicles</td>
+</tr>
+<tr>
+<td>Company car spend</td>
+<td>Costing</td>
+</tr>
+<tr>
+<td>CSV / XLSX exports</td>
+<td>Reports</td>
+</tr>
+<tr>
+<td>Deny list</td>
+<td>Setup (admin)</td>
+</tr>
+<tr>
+<td>Gates, vehicles, settings</td>
+<td>Central Settings → Site Security</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="quick-checklist">Quick checklist</h2>
+<ol type="1">
+<li><strong>Morning</strong> — Pulse Operations → On site + gate log
+filter.</li>
+<li><strong>During shift</strong> — mobile scans at the gate; optional
+company car costs on mobile or Pulse Costing.</li>
+<li><strong>End of day</strong> — Pulse Reports export if needed for
+audit.</li>
+</ol>
+</body>
+</html>

@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-06-29 — Site Security docs + guard-shell alignment
+
+### Site Security — documentation
+
+- **New guides:** `security_guard_guide.md` (module hub home, no job-card tiles) and `security_manager_mobile_guide.md` (mobile + Pulse desk split).
+- **Screens reference** — Home guard-hub layout + full Site Security screen catalog.
+- **Employee / Manager / Executive guides** — security roles and integrated modules (Waste, Site Security, Fleet, Ink).
+- **In-app Documentation** — `requiresSecurity` catalog gate; guards no longer see job-card-centric Employee Guide / App Features.
+
+### Engineering
+
+- `wasteSettingsProvider` + `documentation_screen` passes waste + security settings into `docsForUser`.
+- `tools/build-docs.ps1` — fixed document title generation on Windows PowerShell.
+- `test/doc_catalog_test.dart` — security guard / manager doc filtering.
+
+---
+
 ## 2026-06-24 — Waste cross-links (IBC bins + copper) and stock visibility
 
 ### Waste — IBC bins from Ink Factory

@@ -376,7 +376,7 @@ class _YourRolePageState extends State<_YourRolePage> {
       return "You oversee every waste load that leaves the factory — collections, weights, contractors, and reports.";
     }
     if (_isSecurityGuard) {
-      return "You process waste collections at the gate — beginning the load, recording items, and signing off at the weighbridge.";
+      return "You capture gate entries and waste collections on mobile — Site Security and Waste tabs are your primary work areas.";
     }
     if (_isFleetMechanic) {
       return "You maintain the Hyster machines on site — your work queue lives in the Fleet tab.";
@@ -466,7 +466,7 @@ class _YourRolePageState extends State<_YourRolePage> {
           _RoleBullet(Icons.settings,
               "Open the gear icon and unlock Admin with your password"),
           _RoleBullet(Icons.people_outline,
-              "Employees / Structures / Escalation Config / Job Cards — all editable from the Admin screen"),
+              "Employees / Structures / Escalation Config — editable from the Admin screen (job oversight is on CTP Pulse /jobs)"),
           _RoleBullet(Icons.timer,
               "Escalation rule changes go live on the next 2-minute Cloud Function tick"),
           _RoleBullet(Icons.map,
@@ -505,7 +505,7 @@ class _YourRolePageState extends State<_YourRolePage> {
       return "The next few pages cover job cards, priorities, and escalation — you'll still receive on-site notifications and can report faults too.";
     }
     if (_isSecurityGuard) {
-      return "The next few pages cover the job card system — you may still receive on-site notifications, so this context is useful.";
+      return "The next few pages cover priorities and escalation for the wider plant — your day-to-day screens are Site Security and Waste (see Documentation after setup).";
     }
     if (_isFleetMechanic) {
       return "The next few pages cover the standard job card system — as an operator you can still report and receive plant job cards too.";

@@ -12,6 +12,8 @@ import '../utils/role.dart';
 ///   matches `roles`.
 /// - `requiresFleet` — Fleet Maintenance users only (Mechanic, Reporter, Cost
 ///   Manager, Admin). Gated on the same condition as the Fleet tab.
+/// - `requiresSecurity` — Site Security users only (guard, manager, Admin).
+///   Further narrowed per-doc in `docsForUser` (guard vs manager guides).
 /// - `roles` — Set of base [UserRole]s allowed to see this doc.
 class DocEntry {
   final String id;
@@ -31,6 +33,11 @@ class DocEntry {
   /// visibility of the Fleet tab itself.
   final bool requiresFleet;
 
+  /// When true, only employees for whom `canUseSecurityModule()` returns true
+  /// can see this doc (when Site Security is enabled). Use for Site Security
+  /// guides; guard-only vs manager-only docs are filtered in `docsForUser`.
+  final bool requiresSecurity;
+
   const DocEntry({
     required this.id,
     required this.title,
@@ -40,6 +47,7 @@ class DocEntry {
     this.requiresAdmin = false,
     this.requiresWaste = false,
     this.requiresFleet = false,
+    this.requiresSecurity = false,
   });
 
   String get assetPath => 'docs/$id.md';

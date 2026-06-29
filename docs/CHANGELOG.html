@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>CHANGELOG</title>
+  <title>Changelog</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -28,7 +28,7 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">CHANGELOG</h1>
+<h1 class="title">Changelog</h1>
 </header>
 <h1 id="ctp-job-cards--documentation-changelog">CTP Job Cards —
 Documentation Changelog</h1>
@@ -38,6 +38,174 @@ errors.</p>
 <p>The role guides, the onboarding flow, and the reference docs all draw
 from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
+<hr />
+<h2
+id="2026-06-29--site-security-docs--guard-shell-alignment">2026-06-29 —
+Site Security docs + guard-shell alignment</h2>
+<h3 id="site-security--documentation">Site Security — documentation</h3>
+<ul>
+<li><strong>New guides:</strong> <code>security_guard_guide.md</code>
+(module hub home, no job-card tiles) and
+<code>security_manager_mobile_guide.md</code> (mobile + Pulse desk
+split).</li>
+<li><strong>Screens reference</strong> — Home guard-hub layout + full
+Site Security screen catalog.</li>
+<li><strong>Employee / Manager / Executive guides</strong> — security
+roles and integrated modules (Waste, Site Security, Fleet, Ink).</li>
+<li><strong>In-app Documentation</strong> —
+<code>requiresSecurity</code> catalog gate; guards no longer see
+job-card-centric Employee Guide / App Features.</li>
+</ul>
+<h3 id="engineering">Engineering</h3>
+<ul>
+<li><code>wasteSettingsProvider</code> +
+<code>documentation_screen</code> passes waste + security settings into
+<code>docsForUser</code>.</li>
+<li><code>tools/build-docs.ps1</code> — fixed document title generation
+on Windows PowerShell.</li>
+<li><code>test/doc_catalog_test.dart</code> — security guard / manager
+doc filtering.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-24--waste-cross-links-ibc-bins--copper-and-stock-visibility">2026-06-24
+— Waste cross-links (IBC bins + copper) and stock visibility</h2>
+<h3 id="waste--ibc-bins-from-ink-factory">Waste — IBC bins from Ink
+Factory</h3>
+<p>When an ink operator <strong>consumes an IBC</strong>, the app now
+auto-adds one <strong>IBC Bins</strong> row to on-site waste stock
+(identified by IBC number). Security links it on <strong>collection
+day</strong> via <strong>Begin Collection → From stock</strong>. Voiding
+ink consumption removes the stock item if it is still on site.</p>
+<h3 id="waste--copper-ready-to-sell-managers-only">Waste — Copper ready
+to sell (managers only)</h3>
+<p>When copper in the sell bucket reaches <strong>400 kg</strong>, the
+system auto-creates <strong>Copper Waste</strong> on-site stock
+(rods/nuggets). Security <strong>managers</strong> see a <strong>Copper
+ready to sell</strong> panel and the stock inventory;
+<strong>guards</strong> do not browse inventory but can still
+<strong>From stock</strong> at collection. Completing cost review on
+Pulse for a Copper Waste load records the sale in copper
+transactions.</p>
+<h3 id="docs--onboarding">Docs &amp; onboarding</h3>
+<ul>
+<li><strong>Waste Recovery Guide</strong>
+(<code>waste_user_guide.md</code>) — updated roles, IBC/copper flows,
+collection-day linking.</li>
+<li><strong>Permissions onboarding</strong> — manager vs guard bullets
+aligned with stock visibility.</li>
+</ul>
+<hr />
+<h2
+id="2026-06-23--admin-layout-refresh-ink-capture-on-mobile-read-optimisations">2026-06-23
+— Admin layout refresh, Ink capture on mobile, read optimisations</h2>
+<h3 id="admin--settings-first-five-tabs-no-job-cards-tab">Admin —
+Settings first, five tabs, no Job Cards tab</h3>
+<p>The Admin screen now opens on <strong>Settings</strong> (the tab you
+use most often). There are <strong>five</strong> tabs —
+<strong>Settings</strong>, <strong>Employees</strong>,
+<strong>Structures</strong>, <strong>On Site</strong>, and
+<strong>Comms</strong> — in that order.</p>
+<p>The old <strong>Job Cards</strong> tab (spreadsheet export and bulk
+delete) has been <strong>removed from the mobile app</strong>. Job card
+browsing, history, and KPIs live on <strong>CTP Pulse</strong>
+(<code>/jobs</code>) — use the web board for read-only oversight and
+exports. Mobile Admin stays focused on people, structure, escalation,
+and comms.</p>
+<p><strong>Employees</strong> is no longer a wide spreadsheet. You get a
+searchable <strong>card list</strong>: clock number, name, position,
+department, and an on-site / off-site pill you can tap to toggle. CSV
+template download, import, and bulk delete sit in a toolbar card at the
+top. FCM token editing moved into the <strong>Edit employee</strong>
+dialog (not shown on every row).</p>
+<p><strong>Structures</strong> has a stats row (department / area /
+machine counts), a search box, and expandable cards per department.
+Add-new forms for departments, areas, and machines sit in the same card
+style as Settings. Duplicate names are blocked with a clear message.</p>
+<h3
+id="ink-factory--operators-capture-on-mobile-managers-use-ctp-pulse">Ink
+Factory — operators capture on mobile; managers use CTP Pulse</h3>
+<p>The Ink Factory hub on mobile is <strong>capture-only</strong>:
+receive stock, meter readings, production, Toloul recovery, IBC
+register, and stock balances. The old manager tile grid (pending costs,
+month-end, recipes, corrections, and so on) is <strong>gone from the
+app</strong>.</p>
+<p>Everyone with Ink access now sees a <strong>Management &amp;
+costing</strong> card that opens <strong>CTP Pulse</strong>
+(<code>https://ctp-pulse.web.app/ink</code>) in the browser — month-end,
+pending costs, recipes, reports, and adjustments live there. Operators
+still never see money on mobile; managers do that work on Pulse.</p>
+<p>Stock item detail shows a <strong>bounded recent ledger</strong>
+(last 20 movements) so opening an item does not pull the full
+transaction history.</p>
+<h3 id="other-user-visible-tweaks">Other user-visible tweaks</h3>
+<ul>
+<li><strong>Waste load detail</strong> — removed the suggested rand
+estimate; only approved cost values are shown where relevant.</li>
+<li><strong>Home / job lists</strong> — active job card listening is
+merged into one stream where possible, reducing duplicate Firestore
+reads when the home screen is open.</li>
+</ul>
+<hr />
+<h2 id="2026-06-18--admin-user-feedback-tracking-board">2026-06-18 —
+Admin: user feedback tracking board</h2>
+<p>Admins can now review and track the feedback that staff submit from
+the <strong>Give Feedback</strong> button on the Home screen.</p>
+<p>A new <strong>User Feedback</strong> screen — reached from
+<strong>Admin → Settings → Feedback</strong> — lists every submission
+with who sent it and when. For each one you can:</p>
+<ul>
+<li>Set a tracking status: <strong>New → Planned → Implemented →
+Declined</strong>. Anything submitted before this feature shows as
+<strong>New</strong> until you triage it.</li>
+<li>Add private <strong>implementation notes</strong> — what you did,
+what's planned, or why it was declined.</li>
+<li>Filter by status, with live counts, to see at a glance what's still
+outstanding versus done.</li>
+<li>Delete a submission you no longer need.</li>
+</ul>
+<p>The board is <strong>admin-only</strong> — regular staff never see
+it; they just get the confirmation that their feedback was
+submitted.</p>
+<hr />
+<h2
+id="2026-06-18--ink-factory-combined-daily-readings-screen--recovery-history">2026-06-18
+— Ink Factory: combined daily readings screen + recovery history</h2>
+<p>Two quality-of-life improvements for Ink Factory and Lurgi staff.</p>
+<h3 id="ink-meters-and-toloul-meters-combined-on-one-screen">Ink meters
+and Toloul meters combined on one screen</h3>
+<p>The daily meter capture flow has been simplified. Previously the
+<strong>Daily Readings</strong> hub showed two separate cards — one for
+ink meters and one for Toloul meter points — and each opened its own
+screen. You now land directly on a <strong>single scrollable
+screen</strong> that shows all ink meters (Yellow, Red, Blue, Black,
+Gravure Binder) and all Toloul meter points (Recovery and Usage)
+together.</p>
+<ul>
+<li>One reading date at the top, shared across all entries.</li>
+<li>Enter whichever readings you have — fields you leave blank are
+skipped, so you can still submit ink-only or Toloul-only readings when
+needed.</li>
+<li>One <strong>Record readings</strong> button at the bottom submits
+everything in a single tap.</li>
+<li>The history strip on each card (showing the last few readings) works
+as before.</li>
+<li>The reset checkbox (for when a meter was zeroed) works as
+before.</li>
+</ul>
+<p>The <strong>Daily Readings</strong> tile on the Lurgi home screen
+opens this combined screen directly. The <strong>Meter Readings</strong>
+tile in the Ink Factory hub does the same.</p>
+<h3 id="toloul-recovery--previous-entries-shown-below-the-form">Toloul
+Recovery — previous entries shown below the form</h3>
+<p>The <strong>Toloul Recovery</strong> screen now shows your most
+recent recovery entries directly below the capture form, so you can see
+at a glance what was last entered without leaving the screen. Each entry
+shows the volume, the Lurgi source, the date, and who entered it.</p>
+<p>The form also stays open after a successful submit — fields clear and
+the date resets to now — so back-to-back entries (e.g. morning and
+afternoon recovery from the same Lurgi) can be captured without
+navigating away.</p>
 <hr />
 <h2
 id="2026-06-17--more-reliable-on-site-detection--required-security-update-v211">2026-06-17

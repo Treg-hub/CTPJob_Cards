@@ -51,13 +51,15 @@ cost approval, reports, and settings</strong>.</p>
 <tbody>
 <tr>
 <td><strong>Security Guard</strong></td>
-<td>Schedule, stock, begin collection, submit</td>
-<td>View loads only (if <code>waste</code> board claim)</td>
+<td>Schedule, begin collection, link stock at collection, submit</td>
+<td>View loads only (if <code>waste</code> board claim); <strong>no
+on-site stock inventory page</strong></td>
 </tr>
 <tr>
 <td><strong>Security Manager</strong></td>
-<td>Same field capture as guard</td>
-<td>Weighbridge, schedule/edit loads, overview queues</td>
+<td>Browse on-site stock + copper ready panel; link stock at
+collection</td>
+<td>Weighbridge, schedule/edit loads, overview queues, stock page</td>
 </tr>
 <tr>
 <td><strong>Admin</strong></td>
@@ -123,6 +125,9 @@ if needed).</li>
 <strong>Completed</strong> with <code>cost_by_type</code> saved.</li>
 <li>Rates entered during review are upserted to <code>waste_rates</code>
 keyed by <strong>waste_type</strong>.</li>
+<li><strong>Copper Waste loads:</strong> approval also writes
+<code>record_sale_from_waste</code> in <code>copper_transactions</code>
+(linked to load id; audit only).</li>
 </ol>
 <p>Open <strong>Details</strong> to see the full load including
 <code>cost_by_type</code> breakdown after completion.</p>

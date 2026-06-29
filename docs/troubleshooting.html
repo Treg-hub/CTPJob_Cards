@@ -62,10 +62,17 @@ Function has no way to reach you.</li>
 <li><strong>On-site status</strong> — geofencing only alerts on-site
 technicians. If you're showing as off-site when you're physically on
 site, see "Geofence not triggering" below.</li>
+<li><strong>Home health banner</strong> — if orange "On-site alerts may
+not work" (or "Some alerts may not reach you") appears at the top of
+Home, tap <strong>Fix</strong> and grant every listed permission.
+Settings → App Permissions shows the same six checks with a <strong>Fix
+all permissions</strong> button.</li>
 </ol>
 <p>If all of those check out, ask Admin to look at the
 <code>notifications</code> Firestore collection — it logs every send
-attempt and lists exactly which clock numbers were targeted.</p>
+attempt and lists exactly which clock numbers were targeted. Admin can
+send a <strong>targeted broadcast</strong> (Admin → Comms → Targeted
+Message) to specific clock numbers asking users to fix permissions.</p>
 <hr />
 <h2 id="full-screen-p5-alarm-not-firing">Full-screen P5 alarm not
 firing</h2>

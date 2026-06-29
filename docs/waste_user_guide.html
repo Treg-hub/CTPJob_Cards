@@ -56,18 +56,21 @@ weighbridge document.</p>
 <tbody>
 <tr>
 <td><strong>Security Manager</strong></td>
-<td>Record stock; schedule loads; create on-the-spot loads; link stock;
-capture loaded-truck photos; finish loading</td>
+<td>Browse on-site stock inventory; see <strong>Copper ready to
+sell</strong>; schedule loads; link stock <strong>on collection
+day</strong>; begin collections; finish loading</td>
 </tr>
 <tr>
 <td><strong>Security Guard</strong></td>
-<td>Same field-capture tasks: schedule, stock, begin collections, items,
-optional photos/signature, submit</td>
+<td>Schedule loads; <strong>begin collections</strong>; link saved stock
+<strong>at collection</strong> (From stock); items, photos, signature,
+submit — <strong>does not browse on-site stock inventory</strong></td>
 </tr>
 <tr>
 <td><strong>Admin</strong></td>
-<td>Same on mobile. <strong>Weighbridge, cost review, reports, and
-settings</strong> are on <strong>CTP Pulse</strong> only.</td>
+<td>Same as manager on mobile. <strong>Weighbridge, cost review,
+reports, and settings</strong> are on <strong>CTP Pulse</strong>
+only.</td>
 </tr>
 </tbody>
 </table>
@@ -169,22 +172,80 @@ stock items need at least one photo.</p>
 Required</strong> in the same settings panel. Optional by default at
 launch.</p>
 <hr />
-<h2 id="step-0--record-stock-on-site-optional-but-recommended">Step 0 —
-Record stock on site (optional but recommended)</h2>
+<h2 id="step-0--on-site-stock-managers--admins">Step 0 — On-site stock
+(managers &amp; admins)</h2>
+<p><strong>Security managers and admins</strong> can browse and record
+on-site stock. <strong>Guards do not</strong> see the stock inventory
+screen or banner — they link saved stock <strong>on collection
+day</strong> via <strong>Begin Collection → From stock</strong> (see
+Step 3).</p>
+<h3 id="manual-stock-paper-etc">Manual stock (paper, etc.)</h3>
 <p>Use this when waste is <strong>already sitting on site</strong>
 before the truck arrives (e.g. slab waste, reelends, scrap reels).</p>
 <ol type="1">
 <li>On the <strong>Loads</strong> tab, tap <strong>+ New /
-Schedule</strong> → <strong>Paper Waste Stock</strong>.</li>
-<li>Tap <strong>+</strong> to record a new stock item: choose subtype,
-take photos, enter estimated weight.</li>
-<li>The item stays <strong>On Site</strong> until it is linked to a load
-and the collection is confirmed.</li>
+Schedule</strong> → <strong>On-site Stock</strong> (or tap the green
+stock banner).</li>
+<li>Tap <strong>+</strong> to record a new item: choose type, take
+photos if required, enter estimated weight (or quantity for
+quantity-only types).</li>
+<li>The item stays <strong>On Site</strong> until linked to a load on
+<strong>collection day</strong> and the collection is submitted.</li>
 </ol>
-<p>Stock is stored under <strong>Paper Waste</strong> with a
-<strong>subtype</strong> (e.g. <em>Slab Waste</em>, <em>Reelends</em>,
-<em>Scrap Reels</em>) — even when the contractor's waste types are
-listed as separate chips.</p>
+<p>Paper-family stock is stored under <strong>Paper Waste</strong> with
+a <strong>subtype</strong> (e.g. <em>Slab Waste</em>, <em>Reelends</em>,
+<em>Scrap Reels</em>).</p>
+<h3 id="ibc-bins-automatic-from-ink-factory">IBC Bins (automatic from
+Ink Factory)</h3>
+<p>When an ink operator <strong>consumes an IBC</strong> in the Ink
+Factory app, the system automatically adds <strong>one IBC Bin</strong>
+to on-site waste stock (identified by <strong>IBC number</strong>). No
+photo is required on the stock record — guards add photos at collection
+if <strong>Photos Required</strong> is on.</p>
+<ul>
+<li>Visible to <strong>guards and managers</strong> in the stock
+inventory (managers) or when linking at collection (guards).</li>
+<li><strong>Quantity-only</strong> — weighbridge is skipped; cost review
+uses <strong>count × rate</strong>.</li>
+<li>If an ink manager <strong>voids</strong> the consumption, the linked
+stock item is removed automatically.</li>
+</ul>
+<h3 id="copper-ready-to-sell-managers--admins-only">Copper ready to sell
+(managers &amp; admins only)</h3>
+<p>Copper rods and nuggets are tracked in the separate
+<strong>Copper</strong> module (whitelist staff). The Waste tab shows a
+<strong>Copper ready to sell</strong> panel for <strong>security
+managers and admins only</strong> — guards never see this.</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What you see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Below <strong>400 kg</strong> total in the copper sell bucket</td>
+<td>Panel shows rods/nuggets kg still in the copper module — not yet
+waste stock</td>
+</tr>
+<tr>
+<td><strong>400 kg or more</strong></td>
+<td>System auto-creates <strong>Copper Waste</strong> on-site stock
+(Rods and/or Nuggets). Copper module sell bucket resets. Panel shows kg
+awaiting collection</td>
+</tr>
+<tr>
+<td>Collection day</td>
+<td>Schedule a <strong>Copper Waste</strong> load (no need to pre-link
+stock). On collection, tap <strong>From stock</strong> and select the
+auto-created items</td>
+</tr>
+</tbody>
+</table>
+<p>When an admin <strong>approves cost</strong> on Pulse for a Copper
+Waste load, the commercial sale is recorded in copper transactions
+automatically.</p>
 <hr />
 <h2 id="step-1--create-the-load">Step 1 — Create the load</h2>
 <p>Tap <strong>+ New / Schedule</strong> on the Loads tab.</p>
@@ -198,8 +259,10 @@ Glenpak).</li>
 <li><strong>Waste types</strong> — tap one or more chips. All contractor
 types are pre-selected; deselect any you do not need. Stock and new
 items are <strong>filtered to your selection</strong>.</li>
-<li><strong>On-site stock (optional)</strong> — tick saved stock items
-to pre-link. The guard will see these when collection starts.</li>
+<li><strong>On-site stock (optional)</strong> — managers may pre-link
+stock when scheduling. For <strong>IBC Bins</strong> and <strong>Copper
+Waste</strong>, linking usually happens <strong>on collection
+day</strong> instead (see Step 3).</li>
 <li><strong>Expected date</strong> — the day the truck is due. Time is
 not required.</li>
 <li><strong>Notes</strong> — optional instructions for the guard.</li>
@@ -263,10 +326,11 @@ a scheduled load</h2>
 registration</strong>.</li>
 <li><strong>Waste items:</strong>
 <ul>
-<li>Pre-linked stock appears automatically (marked
-<em>Pre-loaded</em>).</li>
-<li>Tap <strong>From stock</strong> to add more saved items found at the
-gate.</li>
+<li>Pre-linked stock appears automatically (marked <em>Pre-loaded</em>)
+if the manager linked any at schedule time.</li>
+<li>Tap <strong>From stock</strong> to link saved on-site items (IBC
+bins, copper, paper, etc.). <strong>Guards use this</strong> even though
+they do not browse the stock inventory list.</li>
 <li>Tap <strong>Fresh item</strong> to capture new material.</li>
 <li><strong>Weight-based items:</strong> enter weight in kg. Photos
 recommended.</li>
@@ -319,6 +383,8 @@ live.</li>
 <li>Confirm <strong>Approved amount</strong> and tap
 <strong>Approve</strong> — load becomes <strong>Completed</strong> with
 <code>cost_by_type</code> saved.</li>
+<li><strong>Copper Waste loads:</strong> approving also records the sale
+in the copper module (audit transaction linked to the load).</li>
 </ol>
 <p>Reports and exports: <strong>CTP Pulse → Waste</strong>.</p>
 <hr />
@@ -404,10 +470,13 @@ items; this is expected and can be ignored. Only the weighbridge weight
 is used for cost calculations.</p>
 </blockquote>
 <hr />
-<h2 id="paper-waste-stock-banner">Paper Waste Stock banner</h2>
-<p>On the Loads tab, the green <strong>Paper Waste Stock</strong> banner
-shows how many items are on site and the total estimated weight. Tap it
-to open the stock inventory.</p>
+<h2 id="on-site-stock-banner-managers--admins">On-site stock banner
+(managers &amp; admins)</h2>
+<p>On the Loads tab, managers and admins see a green <strong>on-site
+stock</strong> banner (estimated weight and/or bin count). Tap it to
+open the stock inventory.</p>
+<p>Guards <strong>do not</strong> see this banner — they link stock only
+during <strong>Begin Collection → From stock</strong>.</p>
 <hr />
 <h2 id="waste-type-modes-admin">Waste type modes (admin)</h2>
 <p>Configure types in <strong>CTP Pulse → Settings → Waste → Waste
@@ -435,10 +504,27 @@ Types</strong> (Firestore <code>waste_types</code> documents).</p>
 <h2 id="tips--troubleshooting">Tips &amp; troubleshooting</h2>
 <p><strong>Stock not showing when I select waste types</strong></p>
 <ul>
-<li>Stock lives under Paper Waste subtypes. Make sure the matching chips
-are selected (e.g. <em>Reelends</em>, <em>Slab Waste</em>).</li>
+<li>Paper stock lives under Paper Waste subtypes — select matching chips
+(e.g. <em>Reelends</em>, <em>Slab Waste</em>).</li>
+<li><strong>IBC Bins</strong> loads: link stock with waste type
+<strong>IBC Bins</strong>; bins appear after ink operators consume
+IBCs.</li>
+<li><strong>Copper Waste</strong> loads: manager-only stock appears
+after copper sell total reaches <strong>400 kg</strong>; use
+<strong>From stock</strong> on collection day.</li>
 <li>Only <strong>on-site</strong> stock appears — items already loaded
 on another truck are excluded.</li>
+</ul>
+<p><strong>Guard cannot find On-site Stock menu</strong></p>
+<ul>
+<li>By design. Guards link stock at collection via <strong>From
+stock</strong>, not the inventory screen.</li>
+</ul>
+<p><strong>IBC consumed in ink but no bin in waste</strong></p>
+<ul>
+<li>Consumption must complete online. Stock doc id is
+<code>stock_ibc_{number}</code> — retry consume if a prior attempt
+failed partway.</li>
 </ul>
 <p><strong>Cannot submit collection</strong></p>
 <ul>
@@ -479,9 +565,13 @@ not yet written.</li>
 <h2 id="quick-checklist">Quick checklist</h2>
 <h3 id="manager--scheduled-load">Manager — scheduled load</h3>
 <ul class="task-list">
-<li><label><input type="checkbox" />Record stock (optional)</label></li>
+<li><label><input type="checkbox" />Check on-site stock banner / copper
+panel (optional)</label></li>
 <li><label><input type="checkbox" />Schedule load: contractor, waste
-types, stock, expected date</label></li>
+types, expected date (pre-link stock optional)</label></li>
+<li><label><input type="checkbox" />On collection day: guard or manager
+links stock via <strong>From stock</strong> if not
+pre-linked</label></li>
 <li><label><input type="checkbox" />After guard submits: enter off-site
 weighbridge document when received <em>(not needed for IBC
 Bins)</em></label></li>
@@ -490,6 +580,8 @@ Bins)</em></label></li>
 <ul class="task-list">
 <li><label><input type="checkbox" />Begin Collection on incoming
 load</label></li>
+<li><label><input type="checkbox" /><strong>From stock</strong> — link
+IBC bins or other saved items (no inventory browse)</label></li>
 <li><label><input type="checkbox" />Driver details + confirm/add
 items</label>
 <ul>
@@ -497,7 +589,7 @@ items</label>
 <li>IBC Bins / compactor bins: enter quantity only</li>
 </ul></li>
 <li><label><input type="checkbox" />At least one loaded-truck photo +
-driver signature</label></li>
+driver signature when required</label></li>
 <li><label><input type="checkbox" />Submit Collection</label></li>
 </ul>
 <h3 id="manager--truck-already-here">Manager — truck already here</h3>
@@ -521,7 +613,7 @@ Approved amount if accounts differ</label></li>
 accounts</label></li>
 </ul>
 <hr />
-<p><em>CTP Waste Recovery · Mobile Field Guide · Updated 22 June 2026 ·
+<p><em>CTP Waste Recovery · Mobile Field Guide · Updated 24 June 2026 ·
 Pulse steps: waste_pulse_guide.md</em></p>
 </body>
 </html>

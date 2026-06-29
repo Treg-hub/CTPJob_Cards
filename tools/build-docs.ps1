@@ -41,6 +41,18 @@ if (-not (Test-Path $docsDir)) {
     throw "docs/ directory not found at $docsDir"
 }
 
+# Optional PDF engine (first match wins).
+$script:PdfEngine = $null
+foreach ($candidate in @('wkhtmltopdf', 'weasyprint', 'pdflatex', 'xelatex', 'lualatex')) {
+    if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+        $script:PdfEngine = $candidate
+        break
+    }
+}
+if ($Pdf -and -not $script:PdfEngine) {
+    Write-Host "No PDF engine on PATH — HTML will still regenerate; install wkhtmltopdf for PDF output." -ForegroundColor Yellow
+}
+
 # Locate pandoc — required.
 $pandoc = Get-Command pandoc -ErrorAction SilentlyContinue
 if (-not $pandoc) {
@@ -73,11 +85,21 @@ $outDir = if ($Check) {
 # Always relative — keeps committed and check-mode HTML byte-identical.
 $cssRel = 'docs.css'
 
+function Get-DocTitle {
+    param([string]$Name)
+    $spaced = ($Name -replace '_', ' ')
+    try {
+        return [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($spaced.ToLower())
+    } catch {
+        return $spaced
+    }
+}
+
 $failed = 0
 foreach ($md in $markdownFiles) {
     $name    = [IO.Path]::GetFileNameWithoutExtension($md.Name)
     $htmlOut = Join-Path $outDir "$name.html"
-    $title   = $name -replace '_', ' ' -replace '\b(\w)', { $args[0].Value.ToUpper() }
+    $title   = Get-DocTitle -Name $name
 
     Write-Host "→ $($md.Name) → $name.html"
 
@@ -98,12 +120,13 @@ foreach ($md in $markdownFiles) {
     if ($Pdf -and -not $Check) {
         $pdfOut = Join-Path $outDir "$name.pdf"
         Write-Host "  + $name.pdf"
-        & $pandoc.Path `
-            --from=gfm `
-            --output=$pdfOut `
-            $md.FullName
+        $pdfArgs = @('--from=gfm', "--output=$pdfOut", $md.FullName)
+        if ($script:PdfEngine) {
+            $pdfArgs = @('--pdf-engine=' + $script:PdfEngine) + $pdfArgs
+        }
+        & $pandoc.Path @pdfArgs
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "  pandoc PDF failed for $($md.Name) — install a PDF engine (wkhtmltopdf or LaTeX)." -ForegroundColor Yellow
+            Write-Host "  pandoc PDF failed for $($md.Name) — install wkhtmltopdf (winget install wkhtmltopdf) or a LaTeX engine." -ForegroundColor Yellow
         }
     }
 }

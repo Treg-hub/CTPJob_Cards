@@ -1989,6 +1989,17 @@ class WasteService {
     return WasteSettings.fromFirestore(snap);
   }
 
+  Stream<WasteSettings> watchSettings() {
+    return _firestore
+        .collection(Collections.wasteSettings)
+        .doc('config')
+        .snapshots()
+        .map((snap) {
+      if (!snap.exists) return WasteSettings.defaults;
+      return WasteSettings.fromFirestore(snap);
+    });
+  }
+
   Future<void> saveWasteSettings(WasteSettings settings) async {
     await _firestore
         .collection(Collections.wasteSettings)

@@ -2,7 +2,7 @@ name: ctp_job_cards
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.2.0+77
+version: 2.2.0+78
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
@@ -87,6 +87,8 @@ flutter:
     - docs/fleet_mechanic_guide.md
     - docs/fleet_reporter_guide.md
     - docs/fleet_cost_manager_guide.md
+    - docs/security_guard_guide.md
+    - docs/security_manager_mobile_guide.md
 
 flutter_launcher_icons:
   image_path: "assets/images/logo.png"

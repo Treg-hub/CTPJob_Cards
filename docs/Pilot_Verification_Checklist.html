@@ -285,6 +285,26 @@ Skip</strong></label></p>
 directly (no weighbridge).</li>
 <li>Pulse weighbridge queue does not list quantity-only loads.</li>
 </ul></li>
+<li><p><label><input type="checkbox" /><strong>Ink IBC → Waste
+stock</strong></label></p>
+<ul>
+<li>Ink operator consumes IBC → <code>waste_stock/stock_ibc_{n}</code>
+created (IBC Bins, qty 1).</li>
+<li>Manager sees bin in on-site stock; guard does not browse inventory
+but can <strong>From stock</strong> on collection.</li>
+<li>Void ink consumption → stock auto-disposed if still on site.</li>
+</ul></li>
+<li><p><label><input type="checkbox" /><strong>Copper 400 kg → Waste
+stock</strong></label></p>
+<ul>
+<li>Copper sell bucket ≥400 kg → auto Copper Waste stock (manager_only);
+copper sell buckets zeroed.</li>
+<li>Manager sees copper panel + stock; guard links at collection
+only.</li>
+<li>Cost review approve on Copper Waste load →
+<code>record_sale_from_waste</code> in
+<code>copper_transactions</code>.</li>
+</ul></li>
 <li><p><label><input type="checkbox" /><strong>Reports View
 (Pulse)</strong></label></p>
 <ul>
@@ -301,8 +321,9 @@ Consistency</h2>
 <li><p><label><input type="checkbox" /><strong>Feature Parity Matrix
 (Pilot Users)</strong> | Capability | Mobile | Pulse | Notes |
 |------------|--------|-------|-------| | Schedule / create load | Full
-| Full | Pulse for manager corrections | | Stock capture | Full | Full |
-Paper stock on both | | Collection + items + photos | Full | Partial |
+| Full | Pulse for manager corrections | | Stock capture | Manager
+browse; guard link at collection | Manager browse | IBC auto from ink;
+copper at 400 kg | | Collection + items + photos | Full | Partial |
 Pulse new/edit load | | Signature | Full | Partial | Pulse finish
 loading | | Weighbridge | — | Full | Mobile handoff banner only | | Cost
 review | — | Full | Admin only | | Reports + export | — | Full | CSV/PDF

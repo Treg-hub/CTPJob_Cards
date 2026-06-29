@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/doc_entry.dart';
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import 'role.dart';
 
@@ -105,6 +106,22 @@ const List<DocEntry> docCatalog = [
     roles: _allUserFacingRoles,
     requiresFleet: true,
   ),
+  DocEntry(
+    id: 'security_guard_guide',
+    title: 'Site Security — Guard Guide',
+    description: 'Gate scans, module hub home, Waste tab — no job-card tiles.',
+    icon: Icons.shield_outlined,
+    roles: _allUserFacingRoles,
+    requiresSecurity: true,
+  ),
+  DocEntry(
+    id: 'security_manager_mobile_guide',
+    title: 'Site Security — Manager Guide',
+    description: 'Mobile scans + company car costs; Pulse desk for reports.',
+    icon: Icons.admin_panel_settings_outlined,
+    roles: {UserRole.manager, UserRole.admin},
+    requiresSecurity: true,
+  ),
 ];
 
 /// Returns the docs visible to [employee] given their inferred role,
@@ -123,19 +140,46 @@ const List<DocEntry> docCatalog = [
 /// 4. `requiresFleet` — excluded unless the Fleet module is enabled and the
 ///    user is a Fleet user. Mirrors the visibility of the Fleet tab.
 /// 5. `roles` — standard role membership check.
-List<DocEntry> docsForUser(Employee? employee,
-    [FleetSettings? fleetSettings, WasteSettings? wasteSettings]) {
+List<DocEntry> docsForUser(
+  Employee? employee, [
+  FleetSettings? fleetSettings,
+  WasteSettings? wasteSettings,
+  SecuritySettings? securitySettings,
+]) {
   final role = roleFromEmployee(employee);
   final admin = isAdmin(employee);
   final wasteUser = isWasteUser(employee, wasteSettings);
   final fleetUser = (fleetSettings?.fleetEnabled ?? false) &&
       isFleetUser(employee, fleetSettings);
+  final securityUser = (securitySettings?.securityEnabled ?? false) &&
+      canUseSecurityModule(employee, securitySettings);
+  final guardShell =
+      isSiteSecurityGuardOnly(employee, securitySettings);
   return docCatalog.where((doc) {
     if (doc.requiresAdmin && !admin) return false;
-    if (admin) return true;
+    if (admin) {
+      if (doc.requiresSecurity &&
+          !_canSeeSecurityRoleGuide(
+              doc.id, employee, securitySettings, admin)) {
+        return false;
+      }
+      return true;
+    }
     if (doc.requiresWaste && !wasteUser) return false;
     if (doc.requiresFleet && !fleetUser) return false;
-    if (fleetUser && !_canSeeFleetRoleGuide(doc.id, employee, fleetSettings, admin)) {
+    if (doc.requiresSecurity && !securityUser) return false;
+    if (fleetUser &&
+        !_canSeeFleetRoleGuide(doc.id, employee, fleetSettings, admin)) {
+      return false;
+    }
+    if (securityUser &&
+        !_canSeeSecurityRoleGuide(
+            doc.id, employee, securitySettings, admin)) {
+      return false;
+    }
+    // Job-card-centric guides are misleading for site-security guards only.
+    if (guardShell &&
+        (doc.id == 'employee_guide' || doc.id == 'app_features')) {
       return false;
     }
     return doc.roles.contains(role);
@@ -153,6 +197,22 @@ bool _canSeeFleetRoleGuide(
       return admin || isFleetMechanic(employee, settings);
     case 'fleet_reporter_guide':
       return admin || isFleetReporter(employee, settings);
+    default:
+      return true;
+  }
+}
+
+bool _canSeeSecurityRoleGuide(
+  String docId,
+  Employee? employee,
+  SecuritySettings? settings,
+  bool admin,
+) {
+  switch (docId) {
+    case 'security_guard_guide':
+      return admin || isSiteSecurityGuardOnly(employee, settings);
+    case 'security_manager_mobile_guide':
+      return admin || isSecurityCostManager(employee, settings);
     default:
       return true;
   }
