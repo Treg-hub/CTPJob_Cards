@@ -6,6 +6,12 @@ typedef PoFulfillmentResult = ({
   String status,
 });
 
+typedef ShipmentFulfillmentResult = ({
+  Map<String, double> remainingKgByItem,
+  String status,
+  List<String> linkedShipmentIds,
+});
+
 PoFulfillmentResult deductReceiptFromPurchaseOrder({
   required Map<String, double> remainingKgByItem,
   required String itemCode,
@@ -20,4 +26,33 @@ PoFulfillmentResult deductReceiptFromPurchaseOrder({
       ? 'fulfilled'
       : 'partially_fulfilled';
   return (remainingKgByItem: remaining, status: status);
+}
+
+/// Deducts received/scanned kg per item from PO remaining qty.
+/// Mirrors Pulse `applyShipmentToPurchaseOrder` deduction logic.
+ShipmentFulfillmentResult applyShipmentDeduction({
+  required Map<String, double> remainingKgByItem,
+  required Map<String, double> receivedKgByItem,
+  required List<String> linkedShipmentIds,
+  required String shipmentId,
+}) {
+  final deduct = receivedKgByItem;
+
+  final remaining = Map<String, double>.from(remainingKgByItem);
+  for (final entry in deduct.entries) {
+    if (entry.key.isEmpty || entry.value <= 0) continue;
+    remaining[entry.key] =
+        ((remaining[entry.key] ?? 0) - entry.value).clamp(0, double.infinity);
+  }
+
+  final linked = {...linkedShipmentIds, shipmentId}.toList();
+  final totalRemaining = remaining.values.fold<double>(0, (a, b) => a + b);
+  final status = totalRemaining <= inkPoFulfilledThreshold
+      ? 'fulfilled'
+      : 'partially_fulfilled';
+  return (
+    remainingKgByItem: remaining,
+    status: status,
+    linkedShipmentIds: linked,
+  );
 }

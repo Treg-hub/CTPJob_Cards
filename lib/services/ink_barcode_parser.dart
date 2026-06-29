@@ -16,6 +16,7 @@
 ///     human-readable output (some scanners emit "(01)...(10)...") are handled.
 class IbcScanResult {
   const IbcScanResult({
+    this.sscc,
     this.ibcNumber,
     this.colour,
     this.weightKg,
@@ -23,6 +24,8 @@ class IbcScanResult {
     this.weightTruncated = false,
   });
 
+  /// Full SSCC digits when parsed from a GS1 serial barcode (18–20 digits).
+  final String? sscc;
   final String? ibcNumber;
   final String? colour; // 'Yellow' | 'Red' | 'Blue' | 'Black'
   final double? weightKg;
@@ -35,6 +38,7 @@ class IbcScanResult {
 
   /// Combines two results, preferring already-populated fields.
   IbcScanResult merge(IbcScanResult o) => IbcScanResult(
+        sscc: sscc ?? o.sscc,
         ibcNumber: ibcNumber ?? o.ibcNumber,
         colour: colour ?? o.colour,
         weightKg: weightKg ?? o.weightKg,
@@ -86,13 +90,14 @@ double _pow10(int exp) {
 IbcScanResult parseIbcBarcodes(List<String> rawCodes) {
   final codes = rawCodes.map(_clean).where((c) => c.isNotEmpty).toList();
 
+  String? sscc;
   String? ibc;
   String? colour;
   String? charge;
   double? weight;
   var truncated = false;
 
-  // --- IBC number ---
+  // --- IBC number (display = last 8; store full SSCC when available) ---
   for (final c in codes) {
     if (c.startsWith('&') && c.length >= 9) {
       ibc = c.substring(c.length - 8);
@@ -106,6 +111,7 @@ IbcScanResult parseIbcBarcodes(List<String> rawCodes) {
       final isSscc = (c.startsWith('00') && digits.length == 20) ||
           digits.length == 18; // bare NVE
       if (isSscc && digits.length >= 8) {
+        sscc = digits;
         ibc = digits.substring(digits.length - 8);
         break;
       }
@@ -173,6 +179,7 @@ IbcScanResult parseIbcBarcodes(List<String> rawCodes) {
   }
 
   return IbcScanResult(
+    sscc: sscc,
     ibcNumber: ibc,
     colour: colour,
     weightKg: weight,

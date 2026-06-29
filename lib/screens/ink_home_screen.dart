@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/ink_stock_item.dart';
 import '../providers/ink_provider.dart';
+import '../widgets/ink_daily_readings_banner.dart';
 import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
@@ -27,8 +28,8 @@ class InkHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final inkMeterDone =
-        ref.watch(inkTodayInkMeterDoneProvider).valueOrNull ?? true;
+    final readingsStatus =
+        ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
@@ -43,9 +44,9 @@ class InkHomeScreen extends ConsumerWidget {
           _StockQtySummary(itemsAsync: itemsAsync),
           const SizedBox(height: 12),
           _PulseManageCard(pulseUrl: _pulseInkUrl),
-          if (!inkMeterDone) ...[
+          if (readingsStatus != null && !readingsStatus.complete) ...[
             const SizedBox(height: 12),
-            const _MeterReminderBanner(),
+            InkDailyReadingsBanner(status: readingsStatus),
           ],
           const SizedBox(height: 16),
           _sectionLabel(context, 'Capture'),
@@ -233,44 +234,6 @@ class _StockQtySummary extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MeterReminderBanner extends StatelessWidget {
-  const _MeterReminderBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.errorContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const InkDailyReadingsScreen())),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Icon(Icons.speed, color: scheme.onErrorContainer),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Daily meter reading not captured yet today.',
-                  style: TextStyle(
-                      color: scheme.onErrorContainer,
-                      fontWeight: FontWeight.w600),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: scheme.onErrorContainer),
-            ],
-          ),
         ),
       ),
     );

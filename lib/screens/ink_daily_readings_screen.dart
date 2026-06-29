@@ -112,6 +112,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
           continue;
         }
       }
+      final didReset = _inkReset[item.itemCode] ?? false;
+      final noChange = lastReading != null && litres == 0 && !didReset;
       toWriteInk.add(InkTransaction(
         type: InkTxnType.consumptionMeter,
         stockItemCode: item.itemCode,
@@ -125,7 +127,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
         sessionId: sessionId,
         actorClockNo: emp?.clockNo ?? '',
         actorName: emp?.name ?? '',
-        idempotencyKey: const Uuid().v4(),
+        idempotencyKey: '${sessionId}_${item.itemCode}',
+        notes: noChange ? 'No change in meter reading' : null,
       ));
 
       final maxL = _maxInkLitresFor(item);
@@ -136,8 +139,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     }
 
     // ── Toloul meter entries ───────────────────────────────────────────────
-    final toloulLines =
-        <({String pointId, double reading, double consumption, bool reset})>[];
+    final toloulLines = <
+        ({
+          String pointId,
+          double reading,
+          double consumption,
+          bool reset,
+          bool noChange,
+        })>[];
 
     for (final p in toloulPoints) {
       final id = p.id!;
@@ -163,11 +172,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
           continue;
         }
       }
+      final noChange =
+          lastReading != null && consumption == 0 && !didReset;
       toloulLines.add((
         pointId: id,
         reading: entered,
         consumption: consumption,
         reset: didReset,
+        noChange: noChange,
       ));
 
       if (consumption > _maxToloulLitres) {
@@ -235,22 +247,31 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     setState(() => _submitting = true);
     final svc = ref.read(inkServiceProvider);
     try {
-      for (final t in toWriteInk) {
-        await svc.recordTransaction(t);
-      }
-      if (toloulLines.isNotEmpty) {
-        await svc.recordMeterPointReadings(
-          readingDate: _effectiveAt,
-          lines: toloulLines,
-          actorClockNo: emp?.clockNo ?? '',
-          actorName: emp?.name ?? '',
-        );
-      }
+      await svc.recordDailyMeterSession(
+        sessionId: sessionId,
+        readingDate: _effectiveAt,
+        inkTransactions: toWriteInk,
+        toloulLines: toloulLines,
+        actorClockNo: emp?.clockNo ?? '',
+        actorName: emp?.name ?? '',
+      );
       if (!mounted) return;
       final total = toWriteInk.length + toloulLines.length;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$total reading(s) recorded.')));
       Navigator.pop(context);
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      final isDuplicateDay = e.message.contains('calendar day');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isDuplicateDay
+            ? 'Meter readings already submitted for this day. '
+                'Void the existing session first (Ink hub → Meter Sessions).'
+            : e.message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -481,6 +502,10 @@ class _InkMeterCard extends StatelessWidget {
       } else if (belowLast) {
         preview = 'Below last (${qty.format(last)}). Was the meter reset?';
         color = scheme.error;
+      } else if (entered == last!) {
+        consumptionLitres = 0;
+        preview = 'No change in meter reading';
+        color = scheme.onSurfaceVariant;
       } else {
         final d = entered - last!;
         consumptionLitres = d;
@@ -630,6 +655,10 @@ class _ToloulMeterCard extends StatelessWidget {
       } else if (belowLast) {
         preview = 'Below last (${qty.format(last)}). Was the meter reset?';
         color = scheme.error;
+      } else if (entered == last!) {
+        consumptionLitres = 0;
+        preview = 'No change in meter reading';
+        color = scheme.onSurfaceVariant;
       } else {
         consumptionLitres = entered - last!;
         preview = '${qty.format(consumptionLitres)} L';

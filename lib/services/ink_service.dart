@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import '../models/ink_conversion_factor.dart';
 import '../models/ink_count_event.dart';
+import '../models/ink_daily_readings_status.dart';
 import '../models/ink_ibc.dart';
 import '../models/ink_meter_point.dart';
 import '../models/ink_production_run.dart';
@@ -12,6 +16,7 @@ import '../models/ink_purchase_order.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_shipment.dart';
 import '../utils/ink_po_fulfillment.dart';
+import '../utils/ink_sscc.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
@@ -235,6 +240,96 @@ class InkService {
         idempotencyKey: '${sessionId}_adj_${l.itemCode}',
       ));
     }
+
+    await _appendMonthlyConsumptionSnapshot(countDate, actorName: actorName);
+  }
+
+  static const _consumptionTxnTypeValues = {
+    'consumption_meter',
+    'consumption_production',
+    'consumption_toloul_wash',
+    'consumption_toloul_production',
+  };
+
+  /// Rolls up consumption txns for the count month into consumption_baseline
+  /// and refreshes manufacturing_config binder ratio (incremental, not full ledger).
+  Future<void> _appendMonthlyConsumptionSnapshot(
+    DateTime countDate, {
+    String? actorName,
+  }) async {
+    final ym =
+        '${countDate.year}-${countDate.month.toString().padLeft(2, '0')}';
+    final monthStart = DateTime(countDate.year, countDate.month, 1);
+    final monthEnd =
+        DateTime(countDate.year, countDate.month + 1, 0, 23, 59, 59, 999);
+
+    final snap = await _db
+        .collection(Collections.inkTransactions)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('effective_at', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+        .get();
+
+    final monthTotals = <String, double>{};
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      if (d['voided'] as bool? ?? false) continue;
+      final type = d['type'] as String? ?? '';
+      if (!_consumptionTxnTypeValues.contains(type)) continue;
+      final code = d['stock_item_code'] as String? ?? '';
+      if (code.isEmpty) continue;
+      final qty = ((d['quantity_delta'] as num?)?.toDouble() ?? 0).abs();
+      if (qty <= 0) continue;
+      monthTotals[code] = (monthTotals[code] ?? 0) + qty;
+    }
+
+    final baselineRef =
+        _db.collection(Collections.inkSettings).doc('consumption_baseline');
+    final baselineSnap = await baselineRef.get();
+    final existingSeries = Map<String, Map<String, double>>.from(
+      (baselineSnap.data()?['series'] as Map<String, dynamic>? ?? {}).map(
+        (code, months) => MapEntry(
+          code,
+          Map<String, double>.from(
+            (months as Map).map(
+              (k, v) => MapEntry(k as String, (v as num).toDouble()),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    for (final e in monthTotals.entries) {
+      existingSeries.putIfAbsent(e.key, () => {})[ym] = e.value;
+    }
+
+    await baselineRef.set({
+      'series': existingSeries,
+      'last_snapshot_at': FieldValue.serverTimestamp(),
+      'last_snapshot_month': ym,
+      'last_snapshot_by': actorName,
+      'source_note': 'month_end_count_$ym',
+    }, SetOptions(merge: true));
+
+    double inkTotal = 0;
+    double binderTotal = 0;
+    const pressInk = ['yellow', 'red', 'blue', 'black'];
+    for (final code in pressInk) {
+      for (final v in existingSeries[code]?.values ?? const <double>[]) {
+        if (v > 0) inkTotal += v;
+      }
+    }
+    for (final v in existingSeries['gravure_binder']?.values ?? const <double>[]) {
+      if (v > 0) binderTotal += v;
+    }
+    final ratio = inkTotal > 0 && binderTotal > 0 ? binderTotal / inkTotal : null;
+
+    await _db.collection(Collections.inkSettings).doc('manufacturing_config').set({
+      if (ratio != null) 'binder_per_ink_kg': ratio,
+      'ratio_source': ratio != null ? 'monthly_snapshots' : 'fallback',
+      'ratio_updated_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   /// Corrects [original] using the reversing-entry model: the original is marked
@@ -683,6 +778,35 @@ class InkService {
         return list;
       });
 
+  static DateTime _calendarDayStart(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  static DateTime _calendarDayEnd(DateTime date) =>
+      DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+
+  /// Throws if a non-voided `consumption_meter` session exists on [date]'s
+  /// calendar day — operators must void the existing session before re-submitting.
+  Future<void> assertNoActiveMeterSessionForCalendarDay(DateTime date) async {
+    final dayStart = _calendarDayStart(date);
+    final dayEnd = _calendarDayEnd(date);
+    final snap = await _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('effective_at', isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
+        .get();
+    final hasActive = snap.docs.any(
+      (d) => !(d.data()['voided'] as bool? ?? false),
+    );
+    if (hasActive) {
+      throw StateError(
+        'A meter reading session already exists for this calendar day. '
+        'Void it first before submitting again.',
+      );
+    }
+  }
+
   /// Deduct receipt qty from PO remaining; idempotent per [receiptKey].
   Future<void> applyReceiptToPurchaseOrder({
     required String purchaseOrderId,
@@ -724,12 +848,75 @@ class InkService {
     });
   }
 
-  /// Receiving ink via IBC: registers each IBC (doc id = number) and records
-  /// ONE cost-pending `purchase` per colour for the total kg. Receipts are
-  /// idempotent (IBC docs keyed by number; purchase key derived from the
-  /// numbers), so an offline replay won't duplicate. When [shipmentId] is given
-  /// the IBCs + purchases are stamped with it and the shipment is advanced
-  /// (received_units appended, status → received).
+  /// Deducts shipment manifest lines from PO remaining qty; idempotent per
+  /// shipment via `fulfillment_applied_at`. Called on mobile IBC receive, not
+  /// on Pulse shipment create.
+  Future<void> applyShipmentToPurchaseOrder({
+    required InkShipment shipment,
+    required String purchaseOrderId,
+    required Map<String, double> receivedKgByItem,
+  }) async {
+    if (purchaseOrderId.isEmpty) return;
+
+    final poRef =
+        _db.collection(Collections.inkPurchaseOrders).doc(purchaseOrderId);
+    final shipRef = _db.collection(Collections.inkShipments).doc(shipment.id);
+
+    await _db.runTransaction((txn) async {
+      final poSnap = await txn.get(poRef);
+      if (!poSnap.exists) {
+        throw StateError('Purchase order $purchaseOrderId not found');
+      }
+
+      final shipSnap = await txn.get(shipRef);
+      if (shipSnap.exists) {
+        final applied = shipSnap.data()?['fulfillment_applied_at'];
+        if (applied != null) return;
+      }
+
+      final poData = poSnap.data() ?? {};
+      final remainingRaw =
+          poData['remaining_kg_by_item'] as Map<String, dynamic>? ?? {};
+      final remaining = <String, double>{
+        for (final e in remainingRaw.entries)
+          e.key: (e.value as num?)?.toDouble() ?? 0,
+      };
+      final linked =
+          (poData['linked_shipment_ids'] as List?)?.cast<String>() ?? [];
+
+      final result = applyShipmentDeduction(
+        remainingKgByItem: remaining,
+        receivedKgByItem: receivedKgByItem,
+        linkedShipmentIds: linked,
+        shipmentId: shipment.id,
+      );
+
+      txn.set(
+        poRef,
+        {
+          'remaining_kg_by_item': result.remainingKgByItem,
+          'linked_shipment_ids': result.linkedShipmentIds,
+          'status': result.status,
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      txn.set(
+        shipRef,
+        {
+          'purchase_order_id': purchaseOrderId,
+          'fulfillment_applied_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
+
+  /// Receiving ink via IBC — Wave B: `ink_ibcs` creates go through the
+  /// `recordInkIbcReceipt` Cloud Function (Admin SDK). Purchase txns + shipment
+  /// updates are written in the same CF transaction.
   Future<void> recordIbcReceipt({
     required List<InkIbc> ibcs,
     required String supplierName,
@@ -740,63 +927,28 @@ class InkService {
     String? cgnaNumber,
     String? shipmentId,
   }) async {
-    for (final ibc in ibcs) {
-      await _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber).set(
-            InkIbc(
-              ibcNumber: ibc.ibcNumber,
-              itemCode: ibc.itemCode,
-              kg: ibc.kg,
-              receivedDate: effectiveAt,
-              supplierName: supplierName,
-              orderNumber: orderNumber,
-              cgnaNumber: cgnaNumber,
-              chargeNumber: ibc.chargeNumber,
-              shipmentId: shipmentId,
-            ).toFirestore(),
-            SetOptions(merge: true),
-          );
-    }
-    final byItem = <String, double>{};
-    final numbersByItem = <String, List<String>>{};
-    for (final ibc in ibcs) {
-      byItem[ibc.itemCode] = (byItem[ibc.itemCode] ?? 0) + ibc.kg;
-      (numbersByItem[ibc.itemCode] ??= []).add(ibc.ibcNumber);
-    }
-    for (final entry in byItem.entries) {
-      final nums = numbersByItem[entry.key]!..sort();
-      await recordTransaction(InkTransaction(
-        type: InkTxnType.purchase,
-        stockItemCode: entry.key,
-        quantityDelta: entry.value,
-        effectiveAt: effectiveAt,
-        costStatus: InkCostStatus.pending,
-        supplierName: supplierName,
-        notes: '${nums.length} IBC(s): ${nums.join(', ')}'
-            '${(orderNumber ?? '').isNotEmpty ? ' · Order $orderNumber' : ''}'
-            '${(cgnaNumber ?? '').isNotEmpty ? ' · CGNA $cgnaNumber' : ''}',
-        actorClockNo: actorClockNo,
-        actorName: actorName,
-        idempotencyKey: 'ibcrcpt_${entry.key}_${nums.join('_')}',
-        shipmentId: shipmentId,
-      ));
-    }
-    if (shipmentId != null && shipmentId.isNotEmpty) {
-      final received = [
+    final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('recordInkIbcReceipt');
+    await callable.call<Map<String, dynamic>>({
+      'ibcs': [
         for (final ibc in ibcs)
           {
-            'ref': ibc.ibcNumber,
+            'sscc': ibc.sscc,
+            'ibc_number': ibc.ibcNumber,
             'item_code': ibc.itemCode,
-            'net_kg': ibc.kg,
-            'scanned_by': actorClockNo,
-            'scanned_at': Timestamp.fromDate(effectiveAt),
+            'kg': ibc.kg,
+            'charge_number': ibc.chargeNumber,
           },
-      ];
-      await _db.collection(Collections.inkShipments).doc(shipmentId).set({
-        'received_units': FieldValue.arrayUnion(received),
-        'status': 'received',
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
+      ],
+      'supplier_name': supplierName,
+      'effective_at': effectiveAt.toIso8601String(),
+      'actor_clock_no': actorClockNo,
+      'actor_name': actorName,
+      if (orderNumber != null && orderNumber.isNotEmpty)
+        'order_number': orderNumber,
+      if (cgnaNumber != null && cgnaNumber.isNotEmpty) 'cgna_number': cgnaNumber,
+      if (shipmentId != null && shipmentId.isNotEmpty) 'shipment_id': shipmentId,
+    });
   }
 
   /// Receiving a raw material / solvent (one item per call). Records the
@@ -985,6 +1137,8 @@ class InkService {
 
   /// Records meter-point readings (no stock effect). Each line carries the
   /// already-computed [consumption] (delta or reset value).
+  /// When [sessionId] is given, doc id is `${sessionId}_${pointId}` and
+  /// readings are linked for void-by-session.
   Future<void> recordMeterPointReadings({
     required DateTime readingDate,
     required List<
@@ -992,12 +1146,15 @@ class InkService {
         lines,
     required String actorClockNo,
     required String actorName,
+    String? sessionId,
   }) async {
-    final minuteKey = readingDate.millisecondsSinceEpoch ~/ 60000;
     for (final l in lines) {
-      final docId = '${l.pointId}_$minuteKey';
+      final docId = sessionId != null && sessionId.isNotEmpty
+          ? '${sessionId}_${l.pointId}'
+          : '${l.pointId}_${readingDate.millisecondsSinceEpoch ~/ 60000}';
       await _db.collection(Collections.inkMeterPointReadings).doc(docId).set({
         'point_id': l.pointId,
+        if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
         'reading': l.reading,
         'consumption': l.consumption,
         'reset': l.reset,
@@ -1007,6 +1164,91 @@ class InkService {
         'actor_name': actorName,
       });
     }
+  }
+
+  /// Atomic daily submit: ink `consumption_meter` rows + toloul meter-point
+  /// readings in one batch, sharing [sessionId]. Blocks duplicate calendar days.
+  Future<void> recordDailyMeterSession({
+    required String sessionId,
+    required DateTime readingDate,
+    required List<InkTransaction> inkTransactions,
+    required List<
+            ({
+              String pointId,
+              double reading,
+              double consumption,
+              bool reset,
+              bool noChange,
+            })>
+        toloulLines,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    await assertNoActiveMeterSessionForCalendarDay(readingDate);
+
+    final batch = _db.batch();
+    for (final t in inkTransactions) {
+      final key = t.idempotencyKey.isNotEmpty
+          ? t.idempotencyKey
+          : '${sessionId}_${t.stockItemCode}';
+      batch.set(
+        _db.collection(Collections.inkTransactions).doc(key),
+        InkTransaction(
+          id: t.id,
+          seqNumber: t.seqNumber,
+          type: t.type,
+          stockItemCode: t.stockItemCode,
+          quantityDelta: t.quantityDelta,
+          effectiveAt: t.effectiveAt,
+          recordedAt: t.recordedAt,
+          totalCost: t.totalCost,
+          newWac: t.newWac,
+          costStatus: t.costStatus,
+          voided: t.voided,
+          balanceBefore: t.balanceBefore,
+          balanceAfter: t.balanceAfter,
+          wacAtTime: t.wacAtTime,
+          actorClockNo: t.actorClockNo,
+          actorName: t.actorName,
+          idempotencyKey: key,
+          flaggedForReview: t.flaggedForReview,
+          flagReason: t.flagReason,
+          reason: t.reason,
+          notes: t.notes,
+          relatedTransactionId: t.relatedTransactionId,
+          productionRunId: t.productionRunId,
+          sessionId: sessionId,
+          ibcNumber: t.ibcNumber,
+          lurgiSource: t.lurgiSource,
+          supplierName: t.supplierName,
+          litresEntered: t.litresEntered,
+          conversionFactorUsed: t.conversionFactorUsed,
+          meterReading: t.meterReading,
+          readingDate: t.readingDate,
+          shipmentId: t.shipmentId,
+          purchaseOrderId: t.purchaseOrderId,
+        ).toFirestore(),
+      );
+    }
+    for (final l in toloulLines) {
+      final docId = '${sessionId}_${l.pointId}';
+      batch.set(
+        _db.collection(Collections.inkMeterPointReadings).doc(docId),
+        {
+          'point_id': l.pointId,
+          'session_id': sessionId,
+          'reading': l.reading,
+          'consumption': l.consumption,
+          'reset': l.reset,
+          if (l.noChange) 'notes': 'No change in meter reading',
+          'reading_date': Timestamp.fromDate(readingDate),
+          'recorded_at': FieldValue.serverTimestamp(),
+          'actor_clock_no': actorClockNo,
+          'actor_name': actorName,
+        },
+      );
+    }
+    await batch.commit();
   }
 
   /// The most recent [limit] readings per meter point (newest first) — for the
@@ -1064,9 +1306,8 @@ class InkService {
       });
   }
 
-  /// True if at least one ink-meter (consumptionMeter) transaction was recorded
-  /// today (midnight → now). Used by the daily-readings hub to lock the tile.
-  Stream<bool> watchTodayInkMeterStatus() {
+  /// Item codes with a non-voided ink meter reading captured today.
+  Stream<Set<String>> watchTodayInkMeterItemCodes() {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     return _db
@@ -1075,11 +1316,19 @@ class InkService {
         .where('effective_at',
             isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
         .snapshots()
-        .map((s) => s.docs.isNotEmpty);
+        .map((s) {
+          final codes = <String>{};
+          for (final d in s.docs) {
+            if (d.data()['voided'] as bool? ?? false) continue;
+            final code = d.data()['stock_item_code'] as String?;
+            if (code != null && code.isNotEmpty) codes.add(code);
+          }
+          return codes;
+        });
   }
 
-  /// True if at least one toloul meter-point reading was recorded today.
-  Stream<bool> watchTodayToloulMeterStatus() {
+  /// Toloul meter point ids with a reading captured today.
+  Stream<Set<String>> watchTodayToloulPointIds() {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     return _db
@@ -1087,8 +1336,64 @@ class InkService {
         .where('reading_date',
             isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
         .snapshots()
-        .map((s) => s.docs.isNotEmpty);
+        .map((s) {
+          final ids = <String>{};
+          for (final d in s.docs) {
+            final pid = d.data()['point_id'] as String?;
+            if (pid != null && pid.isNotEmpty) ids.add(pid);
+          }
+          return ids;
+        });
   }
+
+  /// Combined daily-readings status — all metered ink items AND all toloul points.
+  Stream<InkDailyReadingsStatus> watchDailyReadingsStatus({
+    required Set<String> requiredInkCodes,
+    required Set<String> requiredToloulPointIds,
+  }) {
+    final controller = StreamController<InkDailyReadingsStatus>();
+    Set<String> inkCaptured = {};
+    Set<String> toloulCaptured = {};
+
+    void emit() {
+      final needsInk = requiredInkCodes.isNotEmpty;
+      final needsToloul = requiredToloulPointIds.isNotEmpty;
+      if (!controller.isClosed) {
+        controller.add(InkDailyReadingsStatus(
+          needsInk: needsInk,
+          needsToloul: needsToloul,
+          inkDone:
+              !needsInk || requiredInkCodes.every(inkCaptured.contains),
+          toloulDone: !needsToloul ||
+              requiredToloulPointIds.every(toloulCaptured.contains),
+        ));
+      }
+    }
+
+    final inkSub = watchTodayInkMeterItemCodes().listen((s) {
+      inkCaptured = s;
+      emit();
+    });
+    final tolSub = watchTodayToloulPointIds().listen((s) {
+      toloulCaptured = s;
+      emit();
+    });
+
+    controller.onCancel = () async {
+      await inkSub.cancel();
+      await tolSub.cancel();
+    };
+
+    return controller.stream;
+  }
+
+  /// @deprecated Use [watchDailyReadingsStatus] via [inkDailyReadingsStatusProvider].
+  Stream<bool> watchTodayInkMeterStatus() =>
+      watchTodayInkMeterItemCodes().map((codes) => codes.isNotEmpty);
+
+  /// @deprecated Use [watchDailyReadingsStatus] via [inkDailyReadingsStatusProvider].
+  Stream<bool> watchTodayToloulMeterStatus() =>
+      watchTodayToloulPointIds().map((ids) => ids.isNotEmpty);
 
   /// All meter-point readings (for month-end totals).
   Stream<List<({String pointId, double consumption, DateTime readingDate})>>
@@ -1148,10 +1453,10 @@ class InkService {
 
   /// Voids a whole meter-reading session: flags every ink `consumption_meter`
   /// row with [sessionId] voided (preserved for audit; the server re-replays so
-  /// the stock is restored) and DELETES the report-only toloul meter-point
-  /// readings captured at [readingDate] (aux data with no stock impact — removed
-  /// so the operator can re-enter the session with the correct date). The caller
-  /// must already have cleared the closed-period guard for [readingDate].
+  /// the stock is restored) and DELETES linked toloul meter-point readings
+  /// (matched by [sessionId]; aux data with no stock impact — removed so the
+  /// operator can re-enter the session). The caller must already have cleared
+  /// the closed-period guard for [readingDate].
   Future<void> voidMeterSession(
     String sessionId,
     DateTime readingDate, {
@@ -1167,7 +1472,7 @@ class InkService {
         .get();
     final tolSnap = await _db
         .collection(Collections.inkMeterPointReadings)
-        .where('reading_date', isEqualTo: Timestamp.fromDate(readingDate))
+        .where('session_id', isEqualTo: sessionId)
         .get();
     final batch = _db.batch();
     for (final d in txnsSnap.docs) {
