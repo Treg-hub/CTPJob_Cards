@@ -979,6 +979,18 @@ class _SecurityVehicleGateScreenState
                                     const SizedBox(height: 8),
                                     _DiscSummaryCard(disc: _disc!),
                                   ],
+                                  if (_disc != null && _companyVehicle == null) ...[
+                                    const SizedBox(height: 8),
+                                    _CompanyRegistryHintCard(
+                                      scannedReg: SecurityVehicle.normalizeReg(
+                                        _disc!.vehicleReg,
+                                      ),
+                                      registeredCompanyCars: vehicles
+                                          .where((v) => v.isCompanyCar && v.active)
+                                          .map((v) => v.vehicleReg)
+                                          .toList(),
+                                    ),
+                                  ],
                                   if (_companyVehicle != null) ...[
                                     const SizedBox(height: 12),
                                     _CompanyCarCard(
@@ -1559,6 +1571,97 @@ class _DirectionPanel extends StatelessWidget {
                 ],
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompanyRegistryHintCard extends StatelessWidget {
+  const _CompanyRegistryHintCard({
+    required this.scannedReg,
+    required this.registeredCompanyCars,
+  });
+
+  final String scannedReg;
+  final List<String> registeredCompanyCars;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final regMissing = scannedReg.isEmpty;
+
+    return Card(
+      color: Colors.orange.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange.shade900, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Not a registered company car',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.orange.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (regMissing)
+              const Text(
+                'The disc was scanned but no registration could be read. '
+                'Rescan the PDF417 on the disc, or use Manual on the scanner screen.',
+              )
+            else ...[
+              Text(
+                'Disc plate: $scannedReg',
+                style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'This reg is not in the company car register, or the vehicle is '
+                'inactive. Job Cards will treat this as a visitor/contractor vehicle.',
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'In Pulse: Settings → Site Security → Company vehicles — scan the '
+                'same disc (QR button) or type the plate exactly as shown above. '
+                'Use the licence disc plate, not the LPF serial or driver licence.',
+              ),
+            ],
+            if (registeredCompanyCars.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Registered company cars (${registeredCompanyCars.length}):',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: registeredCompanyCars
+                    .map(
+                      (r) => Chip(
+                        label: Text(r, style: const TextStyle(fontFamily: 'monospace')),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'No active company cars in the register yet — add this plate in Pulse first.',
+                ),
+              ),
           ],
         ),
       ),
