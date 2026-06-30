@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:intl/intl.dart';
 
 import '../constants/collections.dart';
@@ -100,6 +101,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
   // ── Writes ──────────────────────────────────────────────────────────────
 
   Future<void> _setStatus(String docId, FeedbackStatus status) async {
+    if (!guardPersonaSubmit(context)) return;
     try {
       await FirebaseFirestore.instance.collection(Collections.feedback).doc(docId).set({
         'status': status.id,
@@ -112,6 +114,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
   }
 
   Future<void> _editNotes(String docId, String existing) async {
+    if (!guardPersonaSubmit(context)) return;
     final controller = TextEditingController(text: existing);
     final result = await showDialog<String>(
       context: context,
@@ -150,6 +153,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
   }
 
   Future<void> _deleteFeedback(String docId) async {
+    if (!guardPersonaSubmit(context)) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

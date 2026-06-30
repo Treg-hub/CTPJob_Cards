@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/current_employee_provider.dart';
@@ -54,6 +55,7 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
   }
 
   Future<void> _editComments(CopperTransaction tx) async {
+    if (!guardPersonaSubmit(context)) return;
     final messenger = ScaffoldMessenger.of(context);
     _editCommentsController.text = tx.comments;
     showModalBottomSheet(

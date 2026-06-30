@@ -8,6 +8,7 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
@@ -36,11 +37,13 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   }
 
   Future<void> _submit(InkRecipe recipe, Map<String, double> wacByItem) async {
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
     setState(() => _submitting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     try {
       await ref.read(inkServiceProvider).recordProductionRun(
             recipe: recipe,
@@ -65,7 +68,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   @override
   Widget build(BuildContext context) {
     final recipesAsync = ref.watch(inkRecipesProvider);
-    final runsAsync = ref.watch(inkProductionRunsProvider);
+    final runsAsync = ref.watch(inkProductionRunsCurrentPeriodProvider);
     final items = ref.watch(inkStockItemsProvider).valueOrNull ?? [];
     final byCode = {for (final i in items) i.itemCode: i};
     final wacByItem = {for (final i in items) i.itemCode: i.weightedAverageCost};
@@ -173,7 +176,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 4),
-              Text('Recent Runs',
+              Text('Runs this period',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
               ...runsAsync.when(
@@ -188,7 +191,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
                         padding:
                             const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
-                          'No production runs recorded yet.',
+                          'No production runs in the current period.',
                           style: TextStyle(
                               color: scheme.onSurfaceVariant,
                               fontSize: 13),

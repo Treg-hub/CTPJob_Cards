@@ -16,12 +16,12 @@ import '../models/ink_purchase_order.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_shipment.dart';
 import '../utils/ink_po_fulfillment.dart';
-import '../utils/ink_sscc.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import '../utils/persona_audit.dart';
 import 'waste_stock_crosslink.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
@@ -37,6 +37,8 @@ class InkService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final Uuid _uuid = const Uuid();
 
+  void _guardWrite() => assertPersonaSubmitAllowed();
+
   // ---------------------------------------------------------------------------
   // SETTINGS
   // ---------------------------------------------------------------------------
@@ -47,23 +49,31 @@ class InkService {
       .snapshots()
       .map((s) => s.exists ? InkSettings.fromFirestore(s) : InkSettings.defaults);
 
-  Future<void> saveSettings(InkSettings settings) => _db
+  Future<void> saveSettings(InkSettings settings) async {
+    _guardWrite();
+    await _db
       .collection(Collections.inkSettings)
       .doc('config')
       .set(settings.toFirestore(), SetOptions(merge: true));
+  }
 
   /// Adds [periodKey] to `closed_periods`.
-  Future<void> closePeriod(String periodKey) => _db
+  Future<void> closePeriod(String periodKey) async {
+    _guardWrite();
+    await _db
       .collection(Collections.inkSettings)
       .doc('config')
       .set(
         {'closed_periods': FieldValue.arrayUnion([periodKey])},
         SetOptions(merge: true),
       );
+  }
 
   /// Removes [periodKey] from both `closed_periods` and
   /// `periods_needing_reissue`.
-  Future<void> reopenPeriod(String periodKey) => _db
+  Future<void> reopenPeriod(String periodKey) async {
+    _guardWrite();
+    await _db
       .collection(Collections.inkSettings)
       .doc('config')
       .set(
@@ -73,6 +83,7 @@ class InkService {
         },
         SetOptions(merge: true),
       );
+  }
 
   /// Adds [periodKey] to `periods_needing_reissue` (manager-override was used
   /// to post into a finalised period).
@@ -131,27 +142,35 @@ class InkService {
   /// retry hits an existing doc (rules treat .set() on existing as UPDATE,
   /// which is blocked by the hasOnly whitelist).
   Future<void> recordTransaction(InkTransaction txn) async {
+    assertPersonaSubmitAllowed();
     final key =
         txn.idempotencyKey.isNotEmpty ? txn.idempotencyKey : _uuid.v4();
     final ref = _db.collection(Collections.inkTransactions).doc(key);
+    final data = {...txn.toFirestore(), ...personaAuditFields()};
 
     if (txn.idempotencyKey.isNotEmpty) {
       await _db.runTransaction((txnObj) async {
         final snap = await txnObj.get(ref);
         if (snap.exists) return; // already recorded — idempotent skip
-        txnObj.set(ref, txn.toFirestore());
+        txnObj.set(ref, data);
       });
     } else {
-      await ref.set(txn.toFirestore());
+      await ref.set(data);
     }
   }
 
   /// Manager: enter/correct the cost on a pending receipt → flips to `costed`
   /// and triggers a WAC re-replay server-side.
-  Future<void> setPurchaseCost(String txnId, double totalCost) => _db
-      .collection(Collections.inkTransactions)
-      .doc(txnId)
-      .update({'total_cost': totalCost, 'cost_status': InkCostStatus.costed.value});
+  Future<void> setPurchaseCost(String txnId, double totalCost) async {
+    _guardWrite();
+    await _db
+        .collection(Collections.inkTransactions)
+        .doc(txnId)
+        .update({
+      'total_cost': totalCost,
+      'cost_status': InkCostStatus.costed.value,
+    });
+  }
 
   /// Manager: correct the effective date on a pending (uncosted) receipt.
   /// The server trigger re-replays from [effectiveAt] when the cost is later saved.
@@ -194,6 +213,7 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    _guardWrite();
     final sessionId = _uuid.v4();
     final adjustments = lines.where((l) => (l.counted - l.ledgerBalance).abs() >= 1e-9).toList();
 
@@ -575,6 +595,7 @@ class InkService {
       });
 
   Future<void> saveRecipe(InkRecipe recipe) async {
+    _guardWrite();
     if (recipe.id == null) {
       await _db.collection(Collections.inkRecipes).add(recipe.toFirestore());
     } else {
@@ -625,6 +646,7 @@ class InkService {
     required String actorName,
     required Map<String, double> wacByItem,
   }) async {
+    _guardWrite();
     final runId = _uuid.v4();
     var totalInputCost = 0.0;
     final inputTxns = <InkTransaction>[];
@@ -670,6 +692,7 @@ class InkService {
       'actor_clock_no': actorClockNo,
       'actor_name': actorName,
       'recorded_at': FieldValue.serverTimestamp(),
+      ...personaAuditFields(),
     });
     for (final t in inputTxns) {
       await recordTransaction(t);
@@ -927,6 +950,7 @@ class InkService {
     String? cgnaNumber,
     String? shipmentId,
   }) async {
+    _guardWrite();
     final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
         .httpsCallable('recordInkIbcReceipt');
     await callable.call<Map<String, dynamic>>({
@@ -1003,6 +1027,7 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    _guardWrite();
     final ibcRef = _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber);
     final washKey = 'ibcwash_${ibc.ibcNumber}';
     final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
@@ -1066,6 +1091,7 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    _guardWrite();
     await WasteStockCrosslink.assertIbcStockVoidable(_db, ibc.ibcNumber);
 
     final washRef =
@@ -1184,6 +1210,7 @@ class InkService {
     required String actorClockNo,
     required String actorName,
   }) async {
+    _guardWrite();
     await assertNoActiveMeterSessionForCalendarDay(readingDate);
 
     final batch = _db.batch();

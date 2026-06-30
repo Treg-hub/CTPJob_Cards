@@ -30,7 +30,17 @@ import 'services/device_health_service.dart';
 import 'services/location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-Employee? currentEmployee;
+/// Logged-in employee (never replaced by UI persona).
+Employee? realEmployee;
+
+/// UI-only persona overlay for admin role testing (in-memory; cleared on restart).
+Employee? personaEmployee;
+
+/// When persona is active, whether Firestore writes are allowed (with audit stamping).
+bool personaAllowTestSubmissions = false;
+
+/// Effective identity for UI gating — persona when active, otherwise [realEmployee].
+Employee? get currentEmployee => personaEmployee ?? realEmployee;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -224,7 +234,7 @@ void main() async {
           .doc(clockNo)
           .get(const GetOptions(source: Source.cache));
       if (cachedDoc.exists && cachedDoc.data() != null) {
-        currentEmployee = Employee.fromFirestore(cachedDoc.data()!, clockNo);
+        realEmployee = Employee.fromFirestore(cachedDoc.data()!, clockNo);
         debugPrint('✅ Employee loaded from cache for $clockNo');
       }
     } catch (_) {
@@ -232,10 +242,10 @@ void main() async {
     }
 
     // Cache miss: try network
-    if (currentEmployee == null) {
+    if (realEmployee == null) {
       try {
-        currentEmployee = await firestoreService.getEmployee(clockNo);
-        if (currentEmployee == null) {
+        realEmployee = await firestoreService.getEmployee(clockNo);
+        if (realEmployee == null) {
           employeeNotFound = true; // doc confirmed absent in Firestore
         }
       } catch (e) {
@@ -246,13 +256,13 @@ void main() async {
 
     // Both cache and network failed transiently — build a stub from SharedPreferences
     // so HomeScreen always has a name to display while Firestore loads in the background.
-    if (currentEmployee == null && !employeeNotFound) {
+    if (realEmployee == null && !employeeNotFound) {
       final name = prefs.getString('loggedInName') ?? '';
       final position = prefs.getString('loggedInPosition') ?? '';
       final department = prefs.getString('loggedInDepartment') ?? '';
       final adminFlag = prefs.getBool('loggedInAdmin') ?? false;
       if (name.isNotEmpty) {
-        currentEmployee = Employee(
+        realEmployee = Employee(
           clockNo: clockNo,
           name: name,
           position: position,
@@ -269,7 +279,7 @@ void main() async {
       initialScreen = const LoginScreen();
     } else {
       // Employee loaded (or fetch failed transiently) — keep user logged in
-      if (currentEmployee != null) {
+      if (realEmployee != null) {
         if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
         if (!kIsWeb) {
           NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});

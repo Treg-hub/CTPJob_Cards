@@ -8,6 +8,7 @@ import '../models/assignment_event.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import 'connectivity_service.dart';
+import '../utils/persona_audit.dart';
 
 /// Single implementation of every job-card action, shared by the detail
 /// screen, the My Work tab, and Daily Review.
@@ -66,12 +67,14 @@ class JobCardActionsService {
   /// the local cache (which the detail stream reads) applies it immediately;
   /// awaiting would hang the UI until reconnect.
   Future<void> _apply(String jobCardId, Map<String, dynamic> update) async {
+    assertPersonaSubmitAllowed();
+    final payload = withPersonaAudit(update);
     final ref = _ref(jobCardId);
     final online = kIsWeb || await ConnectivityService().isOnline();
     if (online) {
-      await ref.update(update);
+      await ref.update(payload);
     } else {
-      unawaited(ref.update(update).catchError((Object e) {
+      unawaited(ref.update(payload).catchError((Object e) {
         debugPrint('⚠️ Deferred job-card update failed after reconnect: $e');
       }));
       debugPrint('📤 Job-card update queued in Firestore persistence (offline)');

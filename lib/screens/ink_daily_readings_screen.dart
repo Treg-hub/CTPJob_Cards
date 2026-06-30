@@ -10,6 +10,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
 
@@ -80,7 +81,9 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     List<InkMeterPoint> toloulPoints,
     Map<String, double> lastToloul,
   ) async {
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    if (!guardPersonaSubmit(context)) return;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     final sessionId = const Uuid().v4();
 
     // ── Ink meter entries ──────────────────────────────────────────────────

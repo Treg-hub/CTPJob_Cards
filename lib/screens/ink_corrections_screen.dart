@@ -9,6 +9,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/role.dart' as role_utils;
 import 'ink_stock_item_detail_screen.dart' show inkTxnLabel;
 
@@ -114,11 +115,13 @@ class _State extends ConsumerState<InkCorrectionsScreen> {
           content: Text('Enter a corrected quantity and a reason.')));
       return;
     }
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, effectiveAt);
     if (!allowed) return;
     setState(() => _correcting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     final correction = InkTransaction(
       type: original.type,
       stockItemCode: original.stockItemCode,

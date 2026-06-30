@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -107,6 +108,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
       (!_photosRequired || _totalPhotoCount >= 1);
 
   Future<void> _addPhoto(ImageSource source) async {
+    if (!guardPersonaSubmit(context)) return;
     setState(() => _addingPhoto = true);
     try {
       final path = await _wasteService.pickAndCompressPhotoFromSource(source);
@@ -126,6 +128,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_isValid) return;
     setState(() => _isSaving = true);
     try {
@@ -168,7 +171,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           subtype: _selectedWasteType!,
           estimatedWeightKg: weight,
           notes: notes,
-          createdBy: currentEmployee?.clockNo ?? '',
+          createdBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
           createdByName: currentEmployee?.name ?? '',
           createdAt: DateTime.now(),
         );

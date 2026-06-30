@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/persona_audit.dart';
 import '../models/ink_transaction.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
@@ -19,6 +20,7 @@ class InkPendingCostsScreen extends ConsumerWidget {
 
   Future<void> _editDate(
       BuildContext context, WidgetRef ref, InkTransaction txn) async {
+    if (!guardPersonaSubmit(context)) return;
     final picked = await pickInkDateTime(context, txn.effectiveAt);
     if (picked == null || picked == txn.effectiveAt) return;
     if (txn.id == null) return;
@@ -31,6 +33,7 @@ class InkPendingCostsScreen extends ConsumerWidget {
 
   Future<void> _enterCost(
       BuildContext context, WidgetRef ref, InkTransaction txn, String unit) async {
+    if (!guardPersonaSubmit(context)) return;
     final ctrl = TextEditingController();
     final value = await showDialog<double>(
       context: context,

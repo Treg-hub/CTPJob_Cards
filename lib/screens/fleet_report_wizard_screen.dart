@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -64,7 +65,7 @@ class _FleetReportWizardScreenState
   final _pageCtrl = PageController();
 
   FleetAsset? _selectedAsset;
-  FleetIssueSeverity _severity = FleetIssueSeverity.medium;
+  FleetIssueSeverity? _severity;
   final List<String> _pendingPhotoPaths = [];
   bool _submitting = false;
   bool _showGuide = true;
@@ -83,6 +84,24 @@ class _FleetReportWizardScreenState
     if (!widget.forceStep1) {
       _restoreLastAsset();
     }
+    if (widget.preSelectedAsset != null && !widget.forceStep1) {
+      _step = 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageCtrl.hasClients) {
+          _pageCtrl.jumpToPage(1);
+        }
+      });
+    }
+    if (widget.preSelectedSeverity != null &&
+        widget.preSelectedAsset != null &&
+        !widget.forceStep1) {
+      _step = 2;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageCtrl.hasClients) {
+          _pageCtrl.jumpToPage(2);
+        }
+      });
+    }
     _loadGuidePref();
     _loadChecklistState();
   }
@@ -94,6 +113,12 @@ class _FleetReportWizardScreenState
 
   void _onAssetSelected(FleetAsset asset) {
     setState(() => _selectedAsset = asset);
+    if (_step == 0) _goNext();
+  }
+
+  void _onSeveritySelected(FleetIssueSeverity severity) {
+    setState(() => _severity = severity);
+    if (_step == 1) _goNext();
   }
 
   Future<void> _restoreLastAsset() async {
@@ -134,6 +159,7 @@ class _FleetReportWizardScreenState
   }
 
   Future<void> _addPhoto() async {
+    if (!guardPersonaSubmit(context)) return;
     final path = await pickFleetCompressedPhoto(
       context,
       _service,
@@ -142,15 +168,8 @@ class _FleetReportWizardScreenState
     if (path != null && mounted) setState(() => _pendingPhotoPaths.add(path));
   }
 
-  bool get _canGoNext => switch (_step) {
-        0 => _selectedAsset != null,
-        1 => true,
-        2 => false,
-        _ => false,
-      };
-
   void _goNext() {
-    if (!_canGoNext || _step >= _kStepCount - 1) return;
+    if (_step >= _kStepCount - 1) return;
     final next = _step + 1;
     setState(() => _step = next);
     _pageCtrl.animateToPage(
@@ -175,11 +194,17 @@ class _FleetReportWizardScreenState
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
+    final actor = resolveWriteActor(emp)!;
 
     if (_selectedAsset == null) {
       _showError('Please pick which machine has the problem.');
+      return;
+    }
+    if (_severity == null) {
+      _showError('Please say how urgent the problem is.');
       return;
     }
     final desc = _descCtrl.text.trim();
@@ -194,9 +219,9 @@ class _FleetReportWizardScreenState
         assetId: _selectedAsset!.id!,
         assetName: _selectedAsset!.name,
         description: desc,
-        severity: _severity,
-        reportedByClockNo: emp.clockNo,
-        reportedByName: emp.name,
+        severity: _severity!,
+        reportedByClockNo: actor.clockNo,
+        reportedByName: actor.name,
         parts: const [],
         photos: const [],
       );
@@ -210,7 +235,7 @@ class _FleetReportWizardScreenState
       await _dismissGuide();
 
       if (mounted) {
-        final oos = _severity == FleetIssueSeverity.outOfService;
+        final oos = _severity! == FleetIssueSeverity.outOfService;
         final queued = result.queuedOffline;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -262,11 +287,11 @@ class _FleetReportWizardScreenState
             ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: isLastStep
-              ? FilledButton.icon(
+      bottomNavigationBar: isLastStep
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: FilledButton.icon(
                   onPressed: _submitting ? null : _submit,
                   icon: _submitting
                       ? SizedBox(
@@ -284,18 +309,10 @@ class _FleetReportWizardScreenState
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                )
-              : FilledButton(
-                  onPressed: _canGoNext ? _goNext : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: kBrandOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Next'),
                 ),
-        ),
-      ),
+              ),
+            )
+          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -394,6 +411,11 @@ class _FleetReportWizardScreenState
                       const SizedBox(height: 16),
                     ],
                     const FleetSectionLabel('How urgent is it? *'),
+                    Text(
+                      'Tap the level that fits — you\'ll go straight to the description.',
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -413,12 +435,12 @@ class _FleetReportWizardScreenState
                                 : colors.chipUnselectedLabel,
                             fontWeight: FontWeight.w500,
                           ),
-                          onSelected: (_) => setState(() => _severity = s),
+                          onSelected: (_) => _onSeveritySelected(s),
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 8),
-                    FleetReporterSeverityHint(severity: _severity),
+                    const SizedBox(height: 16),
+                    const FleetReporterSeverityOptionsGuide(),
                   ],
                 ),
                 ListView(
@@ -432,14 +454,15 @@ class _FleetReportWizardScreenState
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        reporterSeverityLabel(_severity),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: fleetSeverityColor(_severity),
-                          fontWeight: FontWeight.w600,
+                      if (_severity != null)
+                        Text(
+                          reporterSeverityLabel(_severity!),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: fleetSeverityColor(_severity!),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 16),
                     ],
                     const FleetSectionLabel('What\'s wrong? *'),

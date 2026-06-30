@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show realEmployee;
 import '../services/firestore_service.dart';
 import 'permissions_onboarding_screen.dart';
 
@@ -86,7 +86,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       await prefs.setString('loggedInPosition', employee.position);
       await prefs.setString('loggedInDepartment', employee.department);
       await prefs.setBool('loggedInAdmin', employee.isAdmin);
-      currentEmployee = employee;
+      realEmployee = employee;
 
       if (mounted) {
         Navigator.pushReplacement(

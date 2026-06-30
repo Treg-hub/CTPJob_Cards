@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -336,6 +337,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   }
 
   Future<void> _addItemsFromStock() async {
+    if (!guardPersonaSubmit(context)) return;
     final picked = await WasteStockLinkSheet.show(
       context,
       wasteType: kPaperWasteStockParent,
@@ -354,6 +356,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   }
 
   Future<void> _addNewItem() async {
+    if (!guardPersonaSubmit(context)) return;
     final typeNames =
         itemSubtypeOptionsForChips(_selectedTypes, _wasteTypes);
     final result = await showModalBottomSheet<Map<String, dynamic>>(
@@ -384,6 +387,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   }
 
   Future<void> _saveLoad() async {
+    if (!guardPersonaSubmit(context)) return;
     if (_driverName.trim().isEmpty || _vehicleReg.trim().isEmpty || _selectedContractor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Driver name, vehicle registration, and contractor are required.')),
@@ -449,7 +453,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           'notes': item.notes,
           'localPhotos': item.photos,
         }).toList(),
-        actorClockNo: currentEmployee?.clockNo,
+        actorClockNo: resolveWriteActor(currentEmployee)?.clockNo,
       );
 
       if (mounted) {
@@ -929,6 +933,7 @@ class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
   }
 
   Future<void> _addPhoto(ImageSource source) async {
+    if (!guardPersonaSubmit(context)) return;
     setState(() => _addingPhoto = true);
     try {
       final path = await _wasteService.pickAndCompressPhotoFromSource(source);

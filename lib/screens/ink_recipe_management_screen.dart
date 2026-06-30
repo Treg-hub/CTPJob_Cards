@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ink_recipe.dart';
@@ -118,6 +119,7 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate() || _outputItemCode == null) return;
     final inputs = <InkRecipeLine>[];
     for (final row in _rows) {

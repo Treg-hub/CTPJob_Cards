@@ -10,6 +10,7 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_barcode_parser.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/ink_receipt_validation.dart';
 import 'ink_barcode_scan_screen.dart';
@@ -130,6 +131,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _scan() async {
+    if (!guardPersonaSubmit(context)) return;
     final res = await Navigator.push<IbcScanResult>(
       context,
       MaterialPageRoute(
@@ -143,6 +145,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _editRow(_IbcRow row, {required bool isNew}) async {
+    if (!guardPersonaSubmit(context)) return;
     final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
     var inks = items.where((i) => i.itemClass == InkItemClass.ink).toList();
     if (_shipment != null) {
@@ -374,6 +377,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _confirmAndSubmit() async {
+    if (!guardPersonaSubmit(context)) return;
     final ibcs = _buildValidIbcs();
     if (ibcs == null) return;
 
@@ -510,11 +514,13 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   }
 
   Future<void> _doSubmit(List<InkIbc> ibcs) async {
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
     setState(() => _submitting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     try {
       await ref.read(inkServiceProvider).recordIbcReceipt(
             ibcs: ibcs,

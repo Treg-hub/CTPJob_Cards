@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -223,6 +224,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
 
   // ── Period close / re-open ────────────────────────────────────────────────
   Future<void> _finalisePeriod(String pk) async {
+    if (!guardPersonaSubmit(context)) return;
     final ok = await _confirm('Finalise period?',
         'Close period $pk?\n\nFurther transactions into this month will require '
         'a manager override and will flag the report for re-issue.', 'Finalise');
@@ -235,6 +237,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
   }
 
   Future<void> _markReissued(String pk) async {
+    if (!guardPersonaSubmit(context)) return;
     await ref.read(inkServiceProvider).clearReissue(pk);
     if (mounted) {
       ScaffoldMessenger.of(context)
@@ -243,6 +246,7 @@ class _State extends ConsumerState<InkMonthEndReportScreen> {
   }
 
   Future<void> _reopenPeriod(String pk) async {
+    if (!guardPersonaSubmit(context)) return;
     final ok = await _confirm('Re-open period?',
         'Re-open period $pk?\n\nThis removes the close lock and the re-issue flag.',
         'Re-open');

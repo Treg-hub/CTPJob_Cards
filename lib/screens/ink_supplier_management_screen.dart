@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/current_employee_provider.dart';
@@ -12,6 +13,7 @@ class InkSupplierManagementScreen extends ConsumerWidget {
   const InkSupplierManagementScreen({super.key});
 
   Future<void> _addDialog(BuildContext context, WidgetRef ref) async {
+    if (!guardPersonaSubmit(context)) return;
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,

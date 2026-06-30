@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart' show currentEmployee;
@@ -63,8 +64,10 @@ class _SecurityOnFootVisitorScreenState
     SecurityGate? gate,
     List<SecurityDenyEntry> denyList,
   ) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null || gate == null) return;
+    final actor = resolveWriteActor(emp)!;
 
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
@@ -97,8 +100,8 @@ class _SecurityOnFootVisitorScreenState
             'driver_name': name,
             'deny_blocked': true,
             'deny_reason': deny.reason,
-            'logged_by_clock_no': emp.clockNo,
-            'logged_by_name': emp.name,
+            'logged_by_clock_no': actor.clockNo,
+            'logged_by_name': actor.name,
             'logged_at': DateTime.now().toIso8601String(),
           },
         );
@@ -142,8 +145,8 @@ class _SecurityOnFootVisitorScreenState
             'host_name': _hostCtrl.text.trim(),
           if (_companyCtrl.text.trim().isNotEmpty)
             'company_name': _companyCtrl.text.trim(),
-          'logged_by_clock_no': emp.clockNo,
-          'logged_by_name': emp.name,
+          'logged_by_clock_no': actor.clockNo,
+          'logged_by_name': actor.name,
           'logged_at': DateTime.now().toIso8601String(),
           'id_scan_captured': _idDoc != null,
           if (_idDoc?.idNumber != null) 'id_number': _idDoc!.idNumber,

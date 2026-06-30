@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -63,6 +64,7 @@ class _SecurityDocumentScanScreenState
   }
 
   Future<void> _setTorch(bool on) async {
+    if (!guardPersonaSubmit(context)) return;
     if (_torchOn == on) return;
     await _controller.toggleTorch();
     if (mounted) setState(() => _torchOn = on);

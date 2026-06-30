@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart' show currentEmployee;
@@ -43,6 +44,7 @@ class _WasteStockItemDetailScreenState
   bool get _canDelete => _isOnSite && isWasteAdmin(currentEmployee);
 
   Future<void> _confirmDelete() async {
+    if (!guardPersonaSubmit(context)) return;
     final id = widget.item.id;
     if (id == null) return;
 

@@ -11,6 +11,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1a — Receive Raw Material / Solvent.
@@ -86,13 +87,16 @@ class _InkReceiveRawMaterialScreenState
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate()) return;
     if (_itemCode == null || _supplier == null) return;
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
     setState(() => _submitting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     final txn = InkTransaction(
       type: InkTxnType.purchase,
       stockItemCode: _itemCode!,

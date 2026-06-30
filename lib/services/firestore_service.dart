@@ -13,6 +13,7 @@ import '../models/job_card.dart';
 import '../constants/collections.dart';
 import 'connectivity_service.dart';
 import 'sync_service.dart';
+import '../utils/persona_audit.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -228,16 +229,6 @@ class FirestoreService {
         .call({'clockNo': clockNo, if (email != null) 'email': email});
   }
 
-  /// Points an employee's notifications at this device by setting only their
-  /// fcmToken, via the `setDeviceFcmToken` Cloud Function. Used by the
-  /// shared-device "switch user" flow (the employees collection is locked to
-  /// admin/CF writes under Wave B).
-  Future<void> setDeviceFcmToken(String clockNo, String fcmToken) async {
-    await FirebaseFunctions.instanceFor(region: 'africa-south1')
-        .httpsCallable('setDeviceFcmToken')
-        .call({'clockNo': clockNo, 'fcmToken': fcmToken});
-  }
-
   Future<void> updateJobCard(String jobCardId, JobCard jobCard) async {
     try {
       // Exclude photos so a routine merge-set does not clobber concurrent
@@ -306,6 +297,7 @@ class FirestoreService {
     required String byName,
     required String byClockNo,
   }) async {
+    assertPersonaSubmitAllowed();
     try {
       final now = DateTime.now();
       final event = AssignmentEvent(
@@ -346,7 +338,7 @@ class FirestoreService {
       await _firestore
           .collection(Collections.jobCards)
           .doc(jobCardId)
-          .update(update);
+          .update(withPersonaAudit(update));
     } catch (e) {
       throw Exception('Failed to change job card status: $e');
     }
@@ -358,10 +350,11 @@ class FirestoreService {
   /// clients (or from offline queues replaying) all land without overwriting
   /// each other.
   Future<void> addPhotoToJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    assertPersonaSubmitAllowed();
     try {
-      await _firestore.collection(Collections.jobCards).doc(jobCardId).update({
-        'photos': FieldValue.arrayUnion([photo]),
-      });
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update(
+        withPersonaAudit({'photos': FieldValue.arrayUnion([photo])}),
+      );
     } catch (e) {
       throw Exception('Failed to add photo: $e');
     }
@@ -372,10 +365,11 @@ class FirestoreService {
   /// [photo] must be the exact map that was stored — Firestore arrayRemove
   /// requires a deep equality match.
   Future<void> removePhotoFromJobCard(String jobCardId, Map<String, dynamic> photo) async {
+    assertPersonaSubmitAllowed();
     try {
-      await _firestore.collection(Collections.jobCards).doc(jobCardId).update({
-        'photos': FieldValue.arrayRemove([photo]),
-      });
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update(
+        withPersonaAudit({'photos': FieldValue.arrayRemove([photo])}),
+      );
     } catch (e) {
       throw Exception('Failed to remove photo: $e');
     }
@@ -783,25 +777,6 @@ class FirestoreService {
     }
   }
 
-  Future<String> getSwitchUserPassword() async {
-    try {
-      final doc = await _firestore.collection(Collections.settings).doc('app').get();
-      return doc.data()?['switchUserPassword'] as String? ?? 'admin123';
-    } catch (e) {
-      throw Exception('Failed to get switch user password: $e');
-    }
-  }
-
-  Future<void> updateSwitchUserPassword(String newPassword) async {
-    try {
-      await _firestore.collection(Collections.settings).doc('app').set({
-        'switchUserPassword': newPassword,
-      }, SetOptions(merge: true));
-    } catch (e) {
-      throw Exception('Failed to update switch user password: $e');
-    }
-  }
-
   Future<Map<String, dynamic>> getNotificationConfig() async {
     try {
       final doc = await _firestore.collection(Collections.notificationConfigs).doc('global').get();
@@ -1081,6 +1056,7 @@ class FirestoreService {
 
   // Offline-aware save for Job Cards
   Future<void> saveJobCardOfflineAware(JobCard jobCard, {String? clientRef}) async {
+    assertPersonaSubmitAllowed();
     final isOnline = await ConnectivityService().isOnline();
 
     if (isOnline) {

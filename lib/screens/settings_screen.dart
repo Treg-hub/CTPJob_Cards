@@ -1,5 +1,6 @@
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -8,7 +9,8 @@ import 'package:android_intent_plus/android_intent.dart' as android_intent;
 
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, personaAllowTestSubmissions, personaEmployee, realEmployee;
+import '../providers/persona_provider.dart';
 import '../models/fleet_settings.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
@@ -74,6 +76,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _setWasteEnabled(bool value) async {
+    if (!guardPersonaSubmit(context)) return;
     setState(() { _wasteEnabled = value; _moduleSaving = true; });
     try {
       await _wasteService.setWasteMasterEnabled(value);
@@ -85,6 +88,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _setFleetEnabled(bool value) async {
+    if (!guardPersonaSubmit(context)) return;
     if (_fleetSettings == null) return;
     setState(() { _fleetEnabled = value; _moduleSaving = true; });
     try {
@@ -99,7 +103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _setupInboxStream() {
-    final clockNo = currentEmployee?.clockNo;
+    final clockNo = realEmployee?.clockNo;
     if (clockNo == null) return;
     _inboxStream = FirebaseFirestore.instance
         .collection('notification_inbox')
@@ -114,9 +118,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _loadOnSiteStatus() async {
-    if (currentEmployee == null) return;
+    if (realEmployee == null) return;
     try {
-      final emp = await _firestoreService.getEmployee(currentEmployee!.clockNo);
+      final emp = await _firestoreService.getEmployee(realEmployee!.clockNo);
       if (emp != null && mounted) {
         setState(() => isOnSite = emp.isOnSite);
       }
@@ -209,7 +213,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('permissionsCompleted');
         if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier('');
-        currentEmployee = null;
+        realEmployee = null;
+        personaEmployee = null;
+        personaAllowTestSubmissions = false;
+        ref.read(personaProvider.notifier).stop();
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,

@@ -20,6 +20,7 @@ import '../models/fleet_work_comment.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
+import '../utils/persona_audit.dart';
 import 'sync_service.dart';
 
 /// Thrown when a status change loses a race — the issue moved on while this
@@ -34,6 +35,8 @@ class FleetConflictException implements Exception {
 /// All Fleet Maintenance Firestore and Storage operations.
 /// Follows the WasteService singleton pattern.
 class FleetService {
+  void _guardWrite() => assertPersonaSubmitAllowed();
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions =
@@ -89,6 +92,7 @@ class FleetService {
     String? actorClockNo,
     String? actorName,
   }) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetSettings)
         .doc('config')
@@ -120,6 +124,7 @@ class FleetService {
 
   /// Saves a new issue-part label if no active type with the same label exists.
   Future<void> ensureIssuePartType(String label) async {
+    _guardWrite();
     final trimmed = label.trim();
     if (trimmed.isEmpty) return;
     final existing = await _db
@@ -137,6 +142,7 @@ class FleetService {
   }
 
   Future<void> saveType(FleetType type) async {
+    _guardWrite();
     if (type.id == null) {
       await _db.collection(Collections.fleetTypes).add(type.toFirestore());
     } else {
@@ -148,6 +154,7 @@ class FleetService {
   }
 
   Future<void> deactivateType(String typeId) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetTypes)
         .doc(typeId)
@@ -191,6 +198,7 @@ class FleetService {
     String? actorClockNo,
     String? actorName,
   }) async {
+    _guardWrite();
     if (asset.id == null) {
       await _db.collection(Collections.fleetAssets).add(asset.toFirestore());
     } else {
@@ -235,6 +243,7 @@ class FleetService {
   // ---------------------------------------------------------------------------
 
   Future<String> createIssue(FleetIssue issue) async {
+    _guardWrite();
     final ref = await _db
         .collection(Collections.fleetIssues)
         .add(issue.toFirestore());
@@ -242,6 +251,7 @@ class FleetService {
   }
 
   Future<void> updateIssuePhotos(String issueId, List<String> photos) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetIssues)
         .doc(issueId)
@@ -331,6 +341,7 @@ class FleetService {
   }
 
   Future<void> acknowledgeIssue(String issueId, String clockNo, String name) async {
+    _guardWrite();
     await _guardIssueStatus(issueId, {FleetIssueStatus.open});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'acknowledged',
@@ -344,6 +355,7 @@ class FleetService {
 
   Future<void> resolveIssueWithNote(
       String issueId, String note, String clockNo, String name) async {
+    _guardWrite();
     await _guardIssueStatus(
         issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
@@ -363,6 +375,7 @@ class FleetService {
   /// called from the offline replay path, which must never throw conflicts.
   Future<void> resolveIssueWithWorkRecord(
       String issueId, String workRecordId, String clockNo, String name) async {
+    _guardWrite();
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
       'status': 'resolved',
       'resolution_type': 'work_record',
@@ -379,6 +392,7 @@ class FleetService {
 
   Future<void> cancelIssue(
       String issueId, String clockNo, String name, {String? reason}) async {
+    _guardWrite();
     await _guardIssueStatus(
         issueId, {FleetIssueStatus.open, FleetIssueStatus.acknowledged});
     await _db.collection(Collections.fleetIssues).doc(issueId).update({
@@ -401,6 +415,7 @@ class FleetService {
   /// Creates a new work record via Cloud Function (gets FM-YYYYMMDD-NNN number).
   Future<Map<String, dynamic>> createWorkRecord(
       Map<String, dynamic> data) async {
+    _guardWrite();
     try {
       final callable = _functions.httpsCallable('createFleetWorkRecord');
       final result = await callable.call(data);
@@ -450,6 +465,7 @@ class FleetService {
     String? actorClockNo,
     String? actorName,
   }) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(id)
@@ -477,6 +493,7 @@ class FleetService {
   }
 
   Future<void> addPart(String workRecordId, FleetWorkPart part) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(workRecordId)
@@ -485,6 +502,7 @@ class FleetService {
   }
 
   Future<void> removePart(String workRecordId, String partId) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(workRecordId)
@@ -495,6 +513,7 @@ class FleetService {
 
   Future<void> replaceParts(
       String workRecordId, List<FleetWorkPart> parts) async {
+    _guardWrite();
     final partsRef = _db
         .collection(Collections.fleetWorkRecords)
         .doc(workRecordId)
@@ -526,6 +545,7 @@ class FleetService {
 
   Future<void> addComment(
       String workRecordId, FleetWorkComment comment) async {
+    _guardWrite();
     await _db
         .collection(Collections.fleetWorkRecords)
         .doc(workRecordId)
@@ -609,6 +629,7 @@ class FleetService {
     required String localPath,
     required String fleetRef,
   }) async {
+    _guardWrite();
     final file = File(localPath);
     final fileName = '${const Uuid().v4()}.jpg';
     final ref = _storage.ref('$fleetRef/photos/$fileName');
@@ -644,6 +665,7 @@ class FleetService {
     required String targetKind,
     required String targetId,
   }) async {
+    _guardWrite();
     await SyncService().addToQueue(
       collection: 'fleet_photos',
       operation: 'upload',
@@ -671,6 +693,7 @@ class FleetService {
     FleetIssue issue, {
     List<String> photoPaths = const [],
   }) async {
+    _guardWrite();
     final issueId = _db.collection(Collections.fleetIssues).doc().id;
     final online = await _checkOnline();
     final base = issue.toFirestore()
@@ -772,6 +795,7 @@ class FleetService {
     required String loggedByClockNo,
     required String loggedByName,
   }) async {
+    _guardWrite();
     final online = await _checkOnline();
     final queueId = const Uuid().v4();
     final cfData = Map<String, dynamic>.from(data)..['client_ref'] = queueId;
@@ -992,6 +1016,7 @@ class FleetService {
     String? actorClockNo,
     String? actorName,
   }) async {
+    _guardWrite();
     final asset = await getAsset(assetId);
     if (asset == null) return;
     final current = asset.currentMachineHours;
@@ -1023,6 +1048,7 @@ class FleetService {
     required double hourMeter,
     String? generalComment,
   }) async {
+    _guardWrite();
     final docId = FleetDailyCheck.docIdFor(assetId);
     final checkDate = FleetDailyCheck.checkDateString();
     final hasFaulty = items.any((i) => i.isFaulty);
@@ -1112,6 +1138,7 @@ class FleetService {
     required String driverClockNo,
     String? driverName,
   }) async {
+    _guardWrite();
     final hoursUsed = endHourMeter - startHourMeter;
     final end = FleetDailyCheckEnd(hourMeter: endHourMeter, comment: comment);
     final payload = {

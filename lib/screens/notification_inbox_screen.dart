@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show realEmployee;
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_navigation.dart';
@@ -28,7 +28,7 @@ class _NotificationInboxScreenState
   bool _markingAllRead = false;
 
   CollectionReference<Map<String, dynamic>>? get _itemsRef {
-    final clockNo = currentEmployee?.clockNo;
+    final clockNo = realEmployee?.clockNo;
     if (clockNo == null) return null;
     return FirebaseFirestore.instance
         .collection('notification_inbox')
@@ -93,7 +93,7 @@ class _NotificationInboxScreenState
 
   @override
   Widget build(BuildContext context) {
-    final clockNo = currentEmployee?.clockNo;
+    final clockNo = realEmployee?.clockNo;
     if (clockNo == null) {
       return const Scaffold(body: Center(child: Text('Not logged in')));
     }
@@ -108,7 +108,7 @@ class _NotificationInboxScreenState
             gradient: LinearGradient(
               colors: [
                 kBrandOrange,
-                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
+                (realEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
