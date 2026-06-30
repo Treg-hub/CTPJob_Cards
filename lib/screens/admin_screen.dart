@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
@@ -283,6 +284,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   // ── Saves ─────────────────────────────────────────────────────────────────
 
   Future<void> _saveKillSwitch() async {
+    if (!guardPersonaSubmit(context)) return;
     final build = int.tryParse(_minBuildController.text.trim());
     if (_minBuildController.text.trim().isNotEmpty && build == null) {
       _showError('Min supported build must be a whole number');
@@ -326,6 +328,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _saveNotificationConfig() async {
+    if (!guardPersonaSubmit(context)) return;
     final s1Min = int.tryParse(_stage1MinController.text) ?? 5;
     final s2Min = int.tryParse(_stage2MinController.text) ?? 10;
     final s3Min = int.tryParse(_stage3MinController.text) ?? 30;
@@ -505,6 +508,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _sendBroadcast() async {
+    if (!guardPersonaSubmit(context)) return;
     final title = _broadcastTitleController.text.trim();
     final body = _broadcastBodyController.text.trim();
     if (title.isEmpty || body.isEmpty) {
@@ -566,6 +570,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _sendTargetedBroadcast() async {
+    if (!guardPersonaSubmit(context)) return;
     final title = _broadcastTitleController.text.trim();
     final body = _broadcastBodyController.text.trim();
     final clockNos = _parseClockNos(_targetedClockNosController.text);
@@ -837,6 +842,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _addDepartment() async {
+    if (!guardPersonaSubmit(context)) return;
     final name = deptController.text.trim();
     if (name.isEmpty) return;
     if (_structure.containsKey(name)) {
@@ -852,6 +858,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _addArea() async {
+    if (!guardPersonaSubmit(context)) return;
     if (selectedDeptForArea == null || areaController.text.trim().isEmpty) return;
     final areaName = areaController.text.trim();
     final updated = Map<String, dynamic>.from(_structure);
@@ -869,6 +876,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _addMachine() async {
+    if (!guardPersonaSubmit(context)) return;
     if (selectedDeptForMachine == null || selectedAreaForMachine == null || machineController.text.trim().isEmpty) return;
     final machineName = machineController.text.trim();
     final updated = Map<String, dynamic>.from(_structure);

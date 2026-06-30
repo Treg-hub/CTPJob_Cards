@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -325,17 +326,19 @@ class _CommentsSectionState extends State<_CommentsSection> {
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     final text = _ctrl.text.trim();
     final emp = currentEmployee;
     if (text.isEmpty || emp == null) return;
+    final actor = resolveWriteActor(emp)!;
     setState(() => _submitting = true);
     try {
       await widget.service.addComment(
         widget.workRecordId,
         FleetWorkComment(
           text: text,
-          authorName: emp.name,
-          authorClockNo: emp.clockNo,
+          authorName: actor.name,
+          authorClockNo: actor.clockNo,
           createdAt: DateTime.now(),
         ),
       );

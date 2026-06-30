@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -52,15 +53,17 @@ class _FleetIssueDetailScreenState
     if (_hasAutoAcknowledged) return;
     final emp = currentEmployee;
     if (emp == null || issue.status != FleetIssueStatus.open) return;
+    final actor = resolveWriteActor(emp)!;
     _hasAutoAcknowledged = true;
     try {
-      await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
+      await _service.acknowledgeIssue(issue.id!, actor.clockNo, actor.name);
     } catch (e) {
       debugPrint('Auto-acknowledge error: $e');
     }
   }
 
   Future<void> _finishFix(FleetIssue issue) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null || !issue.status.isOpen) return;
     setState(() => _actionInProgress = true);
@@ -90,8 +93,10 @@ class _FleetIssueDetailScreenState
   }
 
   Future<void> _resolveWithNote(FleetIssue issue) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
+    final actor = resolveWriteActor(emp)!;
 
     // Out-of-service issues must be closed with a work record — a note alone
     // can't close a safety-critical fault (decided 2026-06-10).
@@ -144,7 +149,7 @@ class _FleetIssueDetailScreenState
     setState(() => _actionInProgress = true);
     try {
       await _service.resolveIssueWithNote(
-          issue.id!, note, emp.clockNo, emp.name);
+          issue.id!, note, actor.clockNo, actor.name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -170,8 +175,10 @@ class _FleetIssueDetailScreenState
   }
 
   Future<void> _cancel(FleetIssue issue) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
+    final actor = resolveWriteActor(emp)!;
 
     final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
@@ -213,7 +220,7 @@ class _FleetIssueDetailScreenState
 
     setState(() => _actionInProgress = true);
     try {
-      await _service.cancelIssue(issue.id!, emp.clockNo, emp.name,
+      await _service.cancelIssue(issue.id!, actor.clockNo, actor.name,
           reason: reason.isEmpty ? null : reason);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

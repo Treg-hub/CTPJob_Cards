@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -187,6 +188,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   }
 
   Future<void> _addPhoto() async {
+    if (!guardPersonaSubmit(context)) return;
     final path = await pickFleetCompressedPhoto(
       context,
       _service,
@@ -200,9 +202,11 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   }
 
   Future<void> _saveProgress() async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     final issue = _linkedIssue;
     if (emp == null || issue?.id == null) return;
+    final actor = resolveWriteActor(emp)!;
     if (issue!.status != FleetIssueStatus.open) {
       if (mounted) Navigator.of(context).pop();
       return;
@@ -210,7 +214,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
 
     setState(() => _savingProgress = true);
     try {
-      await _service.acknowledgeIssue(issue.id!, emp.clockNo, emp.name);
+      await _service.acknowledgeIssue(issue.id!, actor.clockNo, actor.name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -231,11 +235,13 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null || _selectedAsset == null || _repairWorkType == null) {
       _showError('Still loading — try again in a moment.');
       return;
     }
+    final actor = resolveWriteActor(emp)!;
     if (_descCtrl.text.trim().isEmpty) {
       _showError('Please describe what you did to fix it.');
       return;
@@ -310,15 +316,15 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
           'photos': <String>[],
           'start_date': _workCarriedOut.toIso8601String(),
           'end_date': DateTime.now().toIso8601String(),
-          'logged_by_clock_no': emp.clockNo,
-          'logged_by_name': emp.name,
+          'logged_by_clock_no': actor.clockNo,
+          'logged_by_name': actor.name,
           'linked_issue_ids': _linkedIssueIds,
         },
         photoPaths: _pendingPhotoPaths,
         parts: partModels,
         linkedIssueIds: _linkedIssueIds,
-        loggedByClockNo: emp.clockNo,
-        loggedByName: emp.name,
+        loggedByClockNo: actor.clockNo,
+        loggedByName: actor.name,
       );
 
       if (mounted) {

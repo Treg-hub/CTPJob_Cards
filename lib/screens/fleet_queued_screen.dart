@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
@@ -86,6 +87,7 @@ class _FleetQueuedScreenState extends State<FleetQueuedScreen> {
   }
 
   Future<void> _removeItem(Map<String, dynamic> item) async {
+    if (!guardPersonaSubmit(context)) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

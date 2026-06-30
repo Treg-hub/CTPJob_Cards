@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -158,6 +159,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   }
 
   Future<void> _removePhoto(WasteItem item, String photoUrl) async {
+    if (!guardPersonaSubmit(context)) return;
     if (item.id == null) return;
 
     final confirmed = await showDialog<bool>(
@@ -200,6 +202,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   }
 
   Future<void> _deleteItem(WasteItem item) async {
+    if (!guardPersonaSubmit(context)) return;
     final isCompleted = _isCompleted;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -315,6 +318,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       };
 
   Future<void> _addItem() async {
+    if (!guardPersonaSubmit(context)) return;
     final typeNames = _wasteTypes.map((t) => t.mainType).toList();
     final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,
@@ -373,6 +377,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   }
 
   Future<void> _addFinishPhoto(ImageSource source) async {
+    if (!guardPersonaSubmit(context)) return;
     setState(() => _addingFinishPhoto = true);
     try {
       final path = await _wasteService.pickAndCompressPhotoFromSource(source);
@@ -1053,6 +1058,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   /// Draft load: truck photos + signature → pending cost review (qty-only) or
   /// pending weighbridge (weight-based, off-site document to follow).
   Future<void> _finishLoading() async {
+    if (!guardPersonaSubmit(context)) return;
     final signatureBytes = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
@@ -1077,8 +1083,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         loadId: _currentLoad.id!,
         loadPhotoPaths: _finishLoadPhotoPaths,
         signatureLocalPath: signatureTempPath,
-        finishedBy: currentEmployee?.clockNo ?? '',
-        finishedByName: currentEmployee?.name,
+        finishedBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
+        finishedByName: resolveWriteActor(currentEmployee)?.name,
         isQuantityOnly: skipWeighbridge,
       );
 
@@ -1089,8 +1095,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         _currentLoad = _currentLoad.copyWith(
           status: nextStatus,
           pendingWeighbridgeAt: skipWeighbridge ? null : DateTime.now(),
-          collectedBy: currentEmployee?.clockNo,
-          collectedByName: currentEmployee?.name,
+          collectedBy: resolveWriteActor(currentEmployee)?.clockNo,
+          collectedByName: resolveWriteActor(currentEmployee)?.name,
         );
         _finishLoadPhotoPaths.clear();
       });

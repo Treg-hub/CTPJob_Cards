@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -69,6 +70,7 @@ class _GeofenceEditorScreenState extends State<GeofenceEditorScreen> {
   }
 
   Future<void> _saveGeofence() async {
+    if (!guardPersonaSubmit(context)) return;
     setState(() => _isSaving = true);
     try {
       await FirebaseFirestore.instance.collection('settings').doc('geofence').set({

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -186,8 +187,10 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
+    final actor = resolveWriteActor(emp)!;
 
     var items = List<FleetDailyCheckItem>.from(_items);
     final faultyItems =
@@ -225,7 +228,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
         assetId: widget.asset.id!,
         assetName: widget.asset.name,
         assetTag: widget.asset.assetTag,
-        driverClockNo: emp.clockNo,
+        driverClockNo: actor.clockNo,
         driverName: emp.name,
         department: emp.department,
         items: items,
@@ -246,8 +249,8 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
                   generalComment.isEmpty ? null : generalComment,
             ),
             severity: FleetIssueSeverity.medium,
-            reportedByClockNo: emp.clockNo,
-            reportedByName: emp.name,
+            reportedByClockNo: actor.clockNo,
+            reportedByName: actor.name,
             source: 'daily_check',
             dailyCheckId: checkResult.id,
           ),

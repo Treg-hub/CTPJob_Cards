@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -176,8 +177,10 @@ class _FleetLogOtherWorkScreenState
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
+    final actor = resolveWriteActor(emp)!;
     if (_selectedAsset == null) {
       _showError('Please pick which machine you worked on.');
       return;
@@ -256,15 +259,15 @@ class _FleetLogOtherWorkScreenState
           'photos': <String>[],
           'start_date': _workCarriedOut.toIso8601String(),
           'end_date': DateTime.now().toIso8601String(),
-          'logged_by_clock_no': emp.clockNo,
+          'logged_by_clock_no': actor.clockNo,
           'logged_by_name': emp.name,
           'linked_issue_ids': _linkedIssueIds,
         },
         photoPaths: _pendingPhotoPaths,
         parts: partModels,
         linkedIssueIds: _linkedIssueIds,
-        loggedByClockNo: emp.clockNo,
-        loggedByName: emp.name,
+        loggedByClockNo: actor.clockNo,
+        loggedByName: actor.name,
       );
 
       if (!mounted) return;

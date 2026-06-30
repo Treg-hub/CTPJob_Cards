@@ -19,10 +19,13 @@ import '../models/security_settings.dart';
 import '../models/security_vehicle.dart';
 import '../models/security_vehicle_trip.dart';
 import 'connectivity_service.dart';
+import '../utils/persona_audit.dart';
 import 'sync_service.dart';
 
 /// Site Security operations — gate logging, compliance, offline queue.
 class SecurityService {
+  void _guardWrite() => assertPersonaSubmitAllowed();
+
   static final SecurityService _instance = SecurityService._internal();
   factory SecurityService() => _instance;
   SecurityService._internal();
@@ -123,6 +126,7 @@ class SecurityService {
     required String value,
     String? createdByClockNo,
   }) async {
+    _guardWrite();
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
     final lower = trimmed.toLowerCase();
@@ -147,6 +151,7 @@ class SecurityService {
     required String name,
     String? contact,
   }) async {
+    _guardWrite();
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('Contractor name is required');
@@ -354,6 +359,7 @@ class SecurityService {
     String? denyReason,
     String? entryId,
   }) async {
+    _guardWrite();
     try {
       await _functions.httpsCallable('notifySecurityDenyEntry').call({
         'gate_id': gateId,
@@ -373,6 +379,7 @@ class SecurityService {
     required Map<String, dynamic> data,
     List<String> photoLocalPaths = const [],
   }) async {
+    _guardWrite();
     final online = await _isOnline();
     final queueId = const Uuid().v4();
     final provisional = 'OFFLINE-SEC-${DateTime.now().millisecondsSinceEpoch}';
@@ -503,6 +510,7 @@ class SecurityService {
   Future<void> recordCompanyCarTrip({
     required SecurityVehicleTrip trip,
   }) async {
+    _guardWrite();
     await _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore());
   }
 
@@ -510,6 +518,7 @@ class SecurityService {
     required String vehicleId,
     required double odometer,
   }) async {
+    _guardWrite();
     await _db.collection(Collections.securityVehicles).doc(vehicleId).update({
       'odometer_last': odometer,
       'updated_at': FieldValue.serverTimestamp(),
@@ -530,6 +539,7 @@ class SecurityService {
     String? contractorId,
     String? receiptPhotoUrl,
   }) async {
+    _guardWrite();
     final reg = SecurityVehicle.normalizeReg(vehicleReg);
     final vehiclesSnap =
         await _db.collection(Collections.securityVehicles).get();
@@ -561,6 +571,7 @@ class SecurityService {
     required String localPath,
     required String entryId,
   }) async {
+    _guardWrite();
     final file = File(localPath);
     if (!file.existsSync()) {
       throw Exception('Photo file not found: $localPath');
@@ -588,6 +599,7 @@ class SecurityService {
     required String localPath,
     required String entryId,
   }) async {
+    _guardWrite();
     await SyncService().addToQueue(
       collection: 'security_photos',
       operation: 'upload',

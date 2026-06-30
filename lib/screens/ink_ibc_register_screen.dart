@@ -7,12 +7,11 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/role.dart' as role_utils;
 
-
-/// IBC register — colour tabs (Yellow | Red | Blue | Black), each with a
-/// search field and a sortable list of IBCs.  Status filter bar above the tabs
-/// applies across all colours (All / Received / Consumed).
+/// IBC register — **This period** summary tab (consumed grouped by colour) plus
+/// colour tabs for the full register (search, status filter, manager void).
 class InkIbcRegisterScreen extends ConsumerStatefulWidget {
   const InkIbcRegisterScreen({super.key});
 
@@ -22,24 +21,39 @@ class InkIbcRegisterScreen extends ConsumerStatefulWidget {
 
 class _State extends ConsumerState<InkIbcRegisterScreen>
     with SingleTickerProviderStateMixin {
+  static const _summaryTabIndex = 0;
+
   late final TabController _tab;
 
-  /// null = All
+  /// null = All (colour tabs only)
   InkIbcStatus? _filter;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: kInkColourCodes.length, vsync: this);
+    _tab = TabController(
+      length: kInkColourCodes.length + 1,
+      vsync: this,
+    );
+    _tab.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (!_tab.indexIsChanging) return;
+    if (_tab.index == _summaryTabIndex && _filter != null) {
+      setState(() => _filter = null);
+    }
   }
 
   @override
   void dispose() {
+    _tab.removeListener(_onTabChanged);
     _tab.dispose();
     super.dispose();
   }
 
   Future<void> _voidIbc(InkIbc ibc) async {
+    if (!guardPersonaSubmit(context)) return;
     final reasonCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -76,10 +90,12 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
           const SnackBar(content: Text('Enter a reason for the void.')));
       return;
     }
+    if (!guardPersonaSubmit(context)) return;
     final allowed = await confirmClosedPeriodOverride(
         context, ref, ibc.transferredDate ?? ibc.receivedDate);
     if (!allowed || !mounted) return;
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     try {
       await ref.read(inkServiceProvider).voidIbcTransfer(
             ibc,
@@ -102,41 +118,49 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
   @override
   Widget build(BuildContext context) {
     final ibcsAsync = ref.watch(inkAllIbcsProvider);
+    final consumedThisPeriod = ref.watch(inkIbcsConsumedThisPeriodProvider);
     final isManager =
         role_utils.isInkManager(ref.watch(currentEmployeeProvider).valueOrNull);
+    final onSummaryTab = _tab.index == _summaryTabIndex;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('IBC Register'),
         bottom: TabBar(
           controller: _tab,
+          isScrollable: true,
           labelColor: Colors.black,
           unselectedLabelColor: Colors.black54,
           indicatorColor: Colors.black,
-          tabs: [for (final l in kInkColourLabels) Tab(text: l)],
+          tabs: [
+            Tab(
+              text: consumedThisPeriod.isEmpty
+                  ? 'This period'
+                  : 'This period (${consumedThisPeriod.length})',
+            ),
+            for (final l in kInkColourLabels) Tab(text: l),
+          ],
         ),
       ),
       body: Column(
         children: [
-          // ── Status filter ─────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                spacing: 8,
-                children: [
-                  _filterChip(context, null, 'All'),
-                  _filterChip(context, InkIbcStatus.received, 'Received'),
-                  _filterChip(
-                      context, InkIbcStatus.transferred, 'Consumed'),
-                ],
+          if (!onSummaryTab) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  spacing: 8,
+                  children: [
+                    _filterChip(context, null, 'All'),
+                    _filterChip(context, InkIbcStatus.received, 'Received'),
+                    _filterChip(context, InkIbcStatus.transferred, 'Consumed'),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-
-          // ── Colour tab views ──────────────────────────────────────────────
+            const SizedBox(height: 6),
+          ],
           Expanded(
             child: ibcsAsync.when(
               loading: () =>
@@ -150,6 +174,7 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
                 return TabBarView(
                   controller: _tab,
                   children: [
+                    _PeriodSummaryTab(ibcs: consumedThisPeriod),
                     for (final c in kInkColourCodes)
                       _RegisterColourTab(
                         ibcs: pool
@@ -183,11 +208,158 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
       onSelected: (_) => setState(() => _filter = value),
       selectedColor: scheme.primaryContainer,
       labelStyle: TextStyle(
-        color:
-            selected ? scheme.onPrimaryContainer : scheme.onSurface,
-        fontWeight:
-            selected ? FontWeight.w600 : FontWeight.normal,
+        color: selected ? scheme.onPrimaryContainer : scheme.onSurface,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
       ),
+    );
+  }
+}
+
+// ── This period summary ───────────────────────────────────────────────────────
+
+class _PeriodSummaryTab extends StatelessWidget {
+  const _PeriodSummaryTab({required this.ibcs});
+  final List<InkIbc> ibcs;
+
+  static final _qty = NumberFormat('#,##0.##');
+  static final _df = DateFormat('EEE d MMM yyyy HH:mm');
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    if (ibcs.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'No IBCs consumed in the current period yet.',
+            style: TextStyle(color: scheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final byColour = <String, List<InkIbc>>{};
+    for (final ibc in ibcs) {
+      byColour.putIfAbsent(ibc.itemCode, () => []).add(ibc);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        Text(
+          'Consumed since last count',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+                letterSpacing: 0.5,
+              ),
+        ),
+        const SizedBox(height: 12),
+        for (final code in kInkColourCodes)
+          if (byColour[code]?.isNotEmpty == true) ...[
+            _ColourSection(
+              label: kInkColourLabels[kInkColourCodes.indexOf(code)],
+              ibcs: byColour[code]!,
+              qty: _qty,
+              df: _df,
+            ),
+            const SizedBox(height: 16),
+          ],
+      ],
+    );
+  }
+}
+
+class _ColourSection extends StatelessWidget {
+  const _ColourSection({
+    required this.label,
+    required this.ibcs,
+    required this.qty,
+    required this.df,
+  });
+
+  final String label;
+  final List<InkIbc> ibcs;
+  final NumberFormat qty;
+  final DateFormat df;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < ibcs.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: _PeriodIbcRow(ibc: ibcs[i], qty: qty, df: df),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Text(
+          '${ibcs.length} consumed',
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _PeriodIbcRow extends StatelessWidget {
+  const _PeriodIbcRow({
+    required this.ibc,
+    required this.qty,
+    required this.df,
+  });
+
+  final InkIbc ibc;
+  final NumberFormat qty;
+  final DateFormat df;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final wash = ibc.washTolulLitres;
+    final washText = wash != null && wash > 0
+        ? '${qty.format(wash)} L wash'
+        : 'No wash';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${ibc.ibcNumber} · ${qty.format(ibc.kg)} kg · $washText',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          ibc.transferredDate != null
+              ? df.format(ibc.transferredDate!)
+              : 'Date unknown',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+      ],
     );
   }
 }
@@ -205,8 +377,6 @@ class _RegisterColourTab extends StatefulWidget {
   final List<InkIbc> ibcs;
   final String colourLabel;
   final InkIbcStatus? statusFilter;
-
-  /// When set, consumed IBCs are tappable to void the transfer.
   final void Function(InkIbc)? onVoid;
 
   @override
@@ -242,7 +412,6 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
 
     return Column(
       children: [
-        // Search bar
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: TextField(
@@ -267,7 +436,6 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
             ),
           ),
         ),
-        // Count line
         if (widget.ibcs.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
@@ -288,7 +456,6 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
               ],
             ),
           ),
-        // IBC list
         Expanded(
           child: filtered.isEmpty
               ? Center(
@@ -299,8 +466,7 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                           ? 'No IBCs match "$_query".'
                           : 'No ${widget.colourLabel} IBCs'
                               '${widget.statusFilter != null ? ' (${widget.statusFilter!.value})' : ''}.',
-                      style:
-                          TextStyle(color: scheme.onSurfaceVariant),
+                      style: TextStyle(color: scheme.onSurfaceVariant),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -316,15 +482,13 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                         ibc.status == InkIbcStatus.transferred;
 
                     final row = Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Status icon
                           Padding(
-                            padding: const EdgeInsets.only(
-                                top: 2, right: 12),
+                            padding:
+                                const EdgeInsets.only(top: 2, right: 12),
                             child: Icon(
                               consumed
                                   ? Icons.check_circle_outline
@@ -337,10 +501,8 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                           ),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // IBC number + status chip
                                 Row(
                                   children: [
                                     Expanded(
@@ -350,29 +512,24 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                                             .textTheme
                                             .bodyMedium
                                             ?.copyWith(
-                                                fontWeight:
-                                                    FontWeight.w600),
+                                                fontWeight: FontWeight.w600),
                                       ),
                                     ),
                                     _StatusChip(
-                                        status: ibc.status,
-                                        scheme: scheme),
+                                        status: ibc.status, scheme: scheme),
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                // kg + charge
                                 Text(
                                   [
                                     '${_qty.format(ibc.kg)} kg',
                                     if (ibc.chargeNumber != null)
                                       'Charge ${ibc.chargeNumber}',
                                   ].join(' · '),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall,
+                                  style:
+                                      Theme.of(context).textTheme.bodySmall,
                                 ),
                                 const SizedBox(height: 2),
-                                // Received date + supplier
                                 Text(
                                   [
                                     'Received ${_df.format(ibc.receivedDate)}',
@@ -383,28 +540,8 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                                       .textTheme
                                       .bodySmall
                                       ?.copyWith(
-                                          color:
-                                              scheme.onSurfaceVariant),
+                                          color: scheme.onSurfaceVariant),
                                 ),
-                                if (ibc.orderNumber != null ||
-                                    ibc.cgnaNumber != null) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    [
-                                      if (ibc.orderNumber != null)
-                                        'Order ${ibc.orderNumber}',
-                                      if (ibc.cgnaNumber != null)
-                                        'CGNA ${ibc.cgnaNumber}',
-                                    ].join(' · '),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                            color:
-                                                scheme.onSurfaceVariant),
-                                  ),
-                                ],
-                                // Consumed date + wash
                                 if (consumed) ...[
                                   const SizedBox(height: 2),
                                   Text(
@@ -417,7 +554,9 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                                         .textTheme
                                         .bodySmall
                                         ?.copyWith(
-                                            color: Theme.of(context).appColors.statusCompleted),
+                                            color: Theme.of(context)
+                                                .appColors
+                                                .statusCompleted),
                                   ),
                                 ],
                               ],
@@ -439,8 +578,6 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
     );
   }
 }
-
-// ── Status chip ─────────────────────────────────────────────────────────────
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status, required this.scheme});

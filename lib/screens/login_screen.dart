@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show realEmployee;
 import '../services/notification_service.dart';
 import '../services/auth_claims_service.dart';
 import '../services/client_platform_service.dart';
@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;
 
       if (!mounted) return;
-      if (currentEmployee != null && !permissionsCompleted) {
+      if (realEmployee != null && !permissionsCompleted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInPosition', employee.position);
       await prefs.setString('loggedInDepartment', employee.department);
       await prefs.setBool('loggedInAdmin', employee.isAdmin);
-      currentEmployee = employee;
+      realEmployee = employee;
 
       if (!kIsWeb) await FirebaseCrashlytics.instance.setUserIdentifier(employee.clockNo);
 

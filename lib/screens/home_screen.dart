@@ -20,8 +20,13 @@ import '../theme/app_theme.dart';
 import '../services/client_platform_service.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
+import '../providers/current_employee_provider.dart';
+import '../utils/persona_audit.dart';
+import '../utils/registry_admin.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/persona_banner.dart';
+import '../widgets/persona_picker_dialog.dart';
 import '../widgets/job_card_tile.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
@@ -254,10 +259,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final prevIsOnSite = _previousIsOnSite;
       final isNowOnsite = emp.isOnSite;
       setState(() {
-        currentEmployee = emp;
+        realEmployee = emp;
         isOnSite = emp.isOnSite;
         _previousIsOnSite = emp.isOnSite;
       });
+      ref.invalidate(currentEmployeeProvider);
       // React only to a genuine change, and debounce it: GPS jitter at the
       // fence boundary flips isOnSite back and forth, which previously fired a
       // snackbar on every flip. Wait for the new state to settle, and if it
@@ -345,14 +351,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (clockNo == null) return;
 
       // Immediately show cached employee while Firestore loads
-      if (currentEmployee == null) {
+      if (realEmployee == null) {
         final name = prefs.getString('loggedInName') ?? '';
         final position = prefs.getString('loggedInPosition') ?? '';
         final department = prefs.getString('loggedInDepartment') ?? '';
         final adminFlag = prefs.getBool('loggedInAdmin') ?? false;
         if (name.isNotEmpty && mounted) {
           setState(() {
-            currentEmployee = Employee(
+            realEmployee = Employee(
               clockNo: clockNo,
               name: name,
               position: position,
@@ -360,6 +366,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               isAdmin: adminFlag,
             );
           });
+          ref.invalidate(currentEmployeeProvider);
         }
       }
 
@@ -370,7 +377,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       // Phase 2: replace stub with canonical Firestore data
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && mounted) {
-        setState(() => currentEmployee = emp);
+        setState(() => realEmployee = emp);
+        ref.invalidate(currentEmployeeProvider);
       }
     } catch (e) {
       debugPrint('HomeScreen: deferred employee load failed: $e');
@@ -582,8 +590,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadWasteSettings();
     _loadSecuritySettings();
 
-    if (currentEmployee != null) {
-      _setupEmployeeStream(currentEmployee!.clockNo);
+    if (realEmployee != null) {
+      _setupEmployeeStream(realEmployee!.clockNo);
     } else {
       _tryLoadCurrentEmployee();
     }
@@ -757,125 +765,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  /// Admin-gated user switch. The old flow was gated by a shared password
-  /// stored in `settings/app` — readable by every signed-in user, i.e. no
-  /// gate at all. Non-admins now get nothing on title tap.
-  void _handleTitleTap(BuildContext context) {
-    if (!role_utils.isAdmin(currentEmployee)) return;
-    _showUserSwitchDialog(context);
-  }
-
-  void _showUserSwitchDialog(BuildContext context) {
-    String searchQuery = '';
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Switch User'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Search employee...'),
-                  onChanged: (value) => setDialogState(() => searchQuery = value.toLowerCase()),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 300,
-                  child: StreamBuilder<List<Employee>>(
-                    stream: _firestoreService.getEmployeesStream(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const CircularProgressIndicator();
-                      var employees = snapshot.data!;
-                      if (searchQuery.isNotEmpty) {
-                        employees = employees.where((e) => e.displayName.toLowerCase().contains(searchQuery)).toList();
-                      }
-                      employees.sort((a, b) => (a.isOnSite ? 0 : 1).compareTo(b.isOnSite ? 0 : 1));
-                      return ListView.builder(
-                        itemCount: employees.length,
-                        itemBuilder: (context, index) {
-                          final emp = employees[index];
-                          return ListTile(
-                            title: Text(emp.displayName),
-                            subtitle: Text('${emp.department} - ${emp.position}'),
-                            leading: Icon(
-                              emp.isOnSite ? Icons.location_on : Icons.location_off,
-                              color: emp.isOnSite ? Colors.green : Colors.red[400]!,
-                              size: 20,
-                            ),
-                            tileColor: emp.isOnSite ? Colors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
-                            onTap: () async {
-                              final previous = currentEmployee;
-                              try {
-                                await _firestoreService.saveLoggedInEmployee(emp.clockNo);
-                                if (!kIsWeb) {
-                                  try {
-                                    final token = await _notificationService.getToken();
-                                    if (token != null) {
-                                      // Switch-user: route the target employee's
-                                      // notifications to this device via the CF
-                                      // (employees is locked under Wave B).
-                                      await _firestoreService.setDeviceFcmToken(emp.clockNo, token);
-                                    }
-                                  } catch (e) {
-                                    debugPrint('Error updating FCM token: $e');
-                                  }
-                                }
-                                // Re-point the employee stream — the old code
-                                // left it on the previous clockNo, whose next
-                                // emission silently reverted the switch.
-                                _employeeSubscription?.cancel();
-                                setState(() {
-                                  currentEmployee = emp;
-                                  isOnSite = emp.isOnSite;
-                                  _previousIsOnSite = emp.isOnSite;
-                                });
-                                _setupEmployeeStream(emp.clockNo);
-                                // Audit the switch — it changes attribution
-                                // for every subsequent action on this device.
-                                try {
-                                  await FirebaseFirestore.instance.collection('notifications').add({
-                                    'triggeredBy': 'user_switch',
-                                    'level': 'audit',
-                                    'title': 'User switched on device',
-                                    'body':
-                                        '${previous?.name ?? 'Unknown'} (${previous?.clockNo ?? '?'}) → ${emp.name} (${emp.clockNo})',
-                                    'initiatedByClockNo': previous?.clockNo,
-                                    'initiatedByName': previous?.name,
-                                    'sentTo': [emp.clockNo],
-                                    'timestamp': FieldValue.serverTimestamp(),
-                                  });
-                                } catch (e) {
-                                  debugPrint('User switch audit log failed: $e');
-                                }
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Switched to ${emp.name}'), backgroundColor: Colors.green),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error switching user: $e'), backgroundColor: Colors.red),
-                                  );
-                                }
-                              }
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  /// Registry admin only, home tab only — opens UI persona picker (no tap hint).
+  Future<void> _handleTitleLongPress(BuildContext context) async {
+    if (_selectedIndex != 0) return;
+    if (!await isRegistryAdmin()) return;
+    if (!context.mounted) return;
+    await showPersonaPickerDialog(context, ref);
   }
 
   void _showFeedbackDialog() {
@@ -916,14 +811,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 return;
               }
 
+              if (!guardPersonaSubmit(context)) return;
+
               final navigator = Navigator.of(context);
               final messenger = ScaffoldMessenger.of(context);
+              final session = writeAttributionEmployee ?? realEmployee;
               try {
                 await FirebaseFirestore.instance.collection('feedback').add({
                   'feedback': feedback,
-                  'userName': currentEmployee?.name ?? 'Unknown',
-                  'clockNo': currentEmployee?.clockNo ?? 'Unknown',
+                  'userName': session?.name ?? 'Unknown',
+                  'clockNo': session?.clockNo ?? 'Unknown',
                   'timestamp': FieldValue.serverTimestamp(),
+                  ...personaAuditFields(),
                 });
 
                 navigator.pop();
@@ -1529,12 +1428,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       isOperator && job.type != JobType.maintenance;
 
   Future<void> _startWork(JobCard job) async {
+    if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
     try {
       // Same implementation as the detail screen's Start — the old My Work
       // path set inProgress without assigning the user or writing history.
-      await _actions.startJob(job, current);
+      await _actions.startJob(job, actor);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Work started'), backgroundColor: Colors.blue),
@@ -1581,15 +1482,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         );
                         return;
                       }
+                      if (!guardPersonaSubmit(context)) return;
                       final current = currentEmployee;
                       if (current == null) return;
+                      final actor = resolveWriteActor(current)!;
                       setDialogState(() => isCompleting = true);
                       try {
                         // Same field-scoped action as the detail screen —
                         // the old My Work path wrote the note into `notes`
                         // instead of `correctiveAction` and merge-set the
                         // whole document.
-                        await _actions.completeJob(job, current, note,
+                        await _actions.completeJob(job, actor, note,
                             withMonitoring: false);
 
                         if (job.operatorClockNo != null) {
@@ -1678,11 +1581,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         );
                         return;
                       }
+                      if (!guardPersonaSubmit(context)) return;
                       final current = currentEmployee;
                       if (current == null) return;
+                      final actor = resolveWriteActor(current)!;
                       setDialogState(() => isMonitoring = true);
                       try {
-                        await _actions.completeJob(job, current, note,
+                        await _actions.completeJob(job, actor, note,
                             withMonitoring: true);
 
                         if (context.mounted) {
@@ -2099,7 +2004,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
-          onTap: () => _handleTitleTap(context),
+          onLongPress: _selectedIndex == 0
+              ? () => _handleTitleLongPress(context)
+              : null,
           child: Text(_appBarTitle),
         ),
         flexibleSpace: Container(
@@ -2121,11 +2028,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               ),
             ),
           ),
-          if (currentEmployee != null)
+          if (realEmployee != null)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('notification_inbox')
-                  .doc(currentEmployee!.clockNo)
+                  .doc(realEmployee!.clockNo)
                   .collection('items')
                   .where('read', isEqualTo: false)
                   .snapshots(),
@@ -2155,6 +2062,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ),
       body: Column(
         children: [
+          const PersonaBanner(),
           const SyncIndicator(),
           Expanded(
             child: IndexedStack(

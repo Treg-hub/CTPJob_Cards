@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:signature/signature.dart';
 import 'dart:typed_data';
 
@@ -50,6 +51,7 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
   }
 
   Future<void> _saveSignature() async {
+    if (!guardPersonaSubmit(context)) return;
     if (_controller.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please provide a signature')),

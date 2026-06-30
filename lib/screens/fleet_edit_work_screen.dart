@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -173,6 +174,7 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     if (_selectedAsset == null || _selectedWorkType == null) {
       _showError('Please complete all required fields.');
       return;

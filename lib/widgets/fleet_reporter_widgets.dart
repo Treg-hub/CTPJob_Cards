@@ -49,13 +49,81 @@ class FleetReporterGuideBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Three quick steps: pick the machine, say how urgent, describe the problem. '
+              'Tap the machine, tap how urgent, then describe the problem. '
               'Or use Report Problem on the home screen for a shortcut.',
               style: TextStyle(fontSize: 13, height: 1.35),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// All urgency levels with plain-language hints (step 2 — nothing selected yet).
+class FleetReporterSeverityOptionsGuide extends StatelessWidget {
+  const FleetReporterSeverityOptionsGuide({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.appColors.textMuted;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < FleetIssueSeverity.values.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _SeverityGuideRow(severity: FleetIssueSeverity.values[i]),
+        ],
+        const SizedBox(height: 4),
+        Text(
+          'Tap an option above to continue.',
+          style: TextStyle(fontSize: 12, color: muted, fontStyle: FontStyle.italic),
+        ),
+      ],
+    );
+  }
+}
+
+class _SeverityGuideRow extends StatelessWidget {
+  const _SeverityGuideRow({required this.severity});
+
+  final FleetIssueSeverity severity;
+
+  @override
+  Widget build(BuildContext context) {
+    final isOos = severity == FleetIssueSeverity.outOfService;
+    final accent = isOos ? Colors.red.shade800 : kBrandOrange;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          isOos ? Icons.warning_amber_rounded : Icons.circle,
+          size: isOos ? 16 : 8,
+          color: accent,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: DefaultTextStyle.of(context).style.copyWith(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: isOos ? Colors.red.shade900 : null,
+                  ),
+              children: [
+                TextSpan(
+                  text: '${reporterSeverityLabel(severity)} — ',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                TextSpan(text: reporterSeverityHint(severity)),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

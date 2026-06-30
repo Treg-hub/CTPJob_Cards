@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart' show currentEmployee;
@@ -44,6 +45,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
   }
 
   Future<void> _submit(List<String> categories) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee;
     if (emp == null) return;
 
@@ -74,7 +76,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
         category: _category!,
         description: _descCtrl.text.trim(),
         amountZar: amount,
-        enteredByClockNo: emp.clockNo,
+        enteredByClockNo: resolveWriteActor(emp)!.clockNo,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

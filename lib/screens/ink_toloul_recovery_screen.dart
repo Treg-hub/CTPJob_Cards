@@ -9,6 +9,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 
 /// Phase 1g — Toloul Recovery. Records solvent recovered from the Lurgi
@@ -43,12 +44,15 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate() || _itemCode == null) return;
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
     setState(() => _submitting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     final txn = InkTransaction(
       type: InkTxnType.recovery,
       stockItemCode: _itemCode!,
@@ -84,7 +88,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final recentAsync = ref.watch(inkRecentRecoveriesProvider);
+    final recentAsync = ref.watch(inkRecentRecoveriesCurrentPeriodProvider);
     final df = DateFormat('EEE d MMM yyyy HH:mm');
 
     return Scaffold(
@@ -183,7 +187,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 4),
-              Text('Recent Recoveries',
+              Text('Recoveries this period',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
               ...recentAsync.when(
@@ -195,7 +199,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
-                          'No recoveries recorded yet.',
+                          'No recoveries in the current period.',
                           style: TextStyle(
                             color: Theme.of(context)
                                 .colorScheme

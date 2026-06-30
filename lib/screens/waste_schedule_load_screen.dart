@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -191,6 +192,7 @@ class _WasteScheduleLoadScreenState
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_isValid || _isSaving) return;
     setState(() => _isSaving = true);
 
@@ -201,7 +203,7 @@ class _WasteScheduleLoadScreenState
         contractorName: _selectedContractor!.name,
         mainWasteType: resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
         scheduledFor: _scheduledFor,
-        scheduledBy: employee?.clockNo ?? '',
+        scheduledBy: resolveWriteActor(employee)?.clockNo ?? '',
         scheduledByName: employee?.name ?? '',
         scheduledNotes: _notesController.text.trim().isEmpty
             ? null

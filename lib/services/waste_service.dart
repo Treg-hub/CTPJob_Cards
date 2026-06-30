@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import 'connectivity_service.dart';
+import '../utils/persona_audit.dart';
 import 'sync_service.dart';
 import '../models/contractor.dart';
 import '../models/waste_settings.dart';
@@ -29,6 +30,8 @@ import 'copper_service.dart';
 /// (_sessionOfflinePhotoQueue, _sessionOfflineSignatureQueue) stay consistent
 /// across screens during a single app session.
 class WasteService {
+  void _guardWrite() => assertPersonaSubmitAllowed();
+
   static final WasteService _instance = WasteService._internal();
   factory WasteService() => _instance;
   WasteService._internal();
@@ -62,6 +65,7 @@ class WasteService {
     required Map<String, dynamic> data,
     String? documentId,
   }) async {
+    _guardWrite();
     if (!shouldQueue) return;
     await SyncService().addToQueue(
       collection: collection,
@@ -78,6 +82,7 @@ class WasteService {
   /// Creates a new waste load document with an auto-generated load number.
   /// The Cloud Function handles the atomic counter for the current date.
   Future<Map<String, dynamic>> createLoad(Map<String, dynamic> initialData) async {
+    _guardWrite();
     try {
       final callable = _functions.httpsCallable('createWasteLoad');
       final result = await callable
@@ -112,6 +117,7 @@ class WasteService {
 
   Future<({bool queuedOffline})> updateLoad(
       String loadId, Map<String, dynamic> data) async {
+    _guardWrite();
     final online = await _checkOnline();
 
     if (online) {
@@ -156,6 +162,7 @@ class WasteService {
     String? ticketWaivedBy,
     String? ticketWaivedByName,
   }) async {
+    _guardWrite();
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
     final online = await _checkOnline();
     var queuedOffline = !online;
@@ -241,6 +248,7 @@ class WasteService {
     String? driverSignatureUrl,
     required String completedBy,
   }) async {
+    _guardWrite();
     await _firestore.collection(Collections.wasteLoads).doc(loadId).update({
       'status': 'completed',
       if (driverSignatureUrl != null) 'driver_signature_url': driverSignatureUrl,
@@ -250,6 +258,7 @@ class WasteService {
   }
 
   Future<void> softDeleteLoad(String loadId, String deletedBy) async {
+    _guardWrite();
     // In a real implementation we would copy to waste_deleted_loads first.
     // For v1 we simply mark and let a future admin recovery flow handle the archive copy.
     await _firestore.collection(Collections.wasteLoads).doc(loadId).update({
@@ -329,6 +338,7 @@ class WasteService {
     List<String> selectedStockIds = const [],
     List<String> selectedWasteTypes = const [],
   }) async {
+    _guardWrite();
     final payload = {
       'load_number': '',
       'contractor_id': contractorId,
@@ -400,6 +410,7 @@ class WasteService {
   /// Throws [StateError] if the load is no longer in [scheduled] status (online only).
   /// When offline the cancel is queued; status will be applied on next sync.
   Future<void> cancelScheduledLoad(String loadId) async {
+    _guardWrite();
     final online = await _checkOnline();
 
     if (online) {
@@ -471,6 +482,7 @@ class WasteService {
     String? timeOut,
     String? paperDocumentRef,
   }) async {
+    _guardWrite();
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
     final online = await _checkOnline();
     var queuedOffline = !online;
@@ -690,6 +702,7 @@ class WasteService {
     String? finishedByName,
     bool isQuantityOnly = false,
   }) async {
+    _guardWrite();
     if (signatureLocalPath == null) {
       throw ArgumentError('Driver signature is required');
     }
@@ -817,11 +830,13 @@ class WasteService {
   // ---------------------------------------------------------------------------
 
   Future<String> addItem(WasteItem item) async {
+    _guardWrite();
     final doc = await _firestore.collection(Collections.wasteItems).add(item.toFirestore());
     return doc.id;
   }
 
   Future<void> updateItem(String itemId, Map<String, dynamic> data) async {
+    _guardWrite();
     await _firestore.collection(Collections.wasteItems).doc(itemId).update(data);
   }
 
@@ -860,6 +875,7 @@ class WasteService {
   /// Throws [StateError] when offline; item deletion is a supervised action
   /// and partial offline state is worse than a clear "reconnect first" error.
   Future<void> deleteWasteItem(String itemId, {String? sourceStockId}) async {
+    _guardWrite();
     final online = await _checkOnline();
     if (!online) {
       throw StateError('Cannot delete items while offline — reconnect and try again');
@@ -1155,6 +1171,7 @@ class WasteService {
   }
 
   Future<void> addOrUpdateContractor(Contractor contractor) async {
+    _guardWrite();
     if (contractor.id != null) {
       await _firestore.collection(Collections.wasteContractors).doc(contractor.id).set(contractor.toFirestore());
     } else {
@@ -1179,6 +1196,7 @@ class WasteService {
 
   // Internal direct upload (no queuing) - used by public API and offline processor.
   Future<String> _uploadSignatureBytesDirect(Uint8List bytes, String loadId) async {
+    _guardWrite();
     final fileName = 'signature_${DateTime.now().millisecondsSinceEpoch}.png';
     final storagePath = 'waste_loads/$loadId/signature/$fileName';
     final ref = _storage.ref().child(storagePath);
@@ -1197,6 +1215,7 @@ class WasteService {
   /// Queues a signature (by persisted temp file path) for later upload.
   /// Uses central SyncService (Hive 'waste_signatures') + session queue (full offline resilience, matches photo pattern exactly).
   Future<void> queueOfflineWasteSignature({required String localPath, required String loadId}) async {
+    _guardWrite();
     // Central Hive queue for cross-session processing by SyncService (on connectivity return)
     await SyncService().addToQueue(
       collection: 'waste_signatures',
@@ -1243,6 +1262,7 @@ class WasteService {
     List<String> loadLevelPhotoPaths = const [],      // optional load overview photos
     String? actorClockNo,                             // for enhanced pilot flag check + usage logging
   }) async {
+    _guardWrite();
     final allowed = await isWasteTrackEnabledForCurrentUser(actorClockNo);
     if (!allowed) {
       throw Exception('WasteTrack is currently disabled by feature flag or your account is not in the active pilot group');
@@ -1460,6 +1480,7 @@ class WasteService {
 
   /// Creates a new waste type master record. Admin only (enforced in calling screen).
   Future<String> createWasteType(WasteType type) async {
+    _guardWrite();
     try {
       final doc = await _firestore.collection(Collections.wasteTypes).add(type.toFirestore());
       return doc.id;
@@ -1470,6 +1491,7 @@ class WasteService {
 
   /// Toggles the isQuantityOnly flag on an existing waste type.
   Future<void> setWasteTypeQuantityOnly(String typeId, bool isQuantityOnly) async {
+    _guardWrite();
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
         'isQuantityOnly': isQuantityOnly,
@@ -1482,6 +1504,7 @@ class WasteService {
 
   /// Toggles the noSiteWeight flag on an existing waste type.
   Future<void> setWasteTypeNoSiteWeight(String typeId, bool noSiteWeight) async {
+    _guardWrite();
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
         'noSiteWeight': noSiteWeight,
@@ -1494,6 +1517,7 @@ class WasteService {
 
   /// Adds a subtype to an existing waste type (arrayUnion for safety).
   Future<void> addSubtypeToType(String typeId, String newSubtype) async {
+    _guardWrite();
     if (newSubtype.trim().isEmpty) return;
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
@@ -1959,6 +1983,7 @@ class WasteService {
   }
 
   Future<void> setWasteMasterEnabled(bool enabled) async {
+    _guardWrite();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('wasteTrackEnabled', enabled);
   }
@@ -2001,6 +2026,7 @@ class WasteService {
   }
 
   Future<void> saveWasteSettings(WasteSettings settings) async {
+    _guardWrite();
     await _firestore
         .collection(Collections.wasteSettings)
         .doc('config')
@@ -2311,6 +2337,7 @@ class WasteService {
   }
 
   Future<void> markStockLoaded(List<String> stockIds, String loadId) async {
+    _guardWrite();
     if (stockIds.isEmpty) return;
     final online = await _checkOnline();
     final payload = {
@@ -2352,6 +2379,7 @@ class WasteService {
   /// operations must replay together so stock is never marked loaded against
   /// a load that isn't in Firestore yet.
   Future<void> queueMarkStockLoaded(List<String> stockIds, String loadId) async {
+    _guardWrite();
     if (stockIds.isEmpty) return;
     final payload = {
       'status': WasteStockStatus.loaded.value,

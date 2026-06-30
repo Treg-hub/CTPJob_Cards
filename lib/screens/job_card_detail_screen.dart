@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -422,15 +423,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   // ==================== ORIGINAL METHODS ====================
   Future<void> _appendComment() async {
+    if (!guardPersonaSubmit(context)) return;
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
 
     try {
       await _actions.addComment(
         _currentJobCard,
-        current,
+        actor,
         text,
         reoccurrenceCount: _reoccurrenceCount,
       );
@@ -449,10 +452,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _selfUnassign(JobCard jobCard) async {
+    if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
     try {
-      await _actions.selfUnassign(jobCard, current);
+      await _actions.selfUnassign(jobCard, actor);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Removed from job')));
@@ -739,12 +744,14 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _appendNote(String noteText) async {
+    if (!guardPersonaSubmit(context)) return;
     if (noteText.isEmpty) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
 
     try {
-      await _actions.addNote(_currentJobCard, current, noteText);
+      await _actions.addNote(_currentJobCard, actor, noteText);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note added!')));
@@ -759,6 +766,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _addPhoto(String section) async {
+    if (!guardPersonaSubmit(context)) return;
     final jobId = widget.jobCard.id;
     if (jobId == null || jobId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -838,11 +846,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         downloadUrl = await snapshot.ref.getDownloadURL();
       }
 
+      final actor = resolveWriteActor(currentEmployee);
       final photoMap = {
         'url': downloadUrl,
         'section': section,
         'addedBy': FirebaseAuth.instance.currentUser?.uid ?? 'legacy',
-        'addedByName': currentEmployee?.name ?? 'Unknown',
+        'addedByName': actor?.name ?? 'Unknown',
         'timestamp': DateTime.now().toIso8601String(),
         'department': _currentJobCard.department,
         'machine': _currentJobCard.machine,
@@ -888,6 +897,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _deletePhoto(Map<String, dynamic> photo) async {
+    if (!guardPersonaSubmit(context)) return;
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (photo['addedBy'] != currentUid && !isAdmin(currentEmployee)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You can only delete your own photos'), backgroundColor: Colors.red));
@@ -1190,13 +1200,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _startJob(JobCard jobCard) async {
+    if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
     final isAlreadyAssigned =
         jobCard.assignedClockNos?.contains(current.clockNo) ?? false;
 
     try {
-      await _actions.startJob(jobCard, current);
+      await _actions.startJob(jobCard, actor);
 
       // If this user just self-assigned by starting the job (wasn't previously
       // assigned), notify the operator so they know who's now responsible.
@@ -1397,10 +1409,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _completeJob(JobCard jobCard, bool withMonitoring, String description) async {
+    if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
     try {
-      await _actions.completeJob(jobCard, current, description,
+      await _actions.completeJob(jobCard, actor, description,
           withMonitoring: withMonitoring);
       await _refreshJobCard();
 
@@ -1443,10 +1457,12 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   Future<void> _adjustmentMade(JobCard jobCard, String description) async {
+    if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
+    final actor = resolveWriteActor(current)!;
     try {
-      await _actions.adjustmentMade(jobCard, current, description);
+      await _actions.adjustmentMade(jobCard, actor, description);
       await _refreshJobCard();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoring restarted!')));
@@ -1491,7 +1507,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   Navigator.pop(context);
                   return;
                 }
-                final user = currentEmployee?.name ?? 'User';
+                if (!guardPersonaSubmit(context)) return;
+                final actor = resolveWriteActor(currentEmployee);
+                if (actor == null) return;
                 try {
                   // Field-scoped update: stamps closedAt on close, clears
                   // stale completion fields on reopen (copyWith can't null
@@ -1500,8 +1518,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     jobCardId: jobCard.id!,
                     current: jobCard,
                     to: selectedStatus,
-                    byName: user,
-                    byClockNo: currentEmployee?.clockNo ?? '',
+                    byName: actor.name,
+                    byClockNo: actor.clockNo,
                   );
                   await _refreshJobCard();
                   if (context.mounted) {

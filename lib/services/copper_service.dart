@@ -6,8 +6,10 @@ import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 import '../models/waste_stock_source.dart';
 import '../services/connectivity_service.dart';
+import '../utils/persona_audit.dart';
 
 class CopperService {
+  void _guardWrite() => assertPersonaSubmitAllowed();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Uuid _uuid = const Uuid();
 
@@ -44,6 +46,7 @@ class CopperService {
   }
 
   Future<void> updateTransactionComments(String id, String comments) async {
+    _guardWrite();
     try {
       await _firestore.collection(transCollection).doc(id).update({'comments': comments});
     } catch (e) {
@@ -52,6 +55,7 @@ class CopperService {
   }
 
   Future<void> performAddToSort(double amountKg, String comments, String userId) async {
+    _guardWrite();
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
@@ -74,6 +78,7 @@ class CopperService {
   }
 
   Future<void> performPlateBars(double amountKg, String comments, String userId) async {
+    _guardWrite();
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
@@ -101,6 +106,7 @@ class CopperService {
   }
 
   Future<void> performSort(double reuseKg, double sellKg, String comments, String userId) async {
+    _guardWrite();
     final id = _uuid.v4();
     final now = Timestamp.now();
     final totalKg = reuseKg + sellKg;
@@ -132,6 +138,7 @@ class CopperService {
   }
 
   Future<void> performUseReuse(double amountKg, String comments, String userId) async {
+    _guardWrite();
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
@@ -154,6 +161,7 @@ class CopperService {
   }
 
   Future<void> performRecordSale(double amountKg, double rPerKg, String comments, String userId) async {
+    _guardWrite();
     final id = _uuid.v4();
     final now = Timestamp.now();
     final totalValueR = amountKg * rPerKg;
@@ -188,6 +196,7 @@ class CopperService {
     required String userId,
     String comments = '',
   }) async {
+    _guardWrite();
     if (amountKg <= 0 || rPerKg <= 0) return;
     final docId = 'waste_sale_${loadId}_${subtype.toLowerCase()}';
     final now = Timestamp.now();

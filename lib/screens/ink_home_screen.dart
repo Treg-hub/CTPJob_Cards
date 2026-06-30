@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/ink_stock_item.dart';
+import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/role.dart' as role_utils;
 import '../widgets/ink_daily_readings_banner.dart';
 import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
@@ -30,6 +32,8 @@ class InkHomeScreen extends ConsumerWidget {
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final readingsStatus =
         ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
+    final isManager = role_utils.isInkManager(
+        ref.watch(currentEmployeeProvider).valueOrNull);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
@@ -42,8 +46,10 @@ class InkHomeScreen extends ConsumerWidget {
         ),
         children: [
           _StockQtySummary(itemsAsync: itemsAsync),
-          const SizedBox(height: 12),
-          _PulseManageCard(pulseUrl: _pulseInkUrl),
+          if (isManager) ...[
+            const SizedBox(height: 12),
+            _PulseManageCard(pulseUrl: _pulseInkUrl),
+          ],
           if (readingsStatus != null && !readingsStatus.complete) ...[
             const SizedBox(height: 12),
             InkDailyReadingsBanner(status: readingsStatus),

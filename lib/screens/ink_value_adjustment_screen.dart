@@ -9,6 +9,7 @@ import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
+import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
 
@@ -58,13 +59,16 @@ class _State extends ConsumerState<InkValueAdjustmentScreen> {
   }
 
   Future<void> _submit(InkStockItem item) async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate()) return;
     final amount = double.parse(_amountCtrl.text.trim());
+    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
     setState(() => _submitting = true);
-    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
     final txn = InkTransaction(
       type: InkTxnType.valueAdjustment,
       stockItemCode: item.itemCode,

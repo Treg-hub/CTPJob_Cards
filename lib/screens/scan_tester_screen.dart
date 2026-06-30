@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -166,6 +167,7 @@ class _ScanTesterScreenState extends State<ScanTesterScreen> {
   }
 
   Future<void> _save() async {
+    if (!guardPersonaSubmit(context)) return;
     final payload = _primaryPayload;
     if (payload.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

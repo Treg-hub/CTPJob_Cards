@@ -213,37 +213,6 @@ exports.linkEmployeeAccount = onCall(async (request) => {
   return { success: true, clockNo };
 });
 
-/**
- * setDeviceFcmToken — points an employee's notifications at the caller's device
- * by writing ONLY the fcmToken on employees/{clockNo}. Used by the "switch user"
- * flow, where the signed-in account stays the same but the active employee
- * changes, so the target's notifications must route to this handset.
- *
- * ADMIN-ONLY (Security Phase B1). Redirecting another employee's notifications
- * is privileged: the only caller is the in-app Switch User dialog, which is
- * already gated to admins (home_screen._handleTitleTap) and keeps the admin's
- * OWN Firebase identity across the switch. So the caller here is always an
- * admin — assertAdmin() changes nothing for the legitimate flow while closing
- * the hole where any signed-in employee could redirect anyone's notifications
- * via a direct (non-UI) call. Requires the caller's uid in admins/{uid} — the
- * sole live admin (clock 22) is already seeded; any future admin must be too
- * (see scripts/seed_admins.js) or switch-user will fail for them.
- */
-exports.setDeviceFcmToken = onCall(async (request) => {
-  await assertAdmin(request);
-  const innerData = request.data;
-  const clockNo = String(innerData.clockNo || "");
-  const fcmToken = innerData.fcmToken;
-  if (!clockNo || typeof fcmToken !== "string" || !fcmToken) {
-    throw new HttpsError("invalid-argument", "clockNo and fcmToken are required.");
-  }
-  await db.collection("employees").doc(clockNo).set({
-    fcmToken,
-    fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { success: true, clockNo };
-});
-
 // ==================== IN-MEMORY CACHES (module-level, server-side only) ====================
 // Config cache: notification_configs/global is almost never changed; cache for 10 min.
 let _configCache = null;

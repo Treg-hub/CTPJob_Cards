@@ -13,7 +13,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../main.dart' show currentEmployee, navigatorKey, TopRouteTracker;
+import '../main.dart' show currentEmployee, navigatorKey, realEmployee, TopRouteTracker;
 import '../models/assignment_event.dart';
 import '../models/job_card.dart';
 import '../constants/collections.dart';
@@ -162,9 +162,10 @@ class NotificationService {
     String clockNo = '';
     String name = 'Unknown User';
 
-    if (currentEmployee != null) {
-      clockNo = currentEmployee!.clockNo;
-      name = currentEmployee!.name;
+    final session = realEmployee ?? currentEmployee;
+    if (session != null) {
+      clockNo = session.clockNo;
+      name = session.name;
     } else {
       final prefs = await SharedPreferences.getInstance();
       clockNo = prefs.getString('loggedInClockNo') ?? '';
@@ -428,7 +429,7 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
     _messaging.onTokenRefresh.listen((newToken) async {
-      final clockNo = currentEmployee?.clockNo;
+      final clockNo = realEmployee?.clockNo ?? currentEmployee?.clockNo;
       if (clockNo != null) {
         await FirestoreService().updateMyPresence(fcmToken: newToken);
         debugPrint('FCM token auto-refreshed for $clockNo');
@@ -667,7 +668,7 @@ class NotificationService {
         'part': part,
         'description': description,
         'priority': priority ?? 1,
-        'recipientClockNo': currentEmployee?.clockNo,
+        'recipientClockNo': realEmployee?.clockNo ?? currentEmployee?.clockNo,
       });
     } catch (e) {
       debugPrint('❌ Error sending notification: $e');

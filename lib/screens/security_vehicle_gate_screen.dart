@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -218,6 +219,7 @@ class _SecurityVehicleGateScreenState
   }
 
   Future<void> _addContractor() async {
+    if (!guardPersonaSubmit(context)) return;
     final nameCtrl = TextEditingController();
     final added = await showDialog<SecurityContractor>(
       context: context,
@@ -317,7 +319,9 @@ class _SecurityVehicleGateScreenState
     List<SecurityDenyEntry> denyList,
     List<SecurityVehicle> vehicles,
   ) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee!;
+    final actor = resolveWriteActor(emp)!;
 
     if (!gate.allowsEntryType(_entryType)) {
       _showError('This gate does not allow ${_entryType.label} entries.');
@@ -440,7 +444,7 @@ class _SecurityVehicleGateScreenState
               : _purposeCtrl.text.trim(),
           if (host.isNotEmpty) 'host_name': host,
           if (company.isNotEmpty) 'company_name': company,
-          'logged_by_clock_no': emp.clockNo,
+          'logged_by_clock_no': actor.clockNo,
           'logged_by_name': emp.name,
           'logged_at': DateTime.now().toIso8601String(),
           'disc_scan_captured': true,
@@ -471,14 +475,14 @@ class _SecurityVehicleGateScreenState
         await _service.ensureLookupOption(
           type: 'host',
           value: host,
-          createdByClockNo: emp.clockNo,
+          createdByClockNo: actor.clockNo,
         );
       }
       if (company.isNotEmpty) {
         await _service.ensureLookupOption(
           type: 'company',
           value: company,
-          createdByClockNo: emp.clockNo,
+          createdByClockNo: actor.clockNo,
         );
       }
 
@@ -495,7 +499,9 @@ class _SecurityVehicleGateScreenState
     SecurityGate gate,
     List<SecurityEntry> onSite,
   ) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee!;
+    final actor = resolveWriteActor(emp)!;
 
     if (_onSiteEntry == null) {
       _showError('Select or scan to match an on-site vehicle.');
@@ -536,7 +542,7 @@ class _SecurityVehicleGateScreenState
         onSiteEntry: _onSiteEntry!,
         gateId: gate.id,
         gateName: gate.name,
-        loggedByClockNo: emp.clockNo,
+        loggedByClockNo: actor.clockNo,
         loggedByName: emp.name,
         discScan: _disc,
         occupantsLeaving: _occupantsLeaving,
@@ -561,7 +567,9 @@ class _SecurityVehicleGateScreenState
   }
 
   Future<void> _submitCompanyCarExit(SecurityGate gate) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee!;
+    final actor = resolveWriteActor(emp)!;
 
     if (_companyVehicle == null) {
       _showError('Scan a registered company car licence disc.');
@@ -641,7 +649,7 @@ class _SecurityVehicleGateScreenState
               _driverLicence!.expiryDate!.toIso8601String(),
         if (_driverLicence?.expiryDate != null)
           'id_expiry': _driverLicence!.expiryDate!.toIso8601String(),
-        'logged_by_clock_no': emp.clockNo,
+        'logged_by_clock_no': actor.clockNo,
         'logged_by_name': emp.name,
         'logged_at': DateTime.now().toIso8601String(),
       };
@@ -677,7 +685,9 @@ class _SecurityVehicleGateScreenState
   }
 
   Future<void> _submitCompanyCarReturn(SecurityGate gate) async {
+    if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee!;
+    final actor = resolveWriteActor(emp)!;
 
     if (_companyVehicle == null) {
       _showError('Scan a registered company car licence disc.');
@@ -727,7 +737,7 @@ class _SecurityVehicleGateScreenState
         if (_disc?.vehicleMake != null) 'vehicle_make': _disc!.vehicleMake,
         'odometer_end': odometer,
         if (mileage != null) 'mileage_km': mileage,
-        'logged_by_clock_no': emp.clockNo,
+        'logged_by_clock_no': actor.clockNo,
         'logged_by_name': emp.name,
         'logged_at': DateTime.now().toIso8601String(),
       };
@@ -771,8 +781,9 @@ class _SecurityVehicleGateScreenState
     SecurityGate gate,
     String reg,
     SecurityDenyEntry deny,
-    dynamic emp,
+    Employee emp,
   ) async {
+    final actor = resolveWriteActor(emp)!;
     final result = await _service.createEntry(
       data: {
         'gate_id': gate.id,
@@ -784,8 +795,8 @@ class _SecurityVehicleGateScreenState
             _driverCtrl.text.trim().isEmpty ? null : _driverCtrl.text.trim(),
         'deny_blocked': true,
         'deny_reason': deny.reason,
-        'logged_by_clock_no': emp.clockNo,
-        'logged_by_name': emp.name,
+        'logged_by_clock_no': actor.clockNo,
+        'logged_by_name': actor.name,
         'logged_at': DateTime.now().toIso8601String(),
       },
     );

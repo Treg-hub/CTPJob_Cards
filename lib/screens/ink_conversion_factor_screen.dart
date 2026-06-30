@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../utils/persona_audit.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
@@ -14,6 +15,7 @@ class InkConversionFactorScreen extends ConsumerWidget {
 
   Future<void> _edit(BuildContext context, WidgetRef ref, InkStockItem item,
       double current) async {
+    if (!guardPersonaSubmit(context)) return;
     final ctrl =
         TextEditingController(text: current > 0 ? current.toString() : '');
     final v = await showDialog<double>(

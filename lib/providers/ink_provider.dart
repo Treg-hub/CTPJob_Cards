@@ -14,8 +14,16 @@ import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 import '../services/ink_service.dart';
+import '../utils/ink_ibc_period.dart';
+import '../utils/ink_period.dart';
 
 final inkServiceProvider = Provider<InkService>((ref) => InkService());
+
+/// Current open count-to-count window (after latest month-end count, through now).
+final inkOpenPeriodRangeProvider = Provider<InkOpenPeriodRange>((ref) {
+  final events = ref.watch(inkCountEventsProvider).valueOrNull ?? [];
+  return inkOpenPeriodRange(events);
+});
 
 /// Module settings (ink_enabled + closed periods). Loaded once per session and
 /// used for home-screen gating, mirroring fleetSettingsProvider.
@@ -112,6 +120,29 @@ final inkAllIbcsProvider = StreamProvider<List<InkIbc>>(
   (ref) => ref.watch(inkServiceProvider).watchIbcs(),
 );
 
+/// IBCs consumed (transferred) in the current open count period, newest first.
+final inkIbcsConsumedThisPeriodProvider = Provider<List<InkIbc>>((ref) {
+  final all = ref.watch(inkAllIbcsProvider).valueOrNull ?? [];
+  final range = ref.watch(inkOpenPeriodRangeProvider);
+  final consumed = all
+      .where((i) => isIbcConsumedInOpenPeriod(i, range))
+      .toList()
+    ..sort((a, b) {
+      final ad = a.transferredDate ?? a.receivedDate;
+      final bd = b.transferredDate ?? b.receivedDate;
+      return bd.compareTo(ad);
+    });
+  return consumed;
+});
+
+/// Per-colour count of IBCs consumed this period (for Consume IBC tab badges).
+final inkIbcsConsumedCountByColourProvider =
+    Provider<Map<String, int>>((ref) {
+  final all = ref.watch(inkAllIbcsProvider).valueOrNull ?? [];
+  final range = ref.watch(inkOpenPeriodRangeProvider);
+  return ibcConsumedCountByColour(all, range);
+});
+
 /// Open IBC shipments (awaiting_receipt / receiving) to receive against.
 final inkOpenShipmentsProvider = StreamProvider<List<InkShipment>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenIbcShipments(),
@@ -132,10 +163,43 @@ final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>(
   (ref) => ref.watch(inkServiceProvider).watchProductionRuns(),
 );
 
-/// Recent toloul recovery transactions (newest first, non-voided).
+/// Production runs in the current open count period only (operator read-back).
+final inkProductionRunsCurrentPeriodProvider =
+    Provider<AsyncValue<List<InkProductionRun>>>((ref) {
+  final runsAsync = ref.watch(inkProductionRunsProvider);
+  final range = ref.watch(inkOpenPeriodRangeProvider);
+  return runsAsync.when(
+    data: (runs) => AsyncData(
+      runs
+          .where((r) => isWithinInkOpenPeriod(r.effectiveAt, range))
+          .toList(),
+    ),
+    loading: () => const AsyncLoading(),
+    error: (e, st) => AsyncError(e, st),
+  );
+});
+
+/// Toloul recovery transactions (newest first, non-voided) — high cap so
+/// current-period filtering does not drop in-period rows.
 final inkRecentRecoveriesProvider = StreamProvider<List<InkTransaction>>(
-  (ref) => ref.watch(inkServiceProvider).watchRecentRecoveries(),
+  (ref) => ref.watch(inkServiceProvider).watchRecentRecoveries(limit: 200),
 );
+
+/// Recoveries in the current open count period only (operator read-back).
+final inkRecentRecoveriesCurrentPeriodProvider =
+    Provider<AsyncValue<List<InkTransaction>>>((ref) {
+  final recoveriesAsync = ref.watch(inkRecentRecoveriesProvider);
+  final range = ref.watch(inkOpenPeriodRangeProvider);
+  return recoveriesAsync.when(
+    data: (txns) => AsyncData(
+      txns
+          .where((t) => isWithinInkOpenPeriod(t.effectiveAt, range))
+          .toList(),
+    ),
+    loading: () => const AsyncLoading(),
+    error: (e, st) => AsyncError(e, st),
+  );
+});
 
 /// Active toloul meter points (for the reading screen).
 final inkActiveMeterPointsProvider = StreamProvider<List<InkMeterPoint>>(

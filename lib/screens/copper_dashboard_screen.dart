@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -52,8 +53,10 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
   }
 
   Future<void> _executeTransaction() async {
+    if (!guardPersonaSubmit(context)) return;
     final employee = ref.read(currentEmployeeProvider).valueOrNull;
     if (employee == null) return;
+    final actor = resolveWriteActor(employee)!;
 
     final amount = double.tryParse(_amountController.text) ?? 0;
     final rPerKg = double.tryParse(_rPerKgController.text) ?? 0;
@@ -85,21 +88,21 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       final notifier = ref.read(copperNotifierProvider.notifier);
       switch (_selectedType) {
         case 'addToSort':
-          await notifier.performAddToSort(amount, _commentsController.text, employee.clockNo);
+          await notifier.performAddToSort(amount, _commentsController.text, actor.clockNo);
           break;
         case 'plateBars':
-          await notifier.performPlateBars(amount, _commentsController.text, employee.clockNo);
+          await notifier.performPlateBars(amount, _commentsController.text, actor.clockNo);
           break;
         case 'removeFromSort':
           final reuseAmount = amount - sellAmount;
-          await notifier.performSort(reuseAmount, sellAmount, _commentsController.text, employee.clockNo);
+          await notifier.performSort(reuseAmount, sellAmount, _commentsController.text, actor.clockNo);
           break;
         case 'useReuse':
-          await notifier.performUseReuse(amount, _commentsController.text, employee.clockNo);
+          await notifier.performUseReuse(amount, _commentsController.text, actor.clockNo);
           break;
         case 'recordSale':
           if (rPerKg <= 0) throw Exception('R/kg required for sale');
-          await notifier.performRecordSale(amount, rPerKg, _commentsController.text, employee.clockNo);
+          await notifier.performRecordSale(amount, rPerKg, _commentsController.text, actor.clockNo);
           break;
       }
 

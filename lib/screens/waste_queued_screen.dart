@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 
 import '../services/sync_service.dart';
 import '../services/waste_service.dart';
@@ -149,6 +150,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
   }
 
   Future<void> _removeItem(Map<String, dynamic> item) async {
+    if (!guardPersonaSubmit(context)) return;
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 

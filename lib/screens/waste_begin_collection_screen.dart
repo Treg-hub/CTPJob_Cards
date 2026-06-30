@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -276,6 +277,7 @@ class _WasteBeginCollectionScreenState
   }
 
   Future<void> _addItem() async {
+    if (!guardPersonaSubmit(context)) return;
     final contractor = _contractors.firstWhere(
       (c) => c.id == widget.load.contractorId,
       orElse: () => const Contractor(name: ''),
@@ -338,6 +340,7 @@ class _WasteBeginCollectionScreenState
   }
 
   Future<void> _submit() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
     _timeOut ??= TimeOfDay.now();
@@ -370,8 +373,8 @@ class _WasteBeginCollectionScreenState
         loadId: widget.load.id!,
         driverName: _driverCtrl.text.trim(),
         vehicleReg: _regCtrl.text.trim(),
-        collectedBy: currentEmployee?.clockNo ?? '',
-        collectedByName: currentEmployee?.name,
+        collectedBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
+        collectedByName: resolveWriteActor(currentEmployee)?.name,
         securityName: currentEmployee?.name,
         timeIn: _formatTime(_timeIn),
         timeOut: _formatTime(_timeOut!),

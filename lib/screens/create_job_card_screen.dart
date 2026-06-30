@@ -15,6 +15,7 @@ import '../models/job_card.dart';
 import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
+import '../utils/persona_audit.dart';
 import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
@@ -274,6 +275,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
   String? _pendingClientRef;
 
   Future<void> _saveJobCard() async {
+    if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate()) return;
     if (selectedDepartment == null || selectedArea == null || selectedMachine == null || part.isEmpty || jobType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -306,6 +308,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
       final uploadedPhotos = await _uploadPhotos();
 
       // Step 2: Create JobCard with the uploaded photo maps (now containing URLs)
+      final session = writeAttributionEmployee ?? currentEmployee;
       final jobCard = JobCard(
         department: selectedDepartment!,
         area: selectedArea!,
@@ -313,8 +316,8 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
         part: part,
         type: jobType!,
         priority: priority,
-        operator: operatorName,
-        operatorClockNo: currentEmployee?.clockNo,
+        operator: session?.name ?? operatorName,
+        operatorClockNo: session?.clockNo,
         description: description,
         photos: uploadedPhotos,   // ← THIS WAS THE MISSING PART
       );
@@ -349,6 +352,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
   }
 
   Future<void> _addPhoto(String section) async {
+    if (!guardPersonaSubmit(context)) return;
     final picker = ImagePicker();
     final source = await showDialog<ImageSource>(
       context: context,

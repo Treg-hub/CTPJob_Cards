@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../utils/persona_audit.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
@@ -187,6 +188,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   }
 
   Future<void> _saveInput() async {
+    if (!guardPersonaSubmit(context)) return;
     final text = _inputController.text.trim();
     if (text.isEmpty || _selectedCard == null || _isSaving) return;
     final current = currentEmployee;
