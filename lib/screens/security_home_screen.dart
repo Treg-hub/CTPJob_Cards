@@ -46,17 +46,6 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
     final emp = currentEmployee;
     final canManageCosts = role_utils.isSecurityCostManager(emp, settings);
     final gate = ref.watch(selectedSecurityGateProvider);
-    final gatesAsync = ref.watch(securityGatesProvider);
-    gatesAsync.whenData((gates) {
-      if (gate == null && gates.length == 1) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref.read(selectedSecurityGateProvider.notifier).state =
-                gates.first;
-          }
-        });
-      }
-    });
 
     return Scaffold(
       body: ListView(

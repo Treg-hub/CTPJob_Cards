@@ -15,11 +15,13 @@ import '../models/security_entry.dart';
 import '../models/security_gate.dart';
 import '../models/security_settings.dart';
 import '../models/security_vehicle.dart';
+import '../models/security_scan_result.dart';
 import '../models/security_vehicle_trip.dart';
 import '../providers/security_provider.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/security_gate_compact_header.dart';
 import '../widgets/security_suggestion_field.dart';
 import 'security_document_scan_screen.dart';
 
@@ -73,6 +75,14 @@ class _SecurityVehicleGateScreenState
   Employee? _resolvedEmployee;
   bool _resolvingEmployee = false;
   bool _submitting = false;
+  bool _formReady = false;
+  bool _openingScanner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapFlow());
+  }
 
   @override
   void dispose() {
@@ -158,41 +168,230 @@ class _SecurityVehicleGateScreenState
     });
   }
 
-  Future<void> _scanDisc(
+  bool get _needsLicenceScan => switch (_flowKind) {
+        _GateFlowKind.visitorEntry =>
+          !_licenceUnavailable && _driverLicence == null,
+        _GateFlowKind.companyCarExit => _driverLicence == null,
+        _ => false,
+      };
+
+  bool get _showLicenceInHeader => switch (_flowKind) {
+        _GateFlowKind.visitorEntry => true,
+        _GateFlowKind.companyCarExit => true,
+        _ => false,
+      };
+
+  Future<void> _bootstrapFlow() async {
+    if (!mounted) return;
+    final gate = ref.read(selectedSecurityGateProvider);
+    if (gate == null) {
+      setState(() => _formReady = true);
+      return;
+    }
+    await _openDiscScanner();
+  }
+
+  Future<List<SecurityEntry>> _loadOnSite() async {
+    final entries = await _service.watchRecentEntries(limit: 200).first;
+    return _service.computeOnSite(entries);
+  }
+
+  Future<List<SecurityVehicle>> _loadVehicles() async {
+    return _service.watchVehicles().first;
+  }
+
+  Future<void> _openDiscScanner() async {
+    if (_openingScanner || !mounted) return;
+    _openingScanner = true;
+    try {
+      final result = await Navigator.push<SecurityScanResult>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const SecurityDocumentScanScreen(
+            title: 'Scan Licence Disc',
+            expectedType: SecurityDocumentType.licenseDisc,
+            autoConfirmOnDetect: true,
+            structuredResult: true,
+            showCantScanDisc: true,
+          ),
+        ),
+      );
+      if (!mounted) return;
+
+      if (result == null) {
+        setState(() => _formReady = true);
+        return;
+      }
+
+      if (result.cantScan) {
+        setState(() {
+          _disc = null;
+          _discDamaged = true;
+          _formReady = true;
+        });
+        return;
+      }
+
+      if (result.hasDocument) {
+        final onSite = await _loadOnSite();
+        final vehicles = await _loadVehicles();
+        if (!mounted) return;
+        _applyDiscContext(
+          disc: result.document!,
+          onSite: onSite,
+          vehicles: vehicles,
+        );
+        await _maybeChainLicenceScan();
+      }
+
+      if (mounted) setState(() => _formReady = true);
+    } finally {
+      _openingScanner = false;
+    }
+  }
+
+  Future<void> _maybeChainLicenceScan() async {
+    if (!_needsLicenceScan || !mounted) return;
+    await _openLicenceScanner();
+  }
+
+  Future<void> _openLicenceScanner() async {
+    if (_openingScanner || !mounted) return;
+    final settings = ref.read(securitySettingsProvider).valueOrNull;
+    final allowSkip = _flowKind == _GateFlowKind.visitorEntry &&
+        settings != null &&
+        !settings.driverLicenceScanRequired;
+
+    _openingScanner = true;
+    try {
+      final result = await Navigator.push<SecurityScanResult>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SecurityDocumentScanScreen(
+            title: "Scan Driver's Licence",
+            expectedType: SecurityDocumentType.driverLicence,
+            autoConfirmOnDetect: true,
+            structuredResult: true,
+            allowSkip: allowSkip,
+            skipLabel: "Licence not available",
+          ),
+        ),
+      );
+      if (!mounted) return;
+
+      if (result == null) return;
+
+      if (result.skipped && allowSkip) {
+        setState(() => _licenceUnavailable = true);
+        return;
+      }
+
+      if (result.hasDocument) {
+        final doc = result.document!;
+        setState(() {
+          _driverLicence = doc;
+          _licenceUnavailable = false;
+          if (doc.fullName != null && _driverCtrl.text.isEmpty) {
+            _driverCtrl.text = doc.fullName!;
+          }
+        });
+      }
+    } finally {
+      _openingScanner = false;
+    }
+  }
+
+  Future<void> _rescanDisc(
     List<SecurityEntry> onSite,
     List<SecurityVehicle> vehicles,
   ) async {
-    final result = await Navigator.push<ParsedDocument>(
+    final result = await Navigator.push<SecurityScanResult>(
       context,
       MaterialPageRoute(
         builder: (_) => const SecurityDocumentScanScreen(
           title: 'Scan Licence Disc',
           expectedType: SecurityDocumentType.licenseDisc,
+          autoConfirmOnDetect: true,
+          structuredResult: true,
+          showCantScanDisc: true,
         ),
       ),
     );
-    if (result == null || !mounted) return;
-    _applyDiscContext(disc: result, onSite: onSite, vehicles: vehicles);
+    if (!mounted) return;
+
+    if (result == null) return;
+
+    if (result.cantScan) {
+      setState(() {
+        _disc = null;
+        _discDamaged = true;
+        _companyVehicle = null;
+        _onSiteEntry = null;
+        _autoDirection = null;
+      });
+      return;
+    }
+
+    if (result.hasDocument) {
+      _applyDiscContext(
+        disc: result.document!,
+        onSite: onSite,
+        vehicles: vehicles,
+      );
+      await _maybeChainLicenceScan();
+    }
   }
 
-  Future<void> _scanDriverLicence() async {
-    final result = await Navigator.push<ParsedDocument>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const SecurityDocumentScanScreen(
-          title: "Scan Driver's Licence",
-          expectedType: SecurityDocumentType.driverLicence,
+  void _showCompanyRegistryDialog(
+    String scannedReg,
+    List<String> registeredCompanyCars,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Not a registered company car'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Disc plate: $scannedReg',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'This reg is not in the company car register, or the vehicle is '
+                'inactive. Job Cards will treat this as a visitor/contractor vehicle.',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'In Pulse: Settings → Site Security → Company vehicles — add the '
+                'plate exactly as on the disc.',
+              ),
+              if (registeredCompanyCars.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Registered company cars (${registeredCompanyCars.length}):',
+                  style: Theme.of(ctx).textTheme.labelMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(registeredCompanyCars.join(', ')),
+              ],
+            ],
+          ),
         ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
-    if (result == null || !mounted) return;
-    setState(() {
-      _driverLicence = result;
-      _licenceUnavailable = false;
-      if (result.fullName != null && _driverCtrl.text.isEmpty) {
-        _driverCtrl.text = result.fullName!;
-      }
-    });
   }
 
   Future<void> _resolveEmployeeFromClock() async {
@@ -847,23 +1046,6 @@ class _SecurityVehicleGateScreenState
     Navigator.pop(context);
   }
 
-  String? _autoDetectHint(List<SecurityEntry> onSite) {
-    if (_disc == null) {
-      return 'Scan the licence disc to auto-detect entry or exit.';
-    }
-    final reg = SecurityVehicle.normalizeReg(_disc!.vehicleReg);
-    if (_companyVehicle != null) {
-      final onSiteMatch = _onSiteEntry != null;
-      return onSiteMatch
-          ? 'Company car $reg is on site → suggested EXIT (trip out)'
-          : 'Company car $reg not on site → suggested ENTRY (return)';
-    }
-    if (_onSiteEntry != null) {
-      return '$reg is on site → suggested EXIT';
-    }
-    return '$reg not on site → suggested ENTRY';
-  }
-
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(securitySettingsProvider).valueOrNull;
@@ -872,6 +1054,13 @@ class _SecurityVehicleGateScreenState
     if (settings == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_formReady && gate != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Vehicle at Gate')),
+        body: const SizedBox.shrink(),
       );
     }
 
@@ -911,8 +1100,21 @@ class _SecurityVehicleGateScreenState
                               final partial = discrepancy &&
                                   _occupantsLeaving < recorded;
 
+                              final scannedReg = _disc != null
+                                  ? SecurityVehicle.normalizeReg(_disc!.vehicleReg)
+                                  : null;
+                              final companyCarRegs = vehicles
+                                  .where((v) => v.isCompanyCar && v.active)
+                                  .map((v) => v.vehicleReg)
+                                  .toList();
+
                               return ListView(
-                                padding: const EdgeInsets.all(16),
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  ScreenInsets.scrollBottomInHomeShell(),
+                                ),
                                 children: [
                                   if (gate == null)
                                     const Card(
@@ -923,89 +1125,37 @@ class _SecurityVehicleGateScreenState
                                         ),
                                       ),
                                     ),
-                                  _DirectionPanel(
+                                  SecurityGateCompactHeader(
                                     direction: _direction,
                                     autoDirection: _autoDirection,
-                                    overridden: _directionOverridden,
-                                    hint: _autoDetectHint(onSite),
-                                    onChanged: _setDirection,
+                                    directionOverridden: _directionOverridden,
+                                    flowLabel: _flowLabel,
+                                    onDirectionChanged: _setDirection,
                                     onResetAuto: _directionOverridden
                                         ? _resetDirectionToAuto
                                         : null,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Card(
-                                    color: kBrandOrange.withValues(alpha: 0.08),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            _direction ==
-                                                    SecurityDirection.in_
-                                                ? Icons.login
-                                                : Icons.logout,
-                                            color: kBrandOrange,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _flowLabel,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  OutlinedButton.icon(
-                                    onPressed: gate == null
+                                    disc: _disc,
+                                    driverLicence: _driverLicence,
+                                    companyVehicle: _companyVehicle,
+                                    showLicenceRow: _showLicenceInHeader,
+                                    onRescanDisc: gate == null
                                         ? null
-                                        : () => _scanDisc(onSite, vehicles),
-                                    icon: Icon(
-                                      _disc != null
-                                          ? Icons.check_circle
-                                          : Icons.qr_code_scanner,
-                                      color: _disc != null
-                                          ? Colors.green
-                                          : null,
-                                    ),
-                                    label: Text(
-                                      _disc != null
-                                          ? 'Disc scanned: '
-                                              '${SecurityVehicle.normalizeReg(_disc!.vehicleReg)}'
-                                          : 'Scan licence disc *',
-                                    ),
+                                        : () => _rescanDisc(onSite, vehicles),
+                                    onRescanLicence: _showLicenceInHeader
+                                        ? _openLicenceScanner
+                                        : null,
+                                    onShowCompanyRegistryInfo:
+                                        scannedReg != null &&
+                                                _companyVehicle == null
+                                            ? () => _showCompanyRegistryDialog(
+                                                  scannedReg,
+                                                  companyCarRegs,
+                                                )
+                                            : null,
                                   ),
-                                  if (_disc != null) ...[
+                                  if (_disc == null) ...[
                                     const SizedBox(height: 8),
-                                    _DiscSummaryCard(disc: _disc!),
-                                  ],
-                                  if (_disc != null && _companyVehicle == null) ...[
-                                    const SizedBox(height: 8),
-                                    _CompanyRegistryHintCard(
-                                      scannedReg: SecurityVehicle.normalizeReg(
-                                        _disc!.vehicleReg,
-                                      ),
-                                      registeredCompanyCars: vehicles
-                                          .where((v) => v.isCompanyCar && v.active)
-                                          .map((v) => v.vehicleReg)
-                                          .toList(),
-                                    ),
-                                  ],
-                                  if (_companyVehicle != null) ...[
-                                    const SizedBox(height: 12),
-                                    _CompanyCarCard(
-                                      vehicle: _companyVehicle!,
+                                    _CompanyCarManualSection(
                                       discDamaged: _discDamaged,
                                       onDiscDamagedChanged: (v) => setState(() {
                                         _discDamaged = v;
@@ -1166,25 +1316,6 @@ class _SecurityVehicleGateScreenState
             });
           }
         },
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _licenceUnavailable ? null : _scanDriverLicence,
-              icon: Icon(
-                _driverLicence != null
-                    ? Icons.check_circle
-                    : Icons.badge_outlined,
-                color: _driverLicence != null ? Colors.green : null,
-              ),
-              label: Text(
-                licenceRequired ? "Scan driver's licence *" : "Scan driver's licence",
-              ),
-            ),
-          ),
-        ],
       ),
       if (!licenceRequired) ...[
         const SizedBox(height: 8),
@@ -1398,23 +1529,6 @@ class _SecurityVehicleGateScreenState
 
   List<Widget> _companyCarExitFields() {
     return [
-      const SizedBox(height: 16),
-      OutlinedButton.icon(
-        onPressed: _scanDriverLicence,
-        icon: Icon(
-          _driverLicence != null ? Icons.check_circle : Icons.badge_outlined,
-          color: _driverLicence != null ? Colors.green : null,
-        ),
-        label: const Text("Scan driver's licence *"),
-      ),
-      if (_driverLicence?.fullName != null) ...[
-        const SizedBox(height: 4),
-        Text(
-          'Licence: ${_driverLicence!.fullName}'
-          '${_driverLicence!.idNumber != null ? ' · ${_driverLicence!.idNumber}' : ''}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
       const SizedBox(height: 12),
       TextField(
         controller: _clockNoCtrl,
@@ -1492,234 +1606,8 @@ class _SecurityVehicleGateScreenState
   }
 }
 
-class _DirectionPanel extends StatelessWidget {
-  const _DirectionPanel({
-    required this.direction,
-    required this.autoDirection,
-    required this.overridden,
-    required this.hint,
-    required this.onChanged,
-    this.onResetAuto,
-  });
-
-  final SecurityDirection direction;
-  final SecurityDirection? autoDirection;
-  final bool overridden;
-  final String? hint;
-  final ValueChanged<SecurityDirection> onChanged;
-  final VoidCallback? onResetAuto;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: direction == SecurityDirection.in_
-              ? Colors.green.shade600
-              : Colors.deepOrange.shade600,
-          width: 2,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Direction',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<SecurityDirection>(
-              segments: const [
-                ButtonSegment(
-                  value: SecurityDirection.in_,
-                  label: Text('ENTRY'),
-                  icon: Icon(Icons.login),
-                ),
-                ButtonSegment(
-                  value: SecurityDirection.out,
-                  label: Text('EXIT'),
-                  icon: Icon(Icons.logout),
-                ),
-              ],
-              selected: {direction},
-              onSelectionChanged: (s) => onChanged(s.first),
-            ),
-            if (hint != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                hint!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-            if (overridden && autoDirection != null) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.edit, size: 14, color: Colors.orange.shade800),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Changed manually (auto was '
-                      '${autoDirection!.label.toUpperCase()})',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade900,
-                      ),
-                    ),
-                  ),
-                  if (onResetAuto != null)
-                    TextButton(
-                      onPressed: onResetAuto,
-                      child: const Text('Use auto'),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompanyRegistryHintCard extends StatelessWidget {
-  const _CompanyRegistryHintCard({
-    required this.scannedReg,
-    required this.registeredCompanyCars,
-  });
-
-  final String scannedReg;
-  final List<String> registeredCompanyCars;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final regMissing = scannedReg.isEmpty;
-
-    return Card(
-      color: Colors.orange.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange.shade900, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Not a registered company car',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.orange.shade900,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (regMissing)
-              const Text(
-                'The disc was scanned but no registration could be read. '
-                'Rescan the PDF417 on the disc, or use Manual on the scanner screen.',
-              )
-            else ...[
-              Text(
-                'Disc plate: $scannedReg',
-                style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'This reg is not in the company car register, or the vehicle is '
-                'inactive. Job Cards will treat this as a visitor/contractor vehicle.',
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'In Pulse: Settings → Site Security → Company vehicles — scan the '
-                'same disc (QR button) or type the plate exactly as shown above. '
-                'Use the licence disc plate, not the LPF serial or driver licence.',
-              ),
-            ],
-            if (registeredCompanyCars.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Registered company cars (${registeredCompanyCars.length}):',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: registeredCompanyCars
-                    .map(
-                      (r) => Chip(
-                        label: Text(r, style: const TextStyle(fontFamily: 'monospace')),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: scheme.surfaceContainerHighest,
-                      ),
-                    )
-                    .toList(),
-              ),
-            ] else
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'No active company cars in the register yet — add this plate in Pulse first.',
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DiscSummaryCard extends StatelessWidget {
-  const _DiscSummaryCard({required this.disc});
-
-  final ParsedDocument disc;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'From disc scan',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 4),
-            if (disc.vehicleReg != null)
-              Text('Reg: ${SecurityVehicle.normalizeReg(disc.vehicleReg)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (disc.expiryDate != null)
-              Text(
-                'Disc expiry: '
-                '${disc.expiryDate!.toLocal().toString().split(' ').first}',
-              ),
-            if (disc.vehicleMake != null) Text('Make: ${disc.vehicleMake}'),
-            if (disc.vehicleModel != null) Text('Model: ${disc.vehicleModel}'),
-            if (disc.vehicleColour != null)
-              Text('Colour: ${disc.vehicleColour}'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompanyCarCard extends StatelessWidget {
-  const _CompanyCarCard({
-    required this.vehicle,
+class _CompanyCarManualSection extends StatelessWidget {
+  const _CompanyCarManualSection({
     required this.discDamaged,
     required this.onDiscDamagedChanged,
     required this.vehicles,
@@ -1727,7 +1615,6 @@ class _CompanyCarCard extends StatelessWidget {
     required this.onSelect,
   });
 
-  final SecurityVehicle vehicle;
   final bool discDamaged;
   final ValueChanged<bool> onDiscDamagedChanged;
   final List<SecurityVehicle> vehicles;
@@ -1739,14 +1626,6 @@ class _CompanyCarCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Card(
-          color: kBrandOrange.withValues(alpha: 0.08),
-          child: ListTile(
-            leading: const Icon(Icons.directions_car, color: kBrandOrange),
-            title: Text(vehicle.vehicleReg),
-            subtitle: Text(vehicle.description ?? 'Registered company car'),
-          ),
-        ),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: discDamaged,
@@ -1754,14 +1633,16 @@ class _CompanyCarCard extends StatelessWidget {
           title: const Text('Disc damaged / cannot scan'),
           subtitle: const Text('Select company car manually — flagged'),
           controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
         ),
-        if (discDamaged)
+        if (discDamaged && vehicles.isNotEmpty)
           DropdownButtonFormField<SecurityVehicle>(
             key: ValueKey(selected?.id),
             initialValue: selected,
             decoration: const InputDecoration(
               labelText: 'Company car *',
               border: OutlineInputBorder(),
+              isDense: true,
             ),
             items: vehicles
                 .map(

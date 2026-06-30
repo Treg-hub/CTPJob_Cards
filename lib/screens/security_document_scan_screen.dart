@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/parsed_document.dart';
+import '../models/security_scan_result.dart';
 import '../services/security_document_parser.dart';
 import '../utils/barcode_payload_util.dart';
 import '../utils/screen_insets.dart';
@@ -14,10 +15,28 @@ class SecurityDocumentScanScreen extends StatefulWidget {
     super.key,
     this.title = 'Scan Document',
     this.expectedType,
+    this.autoConfirmOnDetect = false,
+    this.structuredResult = false,
+    this.allowSkip = false,
+    this.skipLabel = "Can't scan",
+    this.showCantScanDisc = false,
   });
 
   final String title;
   final SecurityDocumentType? expectedType;
+
+  /// When true, pop as soon as a valid document is parsed (no Use tap).
+  final bool autoConfirmOnDetect;
+
+  /// When true, pop [SecurityScanResult] instead of [ParsedDocument].
+  final bool structuredResult;
+
+  /// Bottom action to skip scanning (e.g. licence not available).
+  final bool allowSkip;
+  final String skipLabel;
+
+  /// Bottom action when the licence disc cannot be scanned.
+  final bool showCantScanDisc;
 
   @override
   State<SecurityDocumentScanScreen> createState() =>
@@ -56,11 +75,38 @@ class _SecurityDocumentScanScreenState
   bool _torchOn = false;
   bool _autoTorchTried = false;
   int _frameCount = 0;
+  bool _confirmed = false;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _pop(dynamic value) {
+    if (!mounted || _confirmed) return;
+    _confirmed = true;
+    Navigator.pop(context, value);
+  }
+
+  void _popDocument(ParsedDocument document) {
+    if (widget.structuredResult) {
+      _pop(SecurityScanResult.success(document));
+    } else {
+      _pop(document);
+    }
+  }
+
+  void _popSkipped() {
+    if (widget.structuredResult) {
+      _pop(SecurityScanResult.skippedScan());
+    } else {
+      _pop(null);
+    }
+  }
+
+  void _popCantScanDisc() {
+    _pop(SecurityScanResult.cantScanDisc());
   }
 
   Future<void> _setTorch(bool on) async {
@@ -91,6 +137,7 @@ class _SecurityDocumentScanScreenState
   }
 
   void _onDetect(BarcodeCapture capture) {
+    if (_confirmed) return;
     _maybeAutoTorch(capture.image);
 
     for (final b in capture.barcodes) {
@@ -114,7 +161,14 @@ class _SecurityDocumentScanScreenState
         _ => SecurityDocumentParser.parseBarcode(raw),
       };
       if (!_acceptsParsedResult(widget.expectedType, parsed, raw)) continue;
-      if (!mounted) return;
+      if (!mounted || _confirmed) return;
+
+      if (widget.autoConfirmOnDetect) {
+        HapticFeedback.mediumImpact();
+        _popDocument(parsed);
+        return;
+      }
+
       setState(() => _result = parsed);
       HapticFeedback.mediumImpact();
       return;
@@ -202,38 +256,41 @@ class _SecurityDocumentScanScreenState
 
     if (ok != true || !mounted) return;
 
-    setState(() {
-      _result = isDisc
-          ? SecurityDocumentParser.manualLicenseDisc(
-              vehicleReg: regCtrl.text,
-              vehicleMake:
-                  makeCtrl.text.isEmpty ? null : makeCtrl.text,
-            )
-          : isDriverLicence
-              ? SecurityDocumentParser.manualDriverLicence(
-                  idNumber: idCtrl.text,
-                  firstName:
-                      firstCtrl.text.isEmpty ? null : firstCtrl.text,
-                  lastName: lastCtrl.text.isEmpty ? null : lastCtrl.text,
-                )
-              : SecurityDocumentParser.manualIdDocument(
-                  idNumber: idCtrl.text,
-                  firstName:
-                      firstCtrl.text.isEmpty ? null : firstCtrl.text,
-                  lastName: lastCtrl.text.isEmpty ? null : lastCtrl.text,
-                );
-    });
+    final manual = isDisc
+        ? SecurityDocumentParser.manualLicenseDisc(
+            vehicleReg: regCtrl.text,
+            vehicleMake: makeCtrl.text.isEmpty ? null : makeCtrl.text,
+          )
+        : isDriverLicence
+            ? SecurityDocumentParser.manualDriverLicence(
+                idNumber: idCtrl.text,
+                firstName: firstCtrl.text.isEmpty ? null : firstCtrl.text,
+                lastName: lastCtrl.text.isEmpty ? null : lastCtrl.text,
+              )
+            : SecurityDocumentParser.manualIdDocument(
+                idNumber: idCtrl.text,
+                firstName: firstCtrl.text.isEmpty ? null : firstCtrl.text,
+                lastName: lastCtrl.text.isEmpty ? null : lastCtrl.text,
+              );
+
+    if (widget.autoConfirmOnDetect) {
+      _popDocument(manual);
+    } else {
+      setState(() => _result = manual);
+    }
   }
 
   void _use() {
-    if (_result == null) return;
-    Navigator.pop(context, _result);
+    final r = _result;
+    if (r == null) return;
+    _popDocument(r);
   }
 
   @override
   Widget build(BuildContext context) {
     final r = _result;
     final scheme = Theme.of(context).colorScheme;
+    final hidePreview = widget.autoConfirmOnDetect;
 
     return Scaffold(
       appBar: AppBar(
@@ -277,41 +334,63 @@ class _SecurityDocumentScanScreenState
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              if (r != null) ...[
-                if (r.vehicleReg != null)
-                  Text('Reg: ${r.vehicleReg}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                if (r.expiryDate != null)
-                  Text('Expiry: ${r.expiryDate!.toLocal().toString().split(' ').first}'),
-                if (r.vehicleMake != null) Text('Make: ${r.vehicleMake}'),
-                if (r.vehicleModel != null) Text('Model: ${r.vehicleModel}'),
-                if (r.fullName != null) Text('Name: ${r.fullName}'),
-                if (r.idNumber != null) Text('ID: ${r.idNumber}'),
-                if (r.fullName == null &&
-                    r.idNumber == null &&
-                    r.rawPayload != null &&
-                    BarcodePayloadUtil.isBinaryPayload(r.rawPayload!))
-                  Text(
-                    BarcodePayloadUtil.displayPayload(r.rawPayload!),
-                    style: TextStyle(
-                      color: scheme.error,
-                      fontSize: 12,
+              if (!hidePreview) ...[
+                if (r != null) ...[
+                  if (r.vehicleReg != null)
+                    Text('Reg: ${r.vehicleReg}',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                  if (r.expiryDate != null)
+                    Text(
+                      'Expiry: ${r.expiryDate!.toLocal().toString().split(' ').first}',
                     ),
+                  if (r.vehicleMake != null) Text('Make: ${r.vehicleMake}'),
+                  if (r.vehicleModel != null) Text('Model: ${r.vehicleModel}'),
+                  if (r.fullName != null) Text('Name: ${r.fullName}'),
+                  if (r.idNumber != null) Text('ID: ${r.idNumber}'),
+                  if (r.fullName == null &&
+                      r.idNumber == null &&
+                      r.rawPayload != null &&
+                      BarcodePayloadUtil.isBinaryPayload(r.rawPayload!))
+                    Text(
+                      BarcodePayloadUtil.displayPayload(r.rawPayload!),
+                      style: TextStyle(
+                        color: scheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (r.manualEntry)
+                    Text('Manual entry',
+                        style: TextStyle(color: scheme.primary, fontSize: 12)),
+                ] else
+                  const Text('Waiting for scan…'),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: r != null ? _use : null,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Use'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
                   ),
-                if (r.manualEntry)
-                  Text('Manual entry',
-                      style: TextStyle(color: scheme.primary, fontSize: 12)),
-              ] else
-                const Text('Waiting for scan…'),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: r != null ? _use : null,
-                icon: const Icon(Icons.check),
-                label: const Text('Use'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
                 ),
-              ),
+              ] else
+                const Text(
+                  'Scanning… release when the barcode is in frame.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              if (widget.showCantScanDisc) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _popCantScanDisc,
+                  child: const Text("Can't scan disc"),
+                ),
+              ],
+              if (widget.allowSkip) ...[
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: _popSkipped,
+                  child: Text(widget.skipLabel),
+                ),
+              ],
             ],
           ),
         ),

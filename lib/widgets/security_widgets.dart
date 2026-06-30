@@ -40,7 +40,7 @@ class SecurityGateSelector extends ConsumerWidget {
               .map((g) => DropdownMenuItem(value: g, child: Text(g.name)))
               .toList(),
           onChanged: (gate) {
-            ref.read(selectedSecurityGateProvider.notifier).state = gate;
+            ref.read(selectedSecurityGateProvider.notifier).select(gate);
             onChanged(gate);
           },
         );
