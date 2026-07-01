@@ -84,31 +84,45 @@ class _SecurityVisitorSignOutScreenState
           ScreenInsets.scrollBottomFullScreen(context),
         ),
         child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: kBrandOrange.withValues(alpha: 0.15),
+              child: const Icon(
+                Icons.directions_walk,
+                color: kBrandOrange,
+              ),
+            ),
+            title: Text(
+              e.visitorName ?? e.driverName ?? '—',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  e.visitorName ?? e.driverName ?? '—',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                if (e.hostName != null) Text('Host: ${e.hostName}'),
-                if (e.companyName != null) Text('Company: ${e.companyName}'),
-                if (e.purpose != null) Text('Purpose: ${e.purpose}'),
-                if (e.gateName != null) Text('Gate in: ${e.gateName}'),
+                if (e.hostName != null)
+                  Text('Host: ${e.hostName}', style: const TextStyle(fontSize: 12)),
+                if (e.companyName != null)
+                  Text('Company: ${e.companyName}', style: const TextStyle(fontSize: 12)),
+                if (e.purpose != null)
+                  Text('Purpose: ${e.purpose}', style: const TextStyle(fontSize: 12)),
+                if (e.gateName != null)
+                  Text('Gate in: ${e.gateName}', style: const TextStyle(fontSize: 12)),
                 if (e.loggedAt != null)
-                  Text('Signed in: ${dateFmt.format(e.loggedAt!.toLocal())}'),
+                  Text(
+                    'Signed in: ${dateFmt.format(e.loggedAt!.toLocal())}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 if (gate == null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 4),
                   const Text(
                     'No gate selected — go back and choose a gate before signing out.',
-                    style: TextStyle(color: Colors.orange),
+                    style: TextStyle(color: Colors.orange, fontSize: 12),
                   ),
                 ],
               ],
             ),
+            isThreeLine: true,
           ),
         ),
       ),

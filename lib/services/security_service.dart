@@ -327,6 +327,9 @@ class SecurityService {
   /// Most recent OUT entry for a company car reg with no matching later IN
   /// — i.e. the car is "out on trip" awaiting return. Used to pull the
   /// occupant count that left, for the return-leg discrepancy check.
+  ///
+  /// Uses createdAt (server timestamp) for ordering when available to avoid
+  /// corruption from skewed client clocks. Falls back to loggedAt.
   SecurityEntry? findOpenCompanyCarExit(
     List<SecurityEntry> entries,
     String? vehicleReg,
@@ -335,7 +338,7 @@ class SecurityService {
     if (reg.isEmpty) return null;
     final sorted = [...entries]
       ..sort((a, b) =>
-          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+          _reliableTime(b).compareTo(_reliableTime(a)));
     for (final e in sorted) {
       if (e.entryType != SecurityEntryType.companyCar) continue;
       if (SecurityVehicle.normalizeReg(e.vehicleReg) != reg) continue;
@@ -345,14 +348,19 @@ class SecurityService {
     return null;
   }
 
+  DateTime _reliableTime(SecurityEntry e) => e.eventTime ?? e.createdAt ?? e.loggedAt ?? DateTime(0);
+
   /// Vehicles currently on site (latest direction per reg is in). Excludes
   /// on-foot visitors by design — see computeOnSiteVisitors for the parallel
   /// on-foot computation (keyed by name, since there's no vehicleReg).
+  ///
+  /// Uses createdAt (server timestamp from CF) for ordering/deduping when
+  /// available. This makes on-site status resilient to client device clock skew.
   List<SecurityEntry> computeOnSite(List<SecurityEntry> entries) {
     final latest = <String, SecurityEntry>{};
     final sorted = [...entries]
       ..sort((a, b) =>
-          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+          _reliableTime(b).compareTo(_reliableTime(a)));
     for (final e in sorted) {
       final reg = SecurityVehicle.normalizeReg(e.vehicleReg);
       if (reg.isEmpty || latest.containsKey(reg)) continue;
@@ -362,7 +370,7 @@ class SecurityService {
         .where((e) => e.direction == SecurityDirection.in_)
         .toList()
       ..sort((a, b) =>
-          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+          _reliableTime(b).compareTo(_reliableTime(a)));
   }
 
   /// On-foot visitors currently on site — parallel to computeOnSite but
@@ -370,11 +378,13 @@ class SecurityService {
   /// on-foot entries). Known limitation: two visitors sharing an identical
   /// name will incorrectly dedupe into one row — accepted v1 tradeoff, see
   /// docs/security-deferred-items.md.
+  ///
+  /// Uses createdAt (server timestamp) for ordering when available.
   List<SecurityEntry> computeOnSiteVisitors(List<SecurityEntry> entries) {
     final latest = <String, SecurityEntry>{};
     final sorted = [...entries]
       ..sort((a, b) =>
-          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+          _reliableTime(b).compareTo(_reliableTime(a)));
     for (final e in sorted) {
       if (e.entryType != SecurityEntryType.onFootVisitor) continue;
       final key = (e.visitorName ?? e.driverName ?? '').trim().toLowerCase();
@@ -385,7 +395,7 @@ class SecurityService {
         .where((e) => e.direction == SecurityDirection.in_)
         .toList()
       ..sort((a, b) =>
-          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+          _reliableTime(b).compareTo(_reliableTime(a)));
   }
 
   // ---------------------------------------------------------------------------
@@ -576,8 +586,8 @@ class SecurityService {
     String? gateName,
     required String loggedByClockNo,
     required String loggedByName,
-  }) {
-    return createEntry(
+  }) async {
+    final result = await createEntry(
       data: {
         'gate_id': gateId,
         if (gateName != null) 'gate_name': gateName,
@@ -594,6 +604,18 @@ class SecurityService {
         'logged_at': DateTime.now().toIso8601String(),
       },
     );
+
+    logAudit(
+      action: 'visitor_sign_out',
+      actorClockNo: loggedByClockNo,
+      actorName: loggedByName,
+      details: {
+        'entry_id': result.id,
+        if (onSiteEntry.visitorName != null) 'visitor_name': onSiteEntry.visitorName,
+      },
+    );
+
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -602,9 +624,24 @@ class SecurityService {
 
   Future<void> recordCompanyCarTrip({
     required SecurityVehicleTrip trip,
+    String? actorClockNo,
+    String? actorName,
   }) async {
     _guardWrite();
     await _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore());
+
+    if (actorClockNo != null) {
+      logAudit(
+        action: 'company_car_trip',
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        details: {
+          'vehicle_reg': trip.vehicleReg,
+          'direction': trip.direction.value,
+          if (trip.mileageKm != null) 'mileage_km': trip.mileageKm,
+        },
+      );
+    }
   }
 
   Future<void> updateCompanyVehicleOdometer({

@@ -131,6 +131,7 @@ class SecurityEntry {
   final double? odometerEnd;
   final double? mileageKm;
   final DateTime? createdAt;
+  final DateTime? eventTime; // Server-controlled event time (set in CF) for reliable ordering
 
   const SecurityEntry({
     required this.id,
@@ -183,6 +184,7 @@ class SecurityEntry {
     this.odometerEnd,
     this.mileageKm,
     this.createdAt,
+    this.eventTime,
   });
 
   String get displayPerson =>
@@ -252,6 +254,7 @@ class SecurityEntry {
       odometerEnd: (data['odometer_end'] as num?)?.toDouble(),
       mileageKm: (data['mileage_km'] as num?)?.toDouble(),
       createdAt: _toDate(data['createdAt']),
+      eventTime: _toDate(data['event_time'] ?? data['createdAt']),
     );
   }
 
@@ -320,5 +323,6 @@ class SecurityEntry {
         if (odometerStart != null) 'odometer_start': odometerStart,
         if (odometerEnd != null) 'odometer_end': odometerEnd,
         if (mileageKm != null) 'mileage_km': mileageKm,
+        if (eventTime != null) 'event_time': Timestamp.fromDate(eventTime!),
       };
 }

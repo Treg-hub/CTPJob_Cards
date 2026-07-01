@@ -36,7 +36,7 @@ class SecurityOnSiteScreen extends StatelessWidget {
           // a long-dwelling vehicle/visitor beyond the 300 most recent
           // gate events).
           stream: service.watchRecentEntriesSince(
-            since: DateTime.now().subtract(const Duration(days: 7)),
+            since: DateTime.now().subtract(const Duration(days: 14)), // Harmonized window using createdAt for reliability
           ),
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
