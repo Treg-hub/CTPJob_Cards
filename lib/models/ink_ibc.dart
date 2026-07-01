@@ -39,6 +39,10 @@ class InkIbc {
     this.cgnaNumber,
     this.chargeNumber,
     this.shipmentId,
+    this.damageFlag = false,
+    this.damageReason,
+    this.damageRecordedAt,
+    this.damageRecordedBy,
   });
 
   final String? id;
@@ -66,6 +70,16 @@ class InkIbc {
   /// Links this receipt to its `ink_shipments` doc ({order}-{letter}) when the
   /// operator received against a selected shipment. Null for free-text receipts.
   final String? shipmentId;
+
+  /// True once this physical IBC has been flagged damaged — either by the
+  /// operator at consume time (excluded from waste stock entirely) or by a
+  /// guard/manager at Begin Collection (removed from a load, not returned to
+  /// on-site stock). [damageReason] is required whenever this is true.
+  final bool damageFlag;
+  final String? damageReason;
+  final DateTime? damageRecordedAt;
+  /// clockNo of whoever recorded the damage (operator or guard/manager).
+  final String? damageRecordedBy;
 
   /// Accepts [Timestamp], ISO [String], or [DateTime] — one bad legacy field
   /// must not poison the whole IBC list stream.
@@ -118,6 +132,10 @@ class InkIbc {
       cgnaNumber: d['cgna_number'] as String?,
       chargeNumber: d['charge_number'] as String?,
       shipmentId: d['shipment_id'] as String?,
+      damageFlag: d['damage_flag'] as bool? ?? false,
+      damageReason: d['damage_reason'] as String?,
+      damageRecordedAt: parseTimestamp(d['damage_recorded_at']),
+      damageRecordedBy: d['damage_recorded_by'] as String?,
     );
   }
 
@@ -136,5 +154,10 @@ class InkIbc {
         if (cgnaNumber != null) 'cgna_number': cgnaNumber,
         if (chargeNumber != null) 'charge_number': chargeNumber,
         if (shipmentId != null) 'shipment_id': shipmentId,
+        if (damageFlag) 'damage_flag': damageFlag,
+        if (damageReason != null) 'damage_reason': damageReason,
+        if (damageRecordedAt != null)
+          'damage_recorded_at': Timestamp.fromDate(damageRecordedAt!),
+        if (damageRecordedBy != null) 'damage_recorded_by': damageRecordedBy,
       };
 }

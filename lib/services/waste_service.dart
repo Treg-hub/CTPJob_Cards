@@ -89,8 +89,62 @@ class WasteService {
           .call(initialData)
           .timeout(_cloudFunctionTimeout);
       return Map<String, dynamic>.from(result.data);
+    } on TimeoutException {
+      // Ambiguous: the request may have committed server-side even though we
+      // never saw the response. Rethrown as-is (not wrapped) so callers like
+      // [_createLoadWithRetry] can distinguish this from a definite failure.
+      rethrow;
     } catch (e) {
       throw Exception('Failed to create waste load via Cloud Function: $e');
+    }
+  }
+
+  /// Calls [createLoad] with retry-safe idempotency via a stable `client_ref`.
+  ///
+  /// A timeout is ambiguous — the request may have committed server-side even
+  /// though the client never saw the response — so this retries exactly once,
+  /// reusing the SAME client_ref. createWasteLoad's server-side dedup check
+  /// then returns the already-created doc instead of minting a duplicate if
+  /// the first attempt actually landed. Only falls back to a local
+  /// OFFLINE-* placeholder (queued for later reconciliation) once the retry
+  /// also fails, or on a definite (non-timeout) failure.
+  Future<({String id, String loadNumber, bool queuedOffline})> _createLoadWithRetry(
+    Map<String, dynamic> loadData,
+  ) async {
+    final clientRef = const Uuid().v4();
+    final payload = {...loadData, 'client_ref': clientRef};
+    try {
+      final result = await createLoad(payload);
+      return (id: result['id'] as String, loadNumber: result['load_number'] as String, queuedOffline: false);
+    } on TimeoutException catch (e) {
+      if (kDebugMode) {
+        debugPrint('createLoad timed out (ambiguous outcome) — retrying with client_ref $clientRef: $e');
+      }
+      try {
+        final retryResult = await createLoad(payload);
+        return (
+          id: retryResult['id'] as String,
+          loadNumber: retryResult['load_number'] as String,
+          queuedOffline: false,
+        );
+      } catch (e2) {
+        if (kDebugMode) {
+          debugPrint('createLoad retry after timeout failed for client_ref $clientRef: $e2');
+        }
+        final now = DateTime.now();
+        return (
+          id: _firestore.collection(Collections.wasteLoads).doc().id,
+          loadNumber: 'OFFLINE-${now.millisecondsSinceEpoch}',
+          queuedOffline: true,
+        );
+      }
+    } catch (_) {
+      final now = DateTime.now();
+      return (
+        id: _firestore.collection(Collections.wasteLoads).doc().id,
+        loadNumber: 'OFFLINE-${now.millisecondsSinceEpoch}',
+        queuedOffline: true,
+      );
     }
   }
 
@@ -326,6 +380,15 @@ class WasteService {
   /// [selectedStockIds] are stored on the load doc; stock items are NOT marked loaded
   /// here — that happens in [submitCollection] when the guard confirms them.
   /// Works offline: a local document ID is used and the write is queued in Hive.
+  /// Schedules a load (manager-facing). Mirrors [saveCompleteWasteLoad]'s
+  /// online/offline numbering pattern — calls the createWasteLoad CF
+  /// immediately (via [_createLoadWithRetry], client_ref-protected) so a
+  /// scheduled load gets a real W-NNNN (or a reconciled OFFLINE-* placeholder)
+  /// up front, instead of deferring numbering to the guard's eventual
+  /// submitCollection call. That deferred approach left a real gap: if the
+  /// guard's submission ever happened offline, the load could be stuck with
+  /// no number at all, since the sync queue only reconciles numbers for
+  /// 'set'/'create' ops, not the 'update' op submitCollection queues.
   Future<String> createScheduledLoad({
     required String contractorId,
     String? contractorName,
@@ -339,14 +402,11 @@ class WasteService {
     List<String> selectedWasteTypes = const [],
   }) async {
     _guardWrite();
-    final payload = {
-      'load_number': '',
+    final scheduleFields = {
       'contractor_id': contractorId,
       if (contractorName != null) 'contractor_name': contractorName,
       'main_waste_type': mainWasteType,
       if (selectedWasteTypes.isNotEmpty) 'selected_waste_types': selectedWasteTypes,
-      'date_time': Timestamp.fromDate(scheduledFor),
-      'createdAt': FieldValue.serverTimestamp(),
       'scheduled_for': Timestamp.fromDate(scheduledFor),
       'scheduled_by': scheduledBy,
       'scheduled_by_name': scheduledByName,
@@ -358,38 +418,67 @@ class WasteService {
       'status': WasteLoadStatus.scheduled.value,
       'driver_name': '',
       'vehicle_reg': '',
-      'load_photos': [],
-      'is_deleted': false,
       'created_by': scheduledBy,
-      'recorded_weight_kg': 0.0,
       if (selectedStockIds.isNotEmpty) 'selected_stock_ids': selectedStockIds,
     };
 
     final online = await _checkOnline();
     if (online) {
-      try {
-        final doc = await _firestore
-            .collection(Collections.wasteLoads)
-            .add(payload)
-            .timeout(_firestoreWriteTimeout);
-        return doc.id;
-      } catch (_) {
-        // Fall through to offline queue.
-      }
+      final cfOutcome = await _createLoadWithRetry({
+        ...scheduleFields,
+        // Top-level sibling key (not part of the spread loadData) — the CF
+        // destructures this separately to set date_time = scheduledFor
+        // instead of its own now-based default.
+        'date': scheduledFor.toIso8601String(),
+      });
+      if (!cfOutcome.queuedOffline) return cfOutcome.id;
+      // Fall through to the offline branch below using the placeholder the
+      // helper already minted, so both paths share one queueing code path.
+      return _queueScheduledLoadOffline(
+        scheduleFields,
+        loadId: cfOutcome.id,
+        loadNumber: cfOutcome.loadNumber,
+        scheduledFor: scheduledFor,
+      );
     }
 
-    // Offline path: use a local placeholder ID so the caller can navigate to
-    // the new load immediately; the real Firestore write replays on reconnect.
-    final localId = 'offline_sched_${DateTime.now().millisecondsSinceEpoch}';
-    final serialized = _serializeLoadDataForQueue(payload, DateTime.now());
+    final now = DateTime.now();
+    return _queueScheduledLoadOffline(
+      scheduleFields,
+      loadId: _firestore.collection(Collections.wasteLoads).doc().id,
+      loadNumber: 'OFFLINE-${now.millisecondsSinceEpoch}',
+      scheduledFor: scheduledFor,
+    );
+  }
+
+  /// Queues a scheduled-load doc for offline sync with an OFFLINE-* placeholder
+  /// number, reconciled by [sync_service]'s existing 'set'/'create' →
+  /// assignWasteLoadNumber path once connectivity returns.
+  Future<String> _queueScheduledLoadOffline(
+    Map<String, dynamic> scheduleFields, {
+    required String loadId,
+    required String loadNumber,
+    required DateTime scheduledFor,
+  }) async {
+    final now = DateTime.now();
+    final payload = {
+      ...scheduleFields,
+      'load_number': loadNumber,
+      'date_time': scheduledFor.toIso8601String(),
+      'createdAt': now.toIso8601String(),
+      'load_photos': const <String>[],
+      'is_deleted': false,
+      'recorded_weight_kg': 0.0,
+    };
+    final serialized = _serializeLoadDataForQueue(payload, now);
     await _enqueueWasteOp(
       shouldQueue: true,
       collection: Collections.wasteLoads,
       operation: 'set',
       data: serialized,
-      documentId: localId,
+      documentId: loadId,
     );
-    return localId;
+    return loadId;
   }
 
   /// Stream of all scheduled (not yet collected) loads, ordered by expected date ascending.
@@ -447,6 +536,36 @@ class WasteService {
     );
   }
 
+  /// Records an admin's use of the "show all contractor types" override at
+  /// Begin Collection — i.e. adding item type(s) outside the manager's
+  /// originally-scheduled [WasteLoad.selectedWasteTypes]. Mirrors the
+  /// waste_audit shape already used by CTP Pulse (action/triggered_by/
+  /// created_at) so the entry is queryable alongside weighbridge-deviation
+  /// and soft-delete audit records. Best-effort — failures are swallowed so
+  /// a logging hiccup never blocks the guard's actual collection submit.
+  Future<void> logWasteTypeOverrideAudit({
+    required String loadId,
+    required String loadNumber,
+    required String adminClockNo,
+    String? adminName,
+    required List<String> addedTypes,
+  }) async {
+    if (addedTypes.isEmpty) return;
+    try {
+      await _firestore.collection(Collections.wasteAudit).add({
+        'load_id': loadId,
+        'load_number': loadNumber,
+        'action': 'type_restriction_override',
+        'added_types': addedTypes,
+        'triggered_by': adminClockNo,
+        if (adminName != null) 'triggered_by_name': adminName,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('logWasteTypeOverrideAudit failed for $loadId: $e');
+    }
+  }
+
   /// Guard submits a completed collection on a scheduled load.
   /// Uses a Firestore transaction to assert the load is still [scheduled] before
   /// writing, preventing double-collection. Then uploads photos/signature and
@@ -469,6 +588,7 @@ class WasteService {
     required String loadId,
     required String driverName,
     required String vehicleReg,
+    String? trailerReg,
     required String collectedBy,
     String? collectedByName,
     required List<Map<String, dynamic>> itemsData,
@@ -505,6 +625,7 @@ class WasteService {
       'status': nextStatus.value,
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
+      if (trailerReg != null && trailerReg.isNotEmpty) 'trailer_reg': trailerReg,
       'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
       if (securityName != null && securityName.isNotEmpty) 'security_name': securityName,
@@ -692,19 +813,26 @@ class WasteService {
   }
 
   /// Guard/manager finishes loading on an on-the-spot [draft] load.
-  /// Requires loaded-truck photos + driver signature.
+  /// Loaded-truck photos + driver signature are required only when [photosRequired]/
+  /// [signatureRequired] (from waste_settings) say so — settings-driven, matching
+  /// the equivalent gating in [submitCollection] for the scheduled-load path.
   /// Quantity-only loads transition to [pendingCostReview]; all others to [pendingWeighbridge].
   Future<({bool queuedOffline})> finishLoading({
     required String loadId,
     required List<String> loadPhotoPaths,
     String? signatureLocalPath,
+    bool signatureRequired = false,
+    bool photosRequired = false,
     required String finishedBy,
     String? finishedByName,
     bool isQuantityOnly = false,
   }) async {
     _guardWrite();
-    if (signatureLocalPath == null) {
+    if (signatureRequired && signatureLocalPath == null) {
       throw ArgumentError('Driver signature is required');
+    }
+    if (photosRequired && loadPhotoPaths.isEmpty) {
+      throw ArgumentError('At least one loaded-truck photo is required');
     }
 
     final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
@@ -779,7 +907,7 @@ class WasteService {
       }
     }
 
-    if (signatureLocalPath.isNotEmpty) {
+    if (signatureLocalPath != null && signatureLocalPath.isNotEmpty) {
       if (queuedOffline) {
         await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
       } else {
@@ -1280,18 +1408,13 @@ class WasteService {
     String loadNumber;
 
     if (online) {
-      try {
-        final cfResult = await createLoad({
-          ...loadData,
-          'recorded_weight_kg': recordedTotal,
-        });
-        loadId = cfResult['id'] as String;
-        loadNumber = cfResult['load_number'] as String;
-      } catch (_) {
-        queuedOffline = true;
-        loadId = _firestore.collection(Collections.wasteLoads).doc().id;
-        loadNumber = 'OFFLINE-${now.millisecondsSinceEpoch}';
-      }
+      final cfOutcome = await _createLoadWithRetry({
+        ...loadData,
+        'recorded_weight_kg': recordedTotal,
+      });
+      loadId = cfOutcome.id;
+      loadNumber = cfOutcome.loadNumber;
+      if (cfOutcome.queuedOffline) queuedOffline = true;
     } else {
       loadId = _firestore.collection(Collections.wasteLoads).doc().id;
       loadNumber = 'OFFLINE-${now.millisecondsSinceEpoch}';
@@ -2394,6 +2517,164 @@ class WasteService {
         data: payload,
         documentId: id,
       );
+    }
+  }
+
+  /// Splits [takeQty] units off an IBC pool/split stock doc (`poolStockId`)
+  /// into a new on-site doc, decrementing the source by the same amount and
+  /// carrying that many of its `linked_ibc_numbers` across. Used when a
+  /// manager/guard takes only part of the on-site IBC quantity onto a load.
+  ///
+  /// Always creates a new doc — even when [takeQty] equals the full current
+  /// quantity — rather than repurposing the pool doc itself. This keeps the
+  /// pool doc's identity stable as the ongoing accumulator (it can sit at
+  /// quantity 0 and simply increment again on the next ink IBC consume)
+  /// instead of needing to clear/repoint `waste_stock_pool_pointers/ibc_bins`
+  /// every time a load takes everything currently on site.
+  ///
+  /// The returned id is the new doc — callers should link/select that id for
+  /// the load instead of [poolStockId].
+  Future<String> splitPoolStock({
+    required String poolStockId,
+    required int takeQty,
+  }) async {
+    _guardWrite();
+    if (takeQty <= 0) {
+      throw ArgumentError('takeQty must be positive');
+    }
+    final poolRef = _firestore.collection(Collections.wasteStock).doc(poolStockId);
+    final newRef = _firestore.collection(Collections.wasteStock).doc();
+
+    await _firestore.runTransaction((tx) async {
+      final poolSnap = await tx.get(poolRef);
+      if (!poolSnap.exists) {
+        throw StateError('Stock item not found.');
+      }
+      final data = poolSnap.data()!;
+      final currentQty = (data['quantity'] as num?)?.toInt() ?? 0;
+      if (takeQty > currentQty) {
+        throw StateError('Only $currentQty on site — cannot take $takeQty.');
+      }
+      final linked = (data['linked_ibc_numbers'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const <String>[];
+      final taken = linked.take(takeQty).toList();
+      final remaining = linked.skip(takeQty).toList();
+
+      tx.update(poolRef, {
+        'quantity': FieldValue.increment(-takeQty),
+        if (linked.isNotEmpty) 'linked_ibc_numbers': remaining,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      tx.set(newRef, {
+        'waste_type': data['waste_type'],
+        'subtype': data['subtype'],
+        'photos': <String>[],
+        'quantity': takeQty,
+        if (taken.isNotEmpty) 'linked_ibc_numbers': taken,
+        'source': data['source'],
+        if (data['source_ref'] != null) 'source_ref': data['source_ref'],
+        'visibility': data['visibility'],
+        'auto_created': true,
+        'status': WasteStockStatus.onSite.value,
+        'created_by': data['created_by'],
+        'created_by_name': data['created_by_name'],
+        'is_deleted': false,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+        'notes': 'Split from on-site pool for load selection',
+      });
+    });
+
+    return newRef.id;
+  }
+
+  /// Removes [count] damaged/scrapped units from a stock item discovered at
+  /// Begin Collection — distinct from a plain "remove from load" (which
+  /// returns the item to on-site stock untouched). Damaged units are
+  /// permanently excluded: if [count] covers the item's full remaining
+  /// quantity the doc is disposed entirely; otherwise its quantity is
+  /// decremented and the flagged IBC numbers are dropped from
+  /// `linked_ibc_numbers`. Either way, the specified `ink_ibcs` docs are
+  /// flagged with the damage reason, and a best-effort `waste_audit` entry is
+  /// written (mirrors [logWasteTypeOverrideAudit]'s shape).
+  Future<void> removeDamagedIbcUnits({
+    required String stockId,
+    required int count,
+    required List<String> ibcNumbersToFlag,
+    required String reason,
+    required String actorClockNo,
+    String? actorName,
+    String? loadId,
+    String? loadNumber,
+  }) async {
+    _guardWrite();
+    if (count <= 0) {
+      throw ArgumentError('count must be positive');
+    }
+    final stockRef = _firestore.collection(Collections.wasteStock).doc(stockId);
+
+    await _firestore.runTransaction((tx) async {
+      final snap = await tx.get(stockRef);
+      if (!snap.exists) {
+        throw StateError('Stock item not found.');
+      }
+      final data = snap.data()!;
+      final currentQty = (data['quantity'] as num?)?.toInt() ?? 1;
+      final now = FieldValue.serverTimestamp();
+
+      if (count >= currentQty) {
+        tx.update(stockRef, {
+          'status': WasteStockStatus.disposed.value,
+          'damaged': true,
+          'is_deleted': true,
+          'updated_at': now,
+          'notes': 'Removed at Begin Collection — damaged/scrapped: $reason',
+        });
+      } else {
+        final linked = (data['linked_ibc_numbers'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const <String>[];
+        final remaining = linked.where((n) => !ibcNumbersToFlag.contains(n)).toList();
+        tx.update(stockRef, {
+          'quantity': FieldValue.increment(-count),
+          if (linked.isNotEmpty) 'linked_ibc_numbers': remaining,
+          'updated_at': now,
+        });
+      }
+
+      for (final ibcNumber in ibcNumbersToFlag) {
+        tx.set(
+          _firestore.collection(Collections.inkIbcs).doc(ibcNumber),
+          {
+            'damage_flag': true,
+            'damage_reason': reason,
+            'damage_recorded_at': now,
+            'damage_recorded_by': actorClockNo,
+          },
+          SetOptions(merge: true),
+        );
+      }
+    });
+
+    try {
+      await _firestore.collection(Collections.wasteAudit).add({
+        if (loadId != null) 'load_id': loadId,
+        if (loadNumber != null) 'load_number': loadNumber,
+        'stock_id': stockId,
+        'ibc_numbers': ibcNumbersToFlag,
+        'count': count,
+        'reason': reason,
+        'action': 'ibc_damaged_removed',
+        'triggered_by': actorClockNo,
+        if (actorName != null) 'triggered_by_name': actorName,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('removeDamagedIbcUnits audit log failed for $stockId: $e');
     }
   }
 

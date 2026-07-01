@@ -48,6 +48,11 @@ class WasteStockItem {
   final double? estimatedWeightKg;
   final int quantity;
   final String? ibcNumber;
+  /// Physical `ink_ibcs` numbers backing this doc's [quantity] — only
+  /// populated for ink-consume pool/split docs (source = inkConsumePool).
+  /// Lets damaged-removal flag a specific physical IBC instead of just
+  /// decrementing a bare count. See waste_stock_crosslink.dart.
+  final List<String> linkedIbcNumbers;
   final WasteStockSource source;
   final String? sourceRef;
   final WasteStockVisibility visibility;
@@ -60,6 +65,11 @@ class WasteStockItem {
   final DateTime? updatedAt;
   final String? notes;
   final bool isDeleted;
+  /// True when this doc (or the units it represented) was disposed because it
+  /// was found damaged/scrapped — distinct from a normal void/manual dispose,
+  /// so reports can tell the two apart even though both use [status] =
+  /// [WasteStockStatus.disposed]. Set by `WasteService.removeDamagedIbcUnits`.
+  final bool damaged;
 
   const WasteStockItem({
     this.id,
@@ -69,6 +79,7 @@ class WasteStockItem {
     this.estimatedWeightKg,
     this.quantity = 1,
     this.ibcNumber,
+    this.linkedIbcNumbers = const [],
     this.source = WasteStockSource.manual,
     this.sourceRef,
     this.visibility = WasteStockVisibility.all,
@@ -81,6 +92,7 @@ class WasteStockItem {
     this.updatedAt,
     this.notes,
     this.isDeleted = false,
+    this.damaged = false,
   });
 
   static DateTime _parseDate(dynamic value, {DateTime? fallback}) {
@@ -129,6 +141,10 @@ class WasteStockItem {
       ),
       quantity: _parseDouble(data['quantity'])?.round() ?? 1,
       ibcNumber: (data['ibc_number'] ?? data['ibcNumber']) as String?,
+      linkedIbcNumbers: (data['linked_ibc_numbers'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       source: WasteStockSource.fromString(data['source'] as String?),
       sourceRef: (data['source_ref'] ?? data['sourceRef']) as String?,
       visibility: WasteStockVisibility.fromString(data['visibility'] as String?),
@@ -142,6 +158,7 @@ class WasteStockItem {
       updatedAt: _parseOptionalDate(data['updated_at'] ?? data['updatedAt']),
       notes: data['notes'] as String?,
       isDeleted: _parseBool(data['is_deleted'] ?? data['isDeleted']),
+      damaged: _parseBool(data['damaged']),
     );
   }
 
@@ -153,6 +170,7 @@ class WasteStockItem {
       if (estimatedWeightKg != null) 'estimated_weight_kg': estimatedWeightKg,
       'quantity': quantity,
       if (ibcNumber != null) 'ibc_number': ibcNumber,
+      if (linkedIbcNumbers.isNotEmpty) 'linked_ibc_numbers': linkedIbcNumbers,
       'source': source.value,
       if (sourceRef != null) 'source_ref': sourceRef,
       'visibility': visibility.value,
@@ -163,6 +181,7 @@ class WasteStockItem {
       'created_by_name': createdByName,
       if (notes != null) 'notes': notes,
       'is_deleted': isDeleted,
+      'damaged': damaged,
     };
   }
 
@@ -176,6 +195,7 @@ class WasteStockItem {
     double? estimatedWeightKg,
     int? quantity,
     String? ibcNumber,
+    List<String>? linkedIbcNumbers,
     WasteStockSource? source,
     String? sourceRef,
     WasteStockVisibility? visibility,
@@ -188,6 +208,7 @@ class WasteStockItem {
     DateTime? updatedAt,
     String? notes,
     bool? isDeleted,
+    bool? damaged,
   }) {
     return WasteStockItem(
       id: id ?? this.id,
@@ -197,6 +218,7 @@ class WasteStockItem {
       estimatedWeightKg: estimatedWeightKg ?? this.estimatedWeightKg,
       quantity: quantity ?? this.quantity,
       ibcNumber: ibcNumber ?? this.ibcNumber,
+      linkedIbcNumbers: linkedIbcNumbers ?? this.linkedIbcNumbers,
       source: source ?? this.source,
       sourceRef: sourceRef ?? this.sourceRef,
       visibility: visibility ?? this.visibility,
@@ -209,6 +231,7 @@ class WasteStockItem {
       updatedAt: updatedAt ?? this.updatedAt,
       notes: notes ?? this.notes,
       isDeleted: isDeleted ?? this.isDeleted,
+      damaged: damaged ?? this.damaged,
     );
   }
 }

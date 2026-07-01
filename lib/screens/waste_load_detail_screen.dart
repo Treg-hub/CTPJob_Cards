@@ -48,6 +48,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   bool _isAdmin = false;
   bool _isManager = false;
   bool _photosRequired = false;
+  bool _signatureRequired = false;
   bool _isSaving = false;
   List<WasteType> _wasteTypes = [];
   StreamSubscription<WasteLoad?>? _loadSubscription;
@@ -63,6 +64,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         setState(() {
           _isManager = role_utils.isSecurityManager(currentEmployee, s);
           _photosRequired = s.photosRequired;
+          _signatureRequired = s.signatureRequired;
         });
       }
     });
@@ -456,6 +458,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                 ['Contractor', load.contractorName?.isNotEmpty == true ? load.contractorName! : load.contractorId],
                 ['Driver', load.driverName.isNotEmpty ? load.driverName : '—'],
                 ['Vehicle', load.vehicleReg.isNotEmpty ? load.vehicleReg : '—'],
+                if (load.trailerReg != null && load.trailerReg!.isNotEmpty)
+                  ['Trailer', load.trailerReg!],
               ], borderColor: borderColor),
               pw.SizedBox(height: 16),
 
@@ -776,6 +780,10 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                   const Divider(height: 16),
                   _infoRow(Icons.local_shipping, 'Vehicle',
                       _currentLoad.vehicleReg.isNotEmpty ? _currentLoad.vehicleReg : '—'),
+                  if (_currentLoad.trailerReg != null && _currentLoad.trailerReg!.isNotEmpty) ...[
+                    const Divider(height: 16),
+                    _infoRow(Icons.rv_hookup_outlined, 'Trailer', _currentLoad.trailerReg!),
+                  ],
                   const Divider(height: 16),
                   _infoRow(Icons.business, 'Contractor',
                       (_currentLoad.contractorName?.isNotEmpty == true)
@@ -1006,7 +1014,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                     const Text('Finish Loading', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const SizedBox(height: 6),
                     Text(
-                      'Truck is loaded — capture the driver signature before it leaves. Truck photos are optional.',
+                      _signatureRequired
+                          ? 'Truck is loaded — capture the driver signature before it leaves.'
+                          : 'Truck is loaded and ready to leave.',
                       style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
                     ),
                     const SizedBox(height: 10),
@@ -1022,19 +1032,29 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
                           OutlinedButton.icon(
                             onPressed: () => _addFinishPhoto(ImageSource.camera),
                             icon: const Icon(Icons.camera_alt, size: 18),
-                            label: const Text('Truck photo (optional)'),
+                            label: Text(_photosRequired ? 'Truck photo *' : 'Truck photo (optional)'),
                           ),
                         ] else
                           const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
                       ],
                     ),
+                    if (_photosRequired && _finishLoadPhotoPaths.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text('⚠ At least one loaded-truck photo required',
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                      ),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _isSaving ? null : _finishLoading,
+                        onPressed: (_isSaving || (_photosRequired && _finishLoadPhotoPaths.isEmpty))
+                            ? null
+                            : _finishLoading,
                         icon: const Icon(Icons.local_shipping),
-                        label: const Text('Finish Loading & Capture Signature'),
+                        label: Text(_signatureRequired
+                            ? 'Finish Loading & Capture Signature'
+                            : 'Finish Loading'),
                         style: FilledButton.styleFrom(backgroundColor: Colors.orange),
                       ),
                     ),
@@ -1059,30 +1079,42 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   /// pending weighbridge (weight-based, off-site document to follow).
   Future<void> _finishLoading() async {
     if (!guardPersonaSubmit(context)) return;
-    final signatureBytes = await Navigator.push<Uint8List>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WasteSignatureScreen(loadNumber: _currentLoad.loadNumber),
-      ),
-    );
-    if (signatureBytes == null || !mounted) return;
+
+    String? signatureTempPath;
+    if (_signatureRequired) {
+      final signatureBytes = await Navigator.push<Uint8List>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WasteSignatureScreen(loadNumber: _currentLoad.loadNumber),
+        ),
+      );
+      if (signatureBytes == null || !mounted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Signature is required to finish loading — not saved.')),
+          );
+        }
+        return;
+      }
+      final tmp = await Directory.systemTemp.createTemp('waste_sig');
+      final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(signatureBytes);
+      signatureTempPath = file.path;
+    }
+    if (!mounted) return;
 
     setState(() => _isSaving = true);
     final skipWeighbridge = mainTypeSkipsWeighbridge(
       _currentLoad.mainWasteType,
       _wasteTypes,
     );
-    String? signatureTempPath;
     try {
-      final tmp = await Directory.systemTemp.createTemp('waste_sig');
-      final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(signatureBytes);
-      signatureTempPath = file.path;
-
       final result = await _wasteService.finishLoading(
         loadId: _currentLoad.id!,
         loadPhotoPaths: _finishLoadPhotoPaths,
         signatureLocalPath: signatureTempPath,
+        signatureRequired: _signatureRequired,
+        photosRequired: _photosRequired,
         finishedBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
         finishedByName: resolveWriteActor(currentEmployee)?.name,
         isQuantityOnly: skipWeighbridge,

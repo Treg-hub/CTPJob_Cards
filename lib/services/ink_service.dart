@@ -1019,6 +1019,11 @@ class InkService {
   /// Uses a Firestore transaction so both writes are atomic and idempotent:
   /// the wash transaction doc is only created if it doesn't already exist,
   /// preventing a permission-denied error when retrying a partial failure.
+  ///
+  /// If [markDamaged] is true (operator identified the IBC as damaged at
+  /// consume time), the IBC still transfers normally in the ink ledger, but
+  /// is excluded from waste stock entirely — [damageReason] is required in
+  /// that case and is recorded on the `ink_ibcs` doc.
   Future<void> transferIbc({
     required InkIbc ibc,
     required String tolulItemCode,
@@ -1026,40 +1031,69 @@ class InkService {
     required DateTime effectiveAt,
     required String actorClockNo,
     required String actorName,
+    bool markDamaged = false,
+    String? damageReason,
   }) async {
     _guardWrite();
+    assert(!markDamaged || (damageReason != null && damageReason.trim().isNotEmpty),
+        'damageReason is required when markDamaged is true');
     final ibcRef = _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber);
     final washKey = 'ibcwash_${ibc.ibcNumber}';
     final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
 
     await _db.runTransaction((txn) async {
       // Firestore requires every read before any write in a transaction.
+      // Idempotency guard: the old deterministic-doc-id waste_stock scheme
+      // gave this for free; the shared pool model needs it explicit here.
+      final ibcSnap = await txn.get(ibcRef);
+      final ibcData = ibcSnap.data();
+      final alreadyTransferred =
+          InkIbcStatus.fromValue(ibcData?['status'] as String?) ==
+              InkIbcStatus.transferred;
+      final alreadyDamaged = ibcData?['damage_flag'] == true;
+      if (alreadyTransferred || alreadyDamaged) return;
+
       final washSnap = washLitres > 0 ? await txn.get(washRef) : null;
-      final stockRef = _db
-          .collection(Collections.wasteStock)
-          .doc(WasteStockCrosslink.ibcStockDocId(ibc.ibcNumber));
-      final stockSnap = await txn.get(stockRef);
       final transferredAt = Timestamp.fromDate(effectiveAt);
 
-      WasteStockCrosslink.writeIbcStockOnConsumeFromSnap(
-        txn: txn,
-        stockRef: stockRef,
-        stockSnap: stockSnap,
-        ibcNumber: ibc.ibcNumber,
-        actorClockNo: actorClockNo,
-        actorName: actorName,
-        createdAt: transferredAt,
-      );
+      final IbcPoolRead? poolRead = markDamaged
+          ? null
+          : await WasteStockCrosslink.readIbcPool(txn: txn, db: _db);
 
-      txn.set(
-        ibcRef,
-        {
-          'status': InkIbcStatus.transferred.value,
-          'transferred_date': transferredAt,
-          'wash_toloul_litres': washLitres,
-        },
-        SetOptions(merge: true),
-      );
+      if (markDamaged) {
+        txn.set(
+          ibcRef,
+          {
+            'status': InkIbcStatus.transferred.value,
+            'transferred_date': transferredAt,
+            'wash_toloul_litres': washLitres,
+            'damage_flag': true,
+            'damage_reason': damageReason,
+            'damage_recorded_at': transferredAt,
+            'damage_recorded_by': actorClockNo,
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        WasteStockCrosslink.applyIbcPoolConsume(
+          txn: txn,
+          db: _db,
+          pool: poolRead!,
+          ibcNumber: ibc.ibcNumber,
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+          createdAt: transferredAt,
+        );
+        txn.set(
+          ibcRef,
+          {
+            'status': InkIbcStatus.transferred.value,
+            'transferred_date': transferredAt,
+            'wash_toloul_litres': washLitres,
+          },
+          SetOptions(merge: true),
+        );
+      }
 
       if (washSnap != null && !washSnap.exists) {
         txn.set(

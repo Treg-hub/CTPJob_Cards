@@ -83,13 +83,18 @@ For exact screens per module, what each does (purpose, reads/writes, UI), and us
 | Weighbridge / Cost review / Reports / Settings | ❌ | ❌ | ❌ | ✅ managers + admins (`canAccessWastePulse`; guards blocked) |
 | Cancel scheduled load | ✅ | ✅ | ❌ | ❌ |
 | Edit scheduled load date/notes | ✅ | ✅ | ❌ | ❌ |
+| On-site stock pick (Schedule / Begin Collection / Create-from-scratch) | ✅ | ✅ | ✅ | ❌ |
+| Begin Collection: "Show all contractor types" override (bypasses scheduled type restriction) | ✅ | ❌ | ❌ | ❌ |
+
+**Converged 2026-06-30**: `paper_document_ref` is required to submit on both Begin Collection and Create-from-scratch (was optional on the latter). On-site stock pick is "any waste user" everywhere (was admin/Security-Manager-only on Create-from-scratch). Loaded-truck-photo + driver-signature requirements are settings-driven (`waste_settings.photos_required`/`signature_required`) on both the scheduled and on-the-spot paths — Finish Loading no longer hardcodes signature=mandatory/photos=optional. Begin Collection's item/stock pickers are restricted to the manager's `selected_waste_types` from scheduling (admin override available, recorded to `waste_audit`).
 
 ---
 
 ## Waste Load Status Flow
 
 ```
-Manager creates scheduled load
+Manager creates scheduled load (W-NNNN assigned immediately via createWasteLoad CF,
+client_ref-protected — no longer deferred to the guard's submitCollection)
           │
           ▼
     ┌──────────────┐
@@ -145,13 +150,13 @@ App entry (home_screen.dart)
 ### WasteScheduleLoadScreen
 - **File**: `lib/screens/waste_schedule_load_screen.dart`
 - **Access**: Security Manager + Admin
-- **Purpose**: Manager pre-creates a load with contractor, waste type, expected date, optional notes
-- **Output**: `waste_loads` doc with `status: scheduled`
+- **Purpose**: Manager pre-creates a load with contractor, waste type(s), expected date, optional notes, optional paper-doc pre-fill, optional on-site stock pre-link
+- **Output**: `waste_loads` doc with `status: scheduled`. As of 2026-06-30, `createScheduledLoad()` calls the `createWasteLoad` CF immediately (online) — getting a real `W-NNNN` up front instead of an empty `load_number` — with a `client_ref`-protected retry-once-on-timeout helper and an `OFFLINE-*` placeholder fallback that reconciles via the same sync-queue path Create-from-scratch already used.
 
 ### WasteBeginCollectionScreen
 - **File**: `lib/screens/waste_begin_collection_screen.dart`
 - **Access**: All waste users (guard, manager, admin)
-- **Purpose**: Guard fills driver name, reg, waste items (with photos), signature when truck arrives
+- **Purpose**: Guard fills driver name, vehicle reg, optional trailer reg, **required** paper document reference, waste items (photos required only if `waste_settings.photos_required`), signature (required only if `waste_settings.signature_required`) when truck arrives. Item/stock pickers are restricted to the manager's `selected_waste_types` from scheduling (full contractor list if unset); an admin-only "Show all contractor types" toggle overrides this, recording the override to `waste_audit` (`action: type_restriction_override`).
 - **Output**: Transitions load `scheduled → pending_weighbridge`, writes items, uploads photos + signature
 
 ---
@@ -160,7 +165,7 @@ App entry (home_screen.dart)
 
 | Collection | Purpose |
 |---|---|
-| `waste_loads` | One doc per load. Status drives the lifecycle. |
+| `waste_loads` | One doc per load. Status drives the lifecycle. Includes optional `trailer_reg` (alongside `driver_name`/`vehicle_reg`, captured at Create-from-scratch or Begin Collection), `selected_waste_types` (manager's schedule-time restriction, enforced at Begin Collection), and a transient `client_ref` written by `createWasteLoad` for retry-dedup. |
 | `waste_items` | Items per load (`load_id` field). Min 1 per completed load. |
 | `waste_photos` | Photo upload queue references (offline). |
 | `waste_types` | Master list of waste types + subtypes. |

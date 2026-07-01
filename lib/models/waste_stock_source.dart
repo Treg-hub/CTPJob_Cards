@@ -2,6 +2,9 @@
 enum WasteStockSource {
   manual('manual'),
   inkConsume('ink_consume'),
+  /// Consolidated IBC pool doc accumulated across multiple ink IBC consumes
+  /// (and any split-off doc derived from one) — see waste_stock_crosslink.dart.
+  inkConsumePool('ink_consume_pool'),
   copperThreshold('copper_threshold');
 
   const WasteStockSource(this.value);
@@ -11,6 +14,8 @@ enum WasteStockSource {
     switch (raw) {
       case 'ink_consume':
         return WasteStockSource.inkConsume;
+      case 'ink_consume_pool':
+        return WasteStockSource.inkConsumePool;
       case 'copper_threshold':
         return WasteStockSource.copperThreshold;
       default:
@@ -44,3 +49,11 @@ abstract final class WasteStockTypes {
 
 /// Minimum sell bucket total before copper auto-creates waste_stock.
 const double kCopperWasteStockThresholdKg = 400.0;
+
+/// Doc id (within `Collections.wasteStockPoolPointers`) for the deterministic
+/// "current open IBC pool" lookup used by [WasteStockCrosslink] — a
+/// transactional read of this single known doc is what makes
+/// find-or-create-the-pool safe under concurrent writers (a transactional
+/// *query* for "does a pool exist" would not serialize against a concurrent
+/// transaction doing the same query).
+const String kIbcPoolPointerDocId = 'ibc_bins';
