@@ -15,6 +15,7 @@ import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
 import '../models/waste_stock_source.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../utils/waste_type_routing.dart';
@@ -44,6 +45,7 @@ class _WasteBeginCollectionScreenState
   final WasteService _wasteService = WasteService();
   final _driverCtrl = TextEditingController();
   final _regCtrl = TextEditingController();
+  final _trailerCtrl = TextEditingController();
   late final TextEditingController _paperDocCtrl;
   TimeOfDay _timeIn = TimeOfDay.now();
   TimeOfDay? _timeOut;
@@ -61,6 +63,12 @@ class _WasteBeginCollectionScreenState
   bool _addingLoadPhoto = false;
   bool _isSubmitting = false;
   WasteSettings? _wasteSettings;
+
+  /// Admin-only: widens the item/stock type pickers back to the full
+  /// contractor type list, bypassing the manager's selectedWasteTypes
+  /// restriction. Off by default; usage is recorded in waste_audit.
+  bool _adminOverrideActive = false;
+  bool get _isAdmin => role_utils.isWasteAdmin(currentEmployee);
 
   bool get _photosRequired => _wasteSettings?.photosRequired ?? false;
   bool get _signatureRequired => _wasteSettings?.signatureRequired ?? false;
@@ -97,6 +105,7 @@ class _WasteBeginCollectionScreenState
   void dispose() {
     _driverCtrl.dispose();
     _regCtrl.dispose();
+    _trailerCtrl.dispose();
     _paperDocCtrl.dispose();
     super.dispose();
   }
@@ -213,6 +222,7 @@ class _WasteBeginCollectionScreenState
     }
   }
 
+  /// Full set of waste types linked to this load's contractor — unrestricted.
   List<WasteType> get _contractorLinkedTypes {
     final contractor = _contractors.firstWhere(
       (c) => c.id == widget.load.contractorId,
@@ -224,6 +234,37 @@ class _WasteBeginCollectionScreenState
     return _wasteTypes
         .where((t) => contractor.wasteTypeIds.contains(t.id))
         .toList();
+  }
+
+  /// Types allowed under the manager's original schedule selection (or the
+  /// full contractor list when the load wasn't restricted — legacy loads or
+  /// loads with no scheduling step).
+  List<WasteType> get _scheduledAllowedTypes =>
+      restrictToScheduledTypes(_contractorLinkedTypes, widget.load.selectedWasteTypes);
+
+  /// What the pickers actually offer right now — widened to every
+  /// contractor-linked type when an admin has switched the override on.
+  List<WasteType> get _effectiveAllowedTypes =>
+      _adminOverrideActive ? _contractorLinkedTypes : _scheduledAllowedTypes;
+
+  /// True if no type in [widget.load.selectedWasteTypes] matches [typeName] —
+  /// i.e. picking it required the admin override.
+  bool _isOutsideSchedule(String typeName) =>
+      widget.load.selectedWasteTypes.isNotEmpty &&
+      !_scheduledAllowedTypes.any((t) => t.mainType == typeName);
+
+  Future<void> _logOverrideIfNeeded(Iterable<String> typeNames) async {
+    if (!_adminOverrideActive) return;
+    final outside = typeNames.where(_isOutsideSchedule).toSet().toList();
+    if (outside.isEmpty) return;
+    final actor = resolveWriteActor(currentEmployee);
+    await _wasteService.logWasteTypeOverrideAudit(
+      loadId: widget.load.id!,
+      loadNumber: widget.load.loadNumber,
+      adminClockNo: actor?.clockNo ?? '',
+      adminName: actor?.name,
+      addedTypes: outside,
+    );
   }
 
   bool get _canLinkOnSiteStock =>
@@ -238,7 +279,7 @@ class _WasteBeginCollectionScreenState
       wasteType: stockLinkParentType(widget.load.mainWasteType),
       subtypeFilter: widget.load.mainWasteType == WasteStockTypes.copperWaste
           ? {WasteStockTypes.copperRods, WasteStockTypes.copperNuggets}
-          : stockSubtypeFilterForChips(_contractorLinkedTypes, _wasteTypes),
+          : stockSubtypeFilterForChips(_effectiveAllowedTypes, _wasteTypes),
       initialSelectedIds: alreadyOnLoad.toList(),
       includeManagerOnlyStock: true,
       title: 'Add saved stock',
@@ -267,6 +308,9 @@ class _WasteBeginCollectionScreenState
           }
         }
       });
+      await _logOverrideIfNeeded(
+        stocks.map((s) => s.subtype.isNotEmpty ? s.subtype : s.wasteType),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -278,14 +322,7 @@ class _WasteBeginCollectionScreenState
 
   Future<void> _addItem() async {
     if (!guardPersonaSubmit(context)) return;
-    final contractor = _contractors.firstWhere(
-      (c) => c.id == widget.load.contractorId,
-      orElse: () => const Contractor(name: ''),
-    );
-    final available = (contractor.id != null && contractor.wasteTypeIds.isNotEmpty)
-        ? _wasteTypes.where((t) => contractor.wasteTypeIds.contains(t.id)).toList()
-        : _wasteTypes;
-    final typeNames = itemSubtypeOptionsForChips(available, _wasteTypes);
+    final typeNames = itemSubtypeOptionsForChips(_effectiveAllowedTypes, _wasteTypes);
 
     final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,
@@ -314,6 +351,7 @@ class _WasteBeginCollectionScreenState
         isQuantityOnly: result.isQuantityOnly,
         isNoSiteWeight: result.isNoSiteWeight,
       )));
+      await _logOverrideIfNeeded([result.subtype]);
     }
   }
 
@@ -373,6 +411,7 @@ class _WasteBeginCollectionScreenState
         loadId: widget.load.id!,
         driverName: _driverCtrl.text.trim(),
         vehicleReg: _regCtrl.text.trim(),
+        trailerReg: _trailerCtrl.text.trim().isEmpty ? null : _trailerCtrl.text.trim(),
         collectedBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
         collectedByName: resolveWriteActor(currentEmployee)?.name,
         securityName: currentEmployee?.name,
@@ -524,6 +563,18 @@ class _WasteBeginCollectionScreenState
             const SizedBox(height: 14),
 
             TextField(
+              controller: _trailerCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Trailer Registration (optional)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.rv_hookup_outlined),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            TextField(
               controller: _paperDocCtrl,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
@@ -592,6 +643,21 @@ class _WasteBeginCollectionScreenState
                 ),
               ],
             ),
+            if (_isAdmin && widget.load.selectedWasteTypes.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Show all contractor types', style: TextStyle(fontSize: 13)),
+                  subtitle: Text(
+                    'Off: limited to the types the manager scheduled. On: any type the contractor handles — recorded in the audit log.',
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                  value: _adminOverrideActive,
+                  onChanged: (v) => setState(() => _adminOverrideActive = v),
+                ),
+              ),
             if (_canLinkOnSiteStock)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -827,7 +893,16 @@ class _WasteBeginCollectionScreenState
 
   Future<void> _confirmRemoveItem(int index, _ItemEntry item) async {
     final isStock = item.stockId != null;
-    if (isStock) {
+    if (!isStock) {
+      setState(() => _items.removeAt(index));
+      return;
+    }
+
+    // Multi-unit (IBC pool/split) entries get the richer dialog with a
+    // damaged/scrapped path; everything else keeps the original simple one.
+    final isMultiUnit =
+        (item.quantity ?? 1) > 1 && item.linkedIbcNumbers.isNotEmpty;
+    if (!isMultiUnit) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -847,8 +922,173 @@ class _WasteBeginCollectionScreenState
         ),
       );
       if (ok != true) return;
+      setState(() => _items.removeAt(index));
+      return;
     }
-    setState(() => _items.removeAt(index));
+
+    final result = await showDialog<_RemoveStockResult>(
+      context: context,
+      builder: (ctx) => _RemoveMultiUnitStockDialog(item: item),
+    );
+    if (result == null) return;
+
+    if (!result.damaged) {
+      // Plain "I changed my mind" — whole item back to on-site, no Firestore
+      // write needed (the stock doc is still on_site until submitCollection's
+      // markStockLoaded call; simply not including it leaves it untouched).
+      setState(() => _items.removeAt(index));
+      return;
+    }
+
+    try {
+      await _wasteService.removeDamagedIbcUnits(
+        stockId: item.stockId!,
+        count: result.count,
+        ibcNumbersToFlag: item.linkedIbcNumbers.take(result.count).toList(),
+        reason: result.reason!,
+        actorClockNo: resolveWriteActor(currentEmployee)?.clockNo ?? '',
+        actorName: resolveWriteActor(currentEmployee)?.name,
+        loadId: widget.load.id,
+        loadNumber: widget.load.loadNumber,
+      );
+      if (!mounted) return;
+      setState(() {
+        final remainingQty = (item.quantity ?? 1) - result.count;
+        if (remainingQty <= 0) {
+          _items.removeAt(index);
+        } else {
+          _items[index] = item.copyWith(
+            quantity: remainingQty,
+            linkedIbcNumbers: item.linkedIbcNumbers.skip(result.count).toList(),
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not record damage: $e')),
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Remove multi-unit stock dialog (IBC pool/split entries with quantity > 1)
+// ---------------------------------------------------------------------------
+
+class _RemoveStockResult {
+  const _RemoveStockResult({required this.damaged, required this.count, this.reason});
+  final bool damaged;
+  final int count;
+  final String? reason;
+}
+
+class _RemoveMultiUnitStockDialog extends StatefulWidget {
+  const _RemoveMultiUnitStockDialog({required this.item});
+  final _ItemEntry item;
+
+  @override
+  State<_RemoveMultiUnitStockDialog> createState() => _RemoveMultiUnitStockDialogState();
+}
+
+class _RemoveMultiUnitStockDialogState extends State<_RemoveMultiUnitStockDialog> {
+  late int _count;
+  bool _damagedMode = false;
+  final _reasonCtrl = TextEditingController();
+
+  int get _fullQty => widget.item.quantity ?? 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _count = _fullQty;
+  }
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reasonValid = _reasonCtrl.text.trim().isNotEmpty;
+    return AlertDialog(
+      title: Text(_damagedMode ? 'Mark Damaged / Scrapped' : 'Remove Pre-loaded Item?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_damagedMode
+              ? 'How many of "${widget.item.subtype}" (of $_fullQty) are damaged? '
+                  'These will be permanently excluded — not returned to on-site stock.'
+              : '"${widget.item.subtype}" — qty $_fullQty on this load.'),
+          if (_damagedMode) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: _count > 1 ? () => setState(() => _count--) : null,
+                ),
+                Text('$_count', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: _count < _fullQty ? () => setState(() => _count++) : null,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Reason *',
+                hintText: 'e.g. split seam, crushed in transit',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ],
+      ),
+      actions: _damagedMode
+          ? [
+              TextButton(
+                onPressed: () => setState(() => _damagedMode = false),
+                child: const Text('Back'),
+              ),
+              FilledButton(
+                onPressed: reasonValid
+                    ? () => Navigator.pop(
+                          context,
+                          _RemoveStockResult(
+                              damaged: true, count: _count, reason: _reasonCtrl.text.trim()),
+                        )
+                    : null,
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Confirm Damaged'),
+              ),
+            ]
+          : [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Keep')),
+              OutlinedButton(
+                onPressed: () => setState(() {
+                  _damagedMode = true;
+                  _count = 1;
+                }),
+                child: const Text('Damaged / Scrapped'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _RemoveStockResult(damaged: false, count: _fullQty),
+                ),
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Remove (back to on-site)'),
+              ),
+            ],
+    );
   }
 }
 
@@ -864,6 +1104,10 @@ class _ItemEntry {
   final List<String> photoPaths;
   /// Non-null when this entry was pre-populated from a waste_stock item.
   final String? stockId;
+  /// Physical ink_ibcs numbers backing this entry's [quantity] — only
+  /// populated for IBC pool/split stock entries. Used by the damaged-removal
+  /// flow to flag specific physical IBCs.
+  final List<String> linkedIbcNumbers;
   /// Mirrors WasteType.isQuantityOnly — weight is meaningless for these items.
   final bool isQuantityOnly;
   /// Mirrors WasteType.noSiteWeight — weight recorded at weighbridge, not on-site.
@@ -876,6 +1120,7 @@ class _ItemEntry {
     this.notes,
     required this.photoPaths,
     this.stockId,
+    this.linkedIbcNumbers = const [],
     this.isQuantityOnly = false,
     this.isNoSiteWeight = false,
   });
@@ -890,8 +1135,33 @@ class _ItemEntry {
       notes: stock.notes ?? (stock.ibcNumber != null ? 'IBC ${stock.ibcNumber}' : null),
       photoPaths: stock.photos,
       stockId: stock.id,
+      linkedIbcNumbers: stock.linkedIbcNumbers,
       isQuantityOnly: isQuantityOnly,
       isNoSiteWeight: isNoSiteWeight,
+    );
+  }
+
+  _ItemEntry copyWith({
+    String? subtype,
+    double? weightKg,
+    int? quantity,
+    String? notes,
+    List<String>? photoPaths,
+    String? stockId,
+    List<String>? linkedIbcNumbers,
+    bool? isQuantityOnly,
+    bool? isNoSiteWeight,
+  }) {
+    return _ItemEntry(
+      subtype: subtype ?? this.subtype,
+      weightKg: weightKg ?? this.weightKg,
+      quantity: quantity ?? this.quantity,
+      notes: notes ?? this.notes,
+      photoPaths: photoPaths ?? this.photoPaths,
+      stockId: stockId ?? this.stockId,
+      linkedIbcNumbers: linkedIbcNumbers ?? this.linkedIbcNumbers,
+      isQuantityOnly: isQuantityOnly ?? this.isQuantityOnly,
+      isNoSiteWeight: isNoSiteWeight ?? this.isNoSiteWeight,
     );
   }
 }

@@ -131,6 +131,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   // Load-level fields
   String _driverName = '';
   String _vehicleReg = '';
+  String? _trailerReg;
   String? _paperDocumentRef;
   String? _notes;
   TimeOfDay _timeIn = TimeOfDay.now();
@@ -158,9 +159,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       .toList();
   bool get _usesPaperStock =>
       selectedChipsUsePaperStock(_selectedTypes, _wasteTypes);
+  // Converged with the Schedule + Begin Collection screens: any waste user
+  // may pick on-site stock, not just admin/security-manager.
   bool get _canSelectStock =>
-      role_utils.isWasteAdmin(currentEmployee) ||
-      role_utils.isSecurityManager(currentEmployee, _wasteSettings);
+      role_utils.isWasteUser(currentEmployee, _wasteSettings);
   bool get _showStockSection => _usesPaperStock && _canSelectStock;
   List<WasteStockItem> get _filteredOnSiteStock =>
       filterStockByChipSubtypes(_onSiteStock, _selectedTypes, _wasteTypes);
@@ -394,6 +396,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       );
       return;
     }
+    if ((_paperDocumentRef ?? '').trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Paper document reference is required — number from the physical gate docket.')),
+      );
+      return;
+    }
     if (_selectedTypes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -438,6 +446,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
               _selectedTypes.map((t) => t.mainType).toList(),
           'driver_name': _driverName,
           'vehicle_reg': _vehicleReg,
+          if (_trailerReg != null && _trailerReg!.trim().isNotEmpty)
+            'trailer_reg': _trailerReg!.trim(),
           'paper_document_ref': _paperDocumentRef,
           'security_name': currentEmployee?.name,
           'time_in': _formatTime(_timeIn),
@@ -763,7 +773,15 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             ),
             const SizedBox(height: 8),
             TextFormField(
-              decoration: const InputDecoration(labelText: 'Paper Document Reference'),
+              decoration: const InputDecoration(labelText: 'Trailer Registration (optional)'),
+              onChanged: (v) => _trailerReg = v,
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Paper Document Reference *',
+                hintText: 'Number from the physical gate docket',
+              ),
               onChanged: (v) => _paperDocumentRef = v,
             ),
             const SizedBox(height: 8),

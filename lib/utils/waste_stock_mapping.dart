@@ -86,6 +86,26 @@ bool loadCanLinkOnSiteStock(String? mainWasteType, List<WasteType> allTypes) {
   return flatWasteTypeNames(allTypes).contains(mainWasteType);
 }
 
+/// Restricts [contractorTypes] (the full set of waste types linked to the
+/// load's contractor) down to the manager's [selectedWasteTypes] chosen at
+/// scheduling time. Falls back to the unrestricted [contractorTypes] when
+/// [selectedWasteTypes] is empty — covers legacy scheduled loads created
+/// before this field existed, and any load with no scheduling step at all.
+///
+/// Used by WasteBeginCollectionScreen so the guard's item/stock pickers only
+/// offer what the manager actually planned for, with an admin-only override
+/// available to widen back to [contractorTypes] (see _adminOverrideActive).
+List<WasteType> restrictToScheduledTypes(
+  List<WasteType> contractorTypes,
+  List<String> selectedWasteTypes,
+) {
+  if (selectedWasteTypes.isEmpty) return contractorTypes;
+  final allowed = selectedWasteTypes.toSet();
+  return contractorTypes
+      .where((t) => allowed.contains(t.mainType))
+      .toList();
+}
+
 String stockLinkParentType(String? mainWasteType) {
   if (mainWasteType == null || mainWasteType.isEmpty) {
     return kPaperWasteStockParent;

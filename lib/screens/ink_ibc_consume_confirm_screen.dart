@@ -36,12 +36,18 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
   bool _useCustomTime = false;
   DateTime _customAt = DateTime.now();
   bool _submitting = false;
+  bool _markDamaged = false;
+  final _damageReasonCtrl = TextEditingController();
 
   @override
   void dispose() {
     _washCtrl.dispose();
+    _damageReasonCtrl.dispose();
     super.dispose();
   }
+
+  bool get _damageReasonValid =>
+      !_markDamaged || _damageReasonCtrl.text.trim().isNotEmpty;
 
   Future<void> _pickCustomTime() async {
     final dt = await pickInkDateTime(context, _customAt);
@@ -56,6 +62,7 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
     if (tolul == null) return;
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
+    if (!_damageReasonValid) return;
 
     if (!guardPersonaSubmit(context)) return;
     setState(() => _submitting = true);
@@ -75,6 +82,9 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
             effectiveAt: _effectiveAt,
             actorClockNo: emp?.clockNo ?? '',
             actorName: emp?.name ?? '',
+            markDamaged: _markDamaged,
+            damageReason:
+                _markDamaged ? _damageReasonCtrl.text.trim() : null,
           );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -155,6 +165,40 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
           const SizedBox(height: 20),
           Card(
             margin: EdgeInsets.zero,
+            color: _markDamaged ? Theme.of(context).colorScheme.errorContainer : null,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Damaged'),
+                    subtitle: const Text(
+                      'IBC still consumes normally, but won\'t be added to waste stock.',
+                    ),
+                    value: _markDamaged,
+                    onChanged: (v) => setState(() => _markDamaged = v),
+                  ),
+                  if (_markDamaged) ...[
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _damageReasonCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason *',
+                        hintText: 'e.g. split seam, crushed in transit',
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Card(
+            margin: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -215,7 +259,9 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
           ],
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: (_submitting || widget.tolulItemCode == null)
+            onPressed: (_submitting ||
+                    widget.tolulItemCode == null ||
+                    !_damageReasonValid)
                 ? null
                 : _submit,
             icon: _submitting

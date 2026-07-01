@@ -64,7 +64,12 @@ class WasteStockLinkSheet extends StatefulWidget {
 class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
   final WasteService _wasteService = WasteService();
   final Set<String> _selected = {};
+  /// How many units to take for each selected multi-unit (IBC pool/split,
+  /// `quantity > 1`) item — defaults to the full on-site quantity. Items not
+  /// present here, or with `quantity == 1`, are taken whole as before.
+  final Map<String, int> _takeQty = {};
   bool _loading = true;
+  bool _saving = false;
   List<WasteStockItem> _stock = [];
 
   @override
@@ -99,6 +104,51 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// For every selected multi-unit item, splits off the chosen take-quantity
+  /// into a fresh doc (always — even when taking the full on-site quantity,
+  /// see [WasteService.splitPoolStock] doc comment for why) and substitutes
+  /// that new doc's id in the returned selection. Single-unit / non-pool
+  /// items pass through unchanged.
+  Future<void> _confirmSelection() async {
+    if (_selected.isEmpty) {
+      if (mounted) Navigator.pop(context, <String>[]);
+      return;
+    }
+    final multiUnitSelections = _selected.where((id) {
+      final item = _stock.firstWhere((s) => s.id == id, orElse: () => _stock.first);
+      return item.id == id && item.isQuantityOnlyType && item.quantity > 1;
+    }).toList();
+
+    if (multiUnitSelections.isEmpty) {
+      if (mounted) Navigator.pop(context, _selected.toList());
+      return;
+    }
+
+    setState(() => _saving = true);
+    final result = <String>[];
+    try {
+      for (final id in _selected) {
+        if (multiUnitSelections.contains(id)) {
+          final newId = await _wasteService.splitPoolStock(
+            poolStockId: id,
+            takeQty: _takeQty[id]!,
+          );
+          result.add(newId);
+        } else {
+          result.add(id);
+        }
+      }
+      if (mounted) Navigator.pop(context, result);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not take stock: $e')),
+        );
+      }
     }
   }
 
@@ -147,12 +197,16 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
                     final item = _stock[i];
                     final id = item.id!;
                     final selected = _selected.contains(id);
+                    final isMultiUnit = item.isQuantityOnlyType && item.quantity > 1;
+                    final takeQty = _takeQty[id] ?? item.quantity;
                     return InkWell(
                       onTap: () => setState(() {
                         if (selected) {
                           _selected.remove(id);
+                          _takeQty.remove(id);
                         } else {
                           _selected.add(id);
+                          if (isMultiUnit) _takeQty[id] = item.quantity;
                         }
                       }),
                       borderRadius: BorderRadius.circular(8),
@@ -167,46 +221,79 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
                           ),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Checkbox(
-                              value: selected,
-                              onChanged: (v) => setState(() {
-                                if (v == true) {
-                                  _selected.add(id);
-                                } else {
-                                  _selected.remove(id);
-                                }
-                              }),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: selected,
+                                  onChanged: (v) => setState(() {
+                                    if (v == true) {
+                                      _selected.add(id);
+                                      if (isMultiUnit) _takeQty[id] = item.quantity;
+                                    } else {
+                                      _selected.remove(id);
+                                      _takeQty.remove(id);
+                                    }
+                                  }),
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.ibcNumber != null
+                                            ? 'IBC ${item.ibcNumber}'
+                                            : (item.subtype.isNotEmpty
+                                                ? item.subtype
+                                                : item.wasteType),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      Text(
+                                        '${formatSADate(item.createdAt)} · ${item.createdByName}'
+                                        '${item.isQuantityOnlyType ? ' · qty ${item.quantity}' : ''}'
+                                        '${item.estimatedWeightKg != null ? ' · ~${formatSAWeight(item.estimatedWeightKg!)}' : ''}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.ibcNumber != null
-                                        ? 'IBC ${item.ibcNumber}'
-                                        : (item.subtype.isNotEmpty
-                                            ? item.subtype
-                                            : item.wasteType),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  Text(
-                                    '${formatSADate(item.createdAt)} · ${item.createdByName}'
-                                    '${item.isQuantityOnlyType ? ' · qty ${item.quantity}' : ''}'
-                                    '${item.estimatedWeightKg != null ? ' · ~${formatSAWeight(item.estimatedWeightKg!)}' : ''}',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                                  ),
-                                ],
+                            if (selected && isMultiUnit)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 40, bottom: 4),
+                                child: Row(
+                                  children: [
+                                    Text('Take:', style: Theme.of(context).textTheme.bodySmall),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: takeQty > 1
+                                          ? () => setState(() => _takeQty[id] = takeQty - 1)
+                                          : null,
+                                    ),
+                                    Text('$takeQty of ${item.quantity}',
+                                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: takeQty < item.quantity
+                                          ? () => setState(() => _takeQty[id] = takeQty + 1)
+                                          : null,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -219,18 +306,23 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _saving ? null : () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () =>
-                      Navigator.pop(context, _selected.toList()),
-                  child: Text(
-                    _selected.isEmpty
-                        ? 'Clear selection'
-                        : 'Save (${_selected.length})',
-                  ),
+                  onPressed: _saving ? null : _confirmSelection,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          _selected.isEmpty
+                              ? 'Clear selection'
+                              : 'Save (${_selected.length})',
+                        ),
                 ),
               ],
             ),

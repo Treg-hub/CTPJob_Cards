@@ -61,6 +61,7 @@ class Collections {
   static const String wasteUsageLogs = 'waste_usage_logs';
   static const String wasteCounters = 'waste_counters';
   static const String wasteStock = 'waste_stock';
+  static const String wasteStockPoolPointers = 'waste_stock_pool_pointers';
 
   // ----- Site Security (security_ prefix) -----
   // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.

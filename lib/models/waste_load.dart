@@ -55,6 +55,9 @@ class WasteLoad {
   final String? collectionCompanyId;
   final String driverName;
   final String vehicleReg;
+  /// Optional trailer registration — captured alongside [vehicleReg] at
+  /// Create-from-scratch or Begin Collection time. Not asked at scheduling.
+  final String? trailerReg;
   final String? paperDocumentRef;
   /// Gate security officer — autofilled from creator or collector.
   final String? securityName;
@@ -100,6 +103,10 @@ class WasteLoad {
   final String? scheduledByName;
   /// Optional notes from the manager for the guard (e.g. "approx 500kg, heavy vehicle").
   final String? scheduledNotes;
+  /// Waste type main-type names the manager selected at scheduling time.
+  /// Empty means unrestricted (legacy loads, or no scheduling step) — see
+  /// restrictToScheduledTypes() in waste_stock_mapping.dart.
+  final List<String> selectedWasteTypes;
   /// When the guard submitted the collection (transitions to pending_weighbridge).
   final DateTime? pendingWeighbridgeAt;
   /// clockNo of the guard who collected (filled on submitCollection).
@@ -120,6 +127,7 @@ class WasteLoad {
     this.collectionCompanyId,
     required this.driverName,
     required this.vehicleReg,
+    this.trailerReg,
     this.paperDocumentRef,
     this.securityName,
     this.timeIn,
@@ -151,6 +159,7 @@ class WasteLoad {
     this.scheduledBy,
     this.scheduledByName,
     this.scheduledNotes,
+    this.selectedWasteTypes = const [],
     this.pendingWeighbridgeAt,
     this.collectedBy,
     this.collectedByName,
@@ -187,6 +196,7 @@ class WasteLoad {
       collectionCompanyId: data['collection_company_id'] as String?,
       driverName: data['driver_name'] as String? ?? '',
       vehicleReg: data['vehicle_reg'] as String? ?? '',
+      trailerReg: data['trailer_reg'] as String?,
       paperDocumentRef: data['paper_document_ref'] as String?,
       securityName: data['security_name'] as String?,
       timeIn: data['time_in'] as String?,
@@ -222,6 +232,10 @@ class WasteLoad {
       scheduledBy: data['scheduled_by'] as String?,
       scheduledByName: data['scheduled_by_name'] as String?,
       scheduledNotes: data['scheduled_notes'] as String?,
+      selectedWasteTypes: (data['selected_waste_types'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       pendingWeighbridgeAt: _parseOptionalDate(data['pending_weighbridge_at']),
       collectedBy: data['collected_by'] as String?,
       collectedByName: data['collected_by_name'] as String?,
@@ -242,6 +256,7 @@ class WasteLoad {
       'collection_company_id': collectionCompanyId,
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
+      if (trailerReg != null) 'trailer_reg': trailerReg,
       'paper_document_ref': paperDocumentRef,
       if (securityName != null) 'security_name': securityName,
       if (timeIn != null) 'time_in': timeIn,
@@ -274,6 +289,7 @@ class WasteLoad {
       if (scheduledBy != null) 'scheduled_by': scheduledBy,
       if (scheduledByName != null) 'scheduled_by_name': scheduledByName,
       if (scheduledNotes != null) 'scheduled_notes': scheduledNotes,
+      if (selectedWasteTypes.isNotEmpty) 'selected_waste_types': selectedWasteTypes,
       if (pendingWeighbridgeAt != null) 'pending_weighbridge_at': Timestamp.fromDate(pendingWeighbridgeAt!),
       if (collectedBy != null) 'collected_by': collectedBy,
       if (collectedByName != null) 'collected_by_name': collectedByName,
@@ -291,6 +307,7 @@ class WasteLoad {
     String? collectionCompanyId,
     String? driverName,
     String? vehicleReg,
+    String? trailerReg,
     String? paperDocumentRef,
     String? securityName,
     String? timeIn,
@@ -322,6 +339,7 @@ class WasteLoad {
     String? scheduledBy,
     String? scheduledByName,
     String? scheduledNotes,
+    List<String>? selectedWasteTypes,
     DateTime? pendingWeighbridgeAt,
     String? collectedBy,
     String? collectedByName,
@@ -337,6 +355,7 @@ class WasteLoad {
       collectionCompanyId: collectionCompanyId ?? this.collectionCompanyId,
       driverName: driverName ?? this.driverName,
       vehicleReg: vehicleReg ?? this.vehicleReg,
+      trailerReg: trailerReg ?? this.trailerReg,
       paperDocumentRef: paperDocumentRef ?? this.paperDocumentRef,
       securityName: securityName ?? this.securityName,
       timeIn: timeIn ?? this.timeIn,
@@ -372,6 +391,7 @@ class WasteLoad {
       scheduledBy: scheduledBy ?? this.scheduledBy,
       scheduledByName: scheduledByName ?? this.scheduledByName,
       scheduledNotes: scheduledNotes ?? this.scheduledNotes,
+      selectedWasteTypes: selectedWasteTypes ?? this.selectedWasteTypes,
       pendingWeighbridgeAt: pendingWeighbridgeAt ?? this.pendingWeighbridgeAt,
       collectedBy: collectedBy ?? this.collectedBy,
       collectedByName: collectedByName ?? this.collectedByName,

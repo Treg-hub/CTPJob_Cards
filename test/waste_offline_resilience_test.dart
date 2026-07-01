@@ -1715,4 +1715,68 @@ void main() {
       expect(SyncService().getQueuedWasteBreakdown(), isEmpty);
     });
   });
+
+  group('WasteLoad model — trailer_reg + selected_waste_types fields (Scheduled/Create-from-scratch convergence)', () {
+    // Pure object-construction tests (no Firestore round-trip — see fromFirestore/
+    // toFirestore note below): the no-Firebase harness used throughout this file
+    // can't exercise real DocumentSnapshot parsing without emulator/mock
+    // infrastructure this repo doesn't currently have for WasteTrack screens
+    // (see waste_widget_smoke_test.dart's own note on the same constraint).
+
+    test('trailerReg defaults to null and round-trips via copyWith', () {
+      final load = WasteLoad(
+        loadNumber: 'W-0001',
+        mainWasteType: 'General',
+        dateTime: DateTime.now(),
+        contractorId: 'c1',
+        driverName: 'D1',
+        vehicleReg: 'V1',
+      );
+      expect(load.trailerReg, isNull);
+
+      final withTrailer = load.copyWith(trailerReg: 'TRL-123');
+      expect(withTrailer.trailerReg, 'TRL-123');
+      // copyWith must not disturb the unrelated vehicleReg it was modeled after.
+      expect(withTrailer.vehicleReg, 'V1');
+    });
+
+    test('selectedWasteTypes defaults to empty (legacy / unrestricted loads) and round-trips via copyWith', () {
+      final load = WasteLoad(
+        loadNumber: 'W-0002',
+        mainWasteType: 'Paper Waste',
+        dateTime: DateTime.now(),
+        contractorId: 'c1',
+        driverName: '',
+        vehicleReg: '',
+      );
+      expect(load.selectedWasteTypes, isEmpty);
+
+      final scheduled = load.copyWith(
+        selectedWasteTypes: ['Paper Waste', 'General Waste'],
+      );
+      expect(scheduled.selectedWasteTypes, ['Paper Waste', 'General Waste']);
+    });
+
+    test('toFirestore omits trailer_reg/selected_waste_types when unset, includes them when set', () {
+      final bare = WasteLoad(
+        loadNumber: 'W-0003',
+        mainWasteType: 'General',
+        dateTime: DateTime.now(),
+        contractorId: 'c1',
+        driverName: 'D1',
+        vehicleReg: 'V1',
+      );
+      final bareMap = bare.toFirestore();
+      expect(bareMap.containsKey('trailer_reg'), isFalse);
+      expect(bareMap.containsKey('selected_waste_types'), isFalse);
+
+      final full = bare.copyWith(
+        trailerReg: 'TRL-9',
+        selectedWasteTypes: ['General'],
+      );
+      final fullMap = full.toFirestore();
+      expect(fullMap['trailer_reg'], 'TRL-9');
+      expect(fullMap['selected_waste_types'], ['General']);
+    });
+  });
 }
