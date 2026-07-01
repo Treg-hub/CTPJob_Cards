@@ -882,6 +882,8 @@ class _SecurityVehicleGateScreenState
           odometerStart: odometer,
           sessionId: sessionId,
         ),
+        actorClockNo: actor.clockNo,
+        actorName: emp.name,
       );
 
       await _service.updateCompanyVehicleOdometer(
@@ -995,6 +997,8 @@ class _SecurityVehicleGateScreenState
           odometerEnd: odometer,
           mileageKm: mileage,
         ),
+        actorClockNo: actor.clockNo,
+        actorName: emp.name,
       );
 
       await _service.updateCompanyVehicleOdometer(
@@ -1746,7 +1750,22 @@ class _CompanyCarManualSection extends StatelessWidget {
                 .map(
                   (v) => DropdownMenuItem(
                     value: v,
-                    child: Text(v.vehicleReg),
+                    child: Text(
+                      v.assignedDriver != null && v.assignedDriver!.isNotEmpty
+                          ? '${v.vehicleReg} · ${v.assignedDriver}'
+                          : v.vehicleReg,
+                      style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+                    ),
+                  ),
+                )
+                .toList(),
+            selectedItemBuilder: (context) => vehicles
+                .map(
+                  (v) => Text(
+                    v.assignedDriver != null && v.assignedDriver!.isNotEmpty
+                        ? '${v.vehicleReg} · ${v.assignedDriver}'
+                        : v.vehicleReg,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 )
                 .toList(),

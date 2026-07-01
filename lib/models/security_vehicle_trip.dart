@@ -17,6 +17,7 @@ class SecurityVehicleTrip {
   final double? mileageKm;
   final double? odometerStart;
   final double? odometerEnd;
+  final DateTime? eventTime; // Server event time (for consistency with entries)
 
   const SecurityVehicleTrip({
     required this.id,
@@ -31,6 +32,7 @@ class SecurityVehicleTrip {
     this.mileageKm,
     this.odometerStart,
     this.odometerEnd,
+    this.eventTime,
   });
 
   double get computedMileage {
@@ -59,6 +61,7 @@ class SecurityVehicleTrip {
       mileageKm: (data['mileage_km'] as num?)?.toDouble(),
       odometerStart: (data['odometer_start'] as num?)?.toDouble(),
       odometerEnd: (data['odometer_end'] as num?)?.toDouble(),
+      eventTime: _toDate(data['event_time'] ?? data['createdAt']),
     );
   }
 
@@ -75,15 +78,14 @@ class SecurityVehicleTrip {
         if (gateId != null) 'gate_id': gateId,
         'direction': direction.value,
         if (entryId != null) 'entry_id': entryId,
-        'logged_at': loggedAt != null
-            ? Timestamp.fromDate(loggedAt!)
-            : FieldValue.serverTimestamp(),
+        'logged_at': FieldValue.serverTimestamp(), // Prefer server time for reliability (client loggedAt is optional reported time)
         if (driverName != null) 'driver_name': driverName,
         if (contractorId != null) 'contractor_id': contractorId,
         if (sessionId != null) 'session_id': sessionId,
         if (mileageKm != null) 'mileage_km': mileageKm,
         if (odometerStart != null) 'odometer_start': odometerStart,
         if (odometerEnd != null) 'odometer_end': odometerEnd,
+        if (eventTime != null) 'event_time': Timestamp.fromDate(eventTime!),
       };
 }
 
