@@ -20,6 +20,7 @@ import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/job_card_badges.dart';
 
 class CreateJobCardScreen extends StatefulWidget {
   const CreateJobCardScreen({super.key});
@@ -222,33 +223,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
       ),
     );
   }
-  Color _getPriorityColor(String priority) {
-    final num = int.tryParse(priority.substring(1)) ?? 0;
-    final appColors = Theme.of(context).appColors;
-    switch (num) {
-      case 1: return appColors.priority1;
-      case 2: return appColors.priority2;
-      case 3: return appColors.priority3;
-      case 4: return appColors.priority4;
-      case 5: return appColors.priority5;
-      default: return Colors.grey;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    final appColors = Theme.of(context).appColors;
-    switch (status.toLowerCase()) {
-      case 'open': return appColors.statusOpen;
-      case 'in_progress':
-      case 'in progress': return appColors.statusInProgress;
-      case 'completed':
-      case 'monitor': return appColors.statusCompleted;
-      case 'closed':
-      case 'cancelled': return appColors.statusCancelled;
-      default: return Colors.grey;
-    }
-  }
-
   String _formatDateTime(DateTime? dt) {
     if (dt == null) return '';
     return '${dt.hour}:${dt.minute.toString().padLeft(2,'0')} ${dt.day}/${dt.month}';
@@ -676,16 +650,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                             // Second Row - Fixed overflow
                             Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _getPriorityColor('P${job.priority}'),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'P${job.priority}',
-                                    style: TextStyle(color: onColor(_getPriorityColor('P${job.priority}')), fontSize: 10, fontWeight: FontWeight.bold),
-                                  ),
+                                PriorityBadge(
+                                  priority: job.priority,
+                                  style: PriorityBadgeStyle.filled,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -703,16 +670,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                             // Third Row - Fixed overflow
                             Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(job.status.name),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    job.status.displayName,
-                                    style: TextStyle(color: onColor(_getStatusColor(job.status.name)), fontSize: 11, fontWeight: FontWeight.w500),
-                                  ),
+                                JobStatusChip(
+                                  status: job.status,
+                                  style: PriorityBadgeStyle.filled,
                                 ),
                                 const SizedBox(width: 6),
                                 Container(

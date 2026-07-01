@@ -1226,8 +1226,26 @@ class InkService {
     }
   }
 
+  /// Throws when any [pointIds] already have a reading on [date]'s calendar day.
+  Future<void> assertToloulPointsAvailableForCalendarDay({
+    required DateTime date,
+    required List<String> pointIds,
+  }) async {
+    if (pointIds.isEmpty) return;
+    final captured = await watchTodayToloulPointIds(onDate: date).first;
+    final dupes = pointIds.where(captured.contains).toList();
+    if (dupes.isNotEmpty) {
+      throw StateError(
+        'Toloul meter reading(s) already captured today for: ${dupes.join(', ')}. '
+        'Void the existing session first if you need to replace them.',
+      );
+    }
+  }
+
   /// Atomic daily submit: ink `consumption_meter` rows + toloul meter-point
-  /// readings in one batch, sharing [sessionId]. Blocks duplicate calendar days.
+  /// readings in one batch, sharing [sessionId]. Blocks duplicate ink sessions
+  /// per calendar day; toloul-only follow-up submits are allowed for points not
+  /// yet captured that day.
   Future<void> recordDailyMeterSession({
     required String sessionId,
     required DateTime readingDate,
@@ -1245,7 +1263,15 @@ class InkService {
     required String actorName,
   }) async {
     _guardWrite();
-    await assertNoActiveMeterSessionForCalendarDay(readingDate);
+    if (inkTransactions.isNotEmpty) {
+      await assertNoActiveMeterSessionForCalendarDay(readingDate);
+    }
+    if (toloulLines.isNotEmpty) {
+      await assertToloulPointsAvailableForCalendarDay(
+        date: readingDate,
+        pointIds: toloulLines.map((l) => l.pointId).toList(),
+      );
+    }
 
     final batch = _db.batch();
     for (final t in inkTransactions) {
@@ -1388,18 +1414,21 @@ class InkService {
         });
   }
 
-  /// Toloul meter point ids with a reading captured today.
-  Stream<Set<String>> watchTodayToloulPointIds() {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
+  /// Toloul meter point ids with a reading captured on today's calendar day.
+  Stream<Set<String>> watchTodayToloulPointIds({DateTime? onDate}) {
+    final anchor = onDate ?? DateTime.now();
+    final dayStart = _calendarDayStart(anchor);
+    final dayEnd = _calendarDayEnd(anchor);
     return _db
         .collection(Collections.inkMeterPointReadings)
         .where('reading_date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+            isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('reading_date', isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
         .snapshots()
         .map((s) {
           final ids = <String>{};
           for (final d in s.docs) {
+            if (d.data()['voided'] as bool? ?? false) continue;
             final pid = d.data()['point_id'] as String?;
             if (pid != null && pid.isNotEmpty) ids.add(pid);
           }
@@ -1411,6 +1440,7 @@ class InkService {
   Stream<InkDailyReadingsStatus> watchDailyReadingsStatus({
     required Set<String> requiredInkCodes,
     required Set<String> requiredToloulPointIds,
+    Map<String, String> toloulPointNames = const {},
   }) {
     final controller = StreamController<InkDailyReadingsStatus>();
     Set<String> inkCaptured = {};
@@ -1419,6 +1449,12 @@ class InkService {
     void emit() {
       final needsInk = requiredInkCodes.isNotEmpty;
       final needsToloul = requiredToloulPointIds.isNotEmpty;
+      final missingToloulIds = requiredToloulPointIds
+          .where((id) => !toloulCaptured.contains(id))
+          .toList();
+      final missingToloulNames = missingToloulIds
+          .map((id) => toloulPointNames[id] ?? id)
+          .toList();
       if (!controller.isClosed) {
         controller.add(InkDailyReadingsStatus(
           needsInk: needsInk,
@@ -1427,6 +1463,13 @@ class InkService {
               !needsInk || requiredInkCodes.every(inkCaptured.contains),
           toloulDone: !needsToloul ||
               requiredToloulPointIds.every(toloulCaptured.contains),
+          inkCapturedCount:
+              inkCaptured.where(requiredInkCodes.contains).length,
+          inkRequiredCount: requiredInkCodes.length,
+          toloulCapturedCount:
+              toloulCaptured.where(requiredToloulPointIds.contains).length,
+          toloulRequiredCount: requiredToloulPointIds.length,
+          missingToloulPointNames: missingToloulNames,
         ));
       }
     }

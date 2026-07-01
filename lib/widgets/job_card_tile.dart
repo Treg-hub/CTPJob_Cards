@@ -1,55 +1,23 @@
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../theme/app_theme.dart';
+import 'job_card_badges.dart';
 
 class JobCardTile extends StatelessWidget {
   final JobCard job;
   final VoidCallback? onTap;
   final Widget? actions;
+  final bool selected;
 
   const JobCardTile({
     super.key,
     required this.job,
     this.onTap,
     this.actions,
+    this.selected = false,
   });
 
-  Color _priorityColor(BuildContext context, int priority) {
-    final c = Theme.of(context).appColors;
-    switch (priority) {
-      case 1: return c.priority1;
-      case 2: return c.priority2;
-      case 3: return c.priority3;
-      case 4: return c.priority4;
-      case 5: return c.priority5;
-      default: return Colors.grey;
-    }
-  }
-
-  Color _statusColor(BuildContext context, String status) {
-    final c = Theme.of(context).appColors;
-    switch (status.toLowerCase()) {
-      case 'open': return c.statusOpen;
-      case 'inprogress':
-      case 'in_progress':
-      case 'in progress': return c.statusInProgress;
-      case 'monitor':
-      case 'monitoring':
-      case 'completed': return c.statusCompleted;
-      case 'closed':
-      case 'cancelled': return c.statusCancelled;
-      default: return Colors.grey;
-    }
-  }
-
-  IconData _statusIcon(JobStatus status) {
-    switch (status) {
-      case JobStatus.open: return Icons.radio_button_unchecked;
-      case JobStatus.inProgress: return Icons.autorenew;
-      case JobStatus.monitor: return Icons.visibility;
-      case JobStatus.closed: return Icons.check_circle;
-    }
-  }
+  static const double _compactStatusBreakpoint = 400;
 
   String _lastEntry(String text) {
     final parts = text.split('\n\n').where((c) => c.trim().isNotEmpty).toList();
@@ -67,42 +35,22 @@ class JobCardTile extends StatelessWidget {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
   }
 
-  List<Widget> _typeIcons(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
-    const size = 18.0;
-    switch (job.type) {
-      case JobType.mechanical:
-        return [Icon(Icons.build, size: size, color: color)];
-      case JobType.electrical:
-        return [Icon(Icons.bolt, size: size, color: color)];
-      case JobType.mechanicalElectrical:
-        return [
-          Icon(Icons.build, size: size, color: color),
-          const SizedBox(width: 2),
-          Icon(Icons.bolt, size: size, color: color),
-        ];
-      case JobType.maintenance:
-        return [Icon(Icons.circle_outlined, size: size, color: color)];
-      case JobType.building:
-        return [Icon(Icons.home_repair_service, size: size, color: color)];
-      case JobType.specialist:
-        return [Icon(Icons.precision_manufacturing, size: size, color: color)];
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final onSurface = Theme.of(context).colorScheme.onSurface;
-    final statusColor = _statusColor(context, job.status.name);
-    final priorityColor = _priorityColor(context, job.priority);
+    final appColors = Theme.of(context).appColors;
+    final commentColor = appColors.statusOpen;
+    final correctiveColor = appColors.statusCompleted;
+    final priorityColor = JobCardColorUtils.priorityColor(context, job.priority);
     final lastComment = job.comments.isNotEmpty ? _lastEntry(job.comments) : '';
     final lastNote = job.notes.isNotEmpty ? _lastEntry(job.notes) : '';
     final lastCA = job.correctiveAction.isNotEmpty ? _lastEntry(job.correctiveAction) : '';
+    final showStatusLabel = MediaQuery.sizeOf(context).width >= _compactStatusBreakpoint;
 
-    return Card(
+    final card = Card(
       elevation: 3,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: priorityColor, width: 2),
@@ -118,55 +66,24 @@ class JobCardTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Row 1: Type + priority + status
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      ..._typeIcons(context),
+                      if (job.jobCardNumber != null) ...[
+                        JobNumberBadge(number: job.jobCardNumber!),
+                        const SizedBox(width: 6),
+                      ],
+                      PriorityBadge(priority: job.priority),
                       const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: priorityColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: priorityColor.withValues(alpha: 0.6)),
-                        ),
-                        child: Text(
-                          'P${job.priority}',
-                          style: TextStyle(
-                            color: priorityColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+                      JobTypeIcons(type: job.type),
                       const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_statusIcon(job.status), size: 13, color: statusColor),
-                            const SizedBox(width: 4),
-                            Text(
-                              job.status.displayName,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                      JobStatusChip(
+                        status: job.status,
+                        showLabel: showStatusLabel,
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  // Location breadcrumb
                   Text(
                     '${job.department} > ${job.area} > ${job.machine} > ${job.part}',
                     style: TextStyle(color: muted, fontSize: 11.5, height: 1.2),
@@ -174,55 +91,29 @@ class JobCardTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  // JC# + description
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (job.jobCardNumber != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '#${job.jobCardNumber}',
-                            style: TextStyle(
-                              color: onColor(Colors.blue),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          job.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: onSurface,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    job.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
                   if (lastComment.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.comment_outlined, size: 13, color: Colors.blue[400]),
+                        Icon(Icons.comment_outlined, size: 13, color: commentColor),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             lastComment,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.blue.shade300,
+                              color: commentColor,
                               fontStyle: FontStyle.italic,
                             ),
                             maxLines: 1,
@@ -256,7 +147,7 @@ class JobCardTile extends StatelessWidget {
                       children: [
                         Padding(
                           padding: const EdgeInsets.only(top: 1),
-                          child: Icon(Icons.check_circle_outline, size: 13, color: Colors.green[600]),
+                          child: Icon(Icons.check_circle_outline, size: 13, color: correctiveColor),
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -264,7 +155,7 @@ class JobCardTile extends StatelessWidget {
                             lastCA,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.green[700],
+                              color: correctiveColor,
                               fontStyle: FontStyle.italic,
                             ),
                             maxLines: 2,
@@ -315,6 +206,17 @@ class JobCardTile extends StatelessWidget {
             ),
         ],
       ),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: selected
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBrandOrange, width: 2),
+            )
+          : null,
+      child: card,
     );
   }
 }

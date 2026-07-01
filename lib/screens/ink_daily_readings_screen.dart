@@ -266,12 +266,16 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     } on StateError catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      final isDuplicateDay = e.message.contains('calendar day');
+      final isDuplicateInk = e.message.contains('calendar day');
+      final isDuplicateToloul = e.message.contains('already captured today');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(isDuplicateDay
-            ? 'Meter readings already submitted for this day. '
-                'Void the existing session first (Ink hub → Meter Sessions).'
-            : e.message),
+        content: Text(isDuplicateInk
+            ? 'Ink meter readings already submitted for this day. '
+                'Void the existing session first (Ink hub → Meter Sessions), '
+                'or submit only the remaining toloul meters.'
+            : isDuplicateToloul
+                ? e.message
+                : e.message),
         backgroundColor: Theme.of(context).colorScheme.error,
         duration: const Duration(seconds: 6),
       ));
@@ -307,6 +311,15 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
         ref.watch(inkLatestMeterPointReadingsProvider).valueOrNull ?? {};
     final recentToloul =
         ref.watch(inkRecentMeterPointReadingsProvider).valueOrNull ?? {};
+    final toloulCapturedToday =
+        ref.watch(inkTodayToloulPointIdsProvider).valueOrNull ?? {};
+    final inkCapturedToday =
+        ref.watch(inkTodayMeterItemCodesProvider).valueOrNull ?? {};
+    final inkDoneToday = meterItems.isNotEmpty &&
+        meterItems.every((i) => inkCapturedToday.contains(i.itemCode));
+    final toloulRemaining = toloulPoints
+        .where((p) => p.id != null && !toloulCapturedToday.contains(p.id))
+        .length;
 
     final df = DateFormat('EEE d MMM HH:mm');
 
@@ -360,6 +373,31 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                     ),
                   ),
           ),
+          if (inkDoneToday || toloulCapturedToday.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Material(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    inkDoneToday && toloulRemaining > 0
+                        ? 'Ink readings are done for today. You can still record '
+                            'the remaining $toloulRemaining toloul meter(s) below.'
+                        : inkDoneToday
+                            ? 'Ink readings are done for today.'
+                            : 'Some toloul meters are already recorded today — '
+                                'only enter the remaining ones below.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(12),
@@ -389,6 +427,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                       history: recentInk[item.itemCode] ?? const [],
                       reset: _inkReset[item.itemCode] ?? false,
                       maxConsumptionLitres: _maxInkLitresFor(item),
+                      capturedToday:
+                          inkCapturedToday.contains(item.itemCode),
                       onResetChanged: (v) =>
                           setState(() => _inkReset[item.itemCode] = v),
                       onChanged: () => setState(() {}),
@@ -418,6 +458,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                       last: lastToloul[p.id],
                       history: recentToloul[p.id] ?? const [],
                       reset: _toloulReset[p.id] ?? false,
+                      capturedToday:
+                          toloulCapturedToday.contains(p.id),
                       onResetChanged: (v) =>
                           setState(() => _toloulReset[p.id!] = v),
                       onChanged: () => setState(() {}),
@@ -470,6 +512,7 @@ class _InkMeterCard extends StatelessWidget {
     required this.onResetChanged,
     required this.onChanged,
     this.maxConsumptionLitres,
+    this.capturedToday = false,
   });
 
   final InkStockItem item;
@@ -479,6 +522,7 @@ class _InkMeterCard extends StatelessWidget {
   final List<({DateTime at, double reading})> history;
   final bool reset;
   final double? maxConsumptionLitres;
+  final bool capturedToday;
   final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
 
@@ -527,8 +571,25 @@ class _InkMeterCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(item.displayName,
-                style: Theme.of(context).textTheme.titleSmall),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(item.displayName,
+                      style: Theme.of(context).textTheme.titleSmall),
+                ),
+                if (capturedToday)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle,
+                          size: 16, color: scheme.primary),
+                      const SizedBox(width: 4),
+                      Text('Recorded today',
+                          style: Theme.of(context).textTheme.labelSmall),
+                    ],
+                  ),
+              ],
+            ),
             const SizedBox(height: 6),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -562,6 +623,7 @@ class _InkMeterCard extends StatelessWidget {
             const SizedBox(height: 8),
             TextField(
               controller: controller,
+              enabled: !capturedToday,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => onChanged(),
@@ -626,6 +688,7 @@ class _ToloulMeterCard extends StatelessWidget {
     required this.reset,
     required this.onResetChanged,
     required this.onChanged,
+    this.capturedToday = false,
   });
 
   final InkMeterPoint point;
@@ -633,6 +696,7 @@ class _ToloulMeterCard extends StatelessWidget {
   final double? last;
   final List<({DateTime at, double reading})> history;
   final bool reset;
+  final bool capturedToday;
   final ValueChanged<bool> onResetChanged;
   final VoidCallback onChanged;
 
@@ -683,6 +747,13 @@ class _ToloulMeterCard extends StatelessWidget {
                   child: Text(point.name,
                       style: Theme.of(context).textTheme.titleSmall),
                 ),
+                if (capturedToday) ...[
+                  Icon(Icons.check_circle, size: 16, color: scheme.primary),
+                  const SizedBox(width: 4),
+                  Text('Recorded today',
+                      style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(width: 8),
+                ],
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -731,6 +802,7 @@ class _ToloulMeterCard extends StatelessWidget {
             const SizedBox(height: 8),
             TextField(
               controller: controller,
+              enabled: !capturedToday,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => onChanged(),
@@ -767,7 +839,7 @@ class _ToloulMeterCard extends StatelessWidget {
                 ],
               ),
             ],
-            if (showReset)
+            if (showReset && !capturedToday)
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
