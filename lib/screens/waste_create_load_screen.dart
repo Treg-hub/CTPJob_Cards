@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../services/waste_service.dart';
 import '../models/contractor.dart';
@@ -14,6 +12,8 @@ import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/waste_stock_mapping.dart';
+import '../utils/waste_type_routing.dart';
+import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
@@ -146,7 +146,26 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
   // Items for this load (in-memory until save)
   final List<WasteItem> _items = [];
-  double get _totalWeight => _items.fold(0.0, (sum, item) => sum + item.weightKg);
+  double get _totalWeight => sumRecordedWeightFromItems(_items);
+
+  Set<String> get _quantityOnlyTypeNames =>
+      _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
+
+  Set<String> get _noSiteWeightTypeNames =>
+      _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
+
+  Map<String, String> get _quantityLabelByType {
+    final map = <String, String>{};
+    for (final t in _wasteTypes) {
+      if (t.isQuantityOnly || t.noSiteWeight) {
+        map[t.mainType] = t.quantityLabelFor('default');
+      }
+      for (final entry in t.quantityLabels.entries) {
+        if (entry.key != 'default') map[entry.key] = entry.value;
+      }
+    }
+    return map;
+  }
 
   // On-site stock (Paper Waste — same UX as Schedule Load)
   List<WasteStockItem> _onSiteStock = [];
@@ -361,15 +380,18 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
     if (!guardPersonaSubmit(context)) return;
     final typeNames =
         itemSubtypeOptionsForChips(_selectedTypes, _wasteTypes);
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
+    final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SingleChildScrollView(
-          child: _AddWasteItemSheet(
-            availableTypes: typeNames,
+          child: WasteAddItemSheet(
+            types: typeNames,
+            quantityOnlyTypeNames: _quantityOnlyTypeNames,
+            noSiteWeightTypeNames: _noSiteWeightTypeNames,
+            quantityLabelByType: _quantityLabelByType,
             photosRequired: _wasteSettings?.photosRequired ?? false,
           ),
         ),
@@ -379,10 +401,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       setState(() {
         _items.add(WasteItem(
           loadId: 'temp',
-          subtype: result['subtype'] as String,
-          weightKg: result['weightKg'] as double,
-          quantity: result['quantity'] as int?,
-          photos: List<String>.from(result['photos'] as List),
+          subtype: result.subtype,
+          weightKg: result.weightKg,
+          quantity: result.quantity,
+          photos: List<String>.from(result.localPhotoPaths),
+          isQuantityOnly: result.isQuantityOnly,
+          isNoSiteWeight: result.isNoSiteWeight,
         ));
       });
     }
@@ -462,6 +486,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           'description': item.description,
           'notes': item.notes,
           'localPhotos': item.photos,
+          'is_quantity_only': item.isQuantityOnly,
+          'is_no_site_weight': item.isNoSiteWeight,
         }).toList(),
         actorClockNo: resolveWriteActor(currentEmployee)?.clockNo,
       );
@@ -842,8 +868,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                     leading: Icon(Icons.delete_outline, color: Theme.of(context).appColors.wasteGreen),
                     title: Text(item.subtype, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
-                      '${item.weightKg} kg'
-                      '${item.quantity != null ? '  •  Qty ${item.quantity}' : ''}'
+                      '${itemMeasureLabel(item)}'
                       '${item.photos.isNotEmpty ? '  •  ${item.photos.length} photo(s)' : '  •  ⚠ No photo'}',
                     ),
                     trailing: IconButton(
@@ -902,201 +927,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Add waste item bottom sheet
-// ---------------------------------------------------------------------------
-
-class _AddWasteItemSheet extends StatefulWidget {
-  const _AddWasteItemSheet({
-    required this.availableTypes,
-    this.photosRequired = false,
-  });
-  final List<String> availableTypes;
-  final bool photosRequired;
-
-  @override
-  State<_AddWasteItemSheet> createState() => _AddWasteItemSheetState();
-}
-
-class _AddWasteItemSheetState extends State<_AddWasteItemSheet> {
-  final WasteService _wasteService = WasteService();
-  late String _wasteType;
-  final _weightCtrl = TextEditingController();
-  final _qtyCtrl    = TextEditingController();
-  final List<String> _photos = [];
-  bool _addingPhoto = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _wasteType = widget.availableTypes.isNotEmpty ? widget.availableTypes.first : '';
-  }
-
-  @override
-  void dispose() {
-    _weightCtrl.dispose();
-    _qtyCtrl.dispose();
-    super.dispose();
-  }
-
-  bool get _valid {
-    if (_wasteType.isEmpty) return false;
-    if ((double.tryParse(_weightCtrl.text) ?? 0) <= 0) return false;
-    if (widget.photosRequired && _photos.isEmpty) return false;
-    return true;
-  }
-
-  Future<void> _addPhoto(ImageSource source) async {
-    if (!guardPersonaSubmit(context)) return;
-    setState(() => _addingPhoto = true);
-    try {
-      final path = await _wasteService.pickAndCompressPhotoFromSource(source);
-      if (path != null && mounted) setState(() => _photos.add(path));
-    } finally {
-      if (mounted) setState(() => _addingPhoto = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add Waste Item',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                // ignore: deprecated_member_use
-                value: _wasteType,
-                items: widget.availableTypes
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (v) => setState(() => _wasteType = v!),
-                decoration: const InputDecoration(labelText: 'Waste Type', isDense: true),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _weightCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Weight (kg) *',
-                  isDense: true,
-                  suffixText: 'kg',
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity (optional)', isDense: true),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.photosRequired
-                    ? 'Photos * (${_photos.length})'
-                    : 'Photos (optional, ${_photos.length})',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF616161)),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt),
-                    tooltip: 'Camera',
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    onPressed: _addingPhoto ? null : () => _addPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library),
-                    tooltip: 'Gallery',
-                  ),
-                  if (_addingPhoto) ...[
-                    const SizedBox(width: 12),
-                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ],
-                ],
-              ),
-              if (_photos.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 64,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _photos.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 6),
-                    itemBuilder: (_, i) => Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(File(_photos[i]), width: 60, height: 60, fit: BoxFit.cover),
-                        ),
-                        Positioned(
-                          top: 0, right: 0,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _photos.removeAt(i)),
-                            child: const CircleAvatar(
-                              radius: 9,
-                              backgroundColor: Colors.red,
-                              child: Icon(Icons.close, size: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _valid
-                      ? () => Navigator.pop(context, {
-                            'subtype': _wasteType,
-                            'weightKg': double.parse(_weightCtrl.text),
-                            'quantity': _qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null,
-                            'photos': List.of(_photos),
-                          })
-                      : null,
-                  child: const Text('Add Item'),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
