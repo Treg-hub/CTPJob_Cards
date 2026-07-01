@@ -110,6 +110,10 @@ class SecurityEntry {
   final bool driverLicenceScanCaptured;
   final String? driverIdNumber;
   final int? occupantCount;
+  // Generic "occupants observed at this direction-event" field — used for
+  // visitor-exit ("leaving now" vs recorded on entry) AND for company-car
+  // returns ("returning now" vs recorded on the matching exit). Not
+  // restricted to literal "leaving" despite the name.
   final int? occupantsLeaving;
   final bool occupantDiscrepancy;
   final String? occupantDiscrepancyNote;

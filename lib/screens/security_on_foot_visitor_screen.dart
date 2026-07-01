@@ -11,6 +11,8 @@ import '../models/security_settings.dart';
 import '../providers/security_provider.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/security_error_messages.dart';
+import '../widgets/security_suggestion_field.dart';
 import 'security_document_scan_screen.dart';
 import '../utils/screen_insets.dart';
 
@@ -168,7 +170,7 @@ class _SecurityOnFootVisitorScreenState
       );
       Navigator.pop(context);
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -192,58 +194,73 @@ class _SecurityOnFootVisitorScreenState
           : StreamBuilder<List<SecurityDenyEntry>>(
               stream: _service.watchDenyList(),
               builder: (context, snap) {
-                return ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    if (gate == null)
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Text(
-                              'Select a gate on the Security home screen.'),
-                        ),
-                      ),
-                    OutlinedButton.icon(
-                      onPressed: _scanId,
-                      icon: const Icon(Icons.badge_outlined),
-                      label: const Text('Scan ID (optional)'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Visitor name *',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _hostCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Host (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _companyCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Company (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _purposeCtrl,
-                      decoration: InputDecoration(
-                        labelText: settings.purposeOfVisitRequired
-                            ? 'Purpose of visit *'
-                            : 'Purpose of visit',
-                        border: const OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                  ],
+                return StreamBuilder<List<String>>(
+                  stream: _service.watchLookupSuggestions('host'),
+                  builder: (context, hostSnap) {
+                    return StreamBuilder<List<String>>(
+                      stream: _service.watchLookupSuggestions('company'),
+                      builder: (context, companySnap) {
+                        return ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            if (gate == null)
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('No gate selected.'),
+                                      const SizedBox(height: 8),
+                                      OutlinedButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Choose a gate'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            OutlinedButton.icon(
+                              onPressed: _scanId,
+                              icon: const Icon(Icons.badge_outlined),
+                              label: const Text('Scan ID (optional)'),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _nameCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Visitor name *',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SecuritySuggestionField(
+                              controller: _hostCtrl,
+                              label: 'Host (optional)',
+                              suggestions: hostSnap.data ?? [],
+                            ),
+                            const SizedBox(height: 12),
+                            SecuritySuggestionField(
+                              controller: _companyCtrl,
+                              label: 'Company (optional)',
+                              suggestions: companySnap.data ?? [],
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _purposeCtrl,
+                              decoration: InputDecoration(
+                                labelText: settings.purposeOfVisitRequired
+                                    ? 'Purpose of visit *'
+                                    : 'Purpose of visit',
+                                border: const OutlineInputBorder(),
+                              ),
+                              maxLines: 2,
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),
