@@ -175,6 +175,25 @@ class SecurityService {
         .map((s) => s.docs.map(SecurityEntry.fromFirestore).toList());
   }
 
+  /// Time-scoped entries — avoids a fixed row-count limit missing a
+  /// long-dwelling vehicle/visitor. Queries on createdAt (a reliable server
+  /// Timestamp on every CF-created doc), NOT logged_at (a client-supplied
+  /// field that's a mix of ISO-string and Timestamp across write paths —
+  /// mixing types in a Firestore range query silently produces wrong
+  /// results, so logged_at cannot be used here).
+  Stream<List<SecurityEntry>> watchRecentEntriesSince({
+    required DateTime since,
+    int limit = 1000,
+  }) {
+    return _db
+        .collection(Collections.securityEntries)
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => s.docs.map(SecurityEntry.fromFirestore).toList());
+  }
+
   // ---------------------------------------------------------------------------
   // COMPLIANCE HELPERS
   // ---------------------------------------------------------------------------
@@ -305,7 +324,30 @@ class SecurityService {
     return null;
   }
 
-  /// Vehicles currently on site (latest direction per reg is in).
+  /// Most recent OUT entry for a company car reg with no matching later IN
+  /// — i.e. the car is "out on trip" awaiting return. Used to pull the
+  /// occupant count that left, for the return-leg discrepancy check.
+  SecurityEntry? findOpenCompanyCarExit(
+    List<SecurityEntry> entries,
+    String? vehicleReg,
+  ) {
+    final reg = SecurityVehicle.normalizeReg(vehicleReg);
+    if (reg.isEmpty) return null;
+    final sorted = [...entries]
+      ..sort((a, b) =>
+          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+    for (final e in sorted) {
+      if (e.entryType != SecurityEntryType.companyCar) continue;
+      if (SecurityVehicle.normalizeReg(e.vehicleReg) != reg) continue;
+      // Most recent entry for this reg — if it's OUT, the car hasn't returned.
+      return e.direction == SecurityDirection.out ? e : null;
+    }
+    return null;
+  }
+
+  /// Vehicles currently on site (latest direction per reg is in). Excludes
+  /// on-foot visitors by design — see computeOnSiteVisitors for the parallel
+  /// on-foot computation (keyed by name, since there's no vehicleReg).
   List<SecurityEntry> computeOnSite(List<SecurityEntry> entries) {
     final latest = <String, SecurityEntry>{};
     final sorted = [...entries]
@@ -315,6 +357,29 @@ class SecurityService {
       final reg = SecurityVehicle.normalizeReg(e.vehicleReg);
       if (reg.isEmpty || latest.containsKey(reg)) continue;
       latest[reg] = e;
+    }
+    return latest.values
+        .where((e) => e.direction == SecurityDirection.in_)
+        .toList()
+      ..sort((a, b) =>
+          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+  }
+
+  /// On-foot visitors currently on site — parallel to computeOnSite but
+  /// keyed by normalized visitor/driver name (no vehicleReg exists for
+  /// on-foot entries). Known limitation: two visitors sharing an identical
+  /// name will incorrectly dedupe into one row — accepted v1 tradeoff, see
+  /// docs/security-deferred-items.md.
+  List<SecurityEntry> computeOnSiteVisitors(List<SecurityEntry> entries) {
+    final latest = <String, SecurityEntry>{};
+    final sorted = [...entries]
+      ..sort((a, b) =>
+          (b.loggedAt ?? DateTime(0)).compareTo(a.loggedAt ?? DateTime(0)));
+    for (final e in sorted) {
+      if (e.entryType != SecurityEntryType.onFootVisitor) continue;
+      final key = (e.visitorName ?? e.driverName ?? '').trim().toLowerCase();
+      if (key.isEmpty || latest.containsKey(key)) continue;
+      latest[key] = e;
     }
     return latest.values
         .where((e) => e.direction == SecurityDirection.in_)
@@ -503,6 +568,34 @@ class SecurityService {
     );
   }
 
+  /// Sign-out for an on-foot visitor. No occupant stepper — doesn't apply
+  /// to a solo pedestrian.
+  Future<({String id, String? entryNumber, bool queuedOffline})> signOutVisitor({
+    required SecurityEntry onSiteEntry,
+    required String gateId,
+    String? gateName,
+    required String loggedByClockNo,
+    required String loggedByName,
+  }) {
+    return createEntry(
+      data: {
+        'gate_id': gateId,
+        if (gateName != null) 'gate_name': gateName,
+        'direction': SecurityDirection.out.value,
+        'entry_type': SecurityEntryType.onFootVisitor.value,
+        if (onSiteEntry.visitorName != null) 'visitor_name': onSiteEntry.visitorName,
+        if (onSiteEntry.driverName != null) 'driver_name': onSiteEntry.driverName,
+        if (onSiteEntry.hostName != null) 'host_name': onSiteEntry.hostName,
+        if (onSiteEntry.companyName != null) 'company_name': onSiteEntry.companyName,
+        if (onSiteEntry.purpose != null) 'purpose': onSiteEntry.purpose,
+        'session_id': onSiteEntry.sessionId,
+        'logged_by_clock_no': loggedByClockNo,
+        'logged_by_name': loggedByName,
+        'logged_at': DateTime.now().toIso8601String(),
+      },
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // COMPANY CAR TRIPS
   // ---------------------------------------------------------------------------
@@ -526,9 +619,45 @@ class SecurityService {
   }
 
   // ---------------------------------------------------------------------------
-  // VEHICLE COSTS (manager)
+  // VEHICLE COSTS (manager) — server-validated via addSecurityVehicleCost CF
   // ---------------------------------------------------------------------------
 
+  /// Uploads a cost receipt photo to Storage under a pre-reserved cost doc id,
+  /// so the id + URL can be passed into addSecurityVehicleCost and the
+  /// Firestore doc created with the receipt URL already attached in one
+  /// write (security_vehicle_costs is write:false for clients — see rules).
+  Future<String> uploadCostReceipt({
+    required String localPath,
+    required String costId,
+  }) async {
+    _guardWrite();
+    final file = File(localPath);
+    if (!file.existsSync()) {
+      throw Exception('Photo file not found: $localPath');
+    }
+
+    Uint8List? compressed;
+    try {
+      compressed = await FlutterImageCompress.compressWithFile(
+        localPath,
+        quality: 75,
+        minWidth: 1280,
+        minHeight: 1280,
+      );
+    } catch (_) {}
+
+    final ref = _storage.ref('security_vehicle_costs/$costId/receipt.jpg');
+    final snapshot = compressed != null
+        ? await ref.putData(compressed)
+        : await ref.putFile(file);
+    return snapshot.ref.getDownloadURL();
+  }
+
+  /// Records a company car cost via the addSecurityVehicleCost Cloud
+  /// Function (server-validated: cost-manager/admin only, re-checks the
+  /// vehicle is a registered active company car). [receiptLocalPath], if
+  /// provided, is uploaded to Storage first using a client-reserved doc id
+  /// so the cost doc lands with its receipt URL already attached.
   Future<void> addVehicleCost({
     required String vehicleReg,
     required DateTime costDate,
@@ -537,10 +666,13 @@ class SecurityService {
     required double amountZar,
     required String enteredByClockNo,
     String? contractorId,
-    String? receiptPhotoUrl,
+    String? receiptLocalPath,
   }) async {
     _guardWrite();
     final reg = SecurityVehicle.normalizeReg(vehicleReg);
+
+    // Fast-fail UX pre-check only — the CF re-validates regardless, since
+    // client-side checks are never trustworthy on their own.
     final vehiclesSnap =
         await _db.collection(Collections.securityVehicles).get();
     final vehicles =
@@ -550,17 +682,35 @@ class SecurityService {
         'Costs can only be recorded for registered company cars.',
       );
     }
-    await _db.collection(Collections.securityVehicleCosts).add({
+
+    String? receiptPhotoUrl;
+    String? docId;
+    if (receiptLocalPath != null) {
+      final reservedRef = _db.collection(Collections.securityVehicleCosts).doc();
+      docId = reservedRef.id;
+      receiptPhotoUrl = await uploadCostReceipt(
+        localPath: receiptLocalPath,
+        costId: docId,
+      ).timeout(_photoTimeout);
+    }
+
+    final callable = _functions.httpsCallable('addSecurityVehicleCost');
+    final result = await callable.call({
       'vehicle_reg': reg,
-      'cost_date': Timestamp.fromDate(costDate),
+      'cost_date': costDate.toIso8601String(),
       'category': category,
       'description': description,
       'amount_zar': amountZar,
       'entered_by_clock_no': enteredByClockNo,
       if (contractorId != null) 'contractor_id': contractorId,
       if (receiptPhotoUrl != null) 'receipt_photo_url': receiptPhotoUrl,
-      'created_at': FieldValue.serverTimestamp(),
-    });
+      if (docId != null) 'doc_id': docId,
+    }).timeout(_callableTimeout);
+
+    final data = Map<String, dynamic>.from(result.data as Map);
+    if (data['success'] != true) {
+      throw Exception(data['error'] as String? ?? 'Failed to save cost');
+    }
   }
 
   // ---------------------------------------------------------------------------

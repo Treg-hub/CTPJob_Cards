@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../main.dart' show currentEmployee;
 import '../providers/security_provider.dart';
@@ -8,8 +9,11 @@ import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
+import '../utils/security_error_messages.dart';
 
-/// Manager/admin vehicle cost entry.
+/// Manager/admin vehicle cost entry — server-validated via the
+/// addSecurityVehicleCost Cloud Function. Same entry point + data model as
+/// CTP Pulse's Costing hub; either surface can be used interchangeably.
 class SecurityAddCostScreen extends ConsumerStatefulWidget {
   const SecurityAddCostScreen({super.key});
 
@@ -25,6 +29,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
   String? _selectedReg;
   String? _category;
   DateTime _costDate = DateTime.now();
+  String? _receiptLocalPath;
   bool _submitting = false;
 
   @override
@@ -42,6 +47,14 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
       lastDate: DateTime.now(),
     );
     if (picked != null) setState(() => _costDate = picked);
+  }
+
+  Future<void> _pickReceiptPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+    if (picked != null) setState(() => _receiptLocalPath = picked.path);
   }
 
   Future<void> _submit(List<String> categories) async {
@@ -77,6 +90,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
         description: _descCtrl.text.trim(),
         amountZar: amount,
         enteredByClockNo: resolveWriteActor(emp)!.clockNo,
+        receiptLocalPath: _receiptLocalPath,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -87,7 +101,7 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
       );
       Navigator.pop(context);
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -197,6 +211,16 @@ class _SecurityAddCostScreenState extends ConsumerState<SecurityAddCostScreen> {
             ),
             trailing: const Icon(Icons.calendar_today),
             onTap: _pickDate,
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _pickReceiptPhoto,
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: Text(
+              _receiptLocalPath == null
+                  ? 'Add receipt photo (optional)'
+                  : 'Receipt photo attached',
+            ),
           ),
         ],
       ),

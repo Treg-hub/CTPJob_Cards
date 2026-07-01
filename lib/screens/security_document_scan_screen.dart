@@ -76,6 +76,8 @@ class _SecurityDocumentScanScreenState
   bool _autoTorchTried = false;
   int _frameCount = 0;
   bool _confirmed = false;
+  int _rejectedScanCount = 0;
+  static const int _manualEntryHintThreshold = 5;
 
   @override
   void dispose() {
@@ -136,12 +138,36 @@ class _SecurityDocumentScanScreenState
     }
   }
 
+  void _bumpRejectedScanCount() {
+    _rejectedScanCount++;
+    if (!mounted) return;
+    if (_rejectedScanCount == _manualEntryHintThreshold) {
+      setState(() {}); // trigger rebuild to show the manual-entry hint banner
+    }
+  }
+
+  void _showWrongBarcodeHintOnce() {
+    if (_rejectedScanCount != 1 || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Wrong barcode detected — make sure you\'re scanning the correct PDF417 barcode.',
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_confirmed) return;
     _maybeAutoTorch(capture.image);
 
     for (final b in capture.barcodes) {
-      if (!_acceptsBarcodeFormat(widget.expectedType, b.format)) continue;
+      if (!_acceptsBarcodeFormat(widget.expectedType, b.format)) {
+        _bumpRejectedScanCount();
+        _showWrongBarcodeHintOnce();
+        continue;
+      }
 
       final preferBinary =
           widget.expectedType == SecurityDocumentType.driverLicence;
@@ -149,7 +175,10 @@ class _SecurityDocumentScanScreenState
         b,
         preferBinary: preferBinary,
       );
-      if (raw == null || raw.isEmpty) continue;
+      if (raw == null || raw.isEmpty) {
+        _bumpRejectedScanCount();
+        continue;
+      }
 
       final parsed = switch (widget.expectedType) {
         SecurityDocumentType.licenseDisc =>
@@ -160,7 +189,10 @@ class _SecurityDocumentScanScreenState
           SecurityDocumentParser.parseDriverLicence(raw),
         _ => SecurityDocumentParser.parseBarcode(raw),
       };
-      if (!_acceptsParsedResult(widget.expectedType, parsed, raw)) continue;
+      if (!_acceptsParsedResult(widget.expectedType, parsed, raw)) {
+        _bumpRejectedScanCount();
+        continue;
+      }
       if (!mounted || _confirmed) return;
 
       if (widget.autoConfirmOnDetect) {
@@ -334,6 +366,30 @@ class _SecurityDocumentScanScreenState
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
+              if (_rejectedScanCount >= _manualEntryHintThreshold)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(
+                    color: Colors.orange.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              "Having trouble scanning? Try 'Manual' above, or check the torch.",
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _manualEntry,
+                            child: const Text('Manual'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (!hidePreview) ...[
                 if (r != null) ...[
                   if (r.vehicleReg != null)

@@ -21,6 +21,7 @@ import '../providers/security_provider.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../utils/security_error_messages.dart';
 import '../widgets/security_gate_compact_header.dart';
 import '../widgets/security_suggestion_field.dart';
 import 'security_document_scan_screen.dart';
@@ -60,6 +61,7 @@ class _SecurityVehicleGateScreenState
   ParsedDocument? _driverLicence;
   SecurityEntry? _onSiteEntry;
   SecurityVehicle? _companyVehicle;
+  SecurityEntry? _openCompanyCarExit;
   SecurityContractor? _contractor;
   SecurityEntryType _entryType = SecurityEntryType.visitor;
 
@@ -71,6 +73,7 @@ class _SecurityVehicleGateScreenState
   bool _discDamaged = false;
   int _occupantCount = 1;
   int _occupantsLeaving = 1;
+  int _occupantsReturning = 1;
   final List<String> _photoPaths = [];
   Employee? _resolvedEmployee;
   bool _resolvingEmployee = false;
@@ -128,12 +131,16 @@ class _SecurityVehicleGateScreenState
     required ParsedDocument disc,
     List<SecurityEntry>? onSite,
     List<SecurityVehicle>? vehicles,
+    List<SecurityEntry>? allRecent,
   }) {
     final reg = SecurityVehicle.normalizeReg(disc.vehicleReg);
     final onSiteList = onSite ?? [];
     final vehicleList = vehicles ?? [];
     final match = _service.findOnSiteByReg(onSiteList, reg);
     final company = _service.findCompanyVehicle(vehicleList, reg);
+    final openExit = company != null
+        ? _service.findOpenCompanyCarExit(allRecent ?? [], reg)
+        : null;
     final suggested =
         match != null ? SecurityDirection.out : SecurityDirection.in_;
 
@@ -141,14 +148,17 @@ class _SecurityVehicleGateScreenState
       _disc = disc;
       _onSiteEntry = match;
       _companyVehicle = company;
+      _openCompanyCarExit = openExit;
       _autoDirection = suggested;
       if (!_directionOverridden) {
         _direction = suggested;
       }
       _occupantsLeaving = match?.occupantCount ?? 1;
+      _occupantsReturning = openExit?.occupantCount ?? 1;
       _discrepancyNoteCtrl.clear();
       if (company != null) {
         _discDamaged = false;
+        _occupantCount = 1;
       }
     });
   }
@@ -191,9 +201,8 @@ class _SecurityVehicleGateScreenState
     await _openDiscScanner();
   }
 
-  Future<List<SecurityEntry>> _loadOnSite() async {
-    final entries = await _service.watchRecentEntries(limit: 200).first;
-    return _service.computeOnSite(entries);
+  Future<List<SecurityEntry>> _loadRecentEntries() async {
+    return _service.watchRecentEntries(limit: 200).first;
   }
 
   Future<List<SecurityVehicle>> _loadVehicles() async {
@@ -233,13 +242,15 @@ class _SecurityVehicleGateScreenState
       }
 
       if (result.hasDocument) {
-        final onSite = await _loadOnSite();
+        final entries = await _loadRecentEntries();
+        final onSite = _service.computeOnSite(entries);
         final vehicles = await _loadVehicles();
         if (!mounted) return;
         _applyDiscContext(
           disc: result.document!,
           onSite: onSite,
           vehicles: vehicles,
+          allRecent: entries,
         );
         await _maybeChainLicenceScan();
       }
@@ -304,6 +315,7 @@ class _SecurityVehicleGateScreenState
   Future<void> _rescanDisc(
     List<SecurityEntry> onSite,
     List<SecurityVehicle> vehicles,
+    List<SecurityEntry> allRecent,
   ) async {
     final result = await Navigator.push<SecurityScanResult>(
       context,
@@ -326,6 +338,7 @@ class _SecurityVehicleGateScreenState
         _disc = null;
         _discDamaged = true;
         _companyVehicle = null;
+        _openCompanyCarExit = null;
         _onSiteEntry = null;
         _autoDirection = null;
       });
@@ -337,6 +350,7 @@ class _SecurityVehicleGateScreenState
         disc: result.document!,
         onSite: onSite,
         vehicles: vehicles,
+        allRecent: allRecent,
       );
       await _maybeChainLicenceScan();
     }
@@ -688,7 +702,7 @@ class _SecurityVehicleGateScreenState
       if (!mounted) return;
       _showSuccess(result, 'Entry logged');
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -759,7 +773,7 @@ class _SecurityVehicleGateScreenState
         partial: partial,
       );
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -838,6 +852,7 @@ class _SecurityVehicleGateScreenState
         'purpose': _purposeCtrl.text.trim(),
         'destination_address': _addressCtrl.text.trim(),
         'odometer_start': odometer,
+        'occupant_count': _occupantCount,
         'session_id': sessionId,
         'driver_licence_scan_captured': true,
         'id_scan_captured': true,
@@ -877,7 +892,7 @@ class _SecurityVehicleGateScreenState
       if (!mounted) return;
       _showSuccess(result, 'Company car exit logged');
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -919,6 +934,19 @@ class _SecurityVehicleGateScreenState
             .toDouble()
         : null;
 
+    final recordedOccupants = _openCompanyCarExit?.occupantCount ?? 1;
+    final occupantDiscrepancy =
+        _openCompanyCarExit != null && _occupantsReturning != recordedOccupants;
+    if (occupantDiscrepancy && _discrepancyNoteCtrl.text.trim().isEmpty) {
+      _showError(
+        recordedOccupants > _occupantsReturning
+            ? 'Explain why $recordedOccupants occupant(s) left but only '
+                '$_occupantsReturning are returning.'
+            : 'Explain why more people are returning than left.',
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final entryData = <String, dynamic>{
@@ -936,6 +964,17 @@ class _SecurityVehicleGateScreenState
         if (_disc?.vehicleMake != null) 'vehicle_make': _disc!.vehicleMake,
         'odometer_end': odometer,
         if (mileage != null) 'mileage_km': mileage,
+        if (_openCompanyCarExit != null) ...{
+          'occupant_count': recordedOccupants,
+          // Reused field: on a company-car RETURN entry this means
+          // "occupants present now", not "leaving" — same generic field
+          // SecurityEntry already uses for the visitor-exit discrepancy
+          // check (see security_entry.dart occupantsLeaving doc comment).
+          'occupants_leaving': _occupantsReturning,
+          'occupant_discrepancy': occupantDiscrepancy,
+          if (occupantDiscrepancy)
+            'occupant_discrepancy_note': _discrepancyNoteCtrl.text.trim(),
+        },
         'logged_by_clock_no': actor.clockNo,
         'logged_by_name': emp.name,
         'logged_at': DateTime.now().toIso8601String(),
@@ -970,7 +1009,7 @@ class _SecurityVehicleGateScreenState
         '${mileage != null ? ' · ${mileage.toStringAsFixed(0)} km' : ''}',
       );
     } catch (e) {
-      _showError('Failed: $e');
+      _showError(friendlySecurityError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -1117,11 +1156,21 @@ class _SecurityVehicleGateScreenState
                                 ),
                                 children: [
                                   if (gate == null)
-                                    const Card(
+                                    Card(
                                       child: Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: Text(
-                                          'Select a gate on the Security home screen.',
+                                        padding: const EdgeInsets.all(12),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('No gate selected.'),
+                                            const SizedBox(height: 8),
+                                            OutlinedButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text('Choose a gate'),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -1140,7 +1189,11 @@ class _SecurityVehicleGateScreenState
                                     showLicenceRow: _showLicenceInHeader,
                                     onRescanDisc: gate == null
                                         ? null
-                                        : () => _rescanDisc(onSite, vehicles),
+                                        : () => _rescanDisc(
+                                              onSite,
+                                              vehicles,
+                                              entriesSnap.data ?? [],
+                                            ),
                                     onRescanLicence: _showLicenceInHeader
                                         ? _openLicenceScanner
                                         : null,
@@ -1555,6 +1608,12 @@ class _SecurityVehicleGateScreenState
         onSubmitted: (_) => _resolveEmployeeFromClock(),
       ),
       const SizedBox(height: 12),
+      _OccupantStepper(
+        label: 'Occupants leaving',
+        value: _occupantCount,
+        onChanged: (v) => setState(() => _occupantCount = v),
+      ),
+      const SizedBox(height: 12),
       TextField(
         controller: _purposeCtrl,
         decoration: const InputDecoration(
@@ -1588,6 +1647,8 @@ class _SecurityVehicleGateScreenState
   }
 
   List<Widget> _companyCarReturnFields() {
+    final recorded = _openCompanyCarExit?.occupantCount ?? 1;
+    final discrepancy = _openCompanyCarExit != null && _occupantsReturning != recorded;
     return [
       const SizedBox(height: 16),
       TextField(
@@ -1602,6 +1663,43 @@ class _SecurityVehicleGateScreenState
         ),
         keyboardType: TextInputType.number,
       ),
+      const SizedBox(height: 16),
+      if (_openCompanyCarExit != null) ...[
+        Text('Recorded on exit: $recorded occupant${recorded == 1 ? '' : 's'}'),
+        const SizedBox(height: 8),
+        _OccupantStepper(
+          label: 'Returning now',
+          value: _occupantsReturning,
+          onChanged: (v) => setState(() => _occupantsReturning = v),
+        ),
+        if (discrepancy) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _occupantsReturning < recorded
+                  ? '${recorded - _occupantsReturning} may still be out — exit will be flagged.'
+                  : 'More occupants returning than left — flagged.',
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _discrepancyNoteCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Discrepancy note *',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ] else
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            'No matching exit trip found for this vehicle — occupant count not tracked for this return.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
     ];
   }
 }
