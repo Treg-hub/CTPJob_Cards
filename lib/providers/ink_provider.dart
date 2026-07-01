@@ -248,11 +248,26 @@ final inkDailyReadingsStatusProvider = StreamProvider<InkDailyReadingsStatus>(
       for (final p in toloulPoints)
         if (p.id != null) p.id!,
     };
+    final toloulPointNames = {
+      for (final p in toloulPoints)
+        if (p.id != null) p.id!: p.name,
+    };
     return ref.watch(inkServiceProvider).watchDailyReadingsStatus(
           requiredInkCodes: requiredInk,
           requiredToloulPointIds: requiredToloul,
+          toloulPointNames: toloulPointNames,
         );
   },
+);
+
+/// Toloul meter point ids already captured on today's calendar day.
+final inkTodayToloulPointIdsProvider = StreamProvider<Set<String>>(
+  (ref) => ref.watch(inkServiceProvider).watchTodayToloulPointIds(),
+);
+
+/// Ink item codes already captured on today's calendar day.
+final inkTodayMeterItemCodesProvider = StreamProvider<Set<String>>(
+  (ref) => ref.watch(inkServiceProvider).watchTodayInkMeterItemCodes(),
 );
 
 /// Recent ink meter-reading sessions (grouped by session_id) for the void list.

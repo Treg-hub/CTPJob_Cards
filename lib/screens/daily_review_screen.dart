@@ -293,17 +293,10 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
                 itemBuilder: (context, index) {
                   final card = cards[index];
                   final isSelected = _selectedCard?.id == card.id;
-                  return Container(
-                    decoration: isSelected
-                        ? BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: kBrandOrange, width: 2),
-                          )
-                        : null,
-                    child: JobCardTile(
-                      job: card,
-                      onTap: () => _selectCard(card),
-                    ),
+                  return JobCardTile(
+                    job: card,
+                    selected: isSelected,
+                    onTap: () => _selectCard(card),
                   );
                 },
               );
