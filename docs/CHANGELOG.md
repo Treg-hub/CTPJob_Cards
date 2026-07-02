@@ -6,6 +6,61 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-03 — Version 2.2.0 — everything since v2.1.1 (17 June)
+
+This is a big release. If you've been on **v2.1.1 (build 38)** since 17 June, here is everything that has changed, at a glance. The dated entries below this one carry the finer detail.
+
+### New — Site Security module (gate staff)
+
+Security guards get a dedicated module for the main gate:
+
+- **Vehicle at Gate** — scan-first flow: scan the licence disc (plate is read automatically, including the newer disc formats), the app checks the company car registry, and you capture occupants and visitors in one pass.
+- **On-Foot Visitor** — walk-in visitor capture, with optional document scanning.
+- **Guard home hub** — guards see a simple "Your modules" home (Site Security + Waste Recovery) instead of the job-card tiles, and the app opens straight into Security on launch.
+- **Kiosk mode** — a dedicated gate tablet can now be locked down so it only ever runs this app.
+
+### Fleet
+
+- **Daily pre-use safety check** — drivers complete a short checklist before using a machine; a failed item automatically raises a fault for the mechanic. This is now separate from fault reporting.
+- **Simpler floor screens** — reporters and mechanics each get a focused view with only their own actions; machine pickers are scoped to your department.
+- **Report a Problem** is a guided step-by-step wizard, and notification taps deep-link straight to the right fault.
+
+### Ink Factory
+
+- **Mobile is for capture, Pulse is for management** — receiving, meter readings, production, Toloul recovery, and IBC work stay on the phone; month-end, costing, recipes, and reports moved to CTP Pulse. Operators never see money on mobile.
+- **Combined daily readings** — all ink meters and Toloul points on one screen, one submit; a Home banner reminds you while readings are still outstanding.
+- **Barcode-driven receiving** — receive IBCs and raw materials against a Pulse shipment or local purchase order with serial validation, a torch for low light, and duplicate warnings. Consume IBCs by QR scan.
+- **Safe corrections** — production runs, IBC consumptions, and meter sessions can now be voided (reversed) with full audit, and month-end counts snapshot values so reports stay accurate even when something is backdated.
+
+### Waste Recovery
+
+- **Reshaped flow** — managers schedule on Pulse; guards capture in the field. Scheduled and from-scratch collections now follow the same rules (paper document reference always required; photo and signature requirements follow admin settings).
+- **Offline you can trust** — photos and signatures captured offline now survive app restarts and cache clears, retry automatically, and anything that could not be recovered is clearly shown instead of vanishing.
+- **Stock cross-links** — consumed ink IBCs and copper ready to sell appear automatically as on-site waste stock for collection day.
+- Home lists show the last 14 days (full history stays in Reports and Pulse).
+
+### Job cards & general app
+
+- **Off-site made clear** — the Create Job Card tile greys out with a reason when you're off-site, instead of hiding or silently failing.
+- **Home screen** — Quick Actions is now a proper aligned grid with uniform tiles and bigger icons.
+- **Fits your screen** — edge-to-edge display with fixed safe areas: submit buttons and bottom bars are no longer hidden behind the gesture bar on modern phones.
+- Refined job card tiles, dark-mode contrast fixes, and a toned-down login screen.
+
+### Notifications & presence
+
+- **Permission health** — the Home banner now watches all six critical Android settings (location, battery, notifications, DND, overlay, full-screen alerts) with a one-tap Fix, so job alerts keep working.
+- **iPhone / web** — notifications for these users are delivered to the in-app inbox reliably.
+- On-site / off-site detection no longer produces repeated snackbar spam when you use the app on more than one device.
+
+### Admin
+
+- **Refreshed Admin screen** — five tabs opening on Settings; searchable employee cards with an on-site toggle; cleaner structures management. Job-card exports moved to CTP Pulse.
+- **User feedback board** — triage staff feedback (New → Planned → Implemented → Declined) with notes.
+- **Role testing** — admins can preview the app as any role, with all writes safely blocked while testing.
+- **Targeted broadcasts** — send an update notice to specific clock numbers, and see each person's permission health at a glance in the On Site tab.
+
+---
+
 ## 2026-07-02 — Home screen tile grid + login screen polish
 
 ### Home screen
