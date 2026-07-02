@@ -12,6 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee, personaAllowTestSubmissions, personaEmployee, realEmployee;
 import '../providers/persona_provider.dart';
 import '../models/fleet_settings.dart';
+import '../providers/fleet_tips_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/fleet_service.dart';
@@ -325,7 +326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (!kIsWeb && _kioskEnabled) ...[
                 const SizedBox(height: 8),
                 Card(
-                  color: Colors.red.shade50,
+                  color: Colors.red.shade50.withValues(alpha: isDark ? 0.05 : 1.0),
                   elevation: 2,
                   child: ListTile(
                     leading: const Icon(Icons.lock, color: Colors.red),
@@ -345,13 +346,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _SectionHeader('Preferences'),
               Card(
                 elevation: 2,
-                child: SwitchListTile(
-                  secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFFF8C42)),
-                  title: const Text('Dark Mode'),
-                  subtitle: Text(isDark ? 'Switch to light theme' : 'Switch to dark theme'),
-                  value: isDark,
-                  activeThumbColor: const Color(0xFFFF8C42),
-                  onChanged: (_) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFFF8C42)),
+                      title: const Text('Dark Mode'),
+                      subtitle: Text(isDark ? 'Switch to light theme' : 'Switch to dark theme'),
+                      value: isDark,
+                      activeThumbColor: const Color(0xFFFF8C42),
+                      onChanged: (_) => ref.read(themeNotifierProvider.notifier).toggleTheme(),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.lightbulb_outline, color: Color(0xFFFF8C42)),
+                      title: const Text('Fleet Mechanic Tips'),
+                      subtitle: const Text('Show the guidance banners on the Fleet screens'),
+                      value: ref.watch(fleetTipsVisibleProvider),
+                      activeThumbColor: const Color(0xFFFF8C42),
+                      onChanged: (value) =>
+                          ref.read(fleetTipsVisibleProvider.notifier).setVisible(value),
+                    ),
+                  ],
                 ),
               ),
 
