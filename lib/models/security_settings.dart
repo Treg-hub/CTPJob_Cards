@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SecuritySettings {
   final bool securityEnabled;
   final bool driverLicenceScanRequired;
+  final bool employeeClockRequired;
   final bool purposeOfVisitRequired;
   final int licenseExpiryWarnDays;
   final List<String> costTypeSuggestions;
@@ -15,6 +16,7 @@ class SecuritySettings {
   const SecuritySettings({
     this.securityEnabled = true,
     this.driverLicenceScanRequired = true,
+    this.employeeClockRequired = false,
     this.purposeOfVisitRequired = false,
     this.licenseExpiryWarnDays = 7,
     this.costTypeSuggestions = const [
@@ -68,6 +70,8 @@ class SecuritySettings {
           data['driver_licence_scan_required'] as bool? ??
               data['id_scan_required'] as bool? ??
               true,
+      employeeClockRequired:
+          data['employee_clock_required'] as bool? ?? false,
       purposeOfVisitRequired:
           data['purpose_of_visit_required'] as bool? ?? false,
       licenseExpiryWarnDays:
@@ -85,6 +89,7 @@ class SecuritySettings {
   Map<String, dynamic> toFirestore() => {
         'security_enabled': securityEnabled,
         'driver_licence_scan_required': driverLicenceScanRequired,
+        'employee_clock_required': employeeClockRequired,
         'purpose_of_visit_required': purposeOfVisitRequired,
         'license_expiry_warn_days': licenseExpiryWarnDays,
         'cost_type_suggestions': costTypeSuggestions,

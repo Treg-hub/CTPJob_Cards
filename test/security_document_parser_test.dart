@@ -75,6 +75,18 @@ void main() {
     });
   });
 
+  group('SecurityDocumentParser — visitor MVL discs', () {
+    test('Hyundai visitor CG24MTZN / VCG592W (2008045XWLWVV serial)', () {
+      const raw =
+          '%MVL1CC54%0146%2055A1N6%1%2008045XWLWVV%CG24MTZN%VCG592W%Hatch back / Luikrug%HYUNDAI%I20%White / Wit%MALAN51BLEM576985%G4HGEM830108%2026-01-31%';
+      final doc = SecurityDocumentParser.parseLicenseDisc(raw);
+      expect(doc.documentType, SecurityDocumentType.licenseDisc);
+      expect(doc.vehicleReg, 'VCG592W');
+      expect(doc.vehicleMake, 'HYUNDAI');
+      expect(doc.expiryDate?.toIso8601String().split('T').first, '2026-01-31');
+    });
+  });
+
   group('SecurityDocumentParser — legacy percent sample', () {
     test('last reg token wins in older FORD sample', () {
       const raw =

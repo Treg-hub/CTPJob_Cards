@@ -296,8 +296,9 @@ class SecurityDocumentParser {
     return payload.toUpperCase().contains('%MVL');
   }
 
-  /// eNaTIS MVL licence disc — `%MVL1CC09%...%LPF%PLATE%...%MAKE%MODEL%...%EXPIRY%`.
-  /// Plate reg is the first reg-like field after the LPF disc serial (e.g. ND663248).
+  /// eNaTIS MVL licence disc — `%MVL1CC09%...%SERIAL%LICENCE%PLATE%...%MAKE%...%`.
+  /// After the disc serial, visitor discs carry licence number then veh. register
+  /// (e.g. CG24MTZN then VCG592W). Fleet/company discs often use plate-first.
   static ParsedDocument? _parseMvlLicenseDisc(String payload) {
     final parts = _splitPayload(payload)
         .map((p) => p.trim())
@@ -313,6 +314,7 @@ class SecurityDocumentParser {
     String? model;
     String? colour;
     var afterDiscSerial = false;
+    final postSerialCandidates = <String>[];
 
     for (var i = 0; i < parts.length; i++) {
       final part = parts[i];
@@ -321,17 +323,32 @@ class SecurityDocumentParser {
 
       if (_isDiscSerial(part)) {
         afterDiscSerial = true;
+        postSerialCandidates.clear();
         continue;
       }
 
       if (afterDiscSerial && reg == null) {
-        // Plate reg is always the first field after the LPF disc serial (e.g. ND663248).
-        reg = SecurityVehicle.normalizeReg(part);
-        afterDiscSerial = false;
-        continue;
+        if (_isPlateCandidate(part)) {
+          postSerialCandidates.add(part);
+          if (postSerialCandidates.length >= 2) {
+            reg = _pickPlateReg(postSerialCandidates);
+            afterDiscSerial = false;
+          }
+          continue;
+        }
+        if (part.contains(' / ') || _isKnownMake(part)) {
+          reg = postSerialCandidates.isEmpty
+              ? null
+              : _pickPlateReg(postSerialCandidates);
+          afterDiscSerial = false;
+        }
       }
 
       if (make == null && _isKnownMake(part)) {
+        reg ??= postSerialCandidates.isEmpty
+            ? null
+            : _pickPlateReg(postSerialCandidates);
+        afterDiscSerial = false;
         make = part;
         if (i + 1 < parts.length) {
           final next = parts[i + 1];
@@ -348,9 +365,17 @@ class SecurityDocumentParser {
       if (colour == null && _looksLikeColour(part)) {
         colour = part;
       } else if (colour == null && part.contains(' / ')) {
+        reg ??= postSerialCandidates.isEmpty
+            ? null
+            : _pickPlateReg(postSerialCandidates);
+        afterDiscSerial = false;
         colour = part;
       }
     }
+
+    reg ??= postSerialCandidates.isEmpty
+        ? null
+        : _pickPlateReg(postSerialCandidates);
 
     return ParsedDocument(
       documentType: SecurityDocumentType.licenseDisc,
@@ -361,6 +386,55 @@ class SecurityDocumentParser {
       vehicleColour: colour,
       rawPayload: payload,
     );
+  }
+
+  static bool _isPlateCandidate(String value) {
+    final upper = value.toUpperCase().trim();
+    if (upper.isEmpty || _vin.hasMatch(upper)) return false;
+    if (_isDiscSerial(upper)) return false;
+    if (_extractDate(upper) != null && upper.length <= 12) return false;
+    return RegExp(r'^[A-Z0-9]{5,10}$').hasMatch(upper);
+  }
+
+  /// Licence numbers (CG24MTZN) precede veh. register (VCG592W) on visitor discs.
+  static bool _looksLikeLicenceNumber(String value) {
+    final upper = value.toUpperCase().trim();
+    return RegExp(r'^[A-Z]{2}\d{2}[A-Z]{2,4}$').hasMatch(upper);
+  }
+
+  /// CTP fleet / company register plates (BX33HKZN, CH09TJZN) on MVL barcodes.
+  static bool _looksLikeFleetRegisterPlate(String value) {
+    final upper = value.toUpperCase().trim();
+    return RegExp(r'(GPZN|HKZN|TJZN)$').hasMatch(upper);
+  }
+
+  static bool _looksLikeClassicPlate(String value) {
+    final upper = value.toUpperCase().trim();
+    if (RegExp(r'^[A-Z]{2}\d{6}$').hasMatch(upper)) return true;
+    if (RegExp(r'^[A-Z]{2,3}\d{3}[A-Z]$').hasMatch(upper)) return true;
+    if (RegExp(r'^[A-Z]{3}\d{3}[A-Z]{2}$').hasMatch(upper)) return true;
+    return _extractReg(upper) != null && !_looksLikeFleetRegisterPlate(upper);
+  }
+
+  static String _pickPlateReg(List<String> candidates) {
+    if (candidates.length == 1) {
+      return SecurityVehicle.normalizeReg(candidates.first);
+    }
+    final first = candidates[0];
+    final second = candidates[1];
+
+    if (_looksLikeFleetRegisterPlate(first)) {
+      return SecurityVehicle.normalizeReg(first);
+    }
+    if (_looksLikeLicenceNumber(first) &&
+        !_looksLikeFleetRegisterPlate(first) &&
+        _looksLikeClassicPlate(second)) {
+      return SecurityVehicle.normalizeReg(second);
+    }
+    if (_looksLikeClassicPlate(first) && _looksLikeClassicPlate(second)) {
+      return SecurityVehicle.normalizeReg(first);
+    }
+    return SecurityVehicle.normalizeReg(first);
   }
 
   /// SA green ID book / smart ID — `SURNAME|FIRST NAMES|SEX|...|ID|DOB|...`.
@@ -383,11 +457,14 @@ class SecurityDocumentParser {
     );
   }
 
-  /// eNaTIS disc serial — legacy `…LPF` or newer `205500575VY0` / `2055005736BD` style.
+  /// eNaTIS disc serial — legacy `…LPF`, `205500575VY0`, or `2008045XWLWVV` styles.
   static bool _isDiscSerial(String value) {
     final upper = value.toUpperCase().trim();
     if (upper.endsWith('LPF') || upper.contains('LICENCE')) return true;
-    return RegExp(r'^2055\d{5,}[A-Z0-9]{3}$').hasMatch(upper);
+    if (RegExp(r'^2055\d{5,}[A-Z0-9]{3}$').hasMatch(upper)) return true;
+    // Printed disc NO. e.g. 2008045XWLWVV (visitor / older format).
+    if (RegExp(r'^\d{7}[A-Z0-9]{4,}$').hasMatch(upper)) return true;
+    return false;
   }
 
   static bool _isKnownMake(String value) {

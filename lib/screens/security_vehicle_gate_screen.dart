@@ -520,7 +520,7 @@ class _SecurityVehicleGateScreenState
       case _GateFlowKind.visitorExit:
         await _submitVisitorExit(gate, onSite);
       case _GateFlowKind.companyCarExit:
-        await _submitCompanyCarExit(gate);
+        await _submitCompanyCarExit(gate, settings: settings);
       case _GateFlowKind.companyCarReturn:
         await _submitCompanyCarReturn(gate);
     }
@@ -779,7 +779,10 @@ class _SecurityVehicleGateScreenState
     }
   }
 
-  Future<void> _submitCompanyCarExit(SecurityGate gate) async {
+  Future<void> _submitCompanyCarExit(
+    SecurityGate gate, {
+    SecuritySettings? settings,
+  }) async {
     if (!guardPersonaSubmit(context)) return;
     final emp = currentEmployee!;
     final actor = resolveWriteActor(emp)!;
@@ -814,15 +817,31 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    await _resolveEmployeeFromClock();
-    if (_clockNoCtrl.text.trim().isEmpty) {
+    final clockRequired = settings?.employeeClockRequired ?? false;
+    final clockNo = _clockNoCtrl.text.trim();
+    if (clockRequired || clockNo.isNotEmpty) {
+      await _resolveEmployeeFromClock();
+    }
+    if (clockRequired && clockNo.isEmpty) {
       _showError('Enter the employee clock number.');
       return;
     }
-    if (_resolvedEmployee == null) {
+    if (clockRequired && _resolvedEmployee == null) {
       _showError('No employee found for that clock number.');
       return;
     }
+
+    final driverName = _resolvedEmployee?.name ??
+        _driverLicence?.fullName ??
+        _driverCtrl.text.trim();
+    if (driverName.isEmpty) {
+      _showError('Driver name is required (from licence scan).');
+      return;
+    }
+
+    final employeeNotInDirectory =
+        clockNo.isNotEmpty && _resolvedEmployee == null;
+
     if (_purposeCtrl.text.trim().isEmpty) {
       _showError('Purpose of trip is required.');
       return;
@@ -841,14 +860,18 @@ class _SecurityVehicleGateScreenState
         'direction': SecurityDirection.out.value,
         'entry_type': SecurityEntryType.companyCar.value,
         'vehicle_reg': _companyVehicle!.vehicleReg,
-        'driver_name': _resolvedEmployee!.name,
+        'driver_name': driverName,
         'disc_scan_captured': _disc != null,
         'disc_scan_missing_flag': _discDamaged || _disc == null,
         if (_disc?.expiryDate != null)
           'disc_expiry': _disc!.expiryDate!.toIso8601String(),
         if (_disc?.vehicleMake != null) 'vehicle_make': _disc!.vehicleMake,
-        'employee_clock_no': _resolvedEmployee!.clockNo,
-        'employee_name': _resolvedEmployee!.name,
+        if (clockNo.isNotEmpty) 'employee_clock_no': clockNo,
+        if (_resolvedEmployee != null)
+          'employee_name': _resolvedEmployee!.name
+        else if (clockNo.isNotEmpty)
+          'employee_name': driverName,
+        if (employeeNotInDirectory) 'employee_not_in_directory': true,
         'purpose': _purposeCtrl.text.trim(),
         'destination_address': _addressCtrl.text.trim(),
         'odometer_start': odometer,
@@ -878,7 +901,7 @@ class _SecurityVehicleGateScreenState
           direction: SecurityDirection.out,
           entryId: result.id,
           loggedAt: DateTime.now(),
-          driverName: _resolvedEmployee!.name,
+          driverName: driverName,
           odometerStart: odometer,
           sessionId: sessionId,
         ),
@@ -892,7 +915,12 @@ class _SecurityVehicleGateScreenState
       );
 
       if (!mounted) return;
-      _showSuccess(result, 'Company car exit logged');
+      _showSuccess(
+        result,
+        employeeNotInDirectory
+            ? 'Company car exit logged (clock not in employee directory)'
+            : 'Company car exit logged',
+      );
     } catch (e) {
       _showError(friendlySecurityError(e));
     } finally {
@@ -1336,7 +1364,7 @@ class _SecurityVehicleGateScreenState
           discrepancy: discrepancy,
           partial: partial,
         ),
-      _GateFlowKind.companyCarExit => _companyCarExitFields(),
+      _GateFlowKind.companyCarExit => _companyCarExitFields(settings),
       _GateFlowKind.companyCarReturn => _companyCarReturnFields(),
     };
   }
@@ -1584,13 +1612,16 @@ class _SecurityVehicleGateScreenState
     ];
   }
 
-  List<Widget> _companyCarExitFields() {
+  List<Widget> _companyCarExitFields(SecuritySettings settings) {
+    final clockRequired = settings.employeeClockRequired;
     return [
       const SizedBox(height: 12),
       TextField(
         controller: _clockNoCtrl,
         decoration: InputDecoration(
-          labelText: 'Employee clock number *',
+          labelText: clockRequired
+              ? 'Employee clock number *'
+              : 'Employee clock number',
           border: const OutlineInputBorder(),
           suffixIcon: _resolvingEmployee
               ? const Padding(
@@ -1606,7 +1637,9 @@ class _SecurityVehicleGateScreenState
                   onPressed: _resolveEmployeeFromClock,
                 ),
           helperText: _resolvedEmployee?.displayName ??
-              'Clock number on driver ID badge',
+              (clockRequired
+                  ? 'Clock number on driver ID badge'
+                  : 'Optional — saved even if not in employee list'),
         ),
         keyboardType: TextInputType.number,
         onSubmitted: (_) => _resolveEmployeeFromClock(),

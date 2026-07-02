@@ -212,6 +212,10 @@ class _SecurityDocumentScanScreenState
     ParsedDocument parsed,
     String raw,
   ) {
+    if (expected == SecurityDocumentType.licenseDisc) {
+      final reg = parsed.vehicleReg?.trim() ?? '';
+      return reg.isNotEmpty;
+    }
     if (parsed.hasVehicleData || parsed.hasIdData) return true;
     if (expected == SecurityDocumentType.driverLicence) {
       return parsed.documentType == SecurityDocumentType.driverLicence &&
