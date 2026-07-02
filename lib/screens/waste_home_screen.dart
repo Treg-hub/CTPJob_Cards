@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
+import '../utils/presence_gating.dart';
 import '../services/sync_service.dart';
 import '../utils/role.dart' as role_utils;
 import '../services/waste_service.dart';
@@ -805,6 +806,14 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (!PresenceGating.canUseOnSiteOnlyModules(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      return const OffSiteBlockedScreen(title: 'Waste Recovery');
+    }
+
     final isAdmin = role_utils.isWasteAdmin(currentEmployee);
     final isManager = role_utils.isSecurityManager(currentEmployee, _wasteSettings);
     final wasteEnabled = _effectiveWasteEnabled;

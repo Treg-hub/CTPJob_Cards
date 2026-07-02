@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../main.dart' show currentEmployee, navigatorKey, TopRouteTracker;
+import '../main.dart' show currentEmployee, navigatorKey, realEmployee, TopRouteTracker;
+import '../utils/presence_gating.dart';
 import '../models/fleet_issue.dart';
 import '../screens/fleet_issue_detail_screen.dart';
 import '../screens/fleet_mark_fixed_screen.dart';
@@ -29,6 +30,21 @@ Future<bool> openFleetIssue(BuildContext context, String issueId) async {
   final emp = currentEmployee;
   final isMechanic = role_utils.isFleetMechanic(emp, settings);
   final isReporter = role_utils.isFleetReporter(emp, settings);
+  final isOnSite = realEmployee?.isOnSite ?? true;
+
+  if (PresenceGating.isReporterOnlyOffSiteBlocked(
+    emp: emp,
+    settings: settings,
+    isOnSite: isOnSite,
+  )) {
+    if (context.mounted) {
+      PresenceGating.showOffSiteSnackBar(
+        context,
+        PresenceGating.offSiteReporterFleetMessage,
+      );
+    }
+    return false;
+  }
 
   final routeName = '/fleet/issue/$issueId';
   if (TopRouteTracker.topRouteName == routeName) return true;

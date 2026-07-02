@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_daily_checklist_rows.dart';
 import '../widgets/fleet_form_fields.dart';
+import '../widgets/fleet_reporter_widgets.dart';
 
 enum _CheckMode { loading, start, done }
 
@@ -169,6 +170,67 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     return result;
   }
 
+  Future<FleetIssueSeverity?> _promptFaultSeverity() async {
+    FleetIssueSeverity? selected = FleetIssueSeverity.medium;
+    final result = await showDialog<FleetIssueSeverity>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final primary = theme.colorScheme.primary;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('How urgent is the problem?'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'The mechanic will see this under To Fix.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: FleetIssueSeverity.values.map((s) {
+                      final isSelected = selected == s;
+                      final chipColor = s == FleetIssueSeverity.outOfService
+                          ? theme.colorScheme.error
+                          : primary;
+                      return ChoiceChip(
+                        label: Text(reporterSeverityLabel(s)),
+                        selected: isSelected,
+                        selectedColor: chipColor,
+                        onSelected: (_) =>
+                            setDialogState(() => selected = s),
+                      );
+                    }).toList(),
+                  ),
+                  if (selected != null) ...[
+                    const SizedBox(height: 12),
+                    FleetReporterSeverityHint(severity: selected!),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Go back'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, selected),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    return result;
+  }
+
   String _issueDescription({
     required List<FleetDailyCheckItem> faultyItems,
     required String faultComment,
@@ -197,9 +259,36 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
         items.where((i) => !i.isOk || !i.reviewed).toList();
 
     String? faultComment;
+    FleetIssueSeverity faultSeverity = FleetIssueSeverity.medium;
     if (faultyItems.isNotEmpty) {
       faultComment = await _promptFaultComment(faultyItems);
       if (faultComment == null) return;
+      final severity = await _promptFaultSeverity();
+      if (severity == null || !mounted) return;
+      faultSeverity = severity;
+      if (faultSeverity == FleetIssueSeverity.outOfService) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Mark machine out of service?'),
+            content: Text(
+              '${widget.asset.name} cannot be used until the mechanic fixes it. '
+              'Send this problem report?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Go back'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Send report'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+      }
       items = items
           .map(
             (i) => (!i.isOk || !i.reviewed)
@@ -248,7 +337,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
               generalComment:
                   generalComment.isEmpty ? null : generalComment,
             ),
-            severity: FleetIssueSeverity.medium,
+            severity: faultSeverity,
             reportedByClockNo: actor.clockNo,
             reportedByName: actor.name,
             source: 'daily_check',

@@ -7,8 +7,10 @@ import '../models/ink_meter_point.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/presence_gating.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
@@ -289,6 +291,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (!PresenceGating.canUseOnSiteOnlyModules(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      return const OffSiteBlockedScreen(title: 'Daily Readings');
+    }
+
     final emp = ref.watch(currentEmployeeProvider).valueOrNull;
     final canEditDate = role_utils.isInkManager(emp) || role_utils.isAdmin(emp);
 

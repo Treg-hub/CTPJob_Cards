@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/fleet_provider.dart';
+import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import 'fleet_mechanic_home_screen.dart';
 import 'fleet_reporter_home_screen.dart';
@@ -34,12 +35,25 @@ class FleetHomeScreen extends ConsumerWidget {
     final emp = currentEmployee;
     final isMechanic = role_utils.isFleetMechanic(emp, settings);
     final isReporter = role_utils.isFleetReporter(emp, settings);
+    final isOnSite = realEmployee?.isOnSite ?? true;
 
     // Dual-role (reporter dept + mechanic clock): mechanic shell wins — floor
-    // work is primary; reporters still use home quick-action tiles.
+    // work is primary; 5th tab surfaces My reports for tracking.
     if (isReporter && !isMechanic) {
+      if (!PresenceGating.canUseReporterFleetActions(
+        emp: emp,
+        settings: settings,
+        isOnSite: isOnSite,
+      )) {
+        return const OffSiteBlockedScreen(
+          title: 'Fleet Reporting',
+          message: PresenceGating.offSiteReporterFleetMessage,
+        );
+      }
       return const FleetReporterHomeScreen();
     }
-    return const FleetMechanicHomeScreen();
+    return FleetMechanicHomeScreen(
+      includeMyReportsTab: isReporter && isMechanic,
+    );
   }
 }

@@ -14,8 +14,9 @@ import 'package:uuid/uuid.dart';
 import '../models/job_card.dart';
 import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import '../utils/persona_audit.dart';
+import '../utils/presence_gating.dart';
 import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
@@ -99,6 +100,23 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
     _initConnectivity();
     _restoreDraft();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _guardOffSiteCreate());
+  }
+
+  void _guardOffSiteCreate() {
+    if (!mounted) return;
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (PresenceGating.canCreateJobCard(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      return;
+    }
+    PresenceGating.showOffSiteSnackBar(
+      context,
+      PresenceGating.offSiteCreateJobMessage,
+    );
+    Navigator.pop(context);
   }
 
   @override
@@ -250,6 +268,17 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
   Future<void> _saveJobCard() async {
     if (!guardPersonaSubmit(context)) return;
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (!PresenceGating.canCreateJobCard(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      PresenceGating.showOffSiteSnackBar(
+        context,
+        PresenceGating.offSiteCreateJobMessage,
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (selectedDepartment == null || selectedArea == null || selectedMachine == null || part.isEmpty || jobType == null) {
       ScaffoldMessenger.of(context).showSnackBar(

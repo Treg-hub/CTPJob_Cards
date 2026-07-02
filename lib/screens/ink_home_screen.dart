@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/ink_stock_item.dart';
+import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/ink_daily_readings_banner.dart';
 import 'ink_daily_readings_screen.dart';
@@ -29,6 +31,14 @@ class InkHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (!PresenceGating.canUseOnSiteOnlyModules(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      return const OffSiteBlockedScreen(title: 'Ink Factory');
+    }
+
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final readingsStatus =
         ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
