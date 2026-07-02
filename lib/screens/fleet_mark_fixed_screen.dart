@@ -386,7 +386,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
                         : const Icon(Icons.pause_circle_outline),
                     label: Text(_savingProgress
                         ? 'Saving…'
-                        : 'Mark in progress & come back later'),
+                        : 'Save progress & come back later'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),

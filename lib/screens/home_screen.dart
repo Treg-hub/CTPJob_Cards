@@ -42,7 +42,7 @@ import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
-import 'fleet_daily_check_entry_screen.dart';
+import 'fleet_reporter_home_screen.dart';
 import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
@@ -62,7 +62,10 @@ import '../services/fleet_service.dart';
 import '../services/security_service.dart';
 import '../services/waste_service.dart';
 import '../utils/fleet_labels.dart';
+import '../utils/presence_gating.dart';
 import '../utils/screen_insets.dart';
+
+enum _ShellTab { home, myWork, dashboard, copper, waste, fleet, security }
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -81,7 +84,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   bool isOnSite = true;
   bool? _previousIsOnSite;
-  bool _overrideOnSite = false;
   String? _pendingJobId;
   bool _showDeptOnly = true;
   int _openJobCount = 0;
@@ -123,22 +125,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   bool get _isCopperAuthorized => role_utils.isCopperAuthorized(currentEmployee);
 
-  bool get _isFleetUser =>
-      (_cachedFleetSettings?.fleetEnabled ?? false) &&
-      role_utils.isFleetUser(currentEmployee, _cachedFleetSettings);
+  bool get _canUseOnSiteModules => PresenceGating.canUseOnSiteOnlyModules(
+        emp: currentEmployee,
+        isOnSite: isOnSite,
+      );
+
+  bool get _isFleetUser => PresenceGating.showFleetTab(
+        emp: currentEmployee,
+        settings: _cachedFleetSettings,
+        isOnSite: isOnSite,
+      );
 
   bool get _canReportFleetIssue =>
-      role_utils.canReportFleetIssue(currentEmployee, _cachedFleetSettings);
+      PresenceGating.canUseReporterFleetActions(
+        emp: currentEmployee,
+        settings: _cachedFleetSettings,
+        isOnSite: isOnSite,
+      );
 
   bool get _canDoFleetDailyCheck =>
       _fleetChecklistEnabled &&
-      role_utils.canDoFleetDailyCheck(currentEmployee, _cachedFleetSettings);
+      PresenceGating.canDoFleetDailyCheckOffSiteAware(
+        emp: currentEmployee,
+        settings: _cachedFleetSettings,
+        isOnSite: isOnSite,
+      );
 
-  bool get _isSecurityUser =>
+  bool get _isSecurityRoleUser =>
       role_utils.canUseSecurityModule(
         currentEmployee,
         _cachedSecuritySettings,
       );
+
+  bool get _showSecurityModule =>
+      _isSecurityRoleUser && _canUseOnSiteModules;
+
+  bool get _showWasteModule =>
+      role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) &&
+      (_cachedWasteSettings?.wasteEnabled ?? true) &&
+      _canUseOnSiteModules;
 
   /// Guards (not site security managers) — waste + gate are primary; hide job-card home UX.
   bool get _isSiteSecurityGuardOnly =>
@@ -164,10 +189,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   int _wasteTabIndex() {
-    if (!role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) ||
-        !(_cachedWasteSettings?.wasteEnabled ?? true)) {
-      return -1;
-    }
+    if (!_showWasteModule) return -1;
     return _indexAfterCoreTabs();
   }
 
@@ -185,7 +207,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   int _securityTabIndex() {
-    if (!_isSecurityUser) return -1;
+    if (!_showSecurityModule) return -1;
     var idx = _indexAfterCoreTabs();
     if (_wasteTabIndex() >= 0) idx++;
     if (_fleetTabIndex() >= 0) idx++;
@@ -213,6 +235,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (idx < 0) return;
     _fleetMechanicNavDone = true;
     setState(() => _selectedIndex = idx);
+  }
+
+  void _openFleetMachinesTab() {
+    final settings = _cachedFleetSettings;
+    final emp = currentEmployee;
+    if (settings == null || emp == null) return;
+
+    if (!PresenceGating.canUseReporterFleetActions(
+      emp: emp,
+      settings: settings,
+      isOnSite: isOnSite,
+    )) {
+      PresenceGating.showOffSiteSnackBar(
+        context,
+        PresenceGating.offSiteReporterFleetMessage,
+      );
+      return;
+    }
+
+    // Dual-role users see the mechanic shell on the Fleet tab — open Machines in a
+    // standalone reporter screen so daily-check / machine pickers stay consistent.
+    if (role_utils.isFleetReporter(emp, settings) &&
+        role_utils.isFleetMechanic(emp, settings)) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const FleetReporterHomeScreen(
+            initialTab: 0,
+            standalone: true,
+          ),
+        ),
+      );
+      return;
+    }
+
+    ref.read(fleetReporterShellTabProvider.notifier).state = 0;
+    final idx = _fleetTabIndex();
+    if (idx >= 0) setState(() => _selectedIndex = idx);
   }
 
   void _maybeOpenModuleTabForSecurityGuard() {
@@ -263,6 +322,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         isOnSite = emp.isOnSite;
         _previousIsOnSite = emp.isOnSite;
       });
+      _resetTabIfHiddenModule();
       ref.invalidate(currentEmployeeProvider);
       // React only to a genuine change, and debounce it: GPS jitter at the
       // fence boundary flips isOnSite back and forth, which previously fired a
@@ -385,7 +445,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  bool get _canCreateJobCard => isOnSite || _overrideOnSite;
+  bool get _canCreateJobCard => PresenceGating.canCreateJobCard(
+        emp: currentEmployee,
+        isOnSite: isOnSite,
+      );
+
+  /// When presence flips off-site, the selected tab may no longer exist or
+  /// another tab may slide into the same index (e.g. Waste hides → Fleet takes
+  /// that slot). Reset to Home when the tab *type* at the current index changes.
+  void _resetTabIfHiddenModule() {
+    if (!mounted) return;
+    final currentTab = _shellTabAtIndex(_selectedIndex);
+    if (currentTab == null || !_isShellTabVisible(currentTab)) {
+      setState(() => _selectedIndex = 0);
+    }
+  }
+
+  bool _isShellTabVisible(_ShellTab tab) => switch (tab) {
+        _ShellTab.home => true,
+        _ShellTab.myWork => _showMyWorkNav,
+        _ShellTab.dashboard =>
+          currentEmployee != null &&
+              currentEmployee!.position.toLowerCase().contains('manager'),
+        _ShellTab.copper => _isCopperAuthorized,
+        _ShellTab.waste => _showWasteModule,
+        _ShellTab.fleet => _isFleetUser,
+        _ShellTab.security => _showSecurityModule,
+      };
+
+  _ShellTab? _shellTabAtIndex(int index) {
+    var i = 0;
+    if (index == i++) return _ShellTab.home;
+    if (_showMyWorkNav) {
+      if (index == i++) return _ShellTab.myWork;
+    }
+    if (currentEmployee != null &&
+        currentEmployee!.position.toLowerCase().contains('manager')) {
+      if (index == i++) return _ShellTab.dashboard;
+    }
+    if (_isCopperAuthorized) {
+      if (index == i++) return _ShellTab.copper;
+    }
+    if (_showWasteModule) {
+      if (index == i++) return _ShellTab.waste;
+    }
+    if (_isFleetUser) {
+      if (index == i++) return _ShellTab.fleet;
+    }
+    if (_showSecurityModule) {
+      if (index == i++) return _ShellTab.security;
+    }
+    return null;
+  }
 
   /// Returns true if [job] falls within the current manager's scope.
   /// Mechanical managers → Mechanical + MechElec types only.
@@ -423,13 +534,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     if (!_canCreateJobCard) {
-      // Keep the tile visible but disabled with a reason — it used to vanish
-      // silently whenever the geofence thought the user was off-site, which
-      // looked like a broken app to someone standing on the factory floor.
-      createAction['disabledReason'] =
-          "You're marked off-site — job cards can only be created on-site. "
-          'If this is wrong, open the app outdoors for a moment so your '
-          'location can update.';
+      createAction['disabledReason'] = PresenceGating.offSiteCreateJobMessage;
     }
     if (_canReportFleetIssue) {
       result = [
@@ -449,11 +554,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           'title': FleetLabels.dailySafetyCheck,
           'icon': Icons.fact_check_outlined,
           'color': const Color(0xFF3D5A80),
-          'onTap': () => openFleetDailyCheckEntry(context),
+          'onTap': _openFleetMachinesTab,
         },
       ];
     }
-    if (role_utils.isInkUser(currentEmployee)) {
+    if (_canUseOnSiteModules && role_utils.isInkUser(currentEmployee)) {
       final inkEnabled =
           ref.watch(inkSettingsProvider).valueOrNull?.inkEnabled ?? true;
       if (inkEnabled) {
@@ -471,7 +576,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ];
       }
     }
-    if (role_utils.isInkMeterUser(currentEmployee)) {
+    if (_canUseOnSiteModules && role_utils.isInkMeterUser(currentEmployee)) {
       result = [
         ...result,
         {
@@ -486,7 +591,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         },
       ];
     }
-    if (_isSecurityUser) {
+    if (_showSecurityModule) {
       result = [
         ...result,
         {
@@ -584,7 +689,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadShowDeptOnly();
-    _loadOverrideOnSite();
     _loadTestMode();
     _loadFleetSettings();
     _loadWasteSettings();
@@ -683,7 +787,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (state == AppLifecycleState.resumed) {
       _loadFleetSettings();
       DeviceHealthService().syncPermissionsToFirestore();
-      if (!_overrideOnSite && !_testMode) {
+      if (!_testMode) {
         _locationService.checkCurrentLocation();
       }
     }
@@ -713,11 +817,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _saveShowDeptOnly(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('showDeptOnly', value);
-  }
-
-  Future<void> _loadOverrideOnSite() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _overrideOnSite = prefs.getBool('overrideOnSite') ?? false);
   }
 
   Future<void> _loadTestMode() async {
@@ -928,8 +1027,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ),
         const SizedBox(height: 6),
         Text(
-          'Your work is in Site Security and Waste Recovery. '
-          'Open a module below — the app opens Security by default.',
+          _canUseOnSiteModules
+              ? 'Your work is in Site Security and Waste Recovery. '
+                'Open a module below — the app opens Security by default.'
+              : 'Waste and Security are available on-site only. '
+                'Return to the factory to open your modules.',
           style: TextStyle(
             fontSize: 14,
             color: scheme.onSurfaceVariant,
@@ -966,8 +1068,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text(
-              'No modules are enabled for your account. Ask an admin to turn on '
-              'Waste or Site Security in CTP Pulse Settings.',
+              _canUseOnSiteModules
+                  ? 'No modules are enabled for your account. Ask an admin to turn on '
+                    'Waste or Site Security in CTP Pulse Settings.'
+                  : 'Waste and Security are available on-site only. '
+                    'Return to the factory to open your modules.',
               textAlign: TextAlign.center,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
@@ -1007,7 +1112,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           // Nudges the user if Location-Always / battery-opt got revoked, which
           // silently breaks background geofencing (hidden on web + when healthy).
           const GeofenceHealthBanner(),
-          if (role_utils.isInkMeterUser(currentEmployee)) ...[
+          if (_canUseOnSiteModules &&
+              role_utils.isInkMeterUser(currentEmployee)) ...[
             Builder(
               builder: (context) {
                 final status =
@@ -1913,11 +2019,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
-      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
+      if (_showWasteModule)
         _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
-      if (_isSecurityUser)
+      if (_showSecurityModule)
         _buildSecurityTab(),
     ];
 
@@ -1974,11 +2080,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
       if (_isCopperAuthorized)
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
-      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
+      if (_showWasteModule)
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
       if (_isFleetUser)
         const BottomNavigationBarItem(icon: Icon(Icons.forklift), label: 'Fleet'),
-      if (_isSecurityUser)
+      if (_showSecurityModule)
         const BottomNavigationBarItem(icon: Icon(Icons.shield_outlined), label: 'Security'),
     ];
 
@@ -1989,11 +2095,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
-      if (role_utils.isWasteUser(currentEmployee, _cachedWasteSettings) && (_cachedWasteSettings?.wasteEnabled ?? true))
+      if (_showWasteModule)
         _buildWasteTab(),
       if (_isFleetUser)
         _buildFleetTab(),
-      if (_isSecurityUser)
+      if (_showSecurityModule)
         _buildSecurityTab(),
     ];
 

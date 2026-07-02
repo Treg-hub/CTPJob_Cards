@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-07-02 (Waste offline resilience — persistent `waste_media_queue/` media, single-owner Hive queue, media_lost audit surfacing, timestamp restoration + photo_count recompute on replay, IBC pool ops online-only guard, 14-day home window). 2026-06-28 (iPhone web inbox_only delivery — clientPlatform/clientDevice on employees; CF prefersInboxDelivery parks all job alerts; Android push unchanged)._
+_Last updated: 2026-07-02 (Waste offline resilience — persistent `waste_media_queue/` media, single-owner Hive queue, media_lost audit surfacing, timestamp restoration + photo_count recompute on replay, IBC pool ops online-only guard, 14-day home window). 2026-07-02 (Client off-site presence gating — Ink/Waste/Security hidden off-site; Fleet reporters on-site only, mechanics full access; My Work retained; Create blocked unless isAdmin; see `lib/utils/presence_gating.dart`). 2026-06-28 (iPhone web inbox_only delivery — clientPlatform/clientDevice on employees; CF prefersInboxDelivery parks all job alerts; Android push unchanged)._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -47,7 +47,18 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 - Waste / Fleet: gated by settings flags + role derivation (see permission matrices below + role.dart).
 - Copper: hardcoded whitelist (clock 22/5421/20) in role.dart + HomeScreen tab visibility. Part of "copper service".
 - Ink Factory: mobile data entry gated by `department == "Ink Factory"` (tile like Fleet). **Pulse** also has an Ink module (claims `boardModules: 'ink'`, manager/admin): stock/ledger/report KPIs **plus** shipments + landed-cost (`/ink/shipments` → drag-drop PDFs → `parseInkShipmentDoc` → review; GRN saved to shipment before FX rate via `saveShipmentSourceDocs` → rate/duty → push per-colour cost). Inbound list shows CGNA. See `docs/Ink_Receiving_Costing_Plan.md` + `public/docs/ink/manager.md`.
+- **Stores (proposed)**: See `../../../docs/Stores_Module_Design.md` (official future-planning design spec — not for current implementation). Digitize manual employee **requisitions** for consumables in the central mobile hub. Volume ~20 req/day (2-5 items). QR/scan proof of collection at crib (replaces paper signature/duplicate). Special items via clerk notification + QR pickup. Direct issues rare (urgent breakdown). High-value (copper nuggets) needs manager release flag. Small items: transaction-level QR (no per-bolt scanning). Returns for wrong size supported. Pastel CSV import via simple daily export. Weekly per-shift/dept reports with costing planned. Gating via `stores_settings` clock lists. Rugged tablet recommended for dirty/greasy crib. Embedded in central Job Cards + Pulse. (Planning spec only.)
 - Geofence / Notifications / Presence (core services): always-on for signed-in (geofence auto in background, presence updates employees.isOnSite/fcm, feeds notification_inbox + escalation). See rules + geofence_editor in Admin.
+
+**Off-Site Client Gating (2026-07-02)** — `lib/utils/presence_gating.dart` + route guards on module roots. **Server write enforcement still deferred** (see memory-bank/decisions.md). Only `Employee.isAdmin` bypasses off-site restrictions (managers are not exempt).
+
+| Surface | On-site | Off-site (floor) | Off-site (`isAdmin`) |
+|---|---|---|---|
+| Ink / Waste / Security (tabs + home tiles) | Visible | Hidden | Full access |
+| Fleet tab | Reporter + mechanic | Mechanic only; reporter hidden | Full fleet |
+| My Work + job detail updates | Yes | Yes | Yes |
+| Create Job Card | Yes | Blocked (disabled tile + route guard) | Allowed |
+| View Jobs / History / Manager Dashboard | Unchanged | Unchanged | Unchanged |
 
 **Detailed Module Screens & User Flows (Phase 8 map enhancement)**:
 For exact screens per module, what each does (purpose, reads/writes, UI), and user flows for users with access (role-specific step-by-step):

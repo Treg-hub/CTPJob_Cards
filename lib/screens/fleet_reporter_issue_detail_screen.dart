@@ -144,6 +144,22 @@ class FleetReporterIssueDetailScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 13, height: 1.35),
                   ),
                 ),
+              ] else if (issue.status == FleetIssueStatus.acknowledged) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.35)),
+                  ),
+                  child: const Text(
+                    'A mechanic has started work on this. '
+                    'You\'ll see the fix here when it\'s done.',
+                    style: TextStyle(fontSize: 13, height: 1.35),
+                  ),
+                ),
               ],
             ],
           );

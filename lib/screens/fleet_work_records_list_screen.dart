@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/fleet_asset.dart';
 import '../models/fleet_type.dart';
+import '../main.dart' show currentEmployee;
 import '../models/fleet_work_record.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
@@ -114,6 +115,9 @@ class _FleetWorkRecordsListScreenState
           child: StreamBuilder<List<FleetWorkRecord>>(
             stream: _service.watchWorkRecords(
               assetId: _assetFilterId,
+              loggedByClockNo: widget.mechanicMode
+                  ? currentEmployee?.clockNo
+                  : null,
               limit: 100,
             ),
             builder: (context, snapshot) {
@@ -129,7 +133,7 @@ class _FleetWorkRecordsListScreenState
                     child: Text(
                       _assetFilterId != null || _workTypeFilterId != null
                           ? 'No jobs match these filters.'
-                          : 'No jobs logged yet.\nFix a problem from To Fix, or tap below to log other work.',
+                          : 'No jobs logged yet.\nFix a problem from To Fix, or use Log work.',
                       textAlign: TextAlign.center,
                     ),
                   ),

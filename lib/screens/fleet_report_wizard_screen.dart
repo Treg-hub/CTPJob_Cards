@@ -3,7 +3,8 @@ import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
+import '../utils/presence_gating.dart';
 import '../models/fleet_asset.dart';
 import '../models/fleet_daily_check.dart';
 import '../models/fleet_daily_checklist_config.dart';
@@ -29,8 +30,25 @@ Future<void> openFleetReportWizard(
   BuildContext context, {
   bool forceStep1 = false,
   FleetAsset? preSelectedAsset,
-}) {
-  return Navigator.of(context).push(
+}) async {
+  final service = FleetService();
+  final settings = await service.getSettings();
+  final isOnSite = realEmployee?.isOnSite ?? true;
+  if (!PresenceGating.canUseReporterFleetActions(
+    emp: currentEmployee,
+    settings: settings,
+    isOnSite: isOnSite,
+  )) {
+    if (context.mounted) {
+      PresenceGating.showOffSiteSnackBar(
+        context,
+        PresenceGating.offSiteReporterFleetMessage,
+      );
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  await Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => FleetReportWizardScreen(
         forceStep1: forceStep1,
@@ -211,6 +229,30 @@ class _FleetReportWizardScreenState
     if (desc.isEmpty) {
       _showError('Please describe the problem.');
       return;
+    }
+
+    if (_severity == FleetIssueSeverity.outOfService) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Mark machine out of service?'),
+          content: Text(
+            '${_selectedAsset!.name} cannot be used until the mechanic fixes it. '
+            'Send this report?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Go back'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Send report'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
     }
 
     setState(() => _submitting = true);

@@ -57,3 +57,9 @@ final currentWorkPartsProvider =
 // ---------------------------------------------------------------------------
 
 final linkedIssueIdsProvider = StateProvider<List<String>>((ref) => []);
+
+// ---------------------------------------------------------------------------
+// Reporter shell tab — home quick-action sets 0 (Machines) before Fleet nav.
+// ---------------------------------------------------------------------------
+
+final fleetReporterShellTabProvider = StateProvider<int>((ref) => 0);

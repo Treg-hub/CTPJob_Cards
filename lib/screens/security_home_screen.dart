@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
+import '../utils/presence_gating.dart';
 import '../providers/security_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
@@ -24,6 +25,14 @@ class SecurityHomeScreen extends ConsumerStatefulWidget {
 class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
   @override
   Widget build(BuildContext context) {
+    final isOnSite = realEmployee?.isOnSite ?? true;
+    if (!PresenceGating.canUseOnSiteOnlyModules(
+      emp: currentEmployee,
+      isOnSite: isOnSite,
+    )) {
+      return const OffSiteBlockedScreen(title: 'Site Security');
+    }
+
     final settingsAsync = ref.watch(securitySettingsProvider);
     final settings = settingsAsync.valueOrNull;
 

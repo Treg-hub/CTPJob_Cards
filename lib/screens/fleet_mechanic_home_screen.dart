@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../main.dart' show currentEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
 import '../providers/fleet_provider.dart';
@@ -12,14 +13,18 @@ import '../theme/app_theme.dart';
 import '../utils/fleet_issue_sort.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
+import '../widgets/fleet_urgent_inbox_banner.dart';
 import 'fleet_log_other_work_screen.dart';
 import 'fleet_mark_fixed_screen.dart';
 import 'fleet_queued_screen.dart';
+import 'fleet_reporter_home_screen.dart';
 import 'fleet_work_records_list_screen.dart';
 
-/// Mechanic-only Fleet shell — To Fix / In progress / Log work / History.
+/// Mechanic Fleet shell — To Fix / In progress / Log work / History (+ My reports when dual-role).
 class FleetMechanicHomeScreen extends ConsumerStatefulWidget {
-  const FleetMechanicHomeScreen({super.key});
+  const FleetMechanicHomeScreen({super.key, this.includeMyReportsTab = false});
+
+  final bool includeMyReportsTab;
 
   @override
   ConsumerState<FleetMechanicHomeScreen> createState() =>
@@ -33,10 +38,12 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
   int _openCount = 0;
   StreamSubscription<List<FleetIssue>>? _countSub;
 
+  int get _tabCount => widget.includeMyReportsTab ? 5 : 4;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this)
+    _tabController = TabController(length: _tabCount, vsync: this)
       ..addListener(() {
         if (mounted) setState(() {});
       });
@@ -46,6 +53,19 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
       },
       onError: (_) {},
     );
+  }
+
+  @override
+  void didUpdateWidget(FleetMechanicHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.includeMyReportsTab != widget.includeMyReportsTab) {
+      final index = _tabController.index.clamp(0, _tabCount - 1);
+      _tabController.dispose();
+      _tabController = TabController(length: _tabCount, vsync: this, initialIndex: index)
+        ..addListener(() {
+          if (mounted) setState(() {});
+        });
+    }
   }
 
   @override
@@ -89,6 +109,56 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
     }
 
     final queuedFleet = SyncService().getQueuedFleetOperationCount();
+    final emp = currentEmployee;
+
+    final tabViews = <Widget>[
+      _MechanicIssueList(
+        service: _service,
+        status: 'open',
+        emptyMessage: 'Nothing to fix right now.\nGood job!',
+        onTap: _openFix,
+        pinOos: true,
+      ),
+      _MechanicIssueList(
+        service: _service,
+        status: 'acknowledged',
+        emptyMessage: 'Nothing in progress.',
+        onTap: _openFix,
+        showFinishHint: true,
+      ),
+      const FleetLogOtherWorkScreen(embedded: true),
+      const FleetWorkRecordsListScreen(
+        embedded: true,
+        mechanicMode: true,
+      ),
+    ];
+
+    final tabs = <Widget>[
+      Tab(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('To Fix'),
+            if (_openCount > 0) ...[
+              const SizedBox(width: 4),
+              _CountBadge(_openCount),
+            ],
+          ],
+        ),
+      ),
+      const Tab(text: 'In progress'),
+      const Tab(text: 'Log work'),
+      const Tab(text: 'History'),
+    ];
+
+    if (widget.includeMyReportsTab) {
+      tabs.add(const Tab(text: 'My reports'));
+      tabViews.add(FleetReporterMyReportsList(
+        service: _service,
+        clockNo: emp?.clockNo,
+        emptyHint: 'Use the home screen Report Problem tile when you spot a fault.',
+      ));
+    }
 
     return Scaffold(
       body: Column(
@@ -125,6 +195,7 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
                 ),
               ),
             ),
+          const FleetUrgentInboxBanner(),
           _ServiceDueStrip(service: _service, onLogService: _openLogService),
           const FleetMechanicGuideBanner(),
           TabBar(
@@ -132,48 +203,12 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
             isScrollable: true,
             labelStyle:
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            tabs: [
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('To Fix'),
-                    if (_openCount > 0) ...[
-                      const SizedBox(width: 4),
-                      _CountBadge(_openCount),
-                    ],
-                  ],
-                ),
-              ),
-              const Tab(text: 'In progress'),
-              const Tab(text: 'Log work'),
-              const Tab(text: 'History'),
-            ],
+            tabs: tabs,
           ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _MechanicIssueList(
-                  service: _service,
-                  status: 'open',
-                  emptyMessage: 'Nothing to fix right now.\nGood job!',
-                  onTap: _openFix,
-                  pinOos: true,
-                ),
-                _MechanicIssueList(
-                  service: _service,
-                  status: 'acknowledged',
-                  emptyMessage: 'Nothing in progress.',
-                  onTap: _openFix,
-                  showFinishHint: true,
-                ),
-                const FleetLogOtherWorkScreen(embedded: true),
-                const FleetWorkRecordsListScreen(
-                  embedded: true,
-                  mechanicMode: true,
-                ),
-              ],
+              children: tabViews,
             ),
           ),
         ],
