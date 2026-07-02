@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp, FieldValue;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:ctp_job_cards/models/sync_queue_item.dart';
@@ -60,6 +62,8 @@ void main() {
   });
 
   group('Waste offline resilience (photos + signatures) — queuing + SyncService routing', () {
+    // Uniquifies fallback media paths (queue dedupes photos/signatures by localPath).
+    var fallbackCounter = 0;
     // Helper: prefer real WasteService when Firebase is available in the test harness;
     // otherwise fall back to direct SyncService (the central Hive queuing layer that both
     // queueOffline* methods and processOfflineWasteQueue ultimately use for cross-session resilience).
@@ -74,11 +78,15 @@ void main() {
         );
       } catch (e) {
         if (e.toString().contains('no-app') || e.toString().contains('Firebase')) {
+          // Unique path per call: production paths are unique per capture and
+          // the queue now dedupes photo/signature entries by localPath.
+          final unique =
+              '${DateTime.now().microsecondsSinceEpoch}_${fallbackCounter++}';
           await SyncService().addToQueue(
             collection: 'waste_photos',
             operation: 'upload',
-            data: {'localPath': 'fallback_photo.jpg', 'loadId': loadId, 'itemId': itemId},
-            documentId: 'fb-photo-${DateTime.now().millisecondsSinceEpoch}',
+            data: {'localPath': 'fallback_photo_$unique.jpg', 'loadId': loadId, 'itemId': itemId},
+            documentId: 'fb-photo-$unique',
           );
         } else {
           rethrow;
@@ -93,11 +101,14 @@ void main() {
         await svc.queueOfflineWasteSignatureBytes(signatureBytes: bytes, loadId: loadId);
       } catch (e) {
         if (e.toString().contains('no-app') || e.toString().contains('Firebase')) {
+          // Unique path per call (see queuePhotoForTest).
+          final unique =
+              '${DateTime.now().microsecondsSinceEpoch}_${fallbackCounter++}';
           await SyncService().addToQueue(
             collection: 'waste_signatures',
             operation: 'upload',
-            data: {'localPath': 'fallback_sig.png', 'loadId': loadId},
-            documentId: 'fb-sig-${DateTime.now().millisecondsSinceEpoch}',
+            data: {'localPath': 'fallback_sig_$unique.png', 'loadId': loadId},
+            documentId: 'fb-sig-$unique',
           );
         } else {
           rethrow;
@@ -1777,6 +1788,242 @@ void main() {
       final fullMap = full.toFirestore();
       expect(fullMap['trailer_reg'], 'TRL-9');
       expect(fullMap['selected_waste_types'], ['General']);
+    });
+  });
+
+  group('Offline resilience hardening — timestamps, dedupe, persistent media, lastError', () {
+    const wasteLoadDateKeys = [
+      'date_time',
+      'scheduled_for',
+      'completed_at',
+      'cost_reviewed_at',
+      'weighbridge_received_at',
+      'pending_cost_review_at',
+      'pending_weighbridge_at',
+      'weighbridge_ticket_waived_at',
+      'createdAt',
+    ];
+
+    test('restoreWasteLoadTimestamps converts every date key ISO string → Timestamp with the real capture time', () {
+      final captured = DateTime(2026, 6, 30, 14, 45, 12);
+      final data = {
+        for (final k in wasteLoadDateKeys) k: captured.toIso8601String(),
+      };
+      final restored = SyncService.restoreWasteLoadTimestamps(data);
+      for (final k in wasteLoadDateKeys) {
+        expect(restored[k], isA<Timestamp>(), reason: '$k must become a Timestamp');
+        expect((restored[k] as Timestamp).toDate(), captured,
+            reason: '$k must keep the real capture time, not now/serverTimestamp');
+      }
+    });
+
+    test('restoreWasteLoadTimestamps: updatedAt → serverTimestamp; unparseable/non-string/unknown keys pass through', () {
+      final restored = SyncService.restoreWasteLoadTimestamps({
+        'updatedAt': DateTime(2026, 1, 1).toIso8601String(),
+        'date_time': 'not-a-date',
+        'scheduled_for': Timestamp.fromDate(DateTime(2026, 2, 2)),
+        'load_number': 'W-0042',
+        'recorded_weight_kg': 120.5,
+      });
+      expect(restored['updatedAt'], isA<FieldValue>(),
+          reason: 'updatedAt means "when this landed" → serverTimestamp');
+      expect(restored['date_time'], 'not-a-date',
+          reason: 'unparseable strings pass through unchanged — never destroy waste data');
+      expect(restored['scheduled_for'], isA<Timestamp>(),
+          reason: 'already-typed values untouched');
+      expect(restored['load_number'], 'W-0042');
+      expect(restored['recorded_weight_kg'], 120.5);
+    });
+
+    test('restoreWasteItemTimestamps converts createdAt → Timestamp and updatedAt → serverTimestamp only', () {
+      final captured = DateTime(2026, 6, 29, 9, 30);
+      final restored = SyncService.restoreWasteItemTimestamps({
+        'createdAt': captured.toIso8601String(),
+        'updatedAt': captured.toIso8601String(),
+        'weight_kg': 45.0,
+        'subtype': 'HDPE',
+        // A load-only date key must NOT be converted on items
+        'scheduled_for': captured.toIso8601String(),
+      });
+      expect(restored['createdAt'], isA<Timestamp>());
+      expect((restored['createdAt'] as Timestamp).toDate(), captured);
+      expect(restored['updatedAt'], isA<FieldValue>());
+      expect(restored['weight_kg'], 45.0);
+      expect(restored['subtype'], 'HDPE');
+      expect(restored['scheduled_for'], isA<String>(),
+          reason: 'item restorer only handles item keys');
+    });
+
+    test('queue dedupe collapses photo/signature entries sharing a localPath, keeps distinct paths', () async {
+      // Same capture queued twice (user retried a submit offline)
+      for (var i = 0; i < 2; i++) {
+        await SyncService().addToQueue(
+          collection: 'waste_photos',
+          operation: 'upload',
+          data: {'localPath': '/cache/dup_photo.jpg', 'loadId': 'ddl'},
+          documentId: 'dd-p$i',
+        );
+      }
+      // A genuinely different capture stays
+      await SyncService().addToQueue(
+        collection: 'waste_photos',
+        operation: 'upload',
+        data: {'localPath': '/cache/other_photo.jpg', 'loadId': 'ddl'},
+        documentId: 'dd-p-other',
+      );
+      await SyncService().addToQueue(
+        collection: 'waste_signatures',
+        operation: 'upload',
+        data: {'localPath': '/cache/sig_a.png', 'loadId': 'ddl'},
+        documentId: 'dd-s0',
+      );
+      await SyncService().addToQueue(
+        collection: 'waste_signatures',
+        operation: 'upload',
+        data: {'localPath': '/cache/sig_a.png', 'loadId': 'ddl'},
+        documentId: 'dd-s1',
+      );
+      expect(SyncService().getQueuedWasteOperationCount(), 5);
+
+      // processNow runs dedupe before draining; the drain itself throws in the
+      // no-Firebase harness, leaving the deduped survivors in place.
+      try {
+        await SyncService().processNow();
+      } catch (_) {}
+
+      final details = SyncService().getQueuedWasteDetails();
+      final photoPaths = details
+          .where((d) => d['collection'] == 'waste_photos')
+          .map((d) => d['id'])
+          .toList();
+      expect(photoPaths.length, 2,
+          reason: 'duplicate-path photo pruned, distinct path kept');
+      expect(
+          details.where((d) => d['collection'] == 'waste_signatures').length, 1,
+          reason: 'duplicate-path signature pruned');
+    });
+
+    test('persistWasteMediaForQueue: already-persistent path unchanged; missing file falls back to original', () async {
+      final alreadyPersistent =
+          '/data/docs/${SyncService.wasteMediaQueueDirName}/x_photo.jpg';
+      expect(await SyncService.persistWasteMediaForQueue(alreadyPersistent),
+          alreadyPersistent);
+
+      const missing = '/cache/definitely_missing_photo.jpg';
+      expect(await SyncService.persistWasteMediaForQueue(missing), missing,
+          reason: 'no file to copy → queue the original path (old behavior)');
+    });
+
+    test('persistWasteMediaForQueue copies a real file into waste_media_queue deterministically (same source → same dest)', () async {
+      final docsDir =
+          await Directory.systemTemp.createTemp('waste_docs_dir_test_');
+      addTearDown(() async {
+        try {
+          await docsDir.delete(recursive: true);
+        } catch (_) {}
+      });
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory') {
+          return docsDir.path;
+        }
+        return null;
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      final source = File(
+          '${tempDir.path}${Platform.pathSeparator}persist_src_photo.jpg');
+      await source.writeAsBytes([1, 2, 3], flush: true);
+
+      final dest1 = await SyncService.persistWasteMediaForQueue(source.path);
+      expect(dest1, contains(SyncService.wasteMediaQueueDirName));
+      expect(File(dest1).existsSync(), isTrue);
+      expect(await File(dest1).readAsBytes(), [1, 2, 3]);
+
+      // Re-queueing the same capture maps to the same persistent file, so the
+      // localPath dedupe collapses the duplicate entries.
+      final dest2 = await SyncService.persistWasteMediaForQueue(source.path);
+      expect(dest2, dest1);
+    });
+
+    test('migrateQueuedWasteMediaToPersistentDir rewrites live cache-path entries, leaves missing-file entries for media_lost', () async {
+      final docsDir =
+          await Directory.systemTemp.createTemp('waste_docs_migrate_test_');
+      addTearDown(() async {
+        try {
+          await docsDir.delete(recursive: true);
+        } catch (_) {}
+      });
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory') {
+          return docsDir.path;
+        }
+        return null;
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      // Old-style entry whose file still exists → must be migrated
+      final liveFile =
+          File('${tempDir.path}${Platform.pathSeparator}migrate_live.jpg');
+      await liveFile.writeAsBytes([9, 9], flush: true);
+      await SyncService().addToQueue(
+        collection: 'waste_photos',
+        operation: 'upload',
+        data: {'localPath': liveFile.path, 'loadId': 'mig-l'},
+        documentId: 'mig-live',
+      );
+      // Old-style entry whose file is already gone → left for media_lost
+      await SyncService().addToQueue(
+        collection: 'waste_photos',
+        operation: 'upload',
+        data: {'localPath': '/cache/long_gone.jpg', 'loadId': 'mig-l'},
+        documentId: 'mig-gone',
+      );
+
+      await SyncService().migrateQueuedWasteMediaToPersistentDir();
+
+      final box = Hive.box<SyncQueueItem>('sync_queue');
+      final migrated =
+          box.values.firstWhere((i) => i.id == 'mig-live');
+      expect(migrated.data['localPath'],
+          contains(SyncService.wasteMediaQueueDirName));
+      expect(File(migrated.data['localPath'] as String).existsSync(), isTrue);
+
+      final untouched = box.values.firstWhere((i) => i.id == 'mig-gone');
+      expect(untouched.data['localPath'], '/cache/long_gone.jpg',
+          reason: 'already-lost files stay as-is so replay surfaces media_lost');
+    });
+
+    test('failed per-item retry records lastError in getQueuedWasteDetails', () async {
+      await SyncService().addToQueue(
+        collection: 'waste_loads',
+        operation: 'update',
+        data: {'loadId': 'err-l', 'photo_count': 2},
+        documentId: 'err-load',
+      );
+
+      var details = SyncService().getQueuedWasteDetails();
+      expect(details.first.containsKey('lastError'), isFalse,
+          reason: 'no error recorded before any attempt');
+
+      // Hits FirebaseFirestore.instance in the no-Firebase harness → fails
+      final ok =
+          await SyncService().retrySpecificQueuedWasteItem(details.first);
+      expect(ok, isFalse);
+
+      details = SyncService().getQueuedWasteDetails();
+      expect(details.first['lastError'], isNotNull,
+          reason: 'failure reason surfaced for the queued screen');
+      expect(details.first['lastError'], isA<String>());
     });
   });
 }

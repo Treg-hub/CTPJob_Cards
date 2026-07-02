@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 
@@ -29,6 +31,7 @@ class WasteQueuedScreen extends StatefulWidget {
 class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
   final WasteService _wasteService = WasteService();
   List<Map<String, dynamic>> _items = [];
+  List<Map<String, dynamic>> _lostMedia = [];
   bool _isProcessing = false;
   DateTime? _lastAttempt;
 
@@ -40,6 +43,14 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
     super.initState();
     _loadFeatureStatus();
     _loadItems();
+    _loadLostMedia();
+  }
+
+  Future<void> _loadLostMedia() async {
+    final lost = await _wasteService.getRecentLostMediaAudit();
+    if (mounted) {
+      setState(() => _lostMedia = lost);
+    }
   }
 
   Future<void> _loadFeatureStatus() async {
@@ -69,6 +80,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
       await _wasteService.processOfflineWasteQueue();
       await SyncService().processNow();
       _loadItems();
+      unawaited(_loadLostMedia());
 
       if (mounted) {
         final after = SyncService().getQueuedWasteOperationCount();
@@ -270,6 +282,66 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
               ),
             ),
 
+          // Permanently lost media (photo/signature file gone before sync).
+          // Sourced from waste_audit media_lost entries — visible to Pulse too.
+          if (_lostMedia.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.error_outline, size: 16, color: Colors.red),
+                      SizedBox(width: 6),
+                      Text(
+                        'Media that could not be recovered',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  ..._lostMedia.take(5).map((m) {
+                    final mediaType =
+                        (m['media_type'] as String?) == 'signature'
+                            ? 'Signature'
+                            : 'Photo';
+                    final loadId = m['load_id'] as String? ?? 'unknown load';
+                    final queuedAt = m['queued_at'] as DateTime?;
+                    final agePart = queuedAt != null
+                        ? ' (queued ${formatSADateTime(queuedAt)})'
+                        : '';
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '$mediaType for load $loadId could not be recovered$agePart',
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.red),
+                      ),
+                    );
+                  }),
+                  if (_lostMedia.length > 5)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '+ ${_lostMedia.length - 5} more — see waste audit',
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.red),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
           Expanded(
             child: _isProcessing
                 ? const Center(
@@ -318,6 +390,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                           final loadRef = item['loadRef'] as String?;
                           final age = item['age'] as String;
                           final type = item['type'] as String;
+                          final lastError = item['lastError'] as String?;
 
                           return Card(
                             elevation: 0,
@@ -337,9 +410,22 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              subtitle: Text(
-                                loadRef != null ? '$loadRef • $age' : age,
-                                style: const TextStyle(fontSize: 12),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    loadRef != null ? '$loadRef • $age' : age,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  if (lastError != null && lastError.isNotEmpty)
+                                    Text(
+                                      'Last error: $lastError — will retry automatically',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 11, color: Colors.red),
+                                    ),
+                                ],
                               ),
                               trailing: PopupMenuButton<String>(
                                 icon: Icon(Icons.more_vert, size: 18, color: Colors.orange.shade700),

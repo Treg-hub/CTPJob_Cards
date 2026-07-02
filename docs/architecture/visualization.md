@@ -2,7 +2,7 @@
 
 **This is a primary "canvas" for the CTP Architecture Map (scannable tables + flows for board presentations).**
 
-_Last updated: 2026-06-28 (iPhone web inbox_only delivery — clientPlatform/clientDevice on employees; CF prefersInboxDelivery parks all job alerts; Android push unchanged)._
+_Last updated: 2026-07-02 (Waste offline resilience — persistent `waste_media_queue/` media, single-owner Hive queue, media_lost audit surfacing, timestamp restoration + photo_count recompute on replay, IBC pool ops online-only guard, 14-day home window). 2026-06-28 (iPhone web inbox_only delivery — clientPlatform/clientDevice on employees; CF prefersInboxDelivery parks all job alerts; Android push unchanged)._
 
 **Cross-links (load these few targeted files for AI efficiency + full map):**
 - Monorepo overview + deploy: `../../../docs/ARCHITECTURE.md`, `../../../README.md`, `../../../docs/COLLECTIONS.md`
@@ -167,7 +167,7 @@ App entry (home_screen.dart)
 |---|---|
 | `waste_loads` | One doc per load. Status drives the lifecycle. Includes optional `trailer_reg` (alongside `driver_name`/`vehicle_reg`, captured at Create-from-scratch or Begin Collection), `selected_waste_types` (manager's schedule-time restriction, enforced at Begin Collection), and a transient `client_ref` written by `createWasteLoad` for retry-dedup. |
 | `waste_items` | Items per load (`load_id` field). Min 1 per completed load. |
-| `waste_photos` | Photo upload queue references (offline). |
+| `waste_photos` | Photo upload queue references (offline). As of 2026-07-02: queued files are copied to the persistent `waste_media_queue/` app-docs dir (single-owner central Hive queue — session queues removed); Storage names derive from the queue item id (retry-idempotent); permanently lost files write a `waste_audit` `media_lost` entry surfaced in WasteQueuedScreen; replay restores ISO-string dates on `waste_loads`/`waste_items` to Timestamps and recomputes `photo_count`. Home lists (active/scheduled/recent) window to the last 14 days + future-scheduled (`WasteService.homeListWindow`). |
 | `waste_types` | Master list of waste types + subtypes. |
 | `waste_contractors` | Contractor list. |
 | `waste_rates` | Cost per kg by contractor + subtype. |
