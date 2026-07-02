@@ -27,8 +27,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/client_platform_service.dart';
 import 'services/device_health_service.dart';
+import 'services/kiosk_mode_service.dart';
 import 'services/location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'widgets/kiosk_lifecycle_guard.dart';
 
 /// Logged-in employee (never replaced by UI persona).
 Employee? realEmployee;
@@ -157,7 +159,8 @@ void main() async {
         if (currentBuild > 0 && currentBuild < minBuild.toInt()) {
           final url = settingsDoc.data()?['updateDownloadUrl'] as String? ?? '';
           debugPrint('🛑 Build $currentBuild < minSupportedBuild $minBuild — blocking');
-          runApp(UpdateRequiredScreen(downloadUrl: url));
+          KioskModeService.instance.reassertIfEnabled();
+          runApp(KioskLifecycleGuard(child: UpdateRequiredScreen(downloadUrl: url)));
           return;
         }
       }
@@ -323,7 +326,9 @@ void main() async {
 
   runApp(
     ProviderScope(
-      child: CtpJobCardsApp(initialScreen: initialScreen),
+      child: KioskLifecycleGuard(
+        child: CtpJobCardsApp(initialScreen: initialScreen),
+      ),
     ),
   );
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Policy descriptor for KioskDeviceAdminReceiver. No specific device-admin
+    policies are requested here — the capability we actually need
+    (setLockTaskPackages / setLockTaskFeatures) comes from Device Owner
+    status itself, granted separately via `adb shell dpm set-device-owner`
+    during physical provisioning of a kiosk tablet.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+    </uses-policies>
+</device-admin>

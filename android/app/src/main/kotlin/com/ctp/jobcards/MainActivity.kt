@@ -1,9 +1,12 @@
 package com.ctp.jobcards
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -26,6 +29,7 @@ class MainActivity : FlutterActivity() {
 
     private val GEOFENCE_CHANNEL = "ctp/geofence"
     private val JOB_ALERT_CHANNEL = "job_alert_channel"
+    private val KIOSK_CHANNEL = "ctp/kiosk"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,6 +119,74 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // ==================== KIOSK MODE CHANNEL ====================
+        // Locks the main-gate tablet to this app (Android Lock Task Mode).
+        // Full protection (system "unpin" gesture fully blocked) requires
+        // this app to be Device Owner (see KioskDeviceAdminReceiver);
+        // otherwise this falls back to best-effort screen pinning.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KIOSK_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isDeviceOwner" -> result.success(isDeviceOwnerApp())
+                    "isLockTaskActive" -> result.success(isLockTaskActive())
+                    "startKioskMode" -> {
+                        try {
+                            enterLockTask()
+                            result.success(isDeviceOwnerApp())
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ startKioskMode failed: ${e.message}")
+                            result.error("KIOSK_START_ERROR", e.message, null)
+                        }
+                    }
+                    "stopKioskMode" -> {
+                        try {
+                            stopLockTask()
+                            result.success(null)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ stopKioskMode failed: ${e.message}")
+                            result.error("KIOSK_STOP_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun kioskDeviceAdminComponent(): ComponentName =
+        ComponentName(this, KioskDeviceAdminReceiver::class.java)
+
+    private fun isDeviceOwnerApp(): Boolean {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        return dpm.isDeviceOwnerApp(packageName)
+    }
+
+    private fun enterLockTask() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (dpm.isDeviceOwnerApp(packageName)) {
+            val admin = kioskDeviceAdminComponent()
+            // Only this app may run while locked; no back/recents/home/
+            // notifications/power-menu escape hatch — the only way out is
+            // this Activity calling stopLockTask() (gated behind the exit
+            // code / admin login in Flutter's KioskModeScreen).
+            dpm.setLockTaskPackages(admin, arrayOf(packageName))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
+            }
+        }
+        // Without Device Owner this is plain screen pinning: still pins the
+        // app, but the user can exit via the standard long-press back+
+        // recents system gesture. Device Owner is what removes that gap.
+        startLockTask()
+    }
+
+    private fun isLockTaskActive(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            return am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
+        }
+        @Suppress("DEPRECATION")
+        return (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).isInLockTaskMode
     }
 
     override fun onDestroy() {

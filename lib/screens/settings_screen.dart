@@ -15,6 +15,7 @@ import '../models/fleet_settings.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/fleet_service.dart';
+import '../services/kiosk_mode_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../services/device_health_service.dart';
@@ -23,6 +24,7 @@ import '../services/waste_service.dart';
 import '../utils/role.dart' show isAdmin;
 import 'admin_screen.dart';
 import 'documentation_screen.dart';
+import 'kiosk_mode_screen.dart';
 import 'notification_diagnostics_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'notification_test_screen.dart';
@@ -52,15 +54,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   FleetSettings? _fleetSettings;
   bool _moduleSaving = false;
 
+  // Kiosk Mode — whether THIS device is currently locked to the app
+  bool _kioskEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _loadOnSiteStatus();
     _initializeLocalNotifications();
     _setupInboxStream();
+    _loadKioskState();
     if (isAdmin(currentEmployee)) {
       _loadModuleStates();
     }
+  }
+
+  Future<void> _loadKioskState() async {
+    final enabled = await KioskModeService.instance.isKioskModeEnabled();
+    if (mounted) setState(() => _kioskEnabled = enabled);
   }
 
   Future<void> _loadModuleStates() async {
@@ -310,6 +321,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
+              // ── Kiosk lockdown (unconditional — this is the escape hatch) ──
+              if (!kIsWeb && _kioskEnabled) ...[
+                const SizedBox(height: 8),
+                Card(
+                  color: Colors.red.shade50,
+                  elevation: 2,
+                  child: ListTile(
+                    leading: const Icon(Icons.lock, color: Colors.red),
+                    title: const Text('This device is locked to Job Cards'),
+                    subtitle: const Text('Admin login or exit code required to unlock'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const KioskModeScreen()));
+                      if (mounted) _loadKioskState();
+                    },
+                  ),
+                ),
+              ],
+
               // ── Preferences ──────────────────────────────────────
               const SizedBox(height: 16),
               _SectionHeader('Preferences'),
@@ -540,6 +570,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
                       ),
+                      if (!kIsWeb && !_kioskEnabled) ...[
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        ListTile(
+                          leading: const Icon(Icons.lock_outline, color: Colors.deepOrange),
+                          title: const Text('Kiosk Mode'),
+                          subtitle: const Text('Lock this device to Job Cards only (main-gate tablets)'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () async {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const KioskModeScreen()));
+                            if (mounted) _loadKioskState();
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),

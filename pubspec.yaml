@@ -2,7 +2,7 @@ name: ctp_job_cards
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.2.0+93
+version: 2.2.0+94
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
@@ -57,6 +57,7 @@ dependencies:
   latlong2: ^0.9.1
   flutter_markdown_plus: ^1.0.3
   signature: ^5.5.0
+  crypto: ^3.0.6   # Salted-hash exit code for Kiosk Mode device lockdown
 
 dev_dependencies:
   flutter_test:
