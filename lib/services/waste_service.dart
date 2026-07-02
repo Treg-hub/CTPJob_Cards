@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
@@ -26,9 +27,10 @@ import 'copper_service.dart';
 
 /// Service for all WasteTrack (Waste Management) operations.
 ///
-/// Singleton: all callers share one instance so in-memory session queues
-/// (_sessionOfflinePhotoQueue, _sessionOfflineSignatureQueue) stay consistent
-/// across screens during a single app session.
+/// Singleton. Offline media (photos/signatures) resilience is owned entirely
+/// by the central SyncService Hive queue: files are copied into the app
+/// documents dir (waste_media_queue/) at queue time so they survive cache
+/// clears, and the queue processor deletes them after a successful upload.
 class WasteService {
   void _guardWrite() => assertPersonaSubmitAllowed();
 
@@ -40,15 +42,9 @@ class WasteService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
 
-  // Session-level offline photo resilience; central Hive queue via SyncService handles cross-session.
-  final List<Map<String, dynamic>> _sessionOfflinePhotoQueue = [];
-
-  int get sessionQueuedPhotoCount => _sessionOfflinePhotoQueue.length;
-
-  // Session queue for signature bytes offline resilience (temp file pattern, session-level; mirrors photo flow in this service only)
-  final List<Map<String, dynamic>> _sessionOfflineSignatureQueue = [];
-
-  int get sessionQueuedSignatureCount => _sessionOfflineSignatureQueue.length;
+  /// Subdirectory of the app documents dir holding queued offline media.
+  /// Files here are owned by the sync queue and deleted after upload.
+  static const String mediaQueueDirName = SyncService.wasteMediaQueueDirName;
 
   static const Duration _photoUploadTimeout = Duration(seconds: 12);
   static const Duration _firestoreWriteTimeout = Duration(seconds: 8);
@@ -335,9 +331,17 @@ class WasteService {
             snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
-  /// Active (in-flight) loads: draft, pendingWeighbridge, pendingCostReview.
-  /// No limit — there are never many active loads at once.
-  /// Used by [WasteHomeScreen] together with [watchRecentCompleted].
+  /// How far back the mobile home lists reach. Older loads stay visible in
+  /// Reports and Pulse — the home screen is a recent-work view (and the
+  /// server-side cutoff saves Firestore reads).
+  static const Duration homeListWindow = Duration(days: 14);
+
+  Timestamp get _homeWindowCutoff =>
+      Timestamp.fromDate(DateTime.now().subtract(homeListWindow));
+
+  /// Active (in-flight) loads from the last [homeListWindow]: draft,
+  /// pendingWeighbridge, pendingCostReview. Older stragglers remain visible
+  /// in Pulse. Used by [WasteHomeScreen] together with [watchRecentCompleted].
   Stream<List<WasteLoad>> watchActiveLoads() {
     return _firestore
         .collection(Collections.wasteLoads)
@@ -348,14 +352,15 @@ class WasteService {
           WasteLoadStatus.pendingCostReview.value,
           'in_progress', // future-proofing — set by web/Pulse, no mobile enum yet
         ])
+        .where('createdAt', isGreaterThanOrEqualTo: _homeWindowCutoff)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
-  /// The [limit] most-recently completed or cancelled loads.
-  /// Used by [WasteHomeScreen] to show a "Recent" section below active loads.
+  /// The [limit] most-recently completed or cancelled loads within
+  /// [homeListWindow]. Used by [WasteHomeScreen] "Recent" section.
   Stream<List<WasteLoad>> watchRecentCompleted({int limit = 10}) {
     return _firestore
         .collection(Collections.wasteLoads)
@@ -364,6 +369,7 @@ class WasteService {
           WasteLoadStatus.completed.value,
           WasteLoadStatus.cancelled.value,
         ])
+        .where('completed_at', isGreaterThanOrEqualTo: _homeWindowCutoff)
         .orderBy('completed_at', descending: true)
         .limit(limit)
         .snapshots()
@@ -481,13 +487,17 @@ class WasteService {
     return loadId;
   }
 
-  /// Stream of all scheduled (not yet collected) loads, ordered by expected date ascending.
+  /// Stream of scheduled (not yet collected) loads, ordered by expected date
+  /// ascending. One range on `scheduled_for` covers both future-scheduled
+  /// loads and recently-past ones still inside [homeListWindow] (docs missing
+  /// `scheduled_for` were already excluded by the orderBy).
   /// Used by [WasteHomeScreen] "Incoming" section.
   Stream<List<WasteLoad>> watchScheduledLoads({int limit = 50}) {
     return _firestore
         .collection(Collections.wasteLoads)
         .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.scheduled.value)
+        .where('scheduled_for', isGreaterThanOrEqualTo: _homeWindowCutoff)
         .orderBy('scheduled_for', descending: false)
         .limit(limit)
         .snapshots()
@@ -563,6 +573,43 @@ class WasteService {
       });
     } catch (e) {
       if (kDebugMode) debugPrint('logWasteTypeOverrideAudit failed for $loadId: $e');
+    }
+  }
+
+  /// Recent `media_lost` audit entries — queued photos/signatures whose local
+  /// file was permanently lost before sync (written by SyncService at replay
+  /// time). Surfaced in WasteQueuedScreen so the loss is visible instead of
+  /// silent. No orderBy: avoids a composite index; volume is tiny, so results
+  /// are sorted client-side. Best-effort — returns [] on any error.
+  Future<List<Map<String, dynamic>>> getRecentLostMediaAudit(
+      {int limit = 20}) async {
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteAudit)
+          .where('action', isEqualTo: 'media_lost')
+          .limit(50)
+          .get()
+          .timeout(_firestoreWriteTimeout);
+      final entries = snap.docs.map((d) {
+        final data = d.data();
+        return {
+          'id': d.id,
+          'media_type': data['media_type'],
+          'load_id': data['load_id'],
+          'item_id': data['item_id'],
+          'queued_at': (data['queued_at'] as Timestamp?)?.toDate(),
+          'created_at': (data['created_at'] as Timestamp?)?.toDate(),
+        };
+      }).toList()
+        ..sort((a, b) {
+          final ad = a['created_at'] as DateTime?;
+          final bd = b['created_at'] as DateTime?;
+          if (ad == null || bd == null) return ad == null ? 1 : -1;
+          return bd.compareTo(ad);
+        });
+      return entries.take(limit).toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -926,6 +973,13 @@ class WasteService {
 
     if (loadPhotoUrls.isNotEmpty) {
       final photoPayload = {'load_photos': loadPhotoUrls};
+      // photo_count only in the online payload: FieldValue.increment can't be
+      // queued (_sanitizeForHive would stringify it); the queue replay path
+      // recomputes photo_count from the arrays instead.
+      final onlinePayload = {
+        ...photoPayload,
+        'photo_count': FieldValue.increment(loadPhotoUrls.length),
+      };
       if (queuedOffline) {
         await _enqueueWasteOp(
           shouldQueue: true,
@@ -936,7 +990,7 @@ class WasteService {
         );
       } else {
         try {
-          await ref.update(photoPayload).timeout(_firestoreWriteTimeout);
+          await ref.update(onlinePayload).timeout(_firestoreWriteTimeout);
         } catch (_) {
           queuedOffline = true;
           await _enqueueWasteOp(
@@ -1316,7 +1370,7 @@ class WasteService {
     try {
       return await _uploadSignatureBytesDirect(signatureBytes, loadId);
     } catch (e) {
-      final localPath = await _persistSignatureBytesToTemp(signatureBytes);
+      final localPath = await _persistSignatureBytesForQueue(signatureBytes);
       await queueOfflineWasteSignature(localPath: localPath, loadId: loadId);
       rethrow;
     }
@@ -1332,33 +1386,47 @@ class WasteService {
     return await snapshot.ref.getDownloadURL();
   }
 
-  Future<String> _persistSignatureBytesToTemp(Uint8List bytes) async {
+  /// Writes signature bytes to a file in the persistent media queue dir
+  /// (falls back to the system temp dir if that fails — the queue-time copy
+  /// in [queueOfflineWasteSignature] then persists it).
+  Future<String> _persistSignatureBytesForQueue(Uint8List bytes) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final path = '${Directory.systemTemp.path}${Platform.pathSeparator}waste_sig_$ts.png';
+    String dirPath;
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final queueDir = Directory(
+          '${docsDir.path}${Platform.pathSeparator}$mediaQueueDirName');
+      if (!queueDir.existsSync()) {
+        queueDir.createSync(recursive: true);
+      }
+      dirPath = queueDir.path;
+    } catch (_) {
+      dirPath = Directory.systemTemp.path;
+    }
+    // Timestamp + uuid: two signatures captured in the same millisecond must
+    // not share a path (the queue dedupes by localPath).
+    final path =
+        '$dirPath${Platform.pathSeparator}waste_sig_${ts}_${const Uuid().v4()}.png';
     final file = File(path);
     await file.writeAsBytes(bytes, flush: true);
     return path;
   }
 
-  /// Queues a signature (by persisted temp file path) for later upload.
-  /// Uses central SyncService (Hive 'waste_signatures') + session queue (full offline resilience, matches photo pattern exactly).
+  /// Queues a signature (by persisted file path) for later upload via the
+  /// central SyncService Hive queue (single owner — no session queue). The
+  /// file is copied into the persistent media dir first.
   Future<void> queueOfflineWasteSignature({required String localPath, required String loadId}) async {
     _guardWrite();
-    // Central Hive queue for cross-session processing by SyncService (on connectivity return)
+    final persistentPath = await _persistMediaForQueue(localPath);
     await SyncService().addToQueue(
       collection: 'waste_signatures',
       operation: 'upload',
       data: {
-        'localPath': localPath,
+        'localPath': persistentPath,
         'loadId': loadId,
       },
       documentId: '${loadId}_sig_${DateTime.now().millisecondsSinceEpoch}',
     );
-    // Session queue for same-run recovery (processed inside processOfflineWasteQueue)
-    _sessionOfflineSignatureQueue.add({
-      'localPath': localPath,
-      'loadId': loadId,
-    });
   }
 
   /// New offline-aware helper: persist bytes to temp + queue (central + session). Used by detail screen when network unavailable.
@@ -1366,7 +1434,7 @@ class WasteService {
     required Uint8List signatureBytes,
     required String loadId,
   }) async {
-    final localPath = await _persistSignatureBytesToTemp(signatureBytes);
+    final localPath = await _persistSignatureBytesForQueue(signatureBytes);
     await queueOfflineWasteSignature(localPath: localPath, loadId: loadId);
   }
 
@@ -1958,41 +2026,44 @@ class WasteService {
   // OFFLINE INTEGRATION (PR2-3) — hooks into existing SyncService/Hive
   // ---------------------------------------------------------------------------
 
-  /// Queues a waste photo for later upload when offline using the central SyncService + session queue.
-  /// [targetCollection] overrides the default routing in processOfflineWasteQueue; used by
-  /// pallet photos so the processor patches waste_pallets instead of waste_items.
+  /// Copies a queued media file into the persistent app documents dir
+  /// (waste_media_queue/) so it survives OS cache clears while waiting for
+  /// sync. Delegates to [SyncService.persistWasteMediaForQueue].
+  Future<String> _persistMediaForQueue(String localPath) =>
+      SyncService.persistWasteMediaForQueue(localPath);
+
+  /// Queues a waste photo for later upload when offline via the central
+  /// SyncService Hive queue (single owner — no session queue). The file is
+  /// first copied into the persistent media dir so a cache clear before the
+  /// next sync cannot lose it.
+  /// [targetCollection] overrides the default routing in the queue processor;
+  /// used by stock photos so it patches waste_stock instead of waste_items.
   Future<void> queueOfflineWastePhoto({
     required String localPath,
     required String loadId,
     String? itemId,
     String? targetCollection,
   }) async {
-    // Central sync
+    final persistentPath = await _persistMediaForQueue(localPath);
     await SyncService().addToQueue(
       collection: 'waste_photos',
       operation: 'upload',
       data: {
-        'localPath': localPath,
+        'localPath': persistentPath,
         'loadId': loadId,
         'itemId': itemId,
         if (targetCollection != null) 'targetCollection': targetCollection,
       },
       documentId: '${loadId}_${itemId ?? 'load'}_${DateTime.now().millisecondsSinceEpoch}',
     );
-    // Session queue for immediate retry in this run
-    _sessionOfflinePhotoQueue.add({
-      'localPath': localPath,
-      'loadId': loadId,
-      'itemId': itemId,
-      if (targetCollection != null) 'targetCollection': targetCollection,
-    });
   }
 
   DateTime? _lastQueueProcess;
 
-  /// Processes queued waste photos using the central SyncService queue + session queue.
-  /// Debounced to 30 seconds so multiple screens calling this simultaneously don't
-  /// each trigger a full queue drain.
+  /// Drains the central SyncService Hive queue (the single owner of all
+  /// queued waste writes, photos, and signatures) and heals OFFLINE-* load
+  /// numbers. Debounced to 30 seconds so multiple screens calling this
+  /// simultaneously don't each trigger a full queue drain.
   Future<int> processOfflineWasteQueue() async {
     final now = DateTime.now();
     if (_lastQueueProcess != null &&
@@ -2000,76 +2071,8 @@ class WasteService {
       return 0;
     }
     _lastQueueProcess = now;
-    int uploaded = 0;
-    // Legacy session queue (lightweight, same-session recovery)
-    final toProcess = List.from(_sessionOfflinePhotoQueue);
-    for (final entry in toProcess) {
-      try {
-        final String? targetColl = entry['targetCollection'] as String?;
-        final String? itemId = entry['itemId'] as String?;
-        final String loadId = entry['loadId'] as String;
-        // Determine storage ref and Firestore target
-        String refBase;
-        String coll;
-        String docId;
-        String field;
-        if (targetColl == Collections.wasteStock && itemId != null) {
-          refBase = 'waste_stock/$itemId';
-          coll = Collections.wasteStock;
-          docId = itemId;
-          field = 'photos';
-        } else if (itemId != null) {
-          refBase = 'waste_items/$itemId';
-          coll = Collections.wasteItems;
-          docId = itemId;
-          field = 'photos';
-        } else {
-          refBase = 'waste_loads/$loadId';
-          coll = Collections.wasteLoads;
-          docId = loadId;
-          field = 'load_photos';
-        }
-        final url = await uploadWastePhoto(
-          localPath: entry['localPath'] as String,
-          wasteRef: refBase,
-        );
-        // Best-effort immediate patch for session items (central queue path also does this)
-        await _firestore.collection(coll).doc(docId).update({
-          field: FieldValue.arrayUnion([url]),
-        });
-        uploaded++;
-        _sessionOfflinePhotoQueue.remove(entry);
-      } catch (_) {
-        // Still offline or failed - keep in queue for next attempt
-      }
-    }
-    // Session signature queue processing (temp file bytes -> Storage -> patch driver_signature_url on load)
-    final sigToProcess = List.from(_sessionOfflineSignatureQueue);
-    for (final entry in sigToProcess) {
-      try {
-        final String localPath = entry['localPath'] as String;
-        final String loadId = entry['loadId'] as String;
-        final file = File(localPath);
-        if (!file.existsSync()) {
-          _sessionOfflineSignatureQueue.remove(entry);
-          continue;
-        }
-        final bytes = await file.readAsBytes();
-        final url = await _uploadSignatureBytesDirect(bytes, loadId);
-        await _firestore.collection(Collections.wasteLoads).doc(loadId).update({
-          'driver_signature_url': url,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        uploaded++;
-        try {
-          await file.delete();
-        } catch (_) {}
-        _sessionOfflineSignatureQueue.remove(entry);
-      } catch (_) {
-        // keep for next retry
-      }
-    }
-    // Central Hive queue (the real production path for cross-session / full offline resilience)
+    const uploaded = 0;
+    // Central Hive queue (the single production path for offline resilience)
     await SyncService().processNow();
 
     // Heal any loads that were written offline and still carry an OFFLINE-* placeholder number.
@@ -2542,9 +2545,32 @@ class WasteService {
     if (takeQty <= 0) {
       throw ArgumentError('takeQty must be positive');
     }
+    // Pool stock is shared read-modify-write state — transactions can't run
+    // offline and must not be queued blind, so fail fast with a clear message.
+    if (!await _checkOnline()) {
+      throw StateError(
+          'No connection — pool stock changes need to be online. Reconnect and try again.');
+    }
     final poolRef = _firestore.collection(Collections.wasteStock).doc(poolStockId);
     final newRef = _firestore.collection(Collections.wasteStock).doc();
 
+    try {
+      await _runSplitPoolStockTxn(poolRef, newRef, takeQty)
+          .timeout(_cloudFunctionTimeout);
+    } on TimeoutException {
+      // The timeout does not cancel the transaction — it may still commit.
+      throw StateError(
+          'Connection too slow — the change may not have saved. Check the stock list before retrying.');
+    }
+
+    return newRef.id;
+  }
+
+  Future<void> _runSplitPoolStockTxn(
+    DocumentReference<Map<String, dynamic>> poolRef,
+    DocumentReference<Map<String, dynamic>> newRef,
+    int takeQty,
+  ) async {
     await _firestore.runTransaction((tx) async {
       final poolSnap = await tx.get(poolRef);
       if (!poolSnap.exists) {
@@ -2587,8 +2613,6 @@ class WasteService {
         'notes': 'Split from on-site pool for load selection',
       });
     });
-
-    return newRef.id;
   }
 
   /// Removes [count] damaged/scrapped units from a stock item discovered at
@@ -2614,8 +2638,52 @@ class WasteService {
     if (count <= 0) {
       throw ArgumentError('count must be positive');
     }
+    // Same online-only rule as splitPoolStock: shared pool state, no blind queueing.
+    if (!await _checkOnline()) {
+      throw StateError(
+          'No connection — pool stock changes need to be online. Reconnect and try again.');
+    }
     final stockRef = _firestore.collection(Collections.wasteStock).doc(stockId);
 
+    try {
+      await _runRemoveDamagedIbcUnitsTxn(
+        stockRef: stockRef,
+        count: count,
+        ibcNumbersToFlag: ibcNumbersToFlag,
+        reason: reason,
+        actorClockNo: actorClockNo,
+      ).timeout(_cloudFunctionTimeout);
+    } on TimeoutException {
+      // The timeout does not cancel the transaction — it may still commit.
+      throw StateError(
+          'Connection too slow — the change may not have saved. Check the stock list before retrying.');
+    }
+
+    try {
+      await _firestore.collection(Collections.wasteAudit).add({
+        if (loadId != null) 'load_id': loadId,
+        if (loadNumber != null) 'load_number': loadNumber,
+        'stock_id': stockId,
+        'ibc_numbers': ibcNumbersToFlag,
+        'count': count,
+        'reason': reason,
+        'action': 'ibc_damaged_removed',
+        'triggered_by': actorClockNo,
+        if (actorName != null) 'triggered_by_name': actorName,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('removeDamagedIbcUnits audit log failed for $stockId: $e');
+    }
+  }
+
+  Future<void> _runRemoveDamagedIbcUnitsTxn({
+    required DocumentReference<Map<String, dynamic>> stockRef,
+    required int count,
+    required List<String> ibcNumbersToFlag,
+    required String reason,
+    required String actorClockNo,
+  }) async {
     await _firestore.runTransaction((tx) async {
       final snap = await tx.get(stockRef);
       if (!snap.exists) {
@@ -2659,23 +2727,6 @@ class WasteService {
         );
       }
     });
-
-    try {
-      await _firestore.collection(Collections.wasteAudit).add({
-        if (loadId != null) 'load_id': loadId,
-        if (loadNumber != null) 'load_number': loadNumber,
-        'stock_id': stockId,
-        'ibc_numbers': ibcNumbersToFlag,
-        'count': count,
-        'reason': reason,
-        'action': 'ibc_damaged_removed',
-        'triggered_by': actorClockNo,
-        if (actorName != null) 'triggered_by_name': actorName,
-        'created_at': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      if (kDebugMode) debugPrint('removeDamagedIbcUnits audit log failed for $stockId: $e');
-    }
   }
 
   /// Returns the count and total estimated weight of all on-site stock.

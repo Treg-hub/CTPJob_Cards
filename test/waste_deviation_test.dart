@@ -39,12 +39,11 @@ void main() {
     });
   });
 
-  // Targeted unit test for signature offline queuing (pure API surface / logic stub, per PRD slice; full integration in widget/service tests)
-  group('WasteService signature offline queuing (temp file pattern)', () {
-    test('exposes sessionQueuedSignatureCount getter (pure accessor)', () {
-      final service = WasteService(); // construction is pure
-      expect(service.sessionQueuedSignatureCount, isA<int>());
-      expect(service.sessionQueuedSignatureCount, 0);
+  // Media queue constants (session queues removed — central Hive queue is the
+  // single owner; full behavior covered in waste_offline_resilience_test.dart)
+  group('WasteService media queue surface', () {
+    test('exposes persistent media queue dir name constant', () {
+      expect(WasteService.mediaQueueDirName, 'waste_media_queue');
     });
   });
 }

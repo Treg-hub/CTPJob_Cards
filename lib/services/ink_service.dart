@@ -22,6 +22,7 @@ import '../models/ink_supplier.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../utils/persona_audit.dart';
+import 'connectivity_service.dart';
 import 'waste_stock_crosslink.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
@@ -1037,10 +1038,51 @@ class InkService {
     _guardWrite();
     assert(!markDamaged || (damageReason != null && damageReason.trim().isNotEmpty),
         'damageReason is required when markDamaged is true');
+    // The waste-pool write inside this transaction is shared read-modify-write
+    // state — transactions can't run offline, so fail fast with a clear message.
+    final online =
+        await ConnectivityService().isOnline().catchError((_) => false);
+    if (!online) {
+      throw StateError(
+          'No connection — consuming an IBC needs to be online. Reconnect and try again.');
+    }
     final ibcRef = _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber);
     final washKey = 'ibcwash_${ibc.ibcNumber}';
     final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
 
+    try {
+      await _runTransferIbcTxn(
+        ibc: ibc,
+        ibcRef: ibcRef,
+        washRef: washRef,
+        tolulItemCode: tolulItemCode,
+        washLitres: washLitres,
+        effectiveAt: effectiveAt,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+        markDamaged: markDamaged,
+        damageReason: damageReason,
+      ).timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      // The timeout does not cancel the transaction — it may still commit,
+      // but the status guard makes a retry a harmless no-op.
+      throw StateError(
+          'Connection too slow — the consume may not have saved. It is safe to retry.');
+    }
+  }
+
+  Future<void> _runTransferIbcTxn({
+    required InkIbc ibc,
+    required DocumentReference<Map<String, dynamic>> ibcRef,
+    required DocumentReference<Map<String, dynamic>> washRef,
+    required String tolulItemCode,
+    required double washLitres,
+    required DateTime effectiveAt,
+    required String actorClockNo,
+    required String actorName,
+    required bool markDamaged,
+    required String? damageReason,
+  }) async {
     await _db.runTransaction((txn) async {
       // Firestore requires every read before any write in a transaction.
       // Idempotency guard: the old deterministic-doc-id waste_stock scheme
@@ -1107,7 +1149,7 @@ class InkService {
             ibcNumber: ibc.ibcNumber,
             actorClockNo: actorClockNo,
             actorName: actorName,
-            idempotencyKey: washKey,
+            idempotencyKey: washRef.id,
           ).toFirestore(),
         );
       }

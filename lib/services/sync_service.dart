@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/sync_queue_item.dart';
@@ -29,6 +30,41 @@ class SyncService {
   static Map<String, dynamic> sanitizeForHive(Map<String, dynamic> data) =>
       _sanitizeForHive(data);
 
+  /// Subdirectory of the app documents dir holding queued offline media
+  /// (photos/signatures). Files here are owned by the sync queue and deleted
+  /// after a successful upload.
+  static const String wasteMediaQueueDirName = 'waste_media_queue';
+
+  /// Copies a queued media file into the persistent app documents dir so it
+  /// survives OS cache clears while waiting for sync. Copy, not move —
+  /// screens may still display the cache original. The destination name is a
+  /// deterministic transform of the source path, so re-queueing the same
+  /// capture (a user retrying a submit offline) maps to the same file and the
+  /// localPath-based queue dedupe collapses the duplicates. Falls back to the
+  /// original path on any error (queueing must never be blocked by a copy
+  /// failure). Lives here (not WasteService) so queue migration can run
+  /// without touching Firebase-backed services.
+  static Future<String> persistWasteMediaForQueue(String localPath) async {
+    try {
+      if (localPath.contains(wasteMediaQueueDirName)) return localPath;
+      final source = File(localPath);
+      if (!source.existsSync()) return localPath;
+      final docsDir = await getApplicationDocumentsDirectory();
+      final queueDir = Directory(
+          '${docsDir.path}${Platform.pathSeparator}$wasteMediaQueueDirName');
+      if (!queueDir.existsSync()) {
+        queueDir.createSync(recursive: true);
+      }
+      final destName = localPath.replaceAll(RegExp(r'[\\/:]'), '_');
+      final destPath = '${queueDir.path}${Platform.pathSeparator}$destName';
+      await source.copy(destPath);
+      return destPath;
+    } catch (e) {
+      debugPrint('⚠️ persistWasteMediaForQueue failed, queueing original path: $e');
+      return localPath;
+    }
+  }
+
   late final Box<SyncQueueItem> _queueBox;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
@@ -37,21 +73,24 @@ class SyncService {
   // queue item concurrently.
   bool _isProcessing = false;
 
-  /// Last sync error per queued fleet item (`collection:id` → message).
+  /// Last sync error per queued fleet/waste item (`collection:id` → message).
   /// In-memory only — cleared on success or when the item leaves the queue.
-  final Map<String, String> _fleetQueueLastErrors = {};
+  final Map<String, String> _queueLastErrors = {};
 
-  String _fleetQueueErrorKey(String collection, String documentId) =>
+  String _queueErrorKey(String collection, String documentId) =>
       '$collection:$documentId';
 
-  void _setFleetQueueError(SyncQueueItem item, Object error) {
-    if (!item.collection.startsWith('fleet_')) return;
-    _fleetQueueLastErrors[_fleetQueueErrorKey(item.collection, item.id)] =
+  void _setQueueLastError(SyncQueueItem item, Object error) {
+    if (!item.collection.startsWith('fleet_') &&
+        !item.collection.startsWith('waste_')) {
+      return;
+    }
+    _queueLastErrors[_queueErrorKey(item.collection, item.id)] =
         error.toString();
   }
 
-  void _clearFleetQueueError(SyncQueueItem item) {
-    _fleetQueueLastErrors.remove(_fleetQueueErrorKey(item.collection, item.id));
+  void _clearQueueLastError(SyncQueueItem item) {
+    _queueLastErrors.remove(_queueErrorKey(item.collection, item.id));
   }
 
   Future<void> init() async {
@@ -61,13 +100,46 @@ class SyncService {
     // uploads only process on the next connectivity *change*, so items queued
     // while already online would sit indefinitely.
     if (_queueBox.isNotEmpty) {
+      await migrateQueuedWasteMediaToPersistentDir();
       _dedupeWasteQueue();
       _processQueue();
     }
   }
 
+  /// One-time healing for queue entries created before media files were
+  /// persisted to the app documents dir: any photo/signature entry whose
+  /// localPath still points at a volatile location (cache/temp) is copied
+  /// into waste_media_queue/ and the entry rewritten. Entries whose file is
+  /// already gone are left untouched — replay surfaces them as media_lost.
+  Future<void> migrateQueuedWasteMediaToPersistentDir() async {
+    try {
+      if (!_queueBox.isOpen) return;
+      for (final item in _queueBox.values.toList()) {
+        if (item.collection != 'waste_photos' &&
+            item.collection != 'waste_signatures') {
+          continue;
+        }
+        final localPath = item.data['localPath'] as String?;
+        if (localPath == null ||
+            localPath.contains(wasteMediaQueueDirName)) {
+          continue;
+        }
+        if (!File(localPath).existsSync()) continue;
+        final persistentPath = await persistWasteMediaForQueue(localPath);
+        if (persistentPath != localPath) {
+          item.data['localPath'] = persistentPath;
+          await item.save();
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ migrateQueuedWasteMediaToPersistentDir error (safe no-op): $e');
+    }
+  }
+
   /// Drops older duplicate Firestore queue entries (same collection/doc/op).
-  /// Photo/signature uploads are kept — each file path is unique.
+  /// Photo/signature uploads are deduped by localPath instead — one capture
+  /// produces one unique file path, so two entries with the same path are the
+  /// same upload queued twice (e.g. a user retrying a submit while offline).
   void _dedupeWasteQueue() {
     try {
       if (!_queueBox.isOpen) return;
@@ -75,11 +147,15 @@ class SyncService {
       final toDelete = <SyncQueueItem>[];
       for (final item in _queueBox.values.toList()) {
         if (!item.collection.startsWith('waste_')) continue;
+        final String key;
         if (item.collection == 'waste_photos' ||
             item.collection == 'waste_signatures') {
-          continue;
+          final localPath = item.data['localPath'] as String?;
+          if (localPath == null) continue;
+          key = '${item.collection}:$localPath';
+        } else {
+          key = '${item.collection}:${item.id}:${item.operation}';
         }
-        final key = '${item.collection}:${item.id}:${item.operation}';
         final existing = seen[key];
         if (existing == null) {
           seen[key] = item;
@@ -190,6 +266,7 @@ class SyncService {
   Future<void> _processQueue() async {
     if (_isProcessing) return;
     if (_queueBox.isEmpty) return;
+    _dedupeWasteQueue();
     _dedupeFleetQueue();
     _isProcessing = true;
     try {
@@ -216,9 +293,7 @@ class SyncService {
             await _processWasteSignatureUpload(item);
           } else {
             final docRef = firestore.collection(item.collection).doc(item.id);
-            final payload = item.collection == Collections.wasteStock
-                ? _restoreFirestoreTimestamps(item.data)
-                : item.data;
+            final payload = _restoreWastePayload(item.collection, item.data);
             if (item.operation == 'create' ||
                 item.operation == 'update' ||
                 item.operation == 'set') {
@@ -233,6 +308,14 @@ class SyncService {
               if (item.collection == Collections.wasteLoads &&
                   (item.operation == 'set' || item.operation == 'create')) {
                 await _assignWasteLoadNumberIfNeeded(item.id, item.data);
+              }
+              // A queued absolute photo_count (or a load_photos overwrite) is
+              // stale by the time it replays — late photo uploads may have
+              // landed first. Recompute from the arrays regardless of order.
+              if (item.collection == Collections.wasteLoads &&
+                  (item.data.containsKey('photo_count') ||
+                      item.data.containsKey('load_photos'))) {
+                await _recomputeWastePhotoCount(item.id);
               }
             } else if (item.operation == 'delete') {
               await docRef.delete();
@@ -264,15 +347,11 @@ class SyncService {
         }
 
         await item.delete();
-        if (item.collection.startsWith('fleet_')) {
-          _clearFleetQueueError(item);
-        }
+        _clearQueueLastError(item);
         debugPrint('✅ Synced from queue: ${item.operation} ${item.collection}');
       } catch (e) {
         debugPrint('❌ Failed to sync item: $e');
-        if (item.collection.startsWith('fleet_')) {
-          _setFleetQueueError(item, e);
-        }
+        _setQueueLastError(item, e);
       }
     }
   }
@@ -378,6 +457,7 @@ class SyncService {
             loadRef = (item.data['loadId'] as String?) ?? (item.data['load_number'] as String?);
         }
         final age = _formatRelativeAge(now, item.createdAt);
+        final errorKey = _queueErrorKey(item.collection, item.id);
         details.add({
           'id': item.id,
           'type': type,
@@ -386,6 +466,8 @@ class SyncService {
           'createdAt': item.createdAt,
           'collection': item.collection,
           'operation': item.operation,
+          if (_queueLastErrors.containsKey(errorKey))
+            'lastError': _queueLastErrors[errorKey],
         });
       }
       details.sort((a, b) => (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
@@ -449,8 +531,10 @@ class SyncService {
   }
 
   /// Handles a queued waste photo upload from the central Hive queue.
-  /// Uploads the local file to Storage, then patches the target waste_load or waste_item
-  /// with the resulting URL using arrayUnion (safe for concurrent retries).
+  /// Uploads the local file to Storage under a deterministic name derived
+  /// from the queue item id — retries reuse the same object and URL, making
+  /// the arrayUnion patch genuinely idempotent — then patches the target doc,
+  /// recomputes the parent load's photo_count, and deletes the local file.
   /// Only the caller (inside try of _processQueue) will delete the queue item on success.
   Future<void> _processWastePhotoUpload(SyncQueueItem item) async {
     final data = item.data;
@@ -461,18 +545,20 @@ class SyncService {
 
     if (localPath == null || loadId == null) {
       debugPrint('⚠️ Invalid waste_photos queue entry, skipping: ${item.id}');
-      return; // will not delete; manual cleanup later if needed
+      return; // returning normally lets the caller delete the malformed entry
     }
 
     final file = File(localPath);
     if (!file.existsSync()) {
       debugPrint('⚠️ Local photo no longer exists for queue item ${item.id}: $localPath');
-      // Allow delete so we don't retry forever on deleted temp files
+      // Surface the permanent loss, then allow delete so we don't retry forever.
+      await _logWasteMediaLostAudit(item, mediaType: 'photo');
       return;
     }
 
-    // Upload to Storage (mirrors WasteService.uploadWastePhoto path convention)
-    final fileName = '${const Uuid().v4()}.jpg';
+    // Deterministic per-queue-item filename: a retry after an ambiguous
+    // failure re-uploads to the same object instead of minting a duplicate.
+    final fileName = '${item.id}.jpg';
     final String storageFolder;
     final String targetCollection;
     final String targetDocId;
@@ -509,8 +595,71 @@ class SyncService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    // The queue owns the file — remove it now that the upload landed.
+    try {
+      await file.delete();
+    } catch (_) {}
+
+    // Keep the load's photo_count (displayed in Pulse) in sync with the
+    // arrays this late upload just changed. waste_stock has no parent load.
+    if (targetCollection != Collections.wasteStock) {
+      await _recomputeWastePhotoCount(loadId);
+    }
+
     debugPrint('✅ Waste photo synced from queue → $targetCollection/$targetDocId');
     // Success: _processQueue will delete the item after this returns without throw
+  }
+
+  /// Best-effort audit record for a queued photo/signature whose local file
+  /// was permanently lost (e.g. cache cleared) before it could sync. Shape
+  /// mirrors WasteService.logWasteTypeOverrideAudit. Never throws — the
+  /// queue entry must still drain.
+  Future<void> _logWasteMediaLostAudit(
+    SyncQueueItem item, {
+    required String mediaType,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('waste_audit').add({
+        'action': 'media_lost',
+        'media_type': mediaType,
+        'load_id': item.data['loadId'],
+        if (item.data['itemId'] != null) 'item_id': item.data['itemId'],
+        'local_path': item.data['localPath'],
+        'queued_at': Timestamp.fromDate(item.createdAt),
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('⚠️ media_lost audit write failed (non-fatal): $e');
+    }
+  }
+
+  /// Recomputes a load's photo_count from truth (load_photos + item photos)
+  /// and writes the absolute value. Used after late photo uploads and after
+  /// replaying a queued waste_loads write that carried a stale absolute
+  /// photo_count. Best-effort: a failed recompute must never resurrect an
+  /// already-uploaded photo's queue entry.
+  Future<void> _recomputeWastePhotoCount(String loadId) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final loadRef = firestore.collection(Collections.wasteLoads).doc(loadId);
+      final loadSnap = await loadRef.get();
+      if (!loadSnap.exists) return;
+      final loadPhotos =
+          (loadSnap.data()?['load_photos'] as List?)?.length ?? 0;
+      final itemsSnap = await firestore
+          .collection(Collections.wasteItems)
+          .where('load_id', isEqualTo: loadId)
+          .get();
+      var itemPhotos = 0;
+      for (final doc in itemsSnap.docs) {
+        final d = doc.data();
+        if (d['is_deleted'] == true) continue;
+        itemPhotos += (d['photos'] as List?)?.length ?? 0;
+      }
+      await loadRef.update({'photo_count': loadPhotos + itemPhotos});
+    } catch (e) {
+      debugPrint('⚠️ photo_count recompute failed for $loadId (non-fatal): $e');
+    }
   }
 
   /// Handles a queued waste signature (bytes) upload from the central Hive queue.
@@ -524,20 +673,22 @@ class SyncService {
 
     if (localPath == null || loadId == null) {
       debugPrint('⚠️ Invalid waste_signatures queue entry, skipping: ${item.id}');
-      return; // will not delete; manual cleanup later if needed
+      return; // returning normally lets the caller delete the malformed entry
     }
 
     final file = File(localPath);
     if (!file.existsSync()) {
       debugPrint('⚠️ Local signature file no longer exists for queue item ${item.id}: $localPath');
-      // Allow delete so we don't retry forever on deleted temp files
+      // Surface the permanent loss, then allow delete so we don't retry forever.
+      await _logWasteMediaLostAudit(item, mediaType: 'signature');
       return;
     }
 
     final bytes = await file.readAsBytes();
 
-    // Upload to Storage under correct signature path (matches WasteService._uploadSignatureBytesDirect convention)
-    final fileName = 'signature_${DateTime.now().millisecondsSinceEpoch}.png';
+    // Deterministic per-queue-item filename (see _processWastePhotoUpload) —
+    // retries overwrite the same object instead of minting duplicates.
+    final fileName = 'signature_${item.id}.png';
     final storagePath = 'waste_loads/$loadId/signature/$fileName';
 
     final ref = FirebaseStorage.instance.ref().child(storagePath);
@@ -579,7 +730,17 @@ class SyncService {
             item.id == targetId &&
             item.operation == targetOp &&
             (targetCreated == null || item.createdAt == targetCreated)) {
+          // Queue-owned media file goes with the entry. The path guard keeps
+          // cache originals (still shown by screens) safe.
+          final localPath = item.data['localPath'] as String?;
+          if (localPath != null &&
+              localPath.contains(wasteMediaQueueDirName)) {
+            try {
+              await File(localPath).delete();
+            } catch (_) {}
+          }
           await item.delete();
+          _clearQueueLastError(item);
           debugPrint('🗑️ Removed specific queued waste item via UI: $targetCollection/$targetId');
           return;
         }
@@ -622,13 +783,16 @@ class SyncService {
                 succeeded = true;
               } else {
                 final docRef = FirebaseFirestore.instance.collection(item.collection).doc(item.id);
-                final payload = item.collection == Collections.wasteStock
-                    ? _restoreFirestoreTimestamps(item.data)
-                    : item.data;
+                final payload = _restoreWastePayload(item.collection, item.data);
                 if (item.operation == 'create' ||
                     item.operation == 'update' ||
                     item.operation == 'set') {
                   await docRef.set(payload, SetOptions(merge: true));
+                  if (item.collection == Collections.wasteLoads &&
+                      (item.data.containsKey('photo_count') ||
+                          item.data.containsKey('load_photos'))) {
+                    await _recomputeWastePhotoCount(item.id);
+                  }
                 } else if (item.operation == 'delete') {
                   await docRef.delete();
                 }
@@ -647,11 +811,13 @@ class SyncService {
             }
           } catch (e) {
             debugPrint('❌ Targeted per-item retry failed for ${item.collection}/${item.id}: $e');
+            _setQueueLastError(item, e);
             succeeded = false;
           }
 
           if (succeeded) {
             await item.delete();
+            _clearQueueLastError(item);
             debugPrint('✅ Targeted retry succeeded + removed: ${item.collection}/${item.id}');
             return true;
           }
@@ -714,7 +880,7 @@ class SyncService {
           type = 'Other (${item.collection.substring('fleet_'.length)})';
           ref = null;
         }
-        final errorKey = _fleetQueueErrorKey(item.collection, item.id);
+        final errorKey = _queueErrorKey(item.collection, item.id);
         details.add({
           'id': item.id,
           'type': type,
@@ -723,8 +889,8 @@ class SyncService {
           'createdAt': item.createdAt,
           'collection': item.collection,
           'operation': item.operation,
-          if (_fleetQueueLastErrors.containsKey(errorKey))
-            'lastError': _fleetQueueLastErrors[errorKey],
+          if (_queueLastErrors.containsKey(errorKey))
+            'lastError': _queueLastErrors[errorKey],
         });
       }
       details.sort((a, b) =>
@@ -756,14 +922,14 @@ class SyncService {
           await _processFleetQueueItem(
               item, FirebaseFirestore.instance);
           await item.delete();
-          _clearFleetQueueError(item);
+          _clearQueueLastError(item);
           debugPrint(
               '✅ Fleet targeted retry succeeded: ${item.collection}/${item.id}');
           return true;
         } catch (e) {
           debugPrint(
               '❌ Fleet targeted retry failed for ${item.collection}/${item.id}: $e');
-          _setFleetQueueError(item, e);
+          _setQueueLastError(item, e);
           return false;
         }
       }
@@ -859,6 +1025,88 @@ class SyncService {
         }
       } else if (value is Map<String, dynamic>) {
         result[key] = _restoreFirestoreTimestamps(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  /// Routes a queued waste payload through the right timestamp restorer for
+  /// its collection. waste_photos/waste_signatures never reach here (they are
+  /// handled by the upload processors before this dispatch).
+  static Map<String, dynamic> _restoreWastePayload(
+    String collection,
+    Map<String, dynamic> data,
+  ) {
+    if (collection == Collections.wasteStock) {
+      return _restoreFirestoreTimestamps(data);
+    }
+    if (collection == Collections.wasteLoads) {
+      return _restoreWasteLoadTimestamps(data);
+    }
+    if (collection == Collections.wasteItems) {
+      return _restoreWasteItemTimestamps(data);
+    }
+    return data;
+  }
+
+  /// Every Timestamp-typed date field on a waste_loads document (see
+  /// WasteLoad.toFirestore). Queue sanitisation turned these into ISO-8601
+  /// strings; replaying them verbatim stores strings in Firestore, and
+  /// Firestore orders by TYPE first — string-dated loads silently fall out of
+  /// every Timestamp range query (Pulse reports, board metrics, the 14-day
+  /// home window). The sanitized string IS the real capture time, so restore
+  /// with Timestamp.fromDate — NOT serverTimestamp.
+  static const Set<String> _wasteLoadTimestampKeys = {
+    'date_time',
+    'scheduled_for',
+    'completed_at',
+    'cost_reviewed_at',
+    'weighbridge_received_at',
+    'pending_cost_review_at',
+    'pending_weighbridge_at',
+    'weighbridge_ticket_waived_at',
+    'createdAt',
+  };
+
+  /// Visible for the offline-resilience tests.
+  static Map<String, dynamic> restoreWasteLoadTimestamps(
+          Map<String, dynamic> data) =>
+      _restoreWasteLoadTimestamps(data);
+
+  /// Visible for the offline-resilience tests.
+  static Map<String, dynamic> restoreWasteItemTimestamps(
+          Map<String, dynamic> data) =>
+      _restoreWasteItemTimestamps(data);
+
+  static Map<String, dynamic> _restoreWasteLoadTimestamps(
+    Map<String, dynamic> data,
+  ) =>
+      _restoreTimestampsByKeys(data, _wasteLoadTimestampKeys);
+
+  static Map<String, dynamic> _restoreWasteItemTimestamps(
+    Map<String, dynamic> data,
+  ) =>
+      _restoreTimestampsByKeys(data, const {'createdAt'});
+
+  /// ISO string → Timestamp for the given keys; updatedAt/updated_at →
+  /// serverTimestamp (they mean "when this landed"). Unparseable strings pass
+  /// through unchanged — never destroy waste data (job cards null them, but a
+  /// waste load's dates feed legal/reporting flows). Top-level keys only.
+  static Map<String, dynamic> _restoreTimestampsByKeys(
+    Map<String, dynamic> data,
+    Set<String> keys,
+  ) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if ((key == 'updatedAt' || key == 'updated_at') && value is String) {
+        result[key] = FieldValue.serverTimestamp();
+      } else if (keys.contains(key) && value is String) {
+        final parsed = DateTime.tryParse(value);
+        result[key] = parsed != null ? Timestamp.fromDate(parsed) : value;
       } else {
         result[key] = value;
       }

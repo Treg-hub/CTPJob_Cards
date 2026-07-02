@@ -5,8 +5,8 @@ import '../models/waste_load.dart';
 import '../models/waste_settings.dart';
 import '../services/waste_service.dart';
 
-/// Singleton WasteService — all waste screens share one instance so the
-/// in-memory session queues (_sessionOfflinePhotoQueue, etc.) are consistent.
+/// Singleton WasteService — all waste screens share one instance. Offline
+/// media resilience is owned by the central SyncService Hive queue.
 final wasteServiceProvider = Provider<WasteService>((ref) => WasteService());
 
 final wasteSettingsProvider = StreamProvider<WasteSettings>((ref) {
