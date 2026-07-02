@@ -85,7 +85,7 @@ Guards (not security managers) see a **module hub** instead of job-card quick ac
 
 #### Standard layout (everyone else)
 
-Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a grid of tiles to navigate everywhere else.
+Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a **Quick Actions** grid to navigate everywhere else. The grid uses a fixed column count (3 on phones, 4 on tablets, 6 on desktop/web) so every tile — including the badge-count and **Daily Review** tiles — renders at the same size, rather than the wrap-based layout used before 2026-07-02.
 
 ##### Standard Tiles
 

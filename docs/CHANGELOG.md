@@ -6,6 +6,22 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-02 — Home screen tile grid + login screen polish
+
+### Home screen
+
+- **Quick Actions is now a fixed-column grid** instead of a centre-aligned wrap. Tiles line up in true rows/columns at every screen size (3 columns on phones, 4 on tablets, 6 on desktop/web) instead of the last row centring 1–2 leftover tiles.
+- **Every tile is the same size**, including the badge count and the manager-only **Daily Review** tile — previously those two rendered narrower than a plain tile because of a layout bug in how they were stacked.
+- **Bigger icons** — tiles now show a larger, more legible icon rather than a small icon lost in a lot of empty tile space.
+- **Vehicle at Gate** now shows a car icon instead of the QR-scanner icon (which is also used for the unrelated **Scan Tester** admin tile), mirroring the walking-person icon on **On-Foot Visitor** next to it.
+- Off-site disabled tiles (e.g. **Create Job Card**) no longer wrap to a second "(off-site)" line — the existing greyed icon + "location off" badge already communicates the disabled state, and tapping still explains why via a SnackBar.
+
+### Login screen
+
+- The orange perimeter glow around the login screen has been toned down — it was overpowering the branding panel and form.
+
+---
+
 ## 2026-06-29 — Site Security docs + guard-shell alignment
 
 ### Site Security — documentation
