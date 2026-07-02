@@ -522,12 +522,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   List<Map<String, dynamic>> get _quickActions {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
-    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
     final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': const Color(0xFF475569), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
 
     List<Map<String, dynamic>> result;
     if (isManager || isSuperManager) {
-      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
       result = [createAction, viewJobsFactory, historyAction];
     } else {
       result = [createAction, viewJobsAction, historyAction];
@@ -596,7 +596,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ...result,
         {
           'title': 'Vehicle at Gate',
-          'icon': Icons.qr_code_scanner,
+          'icon': Icons.directions_car,
           'color': kBrandOrange,
           'onTap': () => Navigator.push(
                 context,
@@ -637,11 +637,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return result;
   }
 
-  double get _iconSize => _isDesktop ? 96 : 80;
-  EdgeInsets get _cardPaddingInsets => _isDesktop ? const EdgeInsets.all(20) : const EdgeInsets.all(16);
-  double get _gridSpacing => _isDesktop ? 6 : (_isTablet ? 15 : 12);
+  double get _iconSize => _isDesktop ? 60 : (_isTablet ? 56 : 40);
+  EdgeInsets get _cardPaddingInsets => const EdgeInsets.all(14);
+  double get _gridSpacing => _isDesktop ? 14 : (_isTablet ? 12 : 10);
   double get _screenPadding => _isDesktop ? 20 : 16;
-  double get _tileWidth => _isDesktop ? 150 : (_isTablet ? 140 : 130);
+  int get _gridColumns => _isDesktop ? 6 : (_isTablet ? 4 : 3);
 
   Future<void> _loadFleetSettings() async {
     try {
@@ -1139,10 +1139,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: _gridSpacing,
-              runSpacing: _gridSpacing,
+            child: GridView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _gridColumns,
+                mainAxisSpacing: _gridSpacing,
+                crossAxisSpacing: _gridSpacing,
+                childAspectRatio: 1,
+              ),
               children: [
                 ..._quickActions.map((action) => _buildQuickActionCard(
                   action['title'] as String,
@@ -1150,18 +1155,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   action['color'] as Color,
                   action['onTap'] as VoidCallback,
                   disabledReason: action['disabledReason'] as String?,
+                  badgeCount: action['badgeCount'] as int?,
                 )),
                 if (kIsWeb && (isManager || isSuperManager))
-                  SizedBox(
-                    width: _tileWidth,
-                    child: _DailyReviewTile(
-                      pendingCount: _pendingReviewCount,
-                      iconSize: _iconSize,
-                      padding: _cardPaddingInsets,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
-                      ),
+                  _DailyReviewTile(
+                    pendingCount: _pendingReviewCount,
+                    iconSize: _iconSize,
+                    padding: _cardPaddingInsets,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
                     ),
                   ),
               ],
@@ -1210,7 +1213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap,
-      {String? disabledReason}) {
+      {String? disabledReason, int? badgeCount}) {
     final disabled = disabledReason != null;
     Widget card = Card(
       elevation: disabled ? 1 : 6,
@@ -1243,9 +1246,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     ),
                 ],
               ),
-              SizedBox(height: _isDesktop ? 8 : 12),
+              SizedBox(height: _isDesktop ? 10 : 12),
               Text(
-                disabled ? '$title\n(off-site)' : title,
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1261,8 +1266,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ),
     );
 
-    if (title == 'View Jobs') {
+    if (badgeCount != null && badgeCount > 0) {
       card = Stack(
+        fit: StackFit.expand,
         children: [
           card,
           Positioned(
@@ -1272,7 +1278,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               padding: const EdgeInsets.all(6),
               decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
               child: Text(
-                (_openJobCount + _inProgressCount).toString(),
+                badgeCount.toString(),
                 style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ),
@@ -1280,7 +1286,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ],
       );
     }
-    return SizedBox(width: _tileWidth, child: card);
+    return card;
   }
 
   Widget _buildRecentJobCards() {
@@ -2292,6 +2298,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
         return Transform.scale(
           scale: isPulsing ? _scaleAnim.value : 1.0,
           child: Stack(
+            fit: StackFit.expand,
             children: [
               Card(
                 elevation: isPulsing ? 6 + _glowAnim.value * 6 : 6,
@@ -2318,9 +2325,11 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                           size: widget.iconSize,
                           color: isPulsing ? glowColor : const Color(0xFF5C6BC0),
                         ),
-                        SizedBox(height: widget.iconSize <= 80 ? 12 : 8),
+                        const SizedBox(height: 12),
                         Text(
                           'Daily Review',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,

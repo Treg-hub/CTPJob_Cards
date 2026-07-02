@@ -293,8 +293,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildPerimeterGlow() {
     const glow = Color(0xFFFF8C42);
-    const extent = 160.0;
-    const opacity = 0.45;
+    const extent = 90.0;
+    const opacity = 0.22;
     gradient(Alignment from, Alignment to) => BoxDecoration(
           gradient: LinearGradient(
             begin: from,
