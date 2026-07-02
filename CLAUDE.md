@@ -144,6 +144,7 @@ This performs a full recursive analysis of `lib/` and updates the visualization 
 - **Java/Kotlin target**: Java 11 (desugaring enabled), Kotlin 1.9.22
 - **NDK ABI filter**: `arm64-v8a` only
 - **JVM heap**: `-Xmx8G -XX:MaxMetaspaceSize=4G` in `gradle.properties`
+- **Kiosk Mode (device lockdown)**: `KioskDeviceAdminReceiver.kt` + `res/xml/kiosk_device_admin.xml` + the `ctp/kiosk` MethodChannel in `MainActivity.kt` let a device be locked to this app via Android Lock Task Mode. Inert unless a specific tablet is enrolled as Device Owner (`adb shell dpm set-device-owner com.ctp.jobcards/.KioskDeviceAdminReceiver`) — see `lib/screens/kiosk_mode_screen.dart` for the in-app setup guide and the monorepo's `Components/kiosk-lockdown.md` for the full design (main-gate Site Security tablet is the first deployment target).
 
 ## Role-Based Access
 

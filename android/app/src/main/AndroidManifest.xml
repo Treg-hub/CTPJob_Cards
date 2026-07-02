@@ -72,6 +72,25 @@
             </intent-filter>
         </receiver>
 
+        <!-- ==================== KIOSK DEVICE ADMIN ==================== -->
+        <!-- Inert until a specific device is enrolled as Device Owner (main-gate
+             kiosk tablet only) via: adb shell dpm set-device-owner
+             com.ctp.jobcards/.KioskDeviceAdminReceiver — see the in-app Kiosk
+             Mode setup guide (Settings > Admin > Kiosk Mode). Device Owner
+             status is what lets Lock Task Mode fully block the system "unpin"
+             gesture instead of just best-effort screen pinning. -->
+        <receiver
+            android:name=".KioskDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/kiosk_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <!-- ==================== META DATA ==================== -->
         <meta-data
             android:name="flutterEmbedding"
