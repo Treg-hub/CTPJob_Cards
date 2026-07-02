@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
+import '../providers/fleet_tips_provider.dart';
 import '../theme/app_theme.dart';
 import 'fleet_issue_widgets.dart';
 
@@ -32,7 +34,7 @@ String mechanicIssueActionHint(FleetIssueStatus status) {
   }
 }
 
-class FleetMechanicGuideBanner extends StatelessWidget {
+class FleetMechanicGuideBanner extends ConsumerWidget {
   const FleetMechanicGuideBanner({
     super.key,
     this.text =
@@ -48,10 +50,13 @@ class FleetMechanicGuideBanner extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visible = ref.watch(fleetTipsVisibleProvider);
+    if (!visible) return const SizedBox.shrink();
+
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
       decoration: BoxDecoration(
         color: kBrandOrange.withValues(alpha: 0.08),
         border: Border.all(color: kBrandOrange.withValues(alpha: 0.35)),
@@ -67,6 +72,21 @@ class FleetMechanicGuideBanner extends StatelessWidget {
               text,
               style: const TextStyle(fontSize: 13, height: 1.35),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Hide tips (Settings > Preferences to bring back)',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            onPressed: () {
+              ref.read(fleetTipsVisibleProvider.notifier).setVisible(false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Tips hidden — turn back on in Settings > Preferences'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            },
           ),
         ],
       ),

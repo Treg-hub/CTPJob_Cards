@@ -188,13 +188,20 @@ class _KioskModeScreenState extends State<KioskModeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    // Light-shade tint fades to near-transparent in dark mode (matches the
+    // Admin section pattern in settings_screen.dart) so the default theme
+    // text color always has correct contrast against whatever's underneath,
+    // instead of a fixed light background clashing with light theme text.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Kiosk Mode')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            color: _isDeviceOwner ? Colors.green.shade50 : Colors.amber.shade50,
+            color: (_isDeviceOwner ? Colors.green.shade50 : Colors.amber.shade50)
+                .withValues(alpha: isDark ? 0.05 : 1.0),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
