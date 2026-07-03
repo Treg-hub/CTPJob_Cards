@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 
+import '../constants/collections.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 
@@ -64,6 +65,7 @@ import '../services/fleet_service.dart';
 import '../services/security_service.dart';
 import '../services/waste_service.dart';
 import '../utils/fleet_labels.dart';
+import '../utils/list_load_state.dart';
 import '../utils/presence_gating.dart';
 import '../utils/screen_insets.dart';
 
@@ -90,9 +92,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _showDeptOnly = true;
   int _openJobCount = 0;
   int _inProgressCount = 0;
-  StreamSubscription<List<JobCard>>? _countSubscription;
+  StreamSubscription<JobCardListSnapshot>? _countSubscription;
   StreamSubscription<List<JobCard>>? _inProgressSub;
   StreamSubscription<Employee>? _employeeSubscription;
+
+  // Streams are created ONCE and held in state: a stream built inline in a
+  // build method re-subscribes a fresh Firestore listener on every rebuild,
+  // and any retry/backoff state in the resilient wrapper would reset with it.
+  // The active (open+inProgress) snapshot is shared by the counts AND the
+  // recent-jobs list — one Firestore listener instead of two for one query.
+  JobCardListSnapshot? _activeJobsSnap;
+  String? _myWorkClockNo;
+  Stream<JobCardListSnapshot>? _myWorkStream;
+  String? _inboxClockNo;
+  Stream<int>? _inboxCountStream;
   bool _testMode = false;
   Timer? _testModeTimer;
   // Debounces on/off-site snackbars so GPS jitter at the fence boundary can't
@@ -352,15 +365,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             .catchError((Object e) => debugPrint('ID token refresh failed: $e'));
       }
     }, onError: (e) {
+      if (e is StateError &&
+          e.message == FirestoreService.employeeNotFoundOnServer) {
+        // Server-confirmed deletion of the employee doc (never a cold-cache
+        // miss — getEmployeeStream filters those). Surfaced via the session
+        // banner; prefs and the offline queue are deliberately left intact.
+        debugPrint('HomeScreen: employee doc deleted (server-confirmed)');
+        return;
+      }
       debugPrint('HomeScreen: employee stream error: $e');
     });
   }
 
+  /// Returns the cached unread-inbox stream for [clockNo], creating it once.
+  Stream<int> _inboxCountStreamFor(String clockNo) {
+    if (_inboxCountStream == null || _inboxClockNo != clockNo) {
+      _inboxClockNo = clockNo;
+      _inboxCountStream = _firestoreService.getUnreadInboxCountStream(clockNo);
+    }
+    return _inboxCountStream!;
+  }
+
   void _checkInboxOnReturn(String clockNo) {
     FirebaseFirestore.instance
-        .collection('notification_inbox')
+        .collection(Collections.notificationInbox)
         .doc(clockNo)
-        .collection('items')
+        .collection(Collections.notificationInboxItems)
         .where('read', isEqualTo: false)
         .get()
         .then((snap) {
@@ -731,11 +761,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     try {
-      // Single open+inProgress listener (one Firestore query vs two).
-      _countSubscription = _firestoreService.getActiveJobCards().listen((jobs) {
+      // Single open+inProgress listener shared by the counts AND the
+      // recent-jobs section (one Firestore query, one subscription).
+      _countSubscription =
+          _firestoreService.getActiveJobCardsWithMeta().listen((snap) {
         if (!mounted) return;
-        final filtered = jobs.where(_isInManagerScope).toList();
+        final filtered = snap.cards.where(_isInManagerScope).toList();
         setState(() {
+          _activeJobsSnap = snap;
           _openJobCount =
               filtered.where((j) => j.status == JobStatus.open).length;
           _inProgressCount = filtered
@@ -1233,54 +1266,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return card;
   }
 
-  Widget _buildRecentJobCards() {
-    // Combine open + inProgress streams (server-filtered) and merge client-side.
-    // This avoids streaming the entire collection (including all closed jobs).
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getActiveJobCards(),
-      builder: (context, activeSnap) {
-            if (activeSnap.hasError) {
-              return Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Center(child: Text('Error: ${activeSnap.error}', style: const TextStyle(color: Colors.red))),
-                ),
-              );
-            }
-            if (!activeSnap.hasData) {
-              return const Card(
-                elevation: 4,
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        SkeletonLoader(height: 80),
-                        SizedBox(height: 12),
-                        SkeletonLoader(height: 80),
-                        SizedBox(height: 12),
-                        SkeletonLoader(height: 80),
-                      ],
+  /// Skeleton placeholder for the recent-jobs section; [waitingForServer]
+  /// adds a hint that the app is offline/reconnecting — a cached-empty
+  /// snapshot must never masquerade as "No recent jobs available".
+  Widget _buildRecentJobsPlaceholder({required bool waitingForServer}) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            children: [
+              const SkeletonLoader(height: 80),
+              const SizedBox(height: 12),
+              const SkeletonLoader(height: 80),
+              const SizedBox(height: 12),
+              const SkeletonLoader(height: 80),
+              if (waitingForServer) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Waiting for connection…',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
-                  ),
+                  ],
                 ),
-              );
-            }
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            final allJobs = activeSnap.data ?? const <JobCard>[];
+  Widget _buildRecentJobCards() {
+    // Renders from _activeJobsSnap — the single shared open+inProgress
+    // listener owned by _countSubscription (see initState). No inline stream:
+    // a stream created in build re-subscribes Firestore on every rebuild.
+    final snap = _activeJobsSnap;
+    switch (decideListLoadState(
+      hasSnapshot: snap != null,
+      isEmpty: snap?.cards.isEmpty ?? true,
+      isFromCache: snap?.isFromCache ?? true,
+    )) {
+      case ListLoadState.loading:
+        return _buildRecentJobsPlaceholder(waitingForServer: false);
+      case ListLoadState.waitingForServer:
+        return _buildRecentJobsPlaceholder(waitingForServer: true);
+      case ListLoadState.empty:
+        return Card(
+          elevation: 4,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
+          ),
+        );
+      case ListLoadState.data:
+        break;
+    }
 
-            if (allJobs.isEmpty) {
-              return Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text('No recent jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ),
-                ),
-              );
-            }
+            final allJobs = snap!.cards;
 
             var recentJobs = allJobs
                 .toList()
@@ -1355,8 +1411,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           );
         }
-      },
-    );
   }
 
   Widget _buildStatusColumn(String title, List<JobCard> jobs, Color accent) {
@@ -1420,8 +1474,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       );
     }
 
-    return StreamBuilder<List<JobCard>>(
-      stream: _firestoreService.getMyJobCards(currentEmployee!.clockNo),
+    // Cache the stream per clockNo — an inline stream re-subscribes a fresh
+    // Firestore listener on every rebuild and resets the resilient wrapper's
+    // retry state. clockNo follows currentEmployee (persona-aware).
+    final clockNo = currentEmployee!.clockNo;
+    if (_myWorkStream == null || _myWorkClockNo != clockNo) {
+      _myWorkClockNo = clockNo;
+      _myWorkStream = _firestoreService.getMyJobCardsWithMeta(clockNo);
+    }
+
+    return StreamBuilder<JobCardListSnapshot>(
+      stream: _myWorkStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -1429,11 +1492,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
           );
         }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+        final meta = snapshot.data;
+        switch (decideListLoadState(
+          hasSnapshot: meta != null,
+          isEmpty: meta?.cards.isEmpty ?? true,
+          isFromCache: meta?.isFromCache ?? true,
+        )) {
+          case ListLoadState.loading:
+            return const Center(child: CircularProgressIndicator());
+          case ListLoadState.waitingForServer:
+            // Cached-empty: the server hasn't answered yet — showing the
+            // "Active (0)" tabs here reads as "my work vanished".
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Waiting for connection…',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            );
+          case ListLoadState.empty:
+          case ListLoadState.data:
+            break; // server-confirmed — the tab bar below is truthful.
         }
 
-        final all = snapshot.data!;
+        final all = meta!.cards;
 
         final activeJobs = all
             .where((j) => j.status == JobStatus.open || j.status == JobStatus.inProgress)
@@ -2085,15 +2175,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
           if (realEmployee != null)
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('notification_inbox')
-                  .doc(realEmployee!.clockNo)
-                  .collection('items')
-                  .where('read', isEqualTo: false)
-                  .snapshots(),
+            StreamBuilder<int>(
+              // Cached per clockNo; the service stream is resilient — this
+              // badge is rules-gated on the clockNum claim and used to die
+              // permanently when it lost the claims race at startup.
+              stream: _inboxCountStreamFor(realEmployee!.clockNo),
               builder: (ctx, snap) {
-                final count = snap.data?.docs.length ?? 0;
+                final count = snap.data ?? 0;
                 return IconButton(
                   icon: Badge(
                     label: count > 0 ? Text('$count') : null,

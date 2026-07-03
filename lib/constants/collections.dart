@@ -30,6 +30,10 @@ class Collections {
   // admin manual toggle, and updateEmployeePresence (CF).
   static const String appGeofence = 'app_geofence';
   static const String alertResponses = 'alertResponses';
+  // Off-site-held notifications: notification_inbox/{clockNo}/items/*.
+  // Written by Cloud Functions only (Wave B); clients read/clear their own.
+  static const String notificationInbox = 'notification_inbox';
+  static const String notificationInboxItems = 'items'; // sub-collection
   static const String feedback = 'feedback';
   // Public two-way thread on a feedback item (sub-collection of feedback).
   // Submitter + admins may post; drives the feedback-loop notifications.

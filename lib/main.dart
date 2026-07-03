@@ -74,7 +74,8 @@ class TopRouteTracker extends NavigatorObserver {
 /// these are recorded as non-fatal to keep the Crashlytics crash dashboard
 /// meaningful:
 ///   • Firestore permission-denied — a snapshot listener still attached across
-///     sign-out; it re-subscribes once the user re-authenticates.
+///     sign-out; the resilient wrapper (services/resilient_stream.dart)
+///     re-subscribes it after a claims/token refresh or on re-login.
 ///   • PlatformException(channel-error) — a Firestore/plugin platform call that
 ///     lost its channel during early startup or teardown.
 bool _isRecoverableAsyncError(Object error) {
