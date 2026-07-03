@@ -4,6 +4,28 @@ This guide covers the most common symptoms users hit in production and the faste
 
 ---
 
+## Home screen is empty after signing in
+
+### Symptoms
+
+- You signed in but Home shows no jobs, no counts, and no inbox badge
+- It used to only fix itself after force-closing and reopening the app
+
+### What the app now does automatically (2026-07-03 build onward)
+
+1. **Self-healing data streams** — if a live list is refused right after sign-in (a brief permissions/timing race while your access token catches up), the app refreshes your access and retries in the background with a short backoff. It also re-tries whenever your connection returns or you switch back to the app. You should see the screen fill in within a few seconds without doing anything.
+2. **Offline vs empty** — an empty list from a cold start now shows **"Waiting for connection…"** with placeholders, not "No recent jobs". If you genuinely have no jobs, it says so only once the server has confirmed it.
+3. **Session-expired banner** — if the emptiness is because your sign-in has lapsed (signed out elsewhere, account disabled/changed), a red **"Session expired — sign in again"** banner appears at the top of Home. Tap **Sign in**. Your queued offline work is preserved and syncs after you re-authenticate.
+
+### If it's still empty
+
+1. Check the signal and the sync badge at the top of Home (see "Sync stuck" below).
+2. Pull the app to the foreground / background once — this re-arms the retries and the permission re-checks.
+3. If a **"Your account is no longer active"** banner shows, your employee profile was removed on the back office — contact Admin.
+4. As a last resort, sign out (Settings → Sign out) and back in.
+
+---
+
 ## Notifications not arriving
 
 ### Symptoms

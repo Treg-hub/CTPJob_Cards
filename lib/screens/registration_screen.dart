@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show realEmployee;
+import '../services/auth_claims_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import 'permissions_onboarding_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -44,66 +48,131 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     try {
       // 1. Create Firebase Auth account (signs the user in)
-      await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(email: email, password: password);
-
-      // 2. IMPORTANT: Wait for auth to fully propagate
-      await Future.delayed(const Duration(milliseconds: 2000));
-
-      // 3. Now query the employee document
-      final empQuery = await FirebaseFirestore.instance
-          .collection('employees')
-          .where('clockNo', isEqualTo: clockNo)
-          .limit(1)
-          .get();
-
-      if (empQuery.docs.isEmpty) {
-        _showSnack('No employee found with that clock card number', Colors.red);
-        setState(() => _isLoading = false);
-        return;
+      UserCredential credential;
+      try {
+        credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'email-already-in-use') rethrow;
+        // Self-heal: the auth account already exists — typically a previous
+        // registration attempt that failed AFTER account creation (e.g. the
+        // link call lost connectivity). Sign in with the provided credentials
+        // and resume the same linking flow instead of dead-ending.
+        try {
+          credential = await FirebaseAuth.instance
+              .signInWithEmailAndPassword(email: email, password: password);
+        } on FirebaseAuthException catch (signInError) {
+          if (signInError.code == 'wrong-password' ||
+              signInError.code == 'invalid-credential') {
+            _showSnack(
+                'This email is already registered. Enter its password to finish '
+                'setup, or go to Login and use Forgot Password.',
+                Colors.orange);
+            return;
+          }
+          rethrow;
+        }
       }
 
-      final empDoc = empQuery.docs.first;
-      final empData = empDoc.data();
-
-      // 4. Link this auth account to the employee doc via the CF. employees is
-      //    locked under Wave B, so the client can no longer write uid directly;
-      //    the CF also refuses to claim a clock number already linked elsewhere.
-      await FirestoreService().linkMyAccount(clockNo, email: email);
-
-      // 5. Create Employee object and save
-      final employee = Employee(
-        clockNo: clockNo,
-        name: empData['name'] ?? '',
-        position: empData['position'] ?? '',
-        department: empData['department'] ?? '',
-        isAdmin: empData['isAdmin'] as bool? ?? false,
-      );
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('loggedInName', employee.name);
-      await prefs.setString('loggedInClockNo', clockNo);
-      await prefs.setString('loggedInPosition', employee.position);
-      await prefs.setString('loggedInDepartment', employee.department);
-      await prefs.setBool('loggedInAdmin', employee.isAdmin);
-      realEmployee = employee;
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
-        );
-        _showSnack('Account created successfully!', Colors.green);
-      }
+      await _completeRegistration(credential.user!, clockNo, email);
     } on FirebaseAuthException catch (e) {
       String msg = 'Registration failed';
-      if (e.code == 'email-already-in-use') msg = 'Email already in use';
       if (e.code == 'weak-password') msg = 'Password is too weak';
+      if (e.code == 'network-request-failed') {
+        msg = 'No internet — check your connection';
+      }
       _showSnack(msg, Colors.red);
     } catch (e) {
       _showSnack('Error: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Post-auth registration flow, shared by the create-account path and the
+  /// email-already-in-use sign-in fallback.
+  Future<void> _completeRegistration(
+      User user, String clockNo, String email) async {
+    // Ensure the ID token is cached before the rules-gated employees query.
+    // Replaces the old fixed 2 s "wait for auth to propagate" delay —
+    // createUserWithEmailAndPassword returns an already-signed-in user.
+    await user.getIdToken();
+
+    final empQuery = await FirebaseFirestore.instance
+        .collection('employees')
+        .where('clockNo', isEqualTo: clockNo)
+        .limit(1)
+        .get();
+
+    if (empQuery.docs.isEmpty) {
+      _showSnack('No employee found with that clock card number', Colors.red);
+      return;
+    }
+
+    final empData = empQuery.docs.first.data();
+
+    // Link this auth account to the employee doc via the CF. employees is
+    // locked under Wave B, so the client can no longer write uid directly;
+    // the CF also refuses to claim a clock number already linked elsewhere.
+    try {
+      await FirestoreService().linkMyAccount(clockNo, email: email);
+    } catch (e, st) {
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'registration_link_failed');
+      }
+      // The auth account exists but isn't linked yet. Retrying Create Account
+      // with the same email/password resumes here via the sign-in fallback.
+      _showSnack(
+          'Account created but not yet linked — check your connection and '
+          'tap Create Account again to retry.',
+          Colors.orange);
+      return;
+    }
+
+    final employee = Employee(
+      clockNo: clockNo,
+      name: empData['name'] ?? '',
+      position: empData['position'] ?? '',
+      department: empData['department'] ?? '',
+      isAdmin: empData['isAdmin'] as bool? ?? false,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('loggedInName', employee.name);
+    await prefs.setString('loggedInClockNo', clockNo);
+    await prefs.setString('loggedInPosition', employee.position);
+    await prefs.setString('loggedInDepartment', employee.department);
+    await prefs.setBool('loggedInAdmin', employee.isAdmin);
+    realEmployee = employee;
+
+    if (!kIsWeb) {
+      await FirebaseCrashlytics.instance.setUserIdentifier(clockNo);
+    }
+
+    // Mint custom claims AFTER the uid link (the CF derives clockNum from
+    // it) — mirrors the login path. Without this a fresh registrant reached
+    // Home with NO claims: inbox reads denied, and the presence CF rejected
+    // the FCM token save below. Non-fatal, has its own 8 s timeout.
+    await AuthClaimsService.refreshClaims();
+
+    if (!kIsWeb) {
+      try {
+        await NotificationService()
+            .refreshAndSaveToken(clockNo)
+            .timeout(const Duration(seconds: 5));
+      } catch (e, st) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'fcm_register_at_registration');
+      }
+    }
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const PermissionsOnboardingScreen()),
+      );
+      _showSnack('Account created successfully!', Colors.green);
     }
   }
 

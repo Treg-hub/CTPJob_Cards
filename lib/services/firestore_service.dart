@@ -12,8 +12,14 @@ import '../models/employee.dart';
 import '../models/job_card.dart';
 import '../constants/collections.dart';
 import 'connectivity_service.dart';
+import 'resilient_stream.dart';
 import 'sync_service.dart';
 import '../utils/persona_audit.dart';
+
+/// A job-card list emission that still knows whether it was served from the
+/// local cache. `isFromCache == true` + empty means "the server hasn't
+/// answered yet", NOT "there are no jobs" — see utils/list_load_state.dart.
+typedef JobCardListSnapshot = ({List<JobCard> cards, bool isFromCache});
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -56,6 +62,27 @@ class FirestoreService {
     } catch (e) {
       throw Exception('Failed to load employee: $e');
     }
+  }
+
+  /// Like [getEmployee], but distinguishes a SERVER-confirmed missing doc from
+  /// an offline cache miss. A default get() answered from cache while offline
+  /// reports `exists == false` even though the doc may exist on the server —
+  /// callers must only clear a saved session when [serverConfirmedAbsent].
+  Future<({Employee? employee, bool serverConfirmedAbsent})> getEmployeeChecked(
+      String clockNo) async {
+    final doc =
+        await _firestore.collection(Collections.employees).doc(clockNo).get();
+    final data = doc.data();
+    if (data == null) {
+      return (
+        employee: null,
+        serverConfirmedAbsent: !doc.metadata.isFromCache,
+      );
+    }
+    return (
+      employee: Employee.fromFirestore(data, clockNo),
+      serverConfirmedAbsent: false,
+    );
   }
 
   Future<void> updateEmployee(Employee employee) async {
@@ -125,18 +152,30 @@ class FirestoreService {
     });
   }
   
+  /// Marker error for a SERVER-confirmed missing employee doc — the session
+  /// banner shows its "account no longer active" variant on this. A cache
+  /// miss while offline is silently skipped (not authoritative).
+  static const String employeeNotFoundOnServer = 'employee-not-found-server';
+
   Stream<Employee> getEmployeeStream(String clockNo) {
-    return _firestore
-        .collection(Collections.employees)
-        .doc(clockNo)
-        .snapshots()
-        .map((doc) {
-          final data = doc.data();
-          if (data == null) {
-            throw Exception('Employee not found');
-          }
-          return Employee.fromFirestore(data, doc.id);
-        });
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.employees)
+          .doc(clockNo)
+          .snapshots(),
+      debugName: 'employee',
+    ).expand((doc) {
+      final data = doc.data();
+      if (data == null) {
+        // Cold-cache miss: skip the emission and wait for the server.
+        if (doc.metadata.isFromCache) return const <Employee>[];
+        // Thrown OUTSIDE resilientSnapshots (in this transform), so the
+        // wrapper never retries it — it reaches the consumer's onError once
+        // per server-confirmed snapshot.
+        throw StateError(employeeNotFoundOnServer);
+      }
+      return [Employee.fromFirestore(data, doc.id)];
+    });
   }
 
   // Job Card operations
@@ -399,20 +438,29 @@ class FirestoreService {
 
   /// Open + in-progress job cards in one listener (halves Firestore reads vs
   /// separate status streams). Matches CTP Pulse [useOpenJobCards] pattern.
-  Stream<List<JobCard>> getActiveJobCards() {
-    return _firestore
-        .collection(Collections.jobCards)
-        .where('status', whereIn: ['open', 'inProgress'])
-        .snapshots()
-        .map((snapshot) => parseJobCards(snapshot.docs));
+  Stream<JobCardListSnapshot> getActiveJobCardsWithMeta() {
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.jobCards)
+          .where('status', whereIn: ['open', 'inProgress']).snapshots(),
+      debugName: 'active_jobs',
+    ).map((snapshot) => (
+          cards: parseJobCards(snapshot.docs),
+          isFromCache: snapshot.metadata.isFromCache,
+        ));
   }
 
+  Stream<List<JobCard>> getActiveJobCards() =>
+      getActiveJobCardsWithMeta().map((m) => m.cards);
+
   Stream<List<JobCard>> getOpenJobCards() {
-    return _firestore
-        .collection(Collections.jobCards)
-        .where('status', isEqualTo: 'open')
-        .snapshots()
-        .map((snapshot) => parseJobCards(snapshot.docs));
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.jobCards)
+          .where('status', isEqualTo: 'open')
+          .snapshots(),
+      debugName: 'open_jobs',
+    ).map((snapshot) => parseJobCards(snapshot.docs));
   }
 
   Stream<List<JobCard>> getAssignedJobCards(String employeeClockNo) {
@@ -424,37 +472,53 @@ class FirestoreService {
         .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
-  Stream<List<JobCard>> getMyJobCards(String clockNo) {
-    final controller = StreamController<List<JobCard>>();
+  Stream<JobCardListSnapshot> getMyJobCardsWithMeta(String clockNo) {
+    final controller = StreamController<JobCardListSnapshot>();
 
     List<JobCard> assignedJobs = [];
     List<JobCard> createdJobs = [];
+    var assignedFromCache = true;
+    var createdFromCache = true;
 
     void emit() {
       final assignedIds = assignedJobs.map((j) => j.id!).toSet();
-      controller.add([
-        ...assignedJobs,
-        ...createdJobs.where((j) => !assignedIds.contains(j.id)),
-      ]);
+      controller.add((
+        cards: [
+          ...assignedJobs,
+          ...createdJobs.where((j) => !assignedIds.contains(j.id)),
+        ],
+        // Cached until BOTH sides have a server answer — an empty merged list
+        // must not render as truly empty while one side is still offline.
+        isFromCache: assignedFromCache || createdFromCache,
+      ));
     }
 
-    final s1 = _firestore
-        .collection(Collections.jobCards)
-        .where('assignedClockNos', arrayContains: clockNo)
-        .snapshots()
-        .listen((snap) {
+    // Both inner listeners are resilient: previously they had NO onError at
+    // all, so one permission-denied was an unhandled zone error that silently
+    // killed both queries for the rest of the session.
+    final s1 = resilientSnapshots(
+      () => _firestore
+          .collection(Collections.jobCards)
+          .where('assignedClockNos', arrayContains: clockNo)
+          .snapshots(),
+      debugName: 'my_jobs_assigned',
+    ).listen((snap) {
       assignedJobs = parseJobCards(snap.docs);
+      assignedFromCache = snap.metadata.isFromCache;
       emit();
-    });
+    }, onError: controller.addError);
 
-    final s2 = _firestore
-        .collection(Collections.jobCards)
-        .where('operatorClockNo', isEqualTo: clockNo)
-        .snapshots()
-        .listen((snap) {
+    final s2 = resilientSnapshots(
+      () => _firestore
+          .collection(Collections.jobCards)
+          .where('operatorClockNo', isEqualTo: clockNo)
+          .snapshots(),
+      debugName: 'my_jobs_created',
+    ).listen((snap) {
       createdJobs = parseJobCards(snap.docs);
+      createdFromCache = snap.metadata.isFromCache;
       emit();
-    });
+    }, onError: controller.addError);
 
     controller.onCancel = () {
       s1.cancel();
@@ -462,6 +526,24 @@ class FirestoreService {
     };
 
     return controller.stream;
+  }
+
+  Stream<List<JobCard>> getMyJobCards(String clockNo) =>
+      getMyJobCardsWithMeta(clockNo).map((m) => m.cards);
+
+  /// Unread notification-inbox count for the AppBar badge. This is the stream
+  /// most likely to die on a claims race — the rules scope it to the clockNum
+  /// custom claim — so it gets the resilient wrapper like the job streams.
+  Stream<int> getUnreadInboxCountStream(String clockNo) {
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.notificationInbox)
+          .doc(clockNo)
+          .collection(Collections.notificationInboxItems)
+          .where('read', isEqualTo: false)
+          .snapshots(),
+      debugName: 'inbox_unread',
+    ).map((snap) => snap.docs.length);
   }
 
   Stream<List<JobCard>> getCompletedJobCards() {
@@ -758,22 +840,6 @@ class FirestoreService {
       await _firestore.collection(Collections.structures).doc('factory').set({'data': structure});
     } catch (e) {
       throw Exception('Failed to update factory structure: $e');
-    }
-  }
-
-  // Settings operations
-  Future<void> initializeSettings() async {
-    try {
-      final doc = await _firestore.collection(Collections.settings).doc('app').get();
-      
-      if (doc.exists) {
-        debugPrint('Settings loaded successfully');
-      } else {
-        debugPrint('Warning: settings/app document does not exist');
-      }
-    } catch (e) {
-      debugPrint('Warning: Could not load settings: $e');
-      // Do NOT throw - let the app continue
     }
   }
 

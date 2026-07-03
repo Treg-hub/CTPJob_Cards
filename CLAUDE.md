@@ -103,6 +103,16 @@ lib/
 
 **Geofencing**: Uses `geolocator` + `workmanager` with native Kotlin support.
 
+**Startup resilience (2026-07-03)**: The cold-start / auto-login path is hardened so a claims/token race or dead session can't leave Home blank.
+- **`services/resilient_stream.dart`** — `resilientSnapshots<T>()` wraps Firestore snapshot streams so a `permission-denied` (which terminates a listener *permanently*) no longer blanks the screen: it refreshes claims + retries with backoff, and re-arms parked streams via `RetryTriggers` (connectivity / claims-completion / resume / auth). Errors are never forwarded downstream. Retry decisions live in the **pure** `utils/stream_retry_policy.dart` (unit-tested).
+- **`utils/list_load_state.dart`** — pure `decideListLoadState()` so a cached-empty snapshot renders "Waiting for connection…" not a false empty state. `FirestoreService` exposes `...WithMeta` variants carrying `metadata.isFromCache`.
+- **`widgets/session_health_banner.dart`** — top-of-Home banner for a dead/revoked auth session or a server-confirmed employee-doc deletion; "Sign in" preserves prefs + the Hive `sync_queue`.
+- **Home streams are hoisted to `State` fields** — never build a Firestore stream inline in `build()`; that re-subscribes on every rebuild (flicker + wasted reads + resets retry state).
+- **Constraint**: nothing new blocks startup — `main.dart` only *caps* existing waits (kill-switch/uid-restore/employee fetch timeouts) and everything resilience-related runs after the first frame.
+- **`AuthClaimsService.refreshClaims()`** is deduped + exposes `onRefreshCompleted`; call it **after** `linkMyAccount` (login and registration) so the CF can derive `clockNum`.
+
+**Navigation**: one `PageTransitionsTheme` (Cupertino slide) is set on both themes in `main.dart` — use plain `MaterialPageRoute`; the theme gives the consistent animation. Home Quick Actions grid is width-constrained on desktop (`_maxContentWidth`/`_gridChildAspectRatio`).
+
 ---
 
 ## Architecture Visualization & Role-Based Access

@@ -6,6 +6,24 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-03 — Steadier start-up, smoother navigation, tidier desktop
+
+### Reliability
+
+- **Fixed the "logged in but nothing shows up" problem.** Occasionally you could sign in and the Home screen would sit empty — no jobs, no counts, no inbox badge — until you force-closed and reopened the app. The app now automatically retries in the background and refreshes your access the moment it's ready, so your data fills in on its own within a few seconds instead of staying blank.
+- **Offline no longer looks broken.** When you open the app with no signal, lists now show a "Waiting for connection…" state instead of a misleading "No recent jobs". As soon as you're back online everything loads — no restart needed.
+- **"Session expired" is now recoverable.** If your sign-in has lapsed (for example your account was changed on the back office), a clear banner appears with a **Sign in** button instead of the app silently showing nothing. Anything you captured offline is kept and syncs after you sign back in.
+- **Faster, more reliable first sign-in.** Registering a new account is quicker and no longer leaves you without notifications; if a step is interrupted, tapping **Create Account** again simply finishes the job.
+- **Your module tabs come back on their own.** Fleet, Waste, and Site Security tabs that were missing because you opened the app offline now appear automatically once you reconnect.
+
+### Look & feel
+
+- **Smoother screen transitions.** Moving between screens — especially going back — is now a clean, consistent slide instead of the occasional stutter, with an edge-swipe-back gesture.
+- **Tidier Home quick actions.** The Quick Actions tiles are now grouped by colour so linked actions read as a set — job-card actions in orange, Ink Factory and Daily Readings in indigo, Report a Problem and Daily Check in slate, and Daily Review in gold. On wide screens the tiles stretch across the full width but keep a fixed height, so they no longer balloon and push Recent Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily Check" on the Home tile.
+- **A cleaner Home for the gate and admin tools.** **Vehicle at Gate** and **On-Foot Visitor** are no longer Home tiles — reach them from the **Security** tab, where the rest of the gate tools live. The admin **Scan Tester** has moved to **Settings → Admin → Scan Tester**.
+
+---
+
 ## 2026-07-03 — "What's changed" after every update
 
 - **The app now tells you what's new.** The first time you open the app after an update, a **What's changed** sheet slides up with the latest release notes — so you don't have to guess what's different. Tap **Got it** to dismiss it (it only shows once per update) or **Full changelog** to read the complete history.

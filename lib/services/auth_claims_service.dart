@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -16,7 +18,28 @@ import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 /// Always NON-FATAL: any failure (offline, cold start, no employee profile) is
 /// swallowed so it can never block login or app startup.
 class AuthClaimsService {
-  static Future<void> refreshClaims() async {
+  /// In-flight dedupe: several dead streams recovering at once must trigger
+  /// ONE callable invocation, not one each.
+  static Future<void>? _inFlight;
+
+  static final StreamController<bool> _completed =
+      StreamController<bool>.broadcast();
+
+  /// Emits after every [refreshClaims] attempt: true on success, false on
+  /// failure. resilient_stream.dart uses the success events to resurrect
+  /// streams that died on permission-denied while claims were being minted.
+  static Stream<bool> get onRefreshCompleted => _completed.stream;
+
+  static Future<void> refreshClaims() {
+    final existing = _inFlight;
+    if (existing != null) return existing;
+    final future = _doRefresh();
+    _inFlight = future;
+    future.whenComplete(() => _inFlight = null);
+    return future;
+  }
+
+  static Future<void> _doRefresh() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
@@ -28,12 +51,21 @@ class AuthClaimsService {
       // now, instead of after the next natural (~1h) refresh.
       await user.getIdTokenResult(true);
       debugPrint('✅ Custom claims refreshed for ${user.uid}');
+      if (!kIsWeb) {
+        unawaited(FirebaseCrashlytics.instance
+            .setCustomKey('claims_refresh_last', 'ok'));
+      }
+      _completed.add(true);
     } catch (e, st) {
       if (!kIsWeb) {
         FirebaseCrashlytics.instance
             .recordError(e, st, reason: 'set_custom_claims_refresh', fatal: false);
+        unawaited(FirebaseCrashlytics.instance.setCustomKey(
+            'claims_refresh_last',
+            'failed:${e is FirebaseFunctionsException ? e.code : e.runtimeType}'));
       }
       debugPrint('Custom claims refresh failed (non-fatal): $e');
+      _completed.add(false);
     }
   }
 }

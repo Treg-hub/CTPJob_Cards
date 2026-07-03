@@ -29,6 +29,7 @@ import 'kiosk_mode_screen.dart';
 import 'notification_diagnostics_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'notification_test_screen.dart';
+import 'scan_tester_screen.dart';
 import 'login_screen.dart';
 import '../widgets/reset_permissions_button.dart';
 
@@ -584,6 +585,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         subtitle: const Text('Advanced fullscreen & permission testing'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF3B82F6)),
+                        title: const Text('Scan Tester'),
+                        subtitle: const Text('Capture raw barcode payloads for parser development'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          final emp = currentEmployee;
+                          if (emp == null) return;
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)));
+                        },
                       ),
                       if (!kIsWeb && !_kioskEnabled) ...[
                         const Divider(height: 1, indent: 16, endIndent: 16),
