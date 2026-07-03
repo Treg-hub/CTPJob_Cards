@@ -383,6 +383,23 @@ void main() async {
   );
 }
 
+/// One consistent push/pop animation for every route. The framework default
+/// on Android is the zoom+fade transition, which is heavier to render (visible
+/// stutter on low-end tablets) and animates differently per platform. A single
+/// Cupertino-style horizontal slide is lighter, uniform, and adds an
+/// interactive edge-swipe back — so navigating (especially back) looks
+/// deliberate instead of janky.
+const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+  },
+);
+
 class CtpJobCardsApp extends ConsumerWidget {
   final Widget initialScreen;
 
@@ -416,6 +433,7 @@ class CtpJobCardsApp extends ConsumerWidget {
       },
       theme: ThemeData(
         useMaterial3: true,
+        pageTransitionsTheme: _appPageTransitions,
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
           primary: kBrandOrange,
@@ -485,6 +503,7 @@ class CtpJobCardsApp extends ConsumerWidget {
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
+        pageTransitionsTheme: _appPageTransitions,
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
           primary: kBrandOrange,
