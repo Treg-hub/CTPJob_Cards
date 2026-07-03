@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../constants/ink_toloul.dart';
+
 /// Classifies a stock item, which drives report grouping and which flows can
 /// touch it. Items are DATA-DRIVEN (`ink_stock_items` collection) — new items
 /// are added without code changes; this enum only labels their behaviour.
@@ -43,6 +45,8 @@ class InkStockItem {
     this.displayOrder = 9999,
     this.category = '',
     this.metered = false,
+    this.factoryTankBalance,
+    this.lurgiBalance,
   });
 
   final String itemCode;
@@ -63,11 +67,22 @@ class InkStockItem {
   /// CoverWax is produced and consumed into binder, but is NOT metered.
   final bool metered;
 
-  /// Cached closing balance from the ledger.
+  /// Cached closing balance from the ledger (consolidated factory + Lurgi).
   final double currentBalance;
+
+  /// Ink-factory tank only — operational balance for production/IBC (toloul).
+  final double? factoryTankBalance;
+
+  /// Lurgi-held toloul from the latest month-end split count (static mid-month).
+  final double? lurgiBalance;
 
   /// Cached weighted-average cost from the ledger.
   final double weightedAverageCost;
+
+  bool get isToloul => itemCode == kToloulItemCode;
+
+  /// Balance available for ink-factory operations (falls back to consolidated).
+  double get operationalBalance => factoryTankBalance ?? currentBalance;
   final DateTime lastUpdated;
   final String? lastTransactionId;
   final bool active;
@@ -83,6 +98,8 @@ class InkStockItem {
       unit: d['unit'] as String? ?? 'KG',
       itemClass: InkItemClass.fromValue(d['item_class'] as String?),
       currentBalance: (d['current_balance'] as num?)?.toDouble() ?? 0,
+      factoryTankBalance: (d['factory_tank_balance'] as num?)?.toDouble(),
+      lurgiBalance: (d['lurgi_balance'] as num?)?.toDouble(),
       weightedAverageCost: (d['weighted_average_cost'] as num?)?.toDouble() ?? 0,
       lastUpdated:
           (d['last_updated'] as Timestamp?)?.toDate() ?? DateTime.now(),

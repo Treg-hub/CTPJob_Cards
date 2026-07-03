@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../constants/ink_toloul.dart';
+
 /// Ink Factory module configuration (`ink_settings/config`).
 ///
 /// `closedPeriods` implements the period-close lock: months listed here are
@@ -11,6 +13,7 @@ class InkSettings {
     this.inkEnabled = true,
     this.closedPeriods = const [],
     this.periodsNeedingReissue = const [],
+    this.toloulLurgiLowLitres = kDefaultToloulLurgiLowLitres,
   });
 
   final bool inkEnabled;
@@ -19,6 +22,9 @@ class InkSettings {
   /// Closed periods where a manager-override transaction was recorded after
   /// finalisation — the report for these months must be re-issued.
   final List<String> periodsNeedingReissue;
+
+  /// Lurgi toloul stock (L) below this level shows a red alert on the Ink hub.
+  final double toloulLurgiLowLitres;
 
   static const InkSettings defaults = InkSettings();
 
@@ -45,6 +51,9 @@ class InkSettings {
                   ?.map((e) => e.toString())
                   .toList() ??
               const [],
+      toloulLurgiLowLitres:
+          (d['toloul_lurgi_low_litres'] as num?)?.toDouble() ??
+              kDefaultToloulLurgiLowLitres,
     );
   }
 
@@ -52,17 +61,21 @@ class InkSettings {
         'ink_enabled': inkEnabled,
         'closed_periods': closedPeriods,
         'periods_needing_reissue': periodsNeedingReissue,
+        'toloul_lurgi_low_litres': toloulLurgiLowLitres,
       };
 
   InkSettings copyWith({
     bool? inkEnabled,
     List<String>? closedPeriods,
     List<String>? periodsNeedingReissue,
+    double? toloulLurgiLowLitres,
   }) =>
       InkSettings(
         inkEnabled: inkEnabled ?? this.inkEnabled,
         closedPeriods: closedPeriods ?? this.closedPeriods,
         periodsNeedingReissue:
             periodsNeedingReissue ?? this.periodsNeedingReissue,
+        toloulLurgiLowLitres:
+            toloulLurgiLowLitres ?? this.toloulLurgiLowLitres,
       );
 }

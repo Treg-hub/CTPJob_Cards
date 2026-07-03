@@ -49,6 +49,22 @@ final inkItemLedgerRecentProvider =
       ref.watch(inkServiceProvider).watchItemLedgerRecent(itemCode),
 );
 
+/// Recent ledger lines in the current open count period only (operator read-back).
+final inkItemLedgerRecentCurrentPeriodProvider =
+    Provider.family<AsyncValue<List<InkTransaction>>, String>((ref, itemCode) {
+  final ledgerAsync = ref.watch(inkItemLedgerRecentProvider(itemCode));
+  final range = ref.watch(inkOpenPeriodRangeProvider);
+  return ledgerAsync.when(
+    data: (txns) => AsyncData(
+      txns
+          .where((t) => isWithinInkOpenPeriod(t.effectiveAt, range))
+          .toList(),
+    ),
+    loading: () => const AsyncLoading(),
+    error: (e, st) => AsyncError(e, st),
+  );
+});
+
 /// Manager "pending costs" queue.
 final inkPendingCostsProvider = StreamProvider<List<InkTransaction>>(
   (ref) => ref.watch(inkServiceProvider).watchPendingCosts(),

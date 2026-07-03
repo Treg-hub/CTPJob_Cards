@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../constants/ink_toloul.dart';
 import '../models/ink_stock_item.dart';
 import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
@@ -40,10 +41,23 @@ class InkHomeScreen extends ConsumerWidget {
     }
 
     final itemsAsync = ref.watch(inkStockItemsProvider);
+    final inkSettings = ref.watch(inkSettingsProvider).valueOrNull;
     final readingsStatus =
         ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
     final isManager = role_utils.isInkManager(
         ref.watch(currentEmployeeProvider).valueOrNull);
+    InkStockItem? toloulItem;
+    for (final i in itemsAsync.valueOrNull ?? <InkStockItem>[]) {
+      if (i.isToloul) {
+        toloulItem = i;
+        break;
+      }
+    }
+    final lurgiBalance = toloulItem?.lurgiBalance;
+    final lurgiLowThreshold =
+        inkSettings?.toloulLurgiLowLitres ?? kDefaultToloulLurgiLowLitres;
+    final showLurgiLowAlert = lurgiBalance != null &&
+        lurgiBalance < lurgiLowThreshold;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
@@ -78,12 +92,24 @@ class InkHomeScreen extends ConsumerWidget {
                 builder: () => const InkIbcTransferScreen()),
             _Action(Icons.science_outlined, 'Production Run',
                 builder: () => const InkProductionRunScreen()),
-            _Action(Icons.recycling_outlined, 'Toloul Recovery',
-                builder: () => const InkTolulRecoveryScreen()),
+            _Action(
+              Icons.recycling_outlined,
+              'Toloul Recovery',
+              builder: () => const InkTolulRecoveryScreen(),
+              onLongPress: (ctx) => _showLurgiLowThresholdDialog(ctx, ref),
+            ),
             _Action(Icons.inventory_2_outlined, 'IBC Register',
                 builder: () => const InkIbcRegisterScreen()),
           ]),
           const SizedBox(height: 20),
+          if (showLurgiLowAlert) ...[
+            _LurgiLowStockBanner(
+              lurgiBalance: lurgiBalance,
+              threshold: lurgiLowThreshold,
+              unit: toloulItem?.unit ?? 'LTS',
+            ),
+            const SizedBox(height: 8),
+          ],
           _sectionLabel(context, 'Stock on hand'),
           const SizedBox(height: 4),
           itemsAsync.when(
@@ -109,6 +135,78 @@ class InkHomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  static Future<void> _showLurgiLowThresholdDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final settings = ref.read(inkSettingsProvider).valueOrNull;
+    final current =
+        settings?.toloulLurgiLowLitres ?? kDefaultToloulLurgiLowLitres;
+    final ctrl = TextEditingController(
+      text: current == current.roundToDouble()
+          ? current.toInt().toString()
+          : current.toString(),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Lurgi low-stock alert'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Show a red warning on this screen when Lurgi toloul stock '
+              'drops below this level (litres). Long-press Toloul Recovery to change.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Low level (L)',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final thresholdText = ctrl.text.trim();
+    ctrl.dispose();
+    if (saved != true || !context.mounted) return;
+    final parsed = double.tryParse(thresholdText);
+    if (parsed == null || parsed < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid non-negative number.')),
+      );
+      return;
+    }
+    try {
+      await ref.read(inkServiceProvider).updateToloulLurgiLowThreshold(parsed);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Low level set to ${_qty.format(parsed)} L')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save: $e')),
+      );
+    }
   }
 
   static Widget _sectionLabel(BuildContext context, String text) => Text(
@@ -155,10 +253,16 @@ class _PulseManageCard extends StatelessWidget {
 }
 
 class _Action {
-  const _Action(this.icon, this.label, {this.builder});
+  const _Action(
+    this.icon,
+    this.label, {
+    this.builder,
+    this.onLongPress,
+  });
   final IconData icon;
   final String label;
   final Widget Function()? builder;
+  final void Function(BuildContext context)? onLongPress;
 }
 
 class _ActionGrid extends StatelessWidget {
@@ -199,6 +303,9 @@ class _ActionCard extends StatelessWidget {
                 context, MaterialPageRoute(builder: (_) => action.builder!()));
           }
         },
+        onLongPress: action.onLongPress != null
+            ? () => action.onLongPress!(context)
+            : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: Column(
@@ -256,19 +363,68 @@ class _StockQtySummary extends StatelessWidget {
   }
 }
 
+class _LurgiLowStockBanner extends StatelessWidget {
+  const _LurgiLowStockBanner({
+    required this.lurgiBalance,
+    required this.threshold,
+    required this.unit,
+  });
+
+  final double lurgiBalance;
+  final double threshold;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      color: scheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded, color: scheme.error),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Lurgi toloul stock low: '
+                '${InkHomeScreen._qty.format(lurgiBalance)} $unit '
+                '(below ${InkHomeScreen._qty.format(threshold)} $unit)',
+                style: TextStyle(
+                  color: scheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StockTile extends StatelessWidget {
   const _StockTile({required this.item});
   final InkStockItem item;
 
   @override
   Widget build(BuildContext context) {
+    final displayQty =
+        item.isToloul ? item.operationalBalance : item.currentBalance;
+    final subtitle = item.isToloul
+        ? 'Factory tank · consolidated ${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}'
+        : '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}';
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       title: Text(item.displayName),
-      subtitle: Text(
-        '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}',
+      subtitle: Text(subtitle),
+      trailing: Text(
+        '${InkHomeScreen._qty.format(displayQty)} ${item.unit}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
