@@ -1,8 +1,10 @@
+import 'dart:async' show unawaited;
+import 'dart:io' show Platform;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, FlutterError, PlatformDispatcher;
 import 'package:flutter/material.dart';
@@ -88,6 +90,20 @@ bool _isRecoverableAsyncError(Object error) {
   return false;
 }
 
+/// True once Firebase init succeeded, so startup breadcrumbs can safely reach
+/// Crashlytics (calls before initializeApp would throw on native platforms).
+bool _crashlyticsReady = false;
+
+/// Startup breadcrumb: debug console always; Crashlytics log fire-and-forget.
+/// Lets a "opened the app and nothing appeared" report show exactly which
+/// startup path was taken (cache/network/stub employee, kill-switch, screen).
+void _crumb(String message) {
+  debugPrint('🚀 startup: $message');
+  if (!kIsWeb && _crashlyticsReady) {
+    unawaited(FirebaseCrashlytics.instance.log('startup: $message'));
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -137,6 +153,8 @@ void main() async {
         return true;
       };
     }
+    _crashlyticsReady = !kIsWeb;
+    _crumb('firebase-ok');
   } catch (e) {
     debugPrint('Firebase warning: $e');
   }
@@ -148,23 +166,28 @@ void main() async {
   // cooldown). Fails open: no doc / no field / fetch error → app continues.
   if (!kIsWeb) {
     try {
+      // Capped: on a dead network this get() could previously hang the native
+      // splash indefinitely. 4 s then fail open (kill-switch is best-effort).
       final settingsDoc = await FirebaseFirestore.instance
           .collection('settings')
           .doc('app')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 4));
       final minBuild = settingsDoc.data()?['minSupportedBuild'];
       if (minBuild is num && minBuild > 0) {
         final info = await PackageInfo.fromPlatform();
         final currentBuild = int.tryParse(info.buildNumber) ?? 0;
         if (currentBuild > 0 && currentBuild < minBuild.toInt()) {
           final url = settingsDoc.data()?['updateDownloadUrl'] as String? ?? '';
-          debugPrint('🛑 Build $currentBuild < minSupportedBuild $minBuild — blocking');
+          _crumb('killswitch-blocked build=$currentBuild min=$minBuild');
           KioskModeService.instance.reassertIfEnabled();
           runApp(KioskLifecycleGuard(child: UpdateRequiredScreen(downloadUrl: url)));
           return;
         }
       }
+      _crumb('killswitch-passed');
     } catch (e) {
+      _crumb('killswitch-skipped');
       debugPrint('minSupportedBuild check skipped: $e');
     }
   }
@@ -189,12 +212,9 @@ void main() async {
     }
   });
 
+  // NOTE: the old initializeSettings() call is gone — it re-read the same
+  // settings/app doc the kill-switch just fetched and only debugPrinted.
   final firestoreService = FirestoreService();
-  try {
-    await firestoreService.initializeSettings();
-  } catch (e) {
-    debugPrint('Settings warning: $e');
-  }
 
   await SyncService().init();
 
@@ -207,13 +227,22 @@ void main() async {
   // Fallback: SharedPreferences was cleared (e.g. reinstall) but Firebase Auth session survived
   if (clockNo == null && !kIsWeb) {
     try {
-      final firebaseUser = FirebaseAuth.instance.currentUser;
+      // currentUser can still be null while FirebaseAuth restores the session
+      // from disk on a cold start — wait (capped) for the first auth event so
+      // a surviving session isn't missed. Only runs when prefs are missing,
+      // so the normal startup path never pays this wait.
+      final firebaseUser = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 2),
+              onTimeout: () => FirebaseAuth.instance.currentUser);
       if (firebaseUser != null) {
         final query = await FirebaseFirestore.instance
             .collection('employees')
             .where('uid', isEqualTo: firebaseUser.uid)
             .limit(1)
-            .get();
+            .get()
+            .timeout(const Duration(seconds: 5));
         if (query.docs.isNotEmpty) {
           clockNo = query.docs.first.data()['clockNo'] as String?;
           if (clockNo != null) {
@@ -229,6 +258,7 @@ void main() async {
 
   if (clockNo != null) {
     bool employeeNotFound = false;
+    String employeeSource = 'none';
 
     // Try Firestore offline cache first — fast and survives app updates without network
     try {
@@ -238,18 +268,28 @@ void main() async {
           .get(const GetOptions(source: Source.cache));
       if (cachedDoc.exists && cachedDoc.data() != null) {
         realEmployee = Employee.fromFirestore(cachedDoc.data()!, clockNo);
+        employeeSource = 'cache';
         debugPrint('✅ Employee loaded from cache for $clockNo');
       }
     } catch (_) {
       // Cache miss — fall through to network
     }
 
-    // Cache miss: try network
+    // Cache miss: try network (capped — a hung channel must not hold the splash)
     if (realEmployee == null) {
       try {
-        realEmployee = await firestoreService.getEmployee(clockNo);
-        if (realEmployee == null) {
-          employeeNotFound = true; // doc confirmed absent in Firestore
+        final checked = await firestoreService
+            .getEmployeeChecked(clockNo)
+            .timeout(const Duration(seconds: 6));
+        realEmployee = checked.employee;
+        if (checked.employee != null) {
+          employeeSource = 'network';
+        } else if (checked.serverConfirmedAbsent) {
+          // Only a SERVER-confirmed absence clears the session. A default
+          // get() answered from cache while offline also reports
+          // exists == false — that used to wrongly log the user out here.
+          employeeNotFound = true;
+          _crumb('employee-absent-server');
         }
       } catch (e) {
         // Network/transient failure — don't force logout, trust the saved session
@@ -272,8 +312,16 @@ void main() async {
           department: department,
           isAdmin: adminFlag,
         );
+        employeeSource = 'stub';
         debugPrint('⚡ Employee stub built from SharedPreferences for $clockNo');
       }
+    }
+    _crumb('employee-$employeeSource');
+    if (!kIsWeb && _crashlyticsReady) {
+      unawaited(FirebaseCrashlytics.instance
+          .setCustomKey('startup_employee_source', employeeSource));
+      unawaited(FirebaseCrashlytics.instance.setCustomKey(
+          'startup_auth_present', FirebaseAuth.instance.currentUser != null));
     }
 
     if (employeeNotFound) {
@@ -324,6 +372,7 @@ void main() async {
     initialScreen = const LoginScreen();
   }
 
+  _crumb('screen-${initialScreen.runtimeType}');
   runApp(
     ProviderScope(
       child: KioskLifecycleGuard(

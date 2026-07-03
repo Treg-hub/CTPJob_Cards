@@ -58,6 +58,27 @@ class FirestoreService {
     }
   }
 
+  /// Like [getEmployee], but distinguishes a SERVER-confirmed missing doc from
+  /// an offline cache miss. A default get() answered from cache while offline
+  /// reports `exists == false` even though the doc may exist on the server —
+  /// callers must only clear a saved session when [serverConfirmedAbsent].
+  Future<({Employee? employee, bool serverConfirmedAbsent})> getEmployeeChecked(
+      String clockNo) async {
+    final doc =
+        await _firestore.collection(Collections.employees).doc(clockNo).get();
+    final data = doc.data();
+    if (data == null) {
+      return (
+        employee: null,
+        serverConfirmedAbsent: !doc.metadata.isFromCache,
+      );
+    }
+    return (
+      employee: Employee.fromFirestore(data, clockNo),
+      serverConfirmedAbsent: false,
+    );
+  }
+
   Future<void> updateEmployee(Employee employee) async {
     try {
       await _firestore.collection(Collections.employees).doc(employee.clockNo).set(
@@ -758,22 +779,6 @@ class FirestoreService {
       await _firestore.collection(Collections.structures).doc('factory').set({'data': structure});
     } catch (e) {
       throw Exception('Failed to update factory structure: $e');
-    }
-  }
-
-  // Settings operations
-  Future<void> initializeSettings() async {
-    try {
-      final doc = await _firestore.collection(Collections.settings).doc('app').get();
-      
-      if (doc.exists) {
-        debugPrint('Settings loaded successfully');
-      } else {
-        debugPrint('Warning: settings/app document does not exist');
-      }
-    } catch (e) {
-      debugPrint('Warning: Could not load settings: $e');
-      // Do NOT throw - let the app continue
     }
   }
 
