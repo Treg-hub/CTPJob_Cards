@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +14,7 @@ import '../constants/collections.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 
+import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
@@ -30,6 +32,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/persona_banner.dart';
 import '../widgets/persona_picker_dialog.dart';
 import '../widgets/job_card_tile.dart';
+import '../widgets/session_health_banner.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
 import '../widgets/geofence_health_banner.dart';
@@ -106,6 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Stream<JobCardListSnapshot>? _myWorkStream;
   String? _inboxClockNo;
   Stream<int>? _inboxCountStream;
+  StreamSubscription<List<ConnectivityResult>>? _moduleSettingsConnSub;
   bool _testMode = false;
   Timer? _testModeTimer;
   // Debounces on/off-site snackbars so GPS jitter at the fence boundary can't
@@ -371,6 +375,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         // miss — getEmployeeStream filters those). Surfaced via the session
         // banner; prefs and the offline queue are deliberately left intact.
         debugPrint('HomeScreen: employee doc deleted (server-confirmed)');
+        SessionHealthBanner.flagAccountMissing();
         return;
       }
       debugPrint('HomeScreen: employee stream error: $e');
@@ -669,11 +674,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return result;
   }
 
-  double get _iconSize => _isDesktop ? 60 : (_isTablet ? 56 : 40);
+  double get _iconSize => _isDesktop ? 44 : (_isTablet ? 48 : 40);
   EdgeInsets get _cardPaddingInsets => const EdgeInsets.all(14);
   double get _gridSpacing => _isDesktop ? 14 : (_isTablet ? 12 : 10);
   double get _screenPadding => _isDesktop ? 20 : 16;
   int get _gridColumns => _isDesktop ? 6 : (_isTablet ? 4 : 3);
+
+  // On a wide screen a square tile (aspectRatio 1) at 6 columns balloons to
+  // ~300px and pushes everything below off-screen. Landscape tiles keep the
+  // Quick Actions to a compact band, leaving room for Recent Job Cards.
+  double get _gridChildAspectRatio => _isDesktop ? 1.25 : (_isTablet ? 1.1 : 1);
+
+  // Stop full-bleed stretching on desktop/large windows — content is centred
+  // in a readable column instead of spanning the whole monitor. At 1200 the
+  // six-column grid yields ~190px tiles (vs ~300px square full-bleed), so
+  // Quick Actions stays a compact band and Recent Job Cards is visible below.
+  double? get _maxContentWidth => _isDesktop ? 1200 : null;
+
+  /// Centres [child] within [_maxContentWidth] on wide screens; passes it
+  /// through unchanged on phones/tablets.
+  Widget _constrainContentWidth(Widget child) {
+    final maxWidth = _maxContentWidth;
+    if (maxWidth == null) return child;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+
+  // Success flags for the one-shot module-settings loads. A load that
+  // returned defaults for a missing doc still counts as success (the server
+  // answered); only the catch path leaves a flag false so
+  // _retryFailedModuleSettings never re-reads settings that loaded fine.
+  bool _fleetSettingsLoaded = false;
+  bool _wasteSettingsLoaded = false;
+  bool _securitySettingsLoaded = false;
 
   Future<void> _loadFleetSettings() async {
     try {
@@ -685,6 +723,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           _cachedFleetSettings = settings;
           _fleetChecklistEnabled = checklist.enabled;
         });
+        _fleetSettingsLoaded = true;
         _maybeOpenFleetTabForMechanic();
       }
     } catch (e) {
@@ -697,6 +736,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final settings = await WasteService().getWasteSettings();
       if (mounted) {
         setState(() => _cachedWasteSettings = settings);
+        _wasteSettingsLoaded = true;
         _maybeOpenModuleTabForSecurityGuard();
       }
     } catch (e) {
@@ -709,11 +749,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final settings = await SecurityService().getSettings();
       if (mounted) {
         setState(() => _cachedSecuritySettings = settings);
+        _securitySettingsLoaded = true;
         _maybeOpenModuleTabForSecurityGuard();
       }
     } catch (e) {
       debugPrint('Security settings load error: $e');
     }
+  }
+
+  /// Re-runs only the module-settings loads whose FIRST attempt failed
+  /// (offline cold start). Without this, a mechanic's Fleet tab or a guard's
+  /// Waste/Security hub stayed missing for the whole session. Fired on
+  /// connectivity restore and app resume; zero extra reads when the initial
+  /// loads succeeded.
+  void _retryFailedModuleSettings() {
+    if (!_fleetSettingsLoaded) _loadFleetSettings();
+    if (!_wasteSettingsLoaded) _loadWasteSettings();
+    if (!_securitySettingsLoaded) _loadSecuritySettings();
   }
 
   @override
@@ -725,6 +777,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadFleetSettings();
     _loadWasteSettings();
     _loadSecuritySettings();
+    // Offline cold start: re-attempt any module-settings load that failed
+    // the moment connectivity returns (only failed ones — no extra reads).
+    _moduleSettingsConnSub =
+        ConnectivityService().connectivityStream.listen((results) {
+      if (results.any((r) => r != ConnectivityResult.none)) {
+        _retryFailedModuleSettings();
+      }
+    });
 
     if (realEmployee != null) {
       _setupEmployeeStream(realEmployee!.clockNo);
@@ -818,6 +878,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _inProgressSub?.cancel();
     _reviewCountSubscription?.cancel();
     _messagingSubscription?.cancel();
+    _moduleSettingsConnSub?.cancel();
     _testModeTimer?.cancel();
     _presenceNoticeDebounce?.cancel();
     super.dispose();
@@ -827,6 +888,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadFleetSettings();
+      // Waste/security settings previously never retried after a failed
+      // initial load — resume is the second re-arm point (with reconnect).
+      _retryFailedModuleSettings();
       DeviceHealthService().syncPermissionsToFirestore();
       if (!_testMode) {
         _locationService.checkCurrentLocation();
@@ -1070,7 +1134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
               ),
         ),
-        child: _buildSecurityGuardHomeHub(),
+        child: _constrainContentWidth(_buildSecurityGuardHomeHub()),
       );
     }
 
@@ -1084,7 +1148,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
             ),
       ),
-      child: Column(
+      child: _constrainContentWidth(Column(
         children: [
           // Nudges the user if Location-Always / battery-opt got revoked, which
           // silently breaks background geofencing (hidden on web + when healthy).
@@ -1123,7 +1187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 crossAxisCount: _gridColumns,
                 mainAxisSpacing: _gridSpacing,
                 crossAxisSpacing: _gridSpacing,
-                childAspectRatio: 1,
+                childAspectRatio: _gridChildAspectRatio,
               ),
               children: [
                 ..._quickActions.map((action) => _buildQuickActionCard(
@@ -1185,7 +1249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             _buildRecentJobCards(),
           ],
         ],
-      ),
+      )),
     );
   }
 
@@ -2206,6 +2270,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ),
       body: Column(
         children: [
+          const SessionHealthBanner(),
           const PersonaBanner(),
           const SyncIndicator(),
           Expanded(
