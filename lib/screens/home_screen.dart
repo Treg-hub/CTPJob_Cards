@@ -53,10 +53,6 @@ import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
 import 'security_home_screen.dart';
-import 'security_vehicle_gate_screen.dart';
-import 'scan_tester_screen.dart';
-
-import 'security_on_foot_visitor_screen.dart';
 
 import '../models/fleet_settings.dart';
 import '../models/security_settings.dart';
@@ -638,49 +634,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         },
       ];
     }
-    if (_showSecurityModule) {
-      result = [
-        ...result,
-        {
-          'title': 'Vehicle at Gate',
-          'icon': Icons.directions_car,
-          'color': kBrandOrange,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const SecurityVehicleGateScreen()),
-              ),
-        },
-        {
-          'title': 'On-Foot Visitor',
-          'icon': Icons.directions_walk,
-          'color': kBrandOrange,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const SecurityOnFootVisitorScreen()),
-              ),
-        },
-      ];
-    }
-    if (role_utils.isAdmin(currentEmployee)) {
-      result = [
-        ...result,
-        {
-          'title': 'Scan Tester',
-          'icon': Icons.qr_code_scanner,
-          'color': const Color(0xFF3B82F6),
-          'onTap': () {
-            final emp = currentEmployee;
-            if (emp == null) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)),
-            );
-          },
-        },
-      ];
-    }
+    // Vehicle at Gate / On-Foot Visitor are reached from the Security tab, not
+    // the Home quick actions. Scan Tester (admin) lives under Settings.
     return result;
   }
 

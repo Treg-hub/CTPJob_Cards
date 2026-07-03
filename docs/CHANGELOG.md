@@ -20,6 +20,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 - **Smoother screen transitions.** Moving between screens — especially going back — is now a clean, consistent slide instead of the occasional stutter, with an edge-swipe-back gesture.
 - **Tidier Home quick actions.** The Quick Actions tiles are now grouped by colour so linked actions read as a set — job-card actions in orange, Ink Factory and Daily Readings in indigo, Report a Problem and Daily Check in slate, and Daily Review in gold. On wide screens the tiles stretch across the full width but keep a fixed height, so they no longer balloon and push Recent Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily Check" on the Home tile.
+- **A cleaner Home for the gate and admin tools.** **Vehicle at Gate** and **On-Foot Visitor** are no longer Home tiles — reach them from the **Security** tab, where the rest of the gate tools live. The admin **Scan Tester** has moved to **Settings → Admin → Scan Tester**.
 
 ---
 
