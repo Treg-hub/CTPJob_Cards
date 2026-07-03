@@ -7,6 +7,7 @@ import '../main.dart' show realEmployee;
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_navigation.dart';
+import 'feedback_thread_screen.dart';
 import 'job_card_detail_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,15 @@ class _NotificationInboxScreenState
         issueId.isNotEmpty &&
         type.startsWith('fleet_')) {
       await openFleetIssue(ctx, issueId);
+      return;
+    }
+
+    final feedbackId = data['feedbackId'] as String?;
+    if (feedbackId != null && feedbackId.isNotEmpty && type.startsWith('feedback')) {
+      await Navigator.push(
+        ctx,
+        MaterialPageRoute(builder: (_) => FeedbackThreadScreen(feedbackId: feedbackId)),
+      );
       return;
     }
 
@@ -395,6 +405,10 @@ class _NotifTile extends StatelessWidget {
         return Icons.build_circle_outlined;
       case 'fleet_issue_resolved':
         return Icons.check_circle_outline;
+      case 'feedback_comment':
+        return Icons.forum;
+      case 'feedback_status':
+        return Icons.fact_check_outlined;
       default:
         return Icons.notifications;
     }
@@ -426,6 +440,10 @@ class _NotifTile extends StatelessWidget {
         return const Color(0xFF2A9D9F);
       case 'fleet_issue_resolved':
         return Colors.green.shade700;
+      case 'feedback_comment':
+        return const Color(0xFFFF8C42);
+      case 'feedback_status':
+        return Colors.teal;
       default:
         return const Color(0xFFFF8C42);
     }
