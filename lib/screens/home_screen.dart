@@ -16,6 +16,7 @@ import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
+import '../services/whats_new_service.dart';
 import '../theme/app_theme.dart';
 import '../services/client_platform_service.dart';
 import '../services/device_health_service.dart';
@@ -719,6 +720,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           await NotificationService().checkPendingFleetNavigation();
         } catch (e) {
           debugPrint('Pending fleet navigation error: $e');
+        }
+        // After update + deep-link handling: one-time "What's changed" sheet
+        // when this is the first launch of a new build. Skips itself if a
+        // deep link pushed a screen over Home.
+        if (mounted) {
+          await WhatsNewService().maybeShowWhatsNew(context);
         }
       });
     }
