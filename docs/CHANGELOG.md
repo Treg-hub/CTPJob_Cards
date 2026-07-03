@@ -6,6 +6,14 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-03 — "What's changed" after every update
+
+- **The app now tells you what's new.** The first time you open the app after an update, a **What's changed** sheet slides up with the latest release notes — so you don't have to guess what's different. Tap **Got it** to dismiss it (it only shows once per update) or **Full changelog** to read the complete history.
+- Brand-new users don't see the sheet on first install — it only appears from your first update onwards.
+- The release notes come straight from this changelog, which you can always find under **Settings → Documentation → Changelog**.
+
+---
+
 ## 2026-07-02 — Home screen tile grid + login screen polish
 
 ### Home screen

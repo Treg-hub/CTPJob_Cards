@@ -2,6 +2,13 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **"What's changed" sheet after app updates (2026-07-03)**:
+  - **New**: `lib/services/whats_new_service.dart` + `lib/widgets/whats_new_sheet.dart`. First HomeScreen mount of a new build (SharedPreferences `lastSeenWhatsNewBuild` < `PackageInfo.buildNumber`) shows a one-time bottom sheet rendering the newest `## ` entry of the bundled `docs/CHANGELOG.md` (markdown, version chip, "Full changelog" → `DocViewerScreen`).
+  - **Hooks**: `home_screen.dart` initState postFrame — runs after `UpdateService.checkForUpdate` + pending deep-link navigation, and skips itself (without stamping) when Home isn't the current route so a notification deep link wins; the sheet then shows on the next launch. `permissions_onboarding_screen.dart` `_completeOnboarding` stamps the current build so fresh installs never see it; `null` stamp on an onboarded device = existing user updating into the feature → shows once.
+  - **Release discipline**: prepend a user-facing entry to `docs/CHANGELOG.md` before each APK build — the top entry is the sheet content (also added as `## 2026-07-03` entry announcing the feature itself).
+  - **Tests**: `test/whats_new_parser_test.dart` (4 tests on the pure `extractLatestEntry` parser). Analyzer clean; full suite 256/257 — the 1 failure is the pre-existing `job_card_tile_golden_test.dart` golden (fails on clean master too).
+  - **Map**: mobile `visualization.md` (Core Services → Startup/Update surfaces — also documents kill-switch + Remote Config layers), mobile `CLAUDE.md` (Local Storage + release-notes discipline), `docs/CHANGELOG.md`; monorepo `Components/Modules/JobCardsCoreModule.md`, `Canvases/INDEX.md`, root `CHANGELOG.md`.
+
 - **Feedback loop closed — two-way thread + status/reply notifications (2026-07-03)**:
   - **Worker surface**: home FAB now opens **My Feedback** (`my_feedback_screen.dart`) — compose dialog (moved from `home_screen.dart`) + own submissions (query `clockNo ==`, client-side sort — no composite index) with worker wording (Received/Planned/Done/Declined) and reply counts. Tap → shared **thread** (`feedback_thread_screen.dart`): original message + status chip + `feedback_comments` bubbles + composer (submitter + admins only; read-only for anyone else). Shared model extracted to `lib/models/feedback_item.dart` (enum/status colors/FeedbackItem/FeedbackComment); `Collections.feedbackComments` added.
   - **Admin surface**: triage board (`feedback_admin_screen.dart`) refactored onto the shared model + "Reply to submitter / Thread (N)" button into the same thread screen; private `adminNotes` unchanged and never shown in the thread.

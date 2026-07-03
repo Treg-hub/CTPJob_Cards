@@ -11,6 +11,7 @@ import '../providers/permissions_provider.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import '../services/whats_new_service.dart';
 import '../utils/role.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
@@ -188,6 +189,11 @@ class _PermissionsOnboardingScreenState
 
     // Onboarding is shown once; revoked permissions are handled via Home banner.
     await prefs.setBool('permissionsCompleted', true);
+
+    // Fresh install / first onboarding: stamp the current build so the
+    // "What's changed" sheet only fires on future updates, not right after
+    // the user has just read the full onboarding.
+    await WhatsNewService().markCurrentBuildSeen();
 
     if (!kIsWeb) {
       await DeviceHealthService().syncPermissionsToFirestore();

@@ -202,7 +202,11 @@ All collection names are defined as constants in `lib/constants/collections.dart
 ## Local Storage
 
 - **Hive**: `sync_queue`
-- **SharedPreferences**: `loggedInClockNo`, `permissionsCompleted`
+- **SharedPreferences**: `loggedInClockNo`, `permissionsCompleted`, `lastSeenWhatsNewBuild` (What's-changed sheet — see `lib/services/whats_new_service.dart`; stamped at onboarding for fresh installs, compared against `PackageInfo.buildNumber` on HomeScreen mount)
+
+## Release notes ("What's changed" sheet)
+
+`WhatsNewService` shows a one-time bottom sheet with the newest `docs/CHANGELOG.md` entry the first time a user opens a new build. **Before building any release APK, prepend a user-facing entry to `docs/CHANGELOG.md`** — the top `## ` section is exactly what every updated user sees.
 
 ## Cloud Functions
 
