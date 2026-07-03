@@ -218,14 +218,15 @@ class _State extends ConsumerState<InkProductionRunScreen> {
   }
 
   Widget _line(BuildContext context, InkStockItem? item, double qty) {
-    final negative = item != null && item.currentBalance < qty;
+    final onHand = item?.operationalBalance ?? 0;
+    final negative = item != null && onHand < qty;
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       title: Text(item?.displayName ?? '?'),
       subtitle: negative
           ? Text(
-              'Only ${_qty.format(item.currentBalance)} ${item.unit} on hand',
+              'Only ${_qty.format(onHand)} ${item!.unit} in factory tank',
               style: TextStyle(
                   color: Theme.of(context).colorScheme.error))
           : null,

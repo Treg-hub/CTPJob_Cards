@@ -56,6 +56,8 @@ class InkCountEvent {
               'delta': l.delta,
               'wac': l.wac,
               'value': l.value,
+              if (l.factoryCounted != null) 'factory_counted': l.factoryCounted,
+              if (l.lurgiCounted != null) 'lurgi_counted': l.lurgiCounted,
             }
         ],
         'created_at': Timestamp.fromDate(createdAt),
@@ -96,6 +98,8 @@ class InkCountEvent {
               ledgerBalance: (l['ledger_balance'] as num?)?.toDouble() ?? 0,
               wac: (l['wac'] as num?)?.toDouble() ?? 0,
               value: (l['value'] as num?)?.toDouble() ?? 0,
+              factoryCounted: (l['factory_counted'] as num?)?.toDouble(),
+              lurgiCounted: (l['lurgi_counted'] as num?)?.toDouble(),
             ),
       ],
       createdAt: _parseTimestamp(d['created_at']) ?? DateTime.now(),
@@ -110,11 +114,19 @@ class InkCountLine {
     required this.ledgerBalance,
     this.wac = 0,
     this.value = 0,
+    this.factoryCounted,
+    this.lurgiCounted,
   });
 
   final String itemCode;
   final double counted;
   final double ledgerBalance;
+
+  /// Toloul only — physical count in the ink-factory tank at month-end.
+  final double? factoryCounted;
+
+  /// Toloul only — physical count held at Lurgi at month-end.
+  final double? lurgiCounted;
 
   /// WAC at the count date (unchanged by the count adjustment, which moves
   /// quantity at the current WAC). This is the opening WAC baseline the report

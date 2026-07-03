@@ -41,8 +41,10 @@ class InkStockItemDetailScreen extends ConsumerWidget {
       if (i.itemCode == itemCode) item = i;
     }
     final scheme = Theme.of(context).colorScheme;
-    // Mobile: qty-only recent ledger; full ledger + costs are on CTP Pulse.
-    final ledgerAsync = ref.watch(inkItemLedgerRecentProvider(itemCode));
+    // Mobile: qty-only recent ledger scoped to the open count period; full
+    // ledger + costs are on CTP Pulse.
+    final ledgerAsync =
+        ref.watch(inkItemLedgerRecentCurrentPeriodProvider(itemCode));
 
     return Scaffold(
       appBar: AppBar(title: Text(item?.displayName ?? itemCode)),
@@ -62,13 +64,38 @@ class InkStockItemDetailScreen extends ConsumerWidget {
               color: scheme.primaryContainer,
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _stat(context, 'Balance',
-                        '${_qty.format(item.currentBalance)} ${item.unit}'),
-                  ],
-                ),
+                child: item.isToloul
+                    ? Wrap(
+                        spacing: 20,
+                        runSpacing: 8,
+                        children: [
+                          _stat(
+                            context,
+                            'Factory tank',
+                            '${_qty.format(item.operationalBalance)} ${item.unit}',
+                          ),
+                          _stat(
+                            context,
+                            'Lurgi',
+                            '${_qty.format(item.lurgiBalance ?? 0)} ${item.unit}',
+                          ),
+                          _stat(
+                            context,
+                            'Consolidated',
+                            '${_qty.format(item.currentBalance)} ${item.unit}',
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _stat(
+                            context,
+                            'Balance',
+                            '${_qty.format(item.currentBalance)} ${item.unit}',
+                          ),
+                        ],
+                      ),
               ),
             ),
           Expanded(
@@ -77,7 +104,12 @@ class InkStockItemDetailScreen extends ConsumerWidget {
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (txns) {
                 if (txns.isEmpty) {
-                  return const Center(child: Text('No transactions yet.'));
+                  return Center(
+                    child: Text(
+                      'No movements in the current period.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  );
                 }
                 final ordered = txns.reversed.toList();
                 return ListView.separated(

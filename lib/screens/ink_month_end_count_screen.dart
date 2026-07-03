@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../constants/ink_toloul.dart';
 import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
@@ -15,7 +16,7 @@ import '../utils/role.dart' as role_utils;
 /// designated date (not necessarily the calendar month-end) and the system
 /// auto-creates the adjustment per item from the difference to the ledger
 /// (count − ledger), exactly as done manually today. Enter counts for the items
-/// you counted; blanks are skipped.
+/// you counted; blanks are skipped. Toloul requires factory tank + Lurgi split.
 class InkMonthEndCountScreen extends ConsumerStatefulWidget {
   const InkMonthEndCountScreen({super.key});
 
@@ -30,6 +31,9 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
 
   TextEditingController _ctrl(String code) =>
       _ctrls.putIfAbsent(code, () => TextEditingController());
+
+  TextEditingController _toloulFactoryCtrl() => _ctrl('${kToloulItemCode}_factory');
+  TextEditingController _toloulLurgiCtrl() => _ctrl('${kToloulItemCode}_lurgi');
 
   @override
   void dispose() {
@@ -46,9 +50,48 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
 
   Future<void> _submit(List<InkStockItem> items) async {
     if (!guardPersonaSubmit(context)) return;
-    final lines =
-        <({String itemCode, double counted, double ledgerBalance, double wac})>[];
+    final lines = <
+        ({
+          String itemCode,
+          double counted,
+          double ledgerBalance,
+          double wac,
+          double? factoryCounted,
+          double? lurgiCounted,
+        })>[];
+
     for (final item in items) {
+      if (item.isToloul) {
+        final factoryRaw = _toloulFactoryCtrl().text.trim();
+        final lurgiRaw = _toloulLurgiCtrl().text.trim();
+        if (factoryRaw.isEmpty && lurgiRaw.isEmpty) continue;
+        if (factoryRaw.isEmpty || lurgiRaw.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Toloul: enter both factory tank and Lurgi counts, or leave both blank.')));
+          return;
+        }
+        final factory = double.tryParse(factoryRaw);
+        final lurgi = double.tryParse(lurgiRaw);
+        if (factory == null ||
+            lurgi == null ||
+            factory < 0 ||
+            lurgi < 0) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Toloul: enter valid non-negative quantities.')));
+          return;
+        }
+        lines.add((
+          itemCode: item.itemCode,
+          counted: factory + lurgi,
+          ledgerBalance: item.currentBalance,
+          wac: item.weightedAverageCost,
+          factoryCounted: factory,
+          lurgiCounted: lurgi,
+        ));
+        continue;
+      }
+
       final raw = _ctrl(item.itemCode).text.trim();
       if (raw.isEmpty) continue;
       final counted = double.tryParse(raw);
@@ -57,11 +100,12 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
         itemCode: item.itemCode,
         counted: counted,
         ledgerBalance: item.currentBalance,
-        // Snapshot the current WAC so this count can seed the next period's
-        // replay (count adjustment moves qty at the current WAC, so it's unchanged).
         wac: item.weightedAverageCost,
+        factoryCounted: null,
+        lurgiCounted: null,
       ));
     }
+
     if (lines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Enter at least one counted quantity.')));
@@ -132,11 +176,19 @@ class _State extends ConsumerState<InkMonthEndCountScreen> {
                 padding: const EdgeInsets.all(12),
                 children: [
                   for (final item in items)
-                    _CountCard(
-                      item: item,
-                      controller: _ctrl(item.itemCode),
-                      onChanged: () => setState(() {}),
-                    ),
+                    if (item.isToloul)
+                      _ToloulCountCard(
+                        item: item,
+                        factoryController: _toloulFactoryCtrl(),
+                        lurgiController: _toloulLurgiCtrl(),
+                        onChanged: () => setState(() {}),
+                      )
+                    else
+                      _CountCard(
+                        item: item,
+                        controller: _ctrl(item.itemCode),
+                        onChanged: () => setState(() {}),
+                      ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _submitting ? null : () => _submit(items),
@@ -196,7 +248,9 @@ class _CountCard extends StatelessWidget {
                       'Adjust ${delta > 0 ? '+' : ''}${qty.format(delta)}',
                       style: TextStyle(
                           fontSize: 12,
-                          color: delta > 0 ? Theme.of(context).appColors.statusCompleted : scheme.error),
+                          color: delta > 0
+                              ? Theme.of(context).appColors.statusCompleted
+                              : scheme.error),
                     ),
                 ],
               ),
@@ -215,6 +269,103 @@ class _CountCard extends StatelessWidget {
                   isDense: true,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToloulCountCard extends StatelessWidget {
+  const _ToloulCountCard({
+    required this.item,
+    required this.factoryController,
+    required this.lurgiController,
+    required this.onChanged,
+  });
+
+  final InkStockItem item;
+  final TextEditingController factoryController;
+  final TextEditingController lurgiController;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final qty = NumberFormat('#,##0.##');
+    final factory = double.tryParse(factoryController.text.trim());
+    final lurgi = double.tryParse(lurgiController.text.trim());
+    final consolidated =
+        factory != null && lurgi != null ? factory + lurgi : null;
+    final delta = consolidated == null
+        ? null
+        : consolidated - item.currentBalance;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.displayName,
+                style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Ledger (consolidated): ${qty.format(item.currentBalance)} ${item.unit}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (item.factoryTankBalance != null)
+              Text(
+                'Factory tank (operational): ${qty.format(item.operationalBalance)} ${item.unit}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (consolidated != null)
+              Text(
+                'Total counted: ${qty.format(consolidated)} ${item.unit}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (delta != null && delta.abs() >= 1e-9)
+              Text(
+                'Adjust ${delta > 0 ? '+' : ''}${qty.format(delta)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: delta > 0
+                      ? Theme.of(context).appColors.statusCompleted
+                      : scheme.error,
+                ),
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: factoryController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => onChanged(),
+                    decoration: InputDecoration(
+                      labelText: 'Factory tank',
+                      suffixText: item.unit,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: lurgiController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => onChanged(),
+                    decoration: InputDecoration(
+                      labelText: 'Lurgi',
+                      suffixText: item.unit,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
