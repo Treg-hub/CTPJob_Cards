@@ -35,6 +35,7 @@ import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
+import 'my_feedback_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
@@ -872,76 +873,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     await showPersonaPickerDialog(context, ref);
   }
 
-  void _showFeedbackDialog() {
-    final TextEditingController feedbackController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Send Feedback'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('What improvements would you like to see?'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: feedbackController,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                hintText: 'Type your feedback here...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8C42)),
-            onPressed: () async {
-              final feedback = feedbackController.text.trim();
-              if (feedback.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter some feedback')),
-                );
-                return;
-              }
-
-              if (!guardPersonaSubmit(context)) return;
-
-              final navigator = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              final session = writeAttributionEmployee ?? realEmployee;
-              try {
-                await FirebaseFirestore.instance.collection('feedback').add({
-                  'feedback': feedback,
-                  'userName': session?.name ?? 'Unknown',
-                  'clockNo': session?.clockNo ?? 'Unknown',
-                  'timestamp': FieldValue.serverTimestamp(),
-                  ...personaAuditFields(),
-                });
-
-                navigator.pop();
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Thank you! Your feedback has been submitted.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (e) {
-                navigator.pop();
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error submitting feedback: $e'), backgroundColor: Colors.red),
-                );
-              }
-            },
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
+  // Feedback moved to its own surface (submit + follow status/replies) so the
+  // loop closes: see MyFeedbackScreen + FeedbackThreadScreen.
+  void _openMyFeedback() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyFeedbackScreen()),
     );
   }
 
@@ -2199,9 +2136,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       floatingActionButton: (_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab)
           ? null
           : FloatingActionButton(
-              onPressed: _showFeedbackDialog,
+              onPressed: _openMyFeedback,
               backgroundColor: const Color(0xFFFF8C42),
-              tooltip: 'Give Feedback',
+              tooltip: 'Feedback',
               child: const Icon(Icons.feedback, color: Colors.black),
             ),
     );

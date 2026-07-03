@@ -4,62 +4,22 @@ import '../utils/persona_audit.dart';
 import 'package:intl/intl.dart';
 
 import '../constants/collections.dart';
+import '../models/feedback_item.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import 'feedback_thread_screen.dart';
 
 /// Admin-only feedback triage board.
 ///
-/// Streams the shared `feedback` collection (written by the home-screen
-/// "Give Feedback" FAB) and lets an admin track each item through a simple
+/// Streams the shared `feedback` collection (written from MyFeedbackScreen's
+/// "Give Feedback" dialog) and lets an admin track each item through a simple
 /// workflow — New → Planned → Implemented → Declined — and attach private
-/// implementation notes. This is an internal tracking tool: the entry point
-/// lives in the admin Settings tab and the screen is gated again on `isAdmin`
-/// here so it can never be opened by a non-admin who deep-links in.
-enum FeedbackStatus { newItem, planned, implemented, declined }
-
-extension FeedbackStatusX on FeedbackStatus {
-  /// Stable id persisted to Firestore (`status` field).
-  String get id {
-    switch (this) {
-      case FeedbackStatus.newItem:
-        return 'new';
-      case FeedbackStatus.planned:
-        return 'planned';
-      case FeedbackStatus.implemented:
-        return 'implemented';
-      case FeedbackStatus.declined:
-        return 'declined';
-    }
-  }
-
-  String get label {
-    switch (this) {
-      case FeedbackStatus.newItem:
-        return 'New';
-      case FeedbackStatus.planned:
-        return 'Planned';
-      case FeedbackStatus.implemented:
-        return 'Implemented';
-      case FeedbackStatus.declined:
-        return 'Declined';
-    }
-  }
-
-  /// Maps a persisted id back to the enum; missing/unknown → New so legacy
-  /// feedback docs (created before this screen existed) show as untriaged.
-  static FeedbackStatus fromId(String? id) {
-    switch (id) {
-      case 'planned':
-        return FeedbackStatus.planned;
-      case 'implemented':
-        return FeedbackStatus.implemented;
-      case 'declined':
-        return FeedbackStatus.declined;
-      default:
-        return FeedbackStatus.newItem;
-    }
-  }
-}
+/// implementation notes. Public replies to the submitter go through the
+/// two-way thread (FeedbackThreadScreen → feedback_comments subcollection);
+/// status changes and replies notify the submitter via Cloud Functions.
+/// This is an internal tracking tool: the entry point lives in the admin
+/// Settings tab and the screen is gated again on `isAdmin` here so it can
+/// never be opened by a non-admin who deep-links in.
 
 class FeedbackAdminScreen extends StatefulWidget {
   const FeedbackAdminScreen({super.key});
@@ -186,19 +146,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
 
   // ── Colours ─────────────────────────────────────────────────────────────
 
-  Color _statusColor(FeedbackStatus s) {
-    final c = Theme.of(context).appColors;
-    switch (s) {
-      case FeedbackStatus.newItem:
-        return c.statusOpen; // blue — untriaged, needs attention
-      case FeedbackStatus.planned:
-        return kBrandOrange; // orange — on the roadmap
-      case FeedbackStatus.implemented:
-        return c.wasteGreen; // green — done
-      case FeedbackStatus.declined:
-        return c.textMuted; // grey — won't do
-    }
-  }
+  Color _statusColor(FeedbackStatus s) => feedbackStatusColor(context, s);
 
   // ── Build ───────────────────────────────────────────────────────────────
 
@@ -250,7 +198,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final items = (snap.data?.docs ?? []).map(_FeedbackItem.fromDoc).toList();
+        final items = (snap.data?.docs ?? []).map(FeedbackItem.fromDoc).toList();
 
         // Per-status counts power the filter chip badges (computed once).
         final counts = <FeedbackStatus, int>{for (final s in FeedbackStatus.values) s: 0};
@@ -324,7 +272,7 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
     );
   }
 
-  Widget _feedbackCard(_FeedbackItem item, AppColors colors) {
+  Widget _feedbackCard(FeedbackItem item, AppColors colors) {
     final fmt = DateFormat('d MMM yyyy HH:mm');
     final statusColor = _statusColor(item.status);
     final hasNotes = item.notes.trim().isNotEmpty;
@@ -403,7 +351,33 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Admin notes block.
+          // Public two-way thread with the submitter (feedback_comments).
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => FeedbackThreadScreen(feedbackId: item.id)),
+              ),
+              icon: Icon(
+                item.commentCount > 0 ? Icons.forum : Icons.reply,
+                size: 16,
+                color: item.commentCount > 0 ? kBrandOrange : null,
+              ),
+              label: Text(item.commentCount > 0
+                  ? 'Thread (${item.commentCount})'
+                  : 'Reply to submitter'),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                foregroundColor:
+                    item.commentCount > 0 ? kBrandOrange : colors.textMuted,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Admin notes block (PRIVATE — never shown in the public thread).
           if (hasNotes)
             InkWell(
               onTap: () => _editNotes(item.id, item.notes),
@@ -451,41 +425,3 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
   }
 }
 
-/// Parsed view of a `feedback` document, tolerant of legacy docs that predate
-/// the triage fields (`status`, `adminNotes`, …).
-class _FeedbackItem {
-  final String id;
-  final String feedback;
-  final String userName;
-  final String clockNo;
-  final DateTime? submittedAt;
-  final FeedbackStatus status;
-  final String notes;
-  final DateTime? notesUpdatedAt;
-
-  _FeedbackItem({
-    required this.id,
-    required this.feedback,
-    required this.userName,
-    required this.clockNo,
-    required this.submittedAt,
-    required this.status,
-    required this.notes,
-    required this.notesUpdatedAt,
-  });
-
-  factory _FeedbackItem.fromDoc(QueryDocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    DateTime? ts(dynamic v) => v is Timestamp ? v.toDate() : null;
-    return _FeedbackItem(
-      id: doc.id,
-      feedback: (data['feedback'] as String?)?.trim() ?? '',
-      userName: (data['userName'] as String?)?.trim() ?? '',
-      clockNo: (data['clockNo'] as String?)?.trim() ?? '',
-      submittedAt: ts(data['timestamp']),
-      status: FeedbackStatusX.fromId(data['status'] as String?),
-      notes: (data['adminNotes'] as String?) ?? '',
-      notesUpdatedAt: ts(data['adminNotesUpdatedAt']),
-    );
-  }
-}

@@ -866,6 +866,7 @@ async function sendNotification({
   triggeredBy,
   initiatedByClockNo = null,
   initiatedByName = null,
+  feedbackId = null, // feedback-loop deep link (My Feedback thread)
 }) {
   let emp = null;
   if (recipientClockNo) {
@@ -895,6 +896,7 @@ async function sendNotification({
         triggeredBy,
         initiatedByClockNo: initiatedByClockNo || null,
         initiatedByName: initiatedByName || null,
+        feedbackId: feedbackId || null,
       });
     }
     return { parked: true };
@@ -921,6 +923,7 @@ async function sendNotification({
       area: area || "",
       machine: machine || "",
       part: part || "",
+      feedbackId: feedbackId || "",
       title,
       body,
     },
@@ -1856,3 +1859,123 @@ exports.clearEscalationStamps = onCall(async (request) => {
   console.log(`Cleared escalation stamps from ${count} open job cards`);
   return { cleared: count };
 });
+// ==================== FEEDBACK LOOP (status changes + two-way thread) ====================
+// Closes the loop on the in-app `feedback` collection: workers hear back when
+// an admin triages their item (status chip on the admin board) or replies in
+// the public `feedback_comments` subcollection, and admins hear back when the
+// submitter replies. Delivery reuses sendNotification (live push on-site,
+// parked to notification_inbox off-site) with feedbackId threaded through so
+// inbox taps deep-link into the My Feedback thread.
+
+// Worker-facing wording for status pushes (mirrors FeedbackStatusX.workerLabel).
+function feedbackStatusLabel(status) {
+  switch (status) {
+    case "planned": return "Planned";
+    case "implemented": return "Done";
+    case "declined": return "Declined";
+    default: return "Received";
+  }
+}
+
+function feedbackSnippet(text, max = 80) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+// Admin recipients for submitter replies. employees.isAdmin is used for
+// ROUTING only (who gets pinged), never for authorization — rules gate the
+// actual thread writes on the isAdmin claim (admins/{uid} registry).
+async function getFeedbackAdminRecipients(excludeClockNo = null) {
+  const snap = await db.collection("employees").where("isAdmin", "==", true).get();
+  return snap.docs
+    .filter((doc) => doc.id !== String(excludeClockNo || ""))
+    .map((doc) => ({ clockNo: doc.id, ...doc.data() }));
+}
+
+exports.onFeedbackStatusChanged = functions.firestore.onDocumentUpdated(
+  { document: "feedback/{feedbackId}" },
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!before || !after) return;
+    if ((before.status || "new") === (after.status || "new")) return;
+
+    const submitterClockNo = (after.clockNo || "").trim();
+    if (!submitterClockNo || submitterClockNo === "Unknown") return;
+    // Admin re-triaging their own feedback — nothing to tell them.
+    if (String(after.statusUpdatedByClockNo || "") === submitterClockNo) return;
+
+    const label = feedbackStatusLabel(after.status);
+    console.log(`onFeedbackStatusChanged: ${event.params.feedbackId} → ${after.status} (notify ${submitterClockNo})`);
+    await sendNotification({
+      recipientClockNo: submitterClockNo,
+      title: `Your feedback is now: ${label}`,
+      body: `"${feedbackSnippet(after.feedback)}"\nOpen My Feedback for details.`,
+      level: getUpdateLevel(),
+      priority: 1,
+      createdBy: "CTP Team",
+      triggeredBy: "feedback_status",
+      initiatedByClockNo: after.statusUpdatedByClockNo || null,
+      feedbackId: event.params.feedbackId,
+    });
+  });
+
+exports.onFeedbackCommentCreated = functions.firestore.onDocumentCreated(
+  { document: "feedback/{feedbackId}/feedback_comments/{commentId}" },
+  async (event) => {
+    const comment = event.data.data();
+    if (!comment) return;
+    const feedbackId = event.params.feedbackId;
+    const feedbackRef = db.collection("feedback").doc(feedbackId);
+
+    // Server-maintained thread metadata (clients can't update the parent doc —
+    // rules lock feedback updates to admins).
+    await feedbackRef.set({
+      lastCommentAt: admin.firestore.FieldValue.serverTimestamp(),
+      commentCount: admin.firestore.FieldValue.increment(1),
+    }, { merge: true });
+
+    const parentSnap = await feedbackRef.get();
+    const parent = parentSnap.data() || {};
+    const submitterClockNo = (parent.clockNo || "").trim();
+    const byClockNo = String(comment.byClockNo || "").trim();
+    const byName = comment.byName || "Unknown";
+    const snippet = feedbackSnippet(comment.text);
+
+    if (byClockNo && byClockNo === submitterClockNo) {
+      // Submitter replied → ping the admins (minus the commenter, if ever both).
+      const admins = await getFeedbackAdminRecipients(byClockNo);
+      console.log(`onFeedbackCommentCreated: submitter reply on ${feedbackId} → ${admins.length} admin(s)`);
+      for (const adm of admins) {
+        await sendNotification({
+          recipientClockNo: adm.clockNo,
+          title: `Feedback reply from ${byName}`,
+          body: snippet,
+          level: getUpdateLevel(),
+          priority: 1,
+          createdBy: byName,
+          triggeredBy: "feedback_comment",
+          initiatedByClockNo: byClockNo,
+          initiatedByName: byName,
+          feedbackId,
+        });
+      }
+      return;
+    }
+
+    // Admin (or anyone who isn't the submitter) replied → ping the submitter.
+    if (!submitterClockNo || submitterClockNo === "Unknown") return;
+    console.log(`onFeedbackCommentCreated: team reply on ${feedbackId} → submitter ${submitterClockNo}`);
+    await sendNotification({
+      recipientClockNo: submitterClockNo,
+      title: "New reply to your feedback",
+      body: snippet,
+      level: getUpdateLevel(),
+      priority: 1,
+      createdBy: byName,
+      triggeredBy: "feedback_comment",
+      initiatedByClockNo: byClockNo || null,
+      initiatedByName: byName,
+      feedbackId,
+    });
+  });

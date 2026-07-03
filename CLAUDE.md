@@ -184,7 +184,7 @@ All collection names are defined as constants in `lib/constants/collections.dart
 - `job_cards`, `job_card_audit`, `counters`, `structures`, `settings`
 - `notification_configs`, `notifications`, `alertResponses`
 - `copper_inventory`, `copper_transactions`
-- `geo_fence_logs`, `feedback`, `employees` (shared)
+- `geo_fence_logs`, `feedback` (+ `feedback/{id}/feedback_comments` two-way thread subcollection — submitter + admins only), `employees` (shared)
 
 **Notification Inbox (subcollection):**
 - `notification_inbox/{clockNo}/items` — off-site-held notifications per employee; written by Cloud Functions, read by `NotificationInboxScreen`
@@ -222,6 +222,7 @@ Key functions:
 - `clearEscalationStamps` — admin-triggered; clears stage stamps on open jobs
 - `onCopperTransactionWrite` — copper sell alert; parks to inbox if recipient is off-site
 - `onJobCardTypeChanged` — re-fires notifications when job type changes
+- `onFeedbackStatusChanged` / `onFeedbackCommentCreated` — feedback loop: status changes + `feedback_comments` thread replies notify the submitter (or admins on submitter replies); push on-site, inbox park off-site with `feedbackId` deep link; maintains `lastCommentAt`/`commentCount`
 - `createWasteLoad` *(callable, africa-south1)* — atomic load creation with global sequential number (W-NNNN, never resets)
 
 **Fleet Maintenance functions live in the monorepo codebase, NOT this repo's `/functions`.** They are in `firebase/functions/src/index.ts` (the `wastetrack-overtime` codebase) and deployed from `/firebase`:

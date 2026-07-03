@@ -31,6 +31,9 @@ class Collections {
   static const String appGeofence = 'app_geofence';
   static const String alertResponses = 'alertResponses';
   static const String feedback = 'feedback';
+  // Public two-way thread on a feedback item (sub-collection of feedback).
+  // Submitter + admins may post; drives the feedback-loop notifications.
+  static const String feedbackComments = 'feedback_comments';
 
   // ----- Fleet Maintenance (fleet_ prefix) -----
   // Hyster machine maintenance (forks or grab attachments) — integrated inside this app.
