@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-03 — Steadier start-up, smoother navigation, tidier desktop
+
+### Reliability
+
+- **Fixed the "logged in but nothing shows up" problem.** Occasionally you could sign in and the Home screen would sit empty — no jobs, no counts, no inbox badge — until you force-closed and reopened the app. The app now automatically retries in the background and refreshes your access the moment it's ready, so your data fills in on its own within a few seconds instead of staying blank.
+- **Offline no longer looks broken.** When you open the app with no signal, lists now show a "Waiting for connection…" state instead of a misleading "No recent jobs". As soon as you're back online everything loads — no restart needed.
+- **"Session expired" is now recoverable.** If your sign-in has lapsed (for example your account was changed on the back office), a clear banner appears with a **Sign in** button instead of the app silently showing nothing. Anything you captured offline is kept and syncs after you sign back in.
+- **Faster, more reliable first sign-in.** Registering a new account is quicker and no longer leaves you without notifications; if a step is interrupted, tapping **Create Account** again simply finishes the job.
+- **Your module tabs come back on their own.** Fleet, Waste, and Site Security tabs that were missing because you opened the app offline now appear automatically once you reconnect.
+
+### Look & feel
+
+- **Smoother screen transitions.** Moving between screens — especially going back — is now a clean, consistent slide instead of the occasional stutter, with an edge-swipe-back gesture.
+- **Better layout on wide screens / desktop.** On large screens the Home tiles were stretching to fill the whole monitor and pushing everything else off the bottom. Tiles are now a compact size in a centred column, so Quick Actions and Recent Job Cards are both visible at a glance.
+
+---
+
 ## 2026-07-03 — "What's changed" after every update
 
 - **The app now tells you what's new.** The first time you open the app after an update, a **What's changed** sheet slides up with the latest release notes — so you don't have to guess what's different. Tap **Got it** to dismiss it (it only shows once per update) or **Full changelog** to read the complete history.
