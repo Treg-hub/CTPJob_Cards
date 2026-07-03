@@ -557,14 +557,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return job.department == emp.department;
   }
 
+  // Quick Actions tile colours are grouped by function so linked tiles read
+  // as a set: job-card actions share the brand orange, ink shares indigo,
+  // fleet shares slate, and Daily Review is gold.
+  static const Color _jobCardsGroup = Color(0xFFFF8C42); // brand orange
+  static const Color _inkGroup = Color(0xFF6366F1); // ink factory indigo
+  static const Color _fleetGroup = Color(0xFF64748B); // slate
+  // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
+  // carries its own amber constant so its pulse animation can override it.
+
   List<Map<String, dynamic>> get _quickActions {
-    final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': const Color(0xFFFF8C42), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
-    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': const Color(0xFF64748B), 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
-    final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': const Color(0xFF475569), 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
+    final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
+    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': _jobCardsGroup, 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+    final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
 
     List<Map<String, dynamic>> result;
     if (isManager || isSuperManager) {
-      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': const Color(0xFF64748B), 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': _jobCardsGroup, 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
       result = [createAction, viewJobsFactory, historyAction];
     } else {
       result = [createAction, viewJobsAction, historyAction];
@@ -579,7 +588,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         {
           'title': FleetLabels.reportProblem,
           'icon': Icons.forklift,
-          'color': kBrandOrange,
+          'color': _fleetGroup,
           'onTap': () => openFleetReportWizard(context, forceStep1: true),
         },
       ];
@@ -588,9 +597,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       result = [
         ...result,
         {
-          'title': FleetLabels.dailySafetyCheck,
+          // Home tile uses the shorter "Daily Check" label.
+          'title': 'Daily Check',
           'icon': Icons.fact_check_outlined,
-          'color': const Color(0xFF3D5A80),
+          'color': _fleetGroup,
           'onTap': _openFleetMachinesTab,
         },
       ];
@@ -604,7 +614,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           {
             'title': 'Ink Factory',
             'icon': Icons.water_drop,
-            'color': const Color(0xFF6366F1),
+            'color': _inkGroup,
             'onTap': () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const InkHomeScreen()),
@@ -619,7 +629,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         {
           'title': 'Daily Readings',
           'icon': Icons.speed,
-          'color': const Color(0xFF0EA5E9),
+          'color': _inkGroup,
           'onTap': () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -675,33 +685,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   double get _iconSize => _isDesktop ? 44 : (_isTablet ? 48 : 40);
-  EdgeInsets get _cardPaddingInsets => const EdgeInsets.all(14);
+  EdgeInsets get _cardPaddingInsets => const EdgeInsets.all(12);
   double get _gridSpacing => _isDesktop ? 14 : (_isTablet ? 12 : 10);
   double get _screenPadding => _isDesktop ? 20 : 16;
   int get _gridColumns => _isDesktop ? 6 : (_isTablet ? 4 : 3);
 
-  // On a wide screen a square tile (aspectRatio 1) at 6 columns balloons to
-  // ~300px and pushes everything below off-screen. Landscape tiles keep the
-  // Quick Actions to a compact band, leaving room for Recent Job Cards.
-  double get _gridChildAspectRatio => _isDesktop ? 1.25 : (_isTablet ? 1.1 : 1);
+  // Fixed tile height so Quick Actions can span the full width without the
+  // tiles ballooning vertically — they stretch across, but never grow tall.
+  double get _gridTileHeight => _isDesktop ? 104 : (_isTablet ? 112 : 116);
 
-  // Stop full-bleed stretching on desktop/large windows — content is centred
-  // in a readable column instead of spanning the whole monitor. At 1200 the
-  // six-column grid yields ~190px tiles (vs ~300px square full-bleed), so
-  // Quick Actions stays a compact band and Recent Job Cards is visible below.
-  double? get _maxContentWidth => _isDesktop ? 1200 : null;
-
-  /// Centres [child] within [_maxContentWidth] on wide screens; passes it
-  /// through unchanged on phones/tablets.
-  Widget _constrainContentWidth(Widget child) {
-    final maxWidth = _maxContentWidth;
-    if (maxWidth == null) return child;
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: child,
-      ),
+  /// Grid layout for the Quick Actions tiles. On desktop/tablet the tiles
+  /// stretch to fill the full width and flow into as many columns as fit
+  /// (capped tile width), so wide screens use the space instead of a few
+  /// giant tiles. Phones keep the fixed 3-column layout. Both use a fixed
+  /// [_gridTileHeight] so tiles never expand vertically.
+  SliverGridDelegate get _quickActionsGridDelegate {
+    if (_isDesktop || _isTablet) {
+      return SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: _isDesktop ? 210 : 200,
+        mainAxisSpacing: _gridSpacing,
+        crossAxisSpacing: _gridSpacing,
+        mainAxisExtent: _gridTileHeight,
+      );
+    }
+    return SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: _gridColumns,
+      mainAxisSpacing: _gridSpacing,
+      crossAxisSpacing: _gridSpacing,
+      mainAxisExtent: _gridTileHeight,
     );
   }
 
@@ -1134,7 +1145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
               ),
         ),
-        child: _constrainContentWidth(_buildSecurityGuardHomeHub()),
+        child: _buildSecurityGuardHomeHub(),
       );
     }
 
@@ -1148,7 +1159,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
             ),
       ),
-      child: _constrainContentWidth(Column(
+      child: Column(
         children: [
           // Nudges the user if Location-Always / battery-opt got revoked, which
           // silently breaks background geofencing (hidden on web + when healthy).
@@ -1183,12 +1194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             child: GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _gridColumns,
-                mainAxisSpacing: _gridSpacing,
-                crossAxisSpacing: _gridSpacing,
-                childAspectRatio: _gridChildAspectRatio,
-              ),
+              gridDelegate: _quickActionsGridDelegate,
               children: [
                 ..._quickActions.map((action) => _buildQuickActionCard(
                   action['title'] as String,
@@ -1249,16 +1255,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             _buildRecentJobCards(),
           ],
         ],
-      )),
+      ),
     );
   }
 
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap,
       {String? disabledReason, int? badgeCount}) {
     final disabled = disabledReason != null;
+    // Flat tile tinted with its group colour (wash + matching border) so
+    // linked tiles read as a set. Disabled tiles fall back to a neutral
+    // surface. See _quickActions for the group→colour mapping.
+    final scheme = Theme.of(context).colorScheme;
+    final tileColor = disabled
+        ? scheme.surfaceContainerHighest
+        : color.withValues(alpha: 0.12);
+    final borderColor =
+        disabled ? scheme.outlineVariant : color.withValues(alpha: 0.45);
     Widget card = Card(
-      elevation: disabled ? 1 : 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 0,
+      color: tileColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: borderColor, width: 0.8),
+      ),
       child: InkWell(
         // Disabled tiles explain themselves instead of doing nothing.
         onTap: disabled
@@ -2385,6 +2404,10 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
   Widget build(BuildContext context) {
     final isPulsing = widget.pendingCount > _threshold;
 
+    // Gold/amber to match the manager group in Quick Actions; the orange→red
+    // pulse still overrides it when the review backlog is over threshold.
+    const amber = Color(0xFFEAB308);
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -2398,20 +2421,22 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
             fit: StackFit.expand,
             children: [
               Card(
-                elevation: isPulsing ? 6 + _glowAnim.value * 6 : 6,
+                elevation: isPulsing ? _glowAnim.value * 6 : 0,
+                color: amber.withValues(alpha: 0.12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   side: isPulsing
                       ? BorderSide(
                           color: glowColor.withValues(
                               alpha: 0.4 + _glowAnim.value * 0.6),
                           width: 2.0,
                         )
-                      : BorderSide.none,
+                      : BorderSide(
+                          color: amber.withValues(alpha: 0.45), width: 0.8),
                 ),
                 child: InkWell(
                   onTap: widget.onTap,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   child: Padding(
                     padding: widget.padding,
                     child: Column(
@@ -2420,7 +2445,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                         Icon(
                           Icons.assignment_late_outlined,
                           size: widget.iconSize,
-                          color: isPulsing ? glowColor : const Color(0xFF5C6BC0),
+                          color: isPulsing ? glowColor : amber,
                         ),
                         const SizedBox(height: 12),
                         Text(

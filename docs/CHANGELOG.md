@@ -19,7 +19,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 ### Look & feel
 
 - **Smoother screen transitions.** Moving between screens — especially going back — is now a clean, consistent slide instead of the occasional stutter, with an edge-swipe-back gesture.
-- **Better layout on wide screens / desktop.** On large screens the Home tiles were stretching to fill the whole monitor and pushing everything else off the bottom. Tiles are now a compact size in a centred column, so Quick Actions and Recent Job Cards are both visible at a glance.
+- **Tidier Home quick actions.** The Quick Actions tiles are now grouped by colour so linked actions read as a set — job-card actions in orange, Ink Factory and Daily Readings in indigo, Report a Problem and Daily Check in slate, and Daily Review in gold. On wide screens the tiles stretch across the full width but keep a fixed height, so they no longer balloon and push Recent Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily Check" on the Home tile.
 
 ---
 
