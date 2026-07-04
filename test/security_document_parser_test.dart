@@ -81,7 +81,10 @@ void main() {
           '%MVL1CC54%0146%2055A1N6%1%2008045XWLWVV%CG24MTZN%VCG592W%Hatch back / Luikrug%HYUNDAI%I20%White / Wit%MALAN51BLEM576985%G4HGEM830108%2026-01-31%';
       final doc = SecurityDocumentParser.parseLicenseDisc(raw);
       expect(doc.documentType, SecurityDocumentType.licenseDisc);
-      expect(doc.vehicleReg, 'VCG592W');
+      // The "Licence no." (CG24MTZN) is the physical number plate; the
+      // following field (VCG592W) is the internal eNaTIS vehicle-register ref
+      // and must NOT be surfaced as the plate.
+      expect(doc.vehicleReg, 'CG24MTZN');
       expect(doc.vehicleMake, 'HYUNDAI');
       expect(doc.expiryDate?.toIso8601String().split('T').first, '2026-01-31');
     });

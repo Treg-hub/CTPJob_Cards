@@ -9,14 +9,22 @@ class InkDailyReadingsBanner extends StatelessWidget {
 
   final InkDailyReadingsStatus status;
 
+  // Ink group colour — matches the indigo Ink Factory / Daily Readings tiles
+  // on Home. Flat colour-tinted style (wash + border) like those tiles, so
+  // the reminder reads as part of the Ink group rather than an error state.
+  static const Color _ink = Color(0xFF6366F1);
+
   @override
   Widget build(BuildContext context) {
     if (status.complete) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.errorContainer,
-      borderRadius: BorderRadius.circular(12),
+      color: _ink.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: _ink.withValues(alpha: 0.45), width: 0.8),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => Navigator.push(
@@ -27,18 +35,18 @@ class InkDailyReadingsBanner extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              Icon(Icons.speed, color: scheme.onErrorContainer),
+              const Icon(Icons.speed, color: _ink),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   status.bannerMessage,
                   style: TextStyle(
-                    color: scheme.onErrorContainer,
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, color: scheme.onErrorContainer),
+              const Icon(Icons.chevron_right, color: _ink),
             ],
           ),
         ),

@@ -50,8 +50,9 @@ class _SecurityVehicleGateScreenState
   final _hostCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
   final _purposeCtrl = TextEditingController();
+  // Optional free-text detail for the override reason below (required only
+  // when the reason is "Other").
   final _overrideCtrl = TextEditingController();
-  final _licenceMissingNoteCtrl = TextEditingController();
   final _discrepancyNoteCtrl = TextEditingController();
   final _clockNoCtrl = TextEditingController();
   final _odometerCtrl = TextEditingController();
@@ -70,6 +71,15 @@ class _SecurityVehicleGateScreenState
   bool _directionOverridden = false;
 
   bool _licenceUnavailable = false;
+  // Single structured reason covering both "licence not scanned" and an
+  // expired disc/licence override. One of [_overrideReasons] or null.
+  String? _overrideReason;
+  static const List<String> _overrideReasons = [
+    'No licence',
+    'Disc expired',
+    'Licence expired',
+    'Other',
+  ];
   bool _discDamaged = false;
   int _occupantCount = 1;
   int _occupantsLeaving = 1;
@@ -94,7 +104,6 @@ class _SecurityVehicleGateScreenState
     _companyCtrl.dispose();
     _purposeCtrl.dispose();
     _overrideCtrl.dispose();
-    _licenceMissingNoteCtrl.dispose();
     _discrepancyNoteCtrl.dispose();
     _clockNoCtrl.dispose();
     _odometerCtrl.dispose();
@@ -268,10 +277,11 @@ class _SecurityVehicleGateScreenState
 
   Future<void> _openLicenceScanner() async {
     if (_openingScanner || !mounted) return;
-    final settings = ref.read(securitySettingsProvider).valueOrNull;
-    final allowSkip = _flowKind == _GateFlowKind.visitorEntry &&
-        settings != null &&
-        !settings.driverLicenceScanRequired;
+    // Visitor entry can always skip the licence scan — a driver may genuinely
+    // have no licence. The `driverLicenceScanRequired` setting no longer hard-
+    // blocks; instead it makes a REASON mandatory (validated in _submit).
+    // Company car exit still requires a licence (allowSkip stays false).
+    final allowSkip = _flowKind == _GateFlowKind.visitorEntry;
 
     _openingScanner = true;
     try {
@@ -293,7 +303,11 @@ class _SecurityVehicleGateScreenState
       if (result == null) return;
 
       if (result.skipped && allowSkip) {
-        setState(() => _licenceUnavailable = true);
+        setState(() {
+          _licenceUnavailable = true;
+          // Pre-select the most common reason; security can change it below.
+          _overrideReason ??= 'No licence';
+        });
         return;
       }
 
@@ -302,6 +316,7 @@ class _SecurityVehicleGateScreenState
         setState(() {
           _driverLicence = doc;
           _licenceUnavailable = false;
+          if (_overrideReason == 'No licence') _overrideReason = null;
           if (doc.fullName != null && _driverCtrl.text.isEmpty) {
             _driverCtrl.text = doc.fullName!;
           }
@@ -547,18 +562,15 @@ class _SecurityVehicleGateScreenState
     }
 
     final licenceCaptured = _driverLicence != null;
-    if (settings.driverLicenceScanRequired && !licenceCaptured) {
-      _showError("Scan the driver's licence (back PDF417) first.");
+    // A missing licence no longer hard-blocks — but a reason is mandatory.
+    if (!licenceCaptured && !_licenceUnavailable) {
+      _showError(
+        "Scan the driver's licence, or tick \"Licence not scanned\" and choose a reason.",
+      );
       return;
     }
-    if (!settings.driverLicenceScanRequired &&
-        !licenceCaptured &&
-        !_licenceUnavailable) {
-      _showError("Scan the driver's licence or mark it as unavailable.");
-      return;
-    }
-    if (_licenceUnavailable && _licenceMissingNoteCtrl.text.trim().isEmpty) {
-      _showError('Enter a note explaining why the licence was not scanned.');
+    if (!licenceCaptured && _overrideReason == null) {
+      _showError('Choose a reason for proceeding without a scanned licence.');
       return;
     }
 
@@ -622,20 +634,28 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    if (compliance.warn && _overrideCtrl.text.trim().isEmpty) {
+    if (compliance.warn && _overrideReason == null) {
       _showError(
-        '${compliance.message}. Enter an override reason to continue.',
+        '${compliance.message}. Choose an override reason to continue.',
       );
+      return;
+    }
+    // "Other" requires a written detail so an audit note isn't just "Other".
+    if (_overrideReason == 'Other' && _overrideCtrl.text.trim().isEmpty) {
+      _showError('Add a short detail for the "Other" reason.');
       return;
     }
 
     final sessionId = const Uuid().v4();
     final host = _hostCtrl.text.trim();
     final company = _companyCtrl.text.trim();
+    final overrideDetail = _overrideCtrl.text.trim();
     final complianceNotes = <String>[
       if (compliance.message != null) compliance.message!,
       if (_licenceUnavailable)
-        'Driver licence not scanned: ${_licenceMissingNoteCtrl.text.trim()}',
+        'Driver licence not scanned'
+            '${_overrideReason != null ? ' ($_overrideReason)' : ''}'
+            '${overrideDetail.isNotEmpty ? ': $overrideDetail' : ''}',
     ];
 
     setState(() => _submitting = true);
@@ -678,8 +698,8 @@ class _SecurityVehicleGateScreenState
           'transporter_compliant': _entryType == SecurityEntryType.transporter,
           if (complianceNotes.isNotEmpty)
             'compliance_notes': complianceNotes.join('; '),
-          if (_overrideCtrl.text.trim().isNotEmpty)
-            'override_reason': _overrideCtrl.text.trim(),
+          if (_overrideReason != null) 'override_reason': _overrideReason,
+          if (overrideDetail.isNotEmpty) 'override_note': overrideDetail,
         },
         photoLocalPaths: _photoPaths,
       );
@@ -1402,29 +1422,33 @@ class _SecurityVehicleGateScreenState
           }
         },
       ),
-      if (!licenceRequired) ...[
-        const SizedBox(height: 8),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _licenceUnavailable,
-          onChanged: (v) => setState(() {
-            _licenceUnavailable = v ?? false;
-            if (_licenceUnavailable) _driverLicence = null;
-          }),
-          title: const Text("Driver's licence not available (flags entry)"),
-          controlAffinity: ListTileControlAffinity.leading,
+      const SizedBox(height: 8),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _licenceUnavailable,
+        onChanged: (v) => setState(() {
+          _licenceUnavailable = v ?? false;
+          if (_licenceUnavailable) {
+            _driverLicence = null;
+            _overrideReason ??= 'No licence';
+          } else if (_overrideReason == 'No licence') {
+            _overrideReason = null;
+          }
+        }),
+        title: const Text("Driver's licence not scanned"),
+        subtitle: Text(
+          licenceRequired
+              ? 'Pick a reason below to proceed without it'
+              : 'Pick a reason below',
         ),
-        if (_licenceUnavailable)
-          TextField(
-            controller: _licenceMissingNoteCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Why not scanned? *',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 2,
-          ),
-      ],
-      const SizedBox(height: 12),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Visitor details',
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
+      const SizedBox(height: 8),
       _OccupantStepper(
         label: 'Occupants entering',
         value: _occupantCount,
@@ -1485,15 +1509,48 @@ class _SecurityVehicleGateScreenState
           ),
         ),
       ],
-      const SizedBox(height: 12),
-      TextField(
-        controller: _overrideCtrl,
-        decoration: const InputDecoration(
-          labelText: 'Override reason (if disc/licence expired)',
-          border: OutlineInputBorder(),
-        ),
-        maxLines: 2,
+      const SizedBox(height: 16),
+      Text(
+        'Reason / override',
+        style: Theme.of(context).textTheme.titleSmall,
       ),
+      const Text(
+        'Required when the licence is not scanned, or the disc / licence is expired.',
+        style: TextStyle(fontSize: 12.5, color: Colors.grey),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: _overrideReasons.map((reason) {
+          return ChoiceChip(
+            label: Text(reason),
+            selected: _overrideReason == reason,
+            onSelected: (sel) => setState(() {
+              _overrideReason = sel ? reason : null;
+              // Keep the "not scanned" checkbox in sync with a "No licence"
+              // reason so the auto-chain and flags stay consistent.
+              if (reason == 'No licence') {
+                _licenceUnavailable = sel;
+                if (sel) _driverLicence = null;
+              }
+            }),
+          );
+        }).toList(),
+      ),
+      if (_overrideReason != null) ...[
+        const SizedBox(height: 8),
+        TextField(
+          controller: _overrideCtrl,
+          decoration: InputDecoration(
+            labelText: _overrideReason == 'Other'
+                ? 'Detail *'
+                : 'Detail (optional)',
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+      ],
       const SizedBox(height: 12),
       OutlinedButton.icon(
         onPressed: _pickPhoto,
