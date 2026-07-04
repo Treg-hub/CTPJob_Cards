@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-04 — Sharper job cards, cyan Ink tiles (build 2.2.0+110)
+
+### Look & feel
+
+- **Job card lists read cleaner.** The shared job card tile (Home **Recent Job Cards**, View Jobs, My Work, History, Daily Review) uses a flatter card with a thin priority border and coloured left edge, a more compact description line, and comments / notes / corrective action grouped in a small inset block. Job numbers use the brand-orange badge.
+- **Quick Actions on wide screens.** Fixed a one-pixel bottom overflow on full-width desktop and tablet layouts. Home and Ink reminder tiles use a consistent 10px corner radius.
+- **Ink module is cyan.** Ink Factory, Daily Readings, and the daily-readings reminder banner use cyan (#06B6D4) instead of indigo — clearer on dark theme and distinct from job-card orange.
+
+---
+
 ## 2026-07-04 — Site Security fixes, clearer job-card tips, ink reminder colour
 
 ### Site Security
@@ -27,7 +37,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ### Ink
 
-- **Daily-readings reminder matches the Ink colour.** The "Daily readings incomplete" banner is now indigo (matching the Ink Factory tiles) instead of pink/red.
+- **Daily-readings reminder matches the Ink colour.** The "Daily readings incomplete" banner now uses the Ink module tint (cyan from build 2.2.0+110; briefly indigo) instead of pink/red.
 
 ---
 
@@ -44,7 +54,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 ### Look & feel
 
 - **Smoother screen transitions.** Moving between screens — especially going back — is now a clean, consistent slide instead of the occasional stutter, with an edge-swipe-back gesture.
-- **Tidier Home quick actions.** The Quick Actions tiles are now grouped by colour so linked actions read as a set — job-card actions in orange, Ink Factory and Daily Readings in indigo, Report a Problem and Daily Check in slate, and Daily Review in gold. On wide screens the tiles stretch across the full width but keep a fixed height, so they no longer balloon and push Recent Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily Check" on the Home tile.
+- **Tidier Home quick actions.** The Quick Actions tiles are now grouped by colour so linked actions read as a set — job-card actions in orange, Ink Factory and Daily Readings in cyan (indigo in earlier 2.2.0 builds), Report a Problem and Daily Check in slate, and Daily Review in gold. On wide screens the tiles stretch across the full width but keep a fixed height, so they no longer balloon and push Recent Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily Check" on the Home tile.
 - **A cleaner Home for the gate and admin tools.** **Vehicle at Gate** and **On-Foot Visitor** are no longer Home tiles — reach them from the **Security** tab, where the rest of the gate tools live. The admin **Scan Tester** has moved to **Settings → Admin → Scan Tester**.
 
 ---

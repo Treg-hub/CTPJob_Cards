@@ -156,8 +156,22 @@ plus Waste and Security tabs.</p>
 <h4 id="standard-layout-everyone-else">Standard layout (everyone
 else)</h4>
 <p>Shows the logged-in employee, a live <strong>On-Site /
-Off-Site</strong> indicator, an employee directory, and a grid of tiles
-to navigate everywhere else.</p>
+Off-Site</strong> indicator, an employee directory, and a <strong>Quick
+Actions</strong> grid to navigate everywhere else. Tiles are
+colour-grouped: job-card actions <strong>orange</strong>, Ink Factory /
+Daily Readings <strong>cyan</strong>, Fleet actions
+<strong>slate</strong>, Daily Review <strong>gold</strong>. On phones
+the grid is 3 columns with a fixed tile height; on tablet/desktop it
+flows into as many columns as fit (capped tile width) at the same fixed
+height so tiles never balloon vertically. Corner radius is 10px.</p>
+<p><strong>Managers</strong> (<code>position</code> contains "manager",
+or <code>department == "general"</code>) also see <strong>Recent Job
+Cards</strong> below Quick Actions — open and in-progress jobs with a
+<strong>Show Dept Only</strong> filter. Operators and technicians do not
+see this section.</p>
+<p>When today's ink/toloul readings are incomplete, ink-meter users see
+an <strong>Ink daily readings</strong> banner (cyan, same tint as Ink
+tiles) above Quick Actions.</p>
 <h5 id="standard-tiles">Standard Tiles</h5>
 <ul>
 <li><code>Create Job Card</code> — <strong>hidden when the employee is
@@ -312,6 +326,9 @@ app bar)</h4>
 <li><code>Monitoring</code></li>
 <li><code>Closed</code></li>
 </ul>
+<p>Each row uses the shared <strong><code>JobCardTile</code></strong>
+widget (flat card, priority left edge, compact description, inset block
+for latest comment / note / corrective action).</p>
 <h4 id="capabilities">Capabilities</h4>
 <ul>
 <li>Tap any card to open <strong>Job Card Detail</strong></li>
@@ -1224,22 +1241,46 @@ updates live — entries appear immediately after a successful submit.</p>
 <p>The form stays open after submit (fields clear, date resets to now)
 to allow back-to-back entries without navigation.</p>
 <hr />
-<h3 id="ink-meter-point-entry-standalone">Ink Meter Point Entry
-(standalone)</h3>
-<p><code>lib/screens/ink_meter_point_entry_screen.dart</code> —
-<strong>Roles:</strong> Ink operator, Ink manager, Lurgi user, Admin</p>
-<p>Standalone Toloul meter point entry screen, available as a fallback
-but no longer linked from the main navigation. The combined
-<code>InkDailyReadingsScreen</code> is the primary path for Toloul meter
-entry.</p>
-<hr />
-<h3 id="ink-meter-readings-grid-standalone">Ink Meter Readings Grid
-(standalone)</h3>
-<p><code>lib/screens/ink_meter_readings_grid_screen.dart</code> —
-<strong>Roles:</strong> Ink operator, Ink manager, Admin</p>
-<p>Standalone ink meter readings screen, available as a fallback. The
-combined <code>InkDailyReadingsScreen</code> is the primary path for
-daily ink meter entry.</p>
+<h3
+id="deprecated-meter--void-screens-not-linked-from-navigation">Deprecated
+meter / void screens (not linked from navigation)</h3>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ink_daily_readings_screen.dart</code></td>
+<td><strong>Canonical</strong> — combined ink + toloul daily readings;
+home/Ink hub banner via <code>inkDailyReadingsStatusProvider</code></td>
+</tr>
+<tr>
+<td><del><code>ink_meter_point_entry_screen.dart</code></del></td>
+<td><strong>Removed</strong> (2026-06-29) — use
+<code>InkDailyReadingsScreen</code></td>
+</tr>
+<tr>
+<td><del><code>ink_meter_readings_grid_screen.dart</code></del></td>
+<td><strong>Removed</strong> (2026-06-29) — use
+<code>InkDailyReadingsScreen</code></td>
+</tr>
+<tr>
+<td><del><code>ink_meter_sessions_screen.dart</code></del></td>
+<td><strong>Removed</strong> (2026-06-29) — void on Pulse
+<code>/ink/ledger-tools</code></td>
+</tr>
+<tr>
+<td><code>ink_production_history_screen.dart</code></td>
+<td><strong>Deprecated</strong> for voids — read-only on mobile; void on
+Pulse <code>/ink/production</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>InkDailyReadingsScreen</code> is the <strong>only</strong>
+operator meter capture path (ink + toloul, one submit).</p>
 <hr />
 <h3 id="production-run">Production Run</h3>
 <p><code>lib/screens/ink_production_run_screen.dart</code> —
