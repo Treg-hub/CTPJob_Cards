@@ -17,7 +17,8 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Damaged/dirty disc? Type the registration.** On a visitor entry, if the licence disc can't be scanned you can now enter the registration manually — the entry is logged and flagged as a missing disc scan, instead of leaving you unable to admit the vehicle.
 - **Re-entry without an exit keeps the line moving.** If you scan a vehicle in while it's still shown on site (its exit was missed), the app auto-closes the old visit with a **flagged-for-review** exit and logs the new entry — no need to log an exit first and hold up the queue.
 - **Company-car exit now checks the disc/licence expiry.** Like a visitor entry, a company car with an expired disc or licence now needs an override reason before it can leave — recorded for audit.
-- **Photos on company-car exit and return.** You can now attach a photo on the company-car flows, not just visitor entries.
+- **Photos on every gate flow.** You can now attach a photo on company-car exit/return **and** visitor exit — not just visitor entry.
+- **Trips and mileage survive going offline.** Company-car trip and odometer records are now durably saved on the device and sync when you're back online, instead of only being written when connected.
 - **On Site tabs are readable again.** The Vehicles / Visitors tabs no longer render orange-on-orange in dark mode.
 
 ### Job Cards

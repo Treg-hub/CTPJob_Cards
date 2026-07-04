@@ -2,6 +2,10 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Gate photos everywhere + offline-durable trips (2026-07-04, same branch)** — follow-up to the audit:
+  - **#6 Photos on all gate flows**: `scanOut` gained a `photoLocalPaths` param → visitor exit now supports photos; `_photoButton()` added to visitor-exit + company-car exit/return field builders. (Visitor entry already had it.)
+  - **Offline-durable trip/mileage**: `SecurityService.recordCompanyCarTrip` + `updateCompanyVehicleOdometer` were plain `await _db.add()/.update()` — which HANG offline (the Future only resolves on server ack), so the earlier best-effort try/catch actually froze the company-car submit offline. Changed both to fire-and-forget (`unawaited(...)`): with Firestore persistence the mutation is durably queued on-device and replays on reconnect, so trip/odometer data survives offline without blocking the submit. Call sites reverted from try/catch to plain awaits (now return fast); removed the now-unused `firebase_crashlytics`/`kIsWeb` imports from the screen. Analyzer clean; security tests pass; web build OK.
+
 - **Vehicle-gate flow gap fixes (2026-07-04, same branch `feat/security-ux-banner-tips`)** — from a full-flow audit after the security batch:
   - **Disc→licence auto-chain fix**: the auto-transition never fired on the INITIAL disc scan — `_openDiscScanner` held the `_openingScanner` re-entrancy guard through its chained `_maybeChainLicenceScan` → `_openLicenceScanner`, which bails while the guard is set (only `_rescanDisc` worked, it doesn't set the guard). Now released right after the disc scanner returns.
   - **#1 Visitor manual reg** (`_manualRegField` + `_manualRegCtrl`): a visitor whose disc can't be scanned (`_discDamaged`) can now type the reg; entry logs with `disc_scan_captured:false` + `disc_scan_missing_flag:true` instead of the old hard-block on `_disc==null`. Company cars still use the registry dropdown.

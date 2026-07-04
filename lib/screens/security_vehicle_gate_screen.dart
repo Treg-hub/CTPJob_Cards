@@ -1,6 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -829,6 +827,7 @@ class _SecurityVehicleGateScreenState
             ? _discrepancyNoteCtrl.text.trim()
             : null,
         discScanMissingFlag: _disc == null,
+        photoLocalPaths: _photoPaths,
       );
 
       if (!mounted) return;
@@ -987,36 +986,27 @@ class _SecurityVehicleGateScreenState
       final result =
           await _service.createEntry(data: entryData, photoLocalPaths: _photoPaths);
 
-      // The gate entry above is the authoritative record (and queues offline).
-      // The trip + odometer writes are best-effort: a failure there (e.g. a
-      // transaction that can't run offline) must not report the whole exit as
-      // failed after the entry already logged/queued.
-      try {
-        await _service.recordCompanyCarTrip(
-          trip: SecurityVehicleTrip(
-            id: '',
-            vehicleReg: _companyVehicle!.vehicleReg,
-            gateId: gate.id,
-            direction: SecurityDirection.out,
-            entryId: result.id,
-            loggedAt: DateTime.now(),
-            driverName: driverName,
-            odometerStart: odometer,
-            sessionId: sessionId,
-          ),
-          actorClockNo: actor.clockNo,
-          actorName: emp.name,
-        );
-        await _service.updateCompanyVehicleOdometer(
-          vehicleId: _companyVehicle!.id,
-          odometer: odometer,
-        );
-      } catch (e, st) {
-        if (!kIsWeb) {
-          FirebaseCrashlytics.instance.recordError(e, st,
-              reason: 'company_car_exit_trip_or_odometer', fatal: false);
-        }
-      }
+      // Trip + odometer are durably queued (fire-and-forget in the service),
+      // so they survive offline and never block this submit on a server ack.
+      await _service.recordCompanyCarTrip(
+        trip: SecurityVehicleTrip(
+          id: '',
+          vehicleReg: _companyVehicle!.vehicleReg,
+          gateId: gate.id,
+          direction: SecurityDirection.out,
+          entryId: result.id,
+          loggedAt: DateTime.now(),
+          driverName: driverName,
+          odometerStart: odometer,
+          sessionId: sessionId,
+        ),
+        actorClockNo: actor.clockNo,
+        actorName: emp.name,
+      );
+      await _service.updateCompanyVehicleOdometer(
+        vehicleId: _companyVehicle!.id,
+        odometer: odometer,
+      );
 
       if (!mounted) return;
       _showSuccess(
@@ -1117,35 +1107,27 @@ class _SecurityVehicleGateScreenState
       final result =
           await _service.createEntry(data: entryData, photoLocalPaths: _photoPaths);
 
-      // Best-effort (see company-car exit) — never fail a logged return on the
-      // secondary trip/odometer writes.
-      try {
-        await _service.recordCompanyCarTrip(
-          trip: SecurityVehicleTrip(
-            id: '',
-            vehicleReg: _companyVehicle!.vehicleReg,
-            gateId: gate.id,
-            direction: SecurityDirection.in_,
-            entryId: result.id,
-            loggedAt: DateTime.now(),
-            driverName: _companyVehicle!.assignedDriver,
-            odometerStart: _companyVehicle!.odometerLast,
-            odometerEnd: odometer,
-            mileageKm: mileage,
-          ),
-          actorClockNo: actor.clockNo,
-          actorName: emp.name,
-        );
-        await _service.updateCompanyVehicleOdometer(
-          vehicleId: _companyVehicle!.id,
-          odometer: odometer,
-        );
-      } catch (e, st) {
-        if (!kIsWeb) {
-          FirebaseCrashlytics.instance.recordError(e, st,
-              reason: 'company_car_return_trip_or_odometer', fatal: false);
-        }
-      }
+      // Trip + odometer are durably queued (fire-and-forget in the service).
+      await _service.recordCompanyCarTrip(
+        trip: SecurityVehicleTrip(
+          id: '',
+          vehicleReg: _companyVehicle!.vehicleReg,
+          gateId: gate.id,
+          direction: SecurityDirection.in_,
+          entryId: result.id,
+          loggedAt: DateTime.now(),
+          driverName: _companyVehicle!.assignedDriver,
+          odometerStart: _companyVehicle!.odometerLast,
+          odometerEnd: odometer,
+          mileageKm: mileage,
+        ),
+        actorClockNo: actor.clockNo,
+        actorName: emp.name,
+      );
+      await _service.updateCompanyVehicleOdometer(
+        vehicleId: _companyVehicle!.id,
+        odometer: odometer,
+      );
 
       if (!mounted) return;
       _showSuccess(
@@ -1804,6 +1786,8 @@ class _SecurityVehicleGateScreenState
           ),
         );
       }),
+      const SizedBox(height: 12),
+      _photoButton(),
     ];
   }
 

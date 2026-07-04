@@ -539,6 +539,7 @@ class SecurityService {
     required int occupantsLeaving,
     String? occupantDiscrepancyNote,
     bool discScanMissingFlag = false,
+    List<String> photoLocalPaths = const [],
   }) async {
     final recorded = onSiteEntry.occupantCount ?? 1;
     final discrepancy = occupantsLeaving != recorded;
@@ -546,6 +547,7 @@ class SecurityService {
     final remaining = partial ? recorded - occupantsLeaving : null;
 
     return createEntry(
+      photoLocalPaths: photoLocalPaths,
       data: {
         'gate_id': gateId,
         if (gateName != null) 'gate_name': gateName,
@@ -696,7 +698,13 @@ class SecurityService {
     String? actorName,
   }) async {
     _guardWrite();
-    await _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore());
+    // Fire-and-forget: with Firestore persistence the write is durably queued
+    // and replays on reconnect, so trip/mileage data survives offline without
+    // blocking the gate submit on a server ack that never arrives while
+    // offline (a plain `await add()` hangs offline).
+    unawaited(
+      _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore()),
+    );
 
     if (actorClockNo != null) {
       logAudit(
@@ -717,10 +725,14 @@ class SecurityService {
     required double odometer,
   }) async {
     _guardWrite();
-    await _db.collection(Collections.securityVehicles).doc(vehicleId).update({
-      'odometer_last': odometer,
-      'updated_at': FieldValue.serverTimestamp(),
-    });
+    // Fire-and-forget (see recordCompanyCarTrip) — survives offline via
+    // Firestore persistence, never blocks the submit on a server ack.
+    unawaited(
+      _db.collection(Collections.securityVehicles).doc(vehicleId).update({
+        'odometer_last': odometer,
+        'updated_at': FieldValue.serverTimestamp(),
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------
