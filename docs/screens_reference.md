@@ -85,7 +85,11 @@ Guards (not security managers) see a **module hub** instead of job-card quick ac
 
 #### Standard layout (everyone else)
 
-Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a **Quick Actions** grid to navigate everywhere else. The grid uses a fixed column count (3 on phones, 4 on tablets, 6 on desktop/web) so every tile — including the badge-count and **Daily Review** tiles — renders at the same size, rather than the wrap-based layout used before 2026-07-02.
+Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a **Quick Actions** grid to navigate everywhere else. Tiles are colour-grouped: job-card actions **orange**, Ink Factory / Daily Readings **cyan**, Fleet actions **slate**, Daily Review **gold**. On phones the grid is 3 columns with a fixed tile height; on tablet/desktop it flows into as many columns as fit (capped tile width) at the same fixed height so tiles never balloon vertically. Corner radius is 10px.
+
+**Managers** (`position` contains "manager", or `department == "general"`) also see **Recent Job Cards** below Quick Actions — open and in-progress jobs with a **Show Dept Only** filter. Operators and technicians do not see this section.
+
+When today's ink/toloul readings are incomplete, ink-meter users see an **Ink daily readings** banner (cyan, same tint as Ink tiles) above Quick Actions.
 
 ##### Standard Tiles
 
@@ -199,6 +203,8 @@ Gradient: orange → green (on-site) / red (off-site). Toggle buttons for filter
 - `In Progress`
 - `Monitoring`
 - `Closed`
+
+Each row uses the shared **`JobCardTile`** widget (flat card, priority left edge, compact description, inset block for latest comment / note / corrective action).
 
 #### Capabilities
 

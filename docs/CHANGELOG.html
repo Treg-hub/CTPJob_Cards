@@ -40,6 +40,185 @@ from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
 <hr />
 <h2
+id="2026-07-04--sharper-job-cards-cyan-ink-tiles-build-220110">2026-07-04
+— Sharper job cards, cyan Ink tiles (build 2.2.0+110)</h2>
+<h3 id="look--feel">Look &amp; feel</h3>
+<ul>
+<li><strong>Job card lists read cleaner.</strong> The shared job card
+tile (Home <strong>Recent Job Cards</strong>, View Jobs, My Work,
+History, Daily Review) uses a flatter card with a thin priority border
+and coloured left edge, a more compact description line, and comments /
+notes / corrective action grouped in a small inset block. Job numbers
+use the brand-orange badge.</li>
+<li><strong>Quick Actions on wide screens.</strong> Fixed a one-pixel
+bottom overflow on full-width desktop and tablet layouts. Home and Ink
+reminder tiles use a consistent 10px corner radius.</li>
+<li><strong>Ink module is cyan.</strong> Ink Factory, Daily Readings,
+and the daily-readings reminder banner use cyan (#06B6D4) instead of
+indigo — clearer on dark theme and distinct from job-card orange.</li>
+</ul>
+<hr />
+<h2
+id="2026-07-04--site-security-fixes-clearer-job-card-tips-ink-reminder-colour">2026-07-04
+— Site Security fixes, clearer job-card tips, ink reminder colour</h2>
+<h3 id="site-security">Site Security</h3>
+<ul>
+<li><strong>Vehicle disc scan now reads the number plate.</strong>
+Scanning a licence disc was showing the internal vehicle-register
+reference (e.g. VCG592W) instead of the actual number plate (e.g.
+CG24MTZN). It now shows the plate as printed on the disc.</li>
+<li><strong>After a disc scan, the app goes straight to the
+driver's-licence scan.</strong> For a visitor entry (and company-car
+exit) a successful disc scan now automatically opens the licence scanner
+— it previously only did this after a manual re-scan.</li>
+<li><strong>You can proceed when a driver has no licence.</strong>
+Previously, if the licence-required setting was on and the driver had no
+licence, you were stuck. Now you can tick <strong>"Driver's licence not
+scanned"</strong> and pick a <strong>reason</strong> — <strong>No
+licence</strong>, <strong>Disc expired</strong>, <strong>Licence
+expired</strong>, or <strong>Other</strong> (with a detail) — and
+continue. The reason is recorded on the entry. The old free-text
+"licence not available" note and the separate "override reason" box are
+combined into this one clear reason picker.</li>
+<li><strong>Force sign-out for stuck vehicles/visitors.</strong> If
+someone's exit was never captured and they're stuck showing as on-site,
+tap the <strong>⋮</strong> menu on their row in <strong>On Site</strong>
+and choose <strong>Force sign out (no scan)</strong>. You must pick a
+reason; the action is recorded in the security audit log.</li>
+<li><strong>Damaged/dirty disc? Type the registration.</strong> On a
+visitor entry, if the licence disc can't be scanned you can now enter
+the registration manually — the entry is logged and flagged as a missing
+disc scan, instead of leaving you unable to admit the vehicle.</li>
+<li><strong>Re-entry without an exit keeps the line moving.</strong> If
+you scan a vehicle in while it's still shown on site (its exit was
+missed), the app auto-closes the old visit with a
+<strong>flagged-for-review</strong> exit and logs the new entry — no
+need to log an exit first and hold up the queue.</li>
+<li><strong>Company-car exit now checks the disc/licence
+expiry.</strong> Like a visitor entry, a company car with an expired
+disc or licence now needs an override reason before it can leave —
+recorded for audit.</li>
+<li><strong>Photos on every gate flow.</strong> You can now attach a
+photo on company-car exit/return <strong>and</strong> visitor exit — not
+just visitor entry.</li>
+<li><strong>Trips and mileage survive going offline.</strong>
+Company-car trip and odometer records are now durably saved on the
+device and sync when you're back online, instead of only being written
+when connected.</li>
+<li><strong>On Site tabs are readable again.</strong> The Vehicles /
+Visitors tabs no longer render orange-on-orange in dark mode.</li>
+</ul>
+<h3 id="job-cards">Job Cards</h3>
+<ul>
+<li><strong>Tips can be hidden.</strong> The guidance tips on the Create
+Job Card screen now have a small <strong>×</strong> to hide them once
+you know the ropes — freeing up space. Turn them back on any time from
+<strong>Settings → Preferences → Job Card Tips</strong>.</li>
+</ul>
+<h3 id="ink">Ink</h3>
+<ul>
+<li><strong>Daily-readings reminder matches the Ink colour.</strong> The
+"Daily readings incomplete" banner now uses the Ink module tint (cyan
+from build 2.2.0+110; briefly indigo) instead of pink/red.</li>
+</ul>
+<hr />
+<h2
+id="2026-07-03--steadier-start-up-smoother-navigation-tidier-desktop">2026-07-03
+— Steadier start-up, smoother navigation, tidier desktop</h2>
+<h3 id="reliability">Reliability</h3>
+<ul>
+<li><strong>Fixed the "logged in but nothing shows up" problem.</strong>
+Occasionally you could sign in and the Home screen would sit empty — no
+jobs, no counts, no inbox badge — until you force-closed and reopened
+the app. The app now automatically retries in the background and
+refreshes your access the moment it's ready, so your data fills in on
+its own within a few seconds instead of staying blank.</li>
+<li><strong>Offline no longer looks broken.</strong> When you open the
+app with no signal, lists now show a "Waiting for connection…" state
+instead of a misleading "No recent jobs". As soon as you're back online
+everything loads — no restart needed.</li>
+<li><strong>"Session expired" is now recoverable.</strong> If your
+sign-in has lapsed (for example your account was changed on the back
+office), a clear banner appears with a <strong>Sign in</strong> button
+instead of the app silently showing nothing. Anything you captured
+offline is kept and syncs after you sign back in.</li>
+<li><strong>Faster, more reliable first sign-in.</strong> Registering a
+new account is quicker and no longer leaves you without notifications;
+if a step is interrupted, tapping <strong>Create Account</strong> again
+simply finishes the job.</li>
+<li><strong>Your module tabs come back on their own.</strong> Fleet,
+Waste, and Site Security tabs that were missing because you opened the
+app offline now appear automatically once you reconnect.</li>
+</ul>
+<h3 id="look--feel-1">Look &amp; feel</h3>
+<ul>
+<li><strong>Smoother screen transitions.</strong> Moving between screens
+— especially going back — is now a clean, consistent slide instead of
+the occasional stutter, with an edge-swipe-back gesture.</li>
+<li><strong>Tidier Home quick actions.</strong> The Quick Actions tiles
+are now grouped by colour so linked actions read as a set — job-card
+actions in orange, Ink Factory and Daily Readings in cyan (indigo in
+earlier 2.2.0 builds), Report a Problem and Daily Check in slate, and
+Daily Review in gold. On wide screens the tiles stretch across the full
+width but keep a fixed height, so they no longer balloon and push Recent
+Job Cards off the bottom. "Daily Safety Check" is shortened to "Daily
+Check" on the Home tile.</li>
+<li><strong>A cleaner Home for the gate and admin tools.</strong>
+<strong>Vehicle at Gate</strong> and <strong>On-Foot Visitor</strong>
+are no longer Home tiles — reach them from the <strong>Security</strong>
+tab, where the rest of the gate tools live. The admin <strong>Scan
+Tester</strong> has moved to <strong>Settings → Admin → Scan
+Tester</strong>.</li>
+</ul>
+<hr />
+<h2 id="2026-07-03--whats-changed-after-every-update">2026-07-03 —
+"What's changed" after every update</h2>
+<ul>
+<li><strong>The app now tells you what's new.</strong> The first time
+you open the app after an update, a <strong>What's changed</strong>
+sheet slides up with the latest release notes — so you don't have to
+guess what's different. Tap <strong>Got it</strong> to dismiss it (it
+only shows once per update) or <strong>Full changelog</strong> to read
+the complete history.</li>
+<li>Brand-new users don't see the sheet on first install — it only
+appears from your first update onwards.</li>
+<li>The release notes come straight from this changelog, which you can
+always find under <strong>Settings → Documentation →
+Changelog</strong>.</li>
+</ul>
+<hr />
+<h2
+id="2026-07-02--home-screen-tile-grid--login-screen-polish">2026-07-02 —
+Home screen tile grid + login screen polish</h2>
+<h3 id="home-screen">Home screen</h3>
+<ul>
+<li><strong>Quick Actions is now a fixed-column grid</strong> instead of
+a centre-aligned wrap. Tiles line up in true rows/columns at every
+screen size (3 columns on phones, 4 on tablets, 6 on desktop/web)
+instead of the last row centring 1–2 leftover tiles.</li>
+<li><strong>Every tile is the same size</strong>, including the badge
+count and the manager-only <strong>Daily Review</strong> tile —
+previously those two rendered narrower than a plain tile because of a
+layout bug in how they were stacked.</li>
+<li><strong>Bigger icons</strong> — tiles now show a larger, more
+legible icon rather than a small icon lost in a lot of empty tile
+space.</li>
+<li><strong>Vehicle at Gate</strong> now shows a car icon instead of the
+QR-scanner icon (which is also used for the unrelated <strong>Scan
+Tester</strong> admin tile), mirroring the walking-person icon on
+<strong>On-Foot Visitor</strong> next to it.</li>
+<li>Off-site disabled tiles (e.g. <strong>Create Job Card</strong>) no
+longer wrap to a second "(off-site)" line — the existing greyed icon +
+"location off" badge already communicates the disabled state, and
+tapping still explains why via a SnackBar.</li>
+</ul>
+<h3 id="login-screen">Login screen</h3>
+<ul>
+<li>The orange perimeter glow around the login screen has been toned
+down — it was overpowering the branding panel and form.</li>
+</ul>
+<hr />
+<h2
 id="2026-06-29--site-security-docs--guard-shell-alignment">2026-06-29 —
 Site Security docs + guard-shell alignment</h2>
 <h3 id="site-security--documentation">Site Security — documentation</h3>
