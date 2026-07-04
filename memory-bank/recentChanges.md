@@ -2,6 +2,14 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Home + shared JobCardTile UI polish + Ink module cyan (2026-07-04, PRs #157/#158, build 2.2.0+110/111)**:
+  - **JobCardTile** (`widgets/job_card_tile.dart`): flat shell (`elevation: 0`), solid `cardSurface` (no priority wash), 0.8px priority border + 4px left accent, 10px radius, description 13px w500, activity inset block for comments/notes/CA, orange `JobNumberBadge` (`kBrandOrange`). Used on Recent Job Cards, View Jobs, My Work, History, Daily Review.
+  - **Home Quick Actions** (`screens/home_screen.dart`): 10px radius; fixed 1px bottom overflow on wide layouts (`_gridTileHeight` 108 desktop / 110 tablet).
+  - **Ink branding**: `kInkModule = #06B6D4` in `theme/app_theme.dart`; Ink Factory + Daily Readings tiles + `ink_daily_readings_banner.dart` (replaces interim indigo `#6366F1` from security batch).
+  - **Docs/tests**: `docs/CHANGELOG.md`, `screens_reference.md`, design mockups; golden updated; `test/failures/` gitignored (PR #158).
+  - **Map**: monorepo `Canvases/INDEX.md`, `JobCardsCoreModule.md` §Home UI polish, `InkModule.md`, root `CHANGELOG.md`; `docs/architecture/visualization.md`.
+  - App-level only — no rules/CF/collection changes.
+
 - **Gate photos everywhere + offline-durable trips (2026-07-04, same branch)** — follow-up to the audit:
   - **#6 Photos on all gate flows**: `scanOut` gained a `photoLocalPaths` param → visitor exit now supports photos; `_photoButton()` added to visitor-exit + company-car exit/return field builders. (Visitor entry already had it.)
   - **Offline-durable trip/mileage**: `SecurityService.recordCompanyCarTrip` + `updateCompanyVehicleOdometer` were plain `await _db.add()/.update()` — which HANG offline (the Future only resolves on server ack), so the earlier best-effort try/catch actually froze the company-car submit offline. Changed both to fire-and-forget (`unawaited(...)`): with Firestore persistence the mutation is durably queued on-device and replays on reconnect, so trip/odometer data survives offline without blocking the submit. Call sites reverted from try/catch to plain awaits (now return fast); removed the now-unused `firebase_crashlytics`/`kIsWeb` imports from the screen. Analyzer clean; security tests pass; web build OK.
@@ -22,7 +30,7 @@ Append-only change log of completed work, in reverse-chronological order (newest
   - **Force sign-out (`security_on_site_screen.dart` + `security_service.dart`)**: new `SecurityService.forceSignOut()` writes a `direction: out` entry (`forced_exit: true` + `forced_exit_reason`) so the derived on-site list clears without a scan, plus a `logAudit(action: 'force_sign_out')` record. On-site rows gained a ⋮ menu → reason dialog (`_ForceSignOutDialog`, presets + Other). Any security user (persona-guarded via `guardPersonaSubmit`/`resolveWriteActor`); audit is the control.
   - **On-site TabBar theme**: explicit black labels/indicator (was orange-on-orange in dark mode — the dark `tabBarTheme` is orange but the AppBar is always orange).
   - **Job-card tips dismissible**: new `providers/job_card_tips_provider.dart` (key `jobCardTipsVisible`, mirrors fleet) + `widgets/job_card_tip.dart` wrapper (global hide + dismiss ×). Wrapped all 8 tip instances (4 tips × narrow/wide) in `create_job_card_screen.dart`; "Job Card Tips" switch added to Settings → Preferences.
-  - **Ink banner**: `ink_daily_readings_banner.dart` recoloured from `scheme.errorContainer` (Material 3 pink) to the indigo `#6366F1` flat-tinted style matching the Ink tiles.
+  - **Ink banner**: `ink_daily_readings_banner.dart` recoloured from `scheme.errorContainer` (Material 3 pink) to the indigo `#6366F1` flat-tinted style matching the Ink tiles (interim — superseded by cyan `kInkModule` `#06B6D4` in PR #157).
   - **New security_entries fields**: `override_reason`, `override_note`, `forced_exit`, `forced_exit_reason`; new audit action `force_sign_out`.
   - **Verify**: `flutter analyze` clean (bar the pre-existing `ink_production_run_screen.dart` warning, not ours); parser + gate-logic tests pass; full suite 271/272 (1 pre-existing golden). Web build OK. **Security-gate flows need device smoke-testing before rollout** (no emulator harness; can't exercise the authenticated gate in preview).
   - **Map**: `docs/CHANGELOG.md`, `docs/architecture/visualization.md`, `CLAUDE.md`; monorepo `Components/Modules/SecurityModule.md` + `JobCardsCoreModule.md`, security collection notes, `Canvases/INDEX.md`, root `CHANGELOG.md`.
