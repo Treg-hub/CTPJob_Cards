@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../main.dart' show currentEmployee;
 import '../models/security_entry.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/persona_audit.dart';
 import '../utils/screen_insets.dart';
 import 'security_visitor_sign_out_screen.dart';
 import 'security_vehicle_gate_screen.dart';
@@ -22,7 +24,13 @@ class SecurityOnSiteScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('On Site'),
+          // The AppBar is brand orange in both themes; the dark theme's global
+          // TabBar colours are orange, which would be orange-on-orange here.
+          // Use black to match the AppBar's black foreground (title/icons).
           bottom: const TabBar(
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: Colors.black,
             tabs: [
               Tab(text: 'Vehicles'),
               Tab(text: 'Visitors'),
@@ -216,7 +224,7 @@ class _VehicleOnSiteCard extends StatelessWidget {
               ),
           ],
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: _ForceSignOutButton(entry: entry),
         isThreeLine: true,
       ),
     );
@@ -335,12 +343,175 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                                   ),
                               ],
                             ),
-                            trailing: const Icon(Icons.chevron_right),
+                            trailing: _ForceSignOutButton(entry: e),
                             isThreeLine: true,
                           ),
                         );
                       },
                     ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Trailing "⋮" menu on an on-site row — offers a manual force sign-out for an
+/// entry stuck on site (exit scan never landed). Any security user can use it;
+/// the reason + actor are written to the security audit trail.
+class _ForceSignOutButton extends StatelessWidget {
+  const _ForceSignOutButton({required this.entry});
+
+  final SecurityEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      tooltip: 'More',
+      onSelected: (v) {
+        if (v == 'force') _confirmForceSignOut(context, entry);
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'force',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.logout, color: Colors.redAccent),
+            title: Text('Force sign out (no scan)'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _confirmForceSignOut(
+    BuildContext context, SecurityEntry entry) async {
+  if (!guardPersonaSubmit(context)) return;
+  final emp = currentEmployee;
+  final actor = resolveWriteActor(emp);
+  if (actor == null) return;
+
+  final reason = await showDialog<String>(
+    context: context,
+    builder: (_) => _ForceSignOutDialog(entry: entry),
+  );
+  if (reason == null || reason.trim().isEmpty) return;
+
+  try {
+    await SecurityService().forceSignOut(
+      onSiteEntry: entry,
+      reason: reason.trim(),
+      loggedByClockNo: actor.clockNo,
+      loggedByName: actor.name,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${entry.vehicleReg ?? entry.visitorName ?? 'Entry'} signed out (manual)',
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Force sign-out failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+class _ForceSignOutDialog extends StatefulWidget {
+  const _ForceSignOutDialog({required this.entry});
+
+  final SecurityEntry entry;
+
+  @override
+  State<_ForceSignOutDialog> createState() => _ForceSignOutDialogState();
+}
+
+class _ForceSignOutDialogState extends State<_ForceSignOutDialog> {
+  static const _reasons = [
+    'Exit scan not captured',
+    'Left without signing out',
+    'Duplicate / erroneous entry',
+    'Other',
+  ];
+  String? _reason;
+  final _detailCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _detailCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final who = widget.entry.vehicleReg ??
+        widget.entry.visitorName ??
+        widget.entry.driverName ??
+        'this entry';
+    final needsDetail = _reason == 'Other';
+    return AlertDialog(
+      title: const Text('Force sign out'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Manually sign out $who without a scan. This is recorded for audit — choose a reason.',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: _reasons
+                  .map((r) => ChoiceChip(
+                        label: Text(r),
+                        selected: _reason == r,
+                        onSelected: (s) =>
+                            setState(() => _reason = s ? r : null),
+                      ))
+                  .toList(),
+            ),
+            if (needsDetail) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _detailCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Detail *',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final reason = _reason;
+            if (reason == null) return;
+            if (reason == 'Other' && _detailCtrl.text.trim().isEmpty) return;
+            final composed = reason == 'Other'
+                ? 'Other: ${_detailCtrl.text.trim()}'
+                : reason;
+            Navigator.pop(context, composed);
+          },
+          child: const Text('Sign out'),
         ),
       ],
     );

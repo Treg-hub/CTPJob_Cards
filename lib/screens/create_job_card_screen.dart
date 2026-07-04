@@ -22,6 +22,7 @@ import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/job_card_badges.dart';
+import '../widgets/job_card_tip.dart';
 
 class CreateJobCardScreen extends StatefulWidget {
   const CreateJobCardScreen({super.key});
@@ -920,51 +921,54 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                     labelStyle: jobType == type ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
-                if (jobType == JobType.maintenance) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 30),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.withValues(alpha: 120)),
-                    ),
-                    child: const Text(
-                      'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
-                      style: TextStyle(fontSize: 12.5),
-                    ),
-                  ),
-                ],
-                if (jobType == JobType.building) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 30),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 120)),
-                    ),
-                    child: const Text(
-                      'Building Maintenance jobs go directly to the maintenance team. No escalation.',
-                      style: TextStyle(fontSize: 12.5),
+                if (jobType == JobType.maintenance)
+                  JobCardTip(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 30),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                      ),
+                      child: const Text(
+                        'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
                     ),
                   ),
-                ],
-                if (jobType == JobType.specialist) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.withValues(alpha: 30),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.purple.withValues(alpha: 120)),
-                    ),
-                    child: const Text(
-                      'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
-                      style: TextStyle(fontSize: 12.5),
+                if (jobType == JobType.building)
+                  JobCardTip(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 30),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 120)),
+                      ),
+                      child: const Text(
+                        'Building Maintenance jobs go directly to the maintenance team. No escalation.',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
                     ),
                   ),
-                ],
+                if (jobType == JobType.specialist)
+                  JobCardTip(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withValues(alpha: 30),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.purple.withValues(alpha: 120)),
+                      ),
+                      child: const Text(
+                        'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -1014,23 +1018,26 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                     ),
                   ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 20),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withValues(alpha: 70)),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                      SizedBox(height: 3),
-                      Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
-                      Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
-                      Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
-                    ],
+                JobCardTip(
+                  dismissible: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 20),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 70)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                        SizedBox(height: 3),
+                        Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
+                        Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
+                        Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
+                      ],
+                    ),
                   ),
                 ),
                 TextFormField(
@@ -1255,51 +1262,54 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                         )).toList(),
                       ),
-                      if (jobType == JobType.maintenance) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withValues(alpha: 30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.amber.withValues(alpha: 120)),
-                          ),
-                          child: const Text(
-                            'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
-                            style: TextStyle(fontSize: 12.5),
-                          ),
-                        ),
-                      ],
-                      if (jobType == JobType.building) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue.withValues(alpha: 120)),
-                          ),
-                          child: const Text(
-                            'Building Maintenance jobs go directly to the maintenance team. No escalation.',
-                            style: TextStyle(fontSize: 12.5),
+                      if (jobType == JobType.maintenance)
+                        JobCardTip(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 30),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 120)),
+                            ),
+                            child: const Text(
+                              'Maintenance jobs are silent — no notifications, no escalation. Use for planned or routine work; the responsible team must pick it up from the list themselves.',
+                              style: TextStyle(fontSize: 12.5),
+                            ),
                           ),
                         ),
-                      ],
-                      if (jobType == JobType.specialist) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.purple.withValues(alpha: 30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.purple.withValues(alpha: 120)),
-                          ),
-                          child: const Text(
-                            'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
-                            style: TextStyle(fontSize: 12.5),
+                      if (jobType == JobType.building)
+                        JobCardTip(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 30),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 120)),
+                            ),
+                            child: const Text(
+                              'Building Maintenance jobs go directly to the maintenance team. No escalation.',
+                              style: TextStyle(fontSize: 12.5),
+                            ),
                           ),
                         ),
-                      ],
+                      if (jobType == JobType.specialist)
+                        JobCardTip(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withValues(alpha: 30),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.purple.withValues(alpha: 120)),
+                            ),
+                            child: const Text(
+                              'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
+                              style: TextStyle(fontSize: 12.5),
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       const Text('Priority (1 = Low → 5 = Urgent)', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
@@ -1348,23 +1358,26 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                           ),
                         ),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        margin: const EdgeInsets.only(bottom: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 20),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.withValues(alpha: 70)),
-                        ),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                            SizedBox(height: 3),
-                            Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
-                            Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
-                            Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
-                          ],
+                      JobCardTip(
+                        dismissible: true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          margin: const EdgeInsets.only(bottom: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 20),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.withValues(alpha: 70)),
+                          ),
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Describe the fault clearly:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                              SizedBox(height: 3),
+                              Text('• What happened and what you observed', style: TextStyle(fontSize: 12.5)),
+                              Text('• Any error codes or alarms displayed', style: TextStyle(fontSize: 12.5)),
+                              Text('• When it started and how often it occurs', style: TextStyle(fontSize: 12.5)),
+                            ],
+                          ),
                         ),
                       ),
                       TextFormField(

@@ -201,6 +201,12 @@ App entry (home_screen.dart)
 
 Mobile gates: `canUseSecurityModule` + `security_enabled`. Pulse gates: `boardModules 'security'` + `canAccessSecurityPulse` (managers + admins only). Costs validate against `security_vehicles` where `vehicle_type: company_car`.
 
+**Vehicle-gate + on-site updates (2026-07-04)**:
+- **Disc plate parse fix** — `security_document_parser.dart` `_pickPlateReg` now returns the "Licence no." plate (e.g. CG24MTZN, the physical plate) not the eNaTIS vehicle-register field (VCG592W). Always takes the first post-serial candidate (visitor licence-first + fleet plate-first both want field 1).
+- **No-licence proceed + structured override** — the driver-licence scan is now always skippable on visitor entry; `driverLicenceScanRequired` makes a *reason* mandatory instead of hard-blocking. One `override_reason` chip set (No licence / Disc expired / Licence expired / Other) + `override_note` on `security_entries` replaces the old free-text "licence unavailable" note + separate override box. Company-car exit still requires a licence.
+- **Force sign-out** — any security user can manually clear a stuck on-site entry via the on-site row ⋮ menu; `SecurityService.forceSignOut()` writes a `direction: out` entry (`forced_exit`/`forced_exit_reason`) + a `force_sign_out` audit record (mandatory reason; persona-guarded).
+- **On-site TabBar** black labels/indicator (was orange-on-orange in dark mode). New `security_entries` fields: `override_reason`, `override_note`, `forced_exit`, `forced_exit_reason`.
+
 ---
 
 ## Permission Matrix — Fleet Maintenance (Mobile)

@@ -539,6 +539,7 @@ class SecurityService {
     required int occupantsLeaving,
     String? occupantDiscrepancyNote,
     bool discScanMissingFlag = false,
+    List<String> photoLocalPaths = const [],
   }) async {
     final recorded = onSiteEntry.occupantCount ?? 1;
     final discrepancy = occupantsLeaving != recorded;
@@ -546,6 +547,7 @@ class SecurityService {
     final remaining = partial ? recorded - occupantsLeaving : null;
 
     return createEntry(
+      photoLocalPaths: photoLocalPaths,
       data: {
         'gate_id': gateId,
         if (gateName != null) 'gate_name': gateName,
@@ -618,6 +620,74 @@ class SecurityService {
     return result;
   }
 
+  /// Manual "force sign-out" for a person/vehicle that is stuck on-site (e.g.
+  /// their exit scan never reached Firestore). Writes a normal `direction: out`
+  /// entry so the derived on-site list clears WITHOUT a scan, plus a
+  /// `force_sign_out` audit record with the mandatory [reason]. Any security
+  /// user may do this — the audit trail is the control.
+  ///
+  /// When [autoClosedOnReentry] is true the exit is stamped
+  /// `auto_closed_missed_scan` + `flagged_for_review` — used when a vehicle is
+  /// scanned IN while still shown on-site (its previous OUT was skipped): the
+  /// stale open is auto-closed with a big flag so the line keeps moving and the
+  /// gap surfaces for review, rather than blocking the guard.
+  Future<({String id, String? entryNumber, bool queuedOffline})> forceSignOut({
+    required SecurityEntry onSiteEntry,
+    required String reason,
+    required String loggedByClockNo,
+    required String loggedByName,
+    bool autoClosedOnReentry = false,
+  }) async {
+    final result = await createEntry(
+      data: {
+        'gate_id': onSiteEntry.gateId,
+        if (onSiteEntry.gateName != null) 'gate_name': onSiteEntry.gateName,
+        'direction': SecurityDirection.out.value,
+        if (onSiteEntry.entryType != null)
+          'entry_type': onSiteEntry.entryType!.value,
+        if (onSiteEntry.vehicleReg != null) 'vehicle_reg': onSiteEntry.vehicleReg,
+        if (onSiteEntry.driverName != null) 'driver_name': onSiteEntry.driverName,
+        if (onSiteEntry.visitorName != null)
+          'visitor_name': onSiteEntry.visitorName,
+        if (onSiteEntry.contractorId != null)
+          'contractor_id': onSiteEntry.contractorId,
+        if (onSiteEntry.contractorName != null)
+          'contractor_name': onSiteEntry.contractorName,
+        if (onSiteEntry.hostName != null) 'host_name': onSiteEntry.hostName,
+        if (onSiteEntry.companyName != null)
+          'company_name': onSiteEntry.companyName,
+        if (onSiteEntry.purpose != null) 'purpose': onSiteEntry.purpose,
+        'occupant_count': onSiteEntry.occupantCount ?? 1,
+        'occupants_leaving': onSiteEntry.occupantCount ?? 1,
+        'session_id': onSiteEntry.sessionId,
+        'logged_by_clock_no': loggedByClockNo,
+        'logged_by_name': loggedByName,
+        'logged_at': DateTime.now().toIso8601String(),
+        'forced_exit': true,
+        'forced_exit_reason': reason,
+        if (autoClosedOnReentry) 'auto_closed_missed_scan': true,
+        if (autoClosedOnReentry) 'flagged_for_review': true,
+        'disc_scan_captured': false,
+      },
+    );
+
+    logAudit(
+      action: autoClosedOnReentry ? 'auto_close_reentry' : 'force_sign_out',
+      actorClockNo: loggedByClockNo,
+      actorName: loggedByName,
+      details: {
+        'reason': reason,
+        'original_entry_id': onSiteEntry.id,
+        'exit_entry_id': result.id,
+        if (onSiteEntry.vehicleReg != null) 'vehicle_reg': onSiteEntry.vehicleReg,
+        if (onSiteEntry.visitorName != null)
+          'visitor_name': onSiteEntry.visitorName,
+      },
+    );
+
+    return result;
+  }
+
   // ---------------------------------------------------------------------------
   // COMPANY CAR TRIPS
   // ---------------------------------------------------------------------------
@@ -628,7 +698,13 @@ class SecurityService {
     String? actorName,
   }) async {
     _guardWrite();
-    await _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore());
+    // Fire-and-forget: with Firestore persistence the write is durably queued
+    // and replays on reconnect, so trip/mileage data survives offline without
+    // blocking the gate submit on a server ack that never arrives while
+    // offline (a plain `await add()` hangs offline).
+    unawaited(
+      _db.collection(Collections.securityVehicleTrips).add(trip.toFirestore()),
+    );
 
     if (actorClockNo != null) {
       logAudit(
@@ -649,10 +725,14 @@ class SecurityService {
     required double odometer,
   }) async {
     _guardWrite();
-    await _db.collection(Collections.securityVehicles).doc(vehicleId).update({
-      'odometer_last': odometer,
-      'updated_at': FieldValue.serverTimestamp(),
-    });
+    // Fire-and-forget (see recordCompanyCarTrip) — survives offline via
+    // Firestore persistence, never blocks the submit on a server ack.
+    unawaited(
+      _db.collection(Collections.securityVehicles).doc(vehicleId).update({
+        'odometer_last': odometer,
+        'updated_at': FieldValue.serverTimestamp(),
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------

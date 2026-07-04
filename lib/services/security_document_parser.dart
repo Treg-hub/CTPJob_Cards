@@ -396,44 +396,21 @@ class SecurityDocumentParser {
     return RegExp(r'^[A-Z0-9]{5,10}$').hasMatch(upper);
   }
 
-  /// Licence numbers (CG24MTZN) precede veh. register (VCG592W) on visitor discs.
-  static bool _looksLikeLicenceNumber(String value) {
-    final upper = value.toUpperCase().trim();
-    return RegExp(r'^[A-Z]{2}\d{2}[A-Z]{2,4}$').hasMatch(upper);
-  }
-
-  /// CTP fleet / company register plates (BX33HKZN, CH09TJZN) on MVL barcodes.
-  static bool _looksLikeFleetRegisterPlate(String value) {
-    final upper = value.toUpperCase().trim();
-    return RegExp(r'(GPZN|HKZN|TJZN)$').hasMatch(upper);
-  }
-
-  static bool _looksLikeClassicPlate(String value) {
-    final upper = value.toUpperCase().trim();
-    if (RegExp(r'^[A-Z]{2}\d{6}$').hasMatch(upper)) return true;
-    if (RegExp(r'^[A-Z]{2,3}\d{3}[A-Z]$').hasMatch(upper)) return true;
-    if (RegExp(r'^[A-Z]{3}\d{3}[A-Z]{2}$').hasMatch(upper)) return true;
-    return _extractReg(upper) != null && !_looksLikeFleetRegisterPlate(upper);
-  }
 
   static String _pickPlateReg(List<String> candidates) {
     if (candidates.length == 1) {
       return SecurityVehicle.normalizeReg(candidates.first);
     }
     final first = candidates[0];
-    final second = candidates[1];
 
-    if (_looksLikeFleetRegisterPlate(first)) {
-      return SecurityVehicle.normalizeReg(first);
-    }
-    if (_looksLikeLicenceNumber(first) &&
-        !_looksLikeFleetRegisterPlate(first) &&
-        _looksLikeClassicPlate(second)) {
-      return SecurityVehicle.normalizeReg(second);
-    }
-    if (_looksLikeClassicPlate(first) && _looksLikeClassicPlate(second)) {
-      return SecurityVehicle.normalizeReg(first);
-    }
+    // Both visitor discs (licence number first, e.g. CG24MTZN then VCG592W)
+    // and fleet/company discs (plate first, e.g. BX33HKZN) carry the number
+    // we want as the FIRST post-serial candidate: on an RSA disc the
+    // "Licence no." IS the physical number plate, while the following
+    // "vehicle register no." (e.g. VCG592W) is an internal eNaTIS reference
+    // that never appears on the car. Always take the first candidate.
+    // (Previously a licence-number-first disc returned the second field, so
+    // visitor scans surfaced VCG592W instead of the CG24MTZN on the plate.)
     return SecurityVehicle.normalizeReg(first);
   }
 

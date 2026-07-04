@@ -13,6 +13,7 @@ import '../main.dart' show currentEmployee, personaAllowTestSubmissions, persona
 import '../providers/persona_provider.dart';
 import '../models/fleet_settings.dart';
 import '../providers/fleet_tips_provider.dart';
+import '../providers/job_card_tips_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/fleet_service.dart';
@@ -366,6 +367,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       activeThumbColor: const Color(0xFFFF8C42),
                       onChanged: (value) =>
                           ref.read(fleetTipsVisibleProvider.notifier).setVisible(value),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.tips_and_updates_outlined, color: Color(0xFFFF8C42)),
+                      title: const Text('Job Card Tips'),
+                      subtitle: const Text('Show the guidance tips on the Create Job Card screen'),
+                      value: ref.watch(jobCardTipsVisibleProvider),
+                      activeThumbColor: const Color(0xFFFF8C42),
+                      onChanged: (value) =>
+                          ref.read(jobCardTipsVisibleProvider.notifier).setVisible(value),
                     ),
                   ],
                 ),
