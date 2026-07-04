@@ -11,6 +11,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 ### Site Security
 
 - **Vehicle disc scan now reads the number plate.** Scanning a licence disc was showing the internal vehicle-register reference (e.g. VCG592W) instead of the actual number plate (e.g. CG24MTZN). It now shows the plate as printed on the disc.
+- **After a disc scan, the app goes straight to the driver's-licence scan.** For a visitor entry (and company-car exit) a successful disc scan now automatically opens the licence scanner — it previously only did this after a manual re-scan.
 - **You can proceed when a driver has no licence.** Previously, if the licence-required setting was on and the driver had no licence, you were stuck. Now you can tick **"Driver's licence not scanned"** and pick a **reason** — **No licence**, **Disc expired**, **Licence expired**, or **Other** (with a detail) — and continue. The reason is recorded on the entry. The old free-text "licence not available" note and the separate "override reason" box are combined into this one clear reason picker.
 - **Force sign-out for stuck vehicles/visitors.** If someone's exit was never captured and they're stuck showing as on-site, tap the **⋮** menu on their row in **On Site** and choose **Force sign out (no scan)**. You must pick a reason; the action is recorded in the security audit log.
 - **On Site tabs are readable again.** The Vehicles / Visitors tabs no longer render orange-on-orange in dark mode.

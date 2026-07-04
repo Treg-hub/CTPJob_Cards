@@ -18,7 +18,11 @@ class JobCardTip extends ConsumerWidget {
     final visible = ref.watch(jobCardTipsVisibleProvider);
     if (!visible) return const SizedBox.shrink();
     if (!dismissible) return child;
+    // passthrough so the tip fills the parent's width (a stretch Column gives
+    // tight width constraints); the default loose fit made the Stack — and so
+    // the tip — shrink to its text content.
     return Stack(
+      fit: StackFit.passthrough,
       children: [
         child,
         Positioned(

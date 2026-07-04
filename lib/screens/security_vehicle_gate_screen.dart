@@ -221,8 +221,9 @@ class _SecurityVehicleGateScreenState
   Future<void> _openDiscScanner() async {
     if (_openingScanner || !mounted) return;
     _openingScanner = true;
+    SecurityScanResult? result;
     try {
-      final result = await Navigator.push<SecurityScanResult>(
+      result = await Navigator.push<SecurityScanResult>(
         context,
         MaterialPageRoute(
           builder: (_) => const SecurityDocumentScanScreen(
@@ -234,40 +235,45 @@ class _SecurityVehicleGateScreenState
           ),
         ),
       );
-      if (!mounted) return;
-
-      if (result == null) {
-        setState(() => _formReady = true);
-        return;
-      }
-
-      if (result.cantScan) {
-        setState(() {
-          _disc = null;
-          _discDamaged = true;
-          _formReady = true;
-        });
-        return;
-      }
-
-      if (result.hasDocument) {
-        final entries = await _loadRecentEntries();
-        final onSite = _service.computeOnSite(entries);
-        final vehicles = await _loadVehicles();
-        if (!mounted) return;
-        _applyDiscContext(
-          disc: result.document!,
-          onSite: onSite,
-          vehicles: vehicles,
-          allRecent: entries,
-        );
-        await _maybeChainLicenceScan();
-      }
-
-      if (mounted) setState(() => _formReady = true);
     } finally {
+      // Release the re-entrancy guard BEFORE the chained licence scan below:
+      // _openLicenceScanner() also checks `_openingScanner` and would bail
+      // while this is still true, so the disc→licence auto-transition never
+      // fired on the INITIAL scan (it only worked from _rescanDisc, which
+      // doesn't set the guard).
       _openingScanner = false;
     }
+    if (!mounted) return;
+
+    if (result == null) {
+      setState(() => _formReady = true);
+      return;
+    }
+
+    if (result.cantScan) {
+      setState(() {
+        _disc = null;
+        _discDamaged = true;
+        _formReady = true;
+      });
+      return;
+    }
+
+    if (result.hasDocument) {
+      final entries = await _loadRecentEntries();
+      final onSite = _service.computeOnSite(entries);
+      final vehicles = await _loadVehicles();
+      if (!mounted) return;
+      _applyDiscContext(
+        disc: result.document!,
+        onSite: onSite,
+        vehicles: vehicles,
+        allRecent: entries,
+      );
+      await _maybeChainLicenceScan();
+    }
+
+    if (mounted) setState(() => _formReady = true);
   }
 
   Future<void> _maybeChainLicenceScan() async {
