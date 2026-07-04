@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 const kBrandOrange = Color(0xFFFF8C42);
 
+/// Ink Factory + Daily Readings quick actions and home banner.
+const kInkModule = Color(0xFF06B6D4);
+
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.priority1,

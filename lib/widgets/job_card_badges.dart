@@ -72,7 +72,7 @@ class JobNumberBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = Theme.of(context).appColors.statusOpen;
+    const bg = kBrandOrange;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
