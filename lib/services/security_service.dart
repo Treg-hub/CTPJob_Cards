@@ -623,11 +623,18 @@ class SecurityService {
   /// entry so the derived on-site list clears WITHOUT a scan, plus a
   /// `force_sign_out` audit record with the mandatory [reason]. Any security
   /// user may do this — the audit trail is the control.
+  ///
+  /// When [autoClosedOnReentry] is true the exit is stamped
+  /// `auto_closed_missed_scan` + `flagged_for_review` — used when a vehicle is
+  /// scanned IN while still shown on-site (its previous OUT was skipped): the
+  /// stale open is auto-closed with a big flag so the line keeps moving and the
+  /// gap surfaces for review, rather than blocking the guard.
   Future<({String id, String? entryNumber, bool queuedOffline})> forceSignOut({
     required SecurityEntry onSiteEntry,
     required String reason,
     required String loggedByClockNo,
     required String loggedByName,
+    bool autoClosedOnReentry = false,
   }) async {
     final result = await createEntry(
       data: {
@@ -656,12 +663,14 @@ class SecurityService {
         'logged_at': DateTime.now().toIso8601String(),
         'forced_exit': true,
         'forced_exit_reason': reason,
+        if (autoClosedOnReentry) 'auto_closed_missed_scan': true,
+        if (autoClosedOnReentry) 'flagged_for_review': true,
         'disc_scan_captured': false,
       },
     );
 
     logAudit(
-      action: 'force_sign_out',
+      action: autoClosedOnReentry ? 'auto_close_reentry' : 'force_sign_out',
       actorClockNo: loggedByClockNo,
       actorName: loggedByName,
       details: {

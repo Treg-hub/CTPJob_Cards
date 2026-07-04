@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,6 +59,8 @@ class _SecurityVehicleGateScreenState
   final _clockNoCtrl = TextEditingController();
   final _odometerCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+  // Manual vehicle reg when a visitor's disc can't be scanned (damaged/dirty).
+  final _manualRegCtrl = TextEditingController();
 
   ParsedDocument? _disc;
   ParsedDocument? _driverLicence;
@@ -108,6 +112,7 @@ class _SecurityVehicleGateScreenState
     _clockNoCtrl.dispose();
     _odometerCtrl.dispose();
     _addressCtrl.dispose();
+    _manualRegCtrl.dispose();
     super.dispose();
   }
 
@@ -562,8 +567,15 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    if (_disc == null) {
+    final manualReg = SecurityVehicle.normalizeReg(_manualRegCtrl.text);
+    if (_disc == null && !_discDamaged) {
       _showError('Scan the vehicle licence disc first.');
+      return;
+    }
+    if (_disc == null && manualReg.isEmpty) {
+      _showError(
+        'Enter the vehicle registration — the disc could not be scanned.',
+      );
       return;
     }
 
@@ -580,9 +592,13 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    final reg = SecurityVehicle.normalizeReg(_disc!.vehicleReg);
+    final reg = _disc != null
+        ? SecurityVehicle.normalizeReg(_disc!.vehicleReg)
+        : manualReg;
     if (reg.isEmpty) {
-      _showError('Could not read registration from the scanned disc.');
+      _showError(_disc != null
+          ? 'Could not read registration from the scanned disc.'
+          : 'Enter the vehicle registration.');
       return;
     }
 
@@ -664,8 +680,26 @@ class _SecurityVehicleGateScreenState
             '${overrideDetail.isNotEmpty ? ': $overrideDetail' : ''}',
     ];
 
+    // Re-entry without a prior exit: the reg is already shown on-site, so its
+    // previous OUT was skipped. Don't hold up the line — auto-close the stale
+    // open with a big flag (flagged_for_review) and continue with this entry.
+    final autoClosedStale = _onSiteEntry != null;
+
     setState(() => _submitting = true);
     try {
+      if (_onSiteEntry != null) {
+        try {
+          await _service.forceSignOut(
+            onSiteEntry: _onSiteEntry!,
+            reason: 'Auto-closed on re-entry — previous exit was not captured',
+            loggedByClockNo: actor.clockNo,
+            loggedByName: emp.name,
+            autoClosedOnReentry: true,
+          );
+        } catch (_) {
+          // Best-effort — never block the new entry on the auto-close.
+        }
+      }
       final result = await _service.createEntry(
         data: {
           'gate_id': gate.id,
@@ -686,7 +720,8 @@ class _SecurityVehicleGateScreenState
           'logged_by_clock_no': actor.clockNo,
           'logged_by_name': emp.name,
           'logged_at': DateTime.now().toIso8601String(),
-          'disc_scan_captured': true,
+          'disc_scan_captured': _disc != null,
+          if (_disc == null) 'disc_scan_missing_flag': true,
           'driver_licence_scan_captured': licenceCaptured,
           'driver_licence_missing_flag': _licenceUnavailable,
           'id_scan_captured': licenceCaptured,
@@ -726,7 +761,12 @@ class _SecurityVehicleGateScreenState
       }
 
       if (!mounted) return;
-      _showSuccess(result, 'Entry logged');
+      _showSuccess(
+        result,
+        autoClosedStale
+            ? 'Entry logged — previous exit was missing, auto-closed & flagged for review'
+            : 'Entry logged',
+      );
     } catch (e) {
       _showError(friendlySecurityError(e));
     } finally {
@@ -837,6 +877,29 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
+    // Expiry compliance — a company car must not leave on an expired disc or
+    // licence without a recorded override reason (mirrors the visitor entry).
+    final compliance = _service.evaluateCompliance(
+      entryType: SecurityEntryType.companyCar,
+      discExpiry: _disc?.expiryDate,
+      idExpiry: _driverLicence?.expiryDate,
+      warnDays: settings?.licenseExpiryWarnDays ?? 0,
+    );
+    if (compliance.blocked) {
+      _showError(compliance.message ?? 'Vehicle compliance failed.');
+      return;
+    }
+    if (compliance.warn && _overrideReason == null) {
+      _showError(
+        '${compliance.message}. Choose an override reason to continue.',
+      );
+      return;
+    }
+    if (_overrideReason == 'Other' && _overrideCtrl.text.trim().isEmpty) {
+      _showError('Add a short detail for the "Other" reason.');
+      return;
+    }
+
     final odometer = double.tryParse(_odometerCtrl.text.trim());
     if (odometer == null) {
       _showError('Enter a valid exit odometer reading (km).');
@@ -915,30 +978,45 @@ class _SecurityVehicleGateScreenState
         'logged_by_clock_no': actor.clockNo,
         'logged_by_name': emp.name,
         'logged_at': DateTime.now().toIso8601String(),
+        if (compliance.message != null) 'compliance_notes': compliance.message,
+        if (_overrideReason != null) 'override_reason': _overrideReason,
+        if (_overrideCtrl.text.trim().isNotEmpty)
+          'override_note': _overrideCtrl.text.trim(),
       };
 
-      final result = await _service.createEntry(data: entryData);
+      final result =
+          await _service.createEntry(data: entryData, photoLocalPaths: _photoPaths);
 
-      await _service.recordCompanyCarTrip(
-        trip: SecurityVehicleTrip(
-          id: '',
-          vehicleReg: _companyVehicle!.vehicleReg,
-          gateId: gate.id,
-          direction: SecurityDirection.out,
-          entryId: result.id,
-          loggedAt: DateTime.now(),
-          driverName: driverName,
-          odometerStart: odometer,
-          sessionId: sessionId,
-        ),
-        actorClockNo: actor.clockNo,
-        actorName: emp.name,
-      );
-
-      await _service.updateCompanyVehicleOdometer(
-        vehicleId: _companyVehicle!.id,
-        odometer: odometer,
-      );
+      // The gate entry above is the authoritative record (and queues offline).
+      // The trip + odometer writes are best-effort: a failure there (e.g. a
+      // transaction that can't run offline) must not report the whole exit as
+      // failed after the entry already logged/queued.
+      try {
+        await _service.recordCompanyCarTrip(
+          trip: SecurityVehicleTrip(
+            id: '',
+            vehicleReg: _companyVehicle!.vehicleReg,
+            gateId: gate.id,
+            direction: SecurityDirection.out,
+            entryId: result.id,
+            loggedAt: DateTime.now(),
+            driverName: driverName,
+            odometerStart: odometer,
+            sessionId: sessionId,
+          ),
+          actorClockNo: actor.clockNo,
+          actorName: emp.name,
+        );
+        await _service.updateCompanyVehicleOdometer(
+          vehicleId: _companyVehicle!.id,
+          odometer: odometer,
+        );
+      } catch (e, st) {
+        if (!kIsWeb) {
+          FirebaseCrashlytics.instance.recordError(e, st,
+              reason: 'company_car_exit_trip_or_odometer', fatal: false);
+        }
+      }
 
       if (!mounted) return;
       _showSuccess(
@@ -1036,29 +1114,38 @@ class _SecurityVehicleGateScreenState
         'logged_at': DateTime.now().toIso8601String(),
       };
 
-      final result = await _service.createEntry(data: entryData);
+      final result =
+          await _service.createEntry(data: entryData, photoLocalPaths: _photoPaths);
 
-      await _service.recordCompanyCarTrip(
-        trip: SecurityVehicleTrip(
-          id: '',
-          vehicleReg: _companyVehicle!.vehicleReg,
-          gateId: gate.id,
-          direction: SecurityDirection.in_,
-          entryId: result.id,
-          loggedAt: DateTime.now(),
-          driverName: _companyVehicle!.assignedDriver,
-          odometerStart: _companyVehicle!.odometerLast,
-          odometerEnd: odometer,
-          mileageKm: mileage,
-        ),
-        actorClockNo: actor.clockNo,
-        actorName: emp.name,
-      );
-
-      await _service.updateCompanyVehicleOdometer(
-        vehicleId: _companyVehicle!.id,
-        odometer: odometer,
-      );
+      // Best-effort (see company-car exit) — never fail a logged return on the
+      // secondary trip/odometer writes.
+      try {
+        await _service.recordCompanyCarTrip(
+          trip: SecurityVehicleTrip(
+            id: '',
+            vehicleReg: _companyVehicle!.vehicleReg,
+            gateId: gate.id,
+            direction: SecurityDirection.in_,
+            entryId: result.id,
+            loggedAt: DateTime.now(),
+            driverName: _companyVehicle!.assignedDriver,
+            odometerStart: _companyVehicle!.odometerLast,
+            odometerEnd: odometer,
+            mileageKm: mileage,
+          ),
+          actorClockNo: actor.clockNo,
+          actorName: emp.name,
+        );
+        await _service.updateCompanyVehicleOdometer(
+          vehicleId: _companyVehicle!.id,
+          odometer: odometer,
+        );
+      } catch (e, st) {
+        if (!kIsWeb) {
+          FirebaseCrashlytics.instance.recordError(e, st,
+              reason: 'company_car_return_trip_or_odometer', fatal: false);
+        }
+      }
 
       if (!mounted) return;
       _showSuccess(
@@ -1364,6 +1451,99 @@ class _SecurityVehicleGateScreenState
     );
   }
 
+  /// Add-photo button, shared by the visitor-entry and company-car flows.
+  Widget _photoButton() {
+    return OutlinedButton.icon(
+      onPressed: _pickPhoto,
+      icon: const Icon(Icons.camera_alt_outlined),
+      label: Text(
+        _photoPaths.isEmpty
+            ? 'Add photo (optional)'
+            : '${_photoPaths.length} photo(s) attached',
+      ),
+    );
+  }
+
+  /// Reason / override chips + optional detail, shared by visitor entry and
+  /// company-car exit. [includeNoLicence] adds the "No licence" option (visitor
+  /// entry only — a company-car driver must carry a licence).
+  List<Widget> _overrideReasonSection({required bool includeNoLicence}) {
+    final reasons = includeNoLicence
+        ? _overrideReasons
+        : _overrideReasons.where((r) => r != 'No licence').toList();
+    return [
+      const SizedBox(height: 16),
+      Text('Reason / override', style: Theme.of(context).textTheme.titleSmall),
+      Text(
+        includeNoLicence
+            ? 'Required when the licence is not scanned, or the disc / licence is expired.'
+            : 'Required when the disc or licence is expired.',
+        style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: reasons.map((reason) {
+          return ChoiceChip(
+            label: Text(reason),
+            selected: _overrideReason == reason,
+            onSelected: (sel) => setState(() {
+              _overrideReason = sel ? reason : null;
+              if (includeNoLicence && reason == 'No licence') {
+                _licenceUnavailable = sel;
+                if (sel) _driverLicence = null;
+              }
+            }),
+          );
+        }).toList(),
+      ),
+      if (_overrideReason != null) ...[
+        const SizedBox(height: 8),
+        TextField(
+          controller: _overrideCtrl,
+          decoration: InputDecoration(
+            labelText:
+                _overrideReason == 'Other' ? 'Detail *' : 'Detail (optional)',
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+      ],
+    ];
+  }
+
+  /// Manual registration entry shown on a visitor entry when the disc could
+  /// not be scanned (damaged/dirty). Company cars use the registry dropdown.
+  List<Widget> _manualRegField() {
+    if (!_discDamaged || _disc != null || _companyVehicle != null) return [];
+    return [
+      Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+        ),
+        child: const Text(
+          "Disc couldn't be scanned — type the registration. The entry is flagged as a missing disc scan.",
+          style: TextStyle(fontSize: 12.5),
+        ),
+      ),
+      const SizedBox(height: 8),
+      TextField(
+        controller: _manualRegCtrl,
+        textCapitalization: TextCapitalization.characters,
+        decoration: const InputDecoration(
+          labelText: 'Vehicle registration (manual) *',
+          border: OutlineInputBorder(),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
   List<Widget> _buildFlowFields({
     required BuildContext context,
     required SecuritySettings settings,
@@ -1404,6 +1584,7 @@ class _SecurityVehicleGateScreenState
   }) {
     return [
       const SizedBox(height: 16),
+      ..._manualRegField(),
       DropdownButtonFormField<SecurityEntryType>(
         key: ValueKey(_entryType),
         initialValue: _entryType,
@@ -1515,58 +1696,9 @@ class _SecurityVehicleGateScreenState
           ),
         ),
       ],
-      const SizedBox(height: 16),
-      Text(
-        'Reason / override',
-        style: Theme.of(context).textTheme.titleSmall,
-      ),
-      const Text(
-        'Required when the licence is not scanned, or the disc / licence is expired.',
-        style: TextStyle(fontSize: 12.5, color: Colors.grey),
-      ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        children: _overrideReasons.map((reason) {
-          return ChoiceChip(
-            label: Text(reason),
-            selected: _overrideReason == reason,
-            onSelected: (sel) => setState(() {
-              _overrideReason = sel ? reason : null;
-              // Keep the "not scanned" checkbox in sync with a "No licence"
-              // reason so the auto-chain and flags stay consistent.
-              if (reason == 'No licence') {
-                _licenceUnavailable = sel;
-                if (sel) _driverLicence = null;
-              }
-            }),
-          );
-        }).toList(),
-      ),
-      if (_overrideReason != null) ...[
-        const SizedBox(height: 8),
-        TextField(
-          controller: _overrideCtrl,
-          decoration: InputDecoration(
-            labelText: _overrideReason == 'Other'
-                ? 'Detail *'
-                : 'Detail (optional)',
-            border: const OutlineInputBorder(),
-          ),
-          maxLines: 2,
-        ),
-      ],
+      ..._overrideReasonSection(includeNoLicence: true),
       const SizedBox(height: 12),
-      OutlinedButton.icon(
-        onPressed: _pickPhoto,
-        icon: const Icon(Icons.camera_alt_outlined),
-        label: Text(
-          _photoPaths.isEmpty
-              ? 'Add photo (optional)'
-              : '${_photoPaths.length} photo(s) attached',
-        ),
-      ),
+      _photoButton(),
     ];
   }
 
@@ -1743,6 +1875,9 @@ class _SecurityVehicleGateScreenState
         ),
         keyboardType: TextInputType.number,
       ),
+      ..._overrideReasonSection(includeNoLicence: false),
+      const SizedBox(height: 12),
+      _photoButton(),
     ];
   }
 
@@ -1800,6 +1935,8 @@ class _SecurityVehicleGateScreenState
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ),
+      const SizedBox(height: 12),
+      _photoButton(),
     ];
   }
 }

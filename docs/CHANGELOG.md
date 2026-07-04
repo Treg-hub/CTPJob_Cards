@@ -14,6 +14,10 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **After a disc scan, the app goes straight to the driver's-licence scan.** For a visitor entry (and company-car exit) a successful disc scan now automatically opens the licence scanner — it previously only did this after a manual re-scan.
 - **You can proceed when a driver has no licence.** Previously, if the licence-required setting was on and the driver had no licence, you were stuck. Now you can tick **"Driver's licence not scanned"** and pick a **reason** — **No licence**, **Disc expired**, **Licence expired**, or **Other** (with a detail) — and continue. The reason is recorded on the entry. The old free-text "licence not available" note and the separate "override reason" box are combined into this one clear reason picker.
 - **Force sign-out for stuck vehicles/visitors.** If someone's exit was never captured and they're stuck showing as on-site, tap the **⋮** menu on their row in **On Site** and choose **Force sign out (no scan)**. You must pick a reason; the action is recorded in the security audit log.
+- **Damaged/dirty disc? Type the registration.** On a visitor entry, if the licence disc can't be scanned you can now enter the registration manually — the entry is logged and flagged as a missing disc scan, instead of leaving you unable to admit the vehicle.
+- **Re-entry without an exit keeps the line moving.** If you scan a vehicle in while it's still shown on site (its exit was missed), the app auto-closes the old visit with a **flagged-for-review** exit and logs the new entry — no need to log an exit first and hold up the queue.
+- **Company-car exit now checks the disc/licence expiry.** Like a visitor entry, a company car with an expired disc or licence now needs an override reason before it can leave — recorded for audit.
+- **Photos on company-car exit and return.** You can now attach a photo on the company-car flows, not just visitor entries.
 - **On Site tabs are readable again.** The Vehicles / Visitors tabs no longer render orange-on-orange in dark mode.
 
 ### Job Cards
