@@ -554,10 +554,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   // Quick Actions tile colours are grouped by function so linked tiles read
-  // as a set: job-card actions share the brand orange, ink shares indigo,
+  // as a set: job-card actions share the brand orange, ink shares cyan,
   // fleet shares slate, and Daily Review is gold.
   static const Color _jobCardsGroup = Color(0xFFFF8C42); // brand orange
-  static const Color _inkGroup = Color(0xFF6366F1); // ink factory indigo
+  static const Color _inkGroup = kInkModule;
   static const Color _fleetGroup = Color(0xFF64748B); // slate
   // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
   // carries its own amber constant so its pulse animation can override it.
@@ -639,15 +639,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return result;
   }
 
-  double get _iconSize => _isDesktop ? 44 : (_isTablet ? 48 : 40);
-  EdgeInsets get _cardPaddingInsets => const EdgeInsets.all(12);
+  double get _iconSize => _isDesktop ? 40 : (_isTablet ? 42 : 40);
+  EdgeInsets get _cardPaddingInsets => EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: _isDesktop || _isTablet ? 8 : 10,
+      );
   double get _gridSpacing => _isDesktop ? 14 : (_isTablet ? 12 : 10);
   double get _screenPadding => _isDesktop ? 20 : 16;
   int get _gridColumns => _isDesktop ? 6 : (_isTablet ? 4 : 3);
 
   // Fixed tile height so Quick Actions can span the full width without the
   // tiles ballooning vertically — they stretch across, but never grow tall.
-  double get _gridTileHeight => _isDesktop ? 104 : (_isTablet ? 112 : 116);
+  // Desktop/tablet need a few extra px — icon + label + vertical padding was
+  // overflowing by 1px on wide layouts with the old 104/112 extents.
+  double get _gridTileHeight => _isDesktop ? 108 : (_isTablet ? 110 : 116);
 
   /// Grid layout for the Quick Actions tiles. On desktop/tablet the tiles
   /// stretch to fill the full width and flow into as many columns as fit
@@ -1230,7 +1235,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       elevation: 0,
       color: tileColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: borderColor, width: 0.8),
       ),
       child: InkWell(
@@ -1244,7 +1249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   ),
                 )
             : onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: _cardPaddingInsets,
           child: Column(
@@ -1261,14 +1266,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     ),
                 ],
               ),
-              SizedBox(height: _isDesktop ? 10 : 12),
+              SizedBox(height: _isDesktop || _isTablet ? 6 : 8),
               Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w500,
+                  height: 1.15,
                   color: disabled
                       ? Theme.of(context).colorScheme.onSurfaceVariant
                       : Theme.of(context).colorScheme.onSurface,
@@ -2379,7 +2385,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                 elevation: isPulsing ? _glowAnim.value * 6 : 0,
                 color: amber.withValues(alpha: 0.12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                   side: isPulsing
                       ? BorderSide(
                           color: glowColor.withValues(
@@ -2391,7 +2397,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                 ),
                 child: InkWell(
                   onTap: widget.onTap,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                   child: Padding(
                     padding: widget.padding,
                     child: Column(

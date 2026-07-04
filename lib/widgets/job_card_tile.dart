@@ -17,6 +17,7 @@ class JobCardTile extends StatelessWidget {
     this.selected = false,
   });
 
+  static const double _tileRadius = 10;
   static const double _compactStatusBreakpoint = 400;
 
   String _lastEntry(String text) {
@@ -35,175 +36,239 @@ class JobCardTile extends StatelessWidget {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
   }
 
+  Widget _activityRow({
+    required IconData icon,
+    required Color color,
+    required String text,
+    int maxLines = 1,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 13, color: color),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontStyle: FontStyle.italic,
+            ),
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurfaceVariant;
+    final onSurface = scheme.onSurface;
     final appColors = Theme.of(context).appColors;
     final commentColor = appColors.statusOpen;
     final correctiveColor = appColors.statusCompleted;
     final priorityColor = JobCardColorUtils.priorityColor(context, job.priority);
     final lastComment = job.comments.isNotEmpty ? _lastEntry(job.comments) : '';
     final lastNote = job.notes.isNotEmpty ? _lastEntry(job.notes) : '';
-    final lastCA = job.correctiveAction.isNotEmpty ? _lastEntry(job.correctiveAction) : '';
+    final lastCA =
+        job.correctiveAction.isNotEmpty ? _lastEntry(job.correctiveAction) : '';
     final showStatusLabel = MediaQuery.sizeOf(context).width >= _compactStatusBreakpoint;
+    final hasActivity =
+        lastComment.isNotEmpty || lastNote.isNotEmpty || lastCA.isNotEmpty;
 
-    final card = Card(
-      elevation: 3,
-      margin: EdgeInsets.zero,
+    final card = Material(
+      color: appColors.cardSurface,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: priorityColor, width: 2),
+        borderRadius: BorderRadius.circular(_tileRadius),
+        side: BorderSide(
+          color: priorityColor.withValues(alpha: 0.35),
+          width: 0.8,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(12, 12, 12, actions != null ? 8 : 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: priorityColor),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (job.jobCardNumber != null) ...[
-                        JobNumberBadge(number: job.jobCardNumber!),
-                        const SizedBox(width: 6),
-                      ],
-                      PriorityBadge(priority: job.priority),
-                      const SizedBox(width: 6),
-                      JobTypeIcons(type: job.type),
-                      const Spacer(),
-                      JobStatusChip(
-                        status: job.status,
-                        showLabel: showStatusLabel,
+                      InkWell(
+                        onTap: onTap,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            10,
+                            10,
+                            10,
+                            actions != null ? 6 : 10,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  if (job.jobCardNumber != null) ...[
+                                    JobNumberBadge(number: job.jobCardNumber!),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  PriorityBadge(priority: job.priority),
+                                  const SizedBox(width: 6),
+                                  JobTypeIcons(type: job.type),
+                                  const Spacer(),
+                                  JobStatusChip(
+                                    status: job.status,
+                                    showLabel: showStatusLabel,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${job.department} > ${job.area} > ${job.machine} > ${job.part}',
+                                style: TextStyle(
+                                  color: muted,
+                                  fontSize: 11,
+                                  height: 1.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                job.description,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: onSurface,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.25,
+                                ),
+                              ),
+                              if (hasActivity) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: scheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: scheme.outlineVariant
+                                          .withValues(alpha: 0.6),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (lastComment.isNotEmpty)
+                                        _activityRow(
+                                          icon: Icons.comment_outlined,
+                                          color: commentColor,
+                                          text: lastComment,
+                                        ),
+                                      if (lastNote.isNotEmpty) ...[
+                                        if (lastComment.isNotEmpty)
+                                          const SizedBox(height: 4),
+                                        _activityRow(
+                                          icon: Icons.edit_note,
+                                          color: muted,
+                                          text: lastNote,
+                                        ),
+                                      ],
+                                      if (lastCA.isNotEmpty) ...[
+                                        if (lastComment.isNotEmpty ||
+                                            lastNote.isNotEmpty)
+                                          const SizedBox(height: 4),
+                                        _activityRow(
+                                          icon: Icons.check_circle_outline,
+                                          color: correctiveColor,
+                                          text: lastCA,
+                                          maxLines: 2,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      job.assignedNames?.isNotEmpty == true
+                                          ? job.assignedNames!.join(', ')
+                                          : 'Unassigned',
+                                      style: TextStyle(
+                                        color: muted,
+                                        fontSize: 12.5,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (job.photos.isNotEmpty) ...[
+                                    Icon(Icons.photo_camera,
+                                        size: 13, color: muted),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${job.photos.length}',
+                                      style: TextStyle(
+                                        color: muted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Text(
+                                    job.createdAt != null
+                                        ? _relativeTime(job.createdAt!)
+                                        : '—',
+                                    style: const TextStyle(
+                                      color: kBrandOrange,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
+                      if (actions != null)
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: scheme.outlineVariant),
+                            ),
+                          ),
+                          child: actions,
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${job.department} > ${job.area} > ${job.machine} > ${job.part}',
-                    style: TextStyle(color: muted, fontSize: 11.5, height: 1.2),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    job.description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: onSurface,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                    ),
-                  ),
-                  if (lastComment.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.comment_outlined, size: 13, color: commentColor),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            lastComment,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: commentColor,
-                              fontStyle: FontStyle.italic,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (lastNote.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Icon(Icons.edit_note, size: 13, color: muted),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            lastNote,
-                            style: TextStyle(fontSize: 12, color: muted, fontStyle: FontStyle.italic),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (lastCA.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Icon(Icons.check_circle_outline, size: 13, color: correctiveColor),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            lastCA,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: correctiveColor,
-                              fontStyle: FontStyle.italic,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          job.assignedNames?.isNotEmpty == true
-                              ? job.assignedNames!.join(', ')
-                              : 'Unassigned',
-                          style: TextStyle(color: muted, fontSize: 12.5),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (job.photos.isNotEmpty) ...[
-                        Icon(Icons.photo_camera, size: 13, color: muted),
-                        const SizedBox(width: 3),
-                        Text('${job.photos.length}', style: TextStyle(color: muted, fontSize: 12)),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        job.createdAt != null ? _relativeTime(job.createdAt!) : '—',
-                        style: const TextStyle(color: kBrandOrange, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          if (actions != null)
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                ),
-              ),
-              child: actions,
-            ),
         ],
       ),
     );
@@ -212,7 +277,7 @@ class JobCardTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: selected
           ? BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(_tileRadius),
               border: Border.all(color: kBrandOrange, width: 2),
             )
           : null,
