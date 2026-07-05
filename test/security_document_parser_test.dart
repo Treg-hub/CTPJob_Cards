@@ -31,6 +31,11 @@ void main() {
       final driver = SecurityDocumentParser.parseDriverLicence(disc);
       expect(driver.documentType, SecurityDocumentType.driverLicence);
       expect(driver.vehicleReg, isNull);
+      expect(
+        SecurityDocumentParser.isValidDriverLicenceScan(driver, disc),
+        isFalse,
+      );
+      expect(SecurityDocumentParser.isVehicleLicenseDiscPayload(disc), isTrue);
     });
 
     test('driver licence parses decrypted PDF417 golden sample', () {
@@ -42,6 +47,10 @@ void main() {
       expect(doc.firstName, 'J');
       expect(doc.idNumber, '8609135139012');
       expect(doc.expiryDate?.toIso8601String().split('T').first, '2017-12-14');
+      expect(
+        SecurityDocumentParser.isValidDriverLicenceScan(doc, 'base64:$sampleB64'),
+        isTrue,
+      );
     });
   });
 

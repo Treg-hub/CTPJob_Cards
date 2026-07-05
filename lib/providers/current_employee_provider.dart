@@ -9,6 +9,12 @@ import 'persona_provider.dart';
 final firestoreServiceProvider =
     Provider<FirestoreService>((ref) => FirestoreService());
 
+/// Shared employees list for admin persona picker — avoids a fresh Firestore
+/// listener every time the dialog opens.
+final employeesStreamProvider = StreamProvider<List<Employee>>((ref) {
+  return ref.watch(firestoreServiceProvider).getEmployeesStream();
+});
+
 class CurrentEmployeeNotifier extends AsyncNotifier<Employee?> {
   @override
   Future<Employee?> build() async {

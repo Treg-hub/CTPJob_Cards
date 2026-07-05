@@ -54,7 +54,10 @@ class ParsedDocument {
 
   bool get hasDriverLicenceData =>
       documentType == SecurityDocumentType.driverLicence &&
-      (hasIdData || (rawPayload != null && rawPayload!.isNotEmpty));
+      (manualEntry
+          ? hasIdData
+          : (idNumber?.replaceAll(RegExp(r'\D'), '').length == 13 &&
+              (firstName != null || lastName != null)));
 
   ParsedDocument copyWith({
     SecurityDocumentType? documentType,

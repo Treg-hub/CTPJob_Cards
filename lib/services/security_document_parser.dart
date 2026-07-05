@@ -296,6 +296,32 @@ class SecurityDocumentParser {
     return payload.toUpperCase().contains('%MVL');
   }
 
+  /// True when the raw scan is an eNaTIS vehicle licence **disc** (MVL), not a
+  /// driver's licence card.
+  static bool isVehicleLicenseDiscPayload(String raw) {
+    return _looksLikeMvlDisc(raw.trim());
+  }
+
+  /// Accept only a real driver's licence scan — rejects vehicle discs and other
+  /// PDF417 payloads that lack decrypted identity fields.
+  static bool isValidDriverLicenceScan(ParsedDocument parsed, String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return false;
+    if (isVehicleLicenseDiscPayload(trimmed)) return false;
+    if (parsed.documentType != SecurityDocumentType.driverLicence) return false;
+
+    if (BarcodePayloadUtil.isBinaryPayload(trimmed)) {
+      final id = parsed.idNumber?.replaceAll(RegExp(r'\D'), '') ?? '';
+      final hasName = (parsed.firstName?.trim().isNotEmpty ?? false) ||
+          (parsed.lastName?.trim().isNotEmpty ?? false);
+      return id.length == 13 && hasName;
+    }
+
+    // Plain-text fallback (rare) — require a 13-digit SA ID, never bare payload.
+    final id = parsed.idNumber?.replaceAll(RegExp(r'\D'), '') ?? '';
+    return id.length == 13;
+  }
+
   /// eNaTIS MVL licence disc — `%MVL1CC09%...%SERIAL%LICENCE%PLATE%...%MAKE%...%`.
   /// After the disc serial, visitor discs carry licence number then veh. register
   /// (e.g. CG24MTZN then VCG592W). Fleet/company discs often use plate-first.
