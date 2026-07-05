@@ -7,6 +7,7 @@ import '../main.dart' show realEmployee;
 import '../models/feedback_item.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../utils/persona_audit.dart';
 
 /// Public two-way thread on a single feedback item.
@@ -88,13 +89,8 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Feedback'),
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-      ),
+      appBar: const CtpAppBar(title: 'Feedback'),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _feedbackRef.snapshots(),
         builder: (context, snap) {

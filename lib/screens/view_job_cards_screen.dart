@@ -4,6 +4,7 @@ import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
 import 'job_card_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import '../utils/screen_insets.dart';
 
@@ -155,8 +156,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                   children: previousParts.map((part) => ActionChip(
                     label: Text(part),
                     onPressed: () => setState(() => selectedPart = part),
-                    backgroundColor: selectedPart == part ? const Color(0xFFFF8C42).withValues(alpha: 51) : null,
-                    labelStyle: TextStyle(color: selectedPart == part ? const Color(0xFFFF8C42) : Theme.of(context).appColors.chipUnselectedLabel),
+                    backgroundColor: selectedPart == part ? kBrandOrange.withValues(alpha: 51) : null,
+                    labelStyle: TextStyle(color: selectedPart == part ? kBrandOrange : Theme.of(context).appColors.chipUnselectedLabel),
                   )).toList(),
                 ),
               );
@@ -243,7 +244,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                       },
                       icon: const Icon(Icons.clear),
                       label: const Text('Clear All Filters'),
-                      style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                      style: TextButton.styleFrom(foregroundColor: kBrandOrange),
                     ),
                   ),
                 ),
@@ -261,22 +262,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('All Job Cards'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFFFF8C42),
-                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
+      appBar: CtpAppBar(
+        title: 'All Job Cards',
         actions: [
-          // Staff Filter Icons
           ToggleButtons(
             isSelected: [
               selectedStaffFilter == 'Mechanical',
@@ -289,16 +277,18 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
               });
             },
             borderRadius: BorderRadius.circular(8),
-            borderColor: Colors.black,
+            borderColor: Colors.black87,
             selectedBorderColor: Colors.black,
-            selectedColor: const Color(0xFFFF8C42),
-            fillColor: const Color(0xFFFF8C42).withValues(alpha: 51),
+            selectedColor: kBrandOrange,
+            fillColor: kBrandOrange.withValues(alpha: 0.35),
+            constraints: const BoxConstraints(minHeight: 36, minWidth: 40),
             children: const [
-              Icon(Icons.build, size: 24, color: Colors.black),
-              Icon(Icons.bolt, size: 24, color: Colors.black),
-              Icon(Icons.circle_outlined, size: 24, color: Colors.black),
+              Icon(Icons.build, size: 22),
+              Icon(Icons.bolt, size: 22),
+              Icon(Icons.all_inclusive, size: 22),
             ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
       // Four server-filtered streams (open/inProgress/monitor capped at 300,

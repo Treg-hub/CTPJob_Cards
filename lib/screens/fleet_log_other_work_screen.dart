@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../utils/fleet_constants.dart';
 import '../utils/fleet_work_photo_utils.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_settings.dart';
@@ -59,7 +59,6 @@ class _FleetLogOtherWorkScreenState
   List<String> _suggestedPartNames = [];
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
-  bool _moreExpanded = false;
 
   @override
   void initState() {
@@ -122,7 +121,6 @@ class _FleetLogOtherWorkScreenState
       _linkedIssueIds.clear();
       _parts.clear();
       _workCarriedOut = DateTime.now();
-      _moreExpanded = false;
       if (widget.preSelectedAssetId == null) _selectedAsset = null;
     });
     if (widget.preSelectedAssetId != null) {
@@ -356,6 +354,15 @@ class _FleetLogOtherWorkScreenState
           ),
           const SizedBox(height: 16),
 
+          const FleetSectionLabel('Work carried out on'),
+          FleetWorkDatesCard(
+            workCarriedOut: _workCarriedOut,
+            dateFmt: dateFmt,
+            workDateIsToday: workDateIsToday,
+            onEdit: _pickWorkDate,
+          ),
+          const SizedBox(height: 16),
+
           const FleetSectionLabel('What you did (short title) *'),
           TextField(
             controller: _titleCtrl,
@@ -396,90 +403,71 @@ class _FleetLogOtherWorkScreenState
             ),
           const SizedBox(height: 16),
 
-          ExpansionTile(
-            initiallyExpanded: _moreExpanded,
-            onExpansionChanged: (v) => setState(() => _moreExpanded = v),
-            title: const Text(
-              'More details (optional)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            children: [
-              const SizedBox(height: 8),
-              FleetWorkDatesCard(
-                workCarriedOut: _workCarriedOut,
-                dateFmt: dateFmt,
-                workDateIsToday: workDateIsToday,
-                onEdit: _pickWorkDate,
-              ),
-              const SizedBox(height: 16),
-              const FleetSectionLabel('Labour hours (optional)'),
-              TextField(
-                controller: _labourHoursCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
-              ),
-              const SizedBox(height: 16),
-              if (_otherOpenIssues.isNotEmpty) ...[
-                const FleetSectionLabel(
-                    'Does this job fix any reported problems?'),
-                ..._otherOpenIssues.map((issue) {
-                  final ticked = _linkedIssueIds.contains(issue.id);
-                  return CheckboxListTile(
-                    value: ticked,
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(issue.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13)),
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _linkedIssueIds.add(issue.id!);
-                        } else {
-                          _linkedIssueIds.remove(issue.id);
-                        }
-                      });
-                    },
-                  );
-                }),
-                const SizedBox(height: 8),
-              ],
-              FleetWorkPartsSection(
-                parts: _parts,
-                optional: true,
-                suggestedPartNames: _suggestedPartNames,
-                onAdd: () => setState(() => _parts.add(FleetWorkPartRow())),
-                onAddSuggestion: (name) {
-                  setState(() {
-                    final row = FleetWorkPartRow();
-                    row.nameCtrl.text = name;
-                    _parts.add(row);
-                  });
-                },
-                onRemove: (i) {
-                  setState(() {
-                    _parts[i].nameCtrl.dispose();
-                    _parts[i].qtyCtrl.dispose();
-                    _parts.removeAt(i);
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              FleetWorkPhotosSection(
-                savedPhotoUrls: const [],
-                pendingPhotoPaths: _pendingPhotoPaths,
-                onAddPhoto: _addPhoto,
-                onRemoveSaved: (_) {},
-                onRemovePending: (path) =>
-                    setState(() => _pendingPhotoPaths.remove(path)),
-                maxPhotos: kFleetMaxPhotos,
-              ),
-              const SizedBox(height: 16),
-            ],
+          const FleetSectionLabel('Labour hours (optional)'),
+          TextField(
+            controller: _labourHoursCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
           ),
+          const SizedBox(height: 16),
+
+          FleetWorkPhotosSection(
+            savedPhotoUrls: const [],
+            pendingPhotoPaths: _pendingPhotoPaths,
+            onAddPhoto: _addPhoto,
+            onRemoveSaved: (_) {},
+            onRemovePending: (path) =>
+                setState(() => _pendingPhotoPaths.remove(path)),
+            maxPhotos: kFleetMaxPhotos,
+          ),
+          const SizedBox(height: 16),
+
+          FleetWorkPartsSection(
+            parts: _parts,
+            optional: true,
+            suggestedPartNames: _suggestedPartNames,
+            onAdd: () => setState(() => _parts.add(FleetWorkPartRow())),
+            onAddSuggestion: (name) {
+              setState(() {
+                final row = FleetWorkPartRow();
+                row.nameCtrl.text = name;
+                _parts.add(row);
+              });
+            },
+            onRemove: (i) {
+              setState(() {
+                _parts[i].nameCtrl.dispose();
+                _parts[i].qtyCtrl.dispose();
+                _parts.removeAt(i);
+              });
+            },
+          ),
+          if (_otherOpenIssues.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const FleetSectionLabel('Does this job fix any reported problems?'),
+            ..._otherOpenIssues.map((issue) {
+              final ticked = _linkedIssueIds.contains(issue.id);
+              return CheckboxListTile(
+                value: ticked,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(issue.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13)),
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _linkedIssueIds.add(issue.id!);
+                    } else {
+                      _linkedIssueIds.remove(issue.id);
+                    }
+                  });
+                },
+              );
+            }),
+          ],
           SizedBox(height: mechanicUx ? 100 : 80),
         ],
       );
@@ -511,6 +499,7 @@ class _FleetLogOtherWorkScreenState
     return Scaffold(
       appBar: FleetAppBar(
         title: mechanicUx ? 'Log other work' : 'Log Work',
+        isOnSite: realEmployee?.isOnSite,
         actions: [
           if (_saving)
             const Padding(

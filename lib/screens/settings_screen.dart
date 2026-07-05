@@ -32,6 +32,7 @@ import 'notification_inbox_screen.dart';
 import 'notification_test_screen.dart';
 import 'scan_tester_screen.dart';
 import 'login_screen.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/reset_permissions_button.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -255,17 +256,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final isDark = themeMode == ThemeMode.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [const Color(0xFFFF8C42), isOnSite ? Colors.green : Colors.red],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
+      appBar: CtpAppBar(
+        title: 'Settings',
+        isOnSite: isOnSite,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _inboxStream,

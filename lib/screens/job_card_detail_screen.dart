@@ -19,6 +19,7 @@ import '../main.dart' show currentEmployee;
 import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ctp_app_bar.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -156,7 +157,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       Chip(
                         label: Text('${selectedClockNos.length} selected'),
                         visualDensity: VisualDensity.compact,
-                        backgroundColor: const Color(0xFFFF8C42).withValues(alpha: 0.15),
+                        backgroundColor: kBrandOrange.withValues(alpha: 0.15),
                         labelStyle: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -355,7 +356,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 color: emp.isOnSite ? Colors.green : Colors.red[400],
                 size: 20,
               ),
-              activeColor: const Color(0xFFFF8C42),
+              activeColor: kBrandOrange,
             );
           },
         );
@@ -413,7 +414,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 color: emp.isOnSite ? Colors.green : Colors.red[400],
                 size: 20,
               ),
-              activeColor: const Color(0xFFFF8C42),
+              activeColor: kBrandOrange,
             );
           },
         );
@@ -618,9 +619,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: const Color(0xFFFF8C42), onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
+                              IconButton(iconSize: 32, icon: const Icon(Icons.remove_circle_outline), color: kBrandOrange, onPressed: () { if (_reoccurrenceCount > 1) setDialogState(() => _reoccurrenceCount--); }),
                               Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)), child: Text('$_reoccurrenceCount', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface))),
-                              IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: const Color(0xFFFF8C42), onPressed: () => setDialogState(() => _reoccurrenceCount++)),
+                              IconButton(iconSize: 32, icon: const Icon(Icons.add_circle_outline), color: kBrandOrange, onPressed: () => setDialogState(() => _reoccurrenceCount++)),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -977,21 +978,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     const double sectionSpacing = 5.0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Job Card Details'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFFFF8C42),
-                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
+      appBar: const CtpAppBar(title: 'Job Card Details'),
       body: StreamBuilder<JobCard>(
         stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
         builder: (context, snapshot) {
@@ -1050,7 +1037,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                           onPressed: () => _addPhoto('Description'),
                           icon: const Icon(Icons.camera_alt, size: 20),
                           label: const Text('Add Photo'),
-                          style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                          style: TextButton.styleFrom(foregroundColor: kBrandOrange),
                         ),
                       ],
                     ),
@@ -1830,7 +1817,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 icon: const Icon(Icons.group_add, size: 24),
                 label: const Text('Manage', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8C42),
+                  backgroundColor: kBrandOrange,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(0, 56),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1983,7 +1970,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     children: [
                       IconButton(
                         icon: const Icon(Icons.add_comment, size: 20),
-                        color: const Color(0xFFFF8C42),
+                        color: kBrandOrange,
                         tooltip: 'Add Comment',
                         onPressed: _showAddCommentDialog,
                         padding: EdgeInsets.zero,
@@ -1991,7 +1978,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       ),
                       IconButton(
                         icon: const Icon(Icons.camera_alt, size: 20),
-                        color: const Color(0xFFFF8C42),
+                        color: kBrandOrange,
                         tooltip: 'Add Photo to Comments',
                         onPressed: () => _addPhoto('Comments'),
                         padding: EdgeInsets.zero,
@@ -2022,7 +2009,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     children: [
                       IconButton(
                         icon: const Icon(Icons.note_add, size: 20),
-                        color: const Color(0xFFFF8C42),
+                        color: kBrandOrange,
                         tooltip: 'Add Note',
                         onPressed: _showAddNoteDialog,
                         padding: EdgeInsets.zero,
@@ -2030,7 +2017,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       ),
                       IconButton(
                         icon: const Icon(Icons.camera_alt, size: 20),
-                        color: const Color(0xFFFF8C42),
+                        color: kBrandOrange,
                         tooltip: 'Add Photo to Notes',
                         onPressed: () => _addPhoto('Notes'),
                         padding: EdgeInsets.zero,
@@ -2445,7 +2432,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   icon: const Icon(Icons.visibility, size: 16),
                   label: const Text('View Details'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8C42),
+                    backgroundColor: kBrandOrange,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
@@ -2533,7 +2520,7 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF8C42),
+                      color: kBrandOrange,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -2606,7 +2593,7 @@ class _RelatedSectionState extends State<RelatedSection> with AutomaticKeepAlive
                         icon: const Icon(Icons.expand_more),
                         label: const Text('Load More'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF8C42),
+                          backgroundColor: kBrandOrange,
                           foregroundColor: Colors.black,
                         ),
                       ),

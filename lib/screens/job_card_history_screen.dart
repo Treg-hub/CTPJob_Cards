@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import 'job_card_detail_screen.dart';
 
@@ -38,7 +39,7 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
   _DatePreset _datePreset = _DatePreset.last30Days;
   DateTime? _customFrom;
   DateTime? _customTo;
-  bool _filtersExpanded = false;
+  bool _initialSearchDone = false;
 
   // ── Client-side filter state ──────────────────────────────────────────────
   JobType? _selectedType;
@@ -61,7 +62,12 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadFactoryStructure();
+    _loadFactoryStructure().then((_) {
+      if (mounted && !_initialSearchDone) {
+        _initialSearchDone = true;
+        _search();
+      }
+    });
   }
 
   @override
@@ -128,7 +134,6 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
             _results.addAll(fetched);
           } else {
             _results = fetched;
-            if (_results.isNotEmpty) _filtersExpanded = false;
           }
           _hasMore = fetched.length == _pageSize;
           _isLoading = false;
@@ -219,27 +224,108 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
     return p >= 1 && p <= 4 ? colors[p] : Colors.grey;
   }
 
-  String get _filterSummary {
-    final parts = <String>[_datePreset.label];
-    if (_selectedDepartment != null) parts.add(_selectedDepartment!);
-    if (_selectedArea != null) parts.add(_selectedArea!);
-    if (_selectedMachine != null) parts.add(_selectedMachine!);
-    return parts.join(' · ');
+  Future<void> _openLocationFilters() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Location filters',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              _SectionLabel('Department'),
+              const SizedBox(height: 6),
+              _buildDropdown<String>(
+                hint: 'All departments',
+                value: _selectedDepartment,
+                items: _departments,
+                onChanged: (v) => _onDepartmentSelected(v),
+              ),
+              if (_selectedDepartment != null && _areas.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _SectionLabel('Area'),
+                const SizedBox(height: 6),
+                _buildDropdown<String>(
+                  hint: 'All areas',
+                  value: _selectedArea,
+                  items: _areas,
+                  onChanged: (v) => _onAreaSelected(v),
+                ),
+              ],
+              if (_selectedArea != null && _machines.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _SectionLabel('Machine'),
+                const SizedBox(height: 6),
+                _buildDropdown<String>(
+                  hint: 'All machines',
+                  value: _selectedMachine,
+                  items: _machines,
+                  onChanged: (v) => setState(() => _selectedMachine = v),
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _search();
+                },
+                icon: const Icon(Icons.search, size: 18),
+                label: const Text('Apply & search'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: kBrandOrange,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Job Card History'),
+      appBar: CtpAppBar(
+        title: 'Job Card History',
+        actions: [
+          IconButton(
+            tooltip: 'Location filters',
+            onPressed: _openLocationFilters,
+            icon: Badge(
+              isLabelVisible: _hasActiveServerFilters,
+              smallSize: 8,
+              child: const Icon(Icons.tune),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
           _buildSearchAndQuickFilters(),
-          _buildFilterPanel(),
           if (_results.isNotEmpty || _isLoading) _buildResultCount(),
           const Divider(height: 1),
-          Expanded(child: _buildResults()),
+          Expanded(
+            child: RefreshIndicator(
+              color: kBrandOrange,
+              onRefresh: () => _search(),
+              child: _buildResults(),
+            ),
+          ),
         ],
       ),
     );
@@ -307,8 +393,72 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          _FilterRow(
+            label: 'When',
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _DatePreset.values.map((p) {
+                  final sel = _datePreset == p;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: ChoiceChip(
+                      label: Text(p.label, style: const TextStyle(fontSize: 12)),
+                      selected: sel,
+                      onSelected: (_) {
+                        setState(() => _datePreset = p);
+                        _search();
+                      },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                      labelStyle: sel
+                          ? const TextStyle(color: kBrandOrange, fontWeight: FontWeight.w600)
+                          : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          if (_hasActiveServerFilters) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (_selectedDepartment != null)
+                  _activeFilterChip(_selectedDepartment!, () {
+                    _onDepartmentSelected(null);
+                    _search();
+                  }),
+                if (_selectedArea != null)
+                  _activeFilterChip(_selectedArea!, () {
+                    _onAreaSelected(null);
+                    _search();
+                  }),
+                if (_selectedMachine != null)
+                  _activeFilterChip(_selectedMachine!, () {
+                    setState(() => _selectedMachine = null);
+                    _search();
+                  }),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _activeFilterChip(String label, VoidCallback onClear) {
+    return InputChip(
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+      deleteIcon: const Icon(Icons.close, size: 14),
+      onDeleted: onClear,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      backgroundColor: kBrandOrange.withValues(alpha: 0.12),
+      side: BorderSide(color: kBrandOrange.withValues(alpha: 0.45)),
     );
   }
 
@@ -352,156 +502,6 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
     );
   }
 
-  // ── Collapsible server-filter panel ──────────────────────────────────────
-
-  Widget _buildFilterPanel() {
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        initiallyExpanded: _filtersExpanded,
-        onExpansionChanged: (v) => setState(() => _filtersExpanded = v),
-        dense: true,
-        leading: Icon(
-          Icons.tune,
-          size: 18,
-          color: _hasActiveServerFilters
-              ? kBrandOrange
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        title: Text(
-          'Server Filters',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: _hasActiveServerFilters
-                ? kBrandOrange
-                : Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        subtitle: Text(
-          _filterSummary,
-          style: TextStyle(
-            fontSize: 11,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(height: 1),
-                const SizedBox(height: 10),
-
-                // Date presets
-                _SectionLabel('Date range'),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: _DatePreset.values.map((p) {
-                    final sel = _datePreset == p;
-                    return ChoiceChip(
-                      label: Text(p.label, style: const TextStyle(fontSize: 12)),
-                      selected: sel,
-                      onSelected: (_) {
-                        setState(() => _datePreset = p);
-                        if (p != _DatePreset.custom) _search();
-                      },
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                      labelStyle: sel
-                          ? const TextStyle(color: kBrandOrange, fontWeight: FontWeight.w600)
-                          : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-                    );
-                  }).toList(),
-                ),
-                if (_datePreset == _DatePreset.custom) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDateButton('From', _customFrom,
-                            (d) { setState(() => _customFrom = d); _search(); }),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildDateButton('To', _customTo,
-                            (d) { setState(() => _customTo = d); _search(); }),
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 12),
-
-                // Department
-                _SectionLabel('Department'),
-                const SizedBox(height: 6),
-                _buildDropdown<String>(
-                  hint: 'All departments',
-                  value: _selectedDepartment,
-                  items: _departments,
-                  onChanged: (v) { _onDepartmentSelected(v); },
-                ),
-
-                // Area (shown when dept selected)
-                if (_selectedDepartment != null && _areas.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _SectionLabel('Area'),
-                  const SizedBox(height: 6),
-                  _buildDropdown<String>(
-                    hint: 'All areas',
-                    value: _selectedArea,
-                    items: _areas,
-                    onChanged: (v) { _onAreaSelected(v); },
-                  ),
-                ],
-
-                // Machine (shown when area selected)
-                if (_selectedArea != null && _machines.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _SectionLabel('Machine'),
-                  const SizedBox(height: 6),
-                  _buildDropdown<String>(
-                    hint: 'All machines',
-                    value: _selectedMachine,
-                    items: _machines,
-                    onChanged: (v) => setState(() => _selectedMachine = v),
-                  ),
-                ],
-
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _isLoading ? null : () => _search(),
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.black))
-                        : const Icon(Icons.search, size: 18),
-                    label: Text(
-                      _isLoading ? 'Searching…' : 'Search History',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: kBrandOrange,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   bool get _hasActiveServerFilters =>
       _datePreset != _DatePreset.last30Days ||
       _selectedDepartment != null ||
@@ -536,31 +536,6 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
         ],
         onChanged: onChanged,
       ),
-    );
-  }
-
-  Widget _buildDateButton(
-      String label, DateTime? value, ValueChanged<DateTime?> onPicked) {
-    return OutlinedButton.icon(
-      icon: const Icon(Icons.calendar_today, size: 15),
-      label: Text(
-        value != null
-            ? '${value.day}/${value.month}/${value.year}'
-            : label,
-        style: const TextStyle(fontSize: 12),
-      ),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      ),
-      onPressed: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: value ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime.now(),
-        );
-        onPicked(picked);
-      },
     );
   }
 
@@ -637,74 +612,98 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
     }
 
     if (_results.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.manage_search,
-                size: 72,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Set your filters and tap\nSearch History to get started.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.45,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.manage_search,
+                      size: 72,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.35),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _isLoading
+                          ? 'Loading closed job cards…'
+                          : 'No closed job cards match your filters.\nTry a wider date range or clear location filters.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (!_isLoading) ...[
+                      const SizedBox(height: 20),
+                      OutlinedButton.icon(
+                        onPressed: _openLocationFilters,
+                        icon: const Icon(Icons.tune, size: 16),
+                        label: const Text('Adjust location filters'),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: () => setState(() => _filtersExpanded = true),
-                icon: const Icon(Icons.tune, size: 16),
-                label: const Text('Open Filters'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
     final jobs = _filtered;
 
     if (jobs.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.filter_list_off, size: 48,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: 12),
-              Text(
-                'No results match the current filters.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.4,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.filter_list_off, size: 48,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No results match the quick filters on this page.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _selectedType = null;
+                          _selectedPriority = null;
+                          _searchQuery = '';
+                        });
+                      },
+                      child: const Text('Clear quick filters'),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {
-                    _selectedType = null;
-                    _selectedPriority = null;
-                    _searchQuery = '';
-                  });
-                },
-                child: const Text('Clear quick filters'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       itemCount: jobs.length + (_hasMore ? 1 : 0),

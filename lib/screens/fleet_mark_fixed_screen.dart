@@ -3,7 +3,7 @@ import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import '../models/fleet_asset.dart';
 import '../models/fleet_issue.dart';
 import '../models/fleet_type.dart';
@@ -51,8 +51,6 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
   bool _savingProgress = false;
-  bool _moreExpanded = false;
-  bool _alsoFixesExpanded = false;
 
   @override
   void initState() {
@@ -130,9 +128,6 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
       _otherOpenIssues = issues
           .where((i) => i.status.isOpen && i.id != widget.linkedIssueId)
           .toList();
-      if (_otherOpenIssues.isNotEmpty) {
-        _alsoFixesExpanded = true;
-      }
     });
   }
 
@@ -366,7 +361,10 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
         }
       },
       child: Scaffold(
-        appBar: const FleetAppBar(title: 'Mark as Fixed'),
+        appBar: FleetAppBar(
+          title: 'Mark as Fixed',
+          isOnSite: realEmployee?.isOnSite,
+        ),
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -461,11 +459,6 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
                   }
                 });
               },
-              alsoFixesExpanded: _alsoFixesExpanded,
-              onAlsoFixesExpansionChanged: (v) =>
-                  setState(() => _alsoFixesExpanded = v),
-              moreExpanded: _moreExpanded,
-              onMoreExpansionChanged: (v) => setState(() => _moreExpanded = v),
               descAutofocus: true,
               descHint:
                   'Describe the work YOU did — the fault is shown above.',

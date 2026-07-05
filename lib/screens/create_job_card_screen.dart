@@ -21,6 +21,7 @@ import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_badges.dart';
 import '../widgets/job_card_tip.dart';
 
@@ -474,13 +475,37 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
     return uploaded;
   }
 
+  Widget _buildPhotoCaptureTile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () {
+            if (part.isEmpty || description.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Fill in the part and description first — photos attach to the fault details.'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+              return;
+            }
+            _addPhoto('Description');
+          },
+          icon: const Icon(Icons.add_a_photo),
+          label: const Text('Add Photo (Camera/Gallery)'),
+        ),
+        if (photos.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildPhotosPreview(),
+        ],
+      ],
+    );
+  }
+
   Widget _buildPhotosPreview() {
-    if (photos.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('No photos added yet', style: TextStyle(color: Colors.grey)),
-      );
-    }
+    if (photos.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
       height: 120,
@@ -751,7 +776,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                 icon: const Icon(Icons.visibility, size: 16),
                 label: const Text('View All Similar Job Cards'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFFF8C42),
+                  foregroundColor: kBrandOrange,
                 ),
               ),
             ),
@@ -982,7 +1007,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                       onSelected: (_) => setState(() => priority = num),
                       backgroundColor: priorityColors[num],
                       selectedColor: priorityColors[num].withValues(alpha: 0.2),
-                      labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                      labelStyle: TextStyle(color: num == priority ? kBrandOrange : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                     );
                   }),
@@ -1052,13 +1077,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   onChanged: (v) => description = v,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                _buildPhotoCaptureTile(),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: (_isLoading || !_isOnline) ? null : _saveJobCard,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8C42),
+                      backgroundColor: kBrandOrange,
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       textStyle: const TextStyle(fontSize: 24),
                     ),
@@ -1070,29 +1097,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                           ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                 const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                 const SizedBox(height: 8),
-                 ElevatedButton.icon(
-                   // Always tappable — when the prerequisites are missing the tap
-                   // explains itself instead of being a dead button.
-                   onPressed: () {
-                     if (part.isEmpty || description.isEmpty) {
-                       ScaffoldMessenger.of(context).showSnackBar(
-                         const SnackBar(
-                           content: Text('Fill in the part and description first — photos attach to the fault details.'),
-                           backgroundColor: Colors.orange,
-                         ),
-                       );
-                       return;
-                     }
-                     _addPhoto('Description');
-                   },
-                   icon: const Icon(Icons.add_a_photo),
-                   label: const Text('Add Photo (Camera/Gallery)'),
-                 ),
-                 const SizedBox(height: 12),
-                _buildPhotosPreview(),
                 const SizedBox(height: 12),
                 _buildSimilarJobCards(),
               ],
@@ -1323,7 +1327,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                             onSelected: (_) => setState(() => priority = num),
                             backgroundColor: priorityColors[num],
                            selectedColor: priorityColors[num].withValues(alpha: 0.2),
-                            labelStyle: TextStyle(color: num == priority ? const Color(0xFFFF8C42) : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
+                            labelStyle: TextStyle(color: num == priority ? kBrandOrange : onColor(priorityColors[num]), fontWeight: num == priority ? FontWeight.bold : FontWeight.normal),
                             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
                           );
                         }),
@@ -1392,13 +1396,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                         onChanged: (v) => description = v,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                      _buildPhotoCaptureTile(),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: (_isLoading || !_isOnline) ? null : _saveJobCard,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF8C42),
+                            backgroundColor: kBrandOrange,
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             textStyle: const TextStyle(fontSize: 24),
                           ),
@@ -1410,29 +1416,6 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      const Text('Photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        // Always tappable — when the prerequisites are missing
-                        // the tap explains itself instead of being a dead button.
-                        onPressed: () {
-                          if (part.isEmpty || description.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fill in the part and description first — photos attach to the fault details.'),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
-                            return;
-                          }
-                          _addPhoto('Description');
-                        },
-                        icon: const Icon(Icons.add_a_photo),
-                        label: const Text('Add Photo (Camera/Gallery)'),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildPhotosPreview(),
                       const SizedBox(height: 12),
                     ],
                   ),
@@ -1455,12 +1438,19 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
   Widget build(BuildContext context) {
     debugPrint('Building CreateJobCardScreen - jobType: $jobType');
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Job Card'),
+      appBar: CtpAppBar(
+        title: 'Create Job Card',
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: Text(operatorName),
+            child: Text(
+              operatorName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+            ),
           ),
         ],
       ),

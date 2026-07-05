@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-const kBrandOrange = Color(0xFFFF8C42);
+/// CTP brand primary — terracotta orange (aligned with factory map palette #C25F3A).
+const kBrandOrange = Color(0xFFC25F3A);
 
 /// Ink Factory + Daily Readings quick actions and home banner.
 const kInkModule = Color(0xFF06B6D4);

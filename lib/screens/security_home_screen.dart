@@ -84,14 +84,31 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
           SecurityGateSelector(onChanged: (_) {}),
           const SizedBox(height: 20),
           SecurityActionCard(
-            title: 'Vehicle at Gate',
-            subtitle: 'Scan disc first — entry/exit auto-detected, override if needed',
+            title: 'Visitor / Contractor Vehicle',
+            subtitle: 'Scan disc — type reg if damaged',
             icon: Icons.qr_code_scanner,
             enabled: gate != null,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const SecurityVehicleGateScreen(),
+                builder: (_) => const SecurityVehicleGateScreen(
+                  mode: SecurityVehicleGateMode.visitor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SecurityActionCard(
+            title: 'Company Car',
+            subtitle: 'Scan disc — odometer & trip details',
+            icon: Icons.directions_car_filled_outlined,
+            enabled: gate != null,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const SecurityVehicleGateScreen(
+                  mode: SecurityVehicleGateMode.companyCar,
+                ),
               ),
             ),
           ),

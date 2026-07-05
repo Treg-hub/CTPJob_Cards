@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-05 — Gate-friendly security flows, job-card polish
+
+### Site Security
+
+- **Two gate entry points.** Site Security home now has **Visitor / Contractor Vehicle** and **Company Car** instead of one combined **Vehicle at Gate** screen — shorter forms for guards.
+- **Damaged disc on visitors.** Tick **Disc damaged / cannot scan**, type the registration (no company-car dropdown). If the plate matches a company car, a **Switch** banner opens the Company Car flow with that vehicle pre-selected.
+- **Damaged disc on company cars.** Pick the vehicle from the registered list only — no typing the plate manually.
+
+### Look & feel
+
+- **Brand orange** updated to terracotta (`#C25F3A`). Home Quick Actions centre on phone.
+- **Presence app bars** (`CtpAppBar`): orange → green/red gradient on pushed Job Cards screens when on/off site.
+- **Job Card History** auto-loads last 30 days; date chips always visible; location filters in a bottom sheet.
+- **Fleet mechanic** urgent banner clears when the linked issue is resolved; log-work forms show all fields flat (no collapsed "More details").
+
+---
+
 ## 2026-07-04 — Sharper job cards, cyan Ink tiles (build 2.2.0+110)
 
 ### Look & feel
