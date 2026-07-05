@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +22,7 @@ class SecurityDocumentScanScreen extends StatefulWidget {
     this.allowSkip = false,
     this.skipLabel = "Can't scan",
     this.showCantScanDisc = false,
+    this.afterCameraHandoff = false,
   });
 
   final String title;
@@ -38,6 +41,9 @@ class SecurityDocumentScanScreen extends StatefulWidget {
   /// Bottom action when the licence disc cannot be scanned.
   final bool showCantScanDisc;
 
+  /// Previous route just released the camera (chained disc → licence scan).
+  final bool afterCameraHandoff;
+
   @override
   State<SecurityDocumentScanScreen> createState() =>
       _SecurityDocumentScanScreenState();
@@ -50,7 +56,11 @@ class _SecurityDocumentScanScreenState
   late final MobileScannerController _controller = MobileScannerController(
     returnImage: true,
     detectionSpeed: DetectionSpeed.noDuplicates,
+    autoStart: false,
   );
+
+  bool _cameraReady = false;
+  DateTime? _lastRejectNotice;
 
   static bool _acceptsBarcodeFormat(
     SecurityDocumentType? expected,
@@ -80,35 +90,86 @@ class _SecurityDocumentScanScreenState
   static const int _manualEntryHintThreshold = 5;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onCameraStateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_startCameraWithHandoff());
+    });
+  }
+
+  void _onCameraStateChanged() {
+    final ready = _controller.value.isInitialized && _controller.value.isRunning;
+    if (ready != _cameraReady && mounted) {
+      setState(() => _cameraReady = ready);
+    }
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_onCameraStateChanged);
     _controller.dispose();
     super.dispose();
   }
 
-  void _pop(dynamic value) {
+  Future<void> _startCameraWithHandoff() async {
+    if (widget.afterCameraHandoff) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+    }
+    await _ensureCameraStarted();
+  }
+
+  Future<void> _releaseCamera() async {
+    try {
+      if (_torchOn) {
+        await _controller.toggleTorch();
+        _torchOn = false;
+      }
+      await _controller.stop();
+    } catch (_) {
+      // Best-effort — route is closing or the controller never bound.
+    }
+  }
+
+  Future<void> _ensureCameraStarted() async {
+    if (!mounted || _confirmed) return;
+    try {
+      await _controller.start();
+    } catch (_) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!mounted || _confirmed) return;
+      try {
+        await _controller.start();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _pop(dynamic value) async {
     if (!mounted || _confirmed) return;
     _confirmed = true;
+    await _releaseCamera();
+    if (!mounted) return;
     Navigator.pop(context, value);
   }
 
   void _popDocument(ParsedDocument document) {
     if (widget.structuredResult) {
-      _pop(SecurityScanResult.success(document));
+      unawaited(_pop(SecurityScanResult.success(document)));
     } else {
-      _pop(document);
+      unawaited(_pop(document));
     }
   }
 
   void _popSkipped() {
     if (widget.structuredResult) {
-      _pop(SecurityScanResult.skippedScan());
+      unawaited(_pop(SecurityScanResult.skippedScan()));
     } else {
-      _pop(null);
+      unawaited(_pop(null));
     }
   }
 
   void _popCantScanDisc() {
-    _pop(SecurityScanResult.cantScanDisc());
+    unawaited(_pop(SecurityScanResult.cantScanDisc()));
   }
 
   Future<void> _setTorch(bool on) async {
@@ -146,14 +207,30 @@ class _SecurityDocumentScanScreenState
     }
   }
 
-  void _showWrongBarcodeHintOnce() {
-    if (_rejectedScanCount != 1 || !mounted) return;
+  void _notifyRejectedScan({required String? raw}) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (_lastRejectNotice != null &&
+        now.difference(_lastRejectNotice!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastRejectNotice = now;
+
+    final isDiscOnLicenceStep =
+        widget.expectedType == SecurityDocumentType.driverLicence &&
+            raw != null &&
+            SecurityDocumentParser.isVehicleLicenseDiscPayload(raw);
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Wrong barcode detected — make sure you\'re scanning the correct PDF417 barcode.',
+          isDiscOnLicenceStep
+              ? 'Incorrect scan — that is the vehicle licence disc. '
+                  'Flip to the driver\'s licence card and scan the PDF417 on the back.'
+              : 'Incorrect scan — wrong document for this step.',
         ),
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.orange.shade900,
       ),
     );
   }
@@ -165,7 +242,7 @@ class _SecurityDocumentScanScreenState
     for (final b in capture.barcodes) {
       if (!_acceptsBarcodeFormat(widget.expectedType, b.format)) {
         _bumpRejectedScanCount();
-        _showWrongBarcodeHintOnce();
+        _notifyRejectedScan(raw: null);
         continue;
       }
 
@@ -191,6 +268,7 @@ class _SecurityDocumentScanScreenState
       };
       if (!_acceptsParsedResult(widget.expectedType, parsed, raw)) {
         _bumpRejectedScanCount();
+        _notifyRejectedScan(raw: raw);
         continue;
       }
       if (!mounted || _confirmed) return;
@@ -212,17 +290,16 @@ class _SecurityDocumentScanScreenState
     ParsedDocument parsed,
     String raw,
   ) {
-    if (expected == SecurityDocumentType.licenseDisc) {
-      final reg = parsed.vehicleReg?.trim() ?? '';
-      return reg.isNotEmpty;
-    }
-    if (parsed.hasVehicleData || parsed.hasIdData) return true;
-    if (expected == SecurityDocumentType.driverLicence) {
-      return parsed.documentType == SecurityDocumentType.driverLicence &&
-          (parsed.hasDriverLicenceData ||
-              BarcodePayloadUtil.isBinaryPayload(raw));
-    }
-    return parsed.hasDriverLicenceData;
+    return switch (expected) {
+      SecurityDocumentType.licenseDisc =>
+        (parsed.vehicleReg?.trim() ?? '').isNotEmpty,
+      SecurityDocumentType.driverLicence =>
+        SecurityDocumentParser.isValidDriverLicenceScan(parsed, raw),
+      SecurityDocumentType.idDocument => parsed.hasIdData,
+      _ => parsed.hasVehicleData ||
+          parsed.hasIdData ||
+          parsed.hasDriverLicenceData,
+    };
   }
 
   void _manualEntry() async {
@@ -344,6 +421,25 @@ class _SecurityDocumentScanScreenState
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
           const _Pdf417GuideOverlay(),
+          if (!_cameraReady)
+            ColoredBox(
+              color: Colors.black,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(color: Colors.white70),
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.afterCameraHandoff
+                          ? 'Starting camera…'
+                          : 'Preparing scanner…',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: Material(

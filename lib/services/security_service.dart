@@ -271,7 +271,8 @@ class SecurityService {
     }
 
     if (entryType == SecurityEntryType.visitor ||
-        entryType == SecurityEntryType.contractor) {
+        entryType == SecurityEntryType.contractor ||
+        entryType == SecurityEntryType.companyCar) {
       if (discExpired || idExpired || discSoon || idSoon) {
         final parts = <String>[];
         if (discExpired) parts.add('license disc expired');

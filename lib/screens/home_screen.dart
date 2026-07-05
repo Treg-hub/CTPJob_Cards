@@ -26,6 +26,7 @@ import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
+import '../providers/persona_provider.dart';
 import '../utils/persona_audit.dart';
 import '../utils/registry_admin.dart';
 import '../utils/role.dart' as role_utils;
@@ -654,28 +655,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // overflowing by 1px on wide layouts with the old 104/112 extents.
   double get _gridTileHeight => _isDesktop ? 108 : (_isTablet ? 110 : 116);
 
-  /// Grid layout for the Quick Actions tiles. On desktop/tablet the tiles
-  /// stretch to fill the full width and flow into as many columns as fit
-  /// (capped tile width), so wide screens use the space instead of a few
-  /// giant tiles. Phones keep the fixed 3-column layout. Both use a fixed
-  /// [_gridTileHeight] so tiles never expand vertically.
-  SliverGridDelegate get _quickActionsGridDelegate {
-    if (_isDesktop || _isTablet) {
-      return SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: _isDesktop ? 210 : 200,
-        mainAxisSpacing: _gridSpacing,
-        crossAxisSpacing: _gridSpacing,
-        mainAxisExtent: _gridTileHeight,
-      );
-    }
-    return SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: _gridColumns,
-      mainAxisSpacing: _gridSpacing,
-      crossAxisSpacing: _gridSpacing,
-      mainAxisExtent: _gridTileHeight,
-    );
-  }
-
   // Success flags for the one-shot module-settings loads. A load that
   // returned defaults for a missing doc still counts as success (the server
   // answered); only the catch path leaves a flag false so
@@ -1194,6 +1173,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
+  /// Tile width for Quick Actions — matches [SliverGridDelegateWithMaxCrossAxisExtent]
+  /// on wide layouts so tiles don't balloon, but uses the phone column count below 600px.
+  double _quickActionTileWidth(double availableWidth) {
+    if (_isDesktop || _isTablet) {
+      final maxExtent = _isDesktop ? 210.0 : 200.0;
+      final columns = ((availableWidth + _gridSpacing) / (maxExtent + _gridSpacing))
+          .ceil()
+          .clamp(1, 99);
+      return (availableWidth - _gridSpacing * (columns - 1)) / columns;
+    }
+    return (availableWidth - _gridSpacing * (_gridColumns - 1)) / _gridColumns;
+  }
+
   Widget _buildQuickActionsGrid() {
     final tiles = <Widget>[
       ..._quickActions.map((action) => _buildQuickActionCard(
@@ -1216,35 +1208,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ),
     ];
 
-    if (_isDesktop || _isTablet) {
-      return SizedBox(
-        width: double.infinity,
-        child: GridView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: _quickActionsGridDelegate,
-          children: tiles,
-        ),
-      );
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final tileWidth = (screenWidth -
-            _screenPadding * 2 -
-            _gridSpacing * (_gridColumns - 1)) /
-        _gridColumns;
-
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: _gridSpacing,
-      runSpacing: _gridSpacing,
-      children: tiles
-          .map((tile) => SizedBox(
-                width: tileWidth,
-                height: _gridTileHeight,
-                child: tile,
-              ))
-          .toList(),
+    // Wrap + center on every breakpoint so a partial row (e.g. three mechanic
+    // tiles on a wide web window) sits in the middle instead of hugging the left
+    // edge. GridView left-aligns spare columns, which is what the screenshot showed.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = _quickActionTileWidth(constraints.maxWidth);
+        return Wrap(
+          alignment: WrapAlignment.center,
+          spacing: _gridSpacing,
+          runSpacing: _gridSpacing,
+          children: tiles
+              .map((tile) => SizedBox(
+                    width: tileWidth,
+                    height: _gridTileHeight,
+                    child: tile,
+                  ))
+              .toList(),
+        );
+      },
     );
   }
 
@@ -2168,6 +2150,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild shell tabs, quick actions, and nav when admin persona testing switches.
+    ref.listen<PersonaState>(personaProvider, (prev, next) {
+      if (prev?.employee?.clockNo != next.employee?.clockNo) {
+        _myWorkStream = null;
+        _myWorkClockNo = null;
+        if (mounted) setState(() => _selectedIndex = 0);
+      }
+    });
+    ref.watch(personaProvider);
+
     ref.listen<AsyncValue<FleetSettings>>(fleetSettingsProvider, (_, next) {
       next.whenData((settings) {
         if (mounted && _cachedFleetSettings != settings) {

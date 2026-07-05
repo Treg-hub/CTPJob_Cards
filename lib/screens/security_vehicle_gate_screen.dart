@@ -18,10 +18,12 @@ import '../models/security_vehicle.dart';
 import '../models/security_scan_result.dart';
 import '../models/security_vehicle_trip.dart';
 import '../providers/security_provider.dart';
+import '../services/security_document_parser.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
 import '../utils/security_error_messages.dart';
+import '../utils/security_vehicle_gate_logic.dart';
 import '../widgets/security_gate_compact_header.dart';
 import '../widgets/security_suggestion_field.dart';
 import 'security_document_scan_screen.dart';
@@ -348,18 +350,63 @@ class _SecurityVehicleGateScreenState
     });
   }
 
-  bool get _needsLicenceScan => switch (_flowKind) {
-        _GateFlowKind.visitorEntry =>
-          !_licenceUnavailable && _driverLicence == null,
-        _GateFlowKind.companyCarExit => _driverLicence == null,
-        _ => false,
-      };
+  bool get _isCompanyCarMode =>
+      widget.mode == SecurityVehicleGateMode.companyCar;
+
+  bool get _hasValidDriverLicence =>
+      _driverLicence != null &&
+      (_driverLicence!.manualEntry ||
+          SecurityDocumentParser.isValidDriverLicenceScan(
+            _driverLicence!,
+            _driverLicence!.rawPayload ?? '',
+          ));
+
+  bool get _needsLicenceScan =>
+      SecurityVehicleGateLogic.shouldChainDriverLicenceScan(
+        isCompanyCarMode: _isCompanyCarMode,
+        direction: _direction,
+        companyVehicleResolved: _companyVehicle != null,
+        licenceUnavailable: _licenceUnavailable,
+        hasDriverLicence: _hasValidDriverLicence,
+      );
 
   bool get _showLicenceInHeader => switch (_flowKind) {
         _GateFlowKind.visitorEntry => true,
         _GateFlowKind.companyCarExit => true,
         _ => false,
       };
+
+  GateFlowKind get _resolvedFlowKind =>
+      SecurityVehicleGateLogic.resolveFlowKind(
+        isCompanyCarMode: _isCompanyCarMode,
+        direction: _direction,
+        companyVehicleResolved: _companyVehicle != null,
+      );
+
+  ({bool warn, String? message}) _complianceStatus(SecuritySettings settings) {
+    if (_flowKind != _GateFlowKind.visitorEntry &&
+        _flowKind != _GateFlowKind.companyCarExit) {
+      return (warn: false, message: null);
+    }
+    final entryType = _flowKind == _GateFlowKind.companyCarExit
+        ? SecurityEntryType.companyCar
+        : _entryType;
+    final result = _service.evaluateCompliance(
+      entryType: entryType,
+      discExpiry: _disc?.expiryDate,
+      idExpiry: _hasValidDriverLicence ? _driverLicence?.expiryDate : null,
+      warnDays: settings.licenseExpiryWarnDays,
+    );
+    return (warn: result.warn, message: result.message);
+  }
+
+  bool _showOverrideSection(SecuritySettings settings) =>
+      SecurityVehicleGateLogic.shouldShowOverrideSection(
+        flow: _resolvedFlowKind,
+        licenceUnavailable: _licenceUnavailable,
+        complianceWarn: _complianceStatus(settings).warn,
+        hasValidDriverLicence: _hasValidDriverLicence,
+      );
 
   Future<void> _bootstrapFlow() async {
     if (!mounted) return;
@@ -384,10 +431,12 @@ class _SecurityVehicleGateScreenState
           onSite: onSite,
           allRecent: entries,
         );
+        if (mounted) setState(() => _formReady = true);
+        await _maybeChainLicenceScan(afterDiscScan: false);
       } else {
         setState(() => _discDamaged = true);
+        if (mounted) setState(() => _formReady = true);
       }
-      setState(() => _formReady = true);
       return;
     }
 
@@ -402,22 +451,51 @@ class _SecurityVehicleGateScreenState
     return _service.watchVehicles().first;
   }
 
+  /// Opens a document scanner. [afterPreviousScan] waits for the prior route's
+  /// camera to release — without this, chained disc→licence scans show a blank
+  /// preview on some Android devices while "scan licence only" still works.
+  Future<SecurityScanResult?> _pushScanScreen({
+    required String title,
+    required SecurityDocumentType expectedType,
+    bool showCantScanDisc = false,
+    bool allowSkip = false,
+    String skipLabel = "Can't scan",
+    bool afterPreviousScan = false,
+  }) async {
+    if (afterPreviousScan) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return null;
+    }
+
+    return Navigator.push<SecurityScanResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SecurityDocumentScanScreen(
+          key: ValueKey(
+            'scan-$expectedType-${DateTime.now().millisecondsSinceEpoch}',
+          ),
+          title: title,
+          expectedType: expectedType,
+          autoConfirmOnDetect: true,
+          structuredResult: true,
+          showCantScanDisc: showCantScanDisc,
+          allowSkip: allowSkip,
+          skipLabel: skipLabel,
+          afterCameraHandoff: afterPreviousScan,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openDiscScanner() async {
     if (_openingScanner || !mounted) return;
     _openingScanner = true;
     SecurityScanResult? result;
     try {
-      result = await Navigator.push<SecurityScanResult>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const SecurityDocumentScanScreen(
-            title: 'Scan Licence Disc',
-            expectedType: SecurityDocumentType.licenseDisc,
-            autoConfirmOnDetect: true,
-            structuredResult: true,
-            showCantScanDisc: true,
-          ),
-        ),
+      result = await _pushScanScreen(
+        title: 'Scan Licence Disc',
+        expectedType: SecurityDocumentType.licenseDisc,
+        showCantScanDisc: true,
       );
     } finally {
       // Release the re-entrancy guard BEFORE the chained licence scan below:
@@ -454,18 +532,20 @@ class _SecurityVehicleGateScreenState
         vehicles: vehicles,
         allRecent: entries,
       );
-      await _maybeChainLicenceScan();
+      if (mounted) setState(() => _formReady = true);
+      await _maybeChainLicenceScan(afterDiscScan: true);
+      return;
     }
 
     if (mounted) setState(() => _formReady = true);
   }
 
-  Future<void> _maybeChainLicenceScan() async {
+  Future<void> _maybeChainLicenceScan({bool afterDiscScan = false}) async {
     if (!_needsLicenceScan || !mounted) return;
-    await _openLicenceScanner();
+    await _openLicenceScanner(afterDiscScan: afterDiscScan);
   }
 
-  Future<void> _openLicenceScanner() async {
+  Future<void> _openLicenceScanner({bool afterDiscScan = false}) async {
     if (_openingScanner || !mounted) return;
     // Visitor entry can always skip the licence scan — a driver may genuinely
     // have no licence. The `driverLicenceScanRequired` setting no longer hard-
@@ -475,18 +555,12 @@ class _SecurityVehicleGateScreenState
 
     _openingScanner = true;
     try {
-      final result = await Navigator.push<SecurityScanResult>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SecurityDocumentScanScreen(
-            title: "Scan Driver's Licence",
-            expectedType: SecurityDocumentType.driverLicence,
-            autoConfirmOnDetect: true,
-            structuredResult: true,
-            allowSkip: allowSkip,
-            skipLabel: "Licence not available",
-          ),
-        ),
+      final result = await _pushScanScreen(
+        title: "Scan Driver's Licence",
+        expectedType: SecurityDocumentType.driverLicence,
+        allowSkip: allowSkip,
+        skipLabel: 'Licence not available',
+        afterPreviousScan: afterDiscScan,
       );
       if (!mounted) return;
 
@@ -503,10 +577,20 @@ class _SecurityVehicleGateScreenState
 
       if (result.hasDocument) {
         final doc = result.document!;
+        final raw = doc.rawPayload ?? '';
+        if (!doc.manualEntry &&
+            !SecurityDocumentParser.isValidDriverLicenceScan(doc, raw)) {
+          return;
+        }
+        final settings = ref.read(securitySettingsProvider).valueOrNull;
         setState(() {
           _driverLicence = doc;
           _licenceUnavailable = false;
           if (_overrideReason == 'No licence') _overrideReason = null;
+          if (settings != null && !_showOverrideSection(settings)) {
+            _overrideReason = null;
+            _overrideCtrl.clear();
+          }
           if (doc.fullName != null && _driverCtrl.text.isEmpty) {
             _driverCtrl.text = doc.fullName!;
           }
@@ -522,17 +606,10 @@ class _SecurityVehicleGateScreenState
     List<SecurityVehicle> vehicles,
     List<SecurityEntry> allRecent,
   ) async {
-    final result = await Navigator.push<SecurityScanResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const SecurityDocumentScanScreen(
-          title: 'Scan Licence Disc',
-          expectedType: SecurityDocumentType.licenseDisc,
-          autoConfirmOnDetect: true,
-          structuredResult: true,
-          showCantScanDisc: true,
-        ),
-      ),
+    final result = await _pushScanScreen(
+      title: 'Scan Licence Disc',
+      expectedType: SecurityDocumentType.licenseDisc,
+      showCantScanDisc: true,
     );
     if (!mounted) return;
 
@@ -558,7 +635,7 @@ class _SecurityVehicleGateScreenState
         vehicles: vehicles,
         allRecent: allRecent,
       );
-      await _maybeChainLicenceScan();
+      await _maybeChainLicenceScan(afterDiscScan: true);
     }
   }
 
@@ -764,7 +841,7 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    final licenceCaptured = _driverLicence != null;
+    final licenceCaptured = _hasValidDriverLicence;
     // A missing licence no longer hard-blocks — but a reason is mandatory.
     if (!licenceCaptured && !_licenceUnavailable) {
       _showError(
@@ -828,7 +905,8 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    final licenceExpiry = _driverLicence?.expiryDate;
+    final licenceExpiry =
+        _hasValidDriverLicence ? _driverLicence?.expiryDate : null;
     final compliance = _service.evaluateCompliance(
       entryType: _entryType,
       discExpiry: _disc?.expiryDate,
@@ -1058,7 +1136,7 @@ class _SecurityVehicleGateScreenState
       }
     }
 
-    if (_driverLicence == null) {
+    if (!_hasValidDriverLicence) {
       _showError("Scan the driver's licence before exit.");
       return;
     }
@@ -1068,7 +1146,7 @@ class _SecurityVehicleGateScreenState
     final compliance = _service.evaluateCompliance(
       entryType: SecurityEntryType.companyCar,
       discExpiry: _disc?.expiryDate,
-      idExpiry: _driverLicence?.expiryDate,
+      idExpiry: _hasValidDriverLicence ? _driverLicence?.expiryDate : null,
       warnDays: settings?.licenseExpiryWarnDays ?? 0,
     );
     if (compliance.blocked) {
@@ -1512,10 +1590,16 @@ class _SecurityVehicleGateScreenState
                                         ? _openLicenceScanner
                                         : null,
                                     onShowCompanyRegistryInfo:
-                                        scannedReg != null &&
-                                                _companyVehicle == null
+                                        SecurityVehicleGateLogic
+                                                .shouldShowCompanyRegistryHint(
+                                              isCompanyCarMode:
+                                                  _isCompanyCarMode,
+                                              hasDiscScan: _disc != null,
+                                              companyVehicleResolved:
+                                                  _companyVehicle != null,
+                                            )
                                             ? () => _showCompanyRegistryDialog(
-                                                  scannedReg,
+                                                  scannedReg!,
                                                   companyCarRegs,
                                                 )
                                             : null,
@@ -1640,20 +1724,32 @@ class _SecurityVehicleGateScreenState
     );
   }
 
-  /// Reason / override chips + optional detail, shared by visitor entry and
-  /// company-car exit. [includeNoLicence] adds the "No licence" option (visitor
-  /// entry only — a company-car driver must carry a licence).
-  List<Widget> _overrideReasonSection({required bool includeNoLicence}) {
+  /// Reason / override chips — caller must gate with [_showOverrideSection].
+  List<Widget> _overrideReasonSection({
+    required SecuritySettings settings,
+  }) {
+    final compliance = _complianceStatus(settings);
+    final includeNoLicence =
+        SecurityVehicleGateLogic.shouldIncludeNoLicenceOverrideReason(
+      flow: _resolvedFlowKind,
+      licenceUnavailable: _licenceUnavailable,
+    );
     final reasons = includeNoLicence
         ? _overrideReasons
         : _overrideReasons.where((r) => r != 'No licence').toList();
+    final subtitle = switch ((_licenceUnavailable, compliance.warn)) {
+      (true, true) =>
+        'Licence not scanned and disc / licence expiry needs a reason.',
+      (true, false) => 'Choose why you are proceeding without a scanned licence.',
+      (false, true) =>
+        compliance.message ?? 'Disc or licence expiry needs a reason.',
+      _ => 'Choose a reason to continue.',
+    };
     return [
       const SizedBox(height: 16),
       Text('Reason / override', style: Theme.of(context).textTheme.titleSmall),
       Text(
-        includeNoLicence
-            ? 'Required when the licence is not scanned, or the disc / licence is expired.'
-            : 'Required when the disc or licence is expired.',
+        subtitle,
         style: const TextStyle(fontSize: 12.5, color: Colors.grey),
       ),
       const SizedBox(height: 8),
@@ -1853,13 +1949,14 @@ class _SecurityVehicleGateScreenState
                 ),
               )
               .toList(),
-          onChanged: (v) {
+          onChanged: (v) async {
             if (v == null) return;
             _applyCompanyCarSelection(
               vehicle: v,
               onSite: onSite,
               allRecent: allRecent,
             );
+            await _maybeChainLicenceScan(afterDiscScan: false);
           },
         ),
       const SizedBox(height: 12),
@@ -1958,27 +2055,28 @@ class _SecurityVehicleGateScreenState
           }
         },
       ),
-      const SizedBox(height: 8),
-      CheckboxListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _licenceUnavailable,
-        onChanged: (v) => setState(() {
-          _licenceUnavailable = v ?? false;
-          if (_licenceUnavailable) {
-            _driverLicence = null;
-            _overrideReason ??= 'No licence';
-          } else if (_overrideReason == 'No licence') {
-            _overrideReason = null;
-          }
-        }),
-        title: const Text("Driver's licence not scanned"),
-        subtitle: Text(
-          licenceRequired
-              ? 'Pick a reason below to proceed without it'
-              : 'Pick a reason below',
+      if (SecurityVehicleGateLogic.shouldShowLicenceNotScannedOptOut(
+        flow: _resolvedFlowKind,
+        hasDriverLicence: _hasValidDriverLicence,
+      )) ...[
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _licenceUnavailable,
+          onChanged: (v) => setState(() {
+            _licenceUnavailable = v ?? false;
+            if (_licenceUnavailable) {
+              _driverLicence = null;
+              _overrideReason ??= 'No licence';
+            } else if (_overrideReason == 'No licence') {
+              _overrideReason = null;
+            }
+          }),
+          title: const Text("Driver's licence not scanned"),
+          subtitle: const Text('Opens reason options below'),
+          controlAffinity: ListTileControlAffinity.leading,
         ),
-        controlAffinity: ListTileControlAffinity.leading,
-      ),
+      ],
       const SizedBox(height: 16),
       Text(
         'Visitor details',
@@ -2045,7 +2143,8 @@ class _SecurityVehicleGateScreenState
           ),
         ),
       ],
-      ..._overrideReasonSection(includeNoLicence: true),
+      if (_showOverrideSection(settings))
+        ..._overrideReasonSection(settings: settings),
       const SizedBox(height: 12),
       _photoButton(),
       ],
@@ -2234,7 +2333,8 @@ class _SecurityVehicleGateScreenState
         ),
         keyboardType: TextInputType.number,
       ),
-      ..._overrideReasonSection(includeNoLicence: false),
+      if (_showOverrideSection(settings))
+        ..._overrideReasonSection(settings: settings),
       const SizedBox(height: 12),
       _photoButton(),
     ];
