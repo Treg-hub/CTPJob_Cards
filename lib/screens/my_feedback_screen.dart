@@ -6,6 +6,7 @@ import '../constants/collections.dart';
 import '../main.dart' show realEmployee;
 import '../models/feedback_item.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../utils/persona_audit.dart';
 import 'feedback_thread_screen.dart';
 
@@ -95,15 +96,10 @@ class _MyFeedbackScreenState extends State<MyFeedbackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final colors = Theme.of(context).appColors;
     final clockNo = realEmployee?.clockNo;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Feedback'),
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-      ),
+      appBar: const CtpAppBar(title: 'My Feedback'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showFeedbackDialog,
         backgroundColor: kBrandOrange,

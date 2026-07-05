@@ -6,6 +6,7 @@ import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 
 class DailyReviewScreen extends StatefulWidget {
@@ -226,21 +227,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daily Review — $_scopeLabel'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                kBrandOrange,
-                (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
+      appBar: CtpAppBar(title: 'Daily Review — $_scopeLabel'),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(

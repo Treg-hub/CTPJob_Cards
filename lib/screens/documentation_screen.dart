@@ -6,6 +6,7 @@ import '../providers/fleet_provider.dart';
 import '../providers/security_provider.dart';
 import '../providers/waste_provider.dart';
 import '../utils/doc_catalog.dart';
+import '../widgets/ctp_app_bar.dart';
 import 'doc_viewer_screen.dart';
 
 class DocumentationScreen extends ConsumerWidget {
@@ -25,18 +26,7 @@ class DocumentationScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Documentation'),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color.fromRGBO(255, 140, 66, 1), Color.fromARGB(255, 124, 124, 124)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
+      appBar: const CtpAppBar(title: 'Documentation'),
       body: docs.isEmpty ? _buildEmpty(context) : _buildList(context, docs),
     );
   }

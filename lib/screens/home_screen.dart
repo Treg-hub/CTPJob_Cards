@@ -406,7 +406,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           action: count > 0
               ? SnackBarAction(
                   label: 'Open',
-                  textColor: const Color(0xFFFF8C42),
+                  textColor: kBrandOrange,
                   onPressed: () {
                     if (mounted) {
                       Navigator.push(
@@ -556,7 +556,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Quick Actions tile colours are grouped by function so linked tiles read
   // as a set: job-card actions share the brand orange, ink shares cyan,
   // fleet shares slate, and Daily Review is gold.
-  static const Color _jobCardsGroup = Color(0xFFFF8C42); // brand orange
+  static const Color _jobCardsGroup = kBrandOrange;
   static const Color _inkGroup = kInkModule;
   static const Color _fleetGroup = Color(0xFF64748B); // slate
   // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
@@ -1140,43 +1140,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               },
             ),
           ],
-          Text(
-            'Quick Actions',
-            style: TextStyle(
-              fontSize: _isDesktop ? 18 : 20,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+          Center(
+            child: Text(
+              'Quick Actions',
+              style: TextStyle(
+                fontSize: _isDesktop ? 18 : 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GridView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: _quickActionsGridDelegate,
-              children: [
-                ..._quickActions.map((action) => _buildQuickActionCard(
-                  action['title'] as String,
-                  action['icon'] as IconData,
-                  action['color'] as Color,
-                  action['onTap'] as VoidCallback,
-                  disabledReason: action['disabledReason'] as String?,
-                  badgeCount: action['badgeCount'] as int?,
-                )),
-                if (kIsWeb && (isManager || isSuperManager))
-                  _DailyReviewTile(
-                    pendingCount: _pendingReviewCount,
-                    iconSize: _iconSize,
-                    padding: _cardPaddingInsets,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          _buildQuickActionsGrid(),
 
           const SizedBox(height: 24),
 
@@ -1204,7 +1179,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                           setState(() => _showDeptOnly = v);
                           _saveShowDeptOnly(v);
                         },
-                        activeThumbColor: const Color(0xFFFF8C42),
+                        activeThumbColor: kBrandOrange,
                       ),
                     ],
                   ),
@@ -1216,6 +1191,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActionsGrid() {
+    final tiles = <Widget>[
+      ..._quickActions.map((action) => _buildQuickActionCard(
+            action['title'] as String,
+            action['icon'] as IconData,
+            action['color'] as Color,
+            action['onTap'] as VoidCallback,
+            disabledReason: action['disabledReason'] as String?,
+            badgeCount: action['badgeCount'] as int?,
+          )),
+      if (kIsWeb && (isManager || isSuperManager))
+        _DailyReviewTile(
+          pendingCount: _pendingReviewCount,
+          iconSize: _iconSize,
+          padding: _cardPaddingInsets,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+          ),
+        ),
+    ];
+
+    if (_isDesktop || _isTablet) {
+      return SizedBox(
+        width: double.infinity,
+        child: GridView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: _quickActionsGridDelegate,
+          children: tiles,
+        ),
+      );
+    }
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final tileWidth = (screenWidth -
+            _screenPadding * 2 -
+            _gridSpacing * (_gridColumns - 1)) /
+        _gridColumns;
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: _gridSpacing,
+      runSpacing: _gridSpacing,
+      children: tiles
+          .map((tile) => SizedBox(
+                width: tileWidth,
+                height: _gridTileHeight,
+                child: tile,
+              ))
+          .toList(),
     );
   }
 
@@ -1402,7 +1431,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildStatusColumn('Open', openJobs, const Color(0xFFFF8C42))),
+                  Expanded(child: _buildStatusColumn('Open', openJobs, kBrandOrange)),
                   const SizedBox(width: 12),
                   Expanded(child: _buildStatusColumn('In Progress', inProgressJobs, Colors.blue)),
                 ],
@@ -1413,7 +1442,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
                   icon: const Icon(Icons.visibility, size: 18),
                   label: const Text('View All Job Cards', style: TextStyle(fontSize: 15)),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                  style: TextButton.styleFrom(foregroundColor: kBrandOrange),
                 ),
               ),
             ],
@@ -1448,7 +1477,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen())),
                     icon: const Icon(Icons.visibility, size: 18),
                     label: const Text('View All Job Cards', style: TextStyle(fontSize: 15)),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8C42)),
+                    style: TextButton.styleFrom(foregroundColor: kBrandOrange),
                   ),
                 ),
               ],
@@ -2202,7 +2231,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [const Color(0xFFFF8C42), isOnSite ? Colors.green : Colors.red],
+              colors: [kBrandOrange, isOnSite ? Colors.green : Colors.red],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -2277,7 +2306,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ? null
           : FloatingActionButton(
               onPressed: _openMyFeedback,
-              backgroundColor: const Color(0xFFFF8C42),
+              backgroundColor: kBrandOrange,
               tooltip: 'Feedback',
               child: const Icon(Icons.feedback, color: Colors.black),
             ),

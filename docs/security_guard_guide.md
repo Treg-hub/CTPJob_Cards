@@ -29,10 +29,10 @@ You will **not** see:
 1. Open the **Security** tab (or tap **Site Security** on Home).
 2. Select the **gate** you are working at.
 3. Choose the action:
-   - **Vehicle scan in** — disc + driver licence + occupants → **SEC-NNNN**
-   - **Vehicle scan out** — scan disc or pick from on-site list
+   - **Visitor / Contractor Vehicle** — scan disc (or type reg if damaged) → driver licence + entry type + occupants → **SEC-NNNN**
+   - **Company Car** — scan disc (or pick from list if damaged) → odometer + trip purpose on exit, mileage on return
    - **On-foot visitor** — manual entry without a vehicle
-   - **Company car** — exit (odometer + purpose) or return (mileage)
+   - **On site** — see who is inside; tap a row to scan out
 4. Use **On site** to see who is currently inside the gate.
 
 > **Company car costs** — only security **managers** and **admins** can add costs on mobile. Guards capture trips only.

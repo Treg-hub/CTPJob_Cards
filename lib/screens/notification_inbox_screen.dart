@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../main.dart' show realEmployee;
 import '../services/firestore_service.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../utils/fleet_navigation.dart';
 import 'feedback_thread_screen.dart';
 import 'job_card_detail_screen.dart';
@@ -109,23 +109,7 @@ class _NotificationInboxScreenState
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notification Inbox'),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                kBrandOrange,
-                (realEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
+      appBar: const CtpAppBar(title: 'Notification Inbox'),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _itemsRef!
             .orderBy('createdAt', descending: true)

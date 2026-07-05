@@ -30,10 +30,6 @@ class FleetWorkCaptureForm extends StatelessWidget {
     this.otherOpenIssues = const [],
     this.linkedIssueIds = const [],
     this.onLinkedIssueToggle,
-    this.alsoFixesExpanded = false,
-    this.onAlsoFixesExpansionChanged,
-    this.moreExpanded = false,
-    this.onMoreExpansionChanged,
     this.descAutofocus = false,
     this.descHint = 'Describe the work carried out.',
   });
@@ -57,10 +53,6 @@ class FleetWorkCaptureForm extends StatelessWidget {
   final List<FleetIssue> otherOpenIssues;
   final List<String> linkedIssueIds;
   final void Function(FleetIssue issue, bool selected)? onLinkedIssueToggle;
-  final bool alsoFixesExpanded;
-  final ValueChanged<bool>? onAlsoFixesExpansionChanged;
-  final bool moreExpanded;
-  final ValueChanged<bool>? onMoreExpansionChanged;
   final bool descAutofocus;
   final String descHint;
 
@@ -69,6 +61,14 @@ class FleetWorkCaptureForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const FleetSectionLabel('Work carried out on'),
+        FleetWorkDatesCard(
+          workCarriedOut: workCarriedOut,
+          dateFmt: dateFmt,
+          workDateIsToday: workDateIsToday,
+          onEdit: onPickWorkDate,
+        ),
+        const SizedBox(height: 16),
         const FleetSectionLabel('What you did *'),
         TextField(
           controller: descCtrl,
@@ -97,124 +97,90 @@ class FleetWorkCaptureForm extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 16),
-        if (otherOpenIssues.isNotEmpty &&
-            onLinkedIssueToggle != null &&
-            onAlsoFixesExpansionChanged != null) ...[
-          ExpansionTile(
-            initiallyExpanded: alsoFixesExpanded,
-            onExpansionChanged: onAlsoFixesExpansionChanged,
-            tilePadding: EdgeInsets.zero,
-            title: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Also fixes these reported problems?',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: kBrandOrange,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${otherOpenIssues.length}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            subtitle: Text(
-              linkedIssueIds.length > 1
-                  ? '${linkedIssueIds.length - 1} selected to close with this fix'
-                  : 'Tick any other open problems this job also fixes',
-              style: const TextStyle(fontSize: 12),
-            ),
+        const FleetSectionLabel('Labour hours (optional)'),
+        TextField(
+          controller: labourHoursCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
+        ),
+        const SizedBox(height: 16),
+        FleetWorkPhotosSection(
+          savedPhotoUrls: const [],
+          pendingPhotoPaths: pendingPhotoPaths,
+          onAddPhoto: onAddPhoto,
+          onRemoveSaved: (_) {},
+          onRemovePending: onRemovePendingPhoto,
+          maxPhotos: kFleetMaxPhotos,
+          hint: 'Photos of the finished work (optional).',
+        ),
+        const SizedBox(height: 16),
+        FleetWorkPartsSection(
+          parts: parts,
+          optional: true,
+          suggestedPartNames: suggestedPartNames,
+          onAdd: onAddPart,
+          onAddSuggestion: onAddPartSuggestion,
+          onRemove: onRemovePart,
+        ),
+        if (otherOpenIssues.isNotEmpty && onLinkedIssueToggle != null) ...[
+          const SizedBox(height: 16),
+          Row(
             children: [
-              ...otherOpenIssues.map((issue) {
-                final ticked = linkedIssueIds.contains(issue.id);
-                return CheckboxListTile(
-                  value: ticked,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(
-                    issue.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
+              const Expanded(
+                child: FleetSectionLabel('Also fixes these reported problems?'),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: kBrandOrange,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${otherOpenIssues.length}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                  subtitle: Text(
-                    'Reported by ${issue.reportedByName}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).appColors.textMuted,
-                    ),
-                  ),
-                  onChanged: (v) =>
-                      onLinkedIssueToggle!(issue, v ?? false),
-                );
-              }),
-              const SizedBox(height: 8),
+                ),
+              ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            linkedIssueIds.length > 1
+                ? '${linkedIssueIds.length - 1} selected to close with this fix'
+                : 'Tick any other open problems this job also fixes',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).appColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...otherOpenIssues.map((issue) {
+            final ticked = linkedIssueIds.contains(issue.id);
+            return CheckboxListTile(
+              value: ticked,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(
+                issue.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+              subtitle: Text(
+                'Reported by ${issue.reportedByName}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).appColors.textMuted,
+                ),
+              ),
+              onChanged: (v) => onLinkedIssueToggle!(issue, v ?? false),
+            );
+          }),
         ],
-        ExpansionTile(
-          initiallyExpanded: moreExpanded,
-          onExpansionChanged: onMoreExpansionChanged,
-          title: const Text(
-            'More details (optional)',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
-          subtitle: const Text(
-            'Labour hours, parts, photos, work date',
-            style: TextStyle(fontSize: 12),
-          ),
-          children: [
-            const SizedBox(height: 8),
-            FleetWorkDatesCard(
-              workCarriedOut: workCarriedOut,
-              dateFmt: dateFmt,
-              workDateIsToday: workDateIsToday,
-              onEdit: onPickWorkDate,
-            ),
-            const SizedBox(height: 16),
-            const FleetSectionLabel('Labour hours (optional)'),
-            TextField(
-              controller: labourHoursCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: fleetDropdownDecoration(hintText: 'e.g. 2.5'),
-            ),
-            const SizedBox(height: 16),
-            FleetWorkPartsSection(
-              parts: parts,
-              optional: true,
-              suggestedPartNames: suggestedPartNames,
-              onAdd: onAddPart,
-              onAddSuggestion: onAddPartSuggestion,
-              onRemove: onRemovePart,
-            ),
-            const SizedBox(height: 16),
-            FleetWorkPhotosSection(
-              savedPhotoUrls: const [],
-              pendingPhotoPaths: pendingPhotoPaths,
-              onAddPhoto: onAddPhoto,
-              onRemoveSaved: (_) {},
-              onRemovePending: onRemovePendingPhoto,
-              maxPhotos: kFleetMaxPhotos,
-              hint: 'Photos of the finished work (optional).',
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
         const SizedBox(height: 80),
       ],
     );

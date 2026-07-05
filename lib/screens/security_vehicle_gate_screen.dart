@@ -33,10 +33,28 @@ enum _GateFlowKind {
   companyCarReturn,
 }
 
-/// Unified vehicle gate capture — scan disc first, auto-detect entry/exit and
-/// company car, operator can override direction for testing.
+/// Which gate workflow the guard started — keeps each screen short and focused.
+enum SecurityVehicleGateMode {
+  /// Visitors, contractors, transporters — licence + host details.
+  visitor,
+
+  /// Registered company cars only — odometer + trip fields.
+  companyCar,
+}
+
+/// Vehicle gate capture — scan disc first, auto-detect entry/exit.
+/// [mode] picks the guard's starting intent (visitor vs company car).
 class SecurityVehicleGateScreen extends ConsumerStatefulWidget {
-  const SecurityVehicleGateScreen({super.key});
+  const SecurityVehicleGateScreen({
+    super.key,
+    this.mode = SecurityVehicleGateMode.visitor,
+    this.initialReg,
+  });
+
+  final SecurityVehicleGateMode mode;
+
+  /// Pre-fill registration (e.g. after switching from visitor flow).
+  final String? initialReg;
 
   @override
   ConsumerState<SecurityVehicleGateScreen> createState() =>
@@ -64,6 +82,8 @@ class _SecurityVehicleGateScreenState
   ParsedDocument? _driverLicence;
   SecurityEntry? _onSiteEntry;
   SecurityVehicle? _companyVehicle;
+  /// Company car matched on the visitor screen — guard should switch flows.
+  SecurityVehicle? _pendingCompanyCarMatch;
   SecurityEntry? _openCompanyCarExit;
   SecurityContractor? _contractor;
   SecurityEntryType _entryType = SecurityEntryType.visitor;
@@ -93,6 +113,18 @@ class _SecurityVehicleGateScreenState
   bool _formReady = false;
   bool _openingScanner = false;
 
+  String get _screenTitle => switch (widget.mode) {
+        SecurityVehicleGateMode.visitor => 'Visitor Vehicle',
+        SecurityVehicleGateMode.companyCar => 'Company Car',
+      };
+
+  bool get _needsCompanyCarIdentify =>
+      widget.mode == SecurityVehicleGateMode.companyCar &&
+      _companyVehicle == null;
+
+  bool get _manualRegEntered =>
+      SecurityVehicle.normalizeReg(_manualRegCtrl.text).isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -115,7 +147,8 @@ class _SecurityVehicleGateScreenState
   }
 
   _GateFlowKind get _flowKind {
-    if (_companyVehicle != null) {
+    if (_companyVehicle != null &&
+        widget.mode == SecurityVehicleGateMode.companyCar) {
       return _direction == SecurityDirection.out
           ? _GateFlowKind.companyCarExit
           : _GateFlowKind.companyCarReturn;
@@ -156,10 +189,40 @@ class _SecurityVehicleGateScreenState
     final suggested =
         match != null ? SecurityDirection.out : SecurityDirection.in_;
 
+    if (widget.mode == SecurityVehicleGateMode.companyCar && company == null) {
+      setState(() {
+        _disc = disc;
+        _onSiteEntry = null;
+        _companyVehicle = null;
+        _pendingCompanyCarMatch = null;
+        _openCompanyCarExit = null;
+        _autoDirection = null;
+      });
+      return;
+    }
+
+    if (widget.mode == SecurityVehicleGateMode.visitor) {
+      setState(() {
+        _disc = disc;
+        _onSiteEntry = match;
+        _companyVehicle = null;
+        _pendingCompanyCarMatch = company;
+        _openCompanyCarExit = null;
+        _autoDirection = suggested;
+        if (!_directionOverridden) {
+          _direction = suggested;
+        }
+        _occupantsLeaving = match?.occupantCount ?? 1;
+        _discrepancyNoteCtrl.clear();
+      });
+      return;
+    }
+
     setState(() {
       _disc = disc;
       _onSiteEntry = match;
       _companyVehicle = company;
+      _pendingCompanyCarMatch = null;
       _openCompanyCarExit = openExit;
       _autoDirection = suggested;
       if (!_directionOverridden) {
@@ -172,6 +235,101 @@ class _SecurityVehicleGateScreenState
         _discDamaged = false;
         _occupantCount = 1;
       }
+    });
+  }
+
+  void _applyManualRegContext({
+    required String rawReg,
+    required List<SecurityVehicle> vehicles,
+    required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
+  }) {
+    final reg = SecurityVehicle.normalizeReg(rawReg);
+    if (reg.isEmpty) {
+      setState(() {
+        _companyVehicle = null;
+        _pendingCompanyCarMatch = null;
+        _openCompanyCarExit = null;
+        _onSiteEntry = null;
+        _autoDirection = null;
+      });
+      return;
+    }
+
+    final company = _service.findCompanyVehicle(vehicles, reg);
+    final match = _service.findOnSiteByReg(onSite, reg);
+    final openExit = company != null
+        ? _service.findOpenCompanyCarExit(allRecent, reg)
+        : null;
+    final suggested =
+        match != null ? SecurityDirection.out : SecurityDirection.in_;
+
+    if (widget.mode == SecurityVehicleGateMode.visitor) {
+      setState(() {
+        _companyVehicle = null;
+        _pendingCompanyCarMatch = company;
+        _onSiteEntry = match;
+        _openCompanyCarExit = null;
+        _autoDirection = suggested;
+        if (!_directionOverridden) {
+          _direction = suggested;
+        }
+        _occupantsLeaving = match?.occupantCount ?? 1;
+      });
+      return;
+    }
+
+    if (company == null) {
+      setState(() {
+        _companyVehicle = null;
+        _pendingCompanyCarMatch = null;
+        _openCompanyCarExit = null;
+        _onSiteEntry = null;
+        _autoDirection = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _companyVehicle = company;
+      _pendingCompanyCarMatch = null;
+      _onSiteEntry = match;
+      _openCompanyCarExit = openExit;
+      _autoDirection = suggested;
+      if (!_directionOverridden) {
+        _direction = suggested;
+      }
+      _occupantsLeaving = match?.occupantCount ?? 1;
+      _occupantsReturning = openExit?.occupantCount ?? 1;
+      _occupantCount = 1;
+    });
+  }
+
+  void _applyCompanyCarSelection({
+    required SecurityVehicle vehicle,
+    required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
+  }) {
+    final reg = SecurityVehicle.normalizeReg(vehicle.vehicleReg);
+    final match = _service.findOnSiteByReg(onSite, reg);
+    final openExit = _service.findOpenCompanyCarExit(allRecent, reg);
+    final suggested =
+        match != null ? SecurityDirection.out : SecurityDirection.in_;
+
+    setState(() {
+      _companyVehicle = vehicle;
+      _pendingCompanyCarMatch = null;
+      _onSiteEntry = match;
+      _openCompanyCarExit = openExit;
+      _autoDirection = suggested;
+      if (!_directionOverridden) {
+        _direction = suggested;
+      }
+      _occupantsLeaving = match?.occupantCount ?? 1;
+      _occupantsReturning = openExit?.occupantCount ?? 1;
+      _occupantCount = 1;
+      _discDamaged = true;
+      _disc = null;
     });
   }
 
@@ -210,6 +368,29 @@ class _SecurityVehicleGateScreenState
       setState(() => _formReady = true);
       return;
     }
+
+    final seedReg = widget.initialReg?.trim();
+    if (widget.mode == SecurityVehicleGateMode.companyCar &&
+        seedReg != null &&
+        seedReg.isNotEmpty) {
+      final entries = await _loadRecentEntries();
+      final onSite = _service.computeOnSite(entries);
+      final vehicles = await _loadVehicles();
+      if (!mounted) return;
+      final company = _service.findCompanyVehicle(vehicles, seedReg);
+      if (company != null) {
+        _applyCompanyCarSelection(
+          vehicle: company,
+          onSite: onSite,
+          allRecent: entries,
+        );
+      } else {
+        setState(() => _discDamaged = true);
+      }
+      setState(() => _formReady = true);
+      return;
+    }
+
     await _openDiscScanner();
   }
 
@@ -362,6 +543,7 @@ class _SecurityVehicleGateScreenState
         _disc = null;
         _discDamaged = true;
         _companyVehicle = null;
+        _pendingCompanyCarMatch = null;
         _openCompanyCarExit = null;
         _onSiteEntry = null;
         _autoDirection = null;
@@ -533,6 +715,11 @@ class _SecurityVehicleGateScreenState
     final emp = currentEmployee;
     if (emp == null || gate == null) return;
 
+    if (_needsCompanyCarIdentify) {
+      _showError('Select a registered company car before continuing.');
+      return;
+    }
+
     if (_disc == null && !_discDamaged) {
       _showError('Scan the vehicle licence disc first.');
       return;
@@ -600,10 +787,10 @@ class _SecurityVehicleGateScreenState
       return;
     }
 
-    if (_companyVehicle != null) {
+    if (_pendingCompanyCarMatch != null) {
       _showError(
-        '$reg is a registered company car. Switch to EXIT for a company car trip, '
-        'or ENTRY for a return.',
+        '$reg is a registered company car — use the Company Car action on '
+        'Site Security.',
       );
       return;
     }
@@ -1225,13 +1412,13 @@ class _SecurityVehicleGateScreenState
 
     if (!_formReady && gate != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Vehicle at Gate')),
+        appBar: AppBar(title: Text(_screenTitle)),
         body: const SizedBox.shrink(),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Vehicle at Gate')),
+      appBar: AppBar(title: Text(_screenTitle)),
       body: StreamBuilder<List<SecurityEntry>>(
         stream: _service.watchRecentEntries(limit: 200),
         builder: (context, entriesSnap) {
@@ -1333,20 +1520,25 @@ class _SecurityVehicleGateScreenState
                                                 )
                                             : null,
                                   ),
-                                  if (_disc == null) ...[
+                                  if (_disc == null &&
+                                      widget.mode ==
+                                          SecurityVehicleGateMode.visitor) ...[
                                     const SizedBox(height: 8),
-                                    _CompanyCarManualSection(
+                                    _DiscCantScanCheckbox(
                                       discDamaged: _discDamaged,
-                                      onDiscDamagedChanged: (v) => setState(() {
+                                      onChanged: (v) => setState(() {
                                         _discDamaged = v;
-                                        if (v) _disc = null;
+                                        if (v) {
+                                          _disc = null;
+                                          _companyVehicle = null;
+                                          _pendingCompanyCarMatch = null;
+                                          _openCompanyCarExit = null;
+                                          _manualRegCtrl.clear();
+                                        } else {
+                                          _pendingCompanyCarMatch = null;
+                                          _manualRegCtrl.clear();
+                                        }
                                       }),
-                                      vehicles: vehicles
-                                          .where((v) => v.isCompanyCar)
-                                          .toList(),
-                                      selected: _companyVehicle,
-                                      onSelect: (v) =>
-                                          setState(() => _companyVehicle = v),
                                     ),
                                   ],
                                   ..._buildFlowFields(
@@ -1358,6 +1550,8 @@ class _SecurityVehicleGateScreenState
                                     companySuggestions:
                                         companySnap.data ?? [],
                                     onSite: onSite,
+                                    allRecent: entriesSnap.data ?? [],
+                                    vehicles: vehicles,
                                     recorded: recorded,
                                     discrepancy: discrepancy,
                                     partial: partial,
@@ -1495,10 +1689,48 @@ class _SecurityVehicleGateScreenState
     ];
   }
 
-  /// Manual registration entry shown on a visitor entry when the disc could
-  /// not be scanned (damaged/dirty). Company cars use the registry dropdown.
-  List<Widget> _manualRegField() {
-    if (!_discDamaged || _disc != null || _companyVehicle != null) return [];
+  List<Widget> _companyCarSwitchBanner() {
+    final car = _pendingCompanyCarMatch;
+    if (car == null) return [];
+    return [
+      Card(
+        color: kBrandOrange.withValues(alpha: 0.12),
+        child: ListTile(
+          leading: const Icon(Icons.directions_car, color: kBrandOrange),
+          title: Text(
+            '${car.vehicleReg} is a company car',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: const Text(
+            'Use Company Car for odometer, trip purpose, and clock number.',
+          ),
+          trailing: TextButton(
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SecurityVehicleGateScreen(
+                    mode: SecurityVehicleGateMode.companyCar,
+                    initialReg: car.vehicleReg,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Switch'),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  /// Manual registration when the disc could not be scanned (visitor flow).
+  List<Widget> _manualRegField({
+    required List<SecurityVehicle> vehicles,
+    required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
+  }) {
+    if (!_discDamaged || _disc != null) return [];
     return [
       Container(
         padding: const EdgeInsets.all(10),
@@ -1508,7 +1740,8 @@ class _SecurityVehicleGateScreenState
           border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
         ),
         child: const Text(
-          "Disc couldn't be scanned — type the registration. The entry is flagged as a missing disc scan.",
+          "Disc couldn't be scanned — type the registration. The entry is "
+          'flagged as a missing disc scan.',
           style: TextStyle(fontSize: 12.5),
         ),
       ),
@@ -1517,11 +1750,118 @@ class _SecurityVehicleGateScreenState
         controller: _manualRegCtrl,
         textCapitalization: TextCapitalization.characters,
         decoration: const InputDecoration(
-          labelText: 'Vehicle registration (manual) *',
+          labelText: 'Vehicle registration *',
           border: OutlineInputBorder(),
+          helperText: 'Matches company cars automatically',
         ),
-        onChanged: (_) => setState(() {}),
+        onChanged: (v) {
+          _applyManualRegContext(
+            rawReg: v,
+            vehicles: vehicles,
+            onSite: onSite,
+            allRecent: allRecent,
+          );
+        },
+        onSubmitted: (v) => _applyManualRegContext(
+          rawReg: v,
+          vehicles: vehicles,
+          onSite: onSite,
+          allRecent: allRecent,
+        ),
       ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  List<Widget> _companyCarIdentifyFields({
+    required List<SecurityVehicle> vehicles,
+    required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
+  }) {
+    final activeCars =
+        vehicles.where((v) => v.isCompanyCar && v.active).toList();
+    final scannedReg = _disc != null
+        ? SecurityVehicle.normalizeReg(_disc!.vehicleReg)
+        : null;
+
+    return [
+      const SizedBox(height: 16),
+      if (scannedReg != null) ...[
+        Card(
+          color: Colors.orange.withValues(alpha: 0.12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              '$scannedReg is not in the company car register. '
+              'Select the correct vehicle from the list below.',
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (_disc == null) ...[
+        _DiscCantScanCheckbox(
+          discDamaged: _discDamaged,
+          subtitle: 'Select the company car from the list — flagged',
+          onChanged: (v) => setState(() {
+            _discDamaged = v;
+            if (v) {
+              _disc = null;
+              _companyVehicle = null;
+              _openCompanyCarExit = null;
+            }
+          }),
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (activeCars.isEmpty)
+        const Text(
+          'No active company cars in the register. '
+          'Ask an admin to add vehicles in Pulse → Site Security.',
+        )
+      else
+        DropdownButtonFormField<SecurityVehicle>(
+          key: ValueKey(_companyVehicle?.id),
+          initialValue: _companyVehicle,
+          decoration: const InputDecoration(
+            labelText: 'Company car *',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: activeCars
+              .map(
+                (v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(
+                    v.assignedDriver != null && v.assignedDriver!.isNotEmpty
+                        ? '${v.vehicleReg} · ${v.assignedDriver}'
+                        : v.vehicleReg,
+                    style: const TextStyle(
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+          selectedItemBuilder: (context) => activeCars
+              .map(
+                (v) => Text(
+                  v.assignedDriver != null && v.assignedDriver!.isNotEmpty
+                      ? '${v.vehicleReg} · ${v.assignedDriver}'
+                      : v.vehicleReg,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              )
+              .toList(),
+          onChanged: (v) {
+            if (v == null) return;
+            _applyCompanyCarSelection(
+              vehicle: v,
+              onSite: onSite,
+              allRecent: allRecent,
+            );
+          },
+        ),
       const SizedBox(height: 12),
     ];
   }
@@ -1534,10 +1874,20 @@ class _SecurityVehicleGateScreenState
     required List<String> hostSuggestions,
     required List<String> companySuggestions,
     required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
+    required List<SecurityVehicle> vehicles,
     required int recorded,
     required bool discrepancy,
     required bool partial,
   }) {
+    if (_needsCompanyCarIdentify) {
+      return _companyCarIdentifyFields(
+        vehicles: vehicles,
+        onSite: onSite,
+        allRecent: allRecent,
+      );
+    }
+
     return switch (_flowKind) {
       _GateFlowKind.visitorEntry => _visitorEntryFields(
           settings: settings,
@@ -1545,6 +1895,9 @@ class _SecurityVehicleGateScreenState
           contractors: contractors,
           hostSuggestions: hostSuggestions,
           companySuggestions: companySuggestions,
+          vehicles: vehicles,
+          onSite: onSite,
+          allRecent: allRecent,
         ),
       _GateFlowKind.visitorExit => _visitorExitFields(
           onSite: onSite,
@@ -1563,10 +1916,24 @@ class _SecurityVehicleGateScreenState
     required List<SecurityContractor> contractors,
     required List<String> hostSuggestions,
     required List<String> companySuggestions,
+    required List<SecurityVehicle> vehicles,
+    required List<SecurityEntry> onSite,
+    required List<SecurityEntry> allRecent,
   }) {
+    final awaitingManualReg =
+        _discDamaged && _disc == null && !_manualRegEntered;
+    final companyCarDetected = _pendingCompanyCarMatch != null;
+
     return [
       const SizedBox(height: 16),
-      ..._manualRegField(),
+      ..._companyCarSwitchBanner(),
+      ..._manualRegField(
+        vehicles: vehicles,
+        onSite: onSite,
+        allRecent: allRecent,
+      ),
+      if (awaitingManualReg || companyCarDetected) const SizedBox.shrink()
+      else ...[
       DropdownButtonFormField<SecurityEntryType>(
         key: ValueKey(_entryType),
         initialValue: _entryType,
@@ -1681,6 +2048,7 @@ class _SecurityVehicleGateScreenState
       ..._overrideReasonSection(includeNoLicence: true),
       const SizedBox(height: 12),
       _photoButton(),
+      ],
     ];
   }
 
@@ -1690,6 +2058,13 @@ class _SecurityVehicleGateScreenState
     required bool discrepancy,
     required bool partial,
   }) {
+    if (_pendingCompanyCarMatch != null) {
+      return [
+        const SizedBox(height: 16),
+        ..._companyCarSwitchBanner(),
+      ];
+    }
+
     return [
       const SizedBox(height: 16),
       if (_onSiteEntry != null) ...[
@@ -1925,70 +2300,27 @@ class _SecurityVehicleGateScreenState
   }
 }
 
-class _CompanyCarManualSection extends StatelessWidget {
-  const _CompanyCarManualSection({
+class _DiscCantScanCheckbox extends StatelessWidget {
+  const _DiscCantScanCheckbox({
     required this.discDamaged,
-    required this.onDiscDamagedChanged,
-    required this.vehicles,
-    required this.selected,
-    required this.onSelect,
+    required this.onChanged,
+    this.subtitle = 'Type the registration manually — flagged',
   });
 
   final bool discDamaged;
-  final ValueChanged<bool> onDiscDamagedChanged;
-  final List<SecurityVehicle> vehicles;
-  final SecurityVehicle? selected;
-  final ValueChanged<SecurityVehicle?> onSelect;
+  final ValueChanged<bool> onChanged;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: discDamaged,
-          onChanged: (v) => onDiscDamagedChanged(v ?? false),
-          title: const Text('Disc damaged / cannot scan'),
-          subtitle: const Text('Select company car manually — flagged'),
-          controlAffinity: ListTileControlAffinity.leading,
-          visualDensity: VisualDensity.compact,
-        ),
-        if (discDamaged && vehicles.isNotEmpty)
-          DropdownButtonFormField<SecurityVehicle>(
-            key: ValueKey(selected?.id),
-            initialValue: selected,
-            decoration: const InputDecoration(
-              labelText: 'Company car *',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            items: vehicles
-                .map(
-                  (v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(
-                      v.assignedDriver != null && v.assignedDriver!.isNotEmpty
-                          ? '${v.vehicleReg} · ${v.assignedDriver}'
-                          : v.vehicleReg,
-                      style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
-                    ),
-                  ),
-                )
-                .toList(),
-            selectedItemBuilder: (context) => vehicles
-                .map(
-                  (v) => Text(
-                    v.assignedDriver != null && v.assignedDriver!.isNotEmpty
-                        ? '${v.vehicleReg} · ${v.assignedDriver}'
-                        : v.vehicleReg,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                )
-                .toList(),
-            onChanged: onSelect,
-          ),
-      ],
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      value: discDamaged,
+      onChanged: (v) => onChanged(v ?? false),
+      title: const Text('Disc damaged / cannot scan'),
+      subtitle: Text(subtitle),
+      controlAffinity: ListTileControlAffinity.leading,
+      visualDensity: VisualDensity.compact,
     );
   }
 }

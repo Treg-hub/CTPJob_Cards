@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee;
-import '../theme/app_theme.dart';
+import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import 'job_card_detail_screen.dart';
 
@@ -158,21 +158,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    kBrandOrange,
-                    (currentEmployee?.isOnSite ?? true) ? Colors.green : Colors.red,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-          ),
+          appBar: CtpAppBar(title: title),
           body: jobs.isEmpty
               ? Center(
                   child: Text(

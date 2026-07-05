@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
+import '../widgets/ctp_app_bar.dart';
 import 'job_card_detail_screen.dart';
 
 class MonitoringDashboardScreen extends StatelessWidget {
@@ -11,10 +12,9 @@ class MonitoringDashboardScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-         appBar: AppBar(
-           title: const Text('Monitoring Dashboard'),
-           backgroundColor: const Color(0xFFFF8C42),
-           bottom: const TabBar(
+         appBar: const CtpAppBar(
+           title: 'Monitoring Dashboard',
+           bottom: TabBar(
              labelColor: Colors.black,
              unselectedLabelColor: Colors.black87,
              tabs: [

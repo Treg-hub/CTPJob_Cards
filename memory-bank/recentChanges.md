@@ -2,6 +2,20 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Site Security vehicle-gate split UX (2026-07-05)**:
+  - **Security home**: two cards — **Visitor / Contractor Vehicle** and **Company Car** (replaces single "Vehicle at Gate").
+  - **Visitor flow**: damaged disc → type reg only (no company-car dropdown); registry lookup → company-car match shows **Switch** banner; no match → entry type + visitor fields (progressive disclosure).
+  - **Company car flow**: when disc not scanned — **select from list only** (no manual reg field); `initialReg` from Switch pre-selects dropdown match.
+  - App-level only — no rules/CF/collection changes. Map: `SecurityModule.md`, `docs/security-scanning-flows.md`.
+
+- **Mobile UX refinement batch — brand, quick actions, fleet log work, history (2026-07-05)**:
+  - **Brand orange**: `kBrandOrange` → `#C25F3A` (terracotta; aligned with factory map palette). Hardcoded `#FF8C42` replaced with `kBrandOrange` on key job-card screens.
+  - **Home Quick Actions**: phone layout uses centred `Wrap` (no left-aligned partial last row); section title centred.
+  - **Fleet mechanic**: `FleetUrgentInboxBanner` hides + auto-marks read when linked issue is resolved; log-work / mark-fixed forms flatten "More details" — fields always visible in order (work date → what you did → hour meter → labour → photos → parts). `FleetWorkCaptureForm` shared path updated.
+  - **Presence app bars**: new `CtpAppBar` (orange → green/red gradient); applied to Create Job Card, View Jobs, Job Card Detail, Job Card History; `FleetAppBar` gained same optional `isOnSite` gradient.
+  - **Job Card History**: auto-loads last 30 days; date chips always visible; location filters in bottom sheet + active chips; pull-to-refresh.
+  - App-level only — no rules/CF/collection changes.
+
 - **Home + shared JobCardTile UI polish + Ink module cyan (2026-07-04, PRs #157/#158, build 2.2.0+110/111)**:
   - **JobCardTile** (`widgets/job_card_tile.dart`): flat shell (`elevation: 0`), solid `cardSurface` (no priority wash), 0.8px priority border + 4px left accent, 10px radius, description 13px w500, activity inset block for comments/notes/CA, orange `JobNumberBadge` (`kBrandOrange`). Used on Recent Job Cards, View Jobs, My Work, History, Daily Review.
   - **Home Quick Actions** (`screens/home_screen.dart`): 10px radius; fixed 1px bottom overflow on wide layouts (`_gridTileHeight` 108 desktop / 110 tablet).

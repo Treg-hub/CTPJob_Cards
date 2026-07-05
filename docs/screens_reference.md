@@ -507,31 +507,25 @@ Gate logging, company cars, and on-site vehicle tracking. Accessible via the **S
 
 `lib/screens/security_home_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
 
-Hub with gate selector and action cards: vehicle scan in/out, on-foot visitor, company car exit/return, on-site list. **Add company car cost** tile: `isSecurityCostManager` only (security manager or admin).
+Hub with gate selector and action cards: **Visitor / Contractor Vehicle**, **Company Car**, on-foot visitor, on-site list. **Add company car cost** tile: `isSecurityCostManager` only (security manager or admin).
 
-### Vehicle Scan In
+### Visitor / Contractor Vehicle
 
-`lib/screens/security_vehicle_scan_in_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+`lib/screens/security_vehicle_gate_screen.dart` (`SecurityVehicleGateMode.visitor`) — **Roles:** Security Guard, Security Manager, Admin
 
-Scan vehicle disc (reg auto) + driver licence + occupants. Assigns entry number **SEC-NNNN** via server counter.
+Scan-first disc → auto IN/OUT from on-site list. Damaged disc: type registration (registry lookup; company-car match shows **Switch** banner). Visitor entry: driver licence + entry type + occupants. Visitor exit: match on-site row + occupant stepper. Assigns **SEC-NNNN** via server counter.
 
-### Vehicle Scan Out
+### Company Car
 
-`lib/screens/security_vehicle_scan_out_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
+`lib/screens/security_vehicle_gate_screen.dart` (`SecurityVehicleGateMode.companyCar`) — **Roles:** Security Guard, Security Manager, Admin
 
-Scan disc or pick from on-site list. Occupant stepper + partial-exit flags.
+Scan-first disc → auto IN/OUT from open trips. When disc not scanned: **select from registered list only** (no manual typing). Exit: licence + clock + odometer + purpose + destination. Return: odometer + occupant match. Reg must match active `vehicle_type: company_car` in `security_vehicles`.
 
 ### On-Foot Visitor
 
 `lib/screens/security_on_foot_visitor_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
 
 Manual visitor entry without a vehicle disc.
-
-### Company Car
-
-`lib/screens/security_company_car_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
-
-Exit: licence + clock + odometer + purpose. Return: mileage capture. Reg must match a `vehicle_type: company_car` row in `security_vehicles`.
 
 ### On-Site List
 
