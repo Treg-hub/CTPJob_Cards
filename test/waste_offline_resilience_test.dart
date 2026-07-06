@@ -1854,6 +1854,40 @@ void main() {
           reason: 'item restorer only handles item keys');
     });
 
+    test('queue dedupe merges multiple waste_loads updates for same doc', () async {
+      const loadId = 'merge-load-1';
+      await SyncService().addToQueue(
+        collection: 'waste_loads',
+        operation: 'update',
+        data: {'status': 'pending_weighbridge', 'recorded_weight_kg': 100.0},
+        documentId: loadId,
+      );
+      await SyncService().addToQueue(
+        collection: 'waste_loads',
+        operation: 'update',
+        data: {'photo_count': 5, 'driver_name': 'Test Driver'},
+        documentId: loadId,
+      );
+      expect(SyncService().getQueuedWasteOperationCount(), 2);
+
+      try {
+        await SyncService().processNow();
+      } catch (_) {}
+
+      final box = Hive.box<SyncQueueItem>('sync_queue');
+      final loadUpdates = box.values
+          .where((i) =>
+              i.collection == 'waste_loads' && i.operation == 'update')
+          .toList();
+      expect(loadUpdates.length, 1,
+          reason: 'two updates for same load doc should merge');
+      final merged = loadUpdates.first.data;
+      expect(merged['status'], 'pending_weighbridge');
+      expect(merged['photo_count'], 5);
+      expect(merged['driver_name'], 'Test Driver');
+      expect(merged['recorded_weight_kg'], 100.0);
+    });
+
     test('queue dedupe collapses photo/signature entries sharing a localPath, keeps distinct paths', () async {
       // Same capture queued twice (user retried a submit offline)
       for (var i = 0; i < 2; i++) {

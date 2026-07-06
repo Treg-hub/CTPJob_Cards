@@ -21,6 +21,9 @@ import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
+import '../utils/waste_collection_marker.dart';
+import '../utils/waste_queue_batch.dart';
+import '../utils/waste_stock_snapshot.dart';
 import '../utils/waste_type_routing.dart';
 import '../models/waste_stock_source.dart';
 import 'copper_service.dart';
@@ -50,8 +53,96 @@ class WasteService {
   static const Duration _firestoreWriteTimeout = Duration(seconds: 8);
   static const Duration _cloudFunctionTimeout = Duration(seconds: 15);
 
+  /// Namespace for deterministic waste_item doc ids on queue-first submits.
+  static const String _wasteItemIdNamespace = 'a3f2c8e1-4b5d-6e7f-8901-23456789abcd';
+
   Future<bool> _checkOnline() =>
       ConnectivityService().isOnline().catchError((_) => false);
+
+  /// Guard-facing saves always queue locally first; this drains the Hive queue
+  /// in the background without blocking the floor workflow.
+  void _triggerBackgroundWasteSync() {
+    unawaited(SyncService().processNow());
+  }
+
+  String _stableWasteItemDocId(String loadId, String submitRef, int index) {
+    return const Uuid().v5(
+      _wasteItemIdNamespace,
+      'waste_item:$loadId:$submitRef:$index',
+    );
+  }
+
+  String _stablePhotoQueueDocId({
+    required String loadId,
+    required String submitRef,
+    required int index,
+    String? itemId,
+  }) {
+    final scope = itemId ?? 'load';
+    return '${loadId}_${scope}_${submitRef.substring(0, 8)}_$index';
+  }
+
+  bool _statusPastScheduled(WasteLoadStatus status) {
+    return status == WasteLoadStatus.pendingWeighbridge ||
+        status == WasteLoadStatus.pendingCostReview ||
+        status == WasteLoadStatus.completed;
+  }
+
+  Future<WasteLoadStatus?> _readLoadStatus(String loadId) async {
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteLoads)
+          .doc(loadId)
+          .get(const GetOptions(source: Source.cache));
+      if (snap.exists) {
+        return WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+      }
+    } catch (_) {}
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteLoads)
+          .doc(loadId)
+          .get()
+          .timeout(const Duration(seconds: 2));
+      if (!snap.exists) return null;
+      return WasteLoadStatus.fromString(snap.data()?['status'] as String?);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _markLocalCollectionSubmitted(String loadId, String submitRef) async {
+    await WasteCollectionMarker.setMarker(loadId, submitRef);
+  }
+
+  Future<void> clearLocalCollectionSubmitMarker(String loadId) async {
+    await WasteCollectionMarker.clearMarker(loadId);
+  }
+
+  /// Idempotent guard: returns true when this load was already submitted (server
+  /// or local marker with pending queue work) so we must not enqueue duplicates.
+  Future<bool> _isCollectionAlreadySubmitted(String loadId) async {
+    if (await WasteCollectionMarker.hasMarker(loadId)) {
+      if (SyncService().hasQueuedWasteOpsForLoad(loadId)) {
+        return true;
+      }
+      await WasteCollectionMarker.clearMarker(loadId);
+    }
+    final status = await _readLoadStatus(loadId);
+    if (status == null) return false;
+    return _statusPastScheduled(status);
+  }
+
+  Future<void> _assertLoadSchedulableForCollection(String loadId) async {
+    final status = await _readLoadStatus(loadId);
+    if (status == null) return;
+    if (_statusPastScheduled(status)) return;
+    if (status != WasteLoadStatus.scheduled) {
+      throw StateError(
+        'Load already started or completed (current: ${status.value})',
+      );
+    }
+  }
 
   /// Only enqueue when offline or a direct Firestore write failed.
   Future<void> _enqueueWasteOp({
@@ -631,7 +722,7 @@ class WasteService {
         .map((doc) => doc.exists ? WasteLoad.fromFirestore(doc) : null);
   }
 
-  Future<({bool queuedOffline})> submitCollection({
+  Future<({bool queuedOffline, int queuedOps})> submitCollection({
     required String loadId,
     required String driverName,
     required String vehicleReg,
@@ -648,12 +739,21 @@ class WasteService {
     String? timeIn,
     String? timeOut,
     String? paperDocumentRef,
+    String? collectionSubmitRef,
   }) async {
     _guardWrite();
-    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
-    final online = await _checkOnline();
-    var queuedOffline = !online;
+    final submitRef = collectionSubmitRef ?? const Uuid().v4();
     final now = DateTime.now();
+
+    if (await _isCollectionAlreadySubmitted(loadId)) {
+      _triggerBackgroundWasteSync();
+      return (
+        queuedOffline: true,
+        queuedOps: SyncService().getQueuedWasteOperationCount(),
+      );
+    }
+
+    await _assertLoadSchedulableForCollection(loadId);
 
     final skipWeighbridge = isQuantityOnly ||
         itemsAllQuantityOnly(
@@ -661,12 +761,17 @@ class WasteService {
         );
     final recordedWeightKg = sumRecordedWeightKg(itemsData);
 
-    // Quantity-only loads skip the weighbridge step entirely.
     final nextStatus = skipWeighbridge
         ? WasteLoadStatus.pendingCostReview
         : WasteLoadStatus.pendingWeighbridge;
     final timestampKey =
         skipWeighbridge ? 'pending_cost_review_at' : 'pending_weighbridge_at';
+
+    var totalPhotoCount = loadPhotoPaths.length;
+    for (final item in itemsData) {
+      totalPhotoCount +=
+          (item['localPhotoPaths'] as List?)?.length ?? 0;
+    }
 
     final statusPayload = {
       'status': nextStatus.value,
@@ -681,182 +786,54 @@ class WasteService {
       if (paperDocumentRef != null && paperDocumentRef.isNotEmpty)
         'paper_document_ref': paperDocumentRef,
       'recorded_weight_kg': recordedWeightKg,
+      'collection_submit_ref': submitRef,
+      'photo_count': totalPhotoCount,
       timestampKey: now.toIso8601String(),
     };
 
-    var statusAlreadyPending = false;
-    if (online) {
-      try {
-        await _firestore.runTransaction((tx) async {
-          final snap = await tx.get(ref);
-          final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
-          if (current == WasteLoadStatus.pendingWeighbridge ||
-              current == WasteLoadStatus.pendingCostReview) {
-            statusAlreadyPending = true;
-            return;
-          }
-          if (current != WasteLoadStatus.scheduled) {
-            throw StateError('Load already started or completed (current: ${current.value})');
-          }
-          tx.update(ref, {
-            ...statusPayload,
-            timestampKey: FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }).timeout(_firestoreWriteTimeout);
-      } on StateError {
-        rethrow;
-      } catch (_) {
-        queuedOffline = true;
-      }
-    }
-
-    await _enqueueWasteOp(
-      shouldQueue: queuedOffline && !statusAlreadyPending,
+    final plan = WasteQueueBatchPlan();
+    plan.addFirestore(
       collection: Collections.wasteLoads,
       operation: 'update',
       data: statusPayload,
       documentId: loadId,
     );
-
+    _addLoadPhotosToPlan(
+      plan: plan,
+      loadId: loadId,
+      submitRef: submitRef,
+      photoPaths: loadPhotoPaths,
+    );
     if (signatureLocalPath != null) {
-      if (queuedOffline) {
-        await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
-      } else {
-        try {
-          final sigUrl = await _uploadSignatureBytesDirect(
-            await File(signatureLocalPath).readAsBytes(),
-            loadId,
-          ).timeout(_photoUploadTimeout);
-          await ref.update({'driver_signature_url': sigUrl}).timeout(_firestoreWriteTimeout);
-        } catch (_) {
-          await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
-        }
-      }
-    }
-
-    // Fetch rates once for the whole batch — avoids opening N Firestore listeners
-    // (one per item) when each item would otherwise call lookupItemRate() in a loop.
-    List<Map<String, dynamic>> ratesList = const [];
-    if (contractorId != null) {
-      try {
-        ratesList = await watchRates()
-            .first
-            .timeout(const Duration(seconds: 6), onTimeout: () => []);
-      } catch (_) {}
-    }
-
-    var totalPhotoCount = 0;
-    for (final item in itemsData) {
-      final itemRef = _firestore.collection(Collections.wasteItems).doc();
-      final photoUrls = <String>[];
-
-      for (final path in (item['localPhotoPaths'] as List<String>? ?? [])) {
-        final url = await _resolveItemPhotoUrl(
-          path: path,
-          loadId: loadId,
-          itemId: itemRef.id,
-          forceQueue: queuedOffline,
-        );
-        if (url != null) photoUrls.add(url);
-      }
-
-      totalPhotoCount += photoUrls.length;
-
-      // Prefill rate from the pre-fetched rates list (synchronous, no extra I/O).
-      final itemSubtype = item['subtype'] as String? ?? '';
-      final itemRate = contractorId != null && itemSubtype.isNotEmpty
-          ? _rateFromList(ratesList, contractorId: contractorId, subtype: itemSubtype)
-          : null;
-
-      final itemData = Map<String, dynamic>.from(item)
-        ..remove('localPhotoPaths')
-        ..addAll({
-          'load_id': loadId,
-          'photos': photoUrls,
-          'is_deleted': false,
-          'is_no_site_weight': item['is_no_site_weight'] == true,
-          'createdAt': queuedOffline ? now.toIso8601String() : FieldValue.serverTimestamp(),
-          if (itemRate != null) 'rate_per_kg': itemRate,
-        });
-
-      if (queuedOffline) {
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteItems,
-          operation: 'set',
-          data: itemData,
-          documentId: itemRef.id,
-        );
-      } else {
-        try {
-          await itemRef.set({
-            ...itemData,
-            'createdAt': FieldValue.serverTimestamp(),
-          }).timeout(_firestoreWriteTimeout);
-        } catch (_) {
-          queuedOffline = true;
-          await _enqueueWasteOp(
-            shouldQueue: true,
-            collection: Collections.wasteItems,
-            operation: 'set',
-            data: itemData,
-            documentId: itemRef.id,
-          );
-        }
-      }
-    }
-
-    final loadPhotoUrls = <String>[];
-    for (final path in loadPhotoPaths) {
-      if (queuedOffline) {
-        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
-        continue;
-      }
-      try {
-        final url = await uploadWastePhoto(
-          localPath: path,
-          wasteRef: 'waste_loads/$loadId',
-        ).timeout(_photoUploadTimeout);
-        loadPhotoUrls.add(url);
-      } catch (_) {
-        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
-        queuedOffline = true;
-      }
-    }
-
-    final photoCountPayload = {
-      'photo_count': totalPhotoCount + loadPhotoUrls.length,
-      if (loadPhotoUrls.isNotEmpty) 'load_photos': loadPhotoUrls,
-    };
-    if (queuedOffline) {
-      await _enqueueWasteOp(
-        shouldQueue: true,
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: photoCountPayload,
-        documentId: loadId,
+      plan.addSignature(
+        localPath: signatureLocalPath,
+        loadId: loadId,
+        queueDocumentId: '${loadId}_sig_${submitRef.substring(0, 8)}',
       );
-    } else {
-      try {
-        await ref.update(photoCountPayload).timeout(_firestoreWriteTimeout);
-      } catch (_) {
-        queuedOffline = true;
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: photoCountPayload,
-          documentId: loadId,
-        );
-      }
     }
-
-    if (!queuedOffline) {
-      unawaited(assignLoadNumberIfNeeded(loadId));
+    for (var i = 0; i < itemsData.length; i++) {
+      _addWasteItemStepsToPlan(
+        plan: plan,
+        loadId: loadId,
+        submitRef: submitRef,
+        itemIndex: i,
+        rawItem: itemsData[i],
+        now: now,
+        extraItemFields: {
+          'is_no_site_weight': itemsData[i]['is_no_site_weight'] == true,
+          'collection_submit_ref': submitRef,
+        },
+      );
     }
+    await _flushWasteQueuePlan(plan);
 
-    return (queuedOffline: queuedOffline);
+    await _markLocalCollectionSubmitted(loadId, submitRef);
+    _triggerBackgroundWasteSync();
+
+    return (
+      queuedOffline: true,
+      queuedOps: SyncService().getQueuedWasteOperationCount(),
+    );
   }
 
   /// Guard/manager finishes loading on an on-the-spot [draft] load.
@@ -864,7 +841,7 @@ class WasteService {
   /// [signatureRequired] (from waste_settings) say so — settings-driven, matching
   /// the equivalent gating in [submitCollection] for the scheduled-load path.
   /// Quantity-only loads transition to [pendingCostReview]; all others to [pendingWeighbridge].
-  Future<({bool queuedOffline})> finishLoading({
+  Future<({bool queuedOffline, int queuedOps})> finishLoading({
     required String loadId,
     required List<String> loadPhotoPaths,
     String? signatureLocalPath,
@@ -873,6 +850,7 @@ class WasteService {
     required String finishedBy,
     String? finishedByName,
     bool isQuantityOnly = false,
+    String? finishSubmitRef,
   }) async {
     _guardWrite();
     if (signatureRequired && signatureLocalPath == null) {
@@ -882,129 +860,68 @@ class WasteService {
       throw ArgumentError('At least one loaded-truck photo is required');
     }
 
-    final ref = _firestore.collection(Collections.wasteLoads).doc(loadId);
-    final online = await _checkOnline();
-    var queuedOffline = !online;
+    final submitRef = finishSubmitRef ?? const Uuid().v4();
     final now = DateTime.now();
+
+    if (await _isCollectionAlreadySubmitted(loadId)) {
+      _triggerBackgroundWasteSync();
+      return (
+        queuedOffline: true,
+        queuedOps: SyncService().getQueuedWasteOperationCount(),
+      );
+    }
+
+    final status = await _readLoadStatus(loadId);
+    if (status != null &&
+        status != WasteLoadStatus.draft &&
+        !_statusPastScheduled(status)) {
+      throw StateError('Load cannot be finished from status: ${status.value}');
+    }
 
     final nextStatus = isQuantityOnly
         ? WasteLoadStatus.pendingCostReview
         : WasteLoadStatus.pendingWeighbridge;
-    final timestampKey = isQuantityOnly ? 'pending_cost_review_at' : 'pending_weighbridge_at';
+    final timestampKey =
+        isQuantityOnly ? 'pending_cost_review_at' : 'pending_weighbridge_at';
 
     final statusPayload = {
       'status': nextStatus.value,
       timestampKey: now.toIso8601String(),
       'collected_by': finishedBy,
       if (finishedByName != null) 'collected_by_name': finishedByName,
+      'finish_submit_ref': submitRef,
+      if (loadPhotoPaths.isNotEmpty) 'photo_count': loadPhotoPaths.length,
     };
 
-    var statusAlreadyPending = false;
-    if (online) {
-      try {
-        await _firestore.runTransaction((tx) async {
-          final snap = await tx.get(ref);
-          final current = WasteLoadStatus.fromString(snap.data()?['status'] as String?);
-          if (current == WasteLoadStatus.pendingWeighbridge ||
-              current == WasteLoadStatus.pendingCostReview) {
-            statusAlreadyPending = true;
-            return;
-          }
-          if (current != WasteLoadStatus.draft) {
-            throw StateError(
-              'Load cannot be finished from status: ${current.value}',
-            );
-          }
-          tx.update(ref, {
-            ...statusPayload,
-            timestampKey: FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }).timeout(_firestoreWriteTimeout);
-      } on StateError {
-        rethrow;
-      } catch (_) {
-        queuedOffline = true;
-      }
-    }
-
-    await _enqueueWasteOp(
-      shouldQueue: queuedOffline && !statusAlreadyPending,
+    final plan = WasteQueueBatchPlan();
+    plan.addFirestore(
       collection: Collections.wasteLoads,
       operation: 'update',
       data: statusPayload,
       documentId: loadId,
     );
-
-    final loadPhotoUrls = <String>[];
-    for (final path in loadPhotoPaths) {
-      if (queuedOffline) {
-        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
-        continue;
-      }
-      try {
-        final url = await uploadWastePhoto(
-          localPath: path,
-          wasteRef: 'waste_loads/$loadId',
-        ).timeout(_photoUploadTimeout);
-        loadPhotoUrls.add(url);
-      } catch (_) {
-        await queueOfflineWastePhoto(localPath: path, loadId: loadId);
-        queuedOffline = true;
-      }
-    }
-
+    _addLoadPhotosToPlan(
+      plan: plan,
+      loadId: loadId,
+      submitRef: submitRef,
+      photoPaths: loadPhotoPaths,
+    );
     if (signatureLocalPath != null && signatureLocalPath.isNotEmpty) {
-      if (queuedOffline) {
-        await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
-      } else {
-        try {
-          final sigUrl = await _uploadSignatureBytesDirect(
-            await File(signatureLocalPath).readAsBytes(),
-            loadId,
-          ).timeout(_photoUploadTimeout);
-          await ref.update({'driver_signature_url': sigUrl}).timeout(_firestoreWriteTimeout);
-        } catch (_) {
-          await queueOfflineWasteSignature(localPath: signatureLocalPath, loadId: loadId);
-          queuedOffline = true;
-        }
-      }
+      plan.addSignature(
+        localPath: signatureLocalPath,
+        loadId: loadId,
+        queueDocumentId: '${loadId}_sig_${submitRef.substring(0, 8)}',
+      );
     }
+    await _flushWasteQueuePlan(plan);
 
-    if (loadPhotoUrls.isNotEmpty) {
-      final photoPayload = {'load_photos': loadPhotoUrls};
-      // photo_count only in the online payload: FieldValue.increment can't be
-      // queued (_sanitizeForHive would stringify it); the queue replay path
-      // recomputes photo_count from the arrays instead.
-      final onlinePayload = {
-        ...photoPayload,
-        'photo_count': FieldValue.increment(loadPhotoUrls.length),
-      };
-      if (queuedOffline) {
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: photoPayload,
-          documentId: loadId,
-        );
-      } else {
-        try {
-          await ref.update(onlinePayload).timeout(_firestoreWriteTimeout);
-        } catch (_) {
-          queuedOffline = true;
-          await _enqueueWasteOp(
-            shouldQueue: true,
-            collection: Collections.wasteLoads,
-            operation: 'update',
-            data: photoPayload,
-            documentId: loadId,
-          );
-        }
-      }
-    }
+    await _markLocalCollectionSubmitted(loadId, submitRef);
+    _triggerBackgroundWasteSync();
 
-    return (queuedOffline: queuedOffline);
+    return (
+      queuedOffline: true,
+      queuedOps: SyncService().getQueuedWasteOperationCount(),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1034,6 +951,38 @@ class WasteService {
             .toList());
   }
 
+  /// Resolves eligible on-site stock for create-load queuing. UI snapshots are
+  /// authoritative offline; Firestore fills any IDs missing from snapshots.
+  Future<List<Map<String, dynamic>>> _resolveEligibleStockForSave({
+    required List<String> selectedStockIds,
+    required List<Map<String, dynamic>> snapshots,
+  }) async {
+    if (selectedStockIds.isEmpty) return const [];
+    final eligible = WasteStockSnapshot.eligibleForQueue(
+      selectedStockIds,
+      snapshots,
+    );
+    final foundIds = eligible
+        .map((s) => s['id'] as String?)
+        .whereType<String>()
+        .toSet();
+    final missingIds =
+        selectedStockIds.where((id) => !foundIds.contains(id)).toList();
+    if (missingIds.isEmpty) return eligible;
+
+    final fetched = await getStockItemsByIds(missingIds);
+    final merged = List<Map<String, dynamic>>.from(eligible);
+    for (final stock in fetched) {
+      if (stock.id == null ||
+          stock.isDeleted ||
+          stock.status != WasteStockStatus.onSite) {
+        continue;
+      }
+      merged.add(WasteStockSnapshot.fromItem(stock));
+    }
+    return merged;
+  }
+
   /// Fetches waste_stock items by their IDs (up to 30 via whereIn).
   /// Used by WasteBeginCollectionScreen to pre-populate pre-linked stock.
   Future<List<WasteStockItem>> getStockItemsByIds(List<String> ids) async {
@@ -1045,7 +994,7 @@ class WasteService {
       final snap = await _firestore
           .collection(Collections.wasteStock)
           .where(FieldPath.documentId, whereIn: chunk)
-          .get();
+          .get(const GetOptions(source: Source.serverAndCache));
       results.addAll(snap.docs.map(WasteStockItem.fromFirestore));
     }
     return results;
@@ -1133,7 +1082,8 @@ class WasteService {
   }
 
   /// Adds a new waste_item to an already-existing load (post-submission editing).
-  Future<({bool queuedOffline})> addItemToExistingLoad({
+  /// Queue-first — never blocks on connectivity or live photo upload.
+  Future<({bool queuedOffline, int queuedOps})> addItemToExistingLoad({
     required String loadId,
     required String subtype,
     required double weightKg,
@@ -1141,54 +1091,46 @@ class WasteService {
     String? notes,
     required List<String> localPhotoPaths,
     String? sourceStockId,
-    String? contractorId,
     bool isQuantityOnly = false,
     bool isNoSiteWeight = false,
   }) async {
-    final online = await _checkOnline();
-    var queuedOffline = !online;
-    final itemRef = _firestore.collection(Collections.wasteItems).doc();
-    final photoUrls = <String>[];
+    _guardWrite();
+    final itemId = _firestore.collection(Collections.wasteItems).doc().id;
     final now = DateTime.now();
-    final countsTowardRecorded = !isQuantityOnly && !isNoSiteWeight && weightKg > 0;
+    final countsTowardRecorded =
+        !isQuantityOnly && !isNoSiteWeight && weightKg > 0;
+    final split = _splitPhotoPaths(localPhotoPaths);
 
-    // Prefill rate from waste_rates for per-item cost tracking.
-    final rate = contractorId != null
-        ? await lookupItemRate(contractorId: contractorId, subtype: subtype)
-        : null;
-
-    for (final path in localPhotoPaths) {
-      final url = await _resolveItemPhotoUrl(
-        path: path,
+    final plan = WasteQueueBatchPlan();
+    plan.addFirestore(
+      collection: Collections.wasteItems,
+      operation: 'set',
+      data: {
+        'load_id': loadId,
+        'subtype': subtype,
+        'weight_kg': weightKg,
+        if (quantity != null) 'quantity': quantity,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        'photos': split.remote,
+        if (sourceStockId != null) 'source_stock_id': sourceStockId,
+        'is_deleted': false,
+        'is_quantity_only': isQuantityOnly,
+        'is_no_site_weight': isNoSiteWeight,
+        'createdAt': now.toIso8601String(),
+      },
+      documentId: itemId,
+    );
+    for (var p = 0; p < split.local.length; p++) {
+      plan.addPhoto(
+        localPath: split.local[p],
         loadId: loadId,
-        itemId: itemRef.id,
-        forceQueue: queuedOffline,
+        itemId: itemId,
+        queueDocumentId: '${loadId}_${itemId}_add_$p',
       );
-      if (url != null) photoUrls.add(url);
     }
 
-    final queueData = {
-      'load_id': loadId,
-      'subtype': subtype,
-      'weight_kg': weightKg,
-      if (quantity != null) 'quantity': quantity,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-      'photos': photoUrls,
-      if (sourceStockId != null) 'source_stock_id': sourceStockId,
-      'is_deleted': false,
-      'is_quantity_only': isQuantityOnly,
-      'is_no_site_weight': isNoSiteWeight,
-      'createdAt': now.toIso8601String(),
-      if (rate != null) 'rate_per_kg': rate,
-    };
-
-    final liveData = {
-      ...queueData,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    var nextRecorded = 0.0;
     if (countsTowardRecorded) {
+      var nextRecorded = weightKg;
       try {
         final loadSnap = await _firestore
             .collection(Collections.wasteLoads)
@@ -1197,59 +1139,21 @@ class WasteService {
         final currentRecorded =
             (loadSnap.data()?['recorded_weight_kg'] as num?)?.toDouble() ?? 0.0;
         nextRecorded = currentRecorded + weightKg;
-      } catch (_) {
-        nextRecorded = weightKg;
-      }
-    }
-
-    final weightUpdate =
-        countsTowardRecorded ? {'recorded_weight_kg': nextRecorded} : null;
-
-    if (queuedOffline) {
-      await _enqueueWasteOp(
-        shouldQueue: true,
-        collection: Collections.wasteItems,
-        operation: 'set',
-        data: queueData,
-        documentId: itemRef.id,
+      } catch (_) {}
+      plan.addFirestore(
+        collection: Collections.wasteLoads,
+        operation: 'update',
+        data: {'recorded_weight_kg': nextRecorded},
+        documentId: loadId,
       );
-      if (weightUpdate != null) {
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: weightUpdate,
-          documentId: loadId,
-        );
-      }
-    } else {
-      try {
-        await itemRef.set(liveData).timeout(_firestoreWriteTimeout);
-        if (weightUpdate != null) {
-          await updateLoad(loadId, weightUpdate).timeout(_firestoreWriteTimeout);
-        }
-      } catch (_) {
-        queuedOffline = true;
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteItems,
-          operation: 'set',
-          data: queueData,
-          documentId: itemRef.id,
-        );
-        if (weightUpdate != null) {
-          await _enqueueWasteOp(
-            shouldQueue: true,
-            collection: Collections.wasteLoads,
-            operation: 'update',
-            data: weightUpdate,
-            documentId: loadId,
-          );
-        }
-      }
     }
 
-    return (queuedOffline: queuedOffline);
+    await _flushWasteQueuePlan(plan);
+    _triggerBackgroundWasteSync();
+    return (
+      queuedOffline: true,
+      queuedOps: SyncService().getQueuedWasteOperationCount(),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1259,36 +1163,98 @@ class WasteService {
   bool _isRemotePhotoUrl(String path) =>
       path.startsWith('http://') || path.startsWith('https://');
 
-  /// Upload a local file, or pass through an existing Firebase URL (pre-loaded stock).
-  Future<String?> _resolveItemPhotoUrl({
-    required String path,
-    required String loadId,
-    required String itemId,
-    bool forceQueue = false,
-  }) async {
-    if (_isRemotePhotoUrl(path)) return path;
-    if (forceQueue) {
-      await queueOfflineWastePhoto(
-        localPath: path,
-        loadId: loadId,
-        itemId: itemId,
-      );
-      return null;
+  ({List<String> remote, List<String> local}) _splitPhotoPaths(
+    List<String> paths,
+  ) {
+    final remote = <String>[];
+    final local = <String>[];
+    for (final path in paths) {
+      if (_isRemotePhotoUrl(path)) {
+        remote.add(path);
+      } else {
+        local.add(path);
+      }
     }
-    try {
-      return await uploadWastePhoto(
-        localPath: path,
-        wasteRef: 'waste_items/$itemId',
-      ).timeout(_photoUploadTimeout);
-    } catch (_) {
-      await queueOfflineWastePhoto(
-        localPath: path,
+    return (remote: remote, local: local);
+  }
+
+  void _addLoadPhotosToPlan({
+    required WasteQueueBatchPlan plan,
+    required String loadId,
+    required String submitRef,
+    required List<String> photoPaths,
+  }) {
+    for (var i = 0; i < photoPaths.length; i++) {
+      plan.addPhoto(
+        localPath: photoPaths[i],
         loadId: loadId,
-        itemId: itemId,
+        queueDocumentId: _stablePhotoQueueDocId(
+          loadId: loadId,
+          submitRef: submitRef,
+          index: i,
+        ),
       );
-      return null;
     }
   }
+
+  void _addWasteItemStepsToPlan({
+    required WasteQueueBatchPlan plan,
+    required String loadId,
+    required String submitRef,
+    required int itemIndex,
+    required Map<String, dynamic> rawItem,
+    required DateTime now,
+    Map<String, dynamic> extraItemFields = const {},
+  }) {
+    final itemId = _stableWasteItemDocId(loadId, submitRef, itemIndex);
+    final photoPaths = List<String>.from(
+      rawItem['localPhotoPaths'] as List? ??
+          rawItem['localPhotos'] as List? ??
+          const [],
+    );
+    final split = _splitPhotoPaths(photoPaths);
+    final itemData = Map<String, dynamic>.from(rawItem)
+      ..remove('localPhotoPaths')
+      ..remove('localPhotos')
+      ..addAll({
+        'load_id': loadId,
+        'is_deleted': false,
+        'photos': split.remote,
+        'createdAt': now.toIso8601String(),
+        ...extraItemFields,
+      });
+
+    plan.addFirestore(
+      collection: Collections.wasteItems,
+      operation: 'set',
+      data: itemData,
+      documentId: itemId,
+    );
+
+    for (var p = 0; p < split.local.length; p++) {
+      plan.addPhoto(
+        localPath: split.local[p],
+        loadId: loadId,
+        itemId: itemId,
+        queueDocumentId: _stablePhotoQueueDocId(
+          loadId: loadId,
+          submitRef: submitRef,
+          index: p,
+          itemId: itemId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _flushWasteQueuePlan(WasteQueueBatchPlan plan) async {
+    if (plan.isEmpty) return;
+    _guardWrite();
+    await plan.flush();
+  }
+
+  /// Persists captured signature bytes into the durable media queue dir.
+  Future<String> persistSignatureBytes(Uint8List bytes) =>
+      _persistSignatureBytesForQueue(bytes);
 
   Future<String?> pickAndCompressPhotoFromSource(ImageSource source) async {
     final picker = ImagePicker();
@@ -1302,7 +1268,13 @@ class WasteService {
       minHeight: 1024,
       quality: 70,
     );
-    return compressedFile?.path;
+    final path = compressedFile?.path;
+    if (path == null) return null;
+    try {
+      return await SyncService.persistWasteMediaForQueue(path);
+    } catch (_) {
+      return path;
+    }
   }
 
   /// Uploads a compressed local photo file to Storage under the waste prefix.
@@ -1415,7 +1387,11 @@ class WasteService {
   /// Queues a signature (by persisted file path) for later upload via the
   /// central SyncService Hive queue (single owner — no session queue). The
   /// file is copied into the persistent media dir first.
-  Future<void> queueOfflineWasteSignature({required String localPath, required String loadId}) async {
+  Future<void> queueOfflineWasteSignature({
+    required String localPath,
+    required String loadId,
+    String? queueDocumentId,
+  }) async {
     _guardWrite();
     final persistentPath = await _persistMediaForQueue(localPath);
     await SyncService().addToQueue(
@@ -1425,7 +1401,8 @@ class WasteService {
         'localPath': persistentPath,
         'loadId': loadId,
       },
-      documentId: '${loadId}_sig_${DateTime.now().millisecondsSinceEpoch}',
+      documentId:
+          queueDocumentId ?? '${loadId}_sig_${DateTime.now().millisecondsSinceEpoch}',
     );
   }
 
@@ -1456,7 +1433,10 @@ class WasteService {
     required Map<String, dynamic> loadData,           // initial load fields (no id yet)
     required List<Map<String, dynamic>> itemsData,    // list of item data (may contain local photo paths)
     List<String> loadLevelPhotoPaths = const [],      // optional load overview photos
+    List<String> selectedStockIds = const [],         // on-site stock → waste_items on create
+    List<Map<String, dynamic>> selectedStockSnapshots = const [],
     String? actorClockNo,                             // for enhanced pilot flag check + usage logging
+    String? createSubmitRef,
   }) async {
     _guardWrite();
     final allowed = await isWasteTrackEnabledForCurrentUser(actorClockNo);
@@ -1464,53 +1444,40 @@ class WasteService {
       throw Exception('WasteTrack is currently disabled by feature flag or your account is not in the active pilot group');
     }
 
-    final online = await _checkOnline();
-    var queuedOffline = !online;
+    final submitRef = createSubmitRef ?? const Uuid().v4();
     final now = DateTime.now();
-    final recordedTotal = itemsData.fold<double>(
+
+    final eligibleStock = await _resolveEligibleStockForSave(
+      selectedStockIds: selectedStockIds,
+      snapshots: selectedStockSnapshots,
+    );
+
+    var recordedTotal = itemsData.fold<double>(
       0.0,
       (acc, item) => acc + ((item['weight_kg'] as num?)?.toDouble() ?? 0.0),
     );
-
-    String loadId;
-    String loadNumber;
-
-    if (online) {
-      final cfOutcome = await _createLoadWithRetry({
-        ...loadData,
-        'recorded_weight_kg': recordedTotal,
-      });
-      loadId = cfOutcome.id;
-      loadNumber = cfOutcome.loadNumber;
-      if (cfOutcome.queuedOffline) queuedOffline = true;
-    } else {
-      loadId = _firestore.collection(Collections.wasteLoads).doc().id;
-      loadNumber = 'OFFLINE-${now.millisecondsSinceEpoch}';
+    for (final stock in eligibleStock) {
+      final w = WasteStockSnapshot.weightKg(stock);
+      if (w > 0) recordedTotal += w;
     }
 
-    await logWasteUsage(
+    var totalPhotoCount = loadLevelPhotoPaths.length;
+    for (final rawItem in itemsData) {
+      final paths = List<String>.from(rawItem['localPhotos'] ?? []);
+      totalPhotoCount += paths.length;
+    }
+    for (final stock in eligibleStock) {
+      totalPhotoCount += WasteStockSnapshot.photos(stock).length;
+    }
+
+    final loadId = _firestore.collection(Collections.wasteLoads).doc().id;
+    final loadNumber = 'OFFLINE-${now.millisecondsSinceEpoch}';
+
+    unawaited(logWasteUsage(
       'save_complete_waste_load',
       clockNo: actorClockNo,
       loadId: loadId,
-    );
-
-    final loadRef = 'waste_loads/$loadId';
-    final loadPhotoUrls = <String>[];
-    for (final localPath in loadLevelPhotoPaths) {
-      if (queuedOffline) {
-        await queueOfflineWastePhoto(localPath: localPath, loadId: loadId);
-        continue;
-      }
-      try {
-        final url = await uploadWastePhoto(
-          localPath: localPath,
-          wasteRef: loadRef,
-        ).timeout(_photoUploadTimeout);
-        loadPhotoUrls.add(url);
-      } catch (_) {
-        await queueOfflineWastePhoto(localPath: localPath, loadId: loadId);
-      }
-    }
+    ));
 
     final serializedLoadData = _serializeLoadDataForQueue(loadData, now);
     final loadQueueData = {
@@ -1519,126 +1486,114 @@ class WasteService {
       'recorded_weight_kg': recordedTotal,
       'status': WasteLoadStatus.draft.value,
       'is_deleted': false,
-      'load_photos': loadPhotoUrls,
-      'photo_count': loadPhotoUrls.length,
+      'client_ref': submitRef,
+      'create_submit_ref': submitRef,
+      'load_photos': <String>[],
+      'photo_count': totalPhotoCount,
+      if (selectedStockIds.isNotEmpty) 'selected_stock_ids': selectedStockIds,
       'createdAt': now.toIso8601String(),
       'date_time': now.toIso8601String(),
     };
 
-    if (queuedOffline) {
-      await _enqueueWasteOp(
-        shouldQueue: true,
-        collection: Collections.wasteLoads,
+    final plan = WasteQueueBatchPlan();
+    _addLoadPhotosToPlan(
+      plan: plan,
+      loadId: loadId,
+      submitRef: submitRef,
+      photoPaths: loadLevelPhotoPaths,
+    );
+    plan.addFirestore(
+      collection: Collections.wasteLoads,
+      operation: 'set',
+      data: loadQueueData,
+      documentId: loadId,
+    );
+
+    for (var i = 0; i < itemsData.length; i++) {
+      _addWasteItemStepsToPlan(
+        plan: plan,
+        loadId: loadId,
+        submitRef: submitRef,
+        itemIndex: i,
+        rawItem: itemsData[i],
+        now: now,
+        extraItemFields: {'create_submit_ref': submitRef},
+      );
+    }
+
+    final stockLoadedIds = <String>[];
+    var stockItemIndex = itemsData.length;
+    for (final stock in eligibleStock) {
+      final label = WasteStockSnapshot.label(stock);
+      if (label.isEmpty) continue;
+      final stockId = stock['id'] as String?;
+      if (stockId == null || stockId.isEmpty) continue;
+      final itemId =
+          _stableWasteItemDocId(loadId, submitRef, stockItemIndex++);
+      final split = _splitPhotoPaths(WasteStockSnapshot.photos(stock));
+      final weight = WasteStockSnapshot.weightKg(stock);
+      final qty = WasteStockSnapshot.quantity(stock);
+      final notes = stock['notes'] as String?;
+
+      plan.addFirestore(
+        collection: Collections.wasteItems,
         operation: 'set',
-        data: loadQueueData,
-        documentId: loadId,
-      );
-    } else if (loadPhotoUrls.isNotEmpty) {
-      // Load doc already exists from Cloud Function — only patch load-level photos.
-      try {
-        await updateLoad(loadId, {'load_photos': loadPhotoUrls})
-            .timeout(_firestoreWriteTimeout);
-      } catch (_) {
-        queuedOffline = true;
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: {'load_photos': loadPhotoUrls},
-          documentId: loadId,
-        );
-      }
-    }
-
-    final batch = queuedOffline ? null : _firestore.batch();
-    var totalPhotoCount = loadPhotoUrls.length;
-    final pendingQueueItems = <({String id, Map<String, dynamic> data})>[];
-
-    for (final rawItem in itemsData) {
-      final itemRef = _firestore.collection(Collections.wasteItems).doc();
-      final localPhotos = List<String>.from(rawItem['localPhotos'] ?? []);
-      final itemBase = Map<String, dynamic>.from(rawItem)
-        ..remove('localPhotos')
-        ..addAll({
+        data: {
           'load_id': loadId,
+          'subtype': label,
+          'weight_kg': weight > 0 ? weight : 0,
+          if (qty > 0) 'quantity': qty,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+          'photos': split.remote,
+          'source_stock_id': stockId,
           'is_deleted': false,
-        });
-
-      final photoUrls = <String>[];
-      for (final localPath in localPhotos) {
-        final url = await _resolveItemPhotoUrl(
-          path: localPath,
-          loadId: loadId,
-          itemId: itemRef.id,
-          forceQueue: queuedOffline,
-        );
-        if (url != null) photoUrls.add(url);
-      }
-      totalPhotoCount += photoUrls.length;
-
-      final queueItemData = {
-        ...itemBase,
-        'photos': photoUrls,
-        'createdAt': now.toIso8601String(),
-      };
-
-      if (queuedOffline) {
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteItems,
-          operation: 'set',
-          data: queueItemData,
-          documentId: itemRef.id,
-        );
-      } else if (batch != null) {
-        batch.set(itemRef, {
-          ...itemBase,
-          'photos': photoUrls,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        pendingQueueItems.add((id: itemRef.id, data: queueItemData));
-      }
-    }
-
-    if (!queuedOffline && batch != null) {
-      try {
-        await batch.commit().timeout(_firestoreWriteTimeout);
-        await updateLoad(loadId, {'photo_count': totalPhotoCount})
-            .timeout(_firestoreWriteTimeout);
-      } catch (_) {
-        queuedOffline = true;
-        for (final pending in pendingQueueItems) {
-          await _enqueueWasteOp(
-            shouldQueue: true,
-            collection: Collections.wasteItems,
-            operation: 'set',
-            data: pending.data,
-            documentId: pending.id,
-          );
-        }
-        await _enqueueWasteOp(
-          shouldQueue: true,
-          collection: Collections.wasteLoads,
-          operation: 'update',
-          data: {'photo_count': totalPhotoCount},
-          documentId: loadId,
-        );
-      }
-    } else if (queuedOffline) {
-      await _enqueueWasteOp(
-        shouldQueue: true,
-        collection: Collections.wasteLoads,
-        operation: 'update',
-        data: {'photo_count': totalPhotoCount},
-        documentId: loadId,
+          'create_submit_ref': submitRef,
+          'createdAt': now.toIso8601String(),
+        },
+        documentId: itemId,
       );
+      for (var p = 0; p < split.local.length; p++) {
+        plan.addPhoto(
+          localPath: split.local[p],
+          loadId: loadId,
+          itemId: itemId,
+          queueDocumentId: _stablePhotoQueueDocId(
+            loadId: loadId,
+            submitRef: submitRef,
+            index: p,
+            itemId: itemId,
+          ),
+        );
+      }
+      stockLoadedIds.add(stockId);
     }
+
+    if (stockLoadedIds.isNotEmpty) {
+      final stockPayload = {
+        'status': WasteStockStatus.loaded.value,
+        'load_id': loadId,
+        'updated_at': now.toIso8601String(),
+      };
+      for (final id in stockLoadedIds) {
+        plan.addFirestore(
+          collection: Collections.wasteStock,
+          operation: 'update',
+          data: stockPayload,
+          documentId: id,
+        );
+      }
+    }
+
+    await _flushWasteQueuePlan(plan);
+
+    _triggerBackgroundWasteSync();
 
     return {
       'id': loadId,
       'load_number': loadNumber,
       'success': true,
-      'queuedOffline': queuedOffline,
+      'queuedOffline': true,
+      'queuedOps': SyncService().getQueuedWasteOperationCount(),
     };
   }
 
@@ -2043,6 +1998,7 @@ class WasteService {
     required String loadId,
     String? itemId,
     String? targetCollection,
+    String? queueDocumentId,
   }) async {
     final persistentPath = await _persistMediaForQueue(localPath);
     await SyncService().addToQueue(
@@ -2054,7 +2010,8 @@ class WasteService {
         'itemId': itemId,
         if (targetCollection != null) 'targetCollection': targetCollection,
       },
-      documentId: '${loadId}_${itemId ?? 'load'}_${DateTime.now().millisecondsSinceEpoch}',
+      documentId: queueDocumentId ??
+          '${loadId}_${itemId ?? 'load'}_${DateTime.now().millisecondsSinceEpoch}',
     );
   }
 
@@ -2457,7 +2414,8 @@ class WasteService {
       loadedIds.add(stock.id!);
     }
     if (loadedIds.isNotEmpty) {
-      await markStockLoaded(loadedIds, loadId);
+      await queueMarkStockLoaded(loadedIds, loadId);
+      _triggerBackgroundWasteSync();
     }
     return loadedIds.length;
   }

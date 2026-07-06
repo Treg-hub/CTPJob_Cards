@@ -33,6 +33,7 @@ abstract final class WasteCreateLoadDraft {
   }
 
   static Map<String, dynamic> toJson({
+    required String createSubmitRef,
     required String driverName,
     required String vehicleReg,
     String? trailerReg,
@@ -44,8 +45,10 @@ abstract final class WasteCreateLoadDraft {
     String? timeOut,
     required List<WasteItem> items,
     required List<String> selectedStockIds,
+    List<Map<String, dynamic>> selectedStockSnapshots = const [],
   }) {
     return {
+      'create_submit_ref': createSubmitRef,
       'driver_name': driverName,
       'vehicle_reg': vehicleReg,
       'trailer_reg': trailerReg,
@@ -56,6 +59,8 @@ abstract final class WasteCreateLoadDraft {
       'time_in': timeIn,
       'time_out': timeOut,
       'selected_stock_ids': selectedStockIds,
+      if (selectedStockSnapshots.isNotEmpty)
+        'selected_stock_snapshots': selectedStockSnapshots,
       'items': items
           .map((item) => {
                 'subtype': item.subtype,
@@ -97,6 +102,7 @@ abstract final class WasteCreateLoadDraft {
         ));
       }
       return WasteCreateLoadDraftData(
+        createSubmitRef: data['create_submit_ref'] as String? ?? '',
         driverName: data['driver_name'] as String? ?? '',
         vehicleReg: data['vehicle_reg'] as String? ?? '',
         trailerReg: data['trailer_reg'] as String?,
@@ -112,6 +118,12 @@ abstract final class WasteCreateLoadDraft {
         selectedStockIds: (data['selected_stock_ids'] as List? ?? const [])
             .whereType<String>()
             .toList(),
+        selectedStockSnapshots: [
+          for (final entry
+              in (data['selected_stock_snapshots'] as List? ?? const []))
+            if (entry is Map)
+              Map<String, dynamic>.from(entry),
+        ],
       );
     } catch (_) {
       return null;
@@ -140,6 +152,7 @@ abstract final class WasteCreateLoadDraft {
 }
 
 class WasteCreateLoadDraftData {
+  final String createSubmitRef;
   final String driverName;
   final String vehicleReg;
   final String? trailerReg;
@@ -151,8 +164,10 @@ class WasteCreateLoadDraftData {
   final String? timeOut;
   final List<WasteItem> items;
   final List<String> selectedStockIds;
+  final List<Map<String, dynamic>> selectedStockSnapshots;
 
   const WasteCreateLoadDraftData({
+    required this.createSubmitRef,
     required this.driverName,
     required this.vehicleReg,
     this.trailerReg,
@@ -164,5 +179,6 @@ class WasteCreateLoadDraftData {
     this.timeOut,
     required this.items,
     required this.selectedStockIds,
+    this.selectedStockSnapshots = const [],
   });
 }

@@ -10,7 +10,23 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/sync_queue_item.dart';
+import '../utils/waste_collection_marker.dart';
 import 'connectivity_service.dart';
+
+/// One Hive queue row for [SyncService.addAllToQueue].
+class SyncQueueBatchEntry {
+  final String collection;
+  final String operation;
+  final Map<String, dynamic> data;
+  final String documentId;
+
+  const SyncQueueBatchEntry({
+    required this.collection,
+    required this.operation,
+    required this.data,
+    required this.documentId,
+  });
+}
 
 class SyncService {
   static final SyncService _instance = SyncService._internal();
@@ -34,6 +50,23 @@ class SyncService {
   /// (photos/signatures). Files here are owned by the sync queue and deleted
   /// after a successful upload.
   static const String wasteMediaQueueDirName = 'waste_media_queue';
+  static String? _cachedWasteMediaQueueDir;
+
+  /// Resolved path to the durable waste media queue directory (cached).
+  static Future<String> wasteMediaQueueDirectory() async {
+    final cached = _cachedWasteMediaQueueDir;
+    if (cached != null && Directory(cached).existsSync()) return cached;
+    _cachedWasteMediaQueueDir = null;
+    final docsDir = await getApplicationDocumentsDirectory();
+    final queueDir = Directory(
+      '${docsDir.path}${Platform.pathSeparator}$wasteMediaQueueDirName',
+    );
+    if (!queueDir.existsSync()) {
+      queueDir.createSync(recursive: true);
+    }
+    _cachedWasteMediaQueueDir = queueDir.path;
+    return queueDir.path;
+  }
 
   /// Copies a queued media file into the persistent app documents dir so it
   /// survives OS cache clears while waiting for sync. Copy, not move —
@@ -49,20 +82,37 @@ class SyncService {
       if (localPath.contains(wasteMediaQueueDirName)) return localPath;
       final source = File(localPath);
       if (!source.existsSync()) return localPath;
-      final docsDir = await getApplicationDocumentsDirectory();
-      final queueDir = Directory(
-          '${docsDir.path}${Platform.pathSeparator}$wasteMediaQueueDirName');
-      if (!queueDir.existsSync()) {
-        queueDir.createSync(recursive: true);
-      }
+      final queueDirPath = await wasteMediaQueueDirectory();
       final destName = localPath.replaceAll(RegExp(r'[\\/:]'), '_');
-      final destPath = '${queueDir.path}${Platform.pathSeparator}$destName';
+      final destPath =
+          '$queueDirPath${Platform.pathSeparator}$destName';
+      if (File(destPath).existsSync()) return destPath;
       await source.copy(destPath);
       return destPath;
     } catch (e) {
       debugPrint('⚠️ persistWasteMediaForQueue failed, queueing original path: $e');
       return localPath;
     }
+  }
+
+  /// Parallel media copies for large guard saves (bounded concurrency).
+  static Future<List<String>> persistWasteMediaBatch(
+    List<String> localPaths, {
+    int concurrency = 8,
+  }) async {
+    if (localPaths.isEmpty) return const [];
+    if (concurrency < 1) concurrency = 1;
+    final out = List<String>.filled(localPaths.length, '');
+    for (var start = 0; start < localPaths.length; start += concurrency) {
+      final end = start + concurrency > localPaths.length
+          ? localPaths.length
+          : start + concurrency;
+      await Future.wait([
+        for (var i = start; i < end; i++)
+          persistWasteMediaForQueue(localPaths[i]).then((p) => out[i] = p),
+      ]);
+    }
+    return out;
   }
 
   late final Box<SyncQueueItem> _queueBox;
@@ -143,6 +193,35 @@ class SyncService {
   void _dedupeWasteQueue() {
     try {
       if (!_queueBox.isOpen) return;
+
+      // Merge multiple waste_loads updates for the same doc (status + photo_count
+      // etc.) instead of dropping the older payload.
+      final mergedLoadUpdates = <String, SyncQueueItem>{};
+      final mergedAway = <SyncQueueItem>[];
+      for (final item in _queueBox.values.toList()) {
+        if (item.collection != Collections.wasteLoads ||
+            item.operation != 'update') {
+          continue;
+        }
+        final existing = mergedLoadUpdates[item.id];
+        if (existing == null) {
+          mergedLoadUpdates[item.id] = item;
+        } else {
+          final mergedData = Map<String, dynamic>.from(existing.data);
+          mergedData.addAll(item.data);
+          existing.data
+            ..clear()
+            ..addAll(mergedData);
+          mergedAway.add(item);
+        }
+      }
+      for (final item in mergedAway) {
+        item.delete();
+        debugPrint(
+          '🗑️ Merged waste_loads update into surviving entry for ${item.id}',
+        );
+      }
+
       final seen = <String, SyncQueueItem>{};
       final toDelete = <SyncQueueItem>[];
       for (final item in _queueBox.values.toList()) {
@@ -190,18 +269,36 @@ class SyncService {
     required Map<String, dynamic> data,
     String? documentId,
   }) async {
-    final id = documentId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    await addAllToQueue([
+      SyncQueueBatchEntry(
+        collection: collection,
+        operation: operation,
+        data: data,
+        documentId:
+            documentId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      ),
+    ]);
+  }
 
-    final item = SyncQueueItem(
-      id: id,
-      collection: collection,
-      operation: operation,
-      data: _sanitizeForHive(data),
-      createdAt: DateTime.now(),
-    );
-
-    await _queueBox.add(item);
-    debugPrint('✅ Added to sync queue: $operation $collection');
+  /// Writes multiple queue entries in order with a single flush pass.
+  Future<void> addAllToQueue(List<SyncQueueBatchEntry> entries) async {
+    if (entries.isEmpty) return;
+    for (final entry in entries) {
+      final item = SyncQueueItem(
+        id: entry.documentId,
+        collection: entry.collection,
+        operation: entry.operation,
+        data: _sanitizeForHive(entry.data),
+        createdAt: DateTime.now(),
+      );
+      await _queueBox.add(item);
+    }
+    if (entries.length == 1) {
+      final e = entries.first;
+      debugPrint('✅ Added to sync queue: ${e.operation} ${e.collection}');
+    } else {
+      debugPrint('✅ Added ${entries.length} entries to sync queue (batch)');
+    }
   }
 
   /// Strips Firestore sentinel types that Hive cannot serialize.
@@ -309,13 +406,16 @@ class SyncService {
                   (item.operation == 'set' || item.operation == 'create')) {
                 await _assignWasteLoadNumberIfNeeded(item.id, item.data);
               }
-              // A queued absolute photo_count (or a load_photos overwrite) is
-              // stale by the time it replays — late photo uploads may have
-              // landed first. Recompute from the arrays regardless of order.
-              if (item.collection == Collections.wasteLoads &&
-                  (item.data.containsKey('photo_count') ||
-                      item.data.containsKey('load_photos'))) {
-                await _recomputeWastePhotoCount(item.id);
+              if (item.collection == Collections.wasteLoads) {
+                if (item.data.containsKey('photo_count') ||
+                    item.data.containsKey('load_photos') ||
+                    _loadStatusPastCollection(item.data['status'] as String?)) {
+                  await _recomputeWastePhotoCount(item.id);
+                }
+                await _maybeClearCollectionMarkerAfterLoadSync(
+                  item.id,
+                  item.data,
+                );
               }
             } else if (item.operation == 'delete') {
               await docRef.delete();
@@ -325,6 +425,19 @@ class SyncService {
           await _processFleetQueueItem(item, firestore);
         } else if (item.collection.startsWith('security_')) {
           await _processSecurityQueueItem(item, firestore);
+        } else if (item.collection.startsWith('work_report_')) {
+          final docRef = firestore.collection(item.collection).doc(item.id);
+          final payload = _restoreWorkReportTimestamps(item.data);
+          if (item.operation == 'create' ||
+              item.operation == 'update' ||
+              item.operation == 'set') {
+            await docRef.set(
+              payload,
+              SetOptions(merge: item.operation != 'create'),
+            );
+          } else if (item.operation == 'delete') {
+            await docRef.delete();
+          }
         } else {
           final docRef = firestore.collection(item.collection).doc(item.id);
           // Job cards: queue sanitisation turned every Timestamp into an
@@ -346,8 +459,14 @@ class SyncService {
           }
         }
 
+        final wasteLoadId = item.collection.startsWith('waste_')
+            ? _loadIdFromWasteQueueItem(item)
+            : null;
         await item.delete();
         _clearQueueLastError(item);
+        if (wasteLoadId != null) {
+          await _maybeClearCollectionMarkerIfQueueDrained(wasteLoadId);
+        }
         debugPrint('✅ Synced from queue: ${item.operation} ${item.collection}');
       } catch (e) {
         debugPrint('❌ Failed to sync item: $e');
@@ -371,6 +490,58 @@ class SyncService {
           .length;
     } catch (_) {
       return 0; // robustness for any edge timing / hot-reload
+    }
+  }
+
+  /// True when any queued waste op still references [loadId] (loads doc id,
+  /// item load_id, photo/signature loadId, or stock load_id update).
+  bool hasQueuedWasteOpsForLoad(String loadId) {
+    try {
+      if (!_queueBox.isOpen || loadId.isEmpty) return false;
+      for (final item in _queueBox.values) {
+        if (!item.collection.startsWith('waste_')) continue;
+        if (item.collection == Collections.wasteLoads && item.id == loadId) {
+          return true;
+        }
+        if (item.collection == 'waste_photos' ||
+            item.collection == 'waste_signatures') {
+          if (item.data['loadId'] == loadId) return true;
+          continue;
+        }
+        if (item.data['load_id'] == loadId || item.data['loadId'] == loadId) {
+          return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _loadStatusPastCollection(String? status) {
+    return status == 'pending_weighbridge' ||
+        status == 'pending_cost_review' ||
+        status == 'completed';
+  }
+
+  Future<void> _maybeClearCollectionMarkerAfterLoadSync(
+    String loadId,
+    Map<String, dynamic> data,
+  ) async {
+    final status = data['status'] as String?;
+    if (!_loadStatusPastCollection(status)) return;
+    await _maybeClearCollectionMarkerIfQueueDrained(loadId);
+  }
+
+  String? _loadIdFromWasteQueueItem(SyncQueueItem item) {
+    if (item.collection == Collections.wasteLoads) return item.id;
+    return (item.data['loadId'] as String?) ?? (item.data['load_id'] as String?);
+  }
+
+  Future<void> _maybeClearCollectionMarkerIfQueueDrained(String loadId) async {
+    if (loadId.isEmpty || hasQueuedWasteOpsForLoad(loadId)) return;
+    if (await WasteCollectionMarker.hasMarker(loadId)) {
+      await WasteCollectionMarker.clearMarker(loadId);
     }
   }
 
@@ -788,10 +959,16 @@ class SyncService {
                     item.operation == 'update' ||
                     item.operation == 'set') {
                   await docRef.set(payload, SetOptions(merge: true));
-                  if (item.collection == Collections.wasteLoads &&
-                      (item.data.containsKey('photo_count') ||
-                          item.data.containsKey('load_photos'))) {
-                    await _recomputeWastePhotoCount(item.id);
+                  if (item.collection == Collections.wasteLoads) {
+                    if (item.data.containsKey('photo_count') ||
+                        item.data.containsKey('load_photos') ||
+                        _loadStatusPastCollection(item.data['status'] as String?)) {
+                      await _recomputeWastePhotoCount(item.id);
+                    }
+                    await _maybeClearCollectionMarkerAfterLoadSync(
+                      item.id,
+                      item.data,
+                    );
                   }
                 } else if (item.operation == 'delete') {
                   await docRef.delete();
@@ -1166,6 +1343,37 @@ class SyncService {
           }
           return e;
         }).toList();
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  static const Set<String> _workReportTimestampKeys = {
+    'periodStart',
+    'periodEnd',
+    'pdfGeneratedAt',
+    'lastUpdatedAt',
+    'createdAt',
+    'updatedAt',
+    'workDate',
+    'editedAt',
+  };
+
+  static Map<String, dynamic> _restoreWorkReportTimestamps(
+    Map<String, dynamic> data,
+  ) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if ((key == 'lastUpdatedAt' || key == 'updatedAt' || key == 'createdAt') &&
+          value is String) {
+        result[key] = FieldValue.serverTimestamp();
+      } else if (_workReportTimestampKeys.contains(key) && value is String) {
+        final parsed = DateTime.tryParse(value);
+        result[key] = parsed != null ? Timestamp.fromDate(parsed) : null;
       } else {
         result[key] = value;
       }
