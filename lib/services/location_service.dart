@@ -242,10 +242,12 @@ class LocationService {
   // corrects it if they disagree (catches missed geofence events).
   // Also syncs WorkManager: running only when on-site.
   // ---------------------------------------------------------------------------
-  Future<void> checkCurrentLocation() async {
+  /// Returns the resolved on-site state after the GPS check, or null when the
+  /// check could not run (web, no clock number, GPS error).
+  Future<bool?> checkCurrentLocation() async {
     // The web build has no geofence and never writes presence — mobile is the
     // sole source of truth. Guard so the web build doesn't prompt for location.
-    if (kIsWeb) return;
+    if (kIsWeb) return null;
     try {
       debugPrint('📍 checkCurrentLocation() called');
 
@@ -263,10 +265,10 @@ class LocationService {
 
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
-      if (clockNo == null) return;
+      if (clockNo == null) return null;
 
       final emp = await _firestoreService.getEmployee(clockNo);
-      if (emp == null) return;
+      if (emp == null) return null;
 
       // Hysteresis dead-band (see callbackDispatcher) — sticky presence so a
       // single jittery fix near the boundary can't flip isOnSite.
@@ -291,8 +293,10 @@ class LocationService {
       } else {
         await _stopWorkManagerCheck();
       }
+      return onSite;
     } catch (e) {
       debugPrint('❌ checkCurrentLocation failed: $e');
+      return null;
     }
   }
 

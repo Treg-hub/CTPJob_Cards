@@ -2131,11 +2131,11 @@ class WasteService {
   // WASTE SETTINGS (Firestore-backed, waste_settings/config)
   // ---------------------------------------------------------------------------
 
-  Future<WasteSettings> getWasteSettings() async {
+  Future<WasteSettings> getWasteSettings({Source? source}) async {
     final snap = await _firestore
         .collection(Collections.wasteSettings)
         .doc('config')
-        .get();
+        .get(source != null ? GetOptions(source: source) : const GetOptions());
     if (!snap.exists) return WasteSettings.defaults;
     return WasteSettings.fromFirestore(snap);
   }

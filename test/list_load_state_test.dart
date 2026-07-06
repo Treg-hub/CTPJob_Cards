@@ -29,6 +29,49 @@ void main() {
     });
   });
 
+  group('shouldRearmActiveJobsOnResume', () {
+    test('re-arms when no snapshot yet', () {
+      expect(
+        shouldRearmActiveJobsOnResume(
+          hasSnapshot: false,
+          isEmpty: true,
+          isFromCache: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('re-arms on cache-only empty snapshot', () {
+      expect(
+        shouldRearmActiveJobsOnResume(
+          hasSnapshot: true,
+          isEmpty: true,
+          isFromCache: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not re-arm when server confirmed empty or data present', () {
+      expect(
+        shouldRearmActiveJobsOnResume(
+          hasSnapshot: true,
+          isEmpty: true,
+          isFromCache: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRearmActiveJobsOnResume(
+          hasSnapshot: true,
+          isEmpty: false,
+          isFromCache: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('shouldTreatEmployeeMissing', () {
     test('only a server-confirmed absence counts as missing', () {
       expect(shouldTreatEmployeeMissing(exists: false, isFromCache: false),

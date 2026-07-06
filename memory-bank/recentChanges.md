@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Home resume hydration fix (2026-07-06)** — geofence "arrived on-site" → open app showed missing Fleet/Security tabs, fleet quick actions, and Recent Job Cards skeletons until force-restart:
+  - **Root cause**: warm resume did not mirror cold-start hydration — local `isOnSite` / module settings / claims refresh stale while geofence had already flipped Firestore presence; job streams could stay on cache-only empty snapshots.
+  - **`home_screen.dart`**: unified `_onAppResumed()` — `AuthClaimsService.refreshClaims()`, one-shot employee fetch, GPS presence applied to UI, server-preferring module settings reload, re-arm active-jobs stream when `shouldRearmActiveJobsOnResume`.
+  - **`location_service.dart`**: `checkCurrentLocation()` returns resolved `bool? onSite` for UI sync.
+  - **`list_load_state.dart`**: pure `shouldRearmActiveJobsOnResume` (+ unit tests).
+
 - **Site Security vehicle-gate split UX (2026-07-05)**:
   - **Security home**: two cards — **Visitor / Contractor Vehicle** and **Company Car** (replaces single "Vehicle at Gate").
   - **Visitor flow**: damaged disc → type reg only (no company-car dropdown); registry lookup → company-car match shows **Switch** banner; no match → entry type + visitor fields (progressive disclosure).
