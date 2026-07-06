@@ -1,19 +1,24 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
+
 
 import '../models/contractor.dart';
 import '../models/waste_settings.dart';
 import '../models/waste_load.dart';
 import '../models/waste_stock_item.dart';
 import '../models/waste_type.dart';
+import '../services/sync_service.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
+import '../utils/waste_begin_collection_draft.dart';
+import '../utils/waste_save_messages.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../models/waste_stock_source.dart';
@@ -64,6 +69,7 @@ class _WasteBeginCollectionScreenState
   bool _addingLoadPhoto = false;
   bool _isSubmitting = false;
   WasteSettings? _wasteSettings;
+  String _collectionSubmitRef = const Uuid().v4();
 
   /// Admin-only: widens the item/stock type pickers back to the full
   /// contractor type list, bypassing the manager's selectedWasteTypes
@@ -100,10 +106,116 @@ class _WasteBeginCollectionScreenState
     if (widget.load.selectedStockIds.isNotEmpty) {
       _loadPrelinkedStock();
     }
+    _restoreDraft();
+    for (final c in [_driverCtrl, _regCtrl, _trailerCtrl, _paperDocCtrl]) {
+      c.addListener(_persistDraft);
+    }
+  }
+
+  TimeOfDay? _parseTime(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final parts = raw.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  Future<void> _restoreDraft() async {
+    final loadId = widget.load.id;
+    if (loadId == null) return;
+    final draft = await WasteBeginCollectionDraft.load(
+      loadId,
+      currentEmployee?.clockNo,
+    );
+    if (draft == null || !mounted) return;
+    if (draft.collectionSubmitRef.isNotEmpty) {
+      _collectionSubmitRef = draft.collectionSubmitRef;
+    }
+    _driverCtrl.text = draft.driverName;
+    _regCtrl.text = draft.vehicleReg;
+    _trailerCtrl.text = draft.trailerReg ?? '';
+    _paperDocCtrl.text = draft.paperDocumentRef;
+    final parsedIn = _parseTime(draft.timeIn);
+    if (parsedIn != null) _timeIn = parsedIn;
+    _timeOut = _parseTime(draft.timeOut);
+    Uint8List? restoredSigBytes;
+    if (draft.signatureLocalPath != null) {
+      try {
+        restoredSigBytes = await File(draft.signatureLocalPath!).readAsBytes();
+      } catch (_) {}
+    }
+    setState(() {
+      _adminOverrideActive = draft.adminOverrideActive;
+      _loadPhotoPaths
+        ..clear()
+        ..addAll(draft.loadPhotoPaths);
+      if (restoredSigBytes != null) {
+        _signatureBytes = restoredSigBytes;
+        _signatureTempPath = draft.signatureLocalPath;
+      }
+      if (draft.items.isNotEmpty) {
+        _items
+          ..clear()
+          ..addAll(draft.items.map((m) => _ItemEntry(
+                subtype: m['subtype'] as String? ?? '',
+                weightKg: (m['weight_kg'] as num?)?.toDouble() ?? 0,
+                quantity: m['quantity'] as int?,
+                notes: m['notes'] as String?,
+                photoPaths: List<String>.from(
+                  m['photo_paths'] as List? ?? const [],
+                ),
+                stockId: m['stock_id'] as String?,
+                linkedIbcNumbers: List<String>.from(
+                  m['linked_ibc_numbers'] as List? ?? const [],
+                ),
+                isQuantityOnly: m['is_quantity_only'] == true,
+                isNoSiteWeight: m['is_no_site_weight'] == true,
+              )));
+      }
+    });
+  }
+
+  void _persistDraft() {
+    final loadId = widget.load.id;
+    if (loadId == null) return;
+    unawaited(WasteBeginCollectionDraft.save(
+      loadId: loadId,
+      clockNo: currentEmployee?.clockNo,
+      payload: WasteBeginCollectionDraft.toJson(
+        collectionSubmitRef: _collectionSubmitRef,
+        driverName: _driverCtrl.text,
+        vehicleReg: _regCtrl.text,
+        trailerReg: _trailerCtrl.text.trim().isEmpty ? null : _trailerCtrl.text.trim(),
+        paperDocumentRef: _paperDocCtrl.text,
+        timeIn: _formatTime(_timeIn),
+        timeOut: _timeOut != null ? _formatTime(_timeOut!) : null,
+        adminOverrideActive: _adminOverrideActive,
+        loadPhotoPaths: _loadPhotoPaths,
+        signatureLocalPath: _signatureTempPath,
+        items: _items
+            .map((i) => {
+                  'subtype': i.subtype,
+                  'weight_kg': i.weightKg,
+                  'quantity': i.quantity,
+                  'notes': i.notes,
+                  'photo_paths': i.photoPaths,
+                  'stock_id': i.stockId,
+                  'linked_ibc_numbers': i.linkedIbcNumbers,
+                  'is_quantity_only': i.isQuantityOnly,
+                  'is_no_site_weight': i.isNoSiteWeight,
+                })
+            .toList(),
+      ),
+    ));
   }
 
   @override
   void dispose() {
+    for (final c in [_driverCtrl, _regCtrl, _trailerCtrl, _paperDocCtrl]) {
+      c.removeListener(_persistDraft);
+    }
     _driverCtrl.dispose();
     _regCtrl.dispose();
     _trailerCtrl.dispose();
@@ -217,7 +329,10 @@ class _WasteBeginCollectionScreenState
     setState(() => _addingLoadPhoto = true);
     try {
       final path = await _wasteService.pickAndCompressPhotoFromSource(source);
-      if (path != null && mounted) setState(() => _loadPhotoPaths.add(path));
+      if (path != null && mounted) {
+        setState(() => _loadPhotoPaths.add(path));
+        _persistDraft();
+      }
     } finally {
       if (mounted) setState(() => _addingLoadPhoto = false);
     }
@@ -353,6 +468,7 @@ class _WasteBeginCollectionScreenState
         isNoSiteWeight: result.isNoSiteWeight,
       )));
       await _logOverrideIfNeeded([result.subtype]);
+      _persistDraft();
     }
   }
 
@@ -368,13 +484,12 @@ class _WasteBeginCollectionScreenState
       ),
     );
     if (bytes != null && mounted) {
-      final tmp = await getTemporaryDirectory();
-      final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(bytes);
+      final path = await _wasteService.persistSignatureBytes(bytes);
       setState(() {
         _signatureBytes = bytes;
-        _signatureTempPath = file.path;
+        _signatureTempPath = path;
       });
+      _persistDraft();
     }
   }
 
@@ -424,30 +539,28 @@ class _WasteBeginCollectionScreenState
         signatureLocalPath: _signatureTempPath,
         contractorId: widget.load.contractorId,
         isQuantityOnly: skipWeighbridge,
+        collectionSubmitRef: _collectionSubmitRef,
       );
 
-      // Mark confirmed stock items as loaded. If the load itself was queued
-      // offline we must also queue the stock updates — marking stock online
-      // against a load that isn't in Firestore yet would leave orphaned state.
       if (confirmedStockIds.isNotEmpty) {
-        if (!result.queuedOffline) {
-          await _wasteService.markStockLoaded(confirmedStockIds, widget.load.id!);
-        } else {
-          await _wasteService.queueMarkStockLoaded(confirmedStockIds, widget.load.id!);
-        }
+        await _wasteService.queueMarkStockLoaded(
+          confirmedStockIds,
+          widget.load.id!,
+        );
       }
+
+      await WasteBeginCollectionDraft.clear(
+        widget.load.id!,
+        currentEmployee?.clockNo,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              result.queuedOffline
-                  ? 'Collection saved offline — will sync when connection returns'
-                  : skipWeighbridge
-                      ? 'Collection submitted — awaiting admin cost review'
-                      : 'Collection submitted — manager will enter weighbridge weight',
-            ),
-            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
+            content: Text(WasteSaveMessages.collectionSaved(
+              queuedOps: result.queuedOps,
+            )),
+            backgroundColor: Colors.orange,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -456,13 +569,14 @@ class _WasteBeginCollectionScreenState
     } catch (e) {
       if (mounted) {
         final isAlreadyStarted = e is StateError;
+        final queued = SyncService().getQueuedWasteOperationCount();
         showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(isAlreadyStarted ? 'Already Started' : 'Submission Failed'),
             content: Text(isAlreadyStarted
                 ? 'This load was already started by another guard.'
-                : 'Failed to submit: $e\n\nYour data has been saved offline and will sync when connectivity is restored.'),
+                : WasteSaveMessages.submitFailed(e, queuedOps: queued)),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
             ],
@@ -896,6 +1010,7 @@ class _WasteBeginCollectionScreenState
     final isStock = item.stockId != null;
     if (!isStock) {
       setState(() => _items.removeAt(index));
+      _persistDraft();
       return;
     }
 
@@ -924,6 +1039,7 @@ class _WasteBeginCollectionScreenState
       );
       if (ok != true) return;
       setState(() => _items.removeAt(index));
+      _persistDraft();
       return;
     }
 

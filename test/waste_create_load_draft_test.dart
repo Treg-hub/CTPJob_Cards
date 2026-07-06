@@ -33,6 +33,7 @@ void main() {
 
     test('toJson and fromJsonString round-trip core fields', () {
       final json = WasteCreateLoadDraft.toJson(
+        createSubmitRef: 'submit-ref-abc',
         driverName: 'Sam Naidoo',
         vehicleReg: 'ABC123GP',
         trailerReg: 'TRL99',
@@ -52,11 +53,21 @@ void main() {
           ),
         ],
         selectedStockIds: ['stock-1'],
+        selectedStockSnapshots: [
+          {
+            'id': 'stock-1',
+            'waste_type': 'Paper Waste',
+            'subtype': 'Mixed',
+            'status': 'on_site',
+            'is_deleted': false,
+          },
+        ],
       );
 
       final restored = WasteCreateLoadDraft.fromJsonString(jsonEncode(json));
       expect(restored, isNotNull);
-      expect(restored!.driverName, 'Sam Naidoo');
+      expect(restored!.createSubmitRef, 'submit-ref-abc');
+      expect(restored.driverName, 'Sam Naidoo');
       expect(restored.vehicleReg, 'ABC123GP');
       expect(restored.trailerReg, 'TRL99');
       expect(restored.paperDocumentRef, 'DOC-42');
@@ -66,6 +77,8 @@ void main() {
       expect(restored.timeIn, '08:30');
       expect(restored.timeOut, '09:15');
       expect(restored.selectedStockIds, ['stock-1']);
+      expect(restored.selectedStockSnapshots, hasLength(1));
+      expect(restored.selectedStockSnapshots.first['id'], 'stock-1');
       expect(restored.items, hasLength(1));
       expect(restored.items.first.subtype, 'Paper Waste');
       expect(restored.items.first.weightKg, 120);

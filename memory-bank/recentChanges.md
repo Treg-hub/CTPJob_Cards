@@ -2,6 +2,39 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Waste large-load save I/O batching (2026-07-06)**:
+  - `WasteQueueBatchPlan` — parallel `persistWasteMediaBatch` (8-wide) + ordered `addAllToQueue` for submit/finish/create/add-item paths.
+  - Cached `waste_media_queue` directory; skip re-copy when dest exists; `logWasteUsage` on create is fire-and-forget.
+  - Tests: `waste_queue_batch_test.dart`.
+
+- **Waste capture polish — single device, no mobile rates (2026-07-06)**:
+  - Stock snapshots on create-load (`WasteStockSnapshot` + draft `selected_stock_snapshots`) — offline create queues stock items without Firestore fetch.
+  - Submit marker clears when Hive queue for that load drains or sync lands `pending_*` status (`WasteCollectionMarker` + `SyncService.hasQueuedWasteOpsForLoad`).
+  - Removed mobile `rate_per_kg` lookup from `addItemToExistingLoad`; rates are Pulse-only.
+  - Create load weight preview includes selected stock; finish-loading sync recomputes `photo_count` on status transition.
+
+- **Waste queue-first review fixes 1–5 (2026-07-06)**:
+  - **Fix 1**: `saveCompleteWasteLoad` single `set` includes `photo_count` — removed trailing `update` that dedupe could drop.
+  - **Fix 2**: `_splitPhotoPaths` in `saveCompleteWasteLoad` — stock Firebase URLs pass through to item `photos`; locals queue only.
+  - **Fix 3**: `addItemToExistingLoad` queue-first (no live upload / connectivity gate); `WasteSaveMessages.addItemSaved`.
+  - **Fix 4**: Signatures via `persistSignatureBytes` at capture (Begin Collection + Finish Loading); draft stores `signature_local_path`.
+  - **Fix 5**: Create-from-scratch queues stock → `waste_items` + `queueMarkStockLoaded` inside `saveCompleteWasteLoad(selectedStockIds)`; `addStockItemsToLoad` uses queue path.
+  - Tests: merge dedupe test in `waste_offline_resilience_test.dart`; photo split tests in `waste_queue_first_test.dart`.
+
+- **Waste queue-first guard save (2026-07-06)**:
+  - `submitCollection`, `finishLoading`, `saveCompleteWasteLoad` always enqueue locally first (Hive + `waste_media_queue/`), return immediately, `SyncService.processNow()` in background — guard no longer blocked on weak WiFi.
+  - Photos persisted at capture via `pickAndCompressPhotoFromSource` → `persistWasteMediaForQueue`.
+  - Truck photos queued before item loop; stable UUIDv5 item doc ids + `collection_submit_ref` idempotent resubmit; `WasteBeginCollectionDraft` + honest `WasteSaveMessages`.
+  - `ConnectivityService.isLikelyReachable` probe helper. Tests: `waste_queue_first_test.dart` + existing offline suite (71 pass).
+  - Map: `Components/Modules/WasteModule.md`, `Canvases/07-waste-guard-to-manager-flow.excalidraw.md`.
+
+- **My Timesheet module — Phase 1 (2026-07-06)**:
+  - Generic `work_report_*` collections, Pulse Settings (`WorkReportSection`), mobile hub + job lines + additional work + PDF export, offline Hive queue, Firestore rules + tests. Pilot clock **10338**. Spec: `docs/Work_Report_Module_Design.md`.
+
+- **Pre Press Specialist job-card workflow fix (2026-07-06)**:
+  - **Root cause**: live employee is `Workshop | Pre Press Specialist` — old `roleFromEmployee` required `Pre Press` department, so they resolved to `UserRole.operator` and `_operatorRestrictedFor` greyed out Start/Complete on mech/elec jobs with "Technicians only". CF `getOnsitePrepressSpecialist` had the same dept gate, breaking Pre Press Spec auto-assign.
+  - **Fix**: `role.dart` — position `pre press specialist` is authoritative; new `isOperatorRestrictedForJob()` exempts anyone in `assignedClockNos`. `home_screen` + `job_card_detail_screen` use shared helper. CF matcher aligned. Tests: `test/role_test.dart`.
+
 - **Mobile safe-area sweep + waste create-load draft/chips (2026-07-06)**:
   - **Safe area (Phase 1)**: `ScreenInsets` / `SafeBottomBar` applied app-wide on remaining scroll routes — Settings, What's New changelog sheet, all Waste full-screen flows, Documentation/Doc viewer, notification screens, admin tabs, Fleet pushed routes, Ink sub-screens, kiosk/copper/feedback/history dashboards. Reuses `lib/utils/screen_insets.dart`.
   - **Waste create load (Phase 2)**: `TextEditingController`s fix fields appearing blank after adding items; clock-scoped SharedPreferences draft (`waste_create_load_draft.dart`) persists header fields + items + stock selection across backgrounding; **Discard draft & start over** button; draft cleared on successful save.

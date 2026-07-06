@@ -10,6 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/waste_load.dart';
 import '../models/waste_item.dart';
@@ -23,6 +24,7 @@ import '../utils/waste_type_routing.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_signature_screen.dart';
 import '../services/waste_service.dart';
+import '../utils/waste_save_messages.dart';
 
 import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
@@ -44,6 +46,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   final WasteService _wasteService = WasteService();
   late WasteLoad _currentLoad;
   final List<String> _finishLoadPhotoPaths = [];
+  final String _finishSubmitRef = const Uuid().v4();
   bool _addingFinishPhoto = false;
   bool _wasteItemsExpanded = false;
   bool _isAdmin = false;
@@ -359,12 +362,10 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              addResult.queuedOffline
-                  ? 'Item saved offline — will sync when connection returns'
-                  : 'Item added',
-            ),
-            backgroundColor: addResult.queuedOffline ? Colors.orange : Colors.green,
+            content: Text(WasteSaveMessages.addItemSaved(
+              queuedOps: addResult.queuedOps,
+            )),
+            backgroundColor: Colors.orange,
           ),
         );
       }
@@ -1097,10 +1098,8 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         }
         return;
       }
-      final tmp = await Directory.systemTemp.createTemp('waste_sig');
-      final file = File('${tmp.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(signatureBytes);
-      signatureTempPath = file.path;
+      signatureTempPath =
+          await _wasteService.persistSignatureBytes(signatureBytes);
     }
     if (!mounted) return;
 
@@ -1119,6 +1118,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
         finishedBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
         finishedByName: resolveWriteActor(currentEmployee)?.name,
         isQuantityOnly: skipWeighbridge,
+        finishSubmitRef: _finishSubmitRef,
       );
 
       final nextStatus = skipWeighbridge
@@ -1137,14 +1137,10 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              result.queuedOffline
-                  ? 'Finish loading saved offline — will sync when connection returns'
-                  : skipWeighbridge
-                      ? 'Loading finished — complete cost review in CTP Pulse'
-                      : 'Loading finished — complete weighbridge entry in CTP Pulse',
-            ),
-            backgroundColor: result.queuedOffline ? Colors.orange : Colors.green,
+            content: Text(WasteSaveMessages.finishLoadingSaved(
+              queuedOps: result.queuedOps,
+            )),
+            backgroundColor: Colors.orange,
           ),
         );
       }

@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/waste_service.dart';
 import '../utils/screen_insets.dart';
 import '../utils/waste_create_load_draft.dart';
+import '../utils/waste_save_messages.dart';
+import '../utils/waste_stock_snapshot.dart';
+import 'package:uuid/uuid.dart';
 import '../models/contractor.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
@@ -146,6 +149,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   TimeOfDay _timeIn = TimeOfDay.now();
   TimeOfDay? _timeOut;
   bool _saved = false;
+  String _createSubmitRef = const Uuid().v4();
 
   // Data
   List<Contractor> _contractors = [];
@@ -156,7 +160,52 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
 
   // Items for this load (in-memory until save)
   final List<WasteItem> _items = [];
-  double get _totalWeight => sumRecordedWeightFromItems(_items);
+  List<WasteStockItem> get _selectedStockItems => _onSiteStock
+      .where((s) => s.id != null && _selectedStockIds.contains(s.id))
+      .toList();
+
+  double get _totalWeight {
+    var total = sumRecordedWeightFromItems(_items);
+    for (final id in _selectedStockIds) {
+      WasteStockItem? live;
+      for (final stock in _onSiteStock) {
+        if (stock.id == id) {
+          live = stock;
+          break;
+        }
+      }
+      if (live != null) {
+        final w = live.estimatedWeightKg ?? 0;
+        if (w > 0) total += w;
+        continue;
+      }
+      for (final snap in _restoredStockSnapshots) {
+        if (snap['id'] == id) {
+          final w = WasteStockSnapshot.weightKg(snap);
+          if (w > 0) total += w;
+          break;
+        }
+      }
+    }
+    return total;
+  }
+
+  List<Map<String, dynamic>> _stockSnapshotsForSave() {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final snap in _restoredStockSnapshots) {
+      final id = snap['id'] as String?;
+      if (id != null && id.isNotEmpty) byId[id] = snap;
+    }
+    for (final stock in _selectedStockItems) {
+      if (stock.id != null) {
+        byId[stock.id!] = WasteStockSnapshot.fromItem(stock);
+      }
+    }
+    return _selectedStockIds
+        .map((id) => byId[id])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
 
   Set<String> get _quantityOnlyTypeNames =>
       _wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
@@ -180,6 +229,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   // On-site stock (Paper Waste — same UX as Schedule Load)
   List<WasteStockItem> _onSiteStock = [];
   final List<String> _selectedStockIds = [];
+  List<Map<String, dynamic>> _restoredStockSnapshots = [];
   bool _loadingStock = false;
 
   bool _isLoading = false;
@@ -341,6 +391,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
       await WasteCreateLoadDraft.save(
         clockNo: currentEmployee?.clockNo,
         payload: WasteCreateLoadDraft.toJson(
+          createSubmitRef: _createSubmitRef,
           driverName: _driverName,
           vehicleReg: _vehicleReg,
           trailerReg: _trailerReg,
@@ -352,6 +403,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
           timeOut: _timeOut != null ? _formatTime(_timeOut!) : null,
           items: _items,
           selectedStockIds: _selectedStockIds,
+          selectedStockSnapshots: _stockSnapshotsForSave(),
         ),
       );
     } catch (_) {}
@@ -374,6 +426,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
     final timeIn = _parseTime(draft.timeIn) ?? _timeIn;
     final timeOut = _parseTime(draft.timeOut);
 
+    if (draft.createSubmitRef.isNotEmpty) {
+      _createSubmitRef = draft.createSubmitRef;
+    }
     setState(() {
       _driverName = draft.driverName;
       _vehicleReg = draft.vehicleReg;
@@ -397,6 +452,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
       _selectedStockIds
         ..clear()
         ..addAll(draft.selectedStockIds);
+      _restoredStockSnapshots = List<Map<String, dynamic>>.from(
+        draft.selectedStockSnapshots,
+      );
     });
 
     if (_showStockSection) {
@@ -696,7 +754,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
           'is_quantity_only': item.isQuantityOnly,
           'is_no_site_weight': item.isNoSiteWeight,
         }).toList(),
+        selectedStockIds: _selectedStockIds,
+        selectedStockSnapshots: _stockSnapshotsForSave(),
         actorClockNo: resolveWriteActor(currentEmployee)?.clockNo,
+        createSubmitRef: _createSubmitRef,
       );
 
       if (mounted) {
@@ -704,51 +765,49 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
         await WasteCreateLoadDraft.clear(currentEmployee?.clockNo);
         final loadId = result['id'] as String?;
         final loadNumber = result['load_number'] as String? ?? '';
-        final queuedOffline = result['queuedOffline'] == true;
-        WasteLoad? newLoad;
-        String? stockLinkWarning;
-        if (loadId != null && !queuedOffline) {
-          if (_selectedStockIds.isNotEmpty) {
-            try {
-              final linked = await _wasteService.addStockItemsToLoad(
-                loadId: loadId,
-                stockIds: _selectedStockIds,
-              );
-              if (linked < _selectedStockIds.length) {
-                stockLinkWarning =
-                    'Load saved but only $linked of ${_selectedStockIds.length} stock item(s) were linked.';
-              }
-            } catch (e) {
-              stockLinkWarning =
-                  'Load saved but on-site stock could not be linked: $e';
-            }
-          }
-          newLoad = await _wasteService.getLoad(loadId);
-        }
+        final queuedOps = (result['queuedOps'] as int?) ?? 0;
         if (!mounted) return;
-        if (stockLinkWarning != null) {
+        if (loadId != null) {
+          final newLoad = WasteLoad(
+            id: loadId,
+            loadNumber: loadNumber,
+            mainWasteType: resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
+            dateTime: DateTime.now(),
+            contractorId: _selectedContractor!.id ?? '',
+            contractorName: _selectedContractor!.name,
+            driverName: _driverName,
+            vehicleReg: _vehicleReg,
+            trailerReg: _trailerReg,
+            paperDocumentRef: _paperDocumentRef,
+            securityName: currentEmployee?.name,
+            timeIn: _formatTime(_timeIn),
+            timeOut: _timeOut != null ? _formatTime(_timeOut!) : null,
+            notes: _notes,
+            status: WasteLoadStatus.draft,
+            recordedWeightKg: _totalWeight,
+            selectedWasteTypes: _selectedTypes.map((t) => t.mainType).toList(),
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(stockLinkWarning),
+              content: Text(WasteSaveMessages.createLoadSaved(
+                queuedOps: queuedOps,
+                loadNumber: loadNumber,
+              )),
               backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
             ),
           );
-        }
-        if (newLoad != null) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: newLoad!)),
+            MaterialPageRoute(builder: (_) => WasteLoadDetailScreen(load: newLoad)),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                queuedOffline
-                    ? 'Load saved offline — will sync when connection returns'
-                    : 'Load $loadNumber saved — find it on the WasteTrack home screen.',
-              ),
-              backgroundColor: queuedOffline ? Colors.orange : Colors.green,
+              content: Text(WasteSaveMessages.createLoadSaved(
+                queuedOps: queuedOps,
+                loadNumber: loadNumber,
+              )),
+              backgroundColor: Colors.orange,
             ),
           );
           Navigator.pop(context);
