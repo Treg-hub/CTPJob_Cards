@@ -6,7 +6,7 @@
 
 ### Who Uses This App
 
-There are four types of users in the CTP Job Cards system:
+There are four **job-card** roles derived from your position, plus module-specific roles:
 
 | Role | Primary Responsibility |
 |------|----------------------|
@@ -14,8 +14,12 @@ There are four types of users in the CTP Job Cards system:
 | **Technician** | Receives job card notifications, attends to faults, and closes jobs when resolved |
 | **Manager** | Oversees job cards in their department, monitors escalations, and ensures quality |
 | **Admin** | Manages the system, employee accounts, and geofence configuration |
+| **Security Guard** | Site Security + Waste field capture — **module hub home, no job-card tiles or My Work** (see **Site Security — Guard Guide** in Documentation) |
+| **Security Manager** | Gate oversight, waste scheduling, company car costs — keeps full manager job-card Home **plus** Security/Waste tabs (see **Site Security — Manager Guide**) |
 
 > **Note:** Operators and Technicians are separate roles. An operator is the person who discovers and reports the fault — a technician is the person who goes to fix it.
+
+> **Security guards:** If your Home screen shows **Your modules** (Site Security / Waste Recovery) instead of Create Job Card, this guide's job-card workflow sections do not apply to your day-to-day work — open **Site Security — Guard Guide** from Settings → Documentation.
 
 ---
 

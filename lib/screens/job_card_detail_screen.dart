@@ -16,7 +16,7 @@ import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
-import '../utils/role.dart' show isAdmin, roleFromEmployee, UserRole;
+import '../utils/role.dart' show isAdmin, isOperatorRestrictedForJob, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
@@ -61,13 +61,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   bool get _canAddNotes => isManager || (currentEmployee?.position.toLowerCase().contains('electrical') ?? false) || (currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
   bool get _canAddComments => !(currentEmployee?.position.toLowerCase().contains('electrical') ?? false) && !(currentEmployee?.position.toLowerCase().contains('mechanical') ?? false);
 
-  /// Operators are restricted to Maintenance jobs for Start/Complete/Monitor
-  /// actions — they can still comment on and view mech/elec jobs they raised.
-  /// See CLAUDE.md (Roles) for the full matrix.
-  bool _operatorRestrictedFor(JobCard job) {
-    return roleFromEmployee(currentEmployee) == UserRole.operator
-        && job.type != JobType.maintenance;
-  }
+  /// Operators are restricted to Maintenance jobs unless explicitly assigned.
+  bool _operatorRestrictedFor(JobCard job) =>
+      isOperatorRestrictedForJob(currentEmployee, job);
 
   /// True when the current user can change the job type. Technicians, managers,
   /// and admins can; operators cannot. Closed jobs are immutable.

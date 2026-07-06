@@ -1,7 +1,9 @@
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/job_card.dart';
 import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
+import '../models/work_report_settings.dart';
 
 enum UserRole { technician, manager, admin, operator }
 
@@ -26,10 +28,21 @@ UserRole roleFromEmployee(Employee? employee) {
       pos.contains('electric') ||
       pos.contains('technician') ||
       pos.contains('building maintenance') ||
+      pos.contains('pre press specialist') ||
       (employee.department == 'Pre Press' && pos.contains('specialist'))) {
     return UserRole.technician;
   }
   return UserRole.operator;
+}
+
+/// Operators may only Start/Complete/Monitor non-Maintenance jobs when they
+/// raised the fault themselves. Anyone explicitly assigned to a job card
+/// (manager assign, auto-assign, or self-assign) may work it like a technician.
+bool isOperatorRestrictedForJob(Employee? employee, JobCard job) {
+  if (employee == null) return true;
+  if (job.assignedClockNos?.contains(employee.clockNo) ?? false) return false;
+  return roleFromEmployee(employee) == UserRole.operator &&
+      job.type != JobType.maintenance;
 }
 
 /// True when [employee]'s department implies factory-wide manager visibility
@@ -268,8 +281,35 @@ bool isBuildingMaintenance(Employee? employee) {
 /// Double-gated on department + position to avoid false matches.
 bool isPrepressSpecialist(Employee? employee) {
   if (employee == null) return false;
-  return employee.department == 'Pre Press' &&
-      employee.position.toLowerCase().contains('specialist');
+  final pos = employee.position.toLowerCase();
+  // Live roster: one specialist is Workshop | Pre Press Specialist (dept mismatch).
+  return pos.contains('pre press specialist') ||
+      (employee.department == 'Pre Press' && pos.contains('specialist'));
+}
+
+// =============================================================================
+// MY TIMESHEET (work_report) role helpers
+// =============================================================================
+
+bool _workReportClockInList(String? clockNo, List<String> allowList) {
+  final normalized = WorkReportSettings.normalizeClockNo(clockNo);
+  if (normalized.isEmpty) return false;
+  return allowList.any(
+    (allowed) => WorkReportSettings.normalizeClockNo(allowed) == normalized,
+  );
+}
+
+/// Worker tile + screens, or admin viewer/editor.
+bool canUseWorkReportModule(Employee? employee, WorkReportSettings? settings) {
+  if (settings == null || !settings.enabled) return false;
+  if (isAdmin(employee)) return true;
+  return _workReportClockInList(employee?.clockNo, settings.enabledClockNos);
+}
+
+/// Non-admin enrolled worker (Home tile).
+bool isWorkReportWorker(Employee? employee, WorkReportSettings? settings) {
+  if (settings == null || !settings.enabled) return false;
+  return _workReportClockInList(employee?.clockNo, settings.enabledClockNos);
 }
 
 // =============================================================================

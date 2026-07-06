@@ -793,19 +793,20 @@ async function getOnsiteBuildingMaintenance(allEmps = null) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
+function isPrepressSpecialistEmployee(emp) {
+  const pos = (emp.position || "").toLowerCase();
+  // Live roster: one specialist is Workshop | Pre Press Specialist (dept mismatch).
+  return pos.includes("pre press specialist") ||
+    (emp.department === "Pre Press" && pos.includes("specialist"));
+}
+
 async function getOnsitePrepressSpecialist(allEmps = null) {
   if (allEmps) {
-    return allEmps.filter((e) =>
-      e.isOnSite === true && e.department === "Pre Press" &&
-      (e.position || "").toLowerCase().includes("specialist")
-    );
+    return allEmps.filter((e) => e.isOnSite === true && isPrepressSpecialistEmployee(e));
   }
-  const snaps = await db.collection("employees")
-    .where("department", "==", "Pre Press")
-    .where("isOnSite", "==", true)
-    .get();
+  const snaps = await db.collection("employees").where("isOnSite", "==", true).get();
   return snaps.docs
-    .filter((doc) => (doc.data().position || "").toLowerCase().includes("specialist"))
+    .filter((doc) => isPrepressSpecialistEmployee(doc.data()))
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 

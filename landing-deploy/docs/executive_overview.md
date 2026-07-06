@@ -4,7 +4,7 @@
 
 ## What the System Is
 
-The CTP Job Cards platform is a real-time digital maintenance management system built for the plant. It replaces paper-based, radio, and verbal fault-reporting processes with a structured, tracked, and auditable system accessible from every employee's mobile phone.
+The CTP Job Cards platform is the **central CTP mobile app** (still branded Job Cards) for plant operations. Its core is real-time digital maintenance management — structured job cards, notifications, and escalation — and it also hosts integrated modules: **Waste Recovery**, **Site Security**, **Fleet Maintenance**, and **Ink Factory** field capture. Manager desks for weighbridge, gate-log reporting, and board KPIs live on **CTP Pulse**.
 
 The platform is built on Google Firebase — enterprise-grade cloud infrastructure — and is designed to be always available, offline-capable, and scalable without requiring any on-site IT infrastructure.
 
@@ -32,6 +32,20 @@ The CTP Job Cards system addresses all of these by digitising the entire process
 | **Technician** | Receives the job notification, attends to the fault, records what was done, and closes the job. |
 | **Manager** | Oversees all jobs in their department, enforces data quality, monitors escalations, and identifies recurring failure patterns. |
 | **Admin** | Manages system configuration, employee accounts, geofence settings, and access control. |
+| **Security Guard** | Site Security + Waste field capture on mobile; **module hub home** (no job-card tiles). Never uses CTP Pulse. |
+| **Security Manager** | Mobile gate scans + company car costs; CTP Pulse desk for gate log, reports, and deny list. |
+
+---
+
+## Integrated modules (same app)
+
+| Module | Mobile (this app) | Manager desk (CTP Pulse) |
+|--------|-------------------|---------------------------|
+| **Job Cards** | Create, assign, escalate, close | Read-only KPIs and list (`/jobs`) |
+| **Waste Recovery** | Schedule, collect, stock link (guards/managers) | Weighbridge, cost review, reports |
+| **Site Security** | Scan in/out, company cars, visitors | Gate log, on-site, exports, deny list |
+| **Fleet Maintenance** | Reporters + mechanics (zero cost UI on floor) | Cost managers link spend, reports |
+| **Ink Factory** | Operators record production / meters | Managers: ledger, shipments, month-end |
 
 ---
 
@@ -160,6 +174,10 @@ There is no server to maintain, no on-site hardware to manage, and no single poi
 | Offline support with automatic sync | Live |
 | Role-based access control | Live |
 | Notification action buttons (Assign / Busy / Dismiss) | Live |
+| Waste Recovery (mobile field capture) | Live |
+| Site Security (gate log + company cars; guard module hub) | Live |
+| Fleet Maintenance (reporter / mechanic mobile shells) | Live |
+| Ink Factory operator capture (mobile) | Live |
 
 ---
 
