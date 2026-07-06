@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **v2.3.0 release notes roll-up (2026-07-06)** — wide rollout from last public **v2.1.1 (build 38)**:
+  - Prepended `## 2026-07-06 — Version 2.3.0` roll-up to `docs/CHANGELOG.md` (bundled asset → **What's changed** sheet + Settings → Documentation → Changelog). Covers all four new modules + July reliability/polish (security gate split, scan validation, home resume, startup resilience, ink cyan, job-card tiles, feedback loop, etc.).
+  - `docs/troubleshooting.md` — geofence resume / incomplete Home section updated for v2.3.0.
+  - `landing-deploy/docs/` synced from `docs/` + HTML rebuild; stash integrated (`ink_production_run_screen.dart` null-safe unit reference).
+  - Branch: `docs/release-notes-2.3.0`.
+
 - **MobileScanner lifecycle hardening (2026-07-06)** — Crashlytics `controllerInitializing` on Honor/slow OEM stacks:
   - New `utils/mobile_scanner_lifecycle.dart`: deduped `MobileScannerStartGuard`, idle-wait + exponential backoff, `safeMobileScannerStop`, non-fatal Crashlytics logging.
   - `security_document_scan_screen`, `ink_barcode_scan_screen`, `scan_tester_screen`: `autoStart: false` + guarded manual start; stop before dispose.
