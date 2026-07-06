@@ -35,7 +35,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 | **Operator** | neither manager nor technician | Limited job card actions |
 | **Building Maintenance** | pos contains `building maintenance` | Receives Building Maintenance type job cards |
 | **Pre Press Specialist** | pos contains `pre press specialist` OR (dept=`Pre Press` + pos contains `specialist`) | Technician workflow (Start/Complete/Monitor on any assigned job); receives + auto-assign for **Pre Press Spec** type job cards. **My Timesheet** when clock in `work_report_settings.enabled_clock_nos` (pilot: 10338). |
-| **My Timesheet worker** | `clockNo` ∈ `work_report_settings.enabled_clock_nos` | Home tile → monthly job hours + additional work + PDF for Accounts. Admin (`isAdmin`) can view/edit any enabled worker with audit. Config: Pulse Settings → My Timesheet. |
+| **My Timesheet worker** | `clockNo` ∈ `work_report_settings.enabled_clock_nos` | Home tile → monthly job hours + additional work + PDF for Accounts. Additional work links job cards via **My Work picker** (machine/description). Admin (`isAdmin`) can view/edit any enabled worker with audit. Config + **desktop PDF** export: Pulse Settings → My Timesheet. |
 | **Fleet Mechanic** | dept=`Workshop`, pos=`Hyster Mechanic` | Log work, acknowledge/resolve issues (no cost amounts) |
 | **Fleet Reporter** | dept ∈ `fleet_settings.reporter_departments` | Report fleet issues, view own issues |
 | **Fleet Cost Manager** | `clockNo` ∈ `fleet_settings.cost_manager_clock_nos` | **Pulse only** — optional cost linking, reports, CSV (no mobile Fleet tab) |

@@ -94,16 +94,19 @@ class WorkReportPdfExporter {
             pw.Text('No additional work.', style: const pw.TextStyle(fontSize: 9))
           else
             pw.TableHelper.fromTextArray(
-              headers: const ['Date', 'Hours', 'Description', 'Linked job #'],
+              headers: const [
+                'Date',
+                'Hours',
+                'Description',
+                'Linked job',
+              ],
               data: [
                 for (final line in sortedAdd)
                   [
                     DateFormat('d MMM yyyy').format(line.workDate),
                     _hours.format(line.hours),
                     _truncate(line.description, 100),
-                    line.linkedJobCardNumber != null
-                        ? '#${line.linkedJobCardNumber}'
-                        : '—',
+                    _linkedJobLabel(line.linkedJobCardNumber, sortedJobs),
                   ],
               ],
               headerStyle:
@@ -113,10 +116,24 @@ class WorkReportPdfExporter {
                   const pw.BoxDecoration(color: PdfColors.grey300),
               cellAlignments: {1: pw.Alignment.centerRight},
             ),
-          pw.SizedBox(height: 16),
-          pw.Text(
-            'Total hours: ${_hours.format(period.totalHours)}',
-            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          pw.SizedBox(height: 12),
+          pw.TableHelper.fromTextArray(
+            headers: const ['', 'Hours'],
+            data: [
+              ['Job card work', _hours.format(period.totalJobHours)],
+              ['Additional work', _hours.format(period.totalAdditionalHours)],
+              [
+                'Total',
+                _hours.format(period.totalHours),
+              ],
+            ],
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(2),
+              1: const pw.FlexColumnWidth(1),
+            },
+            cellAlignments: {1: pw.Alignment.centerRight},
           ),
           pw.SizedBox(height: 8),
           pw.Text(
@@ -143,5 +160,22 @@ class WorkReportPdfExporter {
     final t = text.replaceAll('\n', ' ').trim();
     if (t.length <= max) return t.isEmpty ? '—' : t;
     return '${t.substring(0, max - 1)}…';
+  }
+
+  static String _linkedJobLabel(
+    int? jobNumber,
+    List<WorkReportJobLine> jobLines,
+  ) {
+    if (jobNumber == null) return '—';
+    for (final line in jobLines) {
+      if (line.jobCardNumber == jobNumber) {
+        final machine = line.jobMeta.machine.trim();
+        if (machine.isNotEmpty) return '#$jobNumber · $machine';
+        final loc = line.jobMeta.locationLabel.trim();
+        if (loc.isNotEmpty) return '#$jobNumber · $loc';
+        break;
+      }
+    }
+    return '#$jobNumber';
   }
 }

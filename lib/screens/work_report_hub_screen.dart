@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
+import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
 import '../providers/work_report_provider.dart';
 import '../services/firestore_service.dart';
@@ -188,26 +189,7 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
               ),
               if (period?.hasPdf == true) ...[
                 const SizedBox(height: 12),
-                Card(
-                  color: Colors.amber.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.warning_amber, color: Colors.amber),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'PDF generated ${period!.pdfGeneratedAt != null ? DateFormat('d MMM yyyy HH:mm').format(period.pdfGeneratedAt!) : ''} '
-                            '(v${period.pdfVersion}). Editing may not match what Accounts received.',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _PdfWarningBanner(period: period!),
               ],
               const SizedBox(height: 16),
               _SummaryCard(
@@ -219,13 +201,13 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
               _SummaryCard(
                 label: 'Additional hours',
                 value: period?.totalAdditionalHours ?? 0,
-                color: Colors.blue,
+                color: Theme.of(context).appColors.statusOpen,
               ),
               const SizedBox(height: 8),
               _SummaryCard(
                 label: 'Total hours',
                 value: period?.totalHours ?? 0,
-                color: Colors.green,
+                color: Theme.of(context).appColors.wasteGreen,
                 bold: true,
               ),
               const SizedBox(height: 24),
@@ -269,7 +251,11 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                     : const Icon(Icons.picture_as_pdf),
                 label: Text(_generatingPdf ? 'Generating…' : 'Generate PDF'),
                 style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green.shade700),
+                  backgroundColor: Theme.of(context).appColors.wasteGreen,
+                  foregroundColor: onColor(
+                    Theme.of(context).appColors.wasteGreen,
+                  ),
+                ),
               ),
             ],
           );
@@ -322,15 +308,105 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _AdminWorkerPicker extends ConsumerWidget {
+class _PdfWarningBanner extends StatelessWidget {
+  const _PdfWarningBanner({required this.period});
+
+  final WorkReportPeriod period;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final warning = Colors.amber.shade400;
+    final generated = period.pdfGeneratedAt != null
+        ? DateFormat('d MMM yyyy HH:mm').format(period.pdfGeneratedAt!)
+        : '';
+
+    return Card(
+      color: Colors.amber.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.amber.withValues(alpha: 0.45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded, color: warning),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'PDF generated $generated (v${period.pdfVersion}). '
+                'Editing may not match what Accounts received.',
+                style: TextStyle(fontSize: 13, color: scheme.onSurface),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminWorkerPicker extends ConsumerStatefulWidget {
   const _AdminWorkerPicker({required this.settings});
   final WorkReportSettings settings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AdminWorkerPicker> createState() => _AdminWorkerPickerState();
+}
+
+class _AdminWorkerPickerState extends ConsumerState<_AdminWorkerPicker> {
+  final Map<String, String> _namesByClock = {};
+  bool _loadingNames = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNames();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdminWorkerPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings.enabledClockNos != widget.settings.enabledClockNos) {
+      _loadNames();
+    }
+  }
+
+  Future<void> _loadNames() async {
+    setState(() => _loadingNames = true);
+    final fs = FirestoreService();
+    final next = <String, String>{};
+    for (final clock in widget.settings.enabledClockNos) {
+      final emp = await fs.getEmployee(clock);
+      if (emp != null && emp.name.trim().isNotEmpty) {
+        next[clock] = emp.name.trim();
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _namesByClock
+          ..clear()
+          ..addAll(next);
+        _loadingNames = false;
+      });
+    }
+  }
+
+  String _label(String clock) {
+    final name = _namesByClock[clock];
+    if (name != null && name.isNotEmpty) return '$name (#$clock)';
+    return 'Clock #$clock';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final current = ref.watch(workReportSubjectClockProvider) ??
         currentEmployee?.clockNo ??
         '';
+    final muted = Theme.of(context).appColors.textMuted;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -341,18 +417,18 @@ class _AdminWorkerPicker extends ConsumerWidget {
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              initialValue: settings.enabledClockNos.contains(current)
+              initialValue: widget.settings.enabledClockNos.contains(current)
                   ? current
-                  : (settings.enabledClockNos.isNotEmpty
-                      ? settings.enabledClockNos.first
+                  : (widget.settings.enabledClockNos.isNotEmpty
+                      ? widget.settings.enabledClockNos.first
                       : null),
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
               items: [
-                for (final c in settings.enabledClockNos)
-                  DropdownMenuItem(value: c, child: Text('Clock #$c')),
+                for (final c in widget.settings.enabledClockNos)
+                  DropdownMenuItem(value: c, child: Text(_label(c))),
               ],
               onChanged: (v) {
                 if (v != null) {
@@ -360,6 +436,11 @@ class _AdminWorkerPicker extends ConsumerWidget {
                 }
               },
             ),
+            if (_loadingNames)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Loading names…', style: TextStyle(fontSize: 11, color: muted)),
+              ),
           ],
         ),
       ),

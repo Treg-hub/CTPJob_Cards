@@ -2,6 +2,14 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **My Timesheet UX + Pulse desktop PDF (2026-07-07)**:
+  - **Dark mode hub**: theme-aware PDF warning banner; summary hours use `appColors` (no light-on-light amber card).
+  - **Additional work**: date picker; job link picker from My Work + period job lines (`work_report_job_link_picker.dart`).
+  - **Admin picker**: worker names from `employees/{clockNo}`.
+  - **PDF**: hours breakdown table; linked job shows machine when known.
+  - **Pulse**: Settings → My Timesheet → **Download timesheet PDF** (`WorkReportPdfPanel`, `exportWorkReportPdf.ts`).
+  - Map: `Components/Modules/WorkReportModule.md`, `docs/Work_Report_Module_Design.md`, `visualization.md`.
+
 - **Firestore cost remediations (2026-07-07, monorepo + this repo `master` `42e0153`)**:
   - **Jobcards CFs**: `onJobCardOpenCounts` + `reconcileOpenJobCardCounts` + `job_card_open_counts.js` (unit tests). Maintains `counters/job_cards_open` for Pulse board KPIs.
   - **Home query bounds** (`firestore_service.dart`): active jobs `limit(150)`; my-work `limit(80)` per assigned/created stream; inbox unread `limit(50)`; open-status `whereIn` includes legacy display names (`Open`, `In Progress`, `Monitoring`).
