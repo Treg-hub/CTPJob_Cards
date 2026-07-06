@@ -69,9 +69,11 @@ class FleetService {
   // SETTINGS
   // ---------------------------------------------------------------------------
 
-  Future<FleetSettings> getSettings() async {
-    final snap =
-        await _db.collection(Collections.fleetSettings).doc('config').get();
+  Future<FleetSettings> getSettings({Source? source}) async {
+    final snap = await _db
+        .collection(Collections.fleetSettings)
+        .doc('config')
+        .get(source != null ? GetOptions(source: source) : const GetOptions());
     if (!snap.exists) return FleetSettings.defaults;
     return FleetSettings.fromFirestore(snap);
   }

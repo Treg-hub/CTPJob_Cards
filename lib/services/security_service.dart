@@ -56,11 +56,11 @@ class SecurityService {
         .map((snap) => SecuritySettings.fromFirestore(snap));
   }
 
-  Future<SecuritySettings> getSettings() async {
+  Future<SecuritySettings> getSettings({Source? source}) async {
     final snap = await _db
         .collection(Collections.securitySettings)
         .doc('config')
-        .get();
+        .get(source != null ? GetOptions(source: source) : const GetOptions());
     return SecuritySettings.fromFirestore(snap);
   }
 

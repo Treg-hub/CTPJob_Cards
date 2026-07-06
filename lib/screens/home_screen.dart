@@ -14,6 +14,7 @@ import '../constants/collections.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 
+import '../services/auth_claims_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
@@ -471,8 +472,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       // Phase 2: replace stub with canonical Firestore data
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && mounted) {
-        setState(() => realEmployee = emp);
-        ref.invalidate(currentEmployeeProvider);
+        _applyEmployeePresence(emp);
       }
     } catch (e) {
       debugPrint('HomeScreen: deferred employee load failed: $e');
@@ -663,10 +663,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _wasteSettingsLoaded = false;
   bool _securitySettingsLoaded = false;
 
-  Future<void> _loadFleetSettings() async {
+  Future<void> _loadFleetSettings({bool preferServer = false}) async {
     try {
       final service = FleetService();
-      final settings = await service.getSettings();
+      FleetSettings settings;
+      if (preferServer) {
+        try {
+          settings =
+              await service.getSettings(source: Source.server);
+        } catch (_) {
+          settings = await service.getSettings();
+        }
+      } else {
+        settings = await service.getSettings();
+      }
       final checklist = await service.getDailyChecklistConfig();
       if (mounted) {
         setState(() {
@@ -681,9 +691,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _loadWasteSettings() async {
+  Future<void> _loadWasteSettings({bool preferServer = false}) async {
     try {
-      final settings = await WasteService().getWasteSettings();
+      WasteSettings settings;
+      if (preferServer) {
+        try {
+          settings = await WasteService()
+              .getWasteSettings(source: Source.server);
+        } catch (_) {
+          settings = await WasteService().getWasteSettings();
+        }
+      } else {
+        settings = await WasteService().getWasteSettings();
+      }
       if (mounted) {
         setState(() => _cachedWasteSettings = settings);
         _wasteSettingsLoaded = true;
@@ -694,9 +714,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _loadSecuritySettings() async {
+  Future<void> _loadSecuritySettings({bool preferServer = false}) async {
     try {
-      final settings = await SecurityService().getSettings();
+      SecuritySettings settings;
+      if (preferServer) {
+        try {
+          settings = await SecurityService()
+              .getSettings(source: Source.server);
+        } catch (_) {
+          settings = await SecurityService().getSettings();
+        }
+      } else {
+        settings = await SecurityService().getSettings();
+      }
       if (mounted) {
         setState(() => _cachedSecuritySettings = settings);
         _securitySettingsLoaded = true;
@@ -718,6 +748,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!_securitySettingsLoaded) _loadSecuritySettings();
   }
 
+  void _applyEmployeePresence(Employee emp) {
+    setState(() {
+      realEmployee = emp;
+      isOnSite = emp.isOnSite;
+      _previousIsOnSite ??= emp.isOnSite;
+    });
+    _resetTabIfHiddenModule();
+    ref.invalidate(currentEmployeeProvider);
+  }
+
+  void _setupActiveJobsSubscription() {
+    _countSubscription?.cancel();
+    _countSubscription =
+        _firestoreService.getActiveJobCardsWithMeta().listen((snap) {
+      if (!mounted) return;
+      final filtered = snap.cards.where(_isInManagerScope).toList();
+      setState(() {
+        _activeJobsSnap = snap;
+        _openJobCount =
+            filtered.where((j) => j.status == JobStatus.open).length;
+        _inProgressCount = filtered
+            .where((j) => j.status == JobStatus.inProgress)
+            .length;
+      });
+    }, onError: (e) {
+      debugPrint('HomeScreen: active jobs stream error: $e');
+    });
+  }
+
+  void _rearmActiveJobsStreamIfStuck() {
+    final snap = _activeJobsSnap;
+    if (!shouldRearmActiveJobsOnResume(
+      hasSnapshot: snap != null,
+      isEmpty: snap?.cards.isEmpty ?? true,
+      isFromCache: snap?.isFromCache ?? true,
+    )) {
+      return;
+    }
+    debugPrint('HomeScreen: re-arming active jobs stream on resume');
+    _setupActiveJobsSubscription();
+  }
+
+  Future<void> _refreshEmployeeOnResume() async {
+    final clockNo = realEmployee?.clockNo ??
+        (await SharedPreferences.getInstance())
+            .getString('loggedInClockNo');
+    if (clockNo == null) return;
+
+    final emp = await _firestoreService.getEmployee(clockNo);
+    if (emp != null && mounted) {
+      _applyEmployeePresence(emp);
+    }
+  }
+
+  /// Warm resume after geofence / notification tap can leave Home in a stale
+  /// off-site or partially-hydrated state until a cold restart. Mirror the
+  /// cold-start path: refresh claims, presence, module settings, and re-arm
+  /// job streams that are still showing cache-only skeletons.
+  Future<void> _onAppResumed() async {
+    unawaited(AuthClaimsService.refreshClaims());
+
+    await _refreshEmployeeOnResume();
+
+    if (!_testMode) {
+      final onSite = await _locationService.checkCurrentLocation();
+      if (onSite != null && mounted) {
+        setState(() {
+          isOnSite = onSite;
+          if (realEmployee != null) {
+            realEmployee = realEmployee!.copyWith(isOnSite: onSite);
+          }
+        });
+        ref.invalidate(currentEmployeeProvider);
+        _resetTabIfHiddenModule();
+      }
+    }
+
+    await Future.wait([
+      _loadFleetSettings(preferServer: true),
+      _loadWasteSettings(preferServer: true),
+      _loadSecuritySettings(preferServer: true),
+    ]);
+    _retryFailedModuleSettings();
+    _rearmActiveJobsStreamIfStuck();
+    DeviceHealthService().syncPermissionsToFirestore();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -737,6 +854,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
 
     if (realEmployee != null) {
+      isOnSite = realEmployee!.isOnSite;
+      _previousIsOnSite = realEmployee!.isOnSite;
       _setupEmployeeStream(realEmployee!.clockNo);
     } else {
       _tryLoadCurrentEmployee();
@@ -771,23 +890,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
 
     try {
-      // Single open+inProgress listener shared by the counts AND the
-      // recent-jobs section (one Firestore query, one subscription).
-      _countSubscription =
-          _firestoreService.getActiveJobCardsWithMeta().listen((snap) {
-        if (!mounted) return;
-        final filtered = snap.cards.where(_isInManagerScope).toList();
-        setState(() {
-          _activeJobsSnap = snap;
-          _openJobCount =
-              filtered.where((j) => j.status == JobStatus.open).length;
-          _inProgressCount = filtered
-              .where((j) => j.status == JobStatus.inProgress)
-              .length;
-        });
-      }, onError: (e) {
-        debugPrint('HomeScreen: active jobs stream error: $e');
-      });
+      _setupActiveJobsSubscription();
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
     }
@@ -837,14 +940,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _loadFleetSettings();
-      // Waste/security settings previously never retried after a failed
-      // initial load — resume is the second re-arm point (with reconnect).
-      _retryFailedModuleSettings();
-      DeviceHealthService().syncPermissionsToFirestore();
-      if (!_testMode) {
-        _locationService.checkCurrentLocation();
-      }
+      unawaited(_onAppResumed());
     }
   }
 

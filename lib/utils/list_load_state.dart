@@ -44,3 +44,14 @@ bool shouldTreatEmployeeMissing({
 }) {
   return !exists && !isFromCache;
 }
+
+/// Re-arm the active-jobs listener after resume when it is still showing the
+/// loading skeleton or a cache-only empty snapshot.
+bool shouldRearmActiveJobsOnResume({
+  required bool hasSnapshot,
+  required bool isEmpty,
+  required bool isFromCache,
+}) {
+  if (!hasSnapshot) return true;
+  return isEmpty && isFromCache;
+}
