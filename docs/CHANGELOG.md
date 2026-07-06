@@ -6,7 +6,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## 2026-07-06 — Version 2.3.0 (build 116) — everything since v2.1.1 (build 38)
+## 2026-07-06 — Version 2.3.0 — everything since v2.1.1 (build 38)
 
 This is the wide rollout. If you have been on **v2.1.1 (build 38)** since 17 June, here is everything that has changed in **v2.3.0**. Four whole modules are new — **Site Security**, **Fleet Maintenance**, **Ink Factory**, and **Waste Recovery** — alongside major reliability work, a refreshed Home screen, and a long list of job-card and Admin improvements. The dated entries below carry finer detail; role guides for each module are in **Settings → Documentation**.
 
