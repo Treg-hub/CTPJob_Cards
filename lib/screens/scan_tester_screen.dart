@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +11,7 @@ import '../models/employee.dart';
 import '../services/scan_tester_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/barcode_payload_util.dart';
+import '../utils/mobile_scanner_lifecycle.dart';
 
 /// Admin-only barcode capture for parser development.
 /// Saves to `pulse_scan_samples` — does not submit gate or ink receive flows.
@@ -29,7 +31,9 @@ class _ScanTesterScreenState extends State<ScanTesterScreen> {
   final MobileScannerController _controller = MobileScannerController(
     returnImage: true,
     detectionSpeed: DetectionSpeed.noDuplicates,
+    autoStart: false,
   );
+  final MobileScannerStartGuard _startGuard = MobileScannerStartGuard();
   final ScanTesterService _service = ScanTesterService();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _manualController = TextEditingController();
@@ -77,7 +81,16 @@ class _ScanTesterScreenState extends State<ScanTesterScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_startGuard.start(_controller, debugName: 'scan_tester'));
+    });
+  }
+
+  @override
   void dispose() {
+    unawaited(safeMobileScannerStop(_controller, debugName: 'scan_tester'));
     _controller.dispose();
     _notesController.dispose();
     _manualController.dispose();

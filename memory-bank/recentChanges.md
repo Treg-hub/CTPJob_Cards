@@ -2,6 +2,10 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **MobileScanner lifecycle hardening (2026-07-06)** — Crashlytics `controllerInitializing` on Honor/slow OEM stacks:
+  - New `utils/mobile_scanner_lifecycle.dart`: deduped `MobileScannerStartGuard`, idle-wait + exponential backoff, `safeMobileScannerStop`, non-fatal Crashlytics logging.
+  - `security_document_scan_screen`, `ink_barcode_scan_screen`, `scan_tester_screen`: `autoStart: false` + guarded manual start; stop before dispose.
+
 - **Home resume hydration fix (2026-07-06)** — geofence "arrived on-site" → open app showed missing Fleet/Security tabs, fleet quick actions, and Recent Job Cards skeletons until force-restart:
   - **Root cause**: warm resume did not mirror cold-start hydration — local `isOnSite` / module settings / claims refresh stale while geofence had already flipped Firestore presence; job streams could stay on cache-only empty snapshots.
   - **`home_screen.dart`**: unified `_onAppResumed()` — `AuthClaimsService.refreshClaims()`, one-shot employee fetch, GPS presence applied to UI, server-preferring module settings reload, re-arm active-jobs stream when `shouldRearmActiveJobsOnResume`.

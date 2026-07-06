@@ -1,9 +1,12 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/ink_barcode_parser.dart';
+import '../utils/mobile_scanner_lifecycle.dart';
 import '../utils/screen_insets.dart';
 
 /// Code-128 IBC scanner. Accumulates every barcode seen and merges them through
@@ -27,7 +30,9 @@ class _InkBarcodeScanScreenState extends State<InkBarcodeScanScreen> {
   final MobileScannerController _controller = MobileScannerController(
     formats: const [BarcodeFormat.code128],
     returnImage: true,
+    autoStart: false,
   );
+  final MobileScannerStartGuard _startGuard = MobileScannerStartGuard();
   final Set<String> _seen = {};
   IbcScanResult _result = const IbcScanResult();
   bool _torchOn = false;
@@ -38,10 +43,16 @@ class _InkBarcodeScanScreenState extends State<InkBarcodeScanScreen> {
   void initState() {
     super.initState();
     _torchOn = _controller.torchEnabled;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        _startGuard.start(_controller, debugName: 'ink_barcode'),
+      );
+    });
   }
 
   @override
   void dispose() {
+    unawaited(safeMobileScannerStop(_controller, debugName: 'ink_barcode'));
     _controller.dispose();
     super.dispose();
   }
