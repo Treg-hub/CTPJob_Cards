@@ -438,11 +438,26 @@ class FirestoreService {
 
   /// Open + in-progress job cards in one listener (halves Firestore reads vs
   /// separate status streams). Matches CTP Pulse [useOpenJobCards] pattern.
+  /// Aligned with Pulse + job_card_open_counts.js (enum .name + legacy display names).
+  static const List<String> _openJobStatuses = [
+    'open',
+    'inProgress',
+    'monitoring',
+    'monitor',
+    'Open',
+    'In Progress',
+    'Monitoring',
+  ];
+
+  static const int _homeActiveJobLimit = 150;
+
   Stream<JobCardListSnapshot> getActiveJobCardsWithMeta() {
     return resilientSnapshots(
       () => _firestore
           .collection(Collections.jobCards)
-          .where('status', whereIn: ['open', 'inProgress']).snapshots(),
+          .where('status', whereIn: _openJobStatuses)
+          .limit(_homeActiveJobLimit)
+          .snapshots(),
       debugName: 'active_jobs',
     ).map((snapshot) => (
           cards: parseJobCards(snapshot.docs),
@@ -496,10 +511,13 @@ class FirestoreService {
     // Both inner listeners are resilient: previously they had NO onError at
     // all, so one permission-denied was an unhandled zone error that silently
     // killed both queries for the rest of the session.
+    const myWorkLimit = 80;
     final s1 = resilientSnapshots(
       () => _firestore
           .collection(Collections.jobCards)
           .where('assignedClockNos', arrayContains: clockNo)
+          .where('status', whereIn: _openJobStatuses)
+          .limit(myWorkLimit)
           .snapshots(),
       debugName: 'my_jobs_assigned',
     ).listen((snap) {
@@ -512,6 +530,8 @@ class FirestoreService {
       () => _firestore
           .collection(Collections.jobCards)
           .where('operatorClockNo', isEqualTo: clockNo)
+          .where('status', whereIn: _openJobStatuses)
+          .limit(myWorkLimit)
           .snapshots(),
       debugName: 'my_jobs_created',
     ).listen((snap) {
@@ -541,6 +561,7 @@ class FirestoreService {
           .doc(clockNo)
           .collection(Collections.notificationInboxItems)
           .where('read', isEqualTo: false)
+          .limit(50)
           .snapshots(),
       debugName: 'inbox_unread',
     ).map((snap) => snap.docs.length);

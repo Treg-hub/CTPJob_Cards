@@ -1760,6 +1760,77 @@ function auditStable(value) {
   return JSON.stringify(value);
 }
 
+const {
+  OPEN_JOB_STATUSES,
+  COUNTER_DOC_ID,
+  deltaForTransition,
+  countingFieldsChanged,
+  isOpenJobStatus,
+  isCriticalPriority,
+} = require("./job_card_open_counts");
+
+const openCounterRef = () => db.collection("counters").doc(COUNTER_DOC_ID);
+
+async function applyOpenCountDelta(activeDelta, criticalDelta) {
+  if (activeDelta === 0 && criticalDelta === 0) return;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(openCounterRef());
+    let active = snap.exists ? (snap.data().active ?? 0) : 0;
+    let critical = snap.exists ? (snap.data().critical ?? 0) : 0;
+    active = Math.max(0, active + activeDelta);
+    critical = Math.max(0, critical + criticalDelta);
+    tx.set(
+      openCounterRef(),
+      {
+        active,
+        critical,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        version: 1,
+      },
+      { merge: true },
+    );
+  });
+}
+
+/** Maintains counters/job_cards_open for Pulse board KPIs (1-doc listener). */
+exports.onJobCardOpenCounts = functions.firestore.onDocumentWritten(
+  { document: "job_cards/{jobId}" },
+  async (event) => {
+    const before = event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data.after.exists ? event.data.after.data() : null;
+    if (before && after && !countingFieldsChanged(before, after)) return;
+    const { activeDelta, criticalDelta } = deltaForTransition(before, after);
+    try {
+      await applyOpenCountDelta(activeDelta, criticalDelta);
+    } catch (e) {
+      console.error(`onJobCardOpenCounts: counter update failed for ${event.params.jobId}:`, e);
+    }
+  },
+);
+
+/** Admin one-shot recompute of counters/job_cards_open from live job_cards truth. */
+exports.reconcileOpenJobCardCounts = onCall(async (request) => {
+  await assertAdmin(request);
+  const snap = await db.collection("job_cards")
+    .where("status", "in", OPEN_JOB_STATUSES)
+    .get();
+  let active = 0;
+  let critical = 0;
+  for (const doc of snap.docs) {
+    if (!isOpenJobStatus(doc.data().status)) continue;
+    active += 1;
+    if (isCriticalPriority(doc.data().priority)) critical += 1;
+  }
+  await openCounterRef().set({
+    active,
+    critical,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    version: 1,
+    reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { success: true, active, critical, scanned: snap.size };
+});
+
 exports.onJobCardWritten = functions.firestore.onDocumentWritten({ document: "job_cards/{jobId}" }, async (event) => {
   const before = event.data.before.exists ? event.data.before.data() : null;
   const after = event.data.after.exists ? event.data.after.data() : null;
