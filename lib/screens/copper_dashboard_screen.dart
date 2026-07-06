@@ -10,6 +10,7 @@ import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
 import '../services/copper_service.dart';
 import '../utils/role.dart';
+import '../utils/screen_insets.dart';
 
 class CopperDashboardScreen extends ConsumerStatefulWidget {
   const CopperDashboardScreen({super.key});
@@ -158,7 +159,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Center(child: Text('Error: $error')),
       data: (CopperInventory inv) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

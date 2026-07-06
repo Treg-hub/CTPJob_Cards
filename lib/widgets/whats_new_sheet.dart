@@ -4,6 +4,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../screens/doc_viewer_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/doc_catalog.dart';
+import '../utils/screen_insets.dart';
 
 /// Bottom sheet shown once after an app update with the newest changelog
 /// entry. See WhatsNewService for when it fires.
@@ -99,7 +100,12 @@ class _WhatsNewSheet extends StatelessWidget {
             child: Markdown(
               controller: scrollController,
               data: markdown,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                12 + ScreenInsets.bottomSafe(context),
+              ),
               styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                 // The entry heading is an h2 in the changelog — render it as a
                 // compact title since the sheet header already says "What's
@@ -114,7 +120,7 @@ class _WhatsNewSheet extends StatelessWidget {
             ),
           ),
           Divider(height: 1, color: scheme.outlineVariant),
-          Padding(
+          SafeBottomBar(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
             child: Row(
               children: [

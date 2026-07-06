@@ -10,6 +10,7 @@ import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/waste_app_bar.dart';
+import '../utils/screen_insets.dart';
 
 /// Lightweight "Queued Operations" screen for pilots on WasteTrack.
 /// 
@@ -382,7 +383,7 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
                         ),
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: ScreenInsets.listPadding(context, horizontal: 8, top: 4),
                         itemCount: count,
                         separatorBuilder: (context, index) => const Divider(height: 4),
                         itemBuilder: (context, index) {
@@ -470,8 +471,8 @@ class _WasteQueuedScreenState extends State<WasteQueuedScreen> {
 
           // Bottom action area — easy retry (prominent but contained)
           if (count > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+            SafeBottomBar(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
                 children: [
                   Expanded(

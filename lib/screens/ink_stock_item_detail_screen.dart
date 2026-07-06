@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/ink_provider.dart';
+import '../utils/screen_insets.dart';
 import '../theme/app_theme.dart';
 
 String inkTxnLabel(InkTxnType t) => switch (t) {
@@ -113,6 +114,7 @@ class InkStockItemDetailScreen extends ConsumerWidget {
                 }
                 final ordered = txns.reversed.toList();
                 return ListView.separated(
+                  padding: ScreenInsets.listPadding(context, horizontal: 8, top: 4),
                   itemCount: ordered.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, i) {

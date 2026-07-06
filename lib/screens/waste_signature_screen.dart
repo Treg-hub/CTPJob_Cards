@@ -9,6 +9,7 @@ import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/waste_app_bar.dart';
+import '../utils/screen_insets.dart';
 
 /// Signature capture screen for driver sign-off on Waste Loads.
 /// Uses the `signature` package (add to pubspec if not already present).
@@ -145,25 +146,26 @@ class _WasteSignatureScreenState extends State<WasteSignatureScreen> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(16),
             color: Theme.of(context).colorScheme.surface,
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+            child: SafeBottomBar(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _saveSignature,
-                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
-                    child: const Text('Confirm Signature'),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _saveSignature,
+                      style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).appColors.wasteGreen),
+                      child: const Text('Confirm Signature'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

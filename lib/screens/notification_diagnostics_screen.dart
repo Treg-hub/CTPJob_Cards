@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ctp_job_cards/services/location_service.dart';
 import 'package:ctp_job_cards/services/notification_service.dart';
+import '../utils/screen_insets.dart';
 
 class NotificationDiagnosticsScreen extends StatefulWidget {
   const NotificationDiagnosticsScreen({super.key});
@@ -61,10 +62,9 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Notification Diagnostics")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
+      body: SingleChildScrollView(
+        padding: ScreenInsets.symmetricScroll(context),
+        child: Column(
             children: [
               const Text("Permission Status", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
@@ -154,7 +154,6 @@ class _NotificationDiagnosticsScreenState extends State<NotificationDiagnosticsS
             ],
           ),
         ),
-      ),
     );
   }
 }

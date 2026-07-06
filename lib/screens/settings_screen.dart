@@ -32,6 +32,7 @@ import 'notification_inbox_screen.dart';
 import 'notification_test_screen.dart';
 import 'scan_tester_screen.dart';
 import 'login_screen.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/reset_permissions_button.dart';
 
@@ -265,7 +266,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         builder: (context, inboxSnap) {
           final unreadCount = inboxSnap.data?.docs.length ?? 0;
           return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: ScreenInsets.symmetricScroll(
+              context,
+              horizontal: 16,
+              vertical: 12,
+            ),
             children: [
 
               // ── Your Profile ─────────────────────────────────────

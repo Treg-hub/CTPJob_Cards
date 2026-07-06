@@ -3,6 +3,8 @@ import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/waste_service.dart';
+import '../utils/screen_insets.dart';
+import '../utils/waste_create_load_draft.dart';
 import '../models/contractor.dart';
 import '../models/waste_item.dart';
 import '../models/waste_load.dart';
@@ -124,9 +126,16 @@ class WasteLoadFormScreen extends ConsumerStatefulWidget {
   ConsumerState<WasteLoadFormScreen> createState() => _WasteLoadFormScreenState();
 }
 
-class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
+class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final WasteService _wasteService = WasteService();
+
+  final _driverCtrl = TextEditingController();
+  final _vehicleRegCtrl = TextEditingController();
+  final _trailerCtrl = TextEditingController();
+  final _paperDocCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
 
   // Load-level fields
   String _driverName = '';
@@ -136,6 +145,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   String? _notes;
   TimeOfDay _timeIn = TimeOfDay.now();
   TimeOfDay? _timeOut;
+  bool _saved = false;
 
   // Data
   List<Contractor> _contractors = [];
@@ -206,6 +216,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           _timeOut = picked;
         }
       });
+      _persistDraft();
     }
   }
 
@@ -228,6 +239,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       }
     });
     _refreshStockForSelection();
+    _persistDraft();
   }
 
   void _toggleWasteType(WasteType type) {
@@ -242,6 +254,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       }
     });
     _refreshStockForSelection();
+    _persistDraft();
   }
 
   void _pruneStockSelection() {
@@ -261,7 +274,197 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _driverCtrl.dispose();
+    _vehicleRegCtrl.dispose();
+    _trailerCtrl.dispose();
+    _paperDocCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) _persistDraft();
+  }
+
+  bool get _hasDraftContent => WasteCreateLoadDraft.hasContent(
+        driverName: _driverName,
+        vehicleReg: _vehicleReg,
+        trailerReg: _trailerReg,
+        paperDocumentRef: _paperDocumentRef,
+        notes: _notes,
+        contractorId: _selectedContractor?.id,
+        selectedTypeIds: _selectedTypeIds.toList(),
+        items: _items,
+        selectedStockIds: _selectedStockIds,
+      );
+
+  void _syncFieldsFromControllers() {
+    _driverName = _driverCtrl.text;
+    _vehicleReg = _vehicleRegCtrl.text;
+    _trailerReg = _trailerCtrl.text.isEmpty ? null : _trailerCtrl.text;
+    _paperDocumentRef =
+        _paperDocCtrl.text.isEmpty ? null : _paperDocCtrl.text;
+    _notes = _notesCtrl.text.isEmpty ? null : _notesCtrl.text;
+  }
+
+  void _onFieldChanged() {
+    _syncFieldsFromControllers();
+    _persistDraft();
+    setState(() {});
+  }
+
+  TimeOfDay? _parseTime(String? value) {
+    if (value == null || !value.contains(':')) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  Future<void> _persistDraft() async {
+    if (_saved || !_hasDraftContent) {
+      await WasteCreateLoadDraft.clear(currentEmployee?.clockNo);
+      return;
+    }
+    _syncFieldsFromControllers();
+    try {
+      await WasteCreateLoadDraft.save(
+        clockNo: currentEmployee?.clockNo,
+        payload: WasteCreateLoadDraft.toJson(
+          driverName: _driverName,
+          vehicleReg: _vehicleReg,
+          trailerReg: _trailerReg,
+          paperDocumentRef: _paperDocumentRef,
+          notes: _notes,
+          contractorId: _selectedContractor?.id,
+          selectedTypeIds: _selectedTypeIds.toList(),
+          timeIn: _formatTime(_timeIn),
+          timeOut: _timeOut != null ? _formatTime(_timeOut!) : null,
+          items: _items,
+          selectedStockIds: _selectedStockIds,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    final draft = await WasteCreateLoadDraft.load(currentEmployee?.clockNo);
+    if (draft == null || !mounted) return;
+
+    Contractor? contractor;
+    if (draft.contractorId != null) {
+      for (final c in _contractors) {
+        if (c.id == draft.contractorId) {
+          contractor = c;
+          break;
+        }
+      }
+    }
+
+    final timeIn = _parseTime(draft.timeIn) ?? _timeIn;
+    final timeOut = _parseTime(draft.timeOut);
+
+    setState(() {
+      _driverName = draft.driverName;
+      _vehicleReg = draft.vehicleReg;
+      _trailerReg = draft.trailerReg;
+      _paperDocumentRef = draft.paperDocumentRef;
+      _notes = draft.notes;
+      _driverCtrl.text = draft.driverName;
+      _vehicleRegCtrl.text = draft.vehicleReg;
+      _trailerCtrl.text = draft.trailerReg ?? '';
+      _paperDocCtrl.text = draft.paperDocumentRef ?? '';
+      _notesCtrl.text = draft.notes ?? '';
+      _selectedContractor = contractor;
+      _selectedTypeIds
+        ..clear()
+        ..addAll(draft.selectedTypeIds);
+      _timeIn = timeIn;
+      _timeOut = timeOut;
+      _items
+        ..clear()
+        ..addAll(draft.items);
+      _selectedStockIds
+        ..clear()
+        ..addAll(draft.selectedStockIds);
+    });
+
+    if (_showStockSection) {
+      await _loadOnSiteStock();
+      if (mounted) {
+        setState(() {
+          _selectedStockIds
+            ..clear()
+            ..addAll(draft.selectedStockIds);
+        });
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Draft restored — your in-progress load was kept'),
+      ),
+    );
+  }
+
+  Future<void> _discardDraft() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard draft?'),
+        content: const Text(
+          'This clears the saved load details and items so you can start fresh.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep draft'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    await WasteCreateLoadDraft.clear(currentEmployee?.clockNo);
+    setState(() {
+      _saved = false;
+      _driverName = '';
+      _vehicleReg = '';
+      _trailerReg = null;
+      _paperDocumentRef = null;
+      _notes = null;
+      _driverCtrl.clear();
+      _vehicleRegCtrl.clear();
+      _trailerCtrl.clear();
+      _paperDocCtrl.clear();
+      _notesCtrl.clear();
+      _selectedContractor = null;
+      _selectedTypeIds.clear();
+      _items.clear();
+      _selectedStockIds.clear();
+      _timeIn = TimeOfDay.now();
+      _timeOut = null;
+      _resetStockSelection();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Draft discarded — form reset')),
+    );
   }
 
   Future<void> _loadData() async {
@@ -275,6 +478,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           _wasteTypes = types;
           _wasteSettings = settings;
         });
+        await _restoreDraft();
       }
     } catch (_) {}
   }
@@ -374,6 +578,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
         ..clear()
         ..addAll(picked);
     });
+    _persistDraft();
   }
 
   Future<void> _addNewItem() async {
@@ -409,6 +614,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
           isNoSiteWeight: result.isNoSiteWeight,
         ));
       });
+      _persistDraft();
     }
   }
 
@@ -458,6 +664,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
 
     setState(() => _isLoading = true);
     _timeOut ??= TimeOfDay.now();
+    _syncFieldsFromControllers();
 
     try {
       final result = await _wasteService.saveCompleteWasteLoad(
@@ -493,6 +700,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       );
 
       if (mounted) {
+        _saved = true;
+        await WasteCreateLoadDraft.clear(currentEmployee?.clockNo);
         final loadId = result['id'] as String?;
         final loadNumber = result['load_number'] as String? ?? '';
         final queuedOffline = result['queuedOffline'] == true;
@@ -711,7 +920,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: ScreenInsets.symmetricScroll(context),
           children: [
             // Live total
             Card(
@@ -789,26 +998,32 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             ],
 
             TextFormField(
+              controller: _driverCtrl,
               decoration: const InputDecoration(labelText: 'Driver Name *'),
-              onChanged: (v) => _driverName = v,
+              onChanged: (_) => _onFieldChanged(),
             ),
             const SizedBox(height: 8),
             TextFormField(
+              controller: _vehicleRegCtrl,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(labelText: 'Vehicle Registration *'),
-              onChanged: (v) => _vehicleReg = v,
+              onChanged: (_) => _onFieldChanged(),
             ),
             const SizedBox(height: 8),
             TextFormField(
+              controller: _trailerCtrl,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(labelText: 'Trailer Registration (optional)'),
-              onChanged: (v) => _trailerReg = v,
+              onChanged: (_) => _onFieldChanged(),
             ),
             const SizedBox(height: 8),
             TextFormField(
+              controller: _paperDocCtrl,
               decoration: const InputDecoration(
                 labelText: 'Paper Document Reference *',
                 hintText: 'Number from the physical gate docket',
               ),
-              onChanged: (v) => _paperDocumentRef = v,
+              onChanged: (_) => _onFieldChanged(),
             ),
             const SizedBox(height: 8),
             if (currentEmployee?.name != null)
@@ -841,10 +1056,24 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
             ),
             const SizedBox(height: 8),
             TextFormField(
+              controller: _notesCtrl,
               decoration: const InputDecoration(labelText: 'Notes'),
               maxLines: 2,
-              onChanged: (v) => _notes = v,
+              onChanged: (_) => _onFieldChanged(),
             ),
+
+            if (_hasDraftContent) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _discardDraft,
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                label: const Text('Discard draft & start over'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
             const Text('Waste Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -873,7 +1102,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen> {
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.close, color: Colors.red),
-                      onPressed: () => setState(() => _items.remove(item)),
+                      onPressed: () {
+                        setState(() => _items.remove(item));
+                        _persistDraft();
+                      },
                     ),
                   ),
                 );

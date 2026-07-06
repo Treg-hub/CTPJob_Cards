@@ -22,6 +22,7 @@ import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_app_bar.dart';
 import '../widgets/waste_stock_link_sheet.dart';
+import '../utils/screen_insets.dart';
 import 'waste_signature_screen.dart';
 
 /// Guard-facing screen: complete a collection on a [scheduled] load.
@@ -485,7 +486,7 @@ class _WasteBeginCollectionScreenState
         isOnSite: currentEmployee?.isOnSite,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

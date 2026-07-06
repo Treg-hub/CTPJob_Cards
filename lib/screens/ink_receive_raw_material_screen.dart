@@ -13,6 +13,7 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/screen_insets.dart';
 
 /// Phase 1a — Receive Raw Material / Solvent.
 ///
@@ -182,7 +183,7 @@ class _InkReceiveRawMaterialScreenState
           return Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: ScreenInsets.symmetricScroll(context),
               children: [
                 if (allPos.isNotEmpty) ...[
                   DropdownButtonFormField<String>(

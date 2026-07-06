@@ -26,6 +26,7 @@ import '../services/waste_service.dart';
 
 import '../widgets/waste_add_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
+import '../utils/screen_insets.dart';
 
 /// View / edit a single Waste Load.
 /// Supports item deletion (role-gated), adding items to in-progress loads,
@@ -701,7 +702,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             : null,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
 
           if (_currentLoad.status == WasteLoadStatus.pendingWeighbridge ||

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart' show currentEmployee;
 import '../services/kiosk_mode_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 /// Device-lockdown setup for a dedicated kiosk tablet (e.g. the main-gate
 /// Site Security device). Locks the tablet to this app via Android Lock
@@ -197,7 +198,7 @@ class _KioskModeScreenState extends State<KioskModeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Kiosk Mode')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
           Card(
             color: (_isDeviceOwner ? Colors.green.shade50 : Colors.amber.shade50)

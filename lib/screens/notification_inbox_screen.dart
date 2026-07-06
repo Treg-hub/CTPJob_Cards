@@ -9,6 +9,7 @@ import '../widgets/ctp_app_bar.dart';
 import '../utils/fleet_navigation.dart';
 import 'feedback_thread_screen.dart';
 import 'job_card_detail_screen.dart';
+import '../utils/screen_insets.dart';
 
 // ---------------------------------------------------------------------------
 // NotificationInboxScreen
@@ -180,8 +181,7 @@ class _NotificationInboxScreenState
                 ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                  padding: ScreenInsets.listPadding(context, horizontal: 12, top: 8),
                   children: [
                     ...unread.map((doc) => _NotifTile(
                           doc: doc,

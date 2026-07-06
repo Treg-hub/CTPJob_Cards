@@ -11,6 +11,7 @@ import '../utils/role.dart';
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_add_stock_item_screen.dart';
+import '../utils/screen_insets.dart';
 
 class WasteStockItemDetailScreen extends ConsumerStatefulWidget {
   const WasteStockItemDetailScreen({super.key, required this.item});
@@ -148,7 +149,7 @@ class _WasteStockItemDetailScreenState
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

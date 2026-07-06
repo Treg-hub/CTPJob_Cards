@@ -11,6 +11,7 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/screen_insets.dart';
 
 /// Phase 1g — Toloul Recovery. Records solvent recovered from the Lurgi
 /// distillation as a `recovery` transaction (additive, valued at the CURRENT
@@ -108,7 +109,7 @@ class _State extends ConsumerState<InkTolulRecoveryScreen> {
             if (i.itemCode == _itemCode) selected = i;
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: ScreenInsets.symmetricScroll(context),
             children: [
               Form(
                 key: _formKey,

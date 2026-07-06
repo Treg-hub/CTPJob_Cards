@@ -12,6 +12,7 @@ import '../utils/formatters.dart';
 import '../utils/role.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../main.dart' show currentEmployee;
+import '../utils/screen_insets.dart';
 
 /// Manager-facing screen: schedule an upcoming waste load before the truck arrives.
 /// Creates a [WasteLoad] with status [scheduled] — no driver, items, or photos needed yet.
@@ -302,7 +303,7 @@ class _WasteScheduleLoadScreenState
               ),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: ScreenInsets.symmetricScroll(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

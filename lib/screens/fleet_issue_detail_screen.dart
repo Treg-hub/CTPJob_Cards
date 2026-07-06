@@ -17,6 +17,7 @@ import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import 'fleet_mark_fixed_screen.dart';
 import 'fleet_work_record_detail_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Detailed view of a single fleet issue.
 /// - Reporters: read-only
@@ -329,7 +330,7 @@ class _IssueBody extends StatelessWidget {
     final colors = Theme.of(context).extension<AppColors>();
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       children: [
         // ── Header ──────────────────────────────────────────────────────
         Text(issue.assetName,

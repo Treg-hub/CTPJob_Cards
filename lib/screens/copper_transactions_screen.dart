@@ -6,6 +6,7 @@ import '../providers/current_employee_provider.dart';
 import '../services/copper_service.dart';
 import '../models/copper_transaction.dart';
 import '../utils/role.dart';
+import '../utils/screen_insets.dart';
 
 class CopperTransactionsScreen extends ConsumerStatefulWidget {
   const CopperTransactionsScreen({super.key});
@@ -182,6 +183,7 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
                   return true;
                 }).toList();
                 return ListView.separated(
+                  padding: ScreenInsets.listPadding(context, horizontal: 8, top: 4),
                   itemCount: transactions.length,
                   separatorBuilder: (context, index) => const Divider(),
                   itemBuilder: (context, index) {

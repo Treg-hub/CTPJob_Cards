@@ -12,6 +12,7 @@ import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/screen_insets.dart';
 
 /// Phase 1M — Revaluation (manager / admin only, under instruction from
 /// accounts). Sets a new WAC for an item without changing quantity.
@@ -107,7 +108,7 @@ class _State extends ConsumerState<InkRevaluationScreen> {
           return Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: ScreenInsets.symmetricScroll(context),
               children: [
                 DropdownButtonFormField<String>(
                   // ignore: deprecated_member_use
