@@ -9,6 +9,7 @@ import '../models/parsed_document.dart';
 import '../models/security_scan_result.dart';
 import '../services/security_document_parser.dart';
 import '../utils/barcode_payload_util.dart';
+import '../utils/mobile_scanner_lifecycle.dart';
 import '../utils/screen_insets.dart';
 
 /// PDF417 scanner for SA license disc and ID documents.
@@ -61,6 +62,7 @@ class _SecurityDocumentScanScreenState
 
   bool _cameraReady = false;
   DateTime? _lastRejectNotice;
+  final MobileScannerStartGuard _startGuard = MobileScannerStartGuard();
 
   static bool _acceptsBarcodeFormat(
     SecurityDocumentType? expected,
@@ -108,6 +110,9 @@ class _SecurityDocumentScanScreenState
   @override
   void dispose() {
     _controller.removeListener(_onCameraStateChanged);
+    unawaited(
+      safeMobileScannerStop(_controller, debugName: 'security_document'),
+    );
     _controller.dispose();
     super.dispose();
   }
@@ -125,7 +130,10 @@ class _SecurityDocumentScanScreenState
         await _controller.toggleTorch();
         _torchOn = false;
       }
-      await _controller.stop();
+      await safeMobileScannerStop(
+        _controller,
+        debugName: 'security_document',
+      );
     } catch (_) {
       // Best-effort — route is closing or the controller never bound.
     }
@@ -133,15 +141,10 @@ class _SecurityDocumentScanScreenState
 
   Future<void> _ensureCameraStarted() async {
     if (!mounted || _confirmed) return;
-    try {
-      await _controller.start();
-    } catch (_) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      if (!mounted || _confirmed) return;
-      try {
-        await _controller.start();
-      } catch (_) {}
-    }
+    await _startGuard.start(
+      _controller,
+      debugName: 'security_document',
+    );
   }
 
   Future<void> _pop(dynamic value) async {
