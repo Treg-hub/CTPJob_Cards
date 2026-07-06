@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
+import '../models/work_report_additional_line.dart';
+import '../models/work_report_job_line.dart';
 import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
 import '../providers/work_report_provider.dart';
@@ -10,11 +12,14 @@ import '../services/firestore_service.dart';
 import '../services/work_report_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart';
+import '../utils/work_report_csv.dart';
+import '../utils/work_report_daily_hours.dart';
 import '../utils/work_report_pdf.dart';
 import '../utils/work_report_period_utils.dart';
 import '../widgets/ctp_app_bar.dart';
 import 'work_report_additional_work_screen.dart';
 import 'work_report_job_lines_screen.dart';
+import 'work_report_preview_screen.dart';
 
 class WorkReportHubScreen extends ConsumerStatefulWidget {
   const WorkReportHubScreen({super.key, this.initialSubjectClockNo});
@@ -28,6 +33,8 @@ class WorkReportHubScreen extends ConsumerStatefulWidget {
 
 class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
   bool _generatingPdf = false;
+  bool _exportingCsv = false;
+  bool _refreshingJobs = false;
 
   String get _actorClockNo => currentEmployee?.clockNo ?? '';
 
@@ -52,66 +59,130 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     }
   }
 
-  Future<void> _generatePdf(WorkReportService service) async {
+  Future<
+      ({
+        WorkReportPeriod period,
+        List<WorkReportJobLine> jobLines,
+        List<WorkReportAdditionalLine> additional,
+      })?> _loadExportData(WorkReportService service) async {
     final periodKey = ref.read(workReportPeriodKeyProvider);
     final clockNo = _subjectClockNo;
+    final settings =
+        ref.read(workReportSettingsProvider).valueOrNull ??
+            WorkReportSettings.defaults;
+
+    final period = await service
+        .watchPeriod(clockNo, periodKey)
+        .first
+        .timeout(const Duration(seconds: 10));
+    final jobLines = await service
+        .watchJobLines(clockNo, periodKey)
+        .first
+        .timeout(const Duration(seconds: 10));
+    final additional = await service
+        .watchAdditionalLines(clockNo, periodKey)
+        .first
+        .timeout(const Duration(seconds: 10));
+
+    service.validateDailyHoursCap(
+      additionalLines: additional,
+      settings: settings,
+    );
+
+    final subjectEmp = await FirestoreService().getEmployee(clockNo);
+    if (subjectEmp != null && currentEmployee != null) {
+      await service.ensurePeriodHeader(
+        clockNo: clockNo,
+        periodKey: periodKey,
+        subject: subjectEmp,
+        actor: currentEmployee!,
+      );
+    }
+
+    final periodForExport = period ??
+        await service
+            .watchPeriod(clockNo, periodKey)
+            .first
+            .timeout(const Duration(seconds: 10));
+
+    if (periodForExport == null) {
+      throw WorkReportValidationException(
+        'Add job card or additional work lines before exporting',
+      );
+    }
+
+    if (jobLines.isEmpty && additional.isEmpty) {
+      throw WorkReportValidationException(
+        'Add job card or additional work lines before exporting',
+      );
+    }
+
+    return (
+      period: periodForExport,
+      jobLines: jobLines,
+      additional: additional,
+    );
+  }
+
+  Future<void> _generatePdf(WorkReportService service) async {
     setState(() => _generatingPdf = true);
     try {
-      final period = await service
-          .watchPeriod(clockNo, periodKey)
-          .first
-          .timeout(const Duration(seconds: 10));
-      final jobLines = await service
-          .watchJobLines(clockNo, periodKey)
-          .first
-          .timeout(const Duration(seconds: 10));
-      final additional = await service
-          .watchAdditionalLines(clockNo, periodKey)
-          .first
-          .timeout(const Duration(seconds: 10));
+      final data = await _loadExportData(service);
+      if (data == null) return;
       final settings =
           ref.read(workReportSettingsProvider).valueOrNull ??
               WorkReportSettings.defaults;
 
-      service.validateDailyHoursCap(
-        additionalLines: additional,
+      var postPdfEdits = 0;
+      if (data.period.hasPdf &&
+          settings.includePostPdfEditNote &&
+          data.period.pdfGeneratedAt != null) {
+        postPdfEdits = await service.countEditsAfterPdf(
+          clockNo: data.period.clockNo,
+          periodKey: data.period.periodKey,
+          pdfGeneratedAt: data.period.pdfGeneratedAt!,
+        );
+      }
+
+      final bytes = await WorkReportPdfExporter.buildPdfBytes(
+        period: data.period,
+        jobLines: data.jobLines,
+        additionalLines: data.additional,
         settings: settings,
+        postPdfEditCount: postPdfEdits,
       );
 
-      final subjectEmp =
-          await FirestoreService().getEmployee(clockNo);
-      if (subjectEmp != null && currentEmployee != null) {
-        await service.ensurePeriodHeader(
-          clockNo: clockNo,
-          periodKey: periodKey,
-          subject: subjectEmp,
-          actor: currentEmployee!,
-        );
-      }
-
-      final periodForPdf = period ??
-          await service
-              .watchPeriod(clockNo, periodKey)
-              .first
-              .timeout(const Duration(seconds: 10));
-
-      if (periodForPdf == null) {
-        throw WorkReportValidationException(
-          'Add job card or additional work lines before generating PDF',
-        );
-      }
-
-      await WorkReportPdfExporter.generateAndShare(
-        period: periodForPdf,
-        jobLines: jobLines,
-        additionalLines: additional,
+      if (!mounted) return;
+      final shared = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WorkReportPreviewScreen(
+            period: data.period,
+            pdfBytes: bytes,
+            onShare: () async {
+              final file = await WorkReportPdfExporter.writePdfFile(
+                bytes: bytes,
+                period: data.period,
+              );
+              await WorkReportPdfExporter.sharePdfFile(
+                file: file,
+                period: data.period,
+              );
+              if (currentEmployee != null) {
+                await service.recordPdfGenerated(
+                  clockNo: data.period.clockNo,
+                  periodKey: data.period.periodKey,
+                  actor: currentEmployee!,
+                );
+              }
+            },
+          ),
+        ),
       );
 
-      if (currentEmployee != null) {
-        await service.recordPdfGenerated(
-          clockNo: clockNo,
-          periodKey: periodKey,
-          actor: currentEmployee!,
+      if (shared == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF shared')),
         );
       }
     } on WorkReportValidationException catch (e) {
@@ -131,6 +202,80 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     }
   }
 
+  Future<void> _exportCsv(WorkReportService service) async {
+    setState(() => _exportingCsv = true);
+    try {
+      final data = await _loadExportData(service);
+      if (data == null) return;
+      final settings =
+          ref.read(workReportSettingsProvider).valueOrNull ??
+              WorkReportSettings.defaults;
+      await WorkReportCsvExporter.generateAndShare(
+        period: data.period,
+        jobLines: data.jobLines,
+        additionalLines: data.additional,
+        settings: settings,
+      );
+    } on WorkReportValidationException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('CSV failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingCsv = false);
+    }
+  }
+
+  Future<void> _refreshJobList(WorkReportService service) async {
+    if (currentEmployee == null) return;
+    setState(() => _refreshingJobs = true);
+    try {
+      final subject = await FirestoreService().getEmployee(_subjectClockNo);
+      if (subject == null) {
+        throw WorkReportValidationException('Worker not found');
+      }
+      final settings =
+          ref.read(workReportSettingsProvider).valueOrNull ??
+              WorkReportSettings.defaults;
+      final added = await service.refreshJobLines(
+        clockNo: _subjectClockNo,
+        periodKey: ref.read(workReportPeriodKeyProvider),
+        settings: settings,
+        subject: subject,
+        actor: currentEmployee!,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added $added job card(s)')),
+        );
+      }
+    } on WorkReportValidationException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Refresh failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refreshingJobs = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(workReportSettingsProvider);
@@ -141,6 +286,12 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     );
     final service = ref.watch(workReportServiceProvider);
     final periodStream = service.watchPeriod(_subjectClockNo, periodKey);
+    final additionalStream =
+        service.watchAdditionalLines(_subjectClockNo, periodKey);
+    final editable = WorkReportPeriodUtils.isPeriodEditable(
+      periodKey,
+      editablePeriodsBack: settings.editablePeriodsBack,
+    );
 
     if (!canUseWorkReportModule(currentEmployee, settings)) {
       return Scaffold(
@@ -157,109 +308,210 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
         stream: periodStream,
         builder: (context, snapshot) {
           final period = snapshot.data;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (_isAdminView)
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.admin_panel_settings),
-                    title: Text('Viewing clock #$_subjectClockNo'),
-                    subtitle: Text(period?.employeeName ?? ''),
-                  ),
-                ),
-              if (isAdmin(currentEmployee))
-                _AdminWorkerPicker(settings: settings),
-              const SizedBox(height: 8),
-              Text('Period', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
+          return StreamBuilder(
+            stream: additionalStream,
+            builder: (context, addSnap) {
+              final additional = addSnap.data ?? const [];
+              final daily = WorkReportDailyHours.fromAdditionalLines(additional);
+              final hoursFmt = NumberFormat('#,##0.#');
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  for (final key in selectable)
-                    ChoiceChip(
-                      label: Text(WorkReportPeriodUtils.periodLabel(key)),
-                      selected: periodKey == key,
-                      onSelected: (_) {
-                        ref.read(workReportPeriodKeyProvider.notifier).state =
-                            key;
-                      },
+                  if (_isAdminView)
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.admin_panel_settings),
+                        title: Text('Viewing clock #$_subjectClockNo'),
+                        subtitle: Text(period?.employeeName ?? ''),
+                      ),
                     ),
+                  if (isAdmin(currentEmployee))
+                    _AdminWorkerPicker(settings: settings),
+                  const SizedBox(height: 8),
+                  Text('Period', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final key in selectable)
+                        ChoiceChip(
+                          label: Text(WorkReportPeriodUtils.periodLabel(key)),
+                          selected: periodKey == key,
+                          onSelected: (_) {
+                            ref.read(workReportPeriodKeyProvider.notifier).state =
+                                key;
+                          },
+                        ),
+                    ],
+                  ),
+                  if (period?.hasPdf == true) ...[
+                    const SizedBox(height: 12),
+                    _PdfWarningBanner(period: period!),
+                  ],
+                  const SizedBox(height: 16),
+                  _SummaryCard(
+                    label: 'Job card hours',
+                    value: period?.totalJobHours ?? 0,
+                    color: kBrandOrange,
+                  ),
+                  const SizedBox(height: 8),
+                  _SummaryCard(
+                    label: 'Additional hours',
+                    value: period?.totalAdditionalHours ?? 0,
+                    color: Theme.of(context).appColors.statusOpen,
+                  ),
+                  const SizedBox(height: 8),
+                  _SummaryCard(
+                    label: 'Total hours',
+                    value: period?.totalHours ?? 0,
+                    color: Theme.of(context).appColors.wasteGreen,
+                    bold: true,
+                  ),
+                  if (daily.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Additional work by day',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final d in daily)
+                          _DailyHoursChip(
+                            label: d.chipLabel(hoursFmt.format(d.hours)),
+                            overCap: d.hours > settings.maxHoursPerDay + 0.001,
+                            maxHours: settings.maxHoursPerDay,
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: !editable || _refreshingJobs
+                        ? null
+                        : () => _refreshJobList(service),
+                    icon: _refreshingJobs
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: Text(
+                      _refreshingJobs
+                          ? 'Refreshing job cards…'
+                          : 'Refresh job cards',
+                    ),
+                  ),
+                  if (period?.jobLinesRefreshedAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Last refreshed ${DateFormat('d MMM yyyy HH:mm').format(period!.jobLinesRefreshedAt!)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).appColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WorkReportJobLinesScreen(
+                          subjectClockNo: _subjectClockNo,
+                          periodKey: periodKey,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.assignment),
+                    label: const Text('Job cards for period'),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WorkReportAdditionalWorkScreen(
+                          subjectClockNo: _subjectClockNo,
+                          periodKey: periodKey,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.note_add),
+                    label: const Text('Additional work'),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed:
+                        _generatingPdf ? null : () => _generatePdf(service),
+                    icon: _generatingPdf
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.picture_as_pdf),
+                    label: Text(_generatingPdf ? 'Preparing…' : 'Preview & share PDF'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).appColors.wasteGreen,
+                      foregroundColor: onColor(
+                        Theme.of(context).appColors.wasteGreen,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _exportingCsv ? null : () => _exportCsv(service),
+                    icon: _exportingCsv
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.table_chart_outlined),
+                    label: Text(_exportingCsv ? 'Exporting…' : 'Export CSV'),
+                  ),
                 ],
-              ),
-              if (period?.hasPdf == true) ...[
-                const SizedBox(height: 12),
-                _PdfWarningBanner(period: period!),
-              ],
-              const SizedBox(height: 16),
-              _SummaryCard(
-                label: 'Job card hours',
-                value: period?.totalJobHours ?? 0,
-                color: kBrandOrange,
-              ),
-              const SizedBox(height: 8),
-              _SummaryCard(
-                label: 'Additional hours',
-                value: period?.totalAdditionalHours ?? 0,
-                color: Theme.of(context).appColors.statusOpen,
-              ),
-              const SizedBox(height: 8),
-              _SummaryCard(
-                label: 'Total hours',
-                value: period?.totalHours ?? 0,
-                color: Theme.of(context).appColors.wasteGreen,
-                bold: true,
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => WorkReportJobLinesScreen(
-                      subjectClockNo: _subjectClockNo,
-                      periodKey: periodKey,
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.assignment),
-                label: const Text('Job cards for period'),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => WorkReportAdditionalWorkScreen(
-                      subjectClockNo: _subjectClockNo,
-                      periodKey: periodKey,
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.note_add),
-                label: const Text('Additional work'),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed:
-                    _generatingPdf ? null : () => _generatePdf(service),
-                icon: _generatingPdf
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text(_generatingPdf ? 'Generating…' : 'Generate PDF'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).appColors.wasteGreen,
-                  foregroundColor: onColor(
-                    Theme.of(context).appColors.wasteGreen,
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           );
         },
+      ),
+    );
+  }
+}
+
+class _DailyHoursChip extends StatelessWidget {
+  const _DailyHoursChip({
+    required this.label,
+    required this.overCap,
+    required this.maxHours,
+  });
+
+  final String label;
+  final bool overCap;
+  final double maxHours;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: overCap ? 'Exceeds ${maxHours}h daily limit' : label,
+      child: Chip(
+        label: Text(label, style: const TextStyle(fontSize: 11)),
+        visualDensity: VisualDensity.compact,
+        backgroundColor: overCap
+            ? scheme.errorContainer.withValues(alpha: 0.5)
+            : scheme.surfaceContainerHighest,
+        side: BorderSide(
+          color: overCap ? scheme.error : scheme.outline.withValues(alpha: 0.4),
+        ),
       ),
     );
   }
@@ -439,7 +691,8 @@ class _AdminWorkerPickerState extends ConsumerState<_AdminWorkerPicker> {
             if (_loadingNames)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text('Loading names…', style: TextStyle(fontSize: 11, color: muted)),
+                child: Text('Loading names…',
+                    style: TextStyle(fontSize: 11, color: muted)),
               ),
           ],
         ),

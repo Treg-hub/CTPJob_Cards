@@ -2,6 +2,14 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **My Timesheet report gaps closed (2026-07-08)**:
+  - Daily hours chips on hub (additional work by day, over-cap warning).
+  - Hub **Refresh job cards** + `jobLinesRefreshedAt` on period doc.
+  - **PDF preview** before share (`printing` + `work_report_preview_screen.dart`).
+  - **CSV export** mobile + Pulse.
+  - Settings: `include_zero_hour_jobs`, `include_signature_block`, `include_post_pdf_edit_note`.
+  - PDF: full billing/work-done text, daily hours section, signature block, post-PDF audit note.
+
 - **My Timesheet UX + Pulse desktop PDF (2026-07-07)**:
   - **Dark mode hub**: theme-aware PDF warning banner; summary hours use `appColors` (no light-on-light amber card).
   - **Additional work**: date picker; job link picker from My Work + period job lines (`work_report_job_link_picker.dart`).

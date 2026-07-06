@@ -1354,6 +1354,7 @@ class SyncService {
     'periodStart',
     'periodEnd',
     'pdfGeneratedAt',
+    'jobLinesRefreshedAt',
     'lastUpdatedAt',
     'createdAt',
     'updatedAt',

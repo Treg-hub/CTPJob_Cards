@@ -201,8 +201,42 @@ class WorkReportService {
       }
     }
 
+    final periodId = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
+    await _writeDoc(
+      collection: Collections.workReportPeriods,
+      docId: periodId,
+      operation: 'set',
+      data: {
+        'jobLinesRefreshedAt': FieldValue.serverTimestamp(),
+        'lastUpdatedByClockNo': actor.clockNo,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+      },
+      merge: true,
+    );
+
     await _recomputePeriodTotals(clockNo, periodKey, actor.clockNo);
     return added;
+  }
+
+  /// Admin edits logged after [pdfGeneratedAt], for PDF footnote.
+  Future<int> countEditsAfterPdf({
+    required String clockNo,
+    required String periodKey,
+    required DateTime pdfGeneratedAt,
+  }) async {
+    final snap = await _db
+        .collection(Collections.workReportAudit)
+        .where('clockNo', isEqualTo: clockNo)
+        .where('periodKey', isEqualTo: periodKey)
+        .get();
+    var count = 0;
+    for (final doc in snap.docs) {
+      final editedAt = doc.data()['editedAt'];
+      DateTime? dt;
+      if (editedAt is Timestamp) dt = editedAt.toDate();
+      if (dt != null && dt.isAfter(pdfGeneratedAt)) count++;
+    }
+    return count;
   }
 
   Future<void> upsertJobLine({

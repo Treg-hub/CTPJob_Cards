@@ -16,6 +16,7 @@ class WorkReportPeriod {
   final int pdfVersion;
   final DateTime? lastUpdatedAt;
   final String lastUpdatedByClockNo;
+  final DateTime? jobLinesRefreshedAt;
 
   const WorkReportPeriod({
     required this.id,
@@ -33,6 +34,7 @@ class WorkReportPeriod {
     this.pdfVersion = 0,
     this.lastUpdatedAt,
     this.lastUpdatedByClockNo = '',
+    this.jobLinesRefreshedAt,
   });
 
   bool get hasPdf => pdfGeneratedAt != null;
@@ -63,6 +65,7 @@ class WorkReportPeriod {
       pdfVersion: data['pdfVersion'] as int? ?? 0,
       lastUpdatedAt: _ts(data['lastUpdatedAt']),
       lastUpdatedByClockNo: data['lastUpdatedByClockNo'] as String? ?? '',
+      jobLinesRefreshedAt: _ts(data['jobLinesRefreshedAt']),
     );
   }
 
@@ -82,5 +85,7 @@ class WorkReportPeriod {
         'pdfVersion': pdfVersion,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
         'lastUpdatedByClockNo': lastUpdatedByClockNo,
+        if (jobLinesRefreshedAt != null)
+          'jobLinesRefreshedAt': Timestamp.fromDate(jobLinesRefreshedAt!),
       };
 }

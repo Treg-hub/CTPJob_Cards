@@ -48,6 +48,12 @@ class WorkReportSettings {
   final int editablePeriodsBack;
   final double maxHoursPerDay;
   final WorkReportInclusionRules inclusionRules;
+  /// When false, job lines with 0h are omitted from PDF/CSV exports.
+  final bool includeZeroHourJobs;
+  /// Worker + approver signature lines at the foot of the PDF.
+  final bool includeSignatureBlock;
+  /// Note on PDF when edits occurred after the last generated PDF.
+  final bool includePostPdfEditNote;
 
   const WorkReportSettings({
     this.enabled = false,
@@ -56,6 +62,9 @@ class WorkReportSettings {
     this.editablePeriodsBack = 1,
     this.maxHoursPerDay = 24,
     this.inclusionRules = const WorkReportInclusionRules(),
+    this.includeZeroHourJobs = true,
+    this.includeSignatureBlock = true,
+    this.includePostPdfEditNote = true,
   });
 
   static const WorkReportSettings defaults = WorkReportSettings();
@@ -92,6 +101,10 @@ class WorkReportSettings {
       inclusionRules: WorkReportInclusionRules.fromMap(
         data['job_inclusion_rules'] as Map<String, dynamic>?,
       ),
+      includeZeroHourJobs: data['include_zero_hour_jobs'] as bool? ?? true,
+      includeSignatureBlock: data['include_signature_block'] as bool? ?? true,
+      includePostPdfEditNote:
+          data['include_post_pdf_edit_note'] as bool? ?? true,
     );
   }
 
@@ -102,5 +115,8 @@ class WorkReportSettings {
         'editable_periods_back': editablePeriodsBack,
         'max_hours_per_day': maxHoursPerDay,
         'job_inclusion_rules': inclusionRules.toFirestore(),
+        'include_zero_hour_jobs': includeZeroHourJobs,
+        'include_signature_block': includeSignatureBlock,
+        'include_post_pdf_edit_note': includePostPdfEditNote,
       };
 }

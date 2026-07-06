@@ -603,7 +603,13 @@ Add-item uses a `showModalBottomSheet` (not a dialog) for camera stability. Call
 
 Single-screen flow: contractor, multi-select waste types (`selected_waste_types`), optional stock, driver/vehicle, and items via bottom sheet.
 
-Add-item uses `showModalBottomSheet` (camera-safe). Subtypes are loaded dynamically from the selected `WasteType.subtypes` — not hardcoded.
+Add-item uses `showModalBottomSheet` (camera-safe). Subtypes are loaded dynamically from the selected `WasteType.subtypes` — not hardcoded. **Waste type selection in the add-item sheet uses `FilterChip`s (one tap)** instead of a dropdown.
+
+**Local draft** (`lib/utils/waste_create_load_draft.dart`): driver/vehicle/paper-ref/notes, contractor, selected types, items (incl. local photo paths), and stock selection persist to SharedPreferences (`wasteCreateLoadDraft_{clockNo}`) on field change, item add/remove, and app backgrounding. Restored on re-open with a snackbar. **Discard draft & start over** clears the saved draft and resets the form. Draft is cleared on successful save.
+
+Form fields use `TextEditingController`s so values stay visible after each item add (`setState` rebuild).
+
+Scroll content uses `ScreenInsets` for bottom safe-area clearance.
 
 On successful save, `saveCompleteWasteLoad` returns the new load ID. The screen immediately fetches the full load and `pushReplacement`s to **Waste Load Detail** so the user can capture the signature without navigating back through the home screen.
 
@@ -611,10 +617,11 @@ On successful save, `saveCompleteWasteLoad` returns the new load ID. The screen 
 
 #### Key Actions
 
-- **Add Item** — slide-up sheet: select subtype, enter weight, attach photo(s)
+- **Add Item** — slide-up sheet: tap waste-type chip, enter weight, attach photo(s)
 - **Remove Item** — tap × on item card
+- **Discard draft & start over** — clears local draft when restarting a load
 - **Create Load** — validates required fields and items, saves via `saveCompleteWasteLoad`, navigates to detail on success
-- Offline: item writes are queued via `SyncService` if connectivity is lost
+- Offline: item writes are queued via `SyncService` if connectivity is lost; draft keeps in-progress form data on device
 
 ### Waste Signature
 
