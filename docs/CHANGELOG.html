@@ -40,9 +40,243 @@ from this log. Whatever you write here is what staff will read next time
 they open the docs portal.</p>
 <hr />
 <h2
+id="2026-07-06--version-230-build-116--everything-since-v211-build-38">2026-07-06
+— Version 2.3.0 (build 116) — everything since v2.1.1 (build 38)</h2>
+<p>This is the wide rollout. If you have been on <strong>v2.1.1 (build
+38)</strong> since 17 June, here is everything that has changed in
+<strong>v2.3.0</strong>. Four whole modules are new — <strong>Site
+Security</strong>, <strong>Fleet Maintenance</strong>, <strong>Ink
+Factory</strong>, and <strong>Waste Recovery</strong> — alongside major
+reliability work, a refreshed Home screen, and a long list of job-card
+and Admin improvements. The dated entries below carry finer detail; role
+guides for each module are in <strong>Settings →
+Documentation</strong>.</p>
+<p>The first time you open this build, a <strong>What's changed</strong>
+sheet shows this summary. Tap <strong>Full changelog</strong> any time
+for the complete history.</p>
+<h3 id="new-module--site-security-gate-staff">New module — Site Security
+(gate staff)</h3>
+<p>Security guards get a dedicated module for controlling the main
+gate:</p>
+<ul>
+<li><strong>Two gate entry points</strong> — <strong>Visitor /
+Contractor Vehicle</strong> and <strong>Company Car</strong> (shorter,
+purpose-built forms instead of one combined screen). Gate tools live on
+the <strong>Security</strong> tab, not the Home quick-actions grid.</li>
+<li><strong>Scan-first vehicle flows</strong> — scan the licence disc
+and the <strong>number plate</strong> is read automatically (including
+newer MVL disc formats). Scanning the wrong document (e.g. the disc
+again on the licence step) shows <strong>Incorrect scan</strong> and
+does not accept it.</li>
+<li><strong>Disc → licence chain</strong> — after a successful disc scan
+on visitor entry (or company-car exit), the driver's-licence scanner
+opens automatically. You can tick <strong>Driver's licence not
+scanned</strong> and pick a reason (<strong>No licence</strong>,
+<strong>Disc expired</strong>, <strong>Licence expired</strong>,
+<strong>Other</strong>) when needed.</li>
+<li><strong>Damaged disc</strong> — visitors type the registration;
+company cars pick from the registered list only. If a typed visitor
+plate matches a company car, a <strong>Switch</strong> banner opens the
+Company Car flow.</li>
+<li><strong>Compliance &amp; audit</strong> — expired disc/licence needs
+an override reason (shown only when compliance actually warns).
+<strong>Force sign out</strong> (⋮ menu on <strong>On Site</strong>)
+clears stuck vehicles/visitors with a recorded reason. Re-entry without
+an exit auto-closes the stale visit and flags it for review.</li>
+<li><strong>Photos on every gate flow</strong> — attach photos on
+visitor entry/exit and company-car exit/return. Company-car trips and
+mileage survive going offline.</li>
+<li><strong>On-Foot Visitor</strong> — walk-in capture with optional ID
+scan.</li>
+<li><strong>On Site view</strong> — tabbed live view of vehicles and
+visitors, ordered by server event time so multiple devices agree.</li>
+<li><strong>Guard home hub</strong> — guards see a <strong>Your
+modules</strong> home (Site Security + Waste Recovery) instead of
+job-card tiles; the app can open straight into Security. Managers and
+admins keep the full job-card home plus Security and Waste tabs.</li>
+<li><strong>Scan tester</strong> — <strong>Settings → Admin → Scan
+Tester</strong> for verifying disc and licence scanning before
+go-live.</li>
+<li><strong>Kiosk mode</strong> — a dedicated gate tablet can be locked
+to this app only (no home screen, no other apps, survives reboots).</li>
+</ul>
+<h3 id="new-module--fleet-maintenance-forklifts-grabs--bt">New module —
+Fleet Maintenance (forklifts, grabs &amp; BT)</h3>
+<p>A full fault-and-fix system for the fleet:</p>
+<ul>
+<li><strong>Who gets it</strong> — configured in <strong>Fleet
+Settings</strong> on CTP Pulse. <strong>Reporters</strong> by
+department; machines can be department-scoped.
+<strong>Mechanics</strong> and <strong>cost managers</strong> by clock
+number.</li>
+<li><strong>Report a problem</strong> — guided wizard: machine, urgency,
+description, optional photo. Reports are <strong>permanent</strong>; the
+mechanic's fix is recorded separately.</li>
+<li><strong>Daily pre-use safety check</strong> — 14-item checklist with
+start hour meter; <strong>Faulty</strong> auto-raises a mechanic fault.
+End-shift captures closing hour meter. Separate from fault
+reporting.</li>
+<li><strong>Mechanic view</strong> — work queue, log work records,
+machine hours. Work records lock after a set window. Mechanics
+<strong>never see costs</strong> on mobile.</li>
+<li><strong>Mechanic polish</strong> — urgent banner clears when the
+linked issue is resolved; log-work forms show all fields flat (no
+collapsed "More details"). Dismissible on-screen tips while learning the
+module.</li>
+<li><strong>Notifications</strong> — out-of-service reports push
+immediately; fleet notifications deep-link to the fault.</li>
+</ul>
+<h3 id="new-module--ink-factory">New module — Ink Factory</h3>
+<p>Ink store and Lurgi operations move off paper. <strong>Phone =
+capture; CTP Pulse = management</strong> — operators never see money on
+mobile.</p>
+<ul>
+<li><strong>Mobile hub</strong> — receive stock, meter readings,
+production runs, Toloul recovery, IBC register, stock balances.
+Month-end, costing, recipes, corrections, and reports live on CTP
+Pulse.</li>
+<li><strong>Barcode-driven receiving</strong> — IBCs and raw materials
+against a Pulse shipment or PO; scanner validates serials, pre-fills
+colour/weight, torch in low light.</li>
+<li><strong>Consume by QR</strong> — scan-and-confirm with wash
+quantities; damaged-IBC toggle keeps broken containers out of waste-bin
+stock.</li>
+<li><strong>Combined daily readings</strong> — all ink meters and Toloul
+points on one screen, one submit; blank fields skipped. Cyan
+<strong>Daily readings incomplete</strong> banner on Home when today's
+readings are outstanding.</li>
+<li><strong>Toloul factory vs Lurgi</strong> — separate factory-tank and
+Lurgi balances; <strong>Lurgi low</strong> alert when below
+threshold.</li>
+<li><strong>Safe corrections</strong> — production runs, IBC
+consumptions, and meter sessions can be <strong>voided</strong> (fully
+reversed). Month-end counts snapshot stock values; backdating past
+month-end is admin-only.</li>
+<li><strong>Ink tiles are cyan</strong> — Ink Factory and Daily Readings
+use cyan (#06B6D4), distinct from job-card orange.</li>
+</ul>
+<h3 id="new-module--waste-recovery">New module — Waste Recovery</h3>
+<p>Tracks every waste load leaving the site (permanent
+<strong>W-NNNN</strong> load numbers):</p>
+<ul>
+<li><strong>Managers schedule, guards capture</strong> — schedule on
+Pulse; <strong>Begin Collection</strong> on the phone.
+Create-from-scratch at the gate follows the same rules (paper doc ref,
+photos/signatures per settings, audited overrides). Vehicle and trailer
+registrations captured.</li>
+<li><strong>On-site stock builds itself</strong> — IBC consume auto-adds
+<strong>IBC Bins</strong> stock; copper at <strong>400 kg</strong>
+auto-creates <strong>Copper Waste</strong> for managers.</li>
+<li><strong>Offline you can trust</strong> — photos and signatures
+stored safely, retry automatically, status on the Queued screen;
+unrecoverable media flagged clearly.</li>
+<li><strong>14-day home window</strong> — lists show the last 14 days;
+full history on Pulse.</li>
+</ul>
+<h3 id="job-cards--home">Job cards &amp; Home</h3>
+<ul>
+<li><strong>Off-site made clear</strong> — Create Job Card greys out
+off-site with a reason; tapping explains why.</li>
+<li><strong>Quick Actions</strong> — colour-grouped tiles (job cards
+orange, Ink cyan, Fleet slate, Daily Review gold); uniform size on every
+screen size; centred on phones; gate tiles removed from Home (use
+Security tab).</li>
+<li><strong>Job card tiles</strong> — flatter cards, priority border,
+compact description, grouped comments/notes; orange job-number badge on
+lists (Home, View Jobs, My Work, History, Daily Review).</li>
+<li><strong>Job Card History</strong> — auto-loads last 30 days; date
+chips always visible; location filters in a bottom sheet.</li>
+<li><strong>Tips you can hide</strong> — guidance tips on Create Job
+Card have a <strong>×</strong> dismiss; restore in <strong>Settings →
+Preferences → Job Card Tips</strong>.</li>
+<li><strong>Presence app bars</strong> — orange → green/red gradient on
+pushed Job Cards screens when on/off site.</li>
+<li><strong>Brand orange</strong> updated to terracotta
+(<code>#C25F3A</code>).</li>
+<li><strong>Fits your screen</strong> — edge-to-edge with corrected safe
+areas; submit bars no longer hidden behind the gesture bar.</li>
+<li><strong>My Feedback</strong> — Home FAB opens your submissions with
+two-way reply threads; admins triage from Admin.</li>
+</ul>
+<h3 id="reliability--updates">Reliability &amp; updates</h3>
+<ul>
+<li><strong>What's changed sheet</strong> — first launch after each
+update shows release notes (once per build); <strong>Settings →
+Documentation → Changelog</strong> for full history.</li>
+<li><strong>No more blank Home after sign-in</strong> — if lists were
+refused briefly after login, the app self-heals: refreshes access,
+retries streams, shows <strong>Waiting for connection…</strong> instead
+of false empty states. <strong>Session expired</strong> banner with
+<strong>Sign in</strong> when your account lapsed.</li>
+<li><strong>Geofence resume fix</strong> — opening the app after an
+<strong>arrived on-site</strong> notification no longer leaves Home
+incomplete (missing Fleet/Security tabs, empty Recent Job Cards).
+Presence, module settings, and job streams refresh on resume.</li>
+<li><strong>Steadier scanners</strong> — document scanners wait for the
+camera to be ready before starting, reducing rare crashes on some
+Android devices.</li>
+<li><strong>Smoother navigation</strong> — consistent slide transitions
+and edge-swipe back.</li>
+</ul>
+<h3 id="notifications--presence">Notifications &amp; presence</h3>
+<ul>
+<li><strong>Permission health</strong> — Home banner watches all six
+Android settings job alerts depend on, with one-tap <strong>Fix</strong>
+for each.</li>
+<li><strong>iPhone / web</strong> — notifications delivered reliably to
+the in-app inbox.</li>
+<li><strong>Steadier on-site detection</strong> — fixes for multi-device
+snackbar spam and less trigger-happy boundary transitions.</li>
+</ul>
+<h3 id="admin">Admin</h3>
+<ul>
+<li><strong>Refreshed Admin</strong> — five tabs opening on Settings;
+searchable employee cards with tap-to-toggle on-site; Structures with
+search and duplicate protection. Job-card exports moved to CTP
+Pulse.</li>
+<li><strong>User feedback board</strong> — triage submissions (New →
+Planned → Implemented → Declined) with private notes and two-way reply
+threads.</li>
+<li><strong>Role testing</strong> — preview as any role with <strong>all
+writes blocked</strong>.</li>
+<li><strong>Targeted broadcasts</strong> — message specific clock
+numbers; On Site tab shows permission health and 14-hour stuck-on-site
+flags.</li>
+</ul>
+<hr />
+<h2
+id="2026-07-05--gate-friendly-security-flows-job-card-polish">2026-07-05
+— Gate-friendly security flows, job-card polish</h2>
+<h3 id="site-security">Site Security</h3>
+<ul>
+<li><strong>Two gate entry points.</strong> Site Security home now has
+<strong>Visitor / Contractor Vehicle</strong> and <strong>Company
+Car</strong> instead of one combined <strong>Vehicle at Gate</strong>
+screen — shorter forms for guards.</li>
+<li><strong>Damaged disc on visitors.</strong> Tick <strong>Disc damaged
+/ cannot scan</strong>, type the registration (no company-car dropdown).
+If the plate matches a company car, a <strong>Switch</strong> banner
+opens the Company Car flow with that vehicle pre-selected.</li>
+<li><strong>Damaged disc on company cars.</strong> Pick the vehicle from
+the registered list only — no typing the plate manually.</li>
+</ul>
+<h3 id="look--feel">Look &amp; feel</h3>
+<ul>
+<li><strong>Brand orange</strong> updated to terracotta
+(<code>#C25F3A</code>). Home Quick Actions centre on phone.</li>
+<li><strong>Presence app bars</strong> (<code>CtpAppBar</code>): orange
+→ green/red gradient on pushed Job Cards screens when on/off site.</li>
+<li><strong>Job Card History</strong> auto-loads last 30 days; date
+chips always visible; location filters in a bottom sheet.</li>
+<li><strong>Fleet mechanic</strong> urgent banner clears when the linked
+issue is resolved; log-work forms show all fields flat (no collapsed
+"More details").</li>
+</ul>
+<hr />
+<h2
 id="2026-07-04--sharper-job-cards-cyan-ink-tiles-build-220110">2026-07-04
 — Sharper job cards, cyan Ink tiles (build 2.2.0+110)</h2>
-<h3 id="look--feel">Look &amp; feel</h3>
+<h3 id="look--feel-1">Look &amp; feel</h3>
 <ul>
 <li><strong>Job card lists read cleaner.</strong> The shared job card
 tile (Home <strong>Recent Job Cards</strong>, View Jobs, My Work,
@@ -61,7 +295,7 @@ indigo — clearer on dark theme and distinct from job-card orange.</li>
 <h2
 id="2026-07-04--site-security-fixes-clearer-job-card-tips-ink-reminder-colour">2026-07-04
 — Site Security fixes, clearer job-card tips, ink reminder colour</h2>
-<h3 id="site-security">Site Security</h3>
+<h3 id="site-security-1">Site Security</h3>
 <ul>
 <li><strong>Vehicle disc scan now reads the number plate.</strong>
 Scanning a licence disc was showing the internal vehicle-register
@@ -150,7 +384,7 @@ simply finishes the job.</li>
 Waste, and Site Security tabs that were missing because you opened the
 app offline now appear automatically once you reconnect.</li>
 </ul>
-<h3 id="look--feel-1">Look &amp; feel</h3>
+<h3 id="look--feel-2">Look &amp; feel</h3>
 <ul>
 <li><strong>Smoother screen transitions.</strong> Moving between screens
 — especially going back — is now a clean, consistent slide instead of

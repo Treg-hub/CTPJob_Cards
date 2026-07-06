@@ -35,8 +35,58 @@
 and the fastest fix path for each. Sections are grouped by what the user
 sees, not by component.</p>
 <hr />
-<h2 id="notifications-not-arriving">Notifications not arriving</h2>
+<h2 id="home-screen-is-empty-or-incomplete-after-signing-in">Home screen
+is empty or incomplete after signing in</h2>
 <h3 id="symptoms">Symptoms</h3>
+<ul>
+<li>You signed in but Home shows no jobs, no counts, and no inbox
+badge</li>
+<li>After tapping an <strong>arrived on-site</strong> notification, Home
+is missing Fleet/Security tabs, quick-action tiles, or Recent Job Cards
+(skeleton placeholders that never fill in)</li>
+<li>It used to only fix itself after force-closing and reopening the
+app</li>
+</ul>
+<h3 id="what-the-app-now-does-automatically-v230--build-116-onward">What
+the app now does automatically (v2.3.0 / build 116 onward)</h3>
+<ol type="1">
+<li><strong>Self-healing data streams</strong> — if a live list is
+refused right after sign-in (a brief permissions/timing race while your
+access token catches up), the app refreshes your access and retries in
+the background with a short backoff. It also re-tries whenever your
+connection returns or you switch back to the app. You should see the
+screen fill in within a few seconds without doing anything.</li>
+<li><strong>Resume hydration</strong> — when you open the app from the
+background (including after a geofence notification), Home refreshes
+your on-site status, module settings (Fleet, Waste, Security tabs), and
+job-card streams so tiles and lists match reality without a
+restart.</li>
+<li><strong>Offline vs empty</strong> — an empty list from a cold start
+now shows <strong>"Waiting for connection…"</strong> with placeholders,
+not "No recent jobs". If you genuinely have no jobs, it says so only
+once the server has confirmed it.</li>
+<li><strong>Session-expired banner</strong> — if the emptiness is
+because your sign-in has lapsed (signed out elsewhere, account
+disabled/changed), a red <strong>"Session expired — sign in
+again"</strong> banner appears at the top of Home. Tap <strong>Sign
+in</strong>. Your queued offline work is preserved and syncs after you
+re-authenticate.</li>
+</ol>
+<h3 id="if-its-still-empty-or-incomplete">If it's still empty or
+incomplete</h3>
+<ol type="1">
+<li>Check the signal and the sync badge at the top of Home (see "Sync
+stuck" below).</li>
+<li>Pull the app to the foreground / background once — this re-arms the
+retries, permission re-checks, and resume hydration.</li>
+<li>If a <strong>"Your account is no longer active"</strong> banner
+shows, your employee profile was removed on the back office — contact
+Admin.</li>
+<li>As a last resort, sign out (Settings → Sign out) and back in.</li>
+</ol>
+<hr />
+<h2 id="notifications-not-arriving">Notifications not arriving</h2>
+<h3 id="symptoms-1">Symptoms</h3>
 <ul>
 <li>You're on site but didn't get an alert for a P3+ job in your
 trade</li>
@@ -76,7 +126,7 @@ Message) to specific clock numbers asking users to fix permissions.</p>
 <hr />
 <h2 id="full-screen-p5-alarm-not-firing">Full-screen P5 alarm not
 firing</h2>
-<h3 id="symptoms-1">Symptoms</h3>
+<h3 id="symptoms-2">Symptoms</h3>
 <ul>
 <li>P5 jobs arrive as a regular banner instead of a screen-takeover with
 loud alarm</li>
@@ -102,7 +152,7 @@ page.</li>
 </ol>
 <hr />
 <h2 id="geofence-not-triggering">Geofence not triggering</h2>
-<h3 id="symptoms-2">Symptoms</h3>
+<h3 id="symptoms-3">Symptoms</h3>
 <ul>
 <li>Walking onto site doesn't flip you to on-site</li>
 <li>You never receive job alerts even with all other permissions
@@ -134,7 +184,7 @@ whether the OS is even sending location updates.</p>
 <hr />
 <h2 id="job-card-creation-blocked--no-connection-banner">Job card
 creation blocked — "No connection" banner</h2>
-<h3 id="symptoms-3">Symptoms</h3>
+<h3 id="symptoms-4">Symptoms</h3>
 <ul>
 <li>The Create Job Card screen shows a red banner and the Save button is
 disabled</li>
@@ -154,7 +204,7 @@ data or Wi-Fi is actually connected (not just "on") and that airplane
 mode is not active.</p>
 <hr />
 <h2 id="job-cards-not-syncing">Job cards not syncing</h2>
-<h3 id="symptoms-4">Symptoms</h3>
+<h3 id="symptoms-5">Symptoms</h3>
 <ul>
 <li>You updated a job but the change doesn't appear for others</li>
 <li>Closure note didn't save after going offline</li>
@@ -215,7 +265,7 @@ extend <code>lib/utils/role.dart</code> to recognise it.</p>
 <hr />
 <h2 id="login-fails--no-employee-profile-found">Login fails / "No
 employee profile found"</h2>
-<h3 id="symptoms-5">Symptoms</h3>
+<h3 id="symptoms-6">Symptoms</h3>
 <ul>
 <li>Firebase Auth accepts the password</li>
 <li>App immediately shows "No employee profile found. Please register
@@ -236,7 +286,7 @@ create one.</p>
 <hr />
 <h2 id="escalation-didnt-reach-me-even-though-im-a-manager">Escalation
 didn't reach me even though I'm a manager</h2>
-<h3 id="symptoms-6">Symptoms</h3>
+<h3 id="symptoms-7">Symptoms</h3>
 <ul>
 <li>A job hit Stage 2 escalation and the dashboard logged it</li>
 <li>You're on-site and have the right position, but you didn't get an

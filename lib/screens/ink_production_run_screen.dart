@@ -226,7 +226,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
       title: Text(item?.displayName ?? '?'),
       subtitle: negative
           ? Text(
-              'Only ${_qty.format(onHand)} ${item!.unit} in factory tank',
+              'Only ${_qty.format(onHand)} ${item.unit} in factory tank',
               style: TextStyle(
                   color: Theme.of(context).colorScheme.error))
           : null,
