@@ -13,7 +13,7 @@ A real-time digital maintenance management system. Explore every feature — fro
 |------|-------|
 | Priority Levels | 5 |
 | Escalation Stages | 4 |
-| User Roles | 4 |
+| Job-card roles | 4 (+ module roles: Security, Waste, Fleet, Ink) |
 | First Escalation | 5 min |
 
 ---
@@ -54,7 +54,8 @@ Live:
 - Light & dark theme
 - Notification action buttons
 - Copper Inventory module (clock-number restricted)
-- WasteTrack module (Security department)
+- WasteTrack module (Security department field capture; managers on Pulse for weighbridge)
+- Site Security module (gate scan in/out, company cars, on-foot visitors — guards: module hub home, no job-card tiles)
 - Fleet Maintenance module (Hyster forklifts & grabs)
 - Ink Factory module (production stock inventory)
 
@@ -66,9 +67,11 @@ Planned:
 
 ## User Roles
 
-*Four roles with distinct access scopes and responsibilities*
+*Job-card roles plus module-specific access*
 
 Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is controlled by the `isAdmin` boolean field on the employee's Firestore document. To grant or revoke Admin, edit that field directly — no code change or app release is needed.
+
+**Site Security guards** (`isSiteSecurityGuardOnly`) use a **module hub** on Home — Waste + Security module cards only; no Create Job Card, My Work, or View Jobs. **Security managers** keep the standard job-card Home plus Security and Waste tabs. See the in-app **Site Security** guides under Documentation.
 
 ### Operator
 

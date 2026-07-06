@@ -48,6 +48,9 @@ import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
 import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
+import 'work_report_hub_screen.dart';
+import '../models/work_report_settings.dart';
+import '../providers/work_report_provider.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
 import 'fleet_reporter_home_screen.dart';
@@ -563,7 +566,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
   // carries its own amber constant so its pulse animation can override it.
 
-  List<Map<String, dynamic>> get _quickActions {
+  List<Map<String, dynamic>> _quickActions(WorkReportSettings? workReportSettings) {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
     final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': _jobCardsGroup, 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
     final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
@@ -631,6 +634,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 context,
                 MaterialPageRoute(
                     builder: (_) => const InkDailyReadingsScreen()),
+              ),
+        },
+      ];
+    }
+    if (role_utils.canUseWorkReportModule(
+        currentEmployee, workReportSettings)) {
+      result = [
+        ...result,
+        {
+          'title': 'My Timesheet',
+          'icon': Icons.schedule,
+          'color': const Color(0xFF0D9488),
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const WorkReportHubScreen()),
               ),
         },
       ];
@@ -1283,8 +1302,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildQuickActionsGrid() {
+    final workReportSettings =
+        ref.watch(workReportSettingsProvider).valueOrNull;
     final tiles = <Widget>[
-      ..._quickActions.map((action) => _buildQuickActionCard(
+      ..._quickActions(workReportSettings).map((action) => _buildQuickActionCard(
             action['title'] as String,
             action['icon'] as IconData,
             action['color'] as Color,
@@ -1722,7 +1743,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   bool _operatorRestrictedFor(JobCard job) =>
-      isOperator && job.type != JobType.maintenance;
+      role_utils.isOperatorRestrictedForJob(currentEmployee, job);
 
   Future<void> _startWork(JobCard job) async {
     if (!guardPersonaSubmit(context)) return;

@@ -108,6 +108,13 @@ class Collections {
   static const String inkPurchaseOrders = 'ink_purchase_orders'; // forecast/reorder PO workflow (Pulse); mobile links receipts
   static const String inkAudit = 'ink_audit';
 
+  // ----- My Timesheet / Work Report (work_report_ prefix) -----
+  static const String workReportSettings = 'work_report_settings';
+  static const String workReportPeriods = 'work_report_periods';
+  static const String workReportJobLines = 'work_report_job_lines';
+  static const String workReportAdditionalLines = 'work_report_additional_lines';
+  static const String workReportAudit = 'work_report_audit';
+
   // ----- CTP Pulse (pulse_ prefix) -----
   // Admin scan-tester captures — raw barcode payloads for parser development.
   // Written from Job Cards mobile (Scan Tester); reviewed in Pulse Settings.

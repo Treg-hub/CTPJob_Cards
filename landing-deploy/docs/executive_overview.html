@@ -34,10 +34,14 @@
 Overview</h1>
 <hr />
 <h2 id="what-the-system-is">What the System Is</h2>
-<p>The CTP Job Cards platform is a real-time digital maintenance
-management system built for the plant. It replaces paper-based, radio,
-and verbal fault-reporting processes with a structured, tracked, and
-auditable system accessible from every employee's mobile phone.</p>
+<p>The CTP Job Cards platform is the <strong>central CTP mobile
+app</strong> (still branded Job Cards) for plant operations. Its core is
+real-time digital maintenance management — structured job cards,
+notifications, and escalation — and it also hosts integrated modules:
+<strong>Waste Recovery</strong>, <strong>Site Security</strong>,
+<strong>Fleet Maintenance</strong>, and <strong>Ink Factory</strong>
+field capture. Manager desks for weighbridge, gate-log reporting, and
+board KPIs live on <strong>CTP Pulse</strong>.</p>
 <p>The platform is built on Google Firebase — enterprise-grade cloud
 infrastructure — and is designed to be always available,
 offline-capable, and scalable without requiring any on-site IT
@@ -94,6 +98,54 @@ monitors escalations, and identifies recurring failure patterns.</td>
 <td><strong>Admin</strong></td>
 <td>Manages system configuration, employee accounts, geofence settings,
 and access control.</td>
+</tr>
+<tr>
+<td><strong>Security Guard</strong></td>
+<td>Site Security + Waste field capture on mobile; <strong>module hub
+home</strong> (no job-card tiles). Never uses CTP Pulse.</td>
+</tr>
+<tr>
+<td><strong>Security Manager</strong></td>
+<td>Mobile gate scans + company car costs; CTP Pulse desk for gate log,
+reports, and deny list.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="integrated-modules-same-app">Integrated modules (same app)</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Mobile (this app)</th>
+<th>Manager desk (CTP Pulse)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Job Cards</strong></td>
+<td>Create, assign, escalate, close</td>
+<td>Read-only KPIs and list (<code>/jobs</code>)</td>
+</tr>
+<tr>
+<td><strong>Waste Recovery</strong></td>
+<td>Schedule, collect, stock link (guards/managers)</td>
+<td>Weighbridge, cost review, reports</td>
+</tr>
+<tr>
+<td><strong>Site Security</strong></td>
+<td>Scan in/out, company cars, visitors</td>
+<td>Gate log, on-site, exports, deny list</td>
+</tr>
+<tr>
+<td><strong>Fleet Maintenance</strong></td>
+<td>Reporters + mechanics (zero cost UI on floor)</td>
+<td>Cost managers link spend, reports</td>
+</tr>
+<tr>
+<td><strong>Ink Factory</strong></td>
+<td>Operators record production / meters</td>
+<td>Managers: ledger, shipments, month-end</td>
 </tr>
 </tbody>
 </table>
@@ -372,6 +424,22 @@ default)</td>
 </tr>
 <tr>
 <td>Notification action buttons (Assign / Busy / Dismiss)</td>
+<td>Live</td>
+</tr>
+<tr>
+<td>Waste Recovery (mobile field capture)</td>
+<td>Live</td>
+</tr>
+<tr>
+<td>Site Security (gate log + company cars; guard module hub)</td>
+<td>Live</td>
+</tr>
+<tr>
+<td>Fleet Maintenance (reporter / mechanic mobile shells)</td>
+<td>Live</td>
+</tr>
+<tr>
+<td>Ink Factory operator capture (mobile)</td>
 <td>Live</td>
 </tr>
 </tbody>

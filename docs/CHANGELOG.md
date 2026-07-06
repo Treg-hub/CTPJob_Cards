@@ -6,6 +6,32 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-06 — Version 2.3.0 (build 121) — My Timesheet + waste hardening + Pre Press fix
+
+Follow-up to the wide **v2.3.0** rollout. First open shows this summary in **What's changed**.
+
+### New — My Timesheet (pilot: clock 10338)
+
+- **Home tile** — enabled workers see **My Timesheet** (teal). Admins configure enrolment in **CTP Pulse → Settings → My Timesheet**.
+- **Job hours** — pick a calendar month; job cards you were assigned to, started, or completed in that period appear with editable hours and an optional billing summary line per job.
+- **Additional work** — log ad-hoc tasks (date, hours, description, optional job-card link).
+- **PDF for Accounts** — export a monthly PDF (hours only; department + position on the header). Soft-lock warning if you edit after exporting.
+- **Offline** — line edits queue locally and sync when back online.
+
+### Waste Recovery — queue-first capture (dedicated device)
+
+- **Save never blocks on Wi‑Fi** — collection submit, finish loading, and large creates write to local queue + persistent photo folder first; sync runs in the background.
+- **Large loads** — 25+ items/photos use batched local I/O so the guard is not stuck copying media.
+- **Offline create** — on-site stock selected at schedule time is snapshotted so items queue without a live Firestore read.
+- **Rates** — costing stays on CTP Pulse only (mobile does not stamp `rate_per_kg` on add-item).
+
+### Pre Press Specialist — job-card access fix
+
+- **Workshop | Pre Press Specialist** now resolves correctly (position title is authoritative, not department alone).
+- Can **Start / Complete / Monitor** any job assigned to them; **Pre Press Spec** jobs still auto-assign when the specialist is on-site.
+
+---
+
 ## 2026-07-06 — Version 2.3.0 — everything since v2.1.1 (build 38)
 
 This is the wide rollout. If you have been on **v2.1.1 (build 38)** since 17 June, here is everything that has changed in **v2.3.0**. Four whole modules are new — **Site Security**, **Fleet Maintenance**, **Ink Factory**, and **Waste Recovery** — alongside major reliability work, a refreshed Home screen, and a long list of job-card and Admin improvements. The dated entries below carry finer detail; role guides for each module are in **Settings → Documentation**.

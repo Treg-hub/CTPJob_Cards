@@ -56,8 +56,8 @@ feature — from fault reporting to AI-assisted operations.</p>
 <td>4</td>
 </tr>
 <tr>
-<td>User Roles</td>
-<td>4</td>
+<td>Job-card roles</td>
+<td>4 (+ module roles: Security, Waste, Fleet, Ink)</td>
 </tr>
 <tr>
 <td>First Escalation</td>
@@ -122,8 +122,12 @@ notified on closure.</li>
 <li>Light &amp; dark theme</li>
 <li>Notification action buttons</li>
 <li>Copper Inventory module (clock-number restricted)</li>
-<li>WasteTrack module (Security department)</li>
+<li>WasteTrack module (Security department field capture; managers on
+Pulse for weighbridge)</li>
+<li>Site Security module (gate scan in/out, company cars, on-foot
+visitors — guards: module hub home, no job-card tiles)</li>
 <li>Fleet Maintenance module (Hyster forklifts &amp; grabs)</li>
+<li>Ink Factory module (production stock inventory)</li>
 </ul>
 <p>Planned:</p>
 <ul>
@@ -132,8 +136,7 @@ notified on closure.</li>
 </ul>
 <hr />
 <h2 id="user-roles">User Roles</h2>
-<p><em>Four roles with distinct access scopes and
-responsibilities</em></p>
+<p><em>Job-card roles plus module-specific access</em></p>
 <p>Every employee's role controls what they can see and do. Three roles
 (Operator, Technician, Manager) are <strong>inferred
 automatically</strong> from the <code>position</code> field in each
@@ -142,6 +145,12 @@ employee's profile — there is no separate role field to set. The
 <code>isAdmin</code> boolean field on the employee's Firestore document.
 To grant or revoke Admin, edit that field directly — no code change or
 app release is needed.</p>
+<p><strong>Site Security guards</strong>
+(<code>isSiteSecurityGuardOnly</code>) use a <strong>module hub</strong>
+on Home — Waste + Security module cards only; no Create Job Card, My
+Work, or View Jobs. <strong>Security managers</strong> keep the standard
+job-card Home plus Security and Waste tabs. See the in-app <strong>Site
+Security</strong> guides under Documentation.</p>
 <h3 id="operator">Operator</h3>
 <p>Discovers a fault and creates the job card. Responsible for capturing
 all details accurately at the point of report. Receives notifications
@@ -165,8 +174,8 @@ Daily Review · Monitoring Dashboard</p>
 boundaries, adjusts escalation rules, enables/disables modules (Waste
 Management, Fleet Maintenance), and has access to all data across all
 departments.</p>
-<p><strong>Key Screens:</strong> Admin Screen · Geofence Editor ·
-Employee Management · Settings (Modules)</p>
+<p><strong>Key Screens:</strong> Admin Screen · Geofence Editor · User
+Feedback · Employee Management · Settings (Modules)</p>
 <blockquote>
 <p><strong>Admin access is controlled per user in Firestore.</strong>
 Set <code>isAdmin: true</code> on an employee's Firestore document to
@@ -854,23 +863,23 @@ Root cause: age/fatigue.</td>
 communications</em></p>
 <p>Admins have access to all data across all departments plus system
 configuration tools not available to any other role. Admin Settings has
-six tabs.</p>
+<strong>five tabs</strong> and opens on <strong>Settings</strong> by
+default: <strong>Settings → Employees → Structures → On Site →
+Comms</strong>.</p>
 <ul>
-<li><strong>Employees</strong> — Create, edit, and deactivate employee
-accounts. Set roles, departments, and trade types. Link accounts to
-clock numbers. The <code>isOnSite</code> column shows a tappable
-green/grey chip — tap to toggle an employee's on-site status
-directly.</li>
-<li><strong>Structures</strong> — Manage the department → area → machine
-hierarchy. Cascading deletes with confirmation.</li>
 <li><strong>Settings</strong> — Escalation config (per-stage timer,
-recipients, enable/disable), location tools, access and module controls.
-Includes <strong>App Update Control</strong>: set a minimum supported
-build number and download URL. Any device running an older build sees a
-blocking update screen on next launch — a server-side kill-switch
-independent of Remote Config.</li>
-<li><strong>Job Cards</strong> — Spreadsheet-style export and
-bulk-delete tooling for the <code>job_cards</code> collection.</li>
+recipients, enable/disable), location tools, access and module controls,
+and the User Feedback board link. Includes <strong>App Update
+Control</strong>: set a minimum supported build number and download URL.
+Any device running an older build sees a blocking update screen on next
+launch — a server-side kill-switch independent of Remote Config.</li>
+<li><strong>Employees</strong> — Searchable card list with add / edit /
+bulk-delete. On-site status is a tappable pill on each card. CSV
+template and import in the toolbar. FCM token is edited in the employee
+dialog, not on the list.</li>
+<li><strong>Structures</strong> — Manage the department → area → machine
+hierarchy with search, count stats, and expandable cards. Cascading
+deletes with confirmation.</li>
 <li><strong>On Site</strong> — Real-time panel showing every employee
 currently marked on-site, grouped by department. Updates live as
 employees arrive and leave.</li>
@@ -880,10 +889,23 @@ After sending, a result summary shows sent / parked (off-site users) /
 no-token counts. Recent broadcasts are listed at the bottom of the
 tab.</li>
 </ul>
+<blockquote>
+<p><strong>Job card export and bulk delete</strong> are not in the
+mobile Admin screen. Use <strong>CTP Pulse</strong> for job history,
+KPIs, and read-only oversight.</p>
+</blockquote>
 <p><strong>Geofence Editor</strong> — Separate screen accessible from
 Admin → Settings for drawing the site boundary polygon on a live map.
 Changes take effect immediately for all users without a software
 update.</p>
+<p><strong>User Feedback</strong> — Admin-only screen accessible from
+Admin → Settings → Feedback. Lists everything staff have submitted via
+the <strong>Give Feedback</strong> button on the Home screen, and lets
+an admin track each item through <strong>New → Planned → Implemented →
+Declined</strong> and attach private implementation notes. Filter chips
+with live counts show at a glance what's still outstanding versus done.
+It's an internal tracking tool — only admins can see it; staff just get
+a confirmation when they submit.</p>
 <h3 id="technology-stack">Technology Stack</h3>
 <table>
 <thead>
@@ -1014,6 +1036,135 @@ Maintenance</strong> section: open issues (live), maintenance hours this
 month, cost this month, and average issue resolution time — plus a
 dedicated Fleet page with cost-per-asset and cost-by-category charts and
 a live list of open issues.</p>
+<hr />
+<h2 id="ink-factory">Ink Factory</h2>
+<p><em>Production stock-inventory data entry for the Ink Factory
+department — a separate module from plant job cards.</em></p>
+<p>The Ink Factory module is a full stock-inventory system for raw
+materials, solvents, and manufactured inks. It tracks purchases,
+production runs, meter consumption, Toloul recovery, and month-end
+reporting. It is only visible to staff with
+<code>department == "Ink Factory"</code> and to admins.</p>
+<h3 id="what-it-does-1">What it does</h3>
+<ul>
+<li><strong>Stock on hand</strong> — Live balances and weighted-average
+costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105,
+Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue,
+Black — received as IBCs, never manufactured), and manufactured products
+(CoverWax, Gravure Binder).</li>
+<li><strong>Receive stock (raw materials)</strong> — Operator records
+incoming raw materials from a supplier. Cost is entered later by a
+manager when the invoice arrives (deferred-cost pattern).</li>
+<li><strong>Receive ink IBCs</strong> — Operator scans the IBC barcode
+(GS1-128 / SSCC label), weight and colour are auto-filled from the scan.
+The audit register records every IBC number received.</li>
+<li><strong>Consume IBC</strong> — Transfers an IBC from the audit
+register into the tank. Records Toloul wash consumption and
+<strong>auto-creates an IBC Bins on-site waste stock item</strong> (by
+IBC number) for security to collect on a later load.</li>
+<li><strong>Daily Readings</strong> — Combined screen for ink meters and
+Toloul meter points. Enter all readings on one page with one
+submit.</li>
+<li><strong>Production Run</strong> — Operator picks a recipe (CoverWax
+or Gravure Binder) and a pot count. The screen previews inputs consumed
+and output produced; the run is recorded as consumption transactions for
+each input and a manufacture transaction for the output.</li>
+<li><strong>Toloul Recovery</strong> — Records solvent recovered from
+the Lurgi distillation. Previous recovery entries are shown below the
+form for context.</li>
+<li><strong>IBC Register</strong> — Searchable register of all ink IBCs
+with colour tabs (Yellow / Red / Blue / Black), receive date, order
+number, and CGNA number.</li>
+</ul>
+<h3 id="daily-readings--ink-meters--toloul-meters-on-one-screen">Daily
+Readings — ink meters + Toloul meters on one screen</h3>
+<p>The <strong>Daily Readings</strong> screen (also the Lurgi home tile)
+shows all ink meter points and all Toloul meter points on a single
+scrollable page. The Lurgi operator enters both in one sitting at 06:00
+each morning.</p>
+<ul>
+<li><strong>Ink meters</strong> — cumulative reading entry for Yellow,
+Red, Blue, Black, and Gravure Binder. Each card shows the last few
+readings as a history strip. The delta (litres consumed since the last
+reading) is computed automatically and converted to kg using a
+conversion factor. If the new reading is below the last, a "meter was
+reset" checkbox appears.</li>
+<li><strong>Toloul meters</strong> — the same entry pattern for the
+Toloul Recovery and Toloul Usage meter points. These record how much
+solvent each press consumed and are used for month-end Toloul reporting.
+They do not affect stock levels.</li>
+<li>One date at the top (editable by managers), one <strong>Record
+readings</strong> button at the bottom.</li>
+</ul>
+<h3 id="roles-1">Roles</h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>How you're recognised</th>
+<th>What you can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ink operator</strong></td>
+<td><code>department == "Ink Factory"</code></td>
+<td>All data entry: receive stock, meter readings, production, Toloul
+recovery, consume IBC</td>
+</tr>
+<tr>
+<td><strong>Ink manager</strong></td>
+<td>position contains "manager" + Ink Factory, or Admin</td>
+<td>All operator capture on mobile + full management on <strong>CTP
+Pulse</strong> (<code>/ink</code>): pending costs, revaluation,
+month-end count/report, recipes, supplier management, corrections</td>
+</tr>
+<tr>
+<td><strong>Lurgi operator</strong></td>
+<td><code>department == "Lurgi"</code></td>
+<td>Daily Readings screen only (ink + Toloul meters)</td>
+</tr>
+<tr>
+<td><strong>Admin</strong></td>
+<td><code>isAdmin: true</code></td>
+<td>Full access to all Ink Factory screens</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Operators never see money.</strong> Weighted-average costs,
+stock values, and cost estimates on the Production Run screen are hidden
+from operators — only managers and admins see financial figures.</p>
+</blockquote>
+<h3 id="manager-tools-ctp-pulse--not-mobile">Manager tools (CTP Pulse —
+not mobile)</h3>
+<p>Ink managers open <strong>CTP Pulse</strong> from the
+<strong>Management &amp; costing</strong> card on the Ink Factory hub
+(<code>https://ctp-pulse.web.app/ink</code>). The mobile app no longer
+shows a manager tile grid.</p>
+<ul>
+<li><strong>Pending Costs</strong> — after a purchase is received, the
+manager enters the total cost from the invoice to finalise the
+weighted-average cost calculation.</li>
+<li><strong>Recipes</strong> — define input quantities and output per
+pot for CoverWax and Gravure Binder recipes.</li>
+<li><strong>Conversion Factors</strong> — set the kg-per-litre factor
+for each metered ink so meter readings convert to stock consumption
+correctly.</li>
+<li><strong>Toloul Meter Points</strong> — manage the list of meter
+points (Lurgi recovery points and press usage points) shown on the Daily
+Readings screen.</li>
+<li><strong>Month-end Count</strong> — enter a physical stock count; the
+system auto-generates an adjustment transaction per item (count minus
+ledger balance).</li>
+<li><strong>Month-end Report</strong> — free date-range report
+(count-to-count) with opening balance, all movements, and closing
+balance per item, exportable as CSV and PDF.</li>
+<li><strong>Stock Adjustment / Value Adjustment / Revaluation</strong> —
+manager-only corrections.</li>
+<li><strong>Corrections</strong> — void a transaction and re-enter
+corrected values (void-and-reenter pattern, preserved for audit).</li>
+</ul>
 <hr />
 <h2 id="ai--predictive-maintenance-roadmap">AI &amp; Predictive
 Maintenance Roadmap</h2>

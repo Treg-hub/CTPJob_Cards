@@ -12,7 +12,7 @@ This guide covers the most common symptoms users hit in production and the faste
 - After tapping an **arrived on-site** notification, Home is missing Fleet/Security tabs, quick-action tiles, or Recent Job Cards (skeleton placeholders that never fill in)
 - It used to only fix itself after force-closing and reopening the app
 
-### What the app now does automatically (v2.3.0 / build 115 onward)
+### What the app now does automatically (v2.3.0 onward)
 
 1. **Self-healing data streams** — if a live list is refused right after sign-in (a brief permissions/timing race while your access token catches up), the app refreshes your access and retries in the background with a short backoff. It also re-tries whenever your connection returns or you switch back to the app. You should see the screen fill in within a few seconds without doing anything.
 2. **Resume hydration** — when you open the app from the background (including after a geofence notification), Home refreshes your on-site status, module settings (Fleet, Waste, Security tabs), and job-card streams so tiles and lists match reality without a restart.
