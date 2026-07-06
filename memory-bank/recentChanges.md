@@ -2,6 +2,13 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Firestore cost remediations (2026-07-07, monorepo + this repo `master` `42e0153`)**:
+  - **Jobcards CFs**: `onJobCardOpenCounts` + `reconcileOpenJobCardCounts` + `job_card_open_counts.js` (unit tests). Maintains `counters/job_cards_open` for Pulse board KPIs.
+  - **Home query bounds** (`firestore_service.dart`): active jobs `limit(150)`; my-work `limit(80)` per assigned/created stream; inbox unread `limit(50)`; open-status `whereIn` includes legacy display names (`Open`, `In Progress`, `Monitoring`).
+  - **Monorepo Pulse** (deployed): `useOpenJobCards` counter listener; hybrid `/jobs`; shared waste/OT board attention; ink `ink_replay` logging in wastetrack-overtime.
+  - **Deploy done**: indexes, jobcards CFs, counter seeded (24 active / 4 critical), Pulse hosting, wastetrack-overtime functions. **APK still pending** for floor Home bounds.
+  - Map: monorepo `Canvases/INDEX.md`, `docs/Firestore_Cost_Discipline.md`, `Components/Modules/*`, `visualization.md`, `PULSE-GATING-AND-JOB-CARDS.md`.
+
 - **Waste large-load save I/O batching (2026-07-06)**:
   - `WasteQueueBatchPlan` — parallel `persistWasteMediaBatch` (8-wide) + ordered `addAllToQueue` for submit/finish/create/add-item paths.
   - Cached `waste_media_queue` directory; skip re-copy when dest exists; `logWasteUsage` on create is fire-and-forget.
