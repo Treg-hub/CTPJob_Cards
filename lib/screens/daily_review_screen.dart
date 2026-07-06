@@ -8,6 +8,7 @@ import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
+import '../utils/screen_insets.dart';
 
 class DailyReviewScreen extends StatefulWidget {
   const DailyReviewScreen({super.key});
@@ -275,7 +276,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
                 ),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(12),
+                padding: ScreenInsets.listPadding(context, horizontal: 12, top: 12),
                 itemCount: cards.length,
                 itemBuilder: (context, index) {
                   final card = cards[index];

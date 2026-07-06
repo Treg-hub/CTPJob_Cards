@@ -17,6 +17,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_photo_viewer.dart';
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_log_work_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Mechanic detail view of a single work record (no costing UI).
 class FleetWorkRecordDetailScreen extends ConsumerStatefulWidget {
@@ -120,7 +121,7 @@ class _RecordBody extends ConsumerWidget {
     final colors = Theme.of(context).extension<AppColors>();
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       children: [
         // ── Work number + title ──────────────────────────────────────────
         if (!mechanicView)

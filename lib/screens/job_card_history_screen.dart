@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import 'job_card_detail_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Historic job card search screen.
 ///
@@ -705,7 +706,7 @@ class _JobCardHistoryScreenState extends State<JobCardHistoryScreen> {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: ScreenInsets.listPadding(context, horizontal: 8, top: 4),
       itemCount: jobs.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == jobs.length) {

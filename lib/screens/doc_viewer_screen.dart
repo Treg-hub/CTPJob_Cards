@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/doc_entry.dart';
+import '../utils/screen_insets.dart';
 
 class DocViewerScreen extends StatefulWidget {
   final DocEntry entry;
@@ -86,7 +87,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     }
     return Markdown(
       data: _markdown!,
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       selectable: true,
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
         h1: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),

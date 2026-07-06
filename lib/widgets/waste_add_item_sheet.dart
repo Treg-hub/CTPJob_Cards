@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/waste_service.dart';
+import '../utils/screen_insets.dart';
 
 /// Result returned by [WasteAddItemSheet].
 class WasteAddItemSheetResult {
@@ -72,6 +73,7 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
     _wasteType = (def != null && widget.types.contains(def))
         ? def
         : (widget.types.isNotEmpty ? widget.types.first : null);
+    _applyTypeDefaults(_wasteType);
   }
 
   @override
@@ -98,6 +100,23 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
     if (widget.photosRequired && _photos.isEmpty) return false;
     if (_hideWeight) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
     return (double.tryParse(_weightCtrl.text) ?? 0) > 0;
+  }
+
+  void _applyTypeDefaults(String? type) {
+    if (type != null &&
+        widget.noSiteWeightTypeNames.contains(type) &&
+        _qtyCtrl.text.isEmpty) {
+      _qtyCtrl.text = '1';
+    }
+  }
+
+  void _selectType(String type) {
+    setState(() {
+      _wasteType = type;
+      _weightCtrl.clear();
+      _qtyCtrl.clear();
+      _applyTypeDefaults(type);
+    });
   }
 
   Future<void> _addPhoto(ImageSource source) async {
@@ -137,26 +156,25 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.types.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  initialValue: _wasteType,
-                  isExpanded: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Waste Type', isDense: true),
-                  items: widget.types
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _wasteType = v;
-                    _weightCtrl.clear();
-                    _qtyCtrl.clear();
-                    // Default qty to 1 for no-site-weight types
-                    if (v != null && widget.noSiteWeightTypeNames.contains(v) && _qtyCtrl.text.isEmpty) {
-                      _qtyCtrl.text = '1';
-                    }
-                  }),
-                )
-              else
+              if (widget.types.isNotEmpty) ...[
+                const Text(
+                  'Waste Type *',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF616161)),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: widget.types.map((type) {
+                    final selected = _wasteType == type;
+                    return FilterChip(
+                      label: Text(type),
+                      selected: selected,
+                      onSelected: (_) => _selectType(type),
+                    );
+                  }).toList(),
+                ),
+              ] else
                 TextField(
                   decoration:
                       const InputDecoration(labelText: 'Waste Type *', isDense: true),
@@ -265,7 +283,14 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+        SafeBottomBar(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -300,7 +325,6 @@ class _WasteAddItemSheetState extends State<WasteAddItemSheet> {
                   child: const Text('Cancel'),
                 ),
               ),
-              const SizedBox(height: 8),
             ],
           ),
         ),

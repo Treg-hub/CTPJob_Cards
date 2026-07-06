@@ -10,6 +10,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_reporter_widgets.dart';
+import '../utils/screen_insets.dart';
 
 /// Read-only issue detail for reporter departments — status, report, and fix.
 class FleetReporterIssueDetailScreen extends StatelessWidget {
@@ -39,7 +40,7 @@ class FleetReporterIssueDetailScreen extends StatelessWidget {
           final colors = Theme.of(context).appColors;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: ScreenInsets.symmetricScroll(context),
             children: [
               Text(
                 issue.assetName,

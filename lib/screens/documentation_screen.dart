@@ -6,6 +6,7 @@ import '../providers/fleet_provider.dart';
 import '../providers/security_provider.dart';
 import '../providers/waste_provider.dart';
 import '../utils/doc_catalog.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import 'doc_viewer_screen.dart';
 
@@ -33,7 +34,7 @@ class DocumentationScreen extends ConsumerWidget {
 
   Widget _buildList(BuildContext context, List<DocEntry> docs) {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       itemCount: docs.length + 1,
       itemBuilder: (context, i) {
         if (i == 0) {

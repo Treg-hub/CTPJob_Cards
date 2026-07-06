@@ -16,6 +16,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_daily_checklist_rows.dart';
 import '../widgets/fleet_form_fields.dart';
 import '../widgets/fleet_reporter_widgets.dart';
+import '../utils/screen_insets.dart';
 
 enum _CheckMode { loading, start, done }
 
@@ -436,7 +437,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
       body: ListView(
         controller: _scrollCtrl,
         primary: false,
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
           if (_mode == _CheckMode.start) ...[
             if (_config.instructions.isNotEmpty) ...[

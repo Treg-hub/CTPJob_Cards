@@ -18,6 +18,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_selector.dart';
 import '../widgets/fleet_form_fields.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_type_selector.dart';
 import '../widgets/fleet_work_form_sections.dart';
 
@@ -289,7 +290,7 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
           FleetWorkDatesCard(
             workCarriedOut: _workCarriedOut,

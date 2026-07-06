@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Mobile safe-area sweep + waste create-load draft/chips (2026-07-06)**:
+  - **Safe area (Phase 1)**: `ScreenInsets` / `SafeBottomBar` applied app-wide on remaining scroll routes — Settings, What's New changelog sheet, all Waste full-screen flows, Documentation/Doc viewer, notification screens, admin tabs, Fleet pushed routes, Ink sub-screens, kiosk/copper/feedback/history dashboards. Reuses `lib/utils/screen_insets.dart`.
+  - **Waste create load (Phase 2)**: `TextEditingController`s fix fields appearing blank after adding items; clock-scoped SharedPreferences draft (`waste_create_load_draft.dart`) persists header fields + items + stock selection across backgrounding; **Discard draft & start over** button; draft cleared on successful save.
+  - **Add-item sheet (Phase 3)**: `WasteAddItemSheet` waste-type dropdown → `FilterChip`s for one-tap selection; footer actions in `SafeBottomBar`.
+  - **Tests**: `waste_create_load_draft_test.dart` (serialize/restore, controller rebuild).
+
 - **v2.3.0 release notes roll-up (2026-07-06)** — wide rollout from last public **v2.1.1 (build 38)**:
   - Prepended `## 2026-07-06 — Version 2.3.0` roll-up to `docs/CHANGELOG.md` (bundled asset → **What's changed** sheet + Settings → Documentation → Changelog). Covers all four new modules + July reliability/polish (security gate split, scan validation, home resume, startup resilience, ink cyan, job-card tiles, feedback loop, etc.).
   - `docs/troubleshooting.md` — geofence resume / incomplete Home section updated for v2.3.0.

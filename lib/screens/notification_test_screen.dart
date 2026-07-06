@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
+import '../utils/screen_insets.dart';
 
 class NotificationTestScreen extends StatefulWidget {
   const NotificationTestScreen({super.key});
@@ -38,7 +39,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
         foregroundColor: Colors.black,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
           const Padding(
             padding: EdgeInsets.only(bottom: 12),

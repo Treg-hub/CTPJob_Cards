@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../utils/persona_audit.dart';
 import 'feedback_thread_screen.dart';
+import '../utils/screen_insets.dart';
 
 /// Worker-facing feedback home: submit new feedback and follow what happened
 /// to previous submissions (status + public replies from the team).
@@ -142,7 +143,12 @@ class _MyFeedbackScreenState extends State<MyFeedbackScreen> {
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+                  padding: ScreenInsets.listPadding(
+                    context,
+                    horizontal: 12,
+                    top: 8,
+                    clearFab: true,
+                  ),
                   itemCount: items.length,
                   itemBuilder: (context, i) => _feedbackCard(items[i], colors),
                 );

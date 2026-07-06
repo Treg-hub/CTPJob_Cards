@@ -15,6 +15,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_summary_card.dart';
 import '../widgets/fleet_work_capture_form.dart';
 import '../widgets/fleet_work_form_sections.dart';
+import '../utils/screen_insets.dart';
 
 /// Fix-a-fault screen — Save progress (ack) or Mark as Fixed (work record).
 class FleetMarkFixedScreen extends ConsumerStatefulWidget {
@@ -412,7 +413,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
           ),
         ),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: ScreenInsets.symmetricScroll(context),
           children: [
             if (_linkedIssue != null) ...[
               FleetIssueSummaryCard(issue: _linkedIssue!),

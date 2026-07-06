@@ -3,6 +3,7 @@ import '../models/job_card.dart';
 import '../services/firestore_service.dart';
 import '../widgets/ctp_app_bar.dart';
 import 'job_card_detail_screen.dart';
+import '../utils/screen_insets.dart';
 
 class MonitoringDashboardScreen extends StatelessWidget {
   const MonitoringDashboardScreen({super.key});
@@ -55,7 +56,7 @@ class ActiveMonitoringTab extends StatelessWidget {
           return const Center(child: Text('No jobs currently in monitoring', style: TextStyle(color: Colors.white70)));
         }
         return ListView.builder(
-          padding: const EdgeInsets.all(8),
+          padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
           itemCount: jobs.length,
           itemBuilder: (context, index) {
             final job = jobs[index];
@@ -136,7 +137,7 @@ class RecentlyAutoClosedTab extends StatelessWidget {
           return Center(child: Text('No auto-closed jobs since ${startDate.day}/${startDate.month}/${startDate.year}', style: const TextStyle(color: Colors.white70)));
         }
         return ListView.builder(
-          padding: const EdgeInsets.all(8),
+          padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
           itemCount: jobs.length,
           itemBuilder: (context, index) {
             final job = jobs[index];

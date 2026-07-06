@@ -15,6 +15,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import 'fleet_issue_detail_screen.dart';
 import 'fleet_work_records_list_screen.dart' show WorkRecordTile;
+import '../utils/screen_insets.dart';
 
 /// Everything about one Hyster on a single page: status, hour meter,
 /// service-due state, open problems, work history, and (for cost
@@ -87,7 +88,7 @@ class _AssetBody extends StatelessWidget {
     final colors = Theme.of(context).appColors;
     final dateFmt = DateFormat('d MMM yyyy');
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       children: [
         // ── Header ─────────────────────────────────────────────────────
         Text(asset.name,

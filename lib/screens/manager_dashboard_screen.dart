@@ -7,6 +7,7 @@ import '../main.dart' show currentEmployee;
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import 'job_card_detail_screen.dart';
+import '../utils/screen_insets.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -105,7 +106,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           return Stack(
             children: [
               SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  56,
+                  16,
+                  ScreenInsets.scrollBottomFullScreen(context),
+                ),
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

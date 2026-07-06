@@ -18,6 +18,7 @@ import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_selector.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_form_fields.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_type_selector.dart';
@@ -328,7 +329,7 @@ class _FleetLogOtherWorkScreenState
         _workCarriedOut.day == now.day;
 
     final body = ListView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         children: [
           if (mechanicUx) ...[
             const FleetMechanicGuideBanner.logOtherWork(),

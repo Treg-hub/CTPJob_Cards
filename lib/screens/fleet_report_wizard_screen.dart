@@ -18,6 +18,7 @@ import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_form_fields.dart';
 import '../utils/fleet_daily_check_gate.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_reporter_widgets.dart';
 import '../widgets/fleet_work_form_sections.dart';
@@ -394,7 +395,7 @@ class _FleetReportWizardScreenState
               onPageChanged: (i) => setState(() => _step = i),
               children: [
                 ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: ScreenInsets.symmetricScroll(context),
                   children: [
                     if (_showGuide) ...[
                       const FleetReporterGuideBanner(),
@@ -441,7 +442,7 @@ class _FleetReportWizardScreenState
                   ],
                 ),
                 ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: ScreenInsets.symmetricScroll(context),
                   children: [
                     if (_selectedAsset != null) ...[
                       Text(
@@ -486,7 +487,7 @@ class _FleetReportWizardScreenState
                   ],
                 ),
                 ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: ScreenInsets.symmetricScroll(context),
                   children: [
                     if (_selectedAsset != null) ...[
                       Text(

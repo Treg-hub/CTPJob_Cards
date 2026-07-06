@@ -13,6 +13,7 @@ import '../utils/persona_audit.dart';
 import '../theme/app_theme.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/screen_insets.dart';
 
 /// Phase 1j — Month-end Adjustment (manager). Reconciles the ledger balance to a
 /// physical stock-take count. The operator enters the COUNTED quantity; the
@@ -119,7 +120,7 @@ class _State extends ConsumerState<InkAdjustmentScreen> {
           return Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: ScreenInsets.symmetricScroll(context),
               children: [
                 DropdownButtonFormField<String>(
                   // ignore: deprecated_member_use

@@ -19,6 +19,7 @@ import 'scan_tester_screen.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 
 // ---------------------------------------------------------------------------
 // AdminScreen
@@ -1454,7 +1455,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final structureList = _buildStructureList();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _settingsCard(child: TextField(
           controller: structureSearchController,
@@ -1666,7 +1667,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Widget _buildSettingsTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
         // ── App Kill-switch ─────────────────────────────────────────────────
@@ -1912,7 +1913,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   Widget _buildCommsTab() {
     final colors = Theme.of(context).appColors;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: ScreenInsets.symmetricScroll(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
         _sectionHeader('BROADCAST MESSAGE'),

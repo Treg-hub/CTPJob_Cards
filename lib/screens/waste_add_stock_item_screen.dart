@@ -10,6 +10,7 @@ import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
+import '../utils/screen_insets.dart';
 
 class WasteAddStockItemScreen extends ConsumerStatefulWidget {
   const WasteAddStockItemScreen({
@@ -241,7 +242,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: ScreenInsets.symmetricScroll(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

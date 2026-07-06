@@ -7,6 +7,7 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/screen_insets.dart';
 
 /// Manager screen (1e): list + curate production recipes.
 class InkRecipeManagementScreen extends ConsumerWidget {
@@ -40,6 +41,7 @@ class InkRecipeManagementScreen extends ConsumerWidget {
         data: (recipes) => recipes.isEmpty
             ? const Center(child: Text('No recipes yet. Tap New recipe.'))
             : ListView.separated(
+                padding: ScreenInsets.listPadding(context, horizontal: 16, top: 8),
                 itemCount: recipes.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
@@ -169,7 +171,7 @@ class _EditState extends ConsumerState<InkRecipeEditScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: ScreenInsets.symmetricScroll(context),
           children: [
             TextFormField(
               controller: _nameCtrl,
