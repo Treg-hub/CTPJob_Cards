@@ -337,10 +337,12 @@ class _StockQtySummary extends StatelessWidget {
     final factoryBalance = toloulItem?.operationalBalance;
     final unit = toloulItem?.unit ?? 'LTS';
     final isLow = factoryBalance != null && factoryBalance < factoryLowThreshold;
-    // Match Home quick-action tiles: flat tint + accent border; black body text.
+    // Normal: Home quick-action tile wash (12%). Low: stronger red tint so it
+    // reads clearly against the orange OK state.
     final accent = isLow ? kLowStockRed : kBrandOrange;
-    final tileColor = accent.withValues(alpha: 0.12);
-    final borderColor = accent.withValues(alpha: 0.45);
+    final tileColor = accent.withValues(alpha: isLow ? 0.30 : 0.12);
+    final borderColor = accent.withValues(alpha: isLow ? 0.90 : 0.45);
+    final borderWidth = isLow ? 1.4 : 0.8;
     final textColor = Theme.of(context).brightness == Brightness.light
         ? Colors.black87
         : scheme.onSurface;
@@ -354,13 +356,16 @@ class _StockQtySummary extends StatelessWidget {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: borderColor, width: 0.8),
+        side: BorderSide(color: borderColor, width: borderWidth),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.inventory_2_outlined, color: accent),
+            Icon(
+              isLow ? Icons.warning_amber_rounded : Icons.inventory_2_outlined,
+              color: accent,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

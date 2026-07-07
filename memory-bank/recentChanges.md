@@ -2,8 +2,11 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink hub: toloul tank low tint (2026-07-07)**:
+  - Low-stock card: 30% red fill + 90% border (vs 12% orange OK) + warning icon for clear threshold distinction.
+
 - **Ink hub: toloul tank card colours (2026-07-07)**:
-  - Low-stock summary card uses Home tile pattern (12% tint + accent border) with `kLowStockRed` instead of Material `errorContainer`; body text stays black87 (light) / onSurface (dark).
+  - Low-stock summary card uses Home tile pattern with `kLowStockRed` instead of Material `errorContainer`; body text stays black87 (light) / onSurface (dark).
 
 - **Ink hub: factory toloul tank on summary card (2026-07-07)**:
   - Repurposed low-stock threshold from Lurgi → **factory tank** (`ink_settings/config.toloul_factory_low_litres`, default 4000 L).
