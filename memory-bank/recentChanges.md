@@ -2,6 +2,28 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink hub: factory toloul tank on summary card (2026-07-07)**:
+  - Repurposed low-stock threshold from Lurgi → **factory tank** (`ink_settings/config.toloul_factory_low_litres`, default 4000 L).
+  - **Stock on hand** summary card shows live **Toloul tank** litres top-right; entire card turns red when below threshold.
+  - Removed Lurgi low banner (Lurgi monitoring deferred). Long-press **Toloul Recovery** still sets threshold.
+  - Map: `Components/Modules/InkModule.md`, `Components/Collections/ink_settings.md`.
+
+- **Loading regression audit sweep (2026-07-07)**:
+  - **View Jobs**: replaced 4 nested `StreamBuilder`s (stuck until ALL four had data) with `getViewJobCardsBundleWithMeta` + `decideListLoadState`.
+  - **Daily Review**: `getActiveAndRecentlyClosedJobCardsWithMeta` — 4-bucket merge guard + resilient per-status streams.
+  - **Notification Inbox**: `getNotificationInboxSnapshots` + cache-aware loading UI.
+  - **On-site stock list**: `watchAllStockOnSiteWithMeta` + `decideListLoadState`.
+  - **Shared**: `getJobCardsByStatusWithMeta` / `getClosedJobCardsWithMeta` (resilient + legacy status `whereIn`); `allStreamSidesReady` + `mergedIsFromCache` in `list_load_state.dart`.
+  - **Already OK**: Home recent jobs + My Work (prior fix), Waste home active loads (prior fix).
+  - **Lower risk (not changed)**: Fleet/Ink/Feedback list screens — single-stream `ConnectionState.waiting`; Ink daily-readings 2-stream merge (banner only).
+
+- **Mobile loading + waste stock quantity + fleet check safe area (2026-07-07)**:
+  - **My Work infinite spinner**: `getMyJobCardsWithMeta` — wait for both assigned/created snapshots before emit; defer inner subs to `onListen`; remove server `status whereIn` (Closed tab + merge regression from cost bounds `42e0153`); keep `limit(80)`.
+  - **Waste Recovery tab**: `watchActiveLoadsWithMeta` + `resilientSnapshots`; `WasteHomeScreen` uses `decideListLoadState` (same cached-vs-empty pattern as Home).
+  - **Fleet daily check**: `SafeBottomBar` on submit bar; scroll padding clears bottom bar + home indicator.
+  - **On-site stock quantity types**: `WasteAddStockItemScreen` / detail — quantity +/- for `isQuantityOnly` waste types (Pulse config); `updateStockItem` persists `quantity`.
+  - Map: `docs/architecture/visualization.md`.
+
 - **My Timesheet report gaps closed (2026-07-08)**:
   - Daily hours chips on hub (additional work by day, over-cap warning).
   - Hub **Refresh job cards** + `jobLinesRefreshedAt` on period doc.

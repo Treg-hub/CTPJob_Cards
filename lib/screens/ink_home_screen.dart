@@ -53,11 +53,8 @@ class InkHomeScreen extends ConsumerWidget {
         break;
       }
     }
-    final lurgiBalance = toloulItem?.lurgiBalance;
-    final lurgiLowThreshold =
-        inkSettings?.toloulLurgiLowLitres ?? kDefaultToloulLurgiLowLitres;
-    final showLurgiLowAlert = lurgiBalance != null &&
-        lurgiBalance < lurgiLowThreshold;
+    final factoryLowThreshold = inkSettings?.toloulFactoryLowLitres ??
+        kDefaultToloulFactoryLowLitres;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
@@ -69,7 +66,11 @@ class InkHomeScreen extends ConsumerWidget {
           ScreenInsets.scrollBottomFullScreen(context),
         ),
         children: [
-          _StockQtySummary(itemsAsync: itemsAsync),
+          _StockQtySummary(
+            itemsAsync: itemsAsync,
+            toloulItem: toloulItem,
+            factoryLowThreshold: factoryLowThreshold,
+          ),
           if (isManager) ...[
             const SizedBox(height: 12),
             _PulseManageCard(pulseUrl: _pulseInkUrl),
@@ -96,20 +97,12 @@ class InkHomeScreen extends ConsumerWidget {
               Icons.recycling_outlined,
               'Toloul Recovery',
               builder: () => const InkTolulRecoveryScreen(),
-              onLongPress: (ctx) => _showLurgiLowThresholdDialog(ctx, ref),
+              onLongPress: (ctx) => _showFactoryTankLowThresholdDialog(ctx, ref),
             ),
             _Action(Icons.inventory_2_outlined, 'IBC Register',
                 builder: () => const InkIbcRegisterScreen()),
           ]),
           const SizedBox(height: 20),
-          if (showLurgiLowAlert) ...[
-            _LurgiLowStockBanner(
-              lurgiBalance: lurgiBalance,
-              threshold: lurgiLowThreshold,
-              unit: toloulItem?.unit ?? 'LTS',
-            ),
-            const SizedBox(height: 8),
-          ],
           _sectionLabel(context, 'Stock on hand'),
           const SizedBox(height: 4),
           itemsAsync.when(
@@ -137,13 +130,13 @@ class InkHomeScreen extends ConsumerWidget {
     );
   }
 
-  static Future<void> _showLurgiLowThresholdDialog(
+  static Future<void> _showFactoryTankLowThresholdDialog(
     BuildContext context,
     WidgetRef ref,
   ) async {
     final settings = ref.read(inkSettingsProvider).valueOrNull;
     final current =
-        settings?.toloulLurgiLowLitres ?? kDefaultToloulLurgiLowLitres;
+        settings?.toloulFactoryLowLitres ?? kDefaultToloulFactoryLowLitres;
     final ctrl = TextEditingController(
       text: current == current.roundToDouble()
           ? current.toInt().toString()
@@ -152,13 +145,13 @@ class InkHomeScreen extends ConsumerWidget {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Lurgi low-stock alert'),
+        title: const Text('Toloul tank low alert'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Show a red warning on this screen when Lurgi toloul stock '
+              'Turn the summary card red when the ink-factory toloul tank '
               'drops below this level (litres). Long-press Toloul Recovery to change.',
             ),
             const SizedBox(height: 12),
@@ -196,7 +189,7 @@ class InkHomeScreen extends ConsumerWidget {
       return;
     }
     try {
-      await ref.read(inkServiceProvider).updateToloulLurgiLowThreshold(parsed);
+      await ref.read(inkServiceProvider).updateToloulFactoryLowThreshold(parsed);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Low level set to ${_qty.format(parsed)} L')),
@@ -326,77 +319,76 @@ class _ActionCard extends StatelessWidget {
 }
 
 class _StockQtySummary extends StatelessWidget {
-  const _StockQtySummary({required this.itemsAsync});
+  const _StockQtySummary({
+    required this.itemsAsync,
+    required this.toloulItem,
+    required this.factoryLowThreshold,
+  });
+
   final AsyncValue<List<InkStockItem>> itemsAsync;
+  final InkStockItem? toloulItem;
+  final double factoryLowThreshold;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final count = itemsAsync.valueOrNull?.length ?? 0;
+    final factoryBalance = toloulItem?.operationalBalance;
+    final unit = toloulItem?.unit ?? 'LTS';
+    final isLow = factoryBalance != null && factoryBalance < factoryLowThreshold;
+    final cardColor = isLow ? scheme.errorContainer : scheme.primaryContainer;
+    final onCardColor =
+        isLow ? scheme.onErrorContainer : scheme.onPrimaryContainer;
+    final tankValue = factoryBalance != null
+        ? '${InkHomeScreen._qty.format(factoryBalance)} $unit'
+        : '—';
+
     return Card(
-      color: scheme.primaryContainer,
+      color: cardColor,
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.inventory_2_outlined, color: scheme.onPrimaryContainer),
+            Icon(Icons.inventory_2_outlined, color: onCardColor),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Stock on hand',
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Stock on hand',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: scheme.onPrimaryContainer)),
+                          color: onCardColor,
+                        ),
+                  ),
+                  Text(
+                    '$count items',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: onCardColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Text(
-                  '$count items',
+                  'Toloul tank',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: onCardColor,
+                      ),
+                ),
+                Text(
+                  tankValue,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold),
+                        color: isLow ? scheme.error : onCardColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LurgiLowStockBanner extends StatelessWidget {
-  const _LurgiLowStockBanner({
-    required this.lurgiBalance,
-    required this.threshold,
-    required this.unit,
-  });
-
-  final double lurgiBalance;
-  final double threshold;
-  final String unit;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      color: scheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.warning_amber_rounded, color: scheme.error),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Lurgi toloul stock low: '
-                '${InkHomeScreen._qty.format(lurgiBalance)} $unit '
-                '(below ${InkHomeScreen._qty.format(threshold)} $unit)',
-                style: TextStyle(
-                  color: scheme.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
             ),
           ],
         ),

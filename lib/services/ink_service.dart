@@ -206,14 +206,14 @@ class InkService {
   /// session is recorded even when every item matches the ledger. For each item
   /// whose physical count differs from the ledger balance an `adjustment`
   /// transaction is written; all share the same sessionId.
-  /// Updates the Lurgi low-stock alert threshold (litres) on `ink_settings/config`.
-  Future<void> updateToloulLurgiLowThreshold(double litres) async {
+  /// Updates the factory toloul tank low-stock threshold (litres) on `ink_settings/config`.
+  Future<void> updateToloulFactoryLowThreshold(double litres) async {
     _guardWrite();
     if (litres < 0) {
       throw ArgumentError('Threshold must be zero or positive');
     }
     await _db.collection(Collections.inkSettings).doc('config').set(
-          {'toloul_lurgi_low_litres': litres},
+          {'toloul_factory_low_litres': litres},
           SetOptions(merge: true),
         );
   }

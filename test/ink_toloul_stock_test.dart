@@ -33,8 +33,8 @@ void main() {
     expect(item.operationalBalance, 8000);
   });
 
-  test('ink settings default lurgi low threshold', () {
-    expect(InkSettings.defaults.toloulLurgiLowLitres,
-        kDefaultToloulLurgiLowLitres);
+  test('ink settings default factory tank low threshold', () {
+    expect(InkSettings.defaults.toloulFactoryLowLitres,
+        kDefaultToloulFactoryLowLitres);
   });
 }

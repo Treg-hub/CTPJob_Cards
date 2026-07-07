@@ -13,7 +13,7 @@ class InkSettings {
     this.inkEnabled = true,
     this.closedPeriods = const [],
     this.periodsNeedingReissue = const [],
-    this.toloulLurgiLowLitres = kDefaultToloulLurgiLowLitres,
+    this.toloulFactoryLowLitres = kDefaultToloulFactoryLowLitres,
   });
 
   final bool inkEnabled;
@@ -23,8 +23,8 @@ class InkSettings {
   /// finalisation — the report for these months must be re-issued.
   final List<String> periodsNeedingReissue;
 
-  /// Lurgi toloul stock (L) below this level shows a red alert on the Ink hub.
-  final double toloulLurgiLowLitres;
+  /// Factory toloul tank (L) below this level turns the hub summary card red.
+  final double toloulFactoryLowLitres;
 
   static const InkSettings defaults = InkSettings();
 
@@ -51,9 +51,9 @@ class InkSettings {
                   ?.map((e) => e.toString())
                   .toList() ??
               const [],
-      toloulLurgiLowLitres:
-          (d['toloul_lurgi_low_litres'] as num?)?.toDouble() ??
-              kDefaultToloulLurgiLowLitres,
+      toloulFactoryLowLitres:
+          (d['toloul_factory_low_litres'] as num?)?.toDouble() ??
+              kDefaultToloulFactoryLowLitres,
     );
   }
 
@@ -61,21 +61,21 @@ class InkSettings {
         'ink_enabled': inkEnabled,
         'closed_periods': closedPeriods,
         'periods_needing_reissue': periodsNeedingReissue,
-        'toloul_lurgi_low_litres': toloulLurgiLowLitres,
+        'toloul_factory_low_litres': toloulFactoryLowLitres,
       };
 
   InkSettings copyWith({
     bool? inkEnabled,
     List<String>? closedPeriods,
     List<String>? periodsNeedingReissue,
-    double? toloulLurgiLowLitres,
+    double? toloulFactoryLowLitres,
   }) =>
       InkSettings(
         inkEnabled: inkEnabled ?? this.inkEnabled,
         closedPeriods: closedPeriods ?? this.closedPeriods,
         periodsNeedingReissue:
             periodsNeedingReissue ?? this.periodsNeedingReissue,
-        toloulLurgiLowLitres:
-            toloulLurgiLowLitres ?? this.toloulLurgiLowLitres,
+        toloulFactoryLowLitres:
+            toloulFactoryLowLitres ?? this.toloulFactoryLowLitres,
       );
 }
