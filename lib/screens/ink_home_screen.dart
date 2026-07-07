@@ -19,6 +19,7 @@ import 'ink_select_ibc_shipment_screen.dart';
 import 'ink_receive_raw_material_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
+import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
 
 /// Ink Factory module hub — operator capture only. Management, costing and
@@ -336,21 +337,30 @@ class _StockQtySummary extends StatelessWidget {
     final factoryBalance = toloulItem?.operationalBalance;
     final unit = toloulItem?.unit ?? 'LTS';
     final isLow = factoryBalance != null && factoryBalance < factoryLowThreshold;
-    final cardColor = isLow ? scheme.errorContainer : scheme.primaryContainer;
-    final onCardColor =
-        isLow ? scheme.onErrorContainer : scheme.onPrimaryContainer;
+    // Match Home quick-action tiles: flat tint + accent border; black body text.
+    final accent = isLow ? kLowStockRed : kBrandOrange;
+    final tileColor = accent.withValues(alpha: 0.12);
+    final borderColor = accent.withValues(alpha: 0.45);
+    final textColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.black87
+        : scheme.onSurface;
     final tankValue = factoryBalance != null
         ? '${InkHomeScreen._qty.format(factoryBalance)} $unit'
         : '—';
 
     return Card(
-      color: cardColor,
+      elevation: 0,
+      color: tileColor,
       margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: borderColor, width: 0.8),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.inventory_2_outlined, color: onCardColor),
+            Icon(Icons.inventory_2_outlined, color: accent),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -359,13 +369,14 @@ class _StockQtySummary extends StatelessWidget {
                   Text(
                     'Stock on hand',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: onCardColor,
+                          color: textColor,
+                          fontWeight: FontWeight.w600,
                         ),
                   ),
                   Text(
                     '$count items',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: onCardColor,
+                          color: textColor,
                           fontWeight: FontWeight.bold,
                         ),
                   ),
@@ -378,13 +389,14 @@ class _StockQtySummary extends StatelessWidget {
                 Text(
                   'Toloul tank',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: onCardColor,
+                        color: textColor,
+                        fontWeight: FontWeight.w600,
                       ),
                 ),
                 Text(
                   tankValue,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: isLow ? scheme.error : onCardColor,
+                        color: textColor,
                         fontWeight: FontWeight.bold,
                       ),
                 ),

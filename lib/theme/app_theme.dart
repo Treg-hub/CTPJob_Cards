@@ -6,6 +6,9 @@ const kBrandOrange = Color(0xFFC25F3A);
 /// Ink Factory + Daily Readings quick actions and home banner.
 const kInkModule = Color(0xFF06B6D4);
 
+/// Factory toloul tank low-stock alert — matches home tile critical red (priority5).
+const kLowStockRed = Color(0xFFB71C1C);
+
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.priority1,
