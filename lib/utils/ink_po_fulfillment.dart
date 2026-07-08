@@ -1,5 +1,7 @@
 /// Pure PO receipt deduction — mirrors Pulse `deductReceiptFromPurchaseOrder`.
-const double inkPoFulfilledThreshold = 0.5;
+// Exact-zero only (float epsilon) — delivery variances are written off via
+// the Pulse "Finalize order" reconciliation, never silently absorbed.
+const double inkPoFulfilledThreshold = 1e-6;
 
 typedef PoFulfillmentResult = ({
   Map<String, double> remainingKgByItem,

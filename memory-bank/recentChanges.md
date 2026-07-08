@@ -2,6 +2,11 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink consumption-baseline rollup moved server-side + PO exact-zero fulfil (2026-07-08)**:
+  - Removed `_appendMonthlyConsumptionSnapshot` from `ink_service.dart` — the CF `onInkCountEventWritten` is now the single authority, keying each count period's consumption to the **period-midpoint month** (a 1-Jul count closes June). Old APKs still writing the legacy calendar-month rollup are self-healed by the CF (junk months after the last closed period are pruned server-side).
+  - `ink_po_fulfillment.dart`: `inkPoFulfilledThreshold` 0.5 → 1e-6 (exact zero). Delivery variances (IBC fills) are now reconciled via the Pulse **Finalize order** write-off flow instead of being silently absorbed.
+  - No screen changes; ships with the next APK build. Map: `Components/Modules/InkModule.md`, `Components/Cloud Functions/ink-ledger-replay.md`.
+
 - **Receive Ink (IBC) partial + manual receive (2026-07-08)**:
   - **Root cause fix**: CF no longer marks shipment `received` until every packing-list IBC is in `received_units` — partial saves stay `receiving` and remain on the mobile picker.
   - Mobile resumes prior captures (`fetchIbcsForShipment`), warns on partial submit, stays on screen until load complete.
