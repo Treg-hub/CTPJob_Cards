@@ -54,6 +54,10 @@ class WorkReportSettings {
   final bool includeSignatureBlock;
   /// Note on PDF when edits occurred after the last generated PDF.
   final bool includePostPdfEditNote;
+  /// `calendar_month` (1st–last) or `factory_month` (e.g. 26th–25th).
+  final String defaultPeriodMode;
+  /// Day of month the factory period opens (only for factory_month). Default 26.
+  final int periodStartDay;
 
   const WorkReportSettings({
     this.enabled = false,
@@ -65,9 +69,14 @@ class WorkReportSettings {
     this.includeZeroHourJobs = true,
     this.includeSignatureBlock = true,
     this.includePostPdfEditNote = true,
+    this.defaultPeriodMode = 'calendar_month',
+    this.periodStartDay = 26,
   });
 
   static const WorkReportSettings defaults = WorkReportSettings();
+
+  bool get isFactoryPeriodMode =>
+      defaultPeriodMode == 'factory_month' && periodStartDay > 1;
 
   static String normalizeClockNo(dynamic value) {
     if (value == null) return '';
@@ -92,6 +101,7 @@ class WorkReportSettings {
 
   factory WorkReportSettings.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    final mode = data['default_period_mode'] as String? ?? 'calendar_month';
     return WorkReportSettings(
       enabled: data['enabled'] as bool? ?? false,
       enabledClockNos: _parseClockNoList(data['enabled_clock_nos']),
@@ -105,6 +115,9 @@ class WorkReportSettings {
       includeSignatureBlock: data['include_signature_block'] as bool? ?? true,
       includePostPdfEditNote:
           data['include_post_pdf_edit_note'] as bool? ?? true,
+      defaultPeriodMode:
+          mode == 'factory_month' ? 'factory_month' : 'calendar_month',
+      periodStartDay: (data['period_start_day'] as num?)?.toInt() ?? 26,
     );
   }
 
@@ -118,5 +131,7 @@ class WorkReportSettings {
         'include_zero_hour_jobs': includeZeroHourJobs,
         'include_signature_block': includeSignatureBlock,
         'include_post_pdf_edit_note': includePostPdfEditNote,
+        'default_period_mode': defaultPeriodMode,
+        'period_start_day': periodStartDay,
       };
 }

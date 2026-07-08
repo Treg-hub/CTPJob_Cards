@@ -35,6 +35,7 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
   bool _generatingPdf = false;
   bool _exportingCsv = false;
   bool _refreshingJobs = false;
+  bool _autoRefreshTried = false;
 
   String get _actorClockNo => currentEmployee?.clockNo ?? '';
 
@@ -57,6 +58,27 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
             widget.initialSubjectClockNo;
       });
     }
+  }
+
+  Future<void> _maybeAutoRefresh(
+    WorkReportService service,
+    WorkReportSettings settings,
+    WorkReportPeriod? period,
+  ) async {
+    if (_autoRefreshTried || currentEmployee == null) return;
+    if (!WorkReportPeriodUtils.isPeriodEditable(
+      ref.read(workReportPeriodKeyProvider),
+      editablePeriodsBack: settings.editablePeriodsBack,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    )) {
+      return;
+    }
+    // Auto-refresh when never refreshed, or header missing (first open).
+    final needs = period == null || period.jobLinesRefreshedAt == null;
+    _autoRefreshTried = true;
+    if (!needs) return;
+    await _refreshJobList(service);
   }
 
   Future<
@@ -283,14 +305,25 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     final periodKey = ref.watch(workReportPeriodKeyProvider);
     final selectable = WorkReportPeriodUtils.selectablePeriodKeys(
       editablePeriodsBack: settings.editablePeriodsBack,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
     );
+    // Keep selected key valid when settings load / mode changes.
+    if (!selectable.contains(periodKey) && selectable.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(workReportPeriodKeyProvider.notifier).state = selectable.first;
+      });
+    }
     final service = ref.watch(workReportServiceProvider);
     final periodStream = service.watchPeriod(_subjectClockNo, periodKey);
     final additionalStream =
         service.watchAdditionalLines(_subjectClockNo, periodKey);
+    final jobLinesStream = service.watchJobLines(_subjectClockNo, periodKey);
     final editable = WorkReportPeriodUtils.isPeriodEditable(
       periodKey,
       editablePeriodsBack: settings.editablePeriodsBack,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
     );
 
     if (!canUseWorkReportModule(currentEmployee, settings)) {
@@ -308,12 +341,27 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
         stream: periodStream,
         builder: (context, snapshot) {
           final period = snapshot.data;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _maybeAutoRefresh(service, settings, period);
+          });
           return StreamBuilder(
             stream: additionalStream,
             builder: (context, addSnap) {
+              return StreamBuilder(
+                stream: jobLinesStream,
+                builder: (context, jobSnap) {
               final additional = addSnap.data ?? const [];
+              final jobLines = jobSnap.data ?? const [];
               final daily = WorkReportDailyHours.fromAdditionalLines(additional);
               final hoursFmt = NumberFormat('#,##0.#');
+              final totalHours = period?.totalHours ??
+                  (jobLines.fold<double>(0, (s, l) => s + l.hours) +
+                      additional.fold<double>(0, (s, l) => s + l.hours));
+              final softWarn = service.monthlyHoursSoftWarning(
+                totalHours: totalHours,
+                periodKey: periodKey,
+                settings: settings,
+              );
 
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -330,15 +378,31 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                     _AdminWorkerPicker(settings: settings),
                   const SizedBox(height: 8),
                   Text('Period', style: Theme.of(context).textTheme.titleSmall),
+                  if (settings.isFactoryPeriodMode)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Factory pay period (day ${settings.periodStartDay} open)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).appColors.textMuted,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     children: [
                       for (final key in selectable)
                         ChoiceChip(
-                          label: Text(WorkReportPeriodUtils.periodLabel(key)),
+                          label: Text(WorkReportPeriodUtils.periodLabel(
+                            key,
+                            periodMode: settings.defaultPeriodMode,
+                            periodStartDay: settings.periodStartDay,
+                          )),
                           selected: periodKey == key,
                           onSelected: (_) {
+                            _autoRefreshTried = false;
                             ref.read(workReportPeriodKeyProvider.notifier).state =
                                 key;
                           },
@@ -349,22 +413,37 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                     const SizedBox(height: 12),
                     _PdfWarningBanner(period: period!),
                   ],
+                  if (softWarn != null) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .errorContainer
+                          .withValues(alpha: 0.35),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(softWarn, style: const TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   _SummaryCard(
                     label: 'Job card hours',
-                    value: period?.totalJobHours ?? 0,
+                    value: period?.totalJobHours ??
+                        jobLines.fold<double>(0, (s, l) => s + l.hours),
                     color: kBrandOrange,
                   ),
                   const SizedBox(height: 8),
                   _SummaryCard(
                     label: 'Additional hours',
-                    value: period?.totalAdditionalHours ?? 0,
+                    value: period?.totalAdditionalHours ??
+                        additional.fold<double>(0, (s, l) => s + l.hours),
                     color: Theme.of(context).appColors.statusOpen,
                   ),
                   const SizedBox(height: 8),
                   _SummaryCard(
                     label: 'Total hours',
-                    value: period?.totalHours ?? 0,
+                    value: totalHours,
                     color: Theme.of(context).appColors.wasteGreen,
                     bold: true,
                   ),
@@ -373,6 +452,14 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                     Text(
                       'Additional work by day',
                       style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Text(
+                      'Job card hours are period totals (no daily split). '
+                      'Cap applies to additional work only.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).appColors.textMuted,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -478,6 +565,8 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                     label: Text(_exportingCsv ? 'Exporting…' : 'Export CSV'),
                   ),
                 ],
+              );
+                },
               );
             },
           );

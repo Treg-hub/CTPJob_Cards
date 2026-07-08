@@ -4,12 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main.dart' show currentEmployee;
 import '../models/employee.dart';
 import '../models/work_report_job_line.dart';
+import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
 import '../providers/work_report_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/work_report_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/role.dart';
 import '../utils/work_report_period_utils.dart';
+import '../utils/work_report_soft_lock.dart';
 import '../widgets/ctp_app_bar.dart';
 
 class WorkReportJobLinesScreen extends ConsumerStatefulWidget {
@@ -31,6 +34,7 @@ class _WorkReportJobLinesScreenState
     extends ConsumerState<WorkReportJobLinesScreen> {
   bool _refreshing = false;
   final _firestoreService = FirestoreService();
+  WorkReportPeriod? _period;
 
   bool get _editable {
     final settings =
@@ -39,12 +43,29 @@ class _WorkReportJobLinesScreenState
     return WorkReportPeriodUtils.isPeriodEditable(
       widget.periodKey,
       editablePeriodsBack: settings.editablePeriodsBack,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
     );
   }
 
   bool get _isAdminEdit =>
       isAdmin(currentEmployee) &&
       currentEmployee?.clockNo != widget.subjectClockNo;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPeriod();
+  }
+
+  Future<void> _loadPeriod() async {
+    final service = ref.read(workReportServiceProvider);
+    final p = await service
+        .watchPeriod(widget.subjectClockNo, widget.periodKey)
+        .first
+        .timeout(const Duration(seconds: 10));
+    if (mounted) setState(() => _period = p);
+  }
 
   Future<void> _refresh(WorkReportService service, Employee subject) async {
     if (currentEmployee == null) return;
@@ -60,6 +81,7 @@ class _WorkReportJobLinesScreenState
         subject: subject,
         actor: currentEmployee!,
       );
+      await _loadPeriod();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Added $added job card(s)')),
@@ -83,6 +105,8 @@ class _WorkReportJobLinesScreenState
     required String? prevSummary,
   }) async {
     if (currentEmployee == null) return;
+    final ok = await confirmWorkReportEditAfterPdf(context, period: _period);
+    if (!ok) return;
     try {
       await service.upsertJobLine(
         line: line,
@@ -91,6 +115,7 @@ class _WorkReportJobLinesScreenState
         previousHours: prevHours,
         previousSummary: prevSummary,
       );
+      await _loadPeriod();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -201,6 +226,7 @@ class _JobLineTileState extends State<_JobLineTile> {
   late final TextEditingController _hoursCtrl;
   late final TextEditingController _summaryCtrl;
   bool _expanded = false;
+  bool _dirty = false;
 
   @override
   void initState() {
@@ -209,15 +235,28 @@ class _JobLineTileState extends State<_JobLineTile> {
       text: widget.line.hours == 0 ? '' : widget.line.hours.toString(),
     );
     _summaryCtrl = TextEditingController(text: widget.line.billingSummary);
+    _hoursCtrl.addListener(_markDirty);
+    _summaryCtrl.addListener(_markDirty);
+  }
+
+  void _markDirty() {
+    final hours = double.tryParse(_hoursCtrl.text.trim()) ?? 0;
+    final dirty = hours != widget.line.hours ||
+        _summaryCtrl.text.trim() != widget.line.billingSummary;
+    if (dirty != _dirty) setState(() => _dirty = dirty);
   }
 
   @override
   void didUpdateWidget(covariant _JobLineTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.line.id != widget.line.id) {
+    if (oldWidget.line.id != widget.line.id ||
+        (!_dirty &&
+            (oldWidget.line.hours != widget.line.hours ||
+                oldWidget.line.billingSummary != widget.line.billingSummary))) {
       _hoursCtrl.text =
           widget.line.hours == 0 ? '' : widget.line.hours.toString();
       _summaryCtrl.text = widget.line.billingSummary;
+      _dirty = false;
     }
   }
 
@@ -249,13 +288,16 @@ class _JobLineTileState extends State<_JobLineTile> {
       widget.line.hours.toString(),
       widget.line.billingSummary,
     );
+    setState(() => _dirty = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final line = widget.line;
+    final scheme = Theme.of(context).colorScheme;
+    final orphanBg = scheme.surfaceContainerHighest.withValues(alpha: 0.55);
     return Card(
-      color: line.orphan ? Colors.grey.shade100 : null,
+      color: line.orphan ? orphanBg : null,
       child: ExpansionTile(
         initiallyExpanded: _expanded,
         onExpansionChanged: (v) => setState(() => _expanded = v),
@@ -266,9 +308,15 @@ class _JobLineTileState extends State<_JobLineTile> {
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         subtitle: Text(
-          line.jobMeta.locationLabel,
+          [
+            line.jobMeta.locationLabel,
+            if (_dirty) '• Unsaved',
+          ].where((s) => s.trim().isNotEmpty).join(' '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _dirty ? scheme.primary : null,
+          ),
         ),
         children: [
           Padding(
@@ -277,9 +325,12 @@ class _JobLineTileState extends State<_JobLineTile> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (line.orphan)
-                  const Text(
+                  Text(
                     'No longer matches inclusion rules (hours kept).',
-                    style: TextStyle(color: Colors.orange, fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).appColors.statusOpen,
+                      fontSize: 12,
+                    ),
                   ),
                 const SizedBox(height: 8),
                 TextField(
@@ -323,7 +374,10 @@ class _JobLineTileState extends State<_JobLineTile> {
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(onPressed: _commit, child: const Text('Save')),
+                    child: FilledButton(
+                      onPressed: _dirty ? _commit : null,
+                      child: Text(_dirty ? 'Save changes' : 'Saved'),
+                    ),
                   ),
                 ],
               ],

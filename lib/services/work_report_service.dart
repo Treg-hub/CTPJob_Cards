@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 
@@ -19,6 +20,26 @@ import '../utils/work_report_period_utils.dart';
 class WorkReportService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final _uuid = const Uuid();
+
+  Map<String, dynamic> _periodBounds(
+    String periodKey,
+    WorkReportSettings settings,
+  ) {
+    final mode = settings.defaultPeriodMode;
+    final day = settings.periodStartDay;
+    return {
+      'start': WorkReportPeriodUtils.periodStart(
+        periodKey,
+        periodMode: mode,
+        periodStartDay: day,
+      ),
+      'end': WorkReportPeriodUtils.periodEnd(
+        periodKey,
+        periodMode: mode,
+        periodStartDay: day,
+      ),
+    };
+  }
 
   Stream<WorkReportSettings> watchSettings() {
     return _db
@@ -70,12 +91,50 @@ class WorkReportService {
           ..sort((a, b) => b.workDate.compareTo(a.workDate)));
   }
 
+  /// Candidate jobs: currently assigned + created/operator + recent My Work slice.
   Future<List<JobCard>> fetchCandidateJobCards(String clockNo) async {
-    final snap = await _db
-        .collection(Collections.jobCards)
-        .where('assignedClockNos', arrayContains: clockNo)
-        .get();
-    return FirestoreService.parseJobCards(snap.docs);
+    final byId = <String, JobCard>{};
+
+    Future<void> mergeQuery(Query<Map<String, dynamic>> q) async {
+      try {
+        final snap = await q.get();
+        for (final job in FirestoreService.parseJobCards(snap.docs)) {
+          if (job.id != null) byId[job.id!] = job;
+        }
+      } catch (e) {
+        debugPrint('Work report candidate query failed: $e');
+      }
+    }
+
+    await Future.wait([
+      mergeQuery(
+        _db
+            .collection(Collections.jobCards)
+            .where('assignedClockNos', arrayContains: clockNo)
+            .limit(400),
+      ),
+      mergeQuery(
+        _db
+            .collection(Collections.jobCards)
+            .where('operatorClockNo', isEqualTo: clockNo)
+            .limit(200),
+      ),
+    ]);
+
+    // My Work stream one-shot for anything still missing (created+assigned mix).
+    try {
+      final myWork = await FirestoreService()
+          .getMyJobCards(clockNo)
+          .first
+          .timeout(const Duration(seconds: 12));
+      for (final job in myWork) {
+        if (job.id != null) byId[job.id!] = job;
+      }
+    } catch (e) {
+      debugPrint('Work report My Work merge failed: $e');
+    }
+
+    return byId.values.toList();
   }
 
   Future<void> ensurePeriodHeader({
@@ -83,21 +142,21 @@ class WorkReportService {
     required String periodKey,
     required Employee subject,
     required Employee actor,
+    WorkReportSettings? settings,
   }) async {
     final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
     final ref = _db.collection(Collections.workReportPeriods).doc(id);
     final existing = await ref.get();
     if (existing.exists) return;
 
+    final s = settings ?? WorkReportSettings.defaults;
+    final bounds = _periodBounds(periodKey, s);
+
     final payload = {
       'clockNo': clockNo,
       'periodKey': periodKey,
-      'periodStart': Timestamp.fromDate(
-        WorkReportPeriodUtils.periodStart(periodKey),
-      ),
-      'periodEnd': Timestamp.fromDate(
-        WorkReportPeriodUtils.periodEnd(periodKey),
-      ),
+      'periodStart': Timestamp.fromDate(bounds['start'] as DateTime),
+      'periodEnd': Timestamp.fromDate(bounds['end'] as DateTime),
       'employeeName': subject.name,
       'department': subject.department,
       'position': subject.position,
@@ -117,8 +176,46 @@ class WorkReportService {
     );
   }
 
-  /// Re-runs inclusion; adds new lines; marks stale lines orphan (keeps hours).
+  /// Prefer server CF when online; fall back to client inclusion.
   Future<int> refreshJobLines({
+    required String clockNo,
+    required String periodKey,
+    required WorkReportSettings settings,
+    required Employee subject,
+    required Employee actor,
+    bool preferCloudFunction = true,
+  }) async {
+    final online = await ConnectivityService().isOnline();
+    if (preferCloudFunction && online) {
+      try {
+        final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+            .httpsCallable('refreshWorkReportJobLines');
+        final result = await callable.call(<String, dynamic>{
+          'clockNo': clockNo,
+          'periodKey': periodKey,
+        });
+        final data = result.data;
+        if (data is Map) {
+          final added = data['added'];
+          if (added is int) return added;
+          if (added is num) return added.toInt();
+        }
+        return 0;
+      } catch (e) {
+        debugPrint('refreshWorkReportJobLines CF failed, client fallback: $e');
+      }
+    }
+    return _refreshJobLinesClient(
+      clockNo: clockNo,
+      periodKey: periodKey,
+      settings: settings,
+      subject: subject,
+      actor: actor,
+    );
+  }
+
+  /// Re-runs inclusion; adds new lines; marks stale lines orphan (keeps hours).
+  Future<int> _refreshJobLinesClient({
     required String clockNo,
     required String periodKey,
     required WorkReportSettings settings,
@@ -130,10 +227,12 @@ class WorkReportService {
       periodKey: periodKey,
       subject: subject,
       actor: actor,
+      settings: settings,
     );
 
-    final periodStart = WorkReportPeriodUtils.periodStart(periodKey);
-    final periodEnd = WorkReportPeriodUtils.periodEnd(periodKey);
+    final bounds = _periodBounds(periodKey, settings);
+    final periodStart = bounds['start'] as DateTime;
+    final periodEnd = bounds['end'] as DateTime;
     final jobs = await fetchCandidateJobCards(clockNo);
     final included = jobs
         .where((j) => j.id != null)
@@ -218,7 +317,7 @@ class WorkReportService {
     return added;
   }
 
-  /// Admin edits logged after [pdfGeneratedAt], for PDF footnote.
+  /// Admin + post-PDF worker edits for PDF footnote.
   Future<int> countEditsAfterPdf({
     required String clockNo,
     required String periodKey,
@@ -239,6 +338,13 @@ class WorkReportService {
     return count;
   }
 
+  Future<bool> _periodHasPdf(String clockNo, String periodKey) async {
+    final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
+    final snap =
+        await _db.collection(Collections.workReportPeriods).doc(id).get();
+    return snap.data()?['pdfGeneratedAt'] != null;
+  }
+
   Future<void> upsertJobLine({
     required WorkReportJobLine line,
     required Employee actor,
@@ -247,6 +353,9 @@ class WorkReportService {
     String? previousHours,
     String? previousSummary,
   }) async {
+    if (line.hours < 0) {
+      throw WorkReportValidationException('Hours cannot be negative');
+    }
     final data = line.toFirestore();
     await _writeDoc(
       collection: Collections.workReportJobLines,
@@ -255,7 +364,10 @@ class WorkReportService {
       data: data,
       merge: true,
     );
-    if (isAdminEdit && isAdmin(actor)) {
+
+    final shouldAudit = (isAdminEdit && isAdmin(actor)) ||
+        await _periodHasPdf(line.clockNo, line.periodKey);
+    if (shouldAudit) {
       if (previousHours != null && previousHours != line.hours.toString()) {
         await _writeAudit(
           targetCollection: Collections.workReportJobLines,
@@ -281,7 +393,12 @@ class WorkReportService {
         );
       }
     }
-    await _recomputePeriodTotals(line.clockNo, line.periodKey, actor.clockNo);
+    await _recomputePeriodTotals(
+      line.clockNo,
+      line.periodKey,
+      actor.clockNo,
+      jobHoursHint: null,
+    );
   }
 
   Future<void> upsertAdditionalLine({
@@ -301,7 +418,10 @@ class WorkReportService {
       data: data,
       merge: !isCreate,
     );
-    if (isAdminEdit && isAdmin(actor) && previous != null) {
+
+    final shouldAudit = (isAdminEdit && isAdmin(actor)) ||
+        await _periodHasPdf(line.clockNo, line.periodKey);
+    if (shouldAudit && previous != null) {
       for (final field in ['hours', 'description', 'workDate']) {
         final oldVal = _fieldValue(previous, field);
         final newVal = _fieldValue(line, field);
@@ -318,6 +438,17 @@ class WorkReportService {
           );
         }
       }
+    } else if (shouldAudit && isCreate) {
+      await _writeAudit(
+        targetCollection: Collections.workReportAdditionalLines,
+        targetId: line.id,
+        clockNo: line.clockNo,
+        periodKey: line.periodKey,
+        field: 'create',
+        oldValue: '',
+        newValue: '${line.hours}h ${line.description}',
+        actor: actor,
+      );
     }
     await _recomputePeriodTotals(line.clockNo, line.periodKey, actor.clockNo);
   }
@@ -326,12 +457,25 @@ class WorkReportService {
     required WorkReportAdditionalLine line,
     required Employee actor,
   }) async {
+    final hadPdf = await _periodHasPdf(line.clockNo, line.periodKey);
     await _writeDoc(
       collection: Collections.workReportAdditionalLines,
       docId: line.id,
       operation: 'delete',
       data: {},
     );
+    if (hadPdf || isAdmin(actor)) {
+      await _writeAudit(
+        targetCollection: Collections.workReportAdditionalLines,
+        targetId: line.id,
+        clockNo: line.clockNo,
+        periodKey: line.periodKey,
+        field: 'delete',
+        oldValue: '${line.hours}h ${line.description}',
+        newValue: '',
+        actor: actor,
+      );
+    }
     await _recomputePeriodTotals(line.clockNo, line.periodKey, actor.clockNo);
   }
 
@@ -340,25 +484,23 @@ class WorkReportService {
     required String periodKey,
     required Employee actor,
   }) async {
+    final online = await ConnectivityService().isOnline();
+    if (!online) {
+      throw WorkReportValidationException(
+        'Connect to the network to record PDF generation',
+      );
+    }
     final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
-    final ref = _db.collection(Collections.workReportPeriods).doc(id);
-    final snap = await ref.get();
-    final currentVersion =
-        (snap.data()?['pdfVersion'] as int?) ?? 0;
-    await _writeDoc(
-      collection: Collections.workReportPeriods,
-      docId: id,
-      operation: 'set',
-      data: {
-        'pdfGeneratedAt': FieldValue.serverTimestamp(),
-        'pdfVersion': currentVersion + 1,
-        'lastUpdatedByClockNo': actor.clockNo,
-        'lastUpdatedAt': FieldValue.serverTimestamp(),
-      },
-      merge: true,
-    );
+    // Atomic version bump — never queue FieldValue.increment offline.
+    await _db.collection(Collections.workReportPeriods).doc(id).set({
+      'pdfGeneratedAt': FieldValue.serverTimestamp(),
+      'pdfVersion': FieldValue.increment(1),
+      'lastUpdatedByClockNo': actor.clockNo,
+      'lastUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
+  /// Cap applies to **additional work** by calendar day (job lines have no work date).
   void validateDailyHoursCap({
     required List<WorkReportAdditionalLine> additionalLines,
     required WorkReportSettings settings,
@@ -372,38 +514,106 @@ class WorkReportService {
     for (final entry in byDay.entries) {
       if (entry.value > settings.maxHoursPerDay + 0.001) {
         throw WorkReportValidationException(
-          'Hours on ${entry.key} exceed ${settings.maxHoursPerDay}h limit '
+          'Additional work on ${entry.key} exceeds ${settings.maxHoursPerDay}h '
           '(${entry.value.toStringAsFixed(1)}h)',
         );
       }
     }
   }
 
+  /// Soft monthly guidance: total hours vs max/day × weekdays in period.
+  String? monthlyHoursSoftWarning({
+    required double totalHours,
+    required String periodKey,
+    required WorkReportSettings settings,
+  }) {
+    final days = WorkReportPeriodUtils.workingDaysInPeriod(
+      periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    );
+    if (days <= 0) return null;
+    final softCap = settings.maxHoursPerDay * days;
+    if (totalHours > softCap + 0.001) {
+      return 'Total ${totalHours.toStringAsFixed(1)}h exceeds rough month cap '
+          '(${softCap.toStringAsFixed(0)}h = ${settings.maxHoursPerDay}h × $days weekdays). '
+          'Review before sharing with Accounts.';
+    }
+    return null;
+  }
+
+  Future<void> recomputePeriodTotalsFromLists({
+    required String clockNo,
+    required String periodKey,
+    required String actorClockNo,
+    required List<WorkReportJobLine> jobLines,
+    required List<WorkReportAdditionalLine> additionalLines,
+  }) async {
+    final jobHours = jobLines.fold<double>(0, (s, l) => s + l.hours);
+    final addHours = additionalLines.fold<double>(0, (s, l) => s + l.hours);
+    await _writePeriodTotals(
+      clockNo,
+      periodKey,
+      actorClockNo,
+      jobHours,
+      addHours,
+    );
+  }
+
   Future<void> _recomputePeriodTotals(
     String clockNo,
     String periodKey,
+    String actorClockNo, {
+    double? jobHoursHint,
+  }) async {
+    final online = await ConnectivityService().isOnline();
+    if (!online) {
+      // Offline: avoid clobbering totals with incomplete server reads.
+      // Next online write or CF trigger will recompute.
+      debugPrint('Work report totals skip recompute while offline');
+      return;
+    }
+
+    try {
+      final jobSnap = await _db
+          .collection(Collections.workReportJobLines)
+          .where('clockNo', isEqualTo: clockNo)
+          .where('periodKey', isEqualTo: periodKey)
+          .get();
+      final addSnap = await _db
+          .collection(Collections.workReportAdditionalLines)
+          .where('clockNo', isEqualTo: clockNo)
+          .where('periodKey', isEqualTo: periodKey)
+          .get();
+
+      final jobHours = jobSnap.docs.fold<double>(
+        0,
+        (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
+      );
+      final addHours = addSnap.docs.fold<double>(
+        0,
+        (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
+      );
+
+      await _writePeriodTotals(
+        clockNo,
+        periodKey,
+        actorClockNo,
+        jobHours,
+        addHours,
+      );
+    } catch (e) {
+      debugPrint('Work report totals recompute failed: $e');
+    }
+  }
+
+  Future<void> _writePeriodTotals(
+    String clockNo,
+    String periodKey,
     String actorClockNo,
+    double jobHours,
+    double addHours,
   ) async {
-    final jobSnap = await _db
-        .collection(Collections.workReportJobLines)
-        .where('clockNo', isEqualTo: clockNo)
-        .where('periodKey', isEqualTo: periodKey)
-        .get();
-    final addSnap = await _db
-        .collection(Collections.workReportAdditionalLines)
-        .where('clockNo', isEqualTo: clockNo)
-        .where('periodKey', isEqualTo: periodKey)
-        .get();
-
-    final jobHours = jobSnap.docs.fold<double>(
-      0,
-      (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
-    );
-    final addHours = addSnap.docs.fold<double>(
-      0,
-      (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
-    );
-
     final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
     await _writeDoc(
       collection: Collections.workReportPeriods,
@@ -430,7 +640,12 @@ class WorkReportService {
     if (line.description.trim().isEmpty) {
       throw WorkReportValidationException('Description is required');
     }
-    if (!WorkReportPeriodUtils.isDateInPeriod(line.workDate, line.periodKey)) {
+    if (!WorkReportPeriodUtils.isDateInPeriod(
+      line.workDate,
+      line.periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    )) {
       throw WorkReportValidationException('Date must fall within the period');
     }
     if (line.hours > settings.maxHoursPerDay) {
@@ -463,7 +678,7 @@ class WorkReportService {
     required String newValue,
     required Employee actor,
   }) async {
-    await _db.collection(Collections.workReportAudit).add({
+    final payload = {
       'targetCollection': targetCollection,
       'targetId': targetId,
       'clockNo': clockNo,
@@ -474,7 +689,26 @@ class WorkReportService {
       'editedByClockNo': actor.clockNo,
       'editedByName': actor.name,
       'editedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    final online = await ConnectivityService().isOnline();
+    if (!online) {
+      // Audit requires admin create in rules for pure clients — workers may fail
+      // offline. Queue best-effort; server may reject non-admin. Prefer online.
+      final auditId = _uuid.v4();
+      await SyncService().addToQueue(
+        collection: Collections.workReportAudit,
+        operation: 'set',
+        data: SyncService.sanitizeForHive(payload),
+        documentId: auditId,
+      );
+      return;
+    }
+    try {
+      await _db.collection(Collections.workReportAudit).add(payload);
+    } catch (e) {
+      // Workers cannot create audit under tightened rules — CF/trigger owns post-PDF.
+      debugPrint('Work report audit write skipped: $e');
+    }
   }
 
   Future<void> _writeDoc({
@@ -487,20 +721,36 @@ class WorkReportService {
     final online = await ConnectivityService().isOnline();
     final payload = Map<String, dynamic>.from(data);
 
-    if (!online || operation == 'delete') {
+    // FieldValue.increment cannot be queued through Hive sanitisation safely.
+    if (!online) {
+      final hasServerFieldValue = payload.values.any(
+        (v) => v is FieldValue,
+      );
+      if (hasServerFieldValue) {
+        // Replace increment with deferred online-only path: store without version
+        // bump fields that need server ops; merge safe keys only.
+        payload.removeWhere((_, v) => v is FieldValue);
+      }
       await SyncService().addToQueue(
         collection: collection,
         operation: operation,
         data: SyncService.sanitizeForHive(payload),
         documentId: docId,
       );
-      if (online && operation != 'delete') {
-        try {
-          await _applyDirect(collection, docId, operation, payload, merge);
-          return;
-        } catch (e) {
-          debugPrint('Work report direct write failed, queued: $e');
-        }
+      return;
+    }
+
+    if (operation == 'delete') {
+      await SyncService().addToQueue(
+        collection: collection,
+        operation: operation,
+        data: {},
+        documentId: docId,
+      );
+      try {
+        await _applyDirect(collection, docId, operation, payload, merge);
+      } catch (e) {
+        debugPrint('Work report delete direct failed, queued: $e');
       }
       return;
     }

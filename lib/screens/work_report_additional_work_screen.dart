@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../services/work_report_service.dart';
 import '../utils/role.dart';
 import '../utils/work_report_period_utils.dart';
+import '../utils/work_report_soft_lock.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/work_report_job_link_picker.dart';
 
@@ -35,6 +36,8 @@ class WorkReportAdditionalWorkScreen extends ConsumerWidget {
     final editable = WorkReportPeriodUtils.isPeriodEditable(
       periodKey,
       editablePeriodsBack: settings.editablePeriodsBack,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
     );
     final isAdminEdit =
         isAdmin(currentEmployee) && currentEmployee?.clockNo != subjectClockNo;
@@ -121,6 +124,17 @@ class WorkReportAdditionalWorkScreen extends ConsumerWidget {
                                     isAdminEdit: isAdminEdit,
                                   );
                                 } else if (action == 'delete') {
+                                  final period = await service
+                                      .watchPeriod(subjectClockNo, periodKey)
+                                      .first
+                                      .timeout(const Duration(seconds: 8));
+                                  if (!context.mounted) return;
+                                  final lockOk =
+                                      await confirmWorkReportEditAfterPdf(
+                                    context,
+                                    period: period,
+                                  );
+                                  if (!lockOk || !context.mounted) return;
                                   final ok = await showDialog<bool>(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
@@ -193,8 +207,25 @@ class WorkReportAdditionalWorkScreen extends ConsumerWidget {
         ref.read(workReportSettingsProvider).valueOrNull ??
             WorkReportSettings.defaults;
     final service = ref.read(workReportServiceProvider);
-    final periodStart = WorkReportPeriodUtils.periodStart(periodKey);
-    final periodEnd = WorkReportPeriodUtils.periodEnd(periodKey);
+
+    final period = await service
+        .watchPeriod(subjectClockNo, periodKey)
+        .first
+        .timeout(const Duration(seconds: 10));
+    if (!context.mounted) return;
+    final ok = await confirmWorkReportEditAfterPdf(context, period: period);
+    if (!ok || !context.mounted) return;
+
+    final periodStart = WorkReportPeriodUtils.periodStart(
+      periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    );
+    final periodEnd = WorkReportPeriodUtils.periodEnd(
+      periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    );
 
     List<WorkReportJobLinkOption> linkOptions = [];
     try {

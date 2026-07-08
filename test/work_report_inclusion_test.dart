@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ctp_job_cards/models/assignment_event.dart';
 import 'package:ctp_job_cards/models/job_card.dart';
@@ -10,6 +11,8 @@ JobCard _job({
   List<AssignmentEvent>? assignmentHistory,
   DateTime? startedAt,
   DateTime? completedAt,
+  String? operatorClockNo,
+  List<Map<String, dynamic>>? commentsLog,
 }) {
   return JobCard(
     id: 'j1',
@@ -21,12 +24,13 @@ JobCard _job({
     type: JobType.mechanical,
     priority: 3,
     operator: 'Op',
-    operatorClockNo: '99',
+    operatorClockNo: operatorClockNo ?? '99',
     status: JobStatus.inProgress,
     assignedClockNos: assignedClockNos,
     assignmentHistory: assignmentHistory ?? const <AssignmentEvent>[],
     startedAt: startedAt,
     completedAt: completedAt,
+    commentsLog: commentsLog ?? const [],
   );
 }
 
@@ -97,6 +101,64 @@ void main() {
         rules,
       ),
       isFalse,
+    );
+  });
+
+  test('parseLogAt accepts Timestamp and ISO string', () {
+    final ts = Timestamp.fromDate(DateTime(2026, 7, 10, 12));
+    expect(WorkReportInclusion.parseLogAt(ts), DateTime(2026, 7, 10, 12));
+    expect(
+      WorkReportInclusion.parseLogAt('2026-07-10T08:00:00.000'),
+      isNotNull,
+    );
+  });
+
+  test('comment activity uses Timestamp at field', () {
+    final periodKey = '2026-07';
+    final start = WorkReportPeriodUtils.periodStart(periodKey);
+    final at = start.add(const Duration(days: 3));
+    final job = _job(
+      assignedClockNos: const [],
+      operatorClockNo: 'other',
+      commentsLog: [
+        {
+          'byClockNo': clock,
+          'at': Timestamp.fromDate(at),
+          'text': 'note',
+        },
+      ],
+    );
+    // commented_by off by default — enable for this case
+    const withComments = WorkReportInclusionRules(includeIfCommentedBy: true);
+    expect(
+      WorkReportInclusion.includeJob(
+        job,
+        clock,
+        start,
+        WorkReportPeriodUtils.periodEnd(periodKey),
+        withComments,
+      ),
+      isTrue,
+    );
+  });
+
+  test('includes operator-created job with created activity via startedAt', () {
+    final periodKey = '2026-07';
+    final start = WorkReportPeriodUtils.periodStart(periodKey);
+    final job = _job(
+      assignedClockNos: const [],
+      operatorClockNo: clock,
+      startedAt: start.add(const Duration(days: 1)),
+    );
+    expect(
+      WorkReportInclusion.includeJob(
+        job,
+        clock,
+        start,
+        WorkReportPeriodUtils.periodEnd(periodKey),
+        rules,
+      ),
+      isTrue,
     );
   });
 }
