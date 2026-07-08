@@ -351,7 +351,7 @@ The control panel. Five scrollable tabs with outlined icons. Opens on **Settings
 
 Grouped cards (default tab):
 
-- **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking update screen is shown with the download URL before Home is reached. Works independently of Remote Config.
+- **App Update Control** — `Minimum Supported Build` (int) and `Update Download URL` (string). Written to `settings/app` in Firestore. On app launch, if `currentBuild < minSupportedBuild`, a blocking `UpdateAvailableScreen` (in-app download + system installer; browser fallback) is shown before Home. Works independently of Remote Config soft prompts. Saving requires a download URL when min build is set. Keep RC `download_url` in sync.
 - **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
 - **Access** — **Escalation Config** per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option). Writes to `notification_configs/global`. Prompts to confirm when re-enabling stages so open jobs aren't flooded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled. **Reset Escalation Stamps** calls `clearEscalationStamps` CF.
 - **Modules** — enable/disable Waste Management and Fleet Maintenance

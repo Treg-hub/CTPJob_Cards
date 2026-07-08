@@ -10,6 +10,7 @@ import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'copper_dashboard_screen.dart';
@@ -54,6 +55,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _minBuildController = TextEditingController();
   final TextEditingController _updateUrlController = TextEditingController();
   bool _killSwitchLoading = true;
+  String? _thisDeviceBuildLabel;
   String? _currentClockNo;
 
   // ── Settings — escalation config ──────────────────────────────────────────
@@ -213,10 +215,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('app').get();
       final data = doc.data() ?? {};
+      String? deviceLabel;
+      try {
+        final info = await PackageInfo.fromPlatform();
+        deviceLabel = 'v${info.version} (build ${info.buildNumber})';
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _minBuildController.text = (data['minSupportedBuild'] ?? '').toString();
         _updateUrlController.text = (data['updateDownloadUrl'] ?? '').toString();
+        _thisDeviceBuildLabel = deviceLabel;
         _killSwitchLoading = false;
       });
     } catch (_) {
@@ -291,13 +299,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       _showError('Min supported build must be a whole number');
       return;
     }
+    final url = _updateUrlController.text.trim();
+    if (build != null && build > 0 && url.isEmpty) {
+      _showError(
+        'Set an Update download URL before enforcing a minimum build — '
+        'otherwise users see a blocked screen with no install path.',
+      );
+      return;
+    }
     try {
       await FirebaseFirestore.instance.collection('settings').doc('app').set({
         if (build != null) 'minSupportedBuild': build,
-        if (_updateUrlController.text.trim().isNotEmpty)
-          'updateDownloadUrl': _updateUrlController.text.trim(),
+        if (url.isNotEmpty) 'updateDownloadUrl': url,
       }, SetOptions(merge: true));
-      if (mounted) _showSuccess('Kill-switch settings saved');
+      if (mounted) {
+        _showSuccess(
+          'Kill-switch saved. Also set Remote Config latest_version / '
+          'latest_build / download_url for soft update prompts.',
+        );
+      }
     } catch (e) {
       _showError('Error: $e');
     }
@@ -1680,9 +1700,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           ]),
           const SizedBox(height: 4),
           Text(
-            'Set the minimum build number that the app accepts. Users on older builds see a blocking update screen until they upgrade.',
+            'Hard gate only: users on older builds see a blocking screen with in-app download & install. '
+            'Soft prompts still come from Firebase Remote Config (latest_version, latest_build, download_url, force_update). '
+            'Use the same APK URL in both places.',
             style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
           ),
+          if (_thisDeviceBuildLabel != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'This device: $_thisDeviceBuildLabel',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kBrandOrange),
+            ),
+          ],
           const SizedBox(height: 12),
           _killSwitchLoading
               ? const Center(child: CircularProgressIndicator())
@@ -1690,13 +1719,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   TextField(
                     controller: _minBuildController,
                     keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('Min supported build', hint: 'e.g. 42'),
+                    decoration: _inputDecoration('Min supported build', hint: 'e.g. 130'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _updateUrlController,
                     decoration: _inputDecoration('Update download URL', hint: 'https://…/app-release.apk'),
                     keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Release checklist: (1) bump pubspec +N (2) prepend docs/CHANGELOG.md '
+                    '(3) upload APK (4) set RC latest_* + download_url (5) only then raise min build if retiring old APKs.',
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted, height: 1.35),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(

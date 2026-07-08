@@ -72,15 +72,16 @@ class WhatsNewService {
       }
 
       if (!context.mounted) return;
-      // Stamp at show time — once per update, even if dismissed by swipe.
-      await prefs.setInt(lastSeenBuildKey, currentBuild);
-
-      if (!context.mounted) return;
+      // Show first, then stamp — so a failed presentation can retry next launch.
       await showWhatsNewSheet(
         context,
         markdown: latest,
         versionLabel: 'v${info.version} (build ${info.buildNumber})',
       );
+      // Stamp after the sheet closes (Got it, swipe, or full-changelog nav pop
+      // of the sheet itself). Once per build regardless of how it was dismissed.
+      final prefsAfter = await SharedPreferences.getInstance();
+      await prefsAfter.setInt(lastSeenBuildKey, currentBuild);
     } catch (e) {
       debugPrint('WhatsNewService: skipped ($e)');
     }

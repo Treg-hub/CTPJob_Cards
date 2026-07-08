@@ -6,6 +6,22 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-08 — In-app updates (download & install)
+
+### Easier app updates
+
+- **Download & install inside the app** — when an update is available, tap **Download & install**. Progress shows while the APK downloads; Android then opens the system installer (same as updating any other app). You no longer need to open Chrome and find the file in Downloads.
+- **Install permission** — the first time, Android may ask you to allow CTP Job Cards to install updates. Use **Open settings**, enable the permission, and return — install continues.
+- **Browser fallback** — **Open download in browser** is still available if the in-app path fails.
+- **Check anytime** — Settings → **Check for Update** (shows your current version on the same screen).
+- **After you update** — the next open still shows **What's changed** once for that build.
+
+### For admins
+
+- Kill-switch (**Admin → App Update Control**) uses the same download/install screen. Always set a download URL before raising min supported build. Soft prompts still come from Firebase Remote Config — keep `download_url` in sync.
+
+---
+
 ## 2026-07-06 — Version 2.3.0 (build 121) — My Timesheet + waste hardening + Pre Press fix
 
 Follow-up to the wide **v2.3.0** rollout. First open shows this summary in **What's changed**.
