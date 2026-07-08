@@ -852,6 +852,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _retryFailedModuleSettings();
     _rearmActiveJobsStreamIfStuck();
     DeviceHealthService().syncPermissionsToFirestore();
+
+    // Soft update check also runs on resume (still respects 4h cooldown),
+    // so long-lived sessions still learn about new APKs without a cold start.
+    if (!kIsWeb && mounted) {
+      try {
+        await UpdateService().checkForUpdate(context);
+      } catch (e) {
+        debugPrint('Update check on resume: $e');
+      }
+    }
   }
 
   @override

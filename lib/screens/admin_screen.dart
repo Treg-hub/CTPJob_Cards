@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
@@ -10,6 +11,7 @@ import '../stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'copper_dashboard_screen.dart';
@@ -50,10 +52,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   String? selectedAreaForMachine;
   Map<String, dynamic> _structure = {};
 
-  // ── Settings — kill-switch ──────────────────────────────────────────────────
+  // ── Settings — kill-switch + soft publish (settings/app) ──────────────────
   final TextEditingController _minBuildController = TextEditingController();
   final TextEditingController _updateUrlController = TextEditingController();
+  final TextEditingController _pubVersionController = TextEditingController();
+  final TextEditingController _pubBuildController = TextEditingController();
+  final TextEditingController _pubNotesController = TextEditingController();
+  final TextEditingController _pubShaController = TextEditingController();
+  bool _pubForceUpdate = false;
   bool _killSwitchLoading = true;
+  String? _thisDeviceBuildLabel;
+  String? _thisDeviceVersion;
+  String? _thisDeviceBuild;
   String? _currentClockNo;
 
   // ── Settings — escalation config ──────────────────────────────────────────
@@ -146,6 +156,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     structureSearchController.dispose();
     _minBuildController.dispose();
     _updateUrlController.dispose();
+    _pubVersionController.dispose();
+    _pubBuildController.dispose();
+    _pubNotesController.dispose();
+    _pubShaController.dispose();
     _stage1MinController.dispose();
     _stage2MinController.dispose();
     _stage3MinController.dispose();
@@ -213,14 +227,65 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('app').get();
       final data = doc.data() ?? {};
+      String? deviceLabel;
+      String? deviceVersion;
+      String? deviceBuild;
+      try {
+        final info = await PackageInfo.fromPlatform();
+        deviceVersion = info.version;
+        deviceBuild = info.buildNumber;
+        deviceLabel = 'v${info.version} (build ${info.buildNumber})';
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _minBuildController.text = (data['minSupportedBuild'] ?? '').toString();
         _updateUrlController.text = (data['updateDownloadUrl'] ?? '').toString();
+        _pubVersionController.text =
+            (data['publishedLatestVersion'] ?? '').toString();
+        _pubBuildController.text =
+            (data['publishedLatestBuild'] ?? '').toString();
+        _pubNotesController.text =
+            (data['publishedReleaseNotes'] ?? '').toString();
+        _pubShaController.text = (data['publishedApkSha256'] ?? '').toString();
+        _pubForceUpdate = data['publishedForceUpdate'] == true;
+        _thisDeviceBuildLabel = deviceLabel;
+        _thisDeviceVersion = deviceVersion;
+        _thisDeviceBuild = deviceBuild;
         _killSwitchLoading = false;
       });
     } catch (_) {
       if (mounted) setState(() => _killSwitchLoading = false);
+    }
+  }
+
+  void _fillPublishFromThisDevice() {
+    setState(() {
+      if (_thisDeviceVersion != null) {
+        _pubVersionController.text = _thisDeviceVersion!;
+      }
+      if (_thisDeviceBuild != null) {
+        _pubBuildController.text = _thisDeviceBuild!;
+      }
+    });
+  }
+
+  Future<void> _copyRemoteConfigSnippet() async {
+    final version = _pubVersionController.text.trim();
+    final build = _pubBuildController.text.trim();
+    final url = _updateUrlController.text.trim();
+    final notes = _pubNotesController.text.trim();
+    final sha = _pubShaController.text.trim();
+    final snippet = [
+      'latest_version = $version',
+      'latest_build = $build',
+      'download_url = $url',
+      'force_update = $_pubForceUpdate',
+      'release_notes = $notes',
+      if (sha.isNotEmpty) 'apk_sha256 = $sha',
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: snippet));
+    if (mounted) {
+      _showSuccess('Remote Config key list copied to clipboard');
     }
   }
 
@@ -291,13 +356,44 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       _showError('Min supported build must be a whole number');
       return;
     }
+    final url = _updateUrlController.text.trim();
+    if (build != null && build > 0 && url.isEmpty) {
+      _showError(
+        'Set an Update download URL before enforcing a minimum build — '
+        'otherwise users see a blocked screen with no install path.',
+      );
+      return;
+    }
+    final pubBuild = _pubBuildController.text.trim();
+    if (pubBuild.isNotEmpty && int.tryParse(pubBuild) == null) {
+      _showError('Published latest build must be a whole number');
+      return;
+    }
+    final pubVersion = _pubVersionController.text.trim();
+    if (pubVersion.isNotEmpty && url.isEmpty) {
+      _showError(
+        'Set the shared download URL before publishing a soft update version.',
+      );
+      return;
+    }
     try {
       await FirebaseFirestore.instance.collection('settings').doc('app').set({
         if (build != null) 'minSupportedBuild': build,
-        if (_updateUrlController.text.trim().isNotEmpty)
-          'updateDownloadUrl': _updateUrlController.text.trim(),
+        if (url.isNotEmpty) 'updateDownloadUrl': url,
+        'publishedLatestVersion': pubVersion,
+        'publishedLatestBuild': pubBuild,
+        'publishedReleaseNotes': _pubNotesController.text.trim(),
+        'publishedApkSha256': _pubShaController.text.trim(),
+        'publishedForceUpdate': _pubForceUpdate,
+        'publishedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      if (mounted) _showSuccess('Kill-switch settings saved');
+      if (mounted) {
+        _showSuccess(
+          'Publish saved to settings/app. Clients use this when Remote Config '
+          'is empty. Optionally paste the same keys into Firebase Remote Config '
+          '(Copy RC keys).',
+        );
+      }
     } catch (e) {
       _showError('Error: $e');
     }
@@ -1670,44 +1766,128 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       padding: ScreenInsets.symmetricScroll(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-        // ── App Kill-switch ─────────────────────────────────────────────────
+        // ── App Update Control (kill-switch + soft publish) ────────────────
         _sectionHeader('APP UPDATE CONTROL'),
         _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.security_update_warning_outlined, color: kBrandOrange, size: 18),
+            Icon(Icons.system_update, color: kBrandOrange, size: 18),
             const SizedBox(width: 8),
-            const Text('Force Update Gate', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text('Publish release', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           ]),
           const SizedBox(height: 4),
           Text(
-            'Set the minimum build number that the app accepts. Users on older builds see a blocking update screen until they upgrade.',
+            'One form for the shared APK URL, soft-update metadata (clients read when '
+            'Remote Config is empty), and the hard kill-switch. Prefer this over '
+            'editing RC alone so floor devices stay in sync.',
             style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
           ),
+          if (_thisDeviceBuildLabel != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'This device: $_thisDeviceBuildLabel',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kBrandOrange),
+            ),
+          ],
           const SizedBox(height: 12),
           _killSwitchLoading
               ? const Center(child: CircularProgressIndicator())
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  TextField(
-                    controller: _minBuildController,
-                    keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('Min supported build', hint: 'e.g. 42'),
-                  ),
-                  const SizedBox(height: 10),
+                  Text('Shared download URL',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
+                  const SizedBox(height: 6),
                   TextField(
                     controller: _updateUrlController,
                     decoration: _inputDecoration('Update download URL', hint: 'https://…/app-release.apk'),
                     keyboardType: TextInputType.url,
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _saveKillSwitch,
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text('Save'),
-                      style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+                  const SizedBox(height: 16),
+                  Text('Soft update (prompt on Home)',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _pubVersionController,
+                        decoration: _inputDecoration('Latest version', hint: '2.3.0'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _pubBuildController,
+                        keyboardType: TextInputType.number,
+                        decoration: _inputDecoration('Latest build', hint: '131'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _fillPublishFromThisDevice,
+                      icon: const Icon(Icons.phone_android, size: 18),
+                      label: const Text('Fill version from this device'),
                     ),
                   ),
+                  TextField(
+                    controller: _pubNotesController,
+                    maxLines: 3,
+                    decoration: _inputDecoration(
+                      'Short release notes (dialog)',
+                      hint: 'Optional — What’s changed sheet still uses CHANGELOG.md',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _pubShaController,
+                    decoration: _inputDecoration('APK SHA-256 (optional)', hint: '64 hex chars'),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Force soft update (non-dismissible)', style: TextStyle(fontSize: 14)),
+                    subtitle: Text(
+                      'Still not a hard block — use Min supported build to retire broken APKs.',
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
+                    ),
+                    value: _pubForceUpdate,
+                    activeThumbColor: kBrandOrange,
+                    onChanged: (v) => setState(() => _pubForceUpdate = v),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Hard kill-switch',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _minBuildController,
+                    keyboardType: TextInputType.number,
+                    decoration: _inputDecoration('Min supported build', hint: 'e.g. 130 — blocks older builds at launch'),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Checklist: (1) bump pubspec +N (2) prepend docs/CHANGELOG.md with (build N) '
+                    '(3) upload APK to the URL above (4) Save here (5) optional: Copy RC keys into Firebase Console '
+                    '(6) raise min build only when retiring old APKs.',
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _copyRemoteConfigSnippet,
+                        icon: const Icon(Icons.copy_outlined, size: 18),
+                        label: const Text('Copy RC keys'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _saveKillSwitch,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Save publish'),
+                        style: ElevatedButton.styleFrom(backgroundColor: kBrandOrange, foregroundColor: Colors.white),
+                      ),
+                    ),
+                  ]),
                 ]),
         ])),
 

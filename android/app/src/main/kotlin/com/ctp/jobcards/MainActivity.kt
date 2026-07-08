@@ -10,11 +10,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
+import androidx.core.content.FileProvider
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.LocationServices
@@ -24,12 +27,14 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
 
     private val GEOFENCE_CHANNEL = "ctp/geofence"
     private val JOB_ALERT_CHANNEL = "job_alert_channel"
     private val KIOSK_CHANNEL = "ctp/kiosk"
+    private val APK_INSTALL_CHANNEL = "ctp/apk_install"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -151,6 +156,99 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // ==================== IN-APP APK INSTALL CHANNEL ====================
+        // Downloads stay in Flutter; native only exposes FileProvider + installer.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_INSTALL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "canInstallPackages" -> {
+                        result.success(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                packageManager.canRequestPackageInstalls()
+                            } else {
+                                true
+                            }
+                        )
+                    }
+                    "openInstallPermissionSettings" -> {
+                        try {
+                            openInstallPermissionSettings()
+                            result.success(null)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ openInstallPermissionSettings: ${e.message}")
+                            result.error("INSTALL_PERM_SETTINGS", e.message, null)
+                        }
+                    }
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing path", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            installApkFromPath(path)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ installApk: ${e.message}")
+                            result.error("INSTALL_APK_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun openInstallPermissionSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } else {
+            val intent = Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        }
+    }
+
+    private fun installApkFromPath(path: String) {
+        val file = File(path)
+        if (!file.exists()) {
+            throw IllegalArgumentException("APK file not found: $path")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            throw SecurityException(
+                "Install permission not granted — open install settings first"
+            )
+        }
+
+        val uri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            file
+        )
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        // Explicitly grant the package installer read access on some OEMs.
+        val resInfoList = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        for (resolveInfo in resInfoList) {
+            val packageName = resolveInfo.activityInfo.packageName
+            grantUriPermission(
+                packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        startActivity(intent)
+        Log.d(TAG, "✅ Started package installer for $path")
     }
 
     private fun kioskDeviceAdminComponent(): ComponentName =

@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +7,15 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Service for checking and handling app updates via Firebase Remote Config.
+import '../screens/update_available_screen.dart';
+import '../utils/version_compare.dart';
+
+/// Service for checking and handling app updates via Firebase Remote Config,
+/// with a Firestore `settings/app` soft-publish fallback (Admin publish form).
+///
+/// Soft/force prompts open [UpdateAvailableScreen] (in-app APK download +
+/// system installer). Hard retirement of broken builds remains the Firestore
+/// kill-switch (`settings/app.minSupportedBuild`) — see main.dart.
 class UpdateService {
   static final UpdateService _instance = UpdateService._internal();
   factory UpdateService() => _instance;
@@ -21,6 +29,9 @@ class UpdateService {
   static const Duration _incompleteConfigRetry = Duration(hours: 1);
 
   bool _initialized = false;
+
+  /// Prevents stacking multiple update routes from resume + cold start.
+  bool _showingUpdateUi = false;
 
   /// Configure Remote Config on first use. We force a zero SDK-side
   /// minimumFetchInterval so every fetchAndActivate() actually hits the
@@ -38,43 +49,46 @@ class UpdateService {
       'download_url': '',
       'force_update': false,
       'release_notes': '',
+      'apk_sha256': '',
     });
     _initialized = true;
   }
 
-  /// Silent startup check (respects cooldown). Shows the standard update
-  /// dialog only when a newer version is available.
-  /// - Full 4-hour cooldown when RC is properly configured.
-  /// - 1-hour retry when RC keys are missing, so a setup mistake doesn't
-  ///   silence checks for a full day.
+  /// Silent startup / resume check (respects cooldown). Shows the update
+  /// screen only when a newer version is available.
   Future<void> checkForUpdate(BuildContext context) async {
     if (kIsWeb) return;
+    if (_showingUpdateUi) {
+      debugPrint('UpdateService: skipped — update UI already visible');
+      return;
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastCheck = prefs.getInt(_lastCheckKey);
       final now = DateTime.now().millisecondsSinceEpoch;
 
-      if (lastCheck != null && (now - lastCheck) < _checkInterval.inMilliseconds) {
-        final remaining = Duration(milliseconds: _checkInterval.inMilliseconds - (now - lastCheck));
-        debugPrint('UpdateService: skipped — next check in ${remaining.inMinutes}m');
+      if (lastCheck != null &&
+          (now - lastCheck) < _checkInterval.inMilliseconds) {
+        final remaining = Duration(
+            milliseconds: _checkInterval.inMilliseconds - (now - lastCheck));
+        debugPrint(
+            'UpdateService: skipped — next check in ${remaining.inMinutes}m');
         return;
       }
 
       if (!context.mounted) return;
       final result = await _performUpdateCheck(prefs, now);
-      debugPrint('UpdateService: ${result.hasUpdate ? "UPDATE AVAILABLE ${result.latestVersion}" : result.configComplete ? "up to date" : "RC keys not configured"}');
+      debugPrint(
+          'UpdateService: ${result.hasUpdate ? "UPDATE AVAILABLE ${result.latestVersion}" : result.configComplete ? "up to date" : "RC keys not configured"}');
       if (result.hasUpdate && context.mounted) {
-        await _showUpdateDialog(
-          context,
-          result.latestVersion,
-          result.releaseNotes,
-          result.downloadUrl,
-          result.forceUpdate,
-        );
+        await presentUpdate(context, result);
       }
     } catch (e, st) {
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'update_check_silent', fatal: false);
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'update_check_silent', fatal: false);
+      }
       debugPrint('UpdateService: error — $e');
     }
   }
@@ -96,10 +110,40 @@ class UpdateService {
     }
   }
 
+  /// Opens the full-screen update flow (download + install).
+  Future<void> presentUpdate(
+    BuildContext context,
+    UpdateCheckResult result, {
+    bool? forceOverride,
+  }) async {
+    if (!context.mounted || !result.hasUpdate) return;
+    if (_showingUpdateUi) return;
+
+    final force = forceOverride ?? result.forceUpdate;
+    _showingUpdateUi = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => UpdateAvailableScreen(
+            version: result.latestVersion,
+            latestBuild: result.latestBuild,
+            releaseNotes: result.releaseNotes,
+            downloadUrl: result.downloadUrl,
+            forceUpdate: force,
+            apkSha256: result.apkSha256.isEmpty ? null : result.apkSha256,
+          ),
+        ),
+      );
+    } finally {
+      _showingUpdateUi = false;
+    }
+  }
+
   /// Runs the actual fetch + comparison and returns a structured result.
-  /// Never throws — failures are captured in [_UpdateCheckResult.error] so
-  /// the diagnostic dialog can render them.
-  Future<_UpdateCheckResult> _performUpdateCheck(SharedPreferences prefs, int now) async {
+  /// Never throws — failures are captured in [UpdateCheckResult.error].
+  Future<UpdateCheckResult> _performUpdateCheck(
+      SharedPreferences prefs, int now) async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
     final currentBuild = packageInfo.buildNumber;
@@ -110,6 +154,7 @@ class UpdateService {
     String downloadUrl = '';
     bool forceUpdate = false;
     String releaseNotes = '';
+    String apkSha256 = '';
     bool fetchSucceeded = false;
     String? error;
 
@@ -124,31 +169,72 @@ class UpdateService {
       downloadUrl = rc.getString('download_url');
       forceUpdate = rc.getBool('force_update');
       releaseNotes = rc.getString('release_notes');
-      debugPrint('Remote Config -> latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
+      apkSha256 = rc.getString('apk_sha256');
+      debugPrint(
+          'Remote Config -> latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
     } catch (e, st) {
       error = e.toString();
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'remote_config_fetch', fatal: false);
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'remote_config_fetch', fatal: false);
+      }
       debugPrint('Remote Config fetch failed: $e');
     }
 
-    final configComplete = fetchSucceeded && latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
-    final hasUpdate = configComplete &&
-        _isNewerVersion(currentVersion, latestVersion, currentBuild, latestBuild);
-
-    if (fetchSucceeded) {
-      if (configComplete) {
-        // Full cooldown — config is set up correctly.
-        await prefs.setInt(_lastCheckKey, now);
-      } else {
-        // RC fetched OK but keys are empty. Use a short retry so a
-        // misconfiguration doesn't silence update prompts for 4 hours.
-        final shortRetry = now - (_checkInterval.inMilliseconds - _incompleteConfigRetry.inMilliseconds);
-        await prefs.setInt(_lastCheckKey, shortRetry);
-        debugPrint('UpdateService: RC keys incomplete — retrying in ${_incompleteConfigRetry.inMinutes}m');
+    // Admin "Publish soft update" writes the same fields to settings/app so
+    // floor clients still get prompts if RC is empty or lagging. RC wins when set.
+    var fromFirestoreFallback = false;
+    try {
+      final merged = await _mergePublishedFromFirestore(
+        latestVersion: latestVersion,
+        latestBuild: latestBuild,
+        downloadUrl: downloadUrl,
+        releaseNotes: releaseNotes,
+        apkSha256: apkSha256,
+        forceUpdate: forceUpdate,
+      );
+      if (merged.usedFallback) {
+        fromFirestoreFallback = true;
+        latestVersion = merged.latestVersion;
+        latestBuild = merged.latestBuild;
+        downloadUrl = merged.downloadUrl;
+        releaseNotes = merged.releaseNotes;
+        apkSha256 = merged.apkSha256;
+        forceUpdate = merged.forceUpdate;
+        // Treat Firestore publish as a successful config source when RC failed
+        // or was empty — so we don't spin on 1h incomplete retries forever.
+        if (!fetchSucceeded &&
+            latestVersion.isNotEmpty &&
+            downloadUrl.isNotEmpty) {
+          fetchSucceeded = true;
+          error = null;
+        }
+        debugPrint(
+            'UpdateService: filled gaps from settings/app publish fields');
       }
+    } catch (e) {
+      debugPrint('UpdateService: settings/app publish merge skipped: $e');
     }
 
-    return _UpdateCheckResult(
+    final configComplete =
+        latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
+    final hasUpdate = configComplete &&
+        isNewerAppVersion(
+            currentVersion, latestVersion, currentBuild, latestBuild);
+
+    // Cooldown: full interval when we have a complete config from either source.
+    if (configComplete) {
+      await prefs.setInt(_lastCheckKey, now);
+    } else if (fetchSucceeded || fromFirestoreFallback) {
+      final shortRetry = now -
+          (_checkInterval.inMilliseconds -
+              _incompleteConfigRetry.inMilliseconds);
+      await prefs.setInt(_lastCheckKey, shortRetry);
+      debugPrint(
+          'UpdateService: update keys incomplete — retrying in ${_incompleteConfigRetry.inMinutes}m');
+    }
+
+    return UpdateCheckResult(
       currentVersion: currentVersion,
       currentBuild: currentBuild,
       latestVersion: latestVersion,
@@ -156,6 +242,7 @@ class UpdateService {
       downloadUrl: downloadUrl,
       releaseNotes: releaseNotes,
       forceUpdate: forceUpdate,
+      apkSha256: apkSha256,
       fetchSucceeded: fetchSucceeded,
       configComplete: configComplete,
       hasUpdate: hasUpdate,
@@ -163,34 +250,8 @@ class UpdateService {
     );
   }
 
-  bool _isNewerVersion(String currentVersion, String latestVersion, String currentBuild, String latestBuild) {
-    try {
-      final currentParts = currentVersion.split('.').map(int.parse).toList();
-      final latestParts = latestVersion.split('.').map(int.parse).toList();
-
-      for (int i = 0; i < 3; i++) {
-        final current = currentParts.length > i ? currentParts[i] : 0;
-        final latest = latestParts.length > i ? latestParts[i] : 0;
-
-        if (latest > current) return true;
-        if (latest < current) return false;
-      }
-
-      if (latestBuild.isNotEmpty) {
-        final currentBuildNum = int.tryParse(currentBuild) ?? 0;
-        final latestBuildNum = int.tryParse(latestBuild) ?? 0;
-        return latestBuildNum > currentBuildNum;
-      }
-
-      return false;
-    } catch (e, st) {
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'version_compare', fatal: false);
-      debugPrint('Error comparing versions: $e');
-      return false;
-    }
-  }
-
-  Future<void> _showDiagnosticDialog(BuildContext context, _UpdateCheckResult r) async {
+  Future<void> _showDiagnosticDialog(
+      BuildContext context, UpdateCheckResult r) async {
     final Color statusColor;
     final String statusText;
     final IconData statusIcon;
@@ -214,10 +275,14 @@ class UpdateService {
 
     final latestDisplay = r.latestVersion.isEmpty
         ? '(not set)'
-        : (r.latestBuild.isEmpty ? r.latestVersion : '${r.latestVersion}+${r.latestBuild}');
+        : (r.latestBuild.isEmpty
+            ? r.latestVersion
+            : '${r.latestVersion}+${r.latestBuild}');
     final urlDisplay = r.downloadUrl.isEmpty
         ? '(not set)'
-        : (r.downloadUrl.length > 60 ? '${r.downloadUrl.substring(0, 57)}...' : r.downloadUrl);
+        : (r.downloadUrl.length > 60
+            ? '${r.downloadUrl.substring(0, 57)}...'
+            : r.downloadUrl);
 
     return showDialog(
       context: context,
@@ -229,7 +294,8 @@ class UpdateService {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -241,7 +307,8 @@ class UpdateService {
                     Expanded(
                       child: Text(
                         statusText,
-                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: statusColor, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -252,15 +319,19 @@ class UpdateService {
               _kv('Latest', latestDisplay),
               _kv('Force update', r.forceUpdate ? 'yes' : 'no'),
               _kv('Download URL', urlDisplay),
+              if (r.apkSha256.isNotEmpty) _kv('SHA-256', 'set'),
               if (r.releaseNotes.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Release notes:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Release notes:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(r.releaseNotes),
               ],
               if (r.error != null) ...[
                 const SizedBox(height: 8),
-                const Text('Error:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                const Text('Error:',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                 const SizedBox(height: 4),
                 Text(r.error!, style: const TextStyle(color: Colors.red)),
               ],
@@ -276,7 +347,9 @@ class UpdateService {
             ElevatedButton(
               onPressed: () async {
                 Navigator.of(dialogCtx).pop();
-                await _launchDownload(context, r.downloadUrl);
+                if (context.mounted) {
+                  await presentUpdate(context, r);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFF8C42),
@@ -299,7 +372,8 @@ class UpdateService {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: Colors.grey),
             ),
           ),
           Expanded(child: Text(value)),
@@ -308,79 +382,124 @@ class UpdateService {
     );
   }
 
-  Future<void> _launchDownload(BuildContext context, String downloadUrl) async {
+  /// Fills empty RC fields from Admin-published soft-update metadata on
+  /// `settings/app` (same doc as the kill-switch).
+  static Future<
+      ({
+        String latestVersion,
+        String latestBuild,
+        String downloadUrl,
+        String releaseNotes,
+        String apkSha256,
+        bool forceUpdate,
+        bool usedFallback,
+      })> _mergePublishedFromFirestore({
+    required String latestVersion,
+    required String latestBuild,
+    required String downloadUrl,
+    required String releaseNotes,
+    required String apkSha256,
+    required bool forceUpdate,
+  }) async {
+    var v = latestVersion;
+    var b = latestBuild;
+    var url = downloadUrl;
+    var notes = releaseNotes;
+    var sha = apkSha256;
+    var force = forceUpdate;
+
+    final needsAny = v.isEmpty ||
+        url.isEmpty ||
+        b.isEmpty ||
+        notes.isEmpty ||
+        sha.isEmpty ||
+        !force;
+    if (!needsAny) {
+      return (
+        latestVersion: v,
+        latestBuild: b,
+        downloadUrl: url,
+        releaseNotes: notes,
+        apkSha256: sha,
+        forceUpdate: force,
+        usedFallback: false,
+      );
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('settings')
+        .doc('app')
+        .get()
+        .timeout(const Duration(seconds: 4));
+    final d = doc.data();
+    if (d == null) {
+      return (
+        latestVersion: v,
+        latestBuild: b,
+        downloadUrl: url,
+        releaseNotes: notes,
+        apkSha256: sha,
+        forceUpdate: force,
+        usedFallback: false,
+      );
+    }
+
+    var used = false;
+    String pick(String current, dynamic published) {
+      if (current.isNotEmpty) return current;
+      final s = published?.toString().trim() ?? '';
+      if (s.isNotEmpty) {
+        used = true;
+        return s;
+      }
+      return current;
+    }
+
+    v = pick(v, d['publishedLatestVersion']);
+    b = pick(b, d['publishedLatestBuild']);
+    url = pick(url, d['updateDownloadUrl']);
+    notes = pick(notes, d['publishedReleaseNotes']);
+    sha = pick(sha, d['publishedApkSha256']);
+    if (!force && d['publishedForceUpdate'] == true) {
+      force = true;
+      used = true;
+    }
+
+    return (
+      latestVersion: v,
+      latestBuild: b,
+      downloadUrl: url,
+      releaseNotes: notes,
+      apkSha256: sha,
+      forceUpdate: force,
+      usedFallback: used,
+    );
+  }
+
+  /// Browser fallback when in-app install is unavailable.
+  Future<void> launchDownloadUrl(BuildContext context, String downloadUrl) async {
     debugPrint('UpdateService: launching download URL: $downloadUrl');
     try {
       final uri = Uri.parse(downloadUrl);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e, st) {
       debugPrint('UpdateService: failed to launch URL – $e');
-      if (!kIsWeb) FirebaseCrashlytics.instance.recordError(e, st, reason: 'launch_download_url', fatal: false);
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'launch_download_url', fatal: false);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open download link. Try visiting the URL manually.\n$downloadUrl')),
+          SnackBar(
+              content: Text(
+                  'Could not open download link. Try visiting the URL manually.\n$downloadUrl')),
         );
       }
     }
   }
-
-  Future<void> _showUpdateDialog(
-    BuildContext context,
-    String version,
-    String? releaseNotes,
-    String downloadUrl,
-    bool forceUpdate,
-  ) async {
-    return showDialog(
-      context: context,
-      barrierDismissible: !forceUpdate,
-      builder: (context) => PopScope(
-        canPop: !forceUpdate,
-        child: AlertDialog(
-          title: Text('Update Available (v$version)'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (releaseNotes != null && releaseNotes.isNotEmpty) ...[
-                  const Text('What\'s New:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(releaseNotes),
-                  const SizedBox(height: 16),
-                ],
-                const Text(
-                  'A new version of the app is available. Please update to continue using the latest features.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            if (!forceUpdate)
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Later'),
-              ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _launchDownload(context, downloadUrl);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF8C42),
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Update Now'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-class _UpdateCheckResult {
+class UpdateCheckResult {
   final String currentVersion;
   final String currentBuild;
   final String latestVersion;
@@ -388,12 +507,13 @@ class _UpdateCheckResult {
   final String downloadUrl;
   final String releaseNotes;
   final bool forceUpdate;
+  final String apkSha256;
   final bool fetchSucceeded;
   final bool configComplete;
   final bool hasUpdate;
   final String? error;
 
-  _UpdateCheckResult({
+  UpdateCheckResult({
     required this.currentVersion,
     required this.currentBuild,
     required this.latestVersion,
@@ -401,6 +521,7 @@ class _UpdateCheckResult {
     required this.downloadUrl,
     required this.releaseNotes,
     required this.forceUpdate,
+    this.apkSha256 = '',
     required this.fetchSucceeded,
     required this.configComplete,
     required this.hasUpdate,

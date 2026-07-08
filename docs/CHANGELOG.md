@@ -6,6 +6,28 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-08 — In-app updates, publish form, first-run paths (build 131+)
+
+### Easier app updates
+
+- **Download & install inside the app** — when an update is available, tap **Download & install**. Progress shows while the APK downloads; Android then opens the system installer (same as updating any other app). You no longer need to open Chrome and find the file in Downloads.
+- **Install permission** — the first time, Android may ask you to allow CTP Job Cards to install updates. Use **Open settings**, enable the permission, and return — install continues.
+- **Browser fallback** — **Open download in browser** is still available if the in-app path fails.
+- **Check anytime** — Settings → **Check for Update** (shows your current version on the same screen).
+- **After you update** — the next open still shows **What's changed**. If you skipped several builds, notes for each `(build N)` entry since your last open can roll up together (newest first).
+
+### First-time setup by role
+
+- **Security / Fleet / Ink** staff get a shorter first-run tour aimed at their module, then a **You're ready** screen listing what Home will show.
+- Classic job-card roles keep the full job-card / priority / escalation tour, then the same finish summary.
+- Technicians and managers get an extra confirmation if they try to skip core alert permissions.
+
+### For admins
+
+- **Admin → App Update Control → Publish release** — one form for the shared APK URL, soft-update version/build/notes/force flag, optional SHA-256, and min supported build. **Save publish** writes `settings/app` (clients use this when Remote Config is empty). **Copy RC keys** pastes the same values for the Firebase Remote Config console.
+
+---
+
 ## 2026-07-06 — Version 2.3.0 (build 121) — My Timesheet + waste hardening + Pre Press fix
 
 Follow-up to the wide **v2.3.0** rollout. First open shows this summary in **What's changed**.

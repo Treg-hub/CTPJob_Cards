@@ -69,4 +69,56 @@ Append-only log of user-visible changes.
       expect(entry, contains('Section two'));
     });
   });
+
+  group('WhatsNewService.extractEntriesSince', () {
+    const changelog = '''
+# Title
+
+## 2026-07-08 — Version 2.3.0 (build 131) — Newest
+
+- New feature
+
+---
+
+## 2026-07-06 — Version 2.3.0 (build 121) — Mid
+
+- Mid feature
+
+---
+
+## 2026-07-01 — Version 2.1.1 (build 38) — Old
+
+- Old feature
+''';
+
+    test('null lastSeen returns only the latest entry', () {
+      final md = WhatsNewService.extractEntriesSince(changelog, null);
+      expect(md, contains('build 131'));
+      expect(md, isNot(contains('build 121')));
+    });
+
+    test('rolls up numbered builds newer than lastSeen', () {
+      final md = WhatsNewService.extractEntriesSince(changelog, 38);
+      expect(md, contains('build 131'));
+      expect(md, contains('build 121'));
+      expect(md, isNot(contains('build 38')));
+    });
+
+    test('when already past all numbered builds falls back to latest', () {
+      final md = WhatsNewService.extractEntriesSince(changelog, 200);
+      expect(md, contains('build 131'));
+    });
+
+    test('parseBuildFromHeading supports paren and bare forms', () {
+      expect(
+        WhatsNewService.parseBuildFromHeading('## x (build 121) — y'),
+        121,
+      );
+      expect(
+        WhatsNewService.parseBuildFromHeading('## Version 2.3.0 build 99'),
+        99,
+      );
+      expect(WhatsNewService.parseBuildFromHeading('## No number here'), isNull);
+    });
+  });
 }

@@ -216,7 +216,9 @@ All collection names are defined as constants in `lib/constants/collections.dart
 
 ## Release notes ("What's changed" sheet)
 
-`WhatsNewService` shows a one-time bottom sheet with the newest `docs/CHANGELOG.md` entry the first time a user opens a new build. **Before building any release APK, prepend a user-facing entry to `docs/CHANGELOG.md`** — the top `## ` section is exactly what every updated user sees.
+`WhatsNewService` shows a one-time bottom sheet with the newest `docs/CHANGELOG.md` entry the first time a user opens a new build (stamped **after** the sheet is dismissed). **Before building any release APK, prepend a user-facing entry to `docs/CHANGELOG.md`** — the top `## ` section is exactly what every updated user sees.
+
+**In-app APK updates**: `UpdateService` + `ApkInstallService` download the Remote Config / kill-switch URL into app-private storage and hand off via MethodChannel `ctp/apk_install` (FileProvider). Optional RC key `apk_sha256`. Soft check runs on Home mount **and resume** (4h cooldown). Keep RC `download_url` and Firestore `settings/app.updateDownloadUrl` in sync when publishing.
 
 ## Cloud Functions
 

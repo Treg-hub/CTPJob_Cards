@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart' as android_intent;
@@ -415,6 +416,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               // ── App & Connectivity ────────────────────────────────
               const SizedBox(height: 16),
               _SectionHeader('App & Connectivity'),
+              FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snap) {
+                  final info = snap.data;
+                  final label = info == null
+                      ? 'Version…'
+                      : 'v${info.version} (build ${info.buildNumber})';
+                  return Card(
+                    elevation: 1,
+                    child: ListTile(
+                      leading: const Icon(Icons.info_outline, color: Color(0xFFFF8C42)),
+                      title: const Text('App version'),
+                      subtitle: Text(label),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
               const ResetPermissionsButton(),
               const SizedBox(height: 8),
               Row(
