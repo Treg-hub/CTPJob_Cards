@@ -2,6 +2,20 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Receive Ink (IBC) partial + manual receive (2026-07-08)**:
+  - **Root cause fix**: CF no longer marks shipment `received` until every packing-list IBC is in `received_units` — partial saves stay `receiving` and remain on the mobile picker.
+  - Mobile resumes prior captures (`fetchIbcsForShipment`), warns on partial submit, stays on screen until load complete.
+  - Pulse shipments: **Manual receive** (manager CF creates missing IBCs from packing list) + **Reopen for receive**; list shows `n/m IBCs` + manual link.
+  - Prior: duplicate guard (`lookupRegisteredIbcs`), Remove & continue, idempotent same-shipment skip.
+  - Map: `Components/Modules/InkModule.md`.
+
+- **Receive Ink (IBC) duplicate guard (2026-07-08)**:
+  - Pre-submit `lookupRegisteredIbcs` check; conflicting rows highlighted red.
+  - Dialog offers **Remove & continue** when an IBC is already registered on another shipment/order.
+  - Scan-time snackbar when a registered IBC is scanned.
+  - CF `recordInkIbcReceipt`: idempotent skip when IBC already linked to same `shipment_id`; clearer `already-exists` message includes prior shipment.
+  - Map: `Components/Modules/InkModule.md`.
+
 - **Ink hub: toloul tank low tint (2026-07-07)**:
   - Low-stock card: 30% red fill + 90% border (vs 12% orange OK) + warning icon for clear threshold distinction.
 

@@ -115,11 +115,15 @@ class _ShipmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final unitCount = shipment.expectedUnits.length;
+    final receivedCount = shipment.receivedIbcCount;
     final totalKg = shipment.expectedUnits.fold<double>(
       0,
       (sum, u) => sum + u.netKg,
     );
     final colours = shipment.itemCodes.length;
+    final progress = unitCount > 0 && receivedCount > 0
+        ? ' · $receivedCount / $unitCount received'
+        : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -141,7 +145,7 @@ class _ShipmentTile extends StatelessWidget {
               'Container ${shipment.containerNumber}',
             'Order ${shipment.orderNumber}',
             if (shipment.cgnaNumber != null) 'CGNA ${shipment.cgnaNumber}',
-            '$unitCount IBC${unitCount == 1 ? '' : 's'}'
+            '$unitCount IBC${unitCount == 1 ? '' : 's'}$progress'
                 '${colours > 0 ? ' · $colours colour${colours == 1 ? '' : 's'}' : ''}'
                 '${totalKg > 0 ? ' · ${qty.format(totalKg)} kg' : ''}',
           ].join('\n'),

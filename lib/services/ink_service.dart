@@ -791,6 +791,57 @@ class InkService {
         return filtered;
       });
 
+  /// Returns register entries for the given 8-digit IBC numbers. Used before
+  /// `recordInkIbcReceipt` so operators see conflicts instead of a CF stack trace.
+  Future<Map<String, InkIbc>> lookupRegisteredIbcs(
+    Iterable<String> ibcNumbers,
+  ) async {
+    final numbers = ibcNumbers
+        .map((s) => s.trim())
+        .where((s) => s.length == 8)
+        .toSet()
+        .toList();
+    if (numbers.isEmpty) return {};
+
+    final found = <String, InkIbc>{};
+    for (var i = 0; i < numbers.length; i += 30) {
+      final end = i + 30 > numbers.length ? numbers.length : i + 30;
+      final chunk = numbers.sublist(i, end);
+      final snap = await _db
+          .collection(Collections.inkIbcs)
+          .where('ibc_number', whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        final ibc = InkIbc.tryFromFirestore(doc);
+        if (ibc != null) found[ibc.ibcNumber] = ibc;
+      }
+    }
+
+    for (final n in numbers) {
+      if (found.containsKey(n)) continue;
+      final doc = await _db.collection(Collections.inkIbcs).doc(n).get();
+      if (!doc.exists) continue;
+      final ibc = InkIbc.tryFromFirestore(doc);
+      if (ibc != null) found[n] = ibc;
+    }
+    return found;
+  }
+
+  /// IBCs already registered against a shipment (resume receive after partial capture).
+  Future<List<InkIbc>> fetchIbcsForShipment(String shipmentId) async {
+    final snap = await _db
+        .collection(Collections.inkIbcs)
+        .where('shipment_id', isEqualTo: shipmentId)
+        .get();
+    final list = <InkIbc>[];
+    for (final doc in snap.docs) {
+      final ibc = InkIbc.tryFromFirestore(doc);
+      if (ibc != null) list.add(ibc);
+    }
+    list.sort((a, b) => a.ibcNumber.compareTo(b.ibcNumber));
+    return list;
+  }
+
   /// Open shipments (status awaiting_receipt / receiving) for a packaging mode
   /// the operator can receive against. Created + costed in Pulse; read-only here.
   Stream<List<InkShipment>> _watchOpenShipments(String mode) => _db

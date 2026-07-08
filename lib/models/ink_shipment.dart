@@ -16,6 +16,25 @@ enum InkShipmentStatus {
           orElse: () => InkShipmentStatus.awaitingReceipt);
 }
 
+/// A unit recorded on `ink_shipments.received_units` after mobile receive.
+class InkReceivedUnit {
+  const InkReceivedUnit({
+    required this.ref,
+    required this.itemCode,
+    required this.netKg,
+  });
+
+  final String ref;
+  final String itemCode;
+  final double netKg;
+
+  factory InkReceivedUnit.fromMap(Map<String, dynamic> m) => InkReceivedUnit(
+        ref: m['ref'] as String? ?? '',
+        itemCode: m['item_code'] as String? ?? '',
+        netKg: (m['net_kg'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 /// An expected unit (IBC serial / pallet) from the packing list.
 class InkExpectedUnit {
   const InkExpectedUnit({
@@ -77,6 +96,7 @@ class InkShipment {
     this.purchaseOrderId,
     this.lines = const [],
     this.expectedUnits = const [],
+    this.receivedUnits = const [],
   });
 
   final String id;
@@ -89,8 +109,16 @@ class InkShipment {
   final String? purchaseOrderId;
   final List<InkShipmentLine> lines;
   final List<InkExpectedUnit> expectedUnits;
+  final List<InkReceivedUnit> receivedUnits;
 
   bool get isIbc => packagingMode == 'ibc';
+
+  int get expectedIbcCount => expectedUnits.length;
+
+  int get receivedIbcCount => receivedUnits.length;
+
+  bool get isReceiptComplete =>
+      expectedIbcCount == 0 || receivedIbcCount >= expectedIbcCount;
 
   /// Distinct item codes expected on this shipment (for the colour dropdown).
   List<String> get itemCodes =>
@@ -111,6 +139,7 @@ class InkShipment {
       purchaseOrderId: d['purchase_order_id'] as String?,
       lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
+      receivedUnits: maps('received_units').map(InkReceivedUnit.fromMap).toList(),
     );
   }
 }

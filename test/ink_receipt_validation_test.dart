@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ctp_job_cards/models/ink_ibc.dart';
 import 'package:ctp_job_cards/models/ink_shipment.dart';
 import 'package:ctp_job_cards/utils/ink_receipt_validation.dart';
 
@@ -75,5 +76,45 @@ void main() {
       ],
     );
     expect(errors, isEmpty);
+  });
+
+  test('register conflict on a different shipment blocks receipt', () {
+    final conflicts = findIbcRegisterConflicts(
+      rows: const [IbcReceiptRow(ibcNumber: '54975531', itemCode: 'yellow')],
+      registered: {
+        '54975531': InkIbc(
+          ibcNumber: '54975531',
+          itemCode: 'yellow',
+          kg: 954,
+          receivedDate: DateTime(2026, 6, 1),
+          shipmentId: '51993-J',
+        ),
+      },
+      shipmentId: '51993-K',
+    );
+    expect(conflicts, hasLength(1));
+    expect(conflicts.first.sameShipment, isFalse);
+    expect(
+      describeIbcRegisterConflict(conflicts.first),
+      contains('54975531'),
+    );
+  });
+
+  test('register conflict on the same shipment is treated as idempotent skip', () {
+    final conflicts = findIbcRegisterConflicts(
+      rows: const [IbcReceiptRow(ibcNumber: '54975531', itemCode: 'yellow')],
+      registered: {
+        '54975531': InkIbc(
+          ibcNumber: '54975531',
+          itemCode: 'yellow',
+          kg: 954,
+          receivedDate: DateTime(2026, 7, 1),
+          shipmentId: '51993-K',
+        ),
+      },
+      shipmentId: '51993-K',
+    );
+    expect(conflicts, hasLength(1));
+    expect(conflicts.first.sameShipment, isTrue);
   });
 }

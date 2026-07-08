@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +74,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
   DateTime _effectiveAt = DateTime.now();
   final List<_IbcRow> _rows = [];
   bool _submitting = false;
+  final Set<String> _registerConflicts = {};
   late InkShipment? _shipment;
 
   @override
@@ -82,7 +85,80 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       _supplier = 'Siegwerk';
       _orderCtrl.text = _shipment!.orderNumber;
       _cgnaCtrl.text = _shipment!.cgnaNumber ?? '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_loadShipmentProgress());
+      });
     }
+  }
+
+  Future<void> _loadShipmentProgress() async {
+    final shipment = _shipment;
+    if (shipment == null) return;
+    final existing = await ref
+        .read(inkServiceProvider)
+        .fetchIbcsForShipment(shipment.id);
+    if (!mounted || existing.isEmpty) return;
+    setState(() {
+      for (final ibc in existing) {
+        if (_scannedIbcNumbers.contains(ibc.ibcNumber)) continue;
+        _rows.add(_IbcRow(
+          number: ibc.ibcNumber,
+          sscc: ibc.sscc,
+          itemCode: ibc.itemCode,
+          kg: _kgText(ibc.kg),
+          charge: ibc.chargeNumber,
+          locked: true,
+        ));
+      }
+    });
+    await _refreshRegisterConflicts(existing);
+  }
+
+  List<InkIbc> _filterNewIbcsForSubmit(
+    List<InkIbc> ibcs,
+    Map<String, InkIbc> registered,
+  ) {
+    final shipmentId = _shipment?.id;
+    if (shipmentId == null) return ibcs;
+    return ibcs
+        .where((ibc) {
+          final existing = registered[ibc.ibcNumber];
+          return existing == null || existing.shipmentId != shipmentId;
+        })
+        .toList();
+  }
+
+  Future<bool> _confirmPartialReceipt({
+    required int expected,
+    required int alreadyReceived,
+    required int submitting,
+  }) async {
+    final totalAfter = alreadyReceived + submitting;
+    if (expected <= 0 || totalAfter >= expected) return true;
+    final missing = expected - totalAfter;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Partial shipment?'),
+        content: Text(
+          'This load expects $expected IBCs. '
+          '$alreadyReceived already received, you are submitting $submitting more '
+          '($missing still outstanding).\n\n'
+          'The shipment will stay open as Receiving until every IBC is captured.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Go back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Save $submitting IBC${submitting == 1 ? '' : 's'}'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
   }
 
   Set<String> get _scannedIbcNumbers => {
@@ -128,6 +204,121 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
         locked: lock,
       ));
     });
+    if (ibcNum != null && ibcNum.length == 8) {
+      unawaited(_warnIfAlreadyRegistered(ibcNum));
+    }
+  }
+
+  Future<void> _warnIfAlreadyRegistered(String ibcNumber) async {
+    final registered = await ref
+        .read(inkServiceProvider)
+        .lookupRegisteredIbcs([ibcNumber]);
+    final existing = registered[ibcNumber];
+    if (existing == null || !mounted) return;
+    setState(() => _registerConflicts.add(ibcNumber));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(describeIbcRegisterConflict(IbcRegisterConflict(
+          rowIndex: -1,
+          ibcNumber: ibcNumber,
+          existing: existing,
+          sameShipment:
+              _shipment != null && existing.shipmentId == _shipment!.id,
+        ))),
+      ),
+    );
+  }
+
+  Future<void> _refreshRegisterConflicts(List<InkIbc> ibcs) async {
+    final registered = await ref
+        .read(inkServiceProvider)
+        .lookupRegisteredIbcs(ibcs.map((i) => i.ibcNumber));
+    if (!mounted) return;
+    final conflicts = findIbcRegisterConflicts(
+      rows: [
+        for (final ibc in ibcs)
+          IbcReceiptRow(ibcNumber: ibc.ibcNumber, itemCode: ibc.itemCode),
+      ],
+      registered: registered,
+      shipmentId: _shipment?.id,
+    );
+    setState(() {
+      _registerConflicts
+        ..clear()
+        ..addAll(conflicts.map((c) => c.ibcNumber));
+    });
+  }
+
+  Future<List<InkIbc>?> _resolveRegisterConflicts(List<InkIbc> ibcs) async {
+    await _refreshRegisterConflicts(ibcs);
+    final registered = await ref
+        .read(inkServiceProvider)
+        .lookupRegisteredIbcs(ibcs.map((i) => i.ibcNumber));
+    final conflicts = findIbcRegisterConflicts(
+      rows: [
+        for (final ibc in ibcs)
+          IbcReceiptRow(ibcNumber: ibc.ibcNumber, itemCode: ibc.itemCode),
+      ],
+      registered: registered,
+      shipmentId: _shipment?.id,
+    );
+    if (conflicts.isEmpty) return ibcs;
+
+    final blocking =
+        conflicts.where((c) => !c.sameShipment).toList(growable: false);
+    if (blocking.isEmpty) {
+      final skip = conflicts.map((c) => c.ibcNumber).toSet();
+      return ibcs.where((i) => !skip.contains(i.ibcNumber)).toList();
+    }
+
+    if (!mounted) return null;
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('IBC already registered'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'These IBCs are already in the register and cannot be received again:',
+              ),
+              const SizedBox(height: 12),
+              for (final c in blocking)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('• ${describeIbcRegisterConflict(c)}'),
+                ),
+              const SizedBox(height: 8),
+              const Text(
+                'Remove them from this receipt to receive the remaining IBCs.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove & continue'),
+          ),
+        ],
+      ),
+    );
+    if (remove != true || !mounted) return null;
+
+    final removeNumbers = blocking.map((c) => c.ibcNumber).toSet();
+    setState(() {
+      _rows.removeWhere(
+        (r) => removeNumbers.contains(r.numberCtrl.text.trim()),
+      );
+      _registerConflicts.removeAll(removeNumbers);
+    });
+    return ibcs.where((i) => !removeNumbers.contains(i.ibcNumber)).toList();
   }
 
   Future<void> _scan() async {
@@ -381,6 +572,34 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     final ibcs = _buildValidIbcs();
     if (ibcs == null) return;
 
+    final resolved = await _resolveRegisterConflicts(ibcs);
+    if (!mounted || resolved == null) return;
+
+    final registered = await ref
+        .read(inkServiceProvider)
+        .lookupRegisteredIbcs(resolved.map((i) => i.ibcNumber));
+    if (!mounted) return;
+
+    final toSubmit = _filterNewIbcsForSubmit(resolved, registered);
+    if (toSubmit.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('All scanned IBCs are already on this shipment.'),
+      ));
+      return;
+    }
+
+    if (_shipment != null && _shipment!.expectedIbcCount > 0) {
+      final alreadyOnShipment = registered.values
+          .where((i) => i.shipmentId == _shipment!.id)
+          .length;
+      final allowed = await _confirmPartialReceipt(
+        expected: _shipment!.expectedIbcCount,
+        alreadyReceived: alreadyOnShipment,
+        submitting: toSubmit.length,
+      );
+      if (!allowed || !mounted) return;
+    }
+
     final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
     final displayName = {for (final i in items) i.itemCode: i.displayName};
     final live = _liveSummary(items);
@@ -510,7 +729,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     );
 
     if (confirmed != true) return;
-    await _doSubmit(ibcs);
+    await _doSubmit(toSubmit);
   }
 
   Future<void> _doSubmit(List<InkIbc> ibcs) async {
@@ -533,15 +752,34 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
             shipmentId: _shipment?.id,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${ibcs.length} IBC(s) received — cost pending.'),
-      ));
-      Navigator.pop(context);
+      final expected = _shipment?.expectedIbcCount ?? 0;
+      final registeredAfter = await ref
+          .read(inkServiceProvider)
+          .lookupRegisteredIbcs(
+            _rows
+                .where((r) => r.isComplete)
+                .map((r) => r.numberCtrl.text.trim()),
+          );
+      if (!mounted) return;
+      final onShipment = _shipment == null
+          ? 0
+          : registeredAfter.values
+              .where((i) => i.shipmentId == _shipment!.id)
+              .length;
+      final stillReceiving = expected > 0 && onShipment < expected;
+      final msg = stillReceiving
+          ? '${ibcs.length} IBC(s) saved — $onShipment / $expected on shipment (still receiving).'
+          : '${ibcs.length} IBC(s) received — cost pending.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (!stillReceiving) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      await _refreshRegisterConflicts(ibcs);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(formatInkIbcReceiptError(e))),
+      );
     }
   }
 
@@ -562,7 +800,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
     final live = _liveSummary(items);
     final completeCount = _rows.where((r) => r.isComplete).length;
     final scheme = Theme.of(context).colorScheme;
-    final expectedCount = _shipment?.expectedUnits.length;
+    final expectedCount = _shipment?.expectedIbcCount;
 
     return Scaffold(
       appBar: AppBar(
@@ -752,11 +990,21 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                 for (final row in _rows.where((r) => r.isComplete))
                   Card(
                     margin: const EdgeInsets.only(bottom: 6),
+                    color: _registerConflicts.contains(row.numberCtrl.text.trim())
+                        ? scheme.errorContainer.withValues(alpha: 0.35)
+                        : null,
                     child: ListTile(
                       leading: Icon(
-                        row.locked ? Icons.lock_outline : Icons.edit_outlined,
+                        _registerConflicts.contains(row.numberCtrl.text.trim())
+                            ? Icons.error_outline
+                            : row.locked
+                                ? Icons.lock_outline
+                                : Icons.edit_outlined,
                         size: 20,
-                        color: scheme.onSurfaceVariant,
+                        color: _registerConflicts
+                                .contains(row.numberCtrl.text.trim())
+                            ? scheme.error
+                            : scheme.onSurfaceVariant,
                       ),
                       title: Text(
                         row.numberCtrl.text,
@@ -767,6 +1015,9 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                           displayName[row.itemCode] ?? row.itemCode ?? '?',
                           '${nf.format(double.parse(row.kgCtrl.text.trim()))} kg',
                           if (row.charge != null) 'Charge ${row.charge}',
+                          if (_registerConflicts
+                              .contains(row.numberCtrl.text.trim()))
+                            'Already registered — remove to continue',
                         ].join(' · '),
                       ),
                       trailing: const Icon(Icons.chevron_right, size: 20),
