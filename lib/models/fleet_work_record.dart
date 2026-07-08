@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/fleet_soft_delete.dart';
+
 /// A maintenance or repair job logged by the Hyster mechanic.
 class FleetWorkRecord {
 
@@ -21,6 +23,9 @@ class FleetWorkRecord {
   final DateTime? createdAt;
   final List<String> linkedIssueIds;
   final bool hasLinkedCosts;
+
+  /// Hidden from mobile/Pulse lists when an admin soft-deletes on Pulse.
+  final bool isDeleted;
 
   /// Days a mechanic may edit a record after it was created.
   static const int editLockDays = 7;
@@ -44,6 +49,7 @@ class FleetWorkRecord {
     this.createdAt,
     this.linkedIssueIds = const [],
     this.hasLinkedCosts = false,
+    this.isDeleted = false,
   });
 
   /// Whether the record is still inside the [editLockDays] window.
@@ -120,6 +126,7 @@ class FleetWorkRecord {
               .toList() ??
           const [],
       hasLinkedCosts: _parseHasLinkedCosts(data),
+      isDeleted: parseFleetDeleted(data),
     );
   }
 
@@ -164,6 +171,7 @@ class FleetWorkRecord {
     DateTime? createdAt,
     List<String>? linkedIssueIds,
     bool? hasLinkedCosts,
+    bool? isDeleted,
   }) {
     return FleetWorkRecord(
       id: id ?? this.id,
@@ -184,6 +192,7 @@ class FleetWorkRecord {
       createdAt: createdAt ?? this.createdAt,
       linkedIssueIds: linkedIssueIds ?? this.linkedIssueIds,
       hasLinkedCosts: hasLinkedCosts ?? this.hasLinkedCosts,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

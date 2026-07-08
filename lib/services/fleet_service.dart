@@ -20,6 +20,7 @@ import '../models/fleet_work_comment.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
+import '../utils/fleet_soft_delete.dart';
 import '../utils/persona_audit.dart';
 import 'sync_service.dart';
 
@@ -36,6 +37,31 @@ class FleetConflictException implements Exception {
 /// Follows the WasteService singleton pattern.
 class FleetService {
   void _guardWrite() => assertPersonaSubmitAllowed();
+
+  List<FleetIssue> _activeIssues(Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs) =>
+      docs
+          .map(FleetIssue.fromFirestore)
+          .where((i) => !i.isDeleted)
+          .toList();
+
+  List<FleetWorkRecord> _activeWorkRecords(
+          Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs) =>
+      docs
+          .map(FleetWorkRecord.fromFirestore)
+          .where((r) => !r.isDeleted)
+          .toList();
+
+  FleetIssue? _issueIfActive(DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (!snap.exists) return null;
+    final issue = FleetIssue.fromFirestore(snap);
+    return issue.isDeleted ? null : issue;
+  }
+
+  FleetWorkRecord? _workRecordIfActive(DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (!snap.exists) return null;
+    final record = FleetWorkRecord.fromFirestore(snap);
+    return record.isDeleted ? null : record;
+  }
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -230,7 +256,7 @@ class FleetService {
         .where('asset_id', isEqualTo: assetId)
         .snapshots()
         .map((s) {
-      final issues = s.docs.map(FleetIssue.fromFirestore).toList()
+      final issues = _activeIssues(s.docs)
         ..sort((a, b) {
           final ad = a.createdAt ?? DateTime(2000);
           final bd = b.createdAt ?? DateTime(2000);
@@ -277,7 +303,7 @@ class FleetService {
         .orderBy('created_at', descending: true)
         .limit(limit)
         .snapshots()
-        .map((s) => s.docs.map(FleetIssue.fromFirestore).toList());
+        .map((s) => _activeIssues(s.docs));
   }
 
   Stream<List<FleetIssue>> watchOpenIssues({int limit = 20}) {
@@ -288,7 +314,7 @@ class FleetService {
         .limit(limit)
         .snapshots()
         .map((s) {
-          final issues = s.docs.map(FleetIssue.fromFirestore).toList();
+          final issues = _activeIssues(s.docs);
           // Sort by severity priority (OOS first, then high, medium, low)
           issues.sort(
               (a, b) => a.severity.sortOrder.compareTo(b.severity.sortOrder));
@@ -299,8 +325,7 @@ class FleetService {
   Future<FleetIssue?> getIssue(String id) async {
     final snap =
         await _db.collection(Collections.fleetIssues).doc(id).get();
-    if (!snap.exists) return null;
-    return FleetIssue.fromFirestore(snap);
+    return _issueIfActive(snap);
   }
 
   Stream<FleetIssue?> watchIssue(String id) {
@@ -308,8 +333,7 @@ class FleetService {
         .collection(Collections.fleetIssues)
         .doc(id)
         .snapshots()
-        .map((snap) =>
-            snap.exists ? FleetIssue.fromFirestore(snap) : null);
+        .map(_issueIfActive);
   }
 
   /// Throws [FleetConflictException] when the issue's live status is not in
@@ -329,7 +353,7 @@ class FleetService {
     } catch (_) {
       return;
     }
-    if (!snap.exists) {
+    if (!snap.exists || parseFleetDeleted(snap.data())) {
       throw FleetConflictException('This problem no longer exists.');
     }
     final status =
@@ -442,14 +466,13 @@ class FleetService {
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((s) => s.docs.map(FleetWorkRecord.fromFirestore).toList());
+        .map((s) => _activeWorkRecords(s.docs));
   }
 
   Future<FleetWorkRecord?> getWorkRecord(String id) async {
     final snap =
         await _db.collection(Collections.fleetWorkRecords).doc(id).get();
-    if (!snap.exists) return null;
-    return FleetWorkRecord.fromFirestore(snap);
+    return _workRecordIfActive(snap);
   }
 
   Stream<FleetWorkRecord?> watchWorkRecord(String id) {
@@ -457,8 +480,7 @@ class FleetService {
         .collection(Collections.fleetWorkRecords)
         .doc(id)
         .snapshots()
-        .map((snap) =>
-            snap.exists ? FleetWorkRecord.fromFirestore(snap) : null);
+        .map(_workRecordIfActive);
   }
 
   Future<void> updateWorkRecord(

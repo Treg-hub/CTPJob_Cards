@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../constants/collections.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/fleet_navigation.dart';
+import '../utils/fleet_soft_delete.dart';
 
 const _urgentFleetInboxTypes = {'fleet_oos_issue', 'fleet_high_issue'};
 
@@ -38,11 +39,14 @@ class _FleetUrgentInboxBannerState extends State<FleetUrgentInboxBanner> {
             .collection(Collections.fleetIssues)
             .doc(issueId)
             .get();
-        final status = issueSnap.data()?['status'] as String? ?? 'open';
-        if (status == 'open' || status == 'acknowledged') {
+        final data = issueSnap.data();
+        final status = data?['status'] as String? ?? 'open';
+        final isActive = !parseFleetDeleted(data) &&
+            (status == 'open' || status == 'acknowledged');
+        if (isActive) {
           active.add(doc);
         } else {
-          // Stale alert — issue fixed but inbox row still unread.
+          // Stale alert — issue fixed/deleted but inbox row still unread.
           await doc.reference.update({
             'read': true,
             'readAt': FieldValue.serverTimestamp(),
