@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/fleet_soft_delete.dart';
+
 enum FleetIssueSeverity {
   low('low'),
   medium('medium'),
@@ -121,6 +123,9 @@ class FleetIssue {
   final String? source;
   final String? dailyCheckId;
 
+  /// Hidden from mobile/Pulse lists when an admin soft-deletes on Pulse.
+  final bool isDeleted;
+
   const FleetIssue({
     this.id,
     required this.assetId,
@@ -148,6 +153,7 @@ class FleetIssue {
     this.cancelReason,
     this.source,
     this.dailyCheckId,
+    this.isDeleted = false,
   });
 
   /// "Name (clock)" when both are known, otherwise whichever exists.
@@ -196,6 +202,7 @@ class FleetIssue {
       cancelReason: data['cancel_reason'] as String?,
       source: data['source'] as String?,
       dailyCheckId: data['daily_check_id'] as String?,
+      isDeleted: parseFleetDeleted(data),
     );
   }
 
@@ -257,6 +264,7 @@ class FleetIssue {
     String? cancelReason,
     String? source,
     String? dailyCheckId,
+    bool? isDeleted,
   }) {
     return FleetIssue(
       id: id ?? this.id,
@@ -285,6 +293,7 @@ class FleetIssue {
       cancelReason: cancelReason ?? this.cancelReason,
       source: source ?? this.source,
       dailyCheckId: dailyCheckId ?? this.dailyCheckId,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }
