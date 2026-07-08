@@ -12,6 +12,7 @@ import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/whats_new_service.dart';
+import '../utils/onboarding_persona.dart';
 import '../utils/role.dart';
 import '../models/fleet_settings.dart';
 import '../models/waste_settings.dart';
@@ -27,6 +28,14 @@ class PermissionsOnboardingScreen extends ConsumerStatefulWidget {
       _PermissionsOnboardingScreenState();
 }
 
+/// One page in the onboarding PageView, with optional permission requests
+/// when the user leaves the page (so dialogs appear in context).
+class _OnboardStep {
+  final Widget page;
+  final Future<void> Function()? onLeaving;
+  const _OnboardStep(this.page, {this.onLeaving});
+}
+
 class _PermissionsOnboardingScreenState
     extends ConsumerState<PermissionsOnboardingScreen> {
   int _currentPage = 0;
@@ -36,6 +45,8 @@ class _PermissionsOnboardingScreenState
   // Live geofence radius from the central `settings/geofence` doc, so the
   // onboarding copy always matches the real barrier instead of a hard-coded "800 m".
   int _radiusMeters = kDefaultGeofence.radius.round();
+  WasteSettings? _wasteSettings;
+  FleetSettings? _fleetSettings;
 
   @override
   void initState() {
@@ -43,30 +54,12 @@ class _PermissionsOnboardingScreenState
     loadGeofenceConfig().then((cfg) {
       if (mounted) setState(() => _radiusMeters = cfg.radius.round());
     });
-  }
-
-  // Fired when the user taps "Next" — requests the permissions explained by the
-  // page they are LEAVING, awaiting each system dialog so it is resolved BEFORE
-  // the next screen appears. By the time the final permissions-status page is
-  // reached, every permission has already been requested in context, so that
-  // page is purely a status display.
-  Future<void> _requestPermsForLeavingPage(int leavingPage) async {
-    if (kIsWeb) return;
-    switch (leavingPage) {
-      case 2:
-        // Just read how job cards are created & completed — photos are attached
-        // as evidence, so request the camera in that context.
-        await _requestCameraPerm();
-      case 4:
-        // Just read Priority Levels (P4 DND bypass, P5 full-screen alarm).
-        // Request the alert-delivery permissions that make those behaviours work.
-        await _requestAlertPerms();
-      case 5:
-        // Just read Escalation: you're only alerted while on site, which is
-        // driven by background geofencing. Request location + battery now.
-        await _requestLocationPerms();
-    }
-    ref.invalidate(permissionsProvider);
+    WasteService().getWasteSettings().then((s) {
+      if (mounted) setState(() => _wasteSettings = s);
+    });
+    FleetService().getSettings().then((s) {
+      if (mounted) setState(() => _fleetSettings = s);
+    });
   }
 
   Future<void> _requestCameraPerm() async {
@@ -103,10 +96,17 @@ class _PermissionsOnboardingScreenState
     }
   }
 
+  Future<void> _requestModuleCorePerms() async {
+    await _requestCameraPerm();
+    await _requestAlertPerms();
+    await _requestLocationPerms();
+  }
+
   // Drives forward navigation. Requests the leaving page's permissions and
   // awaits them before animating to the next page, so the system dialogs always
   // appear on the explaining screen — never on the final status screen.
-  Future<void> _handleNext(int lastIndex) async {
+  Future<void> _handleNext(List<_OnboardStep> steps) async {
+    final lastIndex = steps.length - 1;
     if (_currentPage >= lastIndex) {
       await _completeOnboarding();
       return;
@@ -114,7 +114,10 @@ class _PermissionsOnboardingScreenState
     final leaving = _currentPage;
     setState(() => _isLoading = true);
     try {
-      await _requestPermsForLeavingPage(leaving);
+      if (!kIsWeb) {
+        await steps[leaving].onLeaving?.call();
+        ref.invalidate(permissionsProvider);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -125,32 +128,207 @@ class _PermissionsOnboardingScreenState
     );
   }
 
-  // Rebuilt every frame from the latest employee value so the role page reflects
-  // the right role even if the employee provider resolves after this screen mounts.
-  List<Widget> _buildPages(Employee? emp) => [
-        const _WelcomePage(),
-        _YourRolePage(role: roleFromEmployee(emp), employee: emp),
-        const _JobCardFlowPage(),
-        const _JobStatusPage(),
-        const _PriorityLevelsPage(),
-        _EscalationPage(radiusMeters: _radiusMeters),
-        _PermissionsPage(radiusMeters: _radiusMeters),
-      ];
+  /// Persona-aware page list. Specialized floor roles skip the deep job-card
+  /// tour; classic job-card roles keep the full flow + a finish summary.
+  List<_OnboardStep> _buildSteps(Employee? emp) {
+    final persona = resolveOnboardingPersona(
+      emp,
+      wasteSettings: _wasteSettings,
+      fleetSettings: _fleetSettings,
+    );
+    final role = roleFromEmployee(emp);
+    final welcome = _OnboardStep(const _WelcomePage());
+    final rolePage = _OnboardStep(
+      _YourRolePage(
+        role: role,
+        employee: emp,
+        wasteSettings: _wasteSettings,
+        fleetSettings: _fleetSettings,
+      ),
+    );
+    final permissions = _OnboardStep(
+      _PermissionsPage(radiusMeters: _radiusMeters),
+    );
+    final finish = _OnboardStep(_FinishPage(persona: persona));
+
+    switch (persona) {
+      case OnboardingPersona.securityGuard:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(
+            const _ModulePrimerPage(
+              title: 'Your day at the gate',
+              accent: Color(0xFF10B981),
+              icon: Icons.security,
+              bullets: [
+                _RoleBullet(Icons.local_shipping,
+                    'Site Security tab: Visitor / Contractor Vehicle and Company Car flows'),
+                _RoleBullet(Icons.qr_code_scanner,
+                    'Scan licence discs and plates first — type only when the disc is damaged'),
+                _RoleBullet(Icons.delete_outline,
+                    'Waste tab: Begin Collection on scheduled loads; photos + signature when required'),
+                _RoleBullet(Icons.menu_book,
+                    'Guides live under Settings → Documentation (Security Guard + Waste)'),
+              ],
+              permissionNote:
+                  'Next: camera (scans/photos), notifications, and location for on-site status.',
+            ),
+            onLeaving: _requestModuleCorePerms,
+          ),
+          permissions,
+          finish,
+        ];
+      case OnboardingPersona.securityManager:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(
+            const _ModulePrimerPage(
+              title: 'Security & Waste on mobile',
+              accent: Color(0xFF10B981),
+              icon: Icons.badge,
+              bullets: [
+                _RoleBullet(Icons.schedule,
+                    'Schedule waste collections and link on-site stock'),
+                _RoleBullet(Icons.security,
+                    'Gate tools and on-site list stay on the Security tab'),
+                _RoleBullet(Icons.desktop_windows,
+                    'Weighbridge and cost review are on CTP Pulse, not mobile'),
+                _RoleBullet(Icons.work_outline,
+                    'You still get plant job-card tools on Home when you need them'),
+              ],
+              permissionNote:
+                  'Next: camera, alerts, and location (same core as the rest of the floor).',
+            ),
+            onLeaving: _requestModuleCorePerms,
+          ),
+          permissions,
+          finish,
+        ];
+      case OnboardingPersona.fleetMechanic:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(
+            const _ModulePrimerPage(
+              title: 'Fleet mechanic basics',
+              accent: Color(0xFF0EA5E9),
+              icon: Icons.forklift,
+              bullets: [
+                _RoleBullet(Icons.list_alt,
+                    'Fleet tab: open issues sorted by severity — Out of Service first'),
+                _RoleBullet(Icons.build,
+                    'Mark as Fixed or Save progress with hours, meter, parts, photos'),
+                _RoleBullet(Icons.money_off,
+                    'You never see cost amounts on mobile'),
+                _RoleBullet(Icons.work_outline,
+                    'Plant job cards still apply when you are on site'),
+              ],
+              permissionNote:
+                  'Next: camera for work photos, alerts, and location.',
+            ),
+            onLeaving: _requestModuleCorePerms,
+          ),
+          permissions,
+          finish,
+        ];
+      case OnboardingPersona.fleetReporter:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(
+            const _ModulePrimerPage(
+              title: 'Fleet reporter basics',
+              accent: Color(0xFF0EA5E9),
+              icon: Icons.report_problem_outlined,
+              bullets: [
+                _RoleBullet(Icons.checklist,
+                    'Complete the daily machine check before first use when prompted'),
+                _RoleBullet(Icons.add_alert,
+                    'Report faults from Fleet — mechanics pick them up in their queue'),
+                _RoleBullet(Icons.add_circle_outline,
+                    'Use Create Job Card for non-fleet plant faults'),
+              ],
+              permissionNote:
+                  'Next: camera, notifications, and location for on-site checks.',
+            ),
+            onLeaving: _requestModuleCorePerms,
+          ),
+          permissions,
+          finish,
+        ];
+      case OnboardingPersona.inkFloor:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(
+            const _ModulePrimerPage(
+              title: 'Ink Factory on mobile',
+              accent: Color(0xFF06B6D4),
+              icon: Icons.science_outlined,
+              bullets: [
+                _RoleBullet(Icons.inventory_2_outlined,
+                    'Ink tab: stock, IBC receive/transfer, daily meter readings as assigned'),
+                _RoleBullet(Icons.desktop_windows,
+                    'Costing, ledger, and month-end live on CTP Pulse for managers'),
+                _RoleBullet(Icons.add_circle_outline,
+                    'Create Job Card when equipment or process needs a plant job'),
+              ],
+              permissionNote:
+                  'Next: camera (barcodes/photos), alerts, and location.',
+            ),
+            onLeaving: _requestModuleCorePerms,
+          ),
+          permissions,
+          finish,
+        ];
+      case OnboardingPersona.jobCards:
+        return [
+          welcome,
+          rolePage,
+          _OnboardStep(const _JobCardFlowPage(), onLeaving: _requestCameraPerm),
+          const _OnboardStep(_JobStatusPage()),
+          _OnboardStep(
+            const _PriorityLevelsPage(),
+            onLeaving: _requestAlertPerms,
+          ),
+          _OnboardStep(
+            _EscalationPage(radiusMeters: _radiusMeters),
+            onLeaving: _requestLocationPerms,
+          ),
+          permissions,
+          finish,
+        ];
+    }
+  }
 
   Future<void> _completeOnboarding() async {
     setState(() => _isLoading = true);
 
+    final emp =
+        ref.read(currentEmployeeProvider).valueOrNull ?? currentEmployee;
+    final persona = resolveOnboardingPersona(
+      emp,
+      wasteSettings: _wasteSettings,
+      fleetSettings: _fleetSettings,
+    );
+
     if (!kIsWeb) {
       final health = await DeviceHealthService().check();
       if (!health.isOnboardingCoreHealthy && mounted) {
+        final strict = onboardingStrictCorePermissions(persona, emp);
         final proceed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Some permissions still missing'),
+            title: Text(strict
+                ? 'Core permissions still missing'
+                : 'Some permissions still missing'),
             content: Text(
               'Without location, battery, and notification access you may miss '
               'urgent on-site alerts.\n\nStill missing:\n'
-              '${health.missingLabels.map((l) => '• $l').join('\n')}',
+              '${health.missingLabels.map((l) => '• $l').join('\n')}'
+              '${strict ? '\n\nYour role depends on these — fix them before continuing if you can.' : ''}',
             ),
             actions: [
               TextButton(
@@ -165,14 +343,49 @@ class _PermissionsOnboardingScreenState
                 },
                 child: const Text('Open Settings'),
               ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8C42),
-                  foregroundColor: Colors.white,
+              if (!strict)
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C42),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Continue anyway'),
+                )
+              else
+                ElevatedButton(
+                  onPressed: () async {
+                    final sure = await showDialog<bool>(
+                      context: ctx,
+                      builder: (ctx2) => AlertDialog(
+                        title: const Text('Continue without permissions?'),
+                        content: const Text(
+                          'You may miss job alerts and on-site detection. Only continue if you will fix permissions immediately after setup.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx2, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx2, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF8C42),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Yes, continue'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx, sure == true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Continue anyway…'),
                 ),
-                child: const Text('Continue anyway'),
-              ),
             ],
           ),
         );
@@ -224,7 +437,17 @@ class _PermissionsOnboardingScreenState
     // brief window after registration before the provider has resolved.
     final emp =
         ref.watch(currentEmployeeProvider).valueOrNull ?? currentEmployee;
-    final pages = _buildPages(emp);
+    final steps = _buildSteps(emp);
+    // Clamp page index if persona/settings load shrinks the step list.
+    if (_currentPage >= steps.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _currentPage = steps.length - 1);
+          _pageController.jumpToPage(_currentPage);
+        }
+      });
+    }
+    final pages = steps.map((s) => s.page).toList();
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -259,8 +482,7 @@ class _PermissionsOnboardingScreenState
                         child: const Text("Back")),
                   const Spacer(),
                   ElevatedButton(
-                    onPressed:
-                        _isLoading ? null : () => _handleNext(pages.length - 1),
+                    onPressed: _isLoading ? null : () => _handleNext(steps),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF8C42),
                       foregroundColor: Colors.white,
@@ -331,39 +553,24 @@ class _WelcomePage extends StatelessWidget {
 }
 
 // PAGE 2 - Your Role in CTP (role-aware, including specialized roles)
-class _YourRolePage extends StatefulWidget {
+class _YourRolePage extends StatelessWidget {
   final UserRole role;
   final Employee? employee;
-  const _YourRolePage({required this.role, this.employee});
-
-  @override
-  State<_YourRolePage> createState() => _YourRolePageState();
-}
-
-class _YourRolePageState extends State<_YourRolePage> {
-  WasteSettings? _wasteSettings;
-  FleetSettings? _fleetSettings;
-
-  @override
-  void initState() {
-    super.initState();
-    WasteService().getWasteSettings().then((settings) {
-      if (mounted) setState(() => _wasteSettings = settings);
-    });
-    FleetService().getSettings().then((settings) {
-      if (mounted) setState(() => _fleetSettings = settings);
-    });
-  }
-
-  UserRole get role => widget.role;
-  Employee? get employee => widget.employee;
+  final WasteSettings? wasteSettings;
+  final FleetSettings? fleetSettings;
+  const _YourRolePage({
+    required this.role,
+    this.employee,
+    this.wasteSettings,
+    this.fleetSettings,
+  });
 
   // Specialized role checks take priority over the base UserRole so that
   // a Security Guard (maps to 'operator') or Hyster Mechanic (maps to
   // 'technician') sees content relevant to their actual day-to-day module.
-  bool get _isSecurityManager => isSecurityManager(employee, _wasteSettings);
-  bool get _isSecurityGuard => isSecurityGuard(employee, _wasteSettings);
-  bool get _isFleetMechanic => isFleetMechanic(employee, _fleetSettings);
+  bool get _isSecurityManager => isSecurityManager(employee, wasteSettings);
+  bool get _isSecurityGuard => isSecurityGuard(employee, wasteSettings);
+  bool get _isFleetMechanic => isFleetMechanic(employee, fleetSettings);
 
   String get _title {
     if (_isSecurityManager) return "You're a Security Manager";
@@ -578,6 +785,126 @@ class _RoleBullet {
   final IconData icon;
   final String text;
   const _RoleBullet(this.icon, this.text);
+}
+
+/// Short module primer used on specialized onboarding tracks.
+class _ModulePrimerPage extends StatelessWidget {
+  final String title;
+  final Color accent;
+  final IconData icon;
+  final List<_RoleBullet> bullets;
+  final String permissionNote;
+
+  const _ModulePrimerPage({
+    required this.title,
+    required this.accent,
+    required this.icon,
+    required this.bullets,
+    required this.permissionNote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Icon(icon, size: 64, color: accent),
+            const SizedBox(height: 14),
+            Text(title,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 22),
+            ...bullets.map((b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(b.icon, color: accent, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Text(b.text,
+                              style: const TextStyle(fontSize: 15))),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 16),
+            _PermissionPreface(
+              perms: [
+                _PermDetail(
+                  Icons.lock_outline,
+                  'Permissions next',
+                  permissionNote,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Closing page: what Home will show for this persona.
+class _FinishPage extends StatelessWidget {
+  final OnboardingPersona persona;
+  const _FinishPage({required this.persona});
+
+  @override
+  Widget build(BuildContext context) {
+    final expectations = onboardingHomeExpectations(persona);
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            const Icon(Icons.check_circle_outline,
+                size: 72, color: Color(0xFFFF8C42)),
+            const SizedBox(height: 16),
+            const Text(
+              "You're ready",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'After you tap Let’s Get Started, Home will include:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            ...expectations.map((line) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.chevron_right,
+                          color: Color(0xFFFF8C42), size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: Text(line,
+                              style: const TextStyle(fontSize: 15, height: 1.35))),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 12),
+            Text(
+              'Full role guides: Settings → Documentation. You can reset this tour from Settings if permissions change.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // One permission described in a _PermissionPreface row.

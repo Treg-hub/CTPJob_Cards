@@ -6,7 +6,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## 2026-07-08 — In-app updates (download & install)
+## 2026-07-08 — In-app updates, publish form, first-run paths (build 131+)
 
 ### Easier app updates
 
@@ -14,11 +14,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Install permission** — the first time, Android may ask you to allow CTP Job Cards to install updates. Use **Open settings**, enable the permission, and return — install continues.
 - **Browser fallback** — **Open download in browser** is still available if the in-app path fails.
 - **Check anytime** — Settings → **Check for Update** (shows your current version on the same screen).
-- **After you update** — the next open still shows **What's changed** once for that build.
+- **After you update** — the next open still shows **What's changed**. If you skipped several builds, notes for each `(build N)` entry since your last open can roll up together (newest first).
+
+### First-time setup by role
+
+- **Security / Fleet / Ink** staff get a shorter first-run tour aimed at their module, then a **You're ready** screen listing what Home will show.
+- Classic job-card roles keep the full job-card / priority / escalation tour, then the same finish summary.
+- Technicians and managers get an extra confirmation if they try to skip core alert permissions.
 
 ### For admins
 
-- Kill-switch (**Admin → App Update Control**) uses the same download/install screen. Always set a download URL before raising min supported build. Soft prompts still come from Firebase Remote Config — keep `download_url` in sync.
+- **Admin → App Update Control → Publish release** — one form for the shared APK URL, soft-update version/build/notes/force flag, optional SHA-256, and min supported build. **Save publish** writes `settings/app` (clients use this when Remote Config is empty). **Copy RC keys** pastes the same values for the Firebase Remote Config console.
 
 ---
 

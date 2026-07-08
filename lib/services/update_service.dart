@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../screens/update_available_screen.dart';
 import '../utils/version_compare.dart';
 
-/// Service for checking and handling app updates via Firebase Remote Config.
+/// Service for checking and handling app updates via Firebase Remote Config,
+/// with a Firestore `settings/app` soft-publish fallback (Admin publish form).
 ///
 /// Soft/force prompts open [UpdateAvailableScreen] (in-app APK download +
 /// system installer). Hard retirement of broken builds remains the Firestore
@@ -179,23 +181,57 @@ class UpdateService {
       debugPrint('Remote Config fetch failed: $e');
     }
 
+    // Admin "Publish soft update" writes the same fields to settings/app so
+    // floor clients still get prompts if RC is empty or lagging. RC wins when set.
+    var fromFirestoreFallback = false;
+    try {
+      final merged = await _mergePublishedFromFirestore(
+        latestVersion: latestVersion,
+        latestBuild: latestBuild,
+        downloadUrl: downloadUrl,
+        releaseNotes: releaseNotes,
+        apkSha256: apkSha256,
+        forceUpdate: forceUpdate,
+      );
+      if (merged.usedFallback) {
+        fromFirestoreFallback = true;
+        latestVersion = merged.latestVersion;
+        latestBuild = merged.latestBuild;
+        downloadUrl = merged.downloadUrl;
+        releaseNotes = merged.releaseNotes;
+        apkSha256 = merged.apkSha256;
+        forceUpdate = merged.forceUpdate;
+        // Treat Firestore publish as a successful config source when RC failed
+        // or was empty — so we don't spin on 1h incomplete retries forever.
+        if (!fetchSucceeded &&
+            latestVersion.isNotEmpty &&
+            downloadUrl.isNotEmpty) {
+          fetchSucceeded = true;
+          error = null;
+        }
+        debugPrint(
+            'UpdateService: filled gaps from settings/app publish fields');
+      }
+    } catch (e) {
+      debugPrint('UpdateService: settings/app publish merge skipped: $e');
+    }
+
     final configComplete =
-        fetchSucceeded && latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
+        latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
     final hasUpdate = configComplete &&
         isNewerAppVersion(
             currentVersion, latestVersion, currentBuild, latestBuild);
 
-    if (fetchSucceeded) {
-      if (configComplete) {
-        await prefs.setInt(_lastCheckKey, now);
-      } else {
-        final shortRetry = now -
-            (_checkInterval.inMilliseconds -
-                _incompleteConfigRetry.inMilliseconds);
-        await prefs.setInt(_lastCheckKey, shortRetry);
-        debugPrint(
-            'UpdateService: RC keys incomplete — retrying in ${_incompleteConfigRetry.inMinutes}m');
-      }
+    // Cooldown: full interval when we have a complete config from either source.
+    if (configComplete) {
+      await prefs.setInt(_lastCheckKey, now);
+    } else if (fetchSucceeded || fromFirestoreFallback) {
+      final shortRetry = now -
+          (_checkInterval.inMilliseconds -
+              _incompleteConfigRetry.inMilliseconds);
+      await prefs.setInt(_lastCheckKey, shortRetry);
+      debugPrint(
+          'UpdateService: update keys incomplete — retrying in ${_incompleteConfigRetry.inMinutes}m');
     }
 
     return UpdateCheckResult(
@@ -343,6 +379,100 @@ class UpdateService {
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+
+  /// Fills empty RC fields from Admin-published soft-update metadata on
+  /// `settings/app` (same doc as the kill-switch).
+  static Future<
+      ({
+        String latestVersion,
+        String latestBuild,
+        String downloadUrl,
+        String releaseNotes,
+        String apkSha256,
+        bool forceUpdate,
+        bool usedFallback,
+      })> _mergePublishedFromFirestore({
+    required String latestVersion,
+    required String latestBuild,
+    required String downloadUrl,
+    required String releaseNotes,
+    required String apkSha256,
+    required bool forceUpdate,
+  }) async {
+    var v = latestVersion;
+    var b = latestBuild;
+    var url = downloadUrl;
+    var notes = releaseNotes;
+    var sha = apkSha256;
+    var force = forceUpdate;
+
+    final needsAny = v.isEmpty ||
+        url.isEmpty ||
+        b.isEmpty ||
+        notes.isEmpty ||
+        sha.isEmpty ||
+        !force;
+    if (!needsAny) {
+      return (
+        latestVersion: v,
+        latestBuild: b,
+        downloadUrl: url,
+        releaseNotes: notes,
+        apkSha256: sha,
+        forceUpdate: force,
+        usedFallback: false,
+      );
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('settings')
+        .doc('app')
+        .get()
+        .timeout(const Duration(seconds: 4));
+    final d = doc.data();
+    if (d == null) {
+      return (
+        latestVersion: v,
+        latestBuild: b,
+        downloadUrl: url,
+        releaseNotes: notes,
+        apkSha256: sha,
+        forceUpdate: force,
+        usedFallback: false,
+      );
+    }
+
+    var used = false;
+    String pick(String current, dynamic published) {
+      if (current.isNotEmpty) return current;
+      final s = published?.toString().trim() ?? '';
+      if (s.isNotEmpty) {
+        used = true;
+        return s;
+      }
+      return current;
+    }
+
+    v = pick(v, d['publishedLatestVersion']);
+    b = pick(b, d['publishedLatestBuild']);
+    url = pick(url, d['updateDownloadUrl']);
+    notes = pick(notes, d['publishedReleaseNotes']);
+    sha = pick(sha, d['publishedApkSha256']);
+    if (!force && d['publishedForceUpdate'] == true) {
+      force = true;
+      used = true;
+    }
+
+    return (
+      latestVersion: v,
+      latestBuild: b,
+      downloadUrl: url,
+      releaseNotes: notes,
+      apkSha256: sha,
+      forceUpdate: force,
+      usedFallback: used,
     );
   }
 
