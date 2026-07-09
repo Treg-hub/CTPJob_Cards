@@ -6,26 +6,35 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## 2026-07-08 — In-app updates, publish form, first-run paths (build 131+)
+## 2026-07-09 — Targeted updates & department/people pickers (build 136+)
 
-### Easier app updates
+### Easier app updates (for everyone)
 
-- **Download & install inside the app** — when an update is available, tap **Download & install**. Progress shows while the APK downloads; Android then opens the system installer (same as updating any other app). You no longer need to open Chrome and find the file in Downloads.
-- **Install permission** — the first time, Android may ask you to allow CTP Job Cards to install updates. Use **Open settings**, enable the permission, and return — install continues.
-- **Browser fallback** — **Open download in browser** is still available if the in-app path fails.
-- **Check anytime** — Settings → **Check for Update** (shows your current version on the same screen).
-- **After you update** — the next open still shows **What's changed**. If you skipped several builds, notes for each `(build N)` entry since your last open can roll up together (newest first).
-
-### First-time setup by role
-
-- **Security / Fleet / Ink** staff get a shorter first-run tour aimed at their module, then a **You're ready** screen listing what Home will show.
-- Classic job-card roles keep the full job-card / priority / escalation tour, then the same finish summary.
-- Technicians and managers get an extra confirmation if they try to skip core alert permissions.
+- **Download & install inside the app** — when an update is available, use **Update** (banner) or **Download & install** (force screen). Progress shows while the APK downloads; Android opens the system installer.
+- **Soft updates** no longer take over the whole screen — an orange **banner** on Home is enough; **Later** snoozes about a day.
+- **Force updates** (when Admin turns them on for your group) still block until you install.
+- **Check anytime** — Settings → **Check for Update**.
 
 ### For admins
 
-- **Targeted in-app updates** — soft release = Home **banner** only (Later snoozes 24h); force = full-screen until install. Channels: **Default** (factory), **Ink** (department), **Testers** (clock list). Force can target Ink only without forcing the whole factory. Update check cadence **24 hours**. Admin → App Update Control multi-channel publish; old APKs still only see the Default channel.
-- **Admin → App Update Control → Publish release** — shared APK URL, channel metadata, force per channel, min supported build (kill-switch). **Save publish** writes `settings/app.updateChannels` + legacy Default fields. **Copy RC keys** = Default channel only.
+- Full operator guide: **`docs/admin_app_update_guide.md`** (also linked from docs hub after landing rebuild).
+- **App Update Control** — three channels: **Default** (factory), **Departments** (multi-select from employee/structure lists), **People / pilot** (multi-select people, optional departments). Match order: People → Departments → Default.
+- **Force per channel** — e.g. force Ink Factory only without forcing the plant.
+- **24-hour** automatic check; force re-blocks on resume. Kill-switch (`min supported build`) remains factory-wide.
+- **Save publish** writes `settings/app.updateChannels` + legacy Default fields for older APKs. **Copy RC keys** = Default only.
+
+### First-time setup by role (unchanged)
+
+- **Security / Fleet / Ink** staff get a shorter first-run tour; classic job-card roles keep the full tour.
+
+---
+
+## 2026-07-08 — In-app install path (build 131+)
+
+### Install path
+
+- In-app APK download + system installer; install-unknown-apps permission; browser fallback.
+- Settings → Check for Update; What's changed after install (multi-build rollup).
 
 ---
 
