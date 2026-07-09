@@ -436,7 +436,7 @@ Every action taken on a job card — creation, status change, assignment, notifi
 
 Admins have access to all data across all departments plus system configuration tools not available to any other role. Admin Settings has **five tabs** and opens on **Settings** by default: **Settings → Employees → Structures → On Site → Comms**.
 
-- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls, and the User Feedback board link. Includes **App Update Control**: set a minimum supported build number and download URL. Any device running an older build sees a blocking update screen on next launch — a server-side kill-switch independent of Remote Config.
+- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls, and the User Feedback board link. Includes **App Update Control** (full operator guide: `docs/admin_app_update_guide.md`): shared APK URL; **channels** (Default / Departments / People) with multi-select from employee + department lists; **soft** = Home banner only; **force** = full-screen install for that channel only; **min supported build** = factory-wide launch kill-switch. Network check every 24h.
 - **Employees** — Searchable card list with add / edit / bulk-delete. On-site status is a tappable pill on each card. CSV template and import in the toolbar. FCM token is edited in the employee dialog, not on the list.
 - **Structures** — Manage the department → area → machine hierarchy with search, count stats, and expandable cards. Cascading deletes with confirmation.
 - **On Site** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave.

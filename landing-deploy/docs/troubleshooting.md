@@ -28,6 +28,31 @@ This guide covers the most common symptoms users hit in production and the faste
 
 ---
 
+## App update banner or force screen
+
+### Symptoms
+
+- Orange **Update available** banner on Home, or a full-screen **must update** screen
+- Wrong people got forced / nobody got the offer
+- “Later” stopped the banner but you want it back
+
+### What the app does (v2.3.0+ with channel builds)
+
+1. **Soft** offers show a **banner** only (not a blocking dialog). **Update** installs in-app; **Later** snoozes ~24 hours for that build.
+2. **Force** (per publish channel) is full-screen and reappears on resume until the device build catches up.
+3. **Who is targeted** is decided by Admin channels: People (clock list) → Departments → Default. See `docs/admin_app_update_guide.md`.
+4. **Kill-switch** (`min supported build`) blocks **everyone** below that build at launch — different from channel force.
+
+### Check, in order
+
+1. **Settings → Check for update** — shows channel, force flag, URL, current vs latest build.
+2. Confirm Admin published the right channel and selected the right departments/people (list pickers, not free text).
+3. Confirm your `employees.department` matches a selected department (e.g. `Ink Factory`).
+4. Confirm Default build is **not** equal to a Departments force build if you only meant to force one dept (old APKs only read Default).
+5. Install the APK URL manually once if download fails (network / “install unknown apps” permission).
+
+---
+
 ## Notifications not arriving
 
 ### Symptoms
