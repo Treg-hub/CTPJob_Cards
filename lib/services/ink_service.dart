@@ -1261,6 +1261,9 @@ class InkService {
   /// already-computed [consumption] (delta or reset value).
   /// When [sessionId] is given, doc id is `${sessionId}_${pointId}` and
   /// readings are linked for void-by-session.
+  /// Soft flag when daily Δ exceeds this (same as mobile UI soft max).
+  static const double maxToloulConsumptionLitres = 15000;
+
   Future<void> recordMeterPointReadings({
     required DateTime readingDate,
     required List<
@@ -1274,6 +1277,7 @@ class InkService {
       final docId = sessionId != null && sessionId.isNotEmpty
           ? '${sessionId}_${l.pointId}'
           : '${l.pointId}_${readingDate.millisecondsSinceEpoch ~/ 60000}';
+      final overMax = l.consumption > maxToloulConsumptionLitres;
       await _db.collection(Collections.inkMeterPointReadings).doc(docId).set({
         'point_id': l.pointId,
         if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
@@ -1284,6 +1288,12 @@ class InkService {
         'recorded_at': FieldValue.serverTimestamp(),
         'actor_clock_no': actorClockNo,
         'actor_name': actorName,
+        if (overMax) ...{
+          'flagged_for_review': true,
+          'over_max': true,
+          'flag_reason':
+              'Daily consumption ${l.consumption.toStringAsFixed(0)} L exceeds expected max (${maxToloulConsumptionLitres.toStringAsFixed(0)} L)',
+        },
       });
     }
   }
@@ -1362,6 +1372,7 @@ class InkService {
           idempotencyKey: key,
           flaggedForReview: t.flaggedForReview,
           flagReason: t.flagReason,
+          overMax: t.overMax,
           reason: t.reason,
           notes: t.notes,
           relatedTransactionId: t.relatedTransactionId,
@@ -1381,6 +1392,7 @@ class InkService {
     }
     for (final l in toloulLines) {
       final docId = '${sessionId}_${l.pointId}';
+      final overMax = l.consumption > maxToloulConsumptionLitres;
       batch.set(
         _db.collection(Collections.inkMeterPointReadings).doc(docId),
         {
@@ -1394,6 +1406,12 @@ class InkService {
           'recorded_at': FieldValue.serverTimestamp(),
           'actor_clock_no': actorClockNo,
           'actor_name': actorName,
+          if (overMax) ...{
+            'flagged_for_review': true,
+            'over_max': true,
+            'flag_reason':
+                'Daily consumption ${l.consumption.toStringAsFixed(0)} L exceeds expected max (${maxToloulConsumptionLitres.toStringAsFixed(0)} L)',
+          },
         },
       );
     }

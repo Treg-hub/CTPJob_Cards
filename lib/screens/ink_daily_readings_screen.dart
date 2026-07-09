@@ -7,6 +7,7 @@ import '../models/ink_meter_point.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import '../services/ink_service.dart';
 import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
@@ -34,7 +35,9 @@ double? _maxInkLitresFor(InkStockItem item) {
   return null;
 }
 
-const _maxToloulLitres = 15000.0;
+/// Soft max for toloul meter-point daily Δ — warn + confirm on submit; over-max
+/// readings are also soft-flagged for Pulse review (`flagged_for_review`).
+const _maxToloulLitres = InkService.maxToloulConsumptionLitres;
 
 /// Combined daily readings screen — ink meters + toloul meter points on one
 /// page with a shared date and a single submit. This is the screen behind the
@@ -119,6 +122,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
       }
       final didReset = _inkReset[item.itemCode] ?? false;
       final noChange = lastReading != null && litres == 0 && !didReset;
+      final maxL = _maxInkLitresFor(item);
+      final overMax = maxL != null && litres > maxL;
       toWriteInk.add(InkTransaction(
         type: InkTxnType.consumptionMeter,
         stockItemCode: item.itemCode,
@@ -134,10 +139,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
         actorName: emp?.name ?? '',
         idempotencyKey: '${sessionId}_${item.itemCode}',
         notes: noChange ? 'No change in meter reading' : null,
+        flaggedForReview: overMax,
+        overMax: overMax,
+        flagReason: overMax
+            ? 'Daily consumption ${qty.format(litres)} L exceeds expected max (${qty.format(maxL)} L)'
+            : null,
       ));
 
-      final maxL = _maxInkLitresFor(item);
-      if (maxL != null && litres > maxL) {
+      if (overMax) {
         warnings.add(
             '${item.displayName}: ${qty.format(litres)} L (max ${qty.format(maxL)} L)');
       }
@@ -228,7 +237,10 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                   ]),
                 ),
               const SizedBox(height: 10),
-              const Text('Verify the readings are correct before proceeding.'),
+              const Text(
+                'Verify the readings are correct before proceeding. '
+                'Ink and toloul readings above their max will be soft-flagged for manager review on the factory board.',
+              ),
             ],
           ),
           actions: [
