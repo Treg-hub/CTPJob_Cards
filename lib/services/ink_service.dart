@@ -23,6 +23,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../utils/persona_audit.dart';
 import 'connectivity_service.dart';
+import 'resilient_stream.dart';
 import 'waste_stock_crosslink.dart';
 
 /// All Ink Factory Firestore operations. Follows the FleetService/WasteService
@@ -44,11 +45,11 @@ class InkService {
   // SETTINGS
   // ---------------------------------------------------------------------------
 
-  Stream<InkSettings> watchSettings() => _db
-      .collection(Collections.inkSettings)
-      .doc('config')
-      .snapshots()
-      .map((s) => s.exists ? InkSettings.fromFirestore(s) : InkSettings.defaults);
+  Stream<InkSettings> watchSettings() => resilientSnapshots(
+        () => _db.collection(Collections.inkSettings).doc('config').snapshots(),
+        debugName: 'ink_settings',
+      ).map((s) =>
+          s.exists ? InkSettings.fromFirestore(s) : InkSettings.defaults);
 
   Future<void> saveSettings(InkSettings settings) async {
     _guardWrite();
@@ -110,12 +111,21 @@ class InkService {
   // STOCK ITEMS (cache of the ledger — read-only on the client)
   // ---------------------------------------------------------------------------
 
-  Stream<List<InkStockItem>> watchStockItems({bool activeOnly = true}) => _db
-      .collection(Collections.inkStockItems)
-      .snapshots()
-      .map((s) {
-        final items = s.docs.map(InkStockItem.fromFirestore).toList();
-        final filtered = activeOnly ? items.where((i) => i.active).toList() : items;
+  Stream<List<InkStockItem>> watchStockItems({bool activeOnly = true}) =>
+      resilientSnapshots(
+        () => _db.collection(Collections.inkStockItems).snapshots(),
+        debugName: 'ink_stock_items',
+      ).map((s) {
+        final items = <InkStockItem>[];
+        for (final doc in s.docs) {
+          try {
+            items.add(InkStockItem.fromFirestore(doc));
+          } catch (e) {
+            debugPrint('Skipping unparseable ink_stock_items/${doc.id}: $e');
+          }
+        }
+        final filtered =
+            activeOnly ? items.where((i) => i.active).toList() : items;
         // Fixed display order (legacy ITEMID), not alphabetical.
         filtered.sort((a, b) {
           final c = a.displayOrder.compareTo(b.displayOrder);
@@ -124,11 +134,18 @@ class InkService {
         return filtered;
       });
 
-  Stream<InkStockItem?> watchStockItem(String itemCode) => _db
-      .collection(Collections.inkStockItems)
-      .doc(itemCode)
-      .snapshots()
-      .map((s) => s.exists ? InkStockItem.fromFirestore(s) : null);
+  Stream<InkStockItem?> watchStockItem(String itemCode) => resilientSnapshots(
+        () => _db.collection(Collections.inkStockItems).doc(itemCode).snapshots(),
+        debugName: 'ink_stock_item_$itemCode',
+      ).map((s) {
+        if (!s.exists) return null;
+        try {
+          return InkStockItem.fromFirestore(s);
+        } catch (e) {
+          debugPrint('Skipping unparseable ink_stock_items/$itemCode: $e');
+          return null;
+        }
+      });
 
   // ---------------------------------------------------------------------------
   // LEDGER
@@ -181,21 +198,20 @@ class InkService {
       .update({'effective_at': Timestamp.fromDate(effectiveAt)});
 
   /// All count events ordered by count date descending (manager history).
-  Stream<List<InkCountEvent>> watchCountEvents() => _db
-      .collection(Collections.inkCountEvents)
-      .orderBy('count_date', descending: true)
-      .snapshots()
-      .map((s) {
+  Stream<List<InkCountEvent>> watchCountEvents() => resilientSnapshots(
+        () => _db
+            .collection(Collections.inkCountEvents)
+            .orderBy('count_date', descending: true)
+            .snapshots(),
+        debugName: 'ink_count_events',
+      ).map((s) {
         final list = <InkCountEvent>[];
         for (final doc in s.docs) {
           final event = InkCountEvent.tryFromFirestore(doc);
           if (event != null) {
             list.add(event);
           } else {
-            assert(() {
-              debugPrint('Skipping unparseable ink_count_events/${doc.id}');
-              return true;
-            }());
+            debugPrint('Skipping unparseable ink_count_events/${doc.id}');
           }
         }
         return list;
@@ -441,12 +457,22 @@ class InkService {
   // CONVERSION FACTORS (litres → kg per meter-read item; manager-managed)
   // ---------------------------------------------------------------------------
 
-  Stream<Map<String, InkConversionFactor>> watchConversionFactors() => _db
-      .collection(Collections.inkConversionFactors)
-      .snapshots()
-      .map((s) => {
-            for (final d in s.docs) d.id: InkConversionFactor.fromFirestore(d)
-          });
+  Stream<Map<String, InkConversionFactor>> watchConversionFactors() =>
+      resilientSnapshots(
+        () => _db.collection(Collections.inkConversionFactors).snapshots(),
+        debugName: 'ink_conversion_factors',
+      ).map((s) {
+        final out = <String, InkConversionFactor>{};
+        for (final d in s.docs) {
+          try {
+            out[d.id] = InkConversionFactor.fromFirestore(d);
+          } catch (e) {
+            debugPrint(
+                'Skipping unparseable ink_conversion_factors/${d.id}: $e');
+          }
+        }
+        return out;
+      });
 
   Future<void> saveConversionFactor(String itemCode, double kgPerLitre) => _db
       .collection(Collections.inkConversionFactors)
@@ -518,11 +544,19 @@ class InkService {
   // RECIPES + PRODUCTION
   // ---------------------------------------------------------------------------
 
-  Stream<List<InkRecipe>> watchRecipes({bool activeOnly = true}) => _db
-      .collection(Collections.inkRecipes)
-      .snapshots()
-      .map((s) {
-        final all = s.docs.map(InkRecipe.fromFirestore).toList();
+  Stream<List<InkRecipe>> watchRecipes({bool activeOnly = true}) =>
+      resilientSnapshots(
+        () => _db.collection(Collections.inkRecipes).snapshots(),
+        debugName: 'ink_recipes',
+      ).map((s) {
+        final all = <InkRecipe>[];
+        for (final doc in s.docs) {
+          try {
+            all.add(InkRecipe.fromFirestore(doc));
+          } catch (e) {
+            debugPrint('Skipping unparseable ink_recipes/${doc.id}: $e');
+          }
+        }
         final filtered = activeOnly ? all.where((r) => r.active).toList() : all;
         filtered
             .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -546,12 +580,19 @@ class InkService {
   Future<void> setRecipeActive(String id, bool active) =>
       _db.collection(Collections.inkRecipes).doc(id).update({'active': active});
 
-  Stream<List<InkProductionRun>> watchProductionRuns() => _db
-      .collection(Collections.inkProductionRuns)
-      .snapshots()
-      .map((s) {
-        final l = s.docs.map(InkProductionRun.fromFirestore).toList()
-          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
+  Stream<List<InkProductionRun>> watchProductionRuns() => resilientSnapshots(
+        () => _db.collection(Collections.inkProductionRuns).snapshots(),
+        debugName: 'ink_production_runs',
+      ).map((s) {
+        final l = <InkProductionRun>[];
+        for (final doc in s.docs) {
+          try {
+            l.add(InkProductionRun.fromFirestore(doc));
+          } catch (e) {
+            debugPrint('Skipping unparseable ink_production_runs/${doc.id}: $e');
+          }
+        }
+        l.sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
         return l;
       });
 
@@ -816,7 +857,9 @@ class InkService {
     }
   }
 
-  /// Deduct receipt qty from PO remaining; idempotent per [receiptKey].
+  /// Deduct receipt qty from PO remaining via CF `applyInkPurchaseOrderReceipt`
+  /// (Wave B — clients cannot write remaining/status on ink_purchase_orders).
+  /// Idempotent per [receiptKey].
   Future<void> applyReceiptToPurchaseOrder({
     required String purchaseOrderId,
     required String itemCode,
@@ -825,41 +868,25 @@ class InkService {
   }) async {
     if (purchaseOrderId.isEmpty || quantity <= 0 || receiptKey.isEmpty) return;
 
-    final poRef =
-        _db.collection(Collections.inkPurchaseOrders).doc(purchaseOrderId);
-
-    await _db.runTransaction((txn) async {
-      final snap = await txn.get(poRef);
-      if (!snap.exists) {
-        throw StateError('Purchase order $purchaseOrderId not found');
-      }
-      final d = snap.data() ?? {};
-      final applied = (d['applied_receipt_keys'] as List?)?.cast<String>() ?? [];
-      if (applied.contains(receiptKey)) return;
-
-      final po = InkPurchaseOrder.fromFirestore(snap);
-      final result = deductReceiptFromPurchaseOrder(
-        remainingKgByItem: po.remainingKgByItem,
-        itemCode: itemCode,
-        quantity: quantity,
-      );
-
-      txn.set(
-        poRef,
-        {
-          'remaining_kg_by_item': result.remainingKgByItem,
-          'status': result.status,
-          'applied_receipt_keys': FieldValue.arrayUnion([receiptKey]),
-          'updated_at': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+    final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('applyInkPurchaseOrderReceipt');
+    await callable.call<Map<String, dynamic>>({
+      'purchase_order_id': purchaseOrderId,
+      'item_code': itemCode,
+      'quantity': quantity,
+      'receipt_key': receiptKey,
     });
   }
 
-  /// Deducts shipment manifest lines from PO remaining qty; idempotent per
-  /// shipment via `fulfillment_applied_at`. Called on mobile IBC receive, not
-  /// on Pulse shipment create.
+  /// CF-mirror only — **do not call on the live IBC receive path.**
+  ///
+  /// Import PO remaining is deducted solely by Cloud Function
+  /// `recordInkIbcReceipt` / `manualCompleteInkShipmentReceipt` (exact-zero
+  /// fulfil). Calling this **in addition** to the CF would double-deduct.
+  /// Kept for reference / edge tooling; Wave B IBC receive uses the CF only.
+  ///
+  /// Deducts received kg from PO remaining; idempotent per shipment via
+  /// `fulfillment_applied_at`.
   Future<void> applyShipmentToPurchaseOrder({
     required InkShipment shipment,
     required String purchaseOrderId,
@@ -965,8 +992,8 @@ class InkService {
   /// cost-pending `purchase` and, when [shipmentId] is given, stamps it and
   /// appends an aggregate received line to the pallet shipment (status →
   /// receiving — pallet shipments carry several items, each received separately).
-  /// When [purchaseOrderId] is given, deducts [remaining_kg_by_item] on the PO
-  /// (local-loop fulfillment; idempotent via txn idempotency key).
+  /// When [purchaseOrderId] is given, deducts PO remaining via CF
+  /// `applyInkPurchaseOrderReceipt` (idempotent via txn idempotency key).
   Future<void> recordRawMaterialReceipt({
     required InkTransaction txn,
     String? shipmentId,
@@ -1195,11 +1222,19 @@ class InkService {
   // METER POINTS (aux toloul meters — recovery/usage; NO stock impact)
   // ---------------------------------------------------------------------------
 
-  Stream<List<InkMeterPoint>> watchMeterPoints({bool activeOnly = true}) => _db
-      .collection(Collections.inkMeterPoints)
-      .snapshots()
-      .map((s) {
-        final all = s.docs.map(InkMeterPoint.fromFirestore).toList();
+  Stream<List<InkMeterPoint>> watchMeterPoints({bool activeOnly = true}) =>
+      resilientSnapshots(
+        () => _db.collection(Collections.inkMeterPoints).snapshots(),
+        debugName: 'ink_meter_points',
+      ).map((s) {
+        final all = <InkMeterPoint>[];
+        for (final doc in s.docs) {
+          try {
+            all.add(InkMeterPoint.fromFirestore(doc));
+          } catch (e) {
+            debugPrint('Skipping unparseable ink_meter_points/${doc.id}: $e');
+          }
+        }
         final f = activeOnly ? all.where((p) => p.active).toList() : all;
         f.sort((a, b) {
           final c = a.sortOrder.compareTo(b.sortOrder);

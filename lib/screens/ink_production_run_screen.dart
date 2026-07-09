@@ -78,8 +78,50 @@ class _State extends ConsumerState<InkProductionRunScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Production Run')),
       body: recipesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text('Loading recipes…'),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    ref.invalidate(inkRecipesProvider);
+                    ref.invalidate(inkStockItemsProvider);
+                    ref.invalidate(inkProductionRunsProvider);
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Error: $e', textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () {
+                    ref.invalidate(inkRecipesProvider);
+                    ref.invalidate(inkStockItemsProvider);
+                    ref.invalidate(inkProductionRunsProvider);
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
         data: (recipes) {
           if (recipes.isEmpty) {
             return const Padding(

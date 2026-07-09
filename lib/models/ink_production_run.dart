@@ -29,6 +29,16 @@ class InkProductionRun {
   /// transactions are voided and excluded from the replay (preserved for audit).
   final bool voided;
 
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
+  }
+
   factory InkProductionRun.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return InkProductionRun(
@@ -38,7 +48,7 @@ class InkProductionRun {
       pots: (d['pots'] as num?)?.toInt() ?? 0,
       outputQty: (d['output_qty'] as num?)?.toDouble() ?? 0,
       totalInputCost: (d['total_input_cost'] as num?)?.toDouble() ?? 0,
-      effectiveAt: (d['effective_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      effectiveAt: _parseDate(d['effective_at']),
       actorName: d['actor_name'] as String?,
       voided: d['voided'] as bool? ?? false,
     );

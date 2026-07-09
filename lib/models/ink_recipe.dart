@@ -39,15 +39,21 @@ class InkRecipe {
 
   factory InkRecipe.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
+    final rawInputs = d['inputs'];
+    final inputs = <InkRecipeLine>[];
+    if (rawInputs is List) {
+      for (final e in rawInputs) {
+        if (e is Map) {
+          inputs.add(InkRecipeLine.fromMap(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
     return InkRecipe(
       id: doc.id,
       name: d['name'] as String? ?? '',
       outputItemCode: d['output_item_code'] as String? ?? '',
       outputPerPot: (d['output_per_pot'] as num?)?.toDouble() ?? 0,
-      inputs: (d['inputs'] as List<dynamic>?)
-              ?.map((e) => InkRecipeLine.fromMap(e as Map<String, dynamic>))
-              .toList() ??
-          const [],
+      inputs: inputs,
       active: d['active'] as bool? ?? true,
       version: (d['version'] as num?)?.toInt() ?? 1,
     );
