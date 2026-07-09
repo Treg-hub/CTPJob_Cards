@@ -555,8 +555,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
     });
     try {
       final stock = await _wasteService
-          .watchAllStockOnSite()
-          .first
+          .fetchAllStockOnSiteOnce()
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
         setState(() {

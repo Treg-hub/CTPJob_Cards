@@ -82,8 +82,7 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
   Future<void> _load() async {
     try {
       final items = await _wasteService
-          .watchAllStockOnSite()
-          .first
+          .fetchAllStockOnSiteOnce()
           .timeout(const Duration(seconds: 12), onTimeout: () => []);
       if (mounted) {
         final filter = widget.subtypeFilter;

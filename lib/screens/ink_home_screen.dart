@@ -43,8 +43,8 @@ class InkHomeScreen extends ConsumerWidget {
 
     final itemsAsync = ref.watch(inkStockItemsProvider);
     final inkSettings = ref.watch(inkSettingsProvider).valueOrNull;
-    final readingsStatus =
-        ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
+    final readingsAsync = ref.watch(inkDailyReadingsStatusProvider);
+    final readingsStatus = readingsAsync.valueOrNull;
     final isManager = role_utils.isInkManager(
         ref.watch(currentEmployeeProvider).valueOrNull);
     InkStockItem? toloulItem;

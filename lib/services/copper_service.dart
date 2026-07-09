@@ -36,13 +36,26 @@ class CopperService {
     }
   }
 
-  Stream<List<CopperTransaction>> getTransactionsStream({DateTimeRange? range}) {
-    Query query = _firestore.collection(transCollection).orderBy('timestamp', descending: true);
-    if (range != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
-                  .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(range.end));
-    }
-    return query.snapshots().map((snapshot) => snapshot.docs.map((doc) => CopperTransaction.fromFirestore(doc)).toList());
+  /// Transactions in [range] (default: last 90 days). Hard limit for reads.
+  Stream<List<CopperTransaction>> getTransactionsStream({
+    DateTimeRange? range,
+    int limit = 300,
+  }) {
+    final effective = range ??
+        DateTimeRange(
+          start: DateTime.now().subtract(const Duration(days: 90)),
+          end: DateTime.now().add(const Duration(days: 1)),
+        );
+    Query query = _firestore
+        .collection(transCollection)
+        .where('timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(effective.start))
+        .where('timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(effective.end))
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+    return query.snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => CopperTransaction.fromFirestore(doc)).toList());
   }
 
   Future<void> updateTransactionComments(String id, String comments) async {

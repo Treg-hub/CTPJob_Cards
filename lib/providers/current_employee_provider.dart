@@ -3,16 +3,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart' show personaEmployee, realEmployee;
 import '../models/employee.dart';
+import '../services/employee_roster_cache.dart';
 import '../services/firestore_service.dart';
 import 'persona_provider.dart';
 
 final firestoreServiceProvider =
     Provider<FirestoreService>((ref) => FirestoreService());
 
-/// Shared employees list for admin persona picker — avoids a fresh Firestore
-/// listener every time the dialog opens.
-final employeesStreamProvider = StreamProvider<List<Employee>>((ref) {
-  return ref.watch(firestoreServiceProvider).getEmployeesStream();
+/// Session-cached full employee roster (persona picker / admin lists).
+/// Not a live presence stream — reload via [EmployeeRosterCache.invalidate]
+/// when admin adds/removes employees.
+final employeesRosterProvider = FutureProvider<List<Employee>>((ref) {
+  return EmployeeRosterCache.instance.getRoster();
 });
 
 class CurrentEmployeeNotifier extends AsyncNotifier<Employee?> {

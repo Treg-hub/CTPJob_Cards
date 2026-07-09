@@ -63,6 +63,7 @@ import '../models/fleet_settings.dart';
 import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import '../providers/ink_provider.dart';
+import '../providers/inbox_provider.dart';
 import '../widgets/ink_daily_readings_banner.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
@@ -108,8 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   JobCardListSnapshot? _activeJobsSnap;
   String? _myWorkClockNo;
   Stream<JobCardListSnapshot>? _myWorkStream;
-  String? _inboxClockNo;
-  Stream<int>? _inboxCountStream;
+
   StreamSubscription<List<ConnectivityResult>>? _moduleSettingsConnSub;
   bool _testMode = false;
   Timer? _testModeTimer;
@@ -386,14 +386,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
   }
 
-  /// Returns the cached unread-inbox stream for [clockNo], creating it once.
-  Stream<int> _inboxCountStreamFor(String clockNo) {
-    if (_inboxCountStream == null || _inboxClockNo != clockNo) {
-      _inboxClockNo = clockNo;
-      _inboxCountStream = _firestoreService.getUnreadInboxCountStream(clockNo);
-    }
-    return _inboxCountStream!;
-  }
+
 
   void _checkInboxOnReturn(String clockNo) {
     FirebaseFirestore.instance
@@ -1291,21 +1284,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           // Nudges the user if Location-Always / battery-opt got revoked, which
           // silently breaks background geofencing (hidden on web + when healthy).
           const GeofenceHealthBanner(),
+          // One-shot status — banner only when incomplete (no live multi-stream).
           if (_canUseOnSiteModules &&
               role_utils.isInkMeterUser(currentEmployee)) ...[
-            Builder(
-              builder: (context) {
-                final status =
-                    ref.watch(inkDailyReadingsStatusProvider).valueOrNull;
-                if (status == null || status.complete) {
-                  return const SizedBox.shrink();
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: InkDailyReadingsBanner(status: status),
-                );
-              },
-            ),
+            ref.watch(inkDailyReadingsStatusProvider).when(
+                  data: (status) {
+                    if (status.complete) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: InkDailyReadingsBanner(status: status),
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
           ],
           Center(
             child: Text(
@@ -2428,23 +2420,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
           ),
           if (realEmployee != null)
-            StreamBuilder<int>(
-              // Cached per clockNo; the service stream is resilient — this
-              // badge is rules-gated on the clockNum claim and used to die
-              // permanently when it lost the claims race at startup.
-              stream: _inboxCountStreamFor(realEmployee!.clockNo),
-              builder: (ctx, snap) {
-                final count = snap.data ?? 0;
+            Builder(
+              builder: (ctx) {
+                final count = ref.watch(
+                  unreadInboxCountProvider(realEmployee!.clockNo),
+                );
                 return IconButton(
                   icon: Badge(
                     label: count > 0 ? Text('$count') : null,
                     isLabelVisible: count > 0,
-                    child: const Icon(Icons.notifications_outlined, color: Colors.black),
+                    child: const Icon(Icons.notifications_outlined,
+                        color: Colors.black),
                   ),
                   tooltip: 'Notification Inbox',
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const NotificationInboxScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationInboxScreen()),
                   ),
                 );
               },

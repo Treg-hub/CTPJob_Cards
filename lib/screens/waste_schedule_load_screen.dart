@@ -176,8 +176,7 @@ class _WasteScheduleLoadScreenState
     setState(() { _loadingStock = true; _onSiteStock = []; _selectedStockIds.clear(); });
     try {
       final pallets = await _wasteService
-          .watchAllStockOnSite()
-          .first
+          .fetchAllStockOnSiteOnce()
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
         setState(() {

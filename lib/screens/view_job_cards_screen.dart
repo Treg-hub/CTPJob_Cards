@@ -42,8 +42,7 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
       currentEmployee?.department.toLowerCase() == 'general';
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
-  static const int _statusLimit = 300;
-  static const int _closedLimit = 200;
+  static const int _pageSize = 100;
 
   final FirestoreService _firestoreService = FirestoreService();
 
@@ -51,6 +50,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
   late JobStatus _activeStatus;
   Stream<JobCardListSnapshot>? _activeTabStream;
   JobStatus? _streamedStatus;
+  int _statusLimit = _pageSize;
+  int _closedLimit = _pageSize;
 
   static const _tabStatuses = [
     JobStatus.open,
@@ -90,8 +91,12 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
     _ensureStreamForActiveTab();
   }
 
-  void _ensureStreamForActiveTab() {
-    if (_streamedStatus == _activeStatus && _activeTabStream != null) return;
+  void _ensureStreamForActiveTab({bool force = false}) {
+    if (!force &&
+        _streamedStatus == _activeStatus &&
+        _activeTabStream != null) {
+      return;
+    }
     _streamedStatus = _activeStatus;
     if (_activeStatus == JobStatus.closed) {
       _activeTabStream =
@@ -102,6 +107,31 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
         limit: _statusLimit,
       );
     }
+  }
+
+  Future<void> _pullRefresh() async {
+    setState(() {
+      _statusLimit = _pageSize;
+      _closedLimit = _pageSize;
+      _activeTabStream = null;
+      _streamedStatus = null;
+      _ensureStreamForActiveTab(force: true);
+    });
+    // Allow stream to reattach.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+
+  void _loadMore() {
+    setState(() {
+      if (_activeStatus == JobStatus.closed) {
+        _closedLimit += _pageSize;
+      } else {
+        _statusLimit += _pageSize;
+      }
+      _activeTabStream = null;
+      _streamedStatus = null;
+      _ensureStreamForActiveTab(force: true);
+    });
   }
 
   @override
@@ -367,62 +397,86 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
           Expanded(
             child: stream == null
                 ? const Center(child: CircularProgressIndicator())
-                : StreamBuilder<JobCardListSnapshot>(
-                    key: ValueKey(_activeStatus),
-                    stream: stream,
-                    builder: (context, snap) {
-                      if (snap.hasError) {
-                        return Center(
-                          child: Text('Error: ${snap.error}',
-                              style: const TextStyle(color: Colors.red)),
-                        );
-                      }
-                      final meta = snap.data;
-                      switch (decideListLoadState(
-                        hasSnapshot: meta != null,
-                        isEmpty: meta?.cards.isEmpty ?? true,
-                        isFromCache: meta?.isFromCache ?? true,
-                      )) {
-                        case ListLoadState.loading:
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        case ListLoadState.waitingForServer:
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                : RefreshIndicator(
+                    onRefresh: _pullRefresh,
+                    child: StreamBuilder<JobCardListSnapshot>(
+                      key: ValueKey(
+                          '${_activeStatus.name}_$_statusLimit$_closedLimit'),
+                      stream: stream,
+                      builder: (context, snap) {
+                        if (snap.hasError) {
+                          return ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.3,
+                                child: Center(
+                                  child: Text('Error: ${snap.error}',
+                                      style:
+                                          const TextStyle(color: Colors.red)),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        final meta = snap.data;
+                        switch (decideListLoadState(
+                          hasSnapshot: meta != null,
+                          isEmpty: meta?.cards.isEmpty ?? true,
+                          isFromCache: meta?.isFromCache ?? true,
+                        )) {
+                          case ListLoadState.loading:
+                            return ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: const [
+                                SizedBox(
+                                    height: 200,
+                                    child: Center(
+                                        child: CircularProgressIndicator())),
+                              ],
+                            );
+                          case ListLoadState.waitingForServer:
+                            return ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               children: [
-                                const CircularProgressIndicator(),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Waiting for connection…',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                SizedBox(
+                                  height: 200,
+                                  child: Center(
+                                    child: Text(
+                                      'Waiting for connection…',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
-                            ),
-                          );
-                        case ListLoadState.empty:
-                        case ListLoadState.data:
-                          break;
-                      }
+                            );
+                          case ListLoadState.empty:
+                          case ListLoadState.data:
+                            break;
+                        }
 
-                      final jobs = _applyFilters(meta!.cards);
-                      final countLabel = _activeStatus == JobStatus.closed &&
-                              jobs.length >= _closedLimit
-                          ? '$_closedLimit+'
-                          : '${jobs.length}';
-                      return Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
+                        final jobs = _applyFilters(meta!.cards);
+                        final cap = _activeStatus == JobStatus.closed
+                            ? _closedLimit
+                            : _statusLimit;
+                        final hitCap = jobs.length >= cap;
+                        final countLabel =
+                            hitCap ? '$cap+' : '${jobs.length}';
+                        return ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: ScreenInsets.listPadding(context,
+                              horizontal: 8, top: 8),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
                               child: Text(
-                                '$countLabel job${jobs.length == 1 ? '' : 's'}',
+                                '$countLabel job${jobs.length == 1 ? '' : 's'} (pull to refresh)',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Theme.of(context)
@@ -431,11 +485,47 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
                                 ),
                               ),
                             ),
-                          ),
-                          Expanded(child: _buildJobList(jobs)),
-                        ],
-                      );
-                    },
+                            if (jobs.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 48),
+                                child: Center(
+                                  child: Text('No jobs available',
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant)),
+                                ),
+                              )
+                            else
+                              ...jobs.map(
+                                (job) => JobCardTile(
+                                  job: job,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          JobCardDetailScreen(jobCard: job),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (hitCap)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: TextButton.icon(
+                                    onPressed: _loadMore,
+                                    icon: const Icon(Icons.expand_more),
+                                    label: Text(
+                                        'Load more ($_pageSize more)'),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
           ),
         ],
@@ -466,24 +556,4 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
           (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
   }
 
-  Widget _buildJobList(List<JobCard> jobs) {
-    return jobs.isEmpty
-        ? Center(
-            child: Text('No jobs available',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)))
-        : ListView.builder(
-            padding:
-                ScreenInsets.listPadding(context, horizontal: 8, top: 8),
-            itemCount: jobs.length,
-            itemBuilder: (context, index) => JobCardTile(
-              job: jobs[index],
-              onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          JobCardDetailScreen(jobCard: jobs[index]))),
-            ),
-          );
-  }
 }

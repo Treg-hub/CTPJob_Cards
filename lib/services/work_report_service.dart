@@ -91,8 +91,33 @@ class WorkReportService {
           ..sort((a, b) => b.workDate.compareTo(a.workDate)));
   }
 
-  /// Candidate jobs: currently assigned + created/operator + recent My Work slice.
-  Future<List<JobCard>> fetchCandidateJobCards(String clockNo) async {
+  /// Last successful candidate pull (per clock) — avoids re-pull on rebuild.
+  static final Map<String, ({DateTime at, List<JobCard> jobs})> _candidateCache =
+      {};
+  static const _candidateCacheTtl = Duration(minutes: 5);
+  static DateTime? _lastRefreshStarted;
+
+  /// Candidate jobs: one-shot, debounced, session-cached for multi-worker scale.
+  Future<List<JobCard>> fetchCandidateJobCards(
+    String clockNo, {
+    bool force = false,
+  }) async {
+    final now = DateTime.now();
+    if (!force) {
+      final cached = _candidateCache[clockNo];
+      if (cached != null && now.difference(cached.at) < _candidateCacheTtl) {
+        return cached.jobs;
+      }
+    }
+    // Debounce concurrent refresh storms (multi-tap).
+    if (_lastRefreshStarted != null &&
+        now.difference(_lastRefreshStarted!) < const Duration(seconds: 3) &&
+        !force) {
+      final cached = _candidateCache[clockNo];
+      if (cached != null) return cached.jobs;
+    }
+    _lastRefreshStarted = now;
+
     final byId = <String, JobCard>{};
 
     Future<void> mergeQuery(Query<Map<String, dynamic>> q) async {
@@ -106,22 +131,22 @@ class WorkReportService {
       }
     }
 
+    // Caps keep cost predictable as more workers use My Timesheet.
     await Future.wait([
       mergeQuery(
         _db
             .collection(Collections.jobCards)
             .where('assignedClockNos', arrayContains: clockNo)
-            .limit(400),
+            .limit(250),
       ),
       mergeQuery(
         _db
             .collection(Collections.jobCards)
             .where('operatorClockNo', isEqualTo: clockNo)
-            .limit(200),
+            .limit(150),
       ),
     ]);
 
-    // My Work stream one-shot for anything still missing (created+assigned mix).
     try {
       final myWork = await FirestoreService()
           .getMyJobCards(clockNo)
@@ -134,7 +159,9 @@ class WorkReportService {
       debugPrint('Work report My Work merge failed: $e');
     }
 
-    return byId.values.toList();
+    final list = byId.values.toList();
+    _candidateCache[clockNo] = (at: DateTime.now(), jobs: list);
+    return list;
   }
 
   Future<void> ensurePeriodHeader({

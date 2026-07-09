@@ -27,8 +27,8 @@ class WasteCopperReadyPanel extends StatelessWidget {
     return StreamBuilder<CopperInventory>(
       stream: CopperService().getInventoryStream(),
       builder: (context, copperSnap) {
-        return StreamBuilder<List<WasteStockItem>>(
-          stream: wasteService.watchAllStockOnSite(),
+        return FutureBuilder<List<WasteStockItem>>(
+          future: wasteService.fetchAllStockOnSiteOnce(),
           builder: (context, stockSnap) {
             final inv = copperSnap.data;
             final stock = (stockSnap.data ?? [])

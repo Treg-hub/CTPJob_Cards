@@ -2344,7 +2344,13 @@ class WasteService {
   /// Uses a single-field Firestore filter (`waste_type`) and applies
   /// `is_deleted` / `status` / sort client-side so we don't depend on a
   /// 4-field composite index that may not be deployed yet.
-  /// All on-site stock across every waste type (newest first).
+  /// One-shot on-site stock (Phase B — not a live collection listener).
+  Future<List<WasteStockItem>> fetchAllStockOnSiteOnce() async {
+    final snap = await _firestore.collection(Collections.wasteStock).get();
+    return _filterOnSiteStockDocs(snap);
+  }
+
+  /// @deprecated Prefer [fetchAllStockOnSiteOnce] + pull-to-refresh.
   Stream<WasteStockListSnapshot> watchAllStockOnSiteWithMeta() {
     return resilientSnapshots(
       () => _firestore.collection(Collections.wasteStock).snapshots(),
@@ -2355,6 +2361,7 @@ class WasteService {
         ));
   }
 
+  /// @deprecated Prefer [fetchAllStockOnSiteOnce].
   Stream<List<WasteStockItem>> watchAllStockOnSite() =>
       watchAllStockOnSiteWithMeta().map((m) => m.items);
 

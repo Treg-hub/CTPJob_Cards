@@ -64,27 +64,53 @@ class SecurityService {
     return SecuritySettings.fromFirestore(snap);
   }
 
-  Stream<List<SecurityGate>> watchGates({bool activeOnly = true}) {
-    return _db.collection(Collections.securityGates).snapshots().map((snap) {
-      var gates = snap.docs.map(SecurityGate.fromFirestore).toList();
-      if (activeOnly) gates = gates.where((g) => g.active).toList();
-      gates.sort((a, b) {
-        final ao = a.sortOrder ?? 999;
-        final bo = b.sortOrder ?? 999;
-        final cmp = ao.compareTo(bo);
-        return cmp != 0 ? cmp : a.name.compareTo(b.name);
-      });
-      return gates;
+  List<SecurityGate> _mapGates(
+    QuerySnapshot<Map<String, dynamic>> snap, {
+    required bool activeOnly,
+  }) {
+    var gates = snap.docs.map(SecurityGate.fromFirestore).toList();
+    if (activeOnly) gates = gates.where((g) => g.active).toList();
+    gates.sort((a, b) {
+      final ao = a.sortOrder ?? 999;
+      final bo = b.sortOrder ?? 999;
+      final cmp = ao.compareTo(bo);
+      return cmp != 0 ? cmp : a.name.compareTo(b.name);
     });
+    return gates;
   }
 
+  /// One-shot gates (ref data — pull to refresh; not live).
+  Future<List<SecurityGate>> fetchGates({bool activeOnly = true}) async {
+    final snap = await _db.collection(Collections.securityGates).get();
+    return _mapGates(snap, activeOnly: activeOnly);
+  }
+
+  Stream<List<SecurityGate>> watchGates({bool activeOnly = true}) {
+    return _db.collection(Collections.securityGates).snapshots().map(
+          (snap) => _mapGates(snap, activeOnly: activeOnly),
+        );
+  }
+
+  List<SecurityVehicle> _mapVehicles(
+    QuerySnapshot<Map<String, dynamic>> snap, {
+    required bool activeOnly,
+  }) {
+    var list = snap.docs.map(SecurityVehicle.fromFirestore).toList();
+    if (activeOnly) list = list.where((v) => v.active).toList();
+    list.sort((a, b) => a.vehicleReg.compareTo(b.vehicleReg));
+    return list;
+  }
+
+  Future<List<SecurityVehicle>> fetchVehicles({bool activeOnly = true}) async {
+    final snap = await _db.collection(Collections.securityVehicles).get();
+    return _mapVehicles(snap, activeOnly: activeOnly);
+  }
+
+  /// @deprecated Prefer [fetchVehicles] + pull-to-refresh for floor lists.
   Stream<List<SecurityVehicle>> watchVehicles({bool activeOnly = true}) {
-    return _db.collection(Collections.securityVehicles).snapshots().map((snap) {
-      var list = snap.docs.map(SecurityVehicle.fromFirestore).toList();
-      if (activeOnly) list = list.where((v) => v.active).toList();
-      list.sort((a, b) => a.vehicleReg.compareTo(b.vehicleReg));
-      return list;
-    });
+    return _db.collection(Collections.securityVehicles).snapshots().map(
+          (snap) => _mapVehicles(snap, activeOnly: activeOnly),
+        );
   }
 
   Stream<List<SecurityDenyEntry>> watchDenyList({bool activeOnly = true}) {

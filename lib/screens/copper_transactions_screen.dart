@@ -20,8 +20,18 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _editCommentsController = TextEditingController();
 
+  /// null = default last 90 days (never unbounded).
   DateTimeRange? _dateRange;
   String _searchQuery = '';
+
+  DateTimeRange get _effectiveRange {
+    if (_dateRange != null) return _dateRange!;
+    final now = DateTime.now();
+    return DateTimeRange(
+      start: now.subtract(const Duration(days: 90)),
+      end: now.add(const Duration(days: 1)),
+    );
+  }
 
   @override
   void initState() {
@@ -50,6 +60,7 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
 
   void _clearFilters() {
     setState(() {
+      // Back to default 90-day window (not full history).
       _dateRange = null;
       _searchController.clear();
     });
@@ -156,21 +167,21 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
                   child: ElevatedButton(
                     onPressed: _selectDateRange,
                     child: Text(_dateRange == null
-                        ? 'Select Date Range'
+                        ? 'Last 90 days (tap to pick range)'
                         : '${DateFormat('MM/dd').format(_dateRange!.start)} - ${DateFormat('MM/dd').format(_dateRange!.end)}'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: _clearFilters,
-                  child: const Text('Clear'),
+                  child: const Text('Reset 90d'),
                 ),
               ],
             ),
           ),
           Expanded(
             child: StreamBuilder<List<CopperTransaction>>(
-              stream: _copperService.getTransactionsStream(range: _dateRange),
+              stream: _copperService.getTransactionsStream(range: _effectiveRange),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());

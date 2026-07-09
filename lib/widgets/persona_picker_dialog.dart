@@ -40,21 +40,23 @@ class _State extends ConsumerState<_PersonaPickerDialog> {
   }
 
   Widget _buildEmployeeList() {
-    final employeesAsync = ref.watch(employeesStreamProvider);
+    final employeesAsync = ref.watch(employeesRosterProvider);
     return employeesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Failed to load: $e')),
       data: (allEmployees) {
         var employees = allEmployees;
         if (_query.isNotEmpty) {
+          final q = _query.toLowerCase();
           employees = employees
               .where((e) =>
-                  e.displayName.toLowerCase().contains(_query) ||
+                  e.displayName.toLowerCase().contains(q) ||
                   e.clockNo.contains(_query) ||
-                  e.department.toLowerCase().contains(_query) ||
-                  e.position.toLowerCase().contains(_query))
+                  e.department.toLowerCase().contains(q) ||
+                  e.position.toLowerCase().contains(q))
               .toList();
         }
+        // Alphabetical only — not an on-site presence tool.
         employees.sort((a, b) => a.displayName
             .toLowerCase()
             .compareTo(b.displayName.toLowerCase()));

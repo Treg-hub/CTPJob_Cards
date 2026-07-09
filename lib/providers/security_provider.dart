@@ -12,8 +12,9 @@ final securitySettingsProvider = StreamProvider<SecuritySettings>((ref) {
   return _securityService.watchSettings();
 });
 
-final securityGatesProvider = StreamProvider<List<SecurityGate>>((ref) {
-  return _securityService.watchGates(activeOnly: true);
+/// Gates list — one-shot; invalidate for pull-to-refresh.
+final securityGatesProvider = FutureProvider.autoDispose<List<SecurityGate>>((ref) {
+  return _securityService.fetchGates(activeOnly: true);
 });
 
 /// Persists the guard's chosen gate in SharedPreferences so it survives
@@ -100,6 +101,8 @@ final securityServiceProvider = Provider<SecurityService>((ref) {
   return _securityService;
 });
 
-final securityVehiclesProvider = StreamProvider<List<SecurityVehicle>>((ref) {
-  return _securityService.watchVehicles(activeOnly: true);
+/// Vehicles registry — one-shot cache; invalidate to refresh.
+final securityVehiclesProvider =
+    FutureProvider.autoDispose<List<SecurityVehicle>>((ref) {
+  return _securityService.fetchVehicles(activeOnly: true);
 });

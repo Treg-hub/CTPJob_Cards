@@ -26,6 +26,7 @@ class _WasteStockInventoryScreenState
     extends ConsumerState<WasteStockInventoryScreen> {
   final WasteService _wasteService = WasteService();
   WasteSettings? _wasteSettings;
+  int _stockLoadToken = 0;
 
   @override
   void initState() {
@@ -94,46 +95,19 @@ class _WasteStockInventoryScreenState
           ),
           _StockSummaryCard(wasteService: _wasteService),
           Expanded(
-            child: StreamBuilder<WasteStockListSnapshot>(
-              stream: _wasteService.watchAllStockOnSiteWithMeta(),
+            child: FutureBuilder<List<WasteStockItem>>(
+              key: ValueKey(_stockLoadToken),
+              future: _wasteService.fetchAllStockOnSiteOnce(),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return _QueryErrorState(
-                    onRetry: () => setState(() {}),
+                    onRetry: () => setState(() => _stockLoadToken++),
                   );
                 }
-                final meta = snap.data;
-                switch (decideListLoadState(
-                  hasSnapshot: meta != null,
-                  isEmpty: meta?.items.isEmpty ?? true,
-                  isFromCache: meta?.isFromCache ?? true,
-                )) {
-                  case ListLoadState.loading:
-                    return const Center(child: CircularProgressIndicator());
-                  case ListLoadState.waitingForServer:
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Waiting for connection…',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  case ListLoadState.empty:
-                  case ListLoadState.data:
-                    break;
+                if (!snap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
                 }
-                final items = (meta!.items)
+                final items = snap.data!
                     .where((i) => canViewWasteStockInInventory(
                           employee: currentEmployee,
                           settings: _wasteSettings,
@@ -141,19 +115,33 @@ class _WasteStockInventoryScreenState
                         ))
                     .toList();
                 if (items.isEmpty) {
-                  return const _EmptyState();
+                  return RefreshIndicator(
+                    onRefresh: () async => setState(() => _stockLoadToken++),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 120),
+                        _EmptyState(),
+                      ],
+                    ),
+                  );
                 }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 4),
-                  itemBuilder: (_, i) => _StockItemCard(
-                    item: items[i],
-                    appColors: appColors,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WasteStockItemDetailScreen(item: items[i]),
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() => _stockLoadToken++),
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (_, i) => _StockItemCard(
+                      item: items[i],
+                      appColors: appColors,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              WasteStockItemDetailScreen(item: items[i]),
+                        ),
                       ),
                     ),
                   ),

@@ -197,11 +197,13 @@ class InkService {
       .doc(txnId)
       .update({'effective_at': Timestamp.fromDate(effectiveAt)});
 
-  /// All count events ordered by count date descending (manager history).
-  Stream<List<InkCountEvent>> watchCountEvents() => resilientSnapshots(
+  /// Recent count events (newest first). Bounded — full history is Pulse work.
+  Stream<List<InkCountEvent>> watchCountEvents({int limit = 20}) =>
+      resilientSnapshots(
         () => _db
             .collection(Collections.inkCountEvents)
             .orderBy('count_date', descending: true)
+            .limit(limit)
             .snapshots(),
         debugName: 'ink_count_events',
       ).map((s) {
@@ -216,6 +218,17 @@ class InkService {
         }
         return list;
       });
+
+  /// Latest count date only (one-shot) for open-period bounds on mobile.
+  Future<DateTime?> fetchLatestCountDate() async {
+    final snap = await _db
+        .collection(Collections.inkCountEvents)
+        .orderBy('count_date', descending: true)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return InkCountEvent.tryFromFirestore(snap.docs.first)?.countDate;
+  }
 
   /// Records a month-end count on a designated [countDate] (which need not be
   /// the calendar month-end). Always writes a count-event document so the
@@ -318,30 +331,53 @@ class InkService {
     await recordTransaction(correction);
   }
 
-  /// An item's full ledger, oldest-effective first. Equality query (auto-indexed)
-  /// + in-memory sort, so it works without the composite index too.
-  Stream<List<InkTransaction>> watchItemLedger(String itemCode) => _db
-      .collection(Collections.inkTransactions)
-      .where('stock_item_code', isEqualTo: itemCode)
-      .snapshots()
-      .map((s) {
-        final list = s.docs.map(InkTransaction.fromFirestore).toList()
-          ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
-        return list;
-      });
+  /// Item ledger in the open period (mobile). Full history is Pulse.
+  Stream<List<InkTransaction>> watchItemLedger(
+    String itemCode, {
+    DateTime? periodFromExclusive,
+    int limit = 200,
+  }) {
+    Query<Map<String, dynamic>> q = _db
+        .collection(Collections.inkTransactions)
+        .where('stock_item_code', isEqualTo: itemCode);
+    if (periodFromExclusive != null) {
+      q = q.where(
+        'effective_at',
+        isGreaterThan: Timestamp.fromDate(periodFromExclusive),
+      );
+    }
+    return q
+        .orderBy('effective_at', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map(InkTransaction.fromFirestore).toList()
+        ..sort((a, b) => a.effectiveAt.compareTo(b.effectiveAt));
+      return list;
+    });
+  }
 
-  /// Recent ledger lines for operators (qty audit only) — bounded read.
+  /// Recent ledger lines for operators (qty audit only) — open period preferred.
   Stream<List<InkTransaction>> watchItemLedgerRecent(
     String itemCode, {
     int limit = 20,
-  }) =>
-      _db
-          .collection(Collections.inkTransactions)
-          .where('stock_item_code', isEqualTo: itemCode)
-          .orderBy('effective_at', descending: true)
-          .limit(limit)
-          .snapshots()
-          .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+    DateTime? periodFromExclusive,
+  }) {
+    Query<Map<String, dynamic>> q = _db
+        .collection(Collections.inkTransactions)
+        .where('stock_item_code', isEqualTo: itemCode);
+    if (periodFromExclusive != null) {
+      q = q.where(
+        'effective_at',
+        isGreaterThan: Timestamp.fromDate(periodFromExclusive),
+      );
+    }
+    return q
+        .orderBy('effective_at', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => s.docs.map(InkTransaction.fromFirestore).toList());
+  }
 
   static DateTime _meterPointReadingsSince() {
     final now = DateTime.now();
@@ -580,34 +616,58 @@ class InkService {
   Future<void> setRecipeActive(String id, bool active) =>
       _db.collection(Collections.inkRecipes).doc(id).update({'active': active});
 
-  Stream<List<InkProductionRun>> watchProductionRuns() => resilientSnapshots(
-        () => _db.collection(Collections.inkProductionRuns).snapshots(),
-        debugName: 'ink_production_runs',
-      ).map((s) {
-        final l = <InkProductionRun>[];
-        for (final doc in s.docs) {
-          try {
-            l.add(InkProductionRun.fromFirestore(doc));
-          } catch (e) {
-            debugPrint('Skipping unparseable ink_production_runs/${doc.id}: $e');
-          }
+  /// Production runs in the open count period (after [periodFromExclusive]).
+  Stream<List<InkProductionRun>> watchProductionRuns({
+    DateTime? periodFromExclusive,
+    int limit = 100,
+  }) {
+    Query<Map<String, dynamic>> q =
+        _db.collection(Collections.inkProductionRuns);
+    if (periodFromExclusive != null) {
+      q = q.where(
+        'effective_at',
+        isGreaterThan: Timestamp.fromDate(periodFromExclusive),
+      );
+    }
+    return resilientSnapshots(
+      () => q.orderBy('effective_at', descending: true).limit(limit).snapshots(),
+      debugName: 'ink_production_runs',
+    ).map((s) {
+      final l = <InkProductionRun>[];
+      for (final doc in s.docs) {
+        try {
+          l.add(InkProductionRun.fromFirestore(doc));
+        } catch (e) {
+          debugPrint('Skipping unparseable ink_production_runs/${doc.id}: $e');
         }
-        l.sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
-        return l;
-      });
+      }
+      return l;
+    });
+  }
 
-  /// Recent toloul recovery transactions (newest-first, non-voided).
-  /// Server-bounded via orderBy + limit; voided rows filtered client-side.
-  Stream<List<InkTransaction>> watchRecentRecoveries({int limit = 15}) => _db
-      .collection(Collections.inkTransactions)
-      .where('type', isEqualTo: InkTxnType.recovery.value)
-      .orderBy('effective_at', descending: true)
-      .limit(limit)
-      .snapshots()
-      .map((s) => s.docs
-          .map(InkTransaction.fromFirestore)
-          .where((t) => !t.voided)
-          .toList());
+  /// Recent toloul recoveries in the open period (newest-first, non-voided).
+  Stream<List<InkTransaction>> watchRecentRecoveries({
+    int limit = 50,
+    DateTime? periodFromExclusive,
+  }) {
+    Query<Map<String, dynamic>> q = _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.recovery.value);
+    if (periodFromExclusive != null) {
+      q = q.where(
+        'effective_at',
+        isGreaterThan: Timestamp.fromDate(periodFromExclusive),
+      );
+    }
+    return q
+        .orderBy('effective_at', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => s.docs
+            .map(InkTransaction.fromFirestore)
+            .where((t) => !t.voided)
+            .toList());
+  }
 
   /// Records a production run: a `consumption_production` txn per input (valued
   /// at current WAC) and one `manufacture` txn for the output whose total_cost
@@ -1515,7 +1575,95 @@ class InkService {
         });
   }
 
-  /// Combined daily-readings status — all metered ink items AND all toloul points.
+  /// One-shot daily-readings status (Home banner). Not a live multi-listener.
+  Future<InkDailyReadingsStatus> fetchDailyReadingsStatusOnce() async {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final dayEnd = _calendarDayEnd(now);
+
+    final stockSnap =
+        await _db.collection(Collections.inkStockItems).get();
+    final factorSnap =
+        await _db.collection(Collections.inkConversionFactors).get();
+    final factorsActive = <String, bool>{};
+    final factorsKg = <String, double>{};
+    for (final doc in factorSnap.docs) {
+      final d = doc.data();
+      factorsActive[doc.id] = d['active'] as bool? ?? true;
+      factorsKg[doc.id] = (d['kg_per_litre'] as num?)?.toDouble() ?? 0;
+    }
+    final requiredInk = <String>{};
+    for (final doc in stockSnap.docs) {
+      try {
+        final item = InkStockItem.fromFirestore(doc);
+        if (!item.active || !item.metered) continue;
+        if (factorsActive[item.itemCode] != true) continue;
+        if ((factorsKg[item.itemCode] ?? 0) <= 0) continue;
+        requiredInk.add(item.itemCode);
+      } catch (_) {}
+    }
+
+    final pointsSnap =
+        await _db.collection(Collections.inkMeterPoints).get();
+    final requiredToloul = <String>{};
+    final toloulNames = <String, String>{};
+    for (final doc in pointsSnap.docs) {
+      try {
+        final p = InkMeterPoint.fromFirestore(doc);
+        if (!p.active || p.id == null) continue;
+        requiredToloul.add(p.id!);
+        toloulNames[p.id!] = p.name;
+      } catch (_) {}
+    }
+
+    final inkSnap = await _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+        .get();
+    final inkCaptured = <String>{};
+    for (final d in inkSnap.docs) {
+      if (d.data()['voided'] as bool? ?? false) continue;
+      final code = d.data()['stock_item_code'] as String?;
+      if (code != null && code.isNotEmpty) inkCaptured.add(code);
+    }
+
+    final tolSnap = await _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+        .where('reading_date',
+            isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
+        .get();
+    final toloulCaptured = <String>{};
+    for (final d in tolSnap.docs) {
+      if (d.data()['voided'] as bool? ?? false) continue;
+      final pid = d.data()['point_id'] as String?;
+      if (pid != null && pid.isNotEmpty) toloulCaptured.add(pid);
+    }
+
+    final needsInk = requiredInk.isNotEmpty;
+    final needsToloul = requiredToloul.isNotEmpty;
+    final missingToloulIds =
+        requiredToloul.where((id) => !toloulCaptured.contains(id)).toList();
+    return InkDailyReadingsStatus(
+      needsInk: needsInk,
+      needsToloul: needsToloul,
+      inkDone: !needsInk || requiredInk.every(inkCaptured.contains),
+      toloulDone:
+          !needsToloul || requiredToloul.every(toloulCaptured.contains),
+      inkCapturedCount: inkCaptured.where(requiredInk.contains).length,
+      inkRequiredCount: requiredInk.length,
+      toloulCapturedCount:
+          toloulCaptured.where(requiredToloul.contains).length,
+      toloulRequiredCount: requiredToloul.length,
+      missingToloulPointNames:
+          missingToloulIds.map((id) => toloulNames[id] ?? id).toList(),
+    );
+  }
+
+  /// Live combined status — prefer [fetchDailyReadingsStatusOnce] on Home.
   Stream<InkDailyReadingsStatus> watchDailyReadingsStatus({
     required Set<String> requiredInkCodes,
     required Set<String> requiredToloulPointIds,
@@ -1578,30 +1726,39 @@ class InkService {
   Stream<bool> watchTodayToloulMeterStatus() =>
       watchTodayToloulPointIds().map((ids) => ids.isNotEmpty);
 
-  /// All meter-point readings (for month-end totals).
+  /// Meter-point readings in the open period (or last 45 days if unbounded).
   Stream<List<({String pointId, double consumption, DateTime readingDate})>>
-      watchMeterPointReadings() => _db
-          .collection(Collections.inkMeterPointReadings)
-          .snapshots()
-          .map((s) => s.docs.map((doc) {
-                final d = doc.data();
-                return (
-                  pointId: d['point_id'] as String? ?? '',
-                  consumption: (d['consumption'] as num?)?.toDouble() ?? 0,
-                  readingDate: (d['reading_date'] as Timestamp?)?.toDate() ??
-                      DateTime(2000),
-                );
-              }).toList());
+      watchMeterPointReadings({DateTime? periodFromExclusive}) {
+    final since = periodFromExclusive != null
+        ? Timestamp.fromDate(periodFromExclusive)
+        : Timestamp.fromDate(_meterPointReadingsSince());
+    return _db
+        .collection(Collections.inkMeterPointReadings)
+        .where('reading_date', isGreaterThan: since)
+        .snapshots()
+        .map((s) => s.docs.map((doc) {
+              final d = doc.data();
+              return (
+                pointId: d['point_id'] as String? ?? '',
+                consumption: (d['consumption'] as num?)?.toDouble() ?? 0,
+                readingDate: (d['reading_date'] as Timestamp?)?.toDate() ??
+                    DateTime(2000),
+              );
+            }).toList());
+  }
 
-  /// Recent ink meter-reading SESSIONS (grouped by session_id), newest first —
-  /// for the void list. Each daily submit shares one session_id across its ink
-  /// `consumption_meter` rows; this rolls them up so a whole session can be voided.
-  Stream<List<InkMeterSession>> watchRecentMeterSessions({int days = 90}) => _db
+  /// Recent ink meter-reading SESSIONS in the open period (void list).
+  Stream<List<InkMeterSession>> watchRecentMeterSessions({
+    DateTime? periodFromExclusive,
+  }) {
+    final since = periodFromExclusive != null
+        ? Timestamp.fromDate(periodFromExclusive)
+        : Timestamp.fromDate(
+            DateTime.now().subtract(const Duration(days: 45)));
+    return _db
       .collection(Collections.inkTransactions)
       .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
-      .where('effective_at',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(
-              DateTime.now().subtract(Duration(days: days))))
+      .where('effective_at', isGreaterThan: since)
       .snapshots()
       .map((s) {
         final bySession = <String, InkMeterSession>{};
@@ -1633,6 +1790,7 @@ class InkService {
           ..sort((a, b) => b.readingDate.compareTo(a.readingDate));
         return list;
       });
+  }
 
   /// Voids a whole meter-reading session: flags every ink `consumption_meter`
   /// row with [sessionId] voided (preserved for audit; the server re-replays so

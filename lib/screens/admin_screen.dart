@@ -12,6 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../services/employee_roster_cache.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'copper_dashboard_screen.dart';
@@ -211,9 +212,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadEmployees() async {
+  Future<void> _loadEmployees({bool force = false}) async {
     try {
-      _allEmployees = await _firestoreService.getAllEmployees();
+      _allEmployees = force
+          ? await EmployeeRosterCache.instance.reload()
+          : await EmployeeRosterCache.instance.getRoster();
       if (mounted) setState(() {});
     } catch (e) {
       _showError('Error loading employees: $e');
@@ -1258,7 +1261,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       await _firestoreService.deleteEmployee(clockNo);
     }
     _selectedClockNos.clear();
-    setState(() {});
+    EmployeeRosterCache.instance.invalidate();
+    await _loadEmployees();
+    if (mounted) setState(() {});
   }
 
   void _deleteEmployee(String clockNo) async {
@@ -1266,7 +1271,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     if (!ok) return;
     try {
       await _firestoreService.deleteEmployee(clockNo);
-      _loadEmployees();
+      EmployeeRosterCache.instance.invalidate();
+      await _loadEmployees();
       if (mounted) _showSuccess('Employee deleted');
     } catch (e) { _showError('Error: $e'); }
   }
@@ -1324,9 +1330,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     fcmToken: fcmCtrl.text.isEmpty ? null : fcmCtrl.text,
                     fcmTokenUpdatedAt: employee?.fcmTokenUpdatedAt,
                   );
-                  if (isEdit) { await _firestoreService.updateEmployee(emp); } else { await _firestoreService.createEmployee(emp); }
+                  if (isEdit) {
+                    await _firestoreService.updateEmployee(emp);
+                  } else {
+                    await _firestoreService.createEmployee(emp);
+                  }
+                  EmployeeRosterCache.instance.invalidate();
                   nav.pop();
-                  _loadEmployees();
+                  await _loadEmployees();
                   msg.showSnackBar(SnackBar(content: Text('Employee ${isEdit ? 'updated' : 'added'}')));
                 } catch (e) { msg.showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red)); }
               },
@@ -1944,29 +1955,23 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ])),
       ),
       Expanded(
-        child: StreamBuilder<List<Employee>>(
-          stream: _firestoreService.getEmployeesStream(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && _allEmployees.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            _allEmployees = snapshot.data ?? _allEmployees;
-            final displayed = _displayedEmployees;
-            if (displayed.isEmpty) {
-              return Center(
+        child: _allEmployees.isEmpty
+            ? Center(
                 child: Text(
                   _employeeSearchController.text.isEmpty
                       ? 'No employees found'
                       : 'No employees match your search',
                   style: TextStyle(color: colors.textMuted),
                 ),
-              );
-            }
-            return ListView.builder(
+              )
+            : RefreshIndicator(
+                onRefresh: () => _loadEmployees(force: true),
+                child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-              itemCount: displayed.length,
+              itemCount: _displayedEmployees.length,
               itemBuilder: (context, index) {
-                final emp = displayed[index];
+                final emp = _displayedEmployees[index];
                 final selected = _selectedClockNos.contains(emp.clockNo);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -2047,9 +2052,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   ),
                 );
               },
-            );
-          },
-        ),
+            ),
+          ),
       ),
     ]);
   }

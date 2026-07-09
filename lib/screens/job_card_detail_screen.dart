@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/assignment_event.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import '../services/employee_roster_cache.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
@@ -309,45 +310,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   // ==================== HELPER METHODS ====================
-  /// One-shot assignee lists — no live full-roster listener (presence noise).
-  static Future<List<Employee>>? _factoryEmployeesCache;
-  static DateTime? _factoryEmployeesCacheAt;
-  static final Map<String, Future<List<Employee>>> _deptEmployeesCache = {};
-  static DateTime? _deptEmployeesCacheAt;
-  static const _assigneeCacheTtl = Duration(minutes: 10);
+  /// Factory assign list uses session roster cache (invalidate on admin add/remove).
+  Future<List<Employee>> _loadFactoryEmployeesOnce() =>
+      EmployeeRosterCache.instance.getRoster();
 
-  Future<List<Employee>> _loadFactoryEmployeesOnce() {
-    final now = DateTime.now();
-    final cached = _factoryEmployeesCache;
-    final at = _factoryEmployeesCacheAt;
-    if (cached != null &&
-        at != null &&
-        now.difference(at) < _assigneeCacheTtl) {
-      return cached;
-    }
-    final future = _firestoreService.getAllEmployees().then((list) {
-      list.sort((a, b) {
-        if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
-        return a.name.compareTo(b.name);
-      });
-      return list;
-    });
-    _factoryEmployeesCache = future;
-    _factoryEmployeesCacheAt = now;
-    return future;
-  }
-
-  Future<List<Employee>> _loadDepartmentEmployeesOnce(String department) {
-    final now = DateTime.now();
-    final at = _deptEmployeesCacheAt;
-    if (at == null || now.difference(at) >= _assigneeCacheTtl) {
-      _deptEmployeesCache.clear();
-      _deptEmployeesCacheAt = now;
-    }
-    return _deptEmployeesCache.putIfAbsent(
-      department,
-      () => _firestoreService.getEmployeesByDepartment(department),
-    );
+  Future<List<Employee>> _loadDepartmentEmployeesOnce(String department) async {
+    final all = await EmployeeRosterCache.instance.getRoster();
+    final list = all.where((e) => e.department == department).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return list;
   }
 
   Widget _buildDepartmentEmployeeList({

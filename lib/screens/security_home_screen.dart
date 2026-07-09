@@ -57,7 +57,15 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
     final gate = ref.watch(selectedSecurityGateProvider);
 
     return Scaffold(
-      body: ListView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(securityGatesProvider);
+          ref.invalidate(securityVehiclesProvider);
+          ref.invalidate(securitySettingsProvider);
+          await ref.read(securityGatesProvider.future);
+        },
+        child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           16,
           16,
@@ -152,6 +160,7 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

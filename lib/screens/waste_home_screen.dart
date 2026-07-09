@@ -972,7 +972,6 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   int _weightedCount = 0;
   int _qtyOnlyCount = 0;
   double _totalKg = 0;
-  StreamSubscription<List<WasteStockItem>>? _stockSub;
 
   Set<String> get _qtyOnlyTypeNames =>
       widget.wasteTypes.where((t) => t.isQuantityOnly).map((t) => t.mainType).toSet();
@@ -980,39 +979,49 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   @override
   void initState() {
     super.initState();
-    _stockSub = widget.wasteService.watchAllStockOnSite().listen(
-      (items) {
-        if (!mounted) return;
-        final qtyTypes = _qtyOnlyTypeNames;
-        int wtCount = 0;
-        int qtyCount = 0;
-        double totalKg = 0;
-        for (final i in items) {
-          if (i.visibility == WasteStockVisibility.managerOnly) continue;
-          if (qtyTypes.contains(i.wasteType) || qtyTypes.contains(i.subtype)) {
-            qtyCount += i.quantity;
-          } else {
-            wtCount++;
-            totalKg += i.estimatedWeightKg ?? 0.0;
-          }
+    _loadStockOnce();
+  }
+
+  Future<void> _loadStockOnce() async {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    try {
+      final items = await widget.wasteService.fetchAllStockOnSiteOnce();
+      if (!mounted) return;
+      final qtyTypes = _qtyOnlyTypeNames;
+      int wtCount = 0;
+      int qtyCount = 0;
+      double totalKg = 0;
+      for (final i in items) {
+        if (i.visibility == WasteStockVisibility.managerOnly) continue;
+        if (qtyTypes.contains(i.wasteType) || qtyTypes.contains(i.subtype)) {
+          qtyCount += i.quantity;
+        } else {
+          wtCount++;
+          totalKg += i.estimatedWeightKg ?? 0.0;
         }
+      }
+      setState(() {
+        _weightedCount = wtCount;
+        _qtyOnlyCount = qtyCount;
+        _totalKg = totalKg;
+        _loading = false;
+        _error = false;
+      });
+    } catch (_) {
+      if (mounted) {
         setState(() {
-          _weightedCount = wtCount;
-          _qtyOnlyCount = qtyCount;
-          _totalKg = totalKg;
           _loading = false;
-          _error = false;
+          _error = true;
         });
-      },
-      onError: (_) {
-        if (mounted) setState(() { _loading = false; _error = true; });
-      },
-    );
+      }
+    }
   }
 
   @override
   void dispose() {
-    _stockSub?.cancel();
     super.dispose();
   }
 
