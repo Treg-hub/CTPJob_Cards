@@ -49,6 +49,7 @@ class InkTransaction {
     required this.idempotencyKey,
     this.flaggedForReview = false,
     this.flagReason,
+    this.overMax = false,
     this.reason,
     this.notes,
     this.relatedTransactionId,
@@ -106,6 +107,11 @@ class InkTransaction {
 
   final bool flaggedForReview;
   final String? flagReason;
+
+  /// Soft flag: daily meter Δ over expected max (preserved by CF replay; not
+  /// the same as negative-balance flag).
+  final bool overMax;
+
   final String? reason;
   final String? notes;
 
@@ -171,6 +177,7 @@ class InkTransaction {
       idempotencyKey: d['idempotency_key'] as String? ?? '',
       flaggedForReview: d['flagged_for_review'] as bool? ?? false,
       flagReason: d['flag_reason'] as String?,
+      overMax: d['over_max'] as bool? ?? false,
       reason: d['reason'] as String?,
       notes: d['notes'] as String?,
       relatedTransactionId: d['related_transaction_id'] as String?,
@@ -206,6 +213,7 @@ class InkTransaction {
         'idempotency_key': idempotencyKey,
         'flagged_for_review': flaggedForReview,
         if (flagReason != null) 'flag_reason': flagReason,
+        if (overMax) 'over_max': true,
         if (reason != null) 'reason': reason,
         if (notes != null) 'notes': notes,
         if (relatedTransactionId != null)
@@ -238,6 +246,7 @@ class InkTransaction {
     double? wacAtTime,
     bool? flaggedForReview,
     String? flagReason,
+    bool? overMax,
     bool? voided,
   }) =>
       InkTransaction(
@@ -260,6 +269,7 @@ class InkTransaction {
         idempotencyKey: idempotencyKey,
         flaggedForReview: flaggedForReview ?? this.flaggedForReview,
         flagReason: flagReason ?? this.flagReason,
+        overMax: overMax ?? this.overMax,
         reason: reason,
         notes: notes,
         relatedTransactionId: relatedTransactionId,
