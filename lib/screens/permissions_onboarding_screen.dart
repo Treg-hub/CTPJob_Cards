@@ -667,9 +667,9 @@ class _YourRolePage extends StatelessWidget {
         ],
       UserRole.manager => const [
           _RoleBullet(Icons.dashboard,
-              "Manager Dashboard shows live status of every job in your department"),
-          _RoleBullet(Icons.fact_check,
-              "Daily Review (web) lets you scope jobs by department or type and add manager notes"),
+              "Job oversight KPIs live on CTP Pulse (web) → Job Cards — not in this mobile app"),
+          _RoleBullet(Icons.list_alt,
+              "Use View Jobs here for floor lists; open CTP Pulse for department analytics"),
           _RoleBullet(Icons.notification_important,
               "If Stage 2 escalation fires, you're notified — that's your cue to act"),
           _RoleBullet(Icons.history,

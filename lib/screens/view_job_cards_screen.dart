@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import 'job_card_detail_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
@@ -27,40 +27,50 @@ class ViewJobCardsScreen extends StatefulWidget {
   State<ViewJobCardsScreen> createState() => _ViewJobCardsScreenState();
 }
 
-class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTickerProviderStateMixin {
+class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
+    with SingleTickerProviderStateMixin {
   String? selectedDepartment;
   String? selectedArea;
   String? selectedMachine;
   String? selectedPart;
 
-  String selectedStatus = 'open';
-  int openCount = 0;
-  int closedCount = 0;
-
   String selectedStaffFilter = 'All';
 
   late TabController _tabController;
 
-  bool get isManager => (currentEmployee?.position ?? '').toLowerCase().contains('manager');
-  bool get isSuperManager => currentEmployee?.department.toLowerCase() == 'general';
+  bool get isSuperManager =>
+      currentEmployee?.department.toLowerCase() == 'general';
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
+  static const int _statusLimit = 300;
   static const int _closedLimit = 200;
 
   final FirestoreService _firestoreService = FirestoreService();
-  late final Stream<ViewJobCardsSnapshot> _bundleStream =
-      _firestoreService.getViewJobCardsBundleWithMeta(
-        closedLimit: _closedLimit,
-      );
+
+  /// Only the selected tab is live — other tabs are not subscribed until visited.
+  late JobStatus _activeStatus;
+  Stream<JobCardListSnapshot>? _activeTabStream;
+  JobStatus? _streamedStatus;
+
+  static const _tabStatuses = [
+    JobStatus.open,
+    JobStatus.inProgress,
+    JobStatus.monitor,
+    JobStatus.closed,
+  ];
 
   @override
   void initState() {
     super.initState();
+    _activeStatus = JobStatus.open;
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
+      final next = _tabStatuses[_tabController.index];
+      if (next == _activeStatus) return;
       setState(() {
-        selectedStatus = ['open', 'inProgress', 'monitor', 'closed'][_tabController.index];
+        _activeStatus = next;
+        _ensureStreamForActiveTab();
       });
     });
 
@@ -76,6 +86,22 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     selectedArea = widget.filterArea;
     selectedMachine = widget.filterMachine;
     selectedPart = widget.filterPart;
+
+    _ensureStreamForActiveTab();
+  }
+
+  void _ensureStreamForActiveTab() {
+    if (_streamedStatus == _activeStatus && _activeTabStream != null) return;
+    _streamedStatus = _activeStatus;
+    if (_activeStatus == JobStatus.closed) {
+      _activeTabStream =
+          _firestoreService.getClosedJobCardsWithMeta(limit: _closedLimit);
+    } else {
+      _activeTabStream = _firestoreService.getJobCardsByStatusWithMeta(
+        _activeStatus,
+        limit: _statusLimit,
+      );
+    }
   }
 
   @override
@@ -91,9 +117,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     return null;
   }
 
-  /// Mech/Elec combined jobs must appear under BOTH trade filters — the old
-  /// exact-name match hid them from the default view of exactly the
-  /// technicians who have to respond to them.
   bool _matchesStaffFilter(JobCard j) {
     switch (selectedStaffFilter) {
       case 'Mechanical':
@@ -107,7 +130,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     }
   }
 
-  // ==================== CASCADING FILTERS ====================
   Widget _buildCascadingFilters() {
     return FutureBuilder<Map<String, dynamic>>(
       future: _firestoreService.getFactoryStructure(),
@@ -115,7 +137,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         if (snapshot.hasError) {
           return Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('Error loading filters: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+            child: Text('Error loading filters: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red)),
           );
         }
         if (!snapshot.hasData) {
@@ -126,94 +149,132 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
         }
 
         final data = snapshot.data!;
-        final areas = selectedDepartment != null ? (data[selectedDepartment] as Map<String, dynamic>? ?? {}).keys.toList() : <String>[];
+        final areas = selectedDepartment != null
+            ? (data[selectedDepartment] as Map<String, dynamic>? ?? {})
+                .keys
+                .toList()
+            : <String>[];
         final machines = selectedArea != null && selectedDepartment != null
-            ? (data[selectedDepartment]?[selectedArea] as List<dynamic>? ?? []).cast<String>()
+            ? (data[selectedDepartment]?[selectedArea] as List<dynamic>? ?? [])
+                .cast<String>()
             : <String>[];
 
         Widget currentStep;
 
         if (selectedPart != null) {
-          // All selected, show nothing
           currentStep = const SizedBox.shrink();
         } else if (selectedMachine != null) {
-          // Show part chips only
           currentStep = FutureBuilder<List<String>>(
-            future: _firestoreService.getPreviousParts(selectedDepartment!, selectedArea!, selectedMachine!),
+            future: _firestoreService.getPreviousParts(
+                selectedDepartment!, selectedArea!, selectedMachine!),
             builder: (context, snapshot) {
               final previousParts = snapshot.data ?? [];
               if (previousParts.isEmpty) {
-                return Text('No previous parts found', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant));
+                return Text('No previous parts found',
+                    style: TextStyle(
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant));
               }
               return Center(
                 child: Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: previousParts.map((part) => ActionChip(
-                    label: Text(part),
-                    onPressed: () => setState(() => selectedPart = part),
-                    backgroundColor: selectedPart == part ? kBrandOrange.withValues(alpha: 51) : null,
-                    labelStyle: TextStyle(color: selectedPart == part ? kBrandOrange : Theme.of(context).appColors.chipUnselectedLabel),
-                  )).toList(),
+                  children: previousParts
+                      .map((part) => ActionChip(
+                            label: Text(part),
+                            onPressed: () =>
+                                setState(() => selectedPart = part),
+                            backgroundColor: selectedPart == part
+                                ? kBrandOrange.withValues(alpha: 51)
+                                : null,
+                            labelStyle: TextStyle(
+                                color: selectedPart == part
+                                    ? kBrandOrange
+                                    : Theme.of(context)
+                                        .appColors
+                                        .chipUnselectedLabel),
+                          ))
+                      .toList(),
                 ),
               );
             },
           );
         } else if (selectedArea != null) {
-          // Show machine chips
           currentStep = Center(
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: machines.map((machine) => ChoiceChip(
-                label: Text(machine),
-                selected: selectedMachine == machine,
-                onSelected: (_) => setState(() {
-                  selectedMachine = machine;
-                  selectedPart = null;
-                }),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedMachine == machine ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-              )).toList(),
+              children: machines
+                  .map((machine) => ChoiceChip(
+                        label: Text(machine),
+                        selected: selectedMachine == machine,
+                        onSelected: (_) => setState(() {
+                          selectedMachine = machine;
+                          selectedPart = null;
+                        }),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        labelStyle: selectedMachine == machine
+                            ? const TextStyle(color: Color(0xFFFF8C42))
+                            : TextStyle(
+                                color: Theme.of(context)
+                                    .appColors
+                                    .chipUnselectedLabel),
+                      ))
+                  .toList(),
             ),
           );
         } else if (selectedDepartment != null) {
-          // Show area chips
           currentStep = Center(
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: areas.map((area) => ChoiceChip(
-                label: Text(area),
-                selected: selectedArea == area,
-                onSelected: (_) => setState(() {
-                  selectedArea = area;
-                  selectedMachine = null;
-                  selectedPart = null;
-                }),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedArea == area ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-              )).toList(),
+              children: areas
+                  .map((area) => ChoiceChip(
+                        label: Text(area),
+                        selected: selectedArea == area,
+                        onSelected: (_) => setState(() {
+                          selectedArea = area;
+                          selectedMachine = null;
+                          selectedPart = null;
+                        }),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        labelStyle: selectedArea == area
+                            ? const TextStyle(color: Color(0xFFFF8C42))
+                            : TextStyle(
+                                color: Theme.of(context)
+                                    .appColors
+                                    .chipUnselectedLabel),
+                      ))
+                  .toList(),
             ),
           );
         } else {
-          // Show dept chips (no "All Departments" chip — use Clear All Filters to deselect)
           currentStep = Center(
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: data.keys.map((dept) => ChoiceChip(
-                label: Text(dept),
-                selected: selectedDepartment == dept,
-                onSelected: (_) => setState(() {
-                  selectedDepartment = dept;
-                  selectedArea = null;
-                  selectedMachine = null;
-                  selectedPart = null;
-                }),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                labelStyle: selectedDepartment == dept ? const TextStyle(color: Color(0xFFFF8C42)) : TextStyle(color: Theme.of(context).appColors.chipUnselectedLabel),
-              )).toList(),
+              children: data.keys
+                  .map((dept) => ChoiceChip(
+                        label: Text(dept),
+                        selected: selectedDepartment == dept,
+                        onSelected: (_) => setState(() {
+                          selectedDepartment = dept;
+                          selectedArea = null;
+                          selectedMachine = null;
+                          selectedPart = null;
+                        }),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        labelStyle: selectedDepartment == dept
+                            ? const TextStyle(color: Color(0xFFFF8C42))
+                            : TextStyle(
+                                color: Theme.of(context)
+                                    .appColors
+                                    .chipUnselectedLabel),
+                      ))
+                  .toList(),
             ),
           );
         }
@@ -223,8 +284,10 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Clear All Button
-              if (selectedDepartment != null || selectedArea != null || selectedMachine != null || selectedPart != null)
+              if (selectedDepartment != null ||
+                  selectedArea != null ||
+                  selectedMachine != null ||
+                  selectedPart != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Center(
@@ -244,8 +307,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
                     ),
                   ),
                 ),
-
-              // Current Step
               currentStep,
             ],
           ),
@@ -254,12 +315,13 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     );
   }
 
-  // ==================== IMPROVED JOB CARD (same as HomeScreen) ====================
   @override
   Widget build(BuildContext context) {
+    final stream = _activeTabStream;
     return Scaffold(
       appBar: CtpAppBar(
         title: 'All Job Cards',
+        isOnSite: realEmployee?.isOnSite ?? currentEmployee?.isOnSite,
         actions: [
           ToggleButtons(
             isSelected: [
@@ -269,7 +331,8 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
             ],
             onPressed: (index) {
               setState(() {
-                selectedStaffFilter = ['Mechanical', 'Electrical', 'All'][index];
+                selectedStaffFilter =
+                    ['Mechanical', 'Electrical', 'All'][index];
               });
             },
             borderRadius: BorderRadius.circular(8),
@@ -287,58 +350,95 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           const SizedBox(width: 8),
         ],
       ),
-      body: StreamBuilder<ViewJobCardsSnapshot>(
-        stream: _bundleStream,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(
-              child: Text('Error: ${snap.error}',
-                  style: const TextStyle(color: Colors.red)),
-            );
-          }
-          final meta = snap.data;
-          final allEmpty = meta == null ||
-              (meta.open.isEmpty &&
-                  meta.inProgress.isEmpty &&
-                  meta.monitor.isEmpty &&
-                  meta.closed.isEmpty);
-          switch (decideListLoadState(
-            hasSnapshot: meta != null,
-            isEmpty: allEmpty,
-            isFromCache: meta?.isFromCache ?? true,
-          )) {
-            case ListLoadState.loading:
-              return const Center(child: CircularProgressIndicator());
-            case ListLoadState.waitingForServer:
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Waiting for connection…',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            case ListLoadState.empty:
-            case ListLoadState.data:
-              break;
-          }
+      body: Column(
+        children: [
+          TabBar(
+            controller: _tabController,
+            isScrollable: !_isWide,
+            tabAlignment: _isWide ? null : TabAlignment.start,
+            tabs: const [
+              Tab(text: 'Open'),
+              Tab(text: 'In Progress'),
+              Tab(text: 'Monitoring'),
+              Tab(text: 'Closed'),
+            ],
+          ),
+          _buildCascadingFilters(),
+          Expanded(
+            child: stream == null
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<JobCardListSnapshot>(
+                    key: ValueKey(_activeStatus),
+                    stream: stream,
+                    builder: (context, snap) {
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text('Error: ${snap.error}',
+                              style: const TextStyle(color: Colors.red)),
+                        );
+                      }
+                      final meta = snap.data;
+                      switch (decideListLoadState(
+                        hasSnapshot: meta != null,
+                        isEmpty: meta?.cards.isEmpty ?? true,
+                        isFromCache: meta?.isFromCache ?? true,
+                      )) {
+                        case ListLoadState.loading:
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        case ListLoadState.waitingForServer:
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Waiting for connection…',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        case ListLoadState.empty:
+                        case ListLoadState.data:
+                          break;
+                      }
 
-          final bundle = meta!;
-          return _buildTabbedLayout(
-            _applyFilters(bundle.open),
-            _applyFilters(bundle.inProgress),
-            _applyFilters(bundle.monitor),
-            _applyFilters(bundle.closed),
-          );
-        },
+                      final jobs = _applyFilters(meta!.cards);
+                      final countLabel = _activeStatus == JobStatus.closed &&
+                              jobs.length >= _closedLimit
+                          ? '$_closedLimit+'
+                          : '${jobs.length}';
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '$countLabel job${jobs.length == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(child: _buildJobList(jobs)),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -348,75 +448,42 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
     if (selectedStaffFilter != 'All') {
       result = result.where(_matchesStaffFilter).toList();
     }
-    if (selectedDepartment != null) result = result.where((j) => j.department == selectedDepartment).toList();
-    if (selectedArea != null) result = result.where((j) => j.area == selectedArea).toList();
-    if (selectedMachine != null) result = result.where((j) => j.machine == selectedMachine).toList();
-    if (selectedPart != null) result = result.where((j) => j.part == selectedPart).toList();
+    if (selectedDepartment != null) {
+      result =
+          result.where((j) => j.department == selectedDepartment).toList();
+    }
+    if (selectedArea != null) {
+      result = result.where((j) => j.area == selectedArea).toList();
+    }
+    if (selectedMachine != null) {
+      result = result.where((j) => j.machine == selectedMachine).toList();
+    }
+    if (selectedPart != null) {
+      result = result.where((j) => j.part == selectedPart).toList();
+    }
     return result
       ..sort((a, b) =>
           (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
   }
 
-  Widget _buildTabbedLayout(List<JobCard> open, List<JobCard> inProgress,
-      List<JobCard> monitor, List<JobCard> closed) {
-    // The closed stream is capped — show "200+" instead of implying the
-    // total when the cap is hit.
-    final closedLabel =
-        closed.length >= _closedLimit ? '$_closedLimit+' : '${closed.length}';
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          isScrollable: !_isWide,
-          tabAlignment: _isWide ? null : TabAlignment.start,
-          tabs: [
-            Tab(text: 'Open (${open.length})'),
-            Tab(text: 'In Progress (${inProgress.length})'),
-            Tab(text: 'Monitoring (${monitor.length})'),
-            Tab(text: 'Closed ($closedLabel)'),
-          ],
-        ),
-
-        // Cascading Filters
-        _buildCascadingFilters(),
-
-        // Main Content
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildJobList(open, ''),
-              _buildJobList(inProgress, ''),
-              _buildJobList(monitor, ''),
-              _buildJobList(closed, ''),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildJobList(List<JobCard> jobs, String title) {
-    return Column(
-      children: [
-        if (title.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-          ),
-        Expanded(
-          child: jobs.isEmpty
-              ? Center(child: Text('No jobs available', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)))
-              : ListView.builder(
-                  padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
-                  itemCount: jobs.length,
-                  itemBuilder: (context, index) => JobCardTile(
-                    job: jobs[index],
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobCardDetailScreen(jobCard: jobs[index]))),
-                  ),
-                ),
-        ),
-      ],
-    );
+  Widget _buildJobList(List<JobCard> jobs) {
+    return jobs.isEmpty
+        ? Center(
+            child: Text('No jobs available',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)))
+        : ListView.builder(
+            padding:
+                ScreenInsets.listPadding(context, horizontal: 8, top: 8),
+            itemCount: jobs.length,
+            itemBuilder: (context, index) => JobCardTile(
+              job: jobs[index],
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          JobCardDetailScreen(jobCard: jobs[index]))),
+            ),
+          );
   }
 }

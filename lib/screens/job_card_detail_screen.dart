@@ -309,6 +309,47 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
   }
 
   // ==================== HELPER METHODS ====================
+  /// One-shot assignee lists — no live full-roster listener (presence noise).
+  static Future<List<Employee>>? _factoryEmployeesCache;
+  static DateTime? _factoryEmployeesCacheAt;
+  static final Map<String, Future<List<Employee>>> _deptEmployeesCache = {};
+  static DateTime? _deptEmployeesCacheAt;
+  static const _assigneeCacheTtl = Duration(minutes: 10);
+
+  Future<List<Employee>> _loadFactoryEmployeesOnce() {
+    final now = DateTime.now();
+    final cached = _factoryEmployeesCache;
+    final at = _factoryEmployeesCacheAt;
+    if (cached != null &&
+        at != null &&
+        now.difference(at) < _assigneeCacheTtl) {
+      return cached;
+    }
+    final future = _firestoreService.getAllEmployees().then((list) {
+      list.sort((a, b) {
+        if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
+        return a.name.compareTo(b.name);
+      });
+      return list;
+    });
+    _factoryEmployeesCache = future;
+    _factoryEmployeesCacheAt = now;
+    return future;
+  }
+
+  Future<List<Employee>> _loadDepartmentEmployeesOnce(String department) {
+    final now = DateTime.now();
+    final at = _deptEmployeesCacheAt;
+    if (at == null || now.difference(at) >= _assigneeCacheTtl) {
+      _deptEmployeesCache.clear();
+      _deptEmployeesCacheAt = now;
+    }
+    return _deptEmployeesCache.putIfAbsent(
+      department,
+      () => _firestoreService.getEmployeesByDepartment(department),
+    );
+  }
+
   Widget _buildDepartmentEmployeeList({
     required BuildContext context,
     required String department,
@@ -316,19 +357,20 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     required List<String> selectedNames,
     required StateSetter setDialogState,
   }) {
-    return StreamBuilder<List<Employee>>(
-      stream: _firestoreService.getEmployeesStream(),
+    return FutureBuilder<List<Employee>>(
+      future: _loadDepartmentEmployeesOnce(department),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-        final employees = snapshot.data!.where((e) => e.department == department).toList();
-
-        employees.sort((a, b) {
-          if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
-          return a.name.compareTo(b.name);
-        });
-
-        if (employees.isEmpty) return const Center(child: Text('No employees in your department'));
+        final employees = snapshot.data!;
+        if (employees.isEmpty) {
+          return const Center(child: Text('No employees in your department'));
+        }
 
         return ListView.builder(
           itemCount: employees.length,
@@ -367,26 +409,29 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     required List<String> selectedNames,
     required StateSetter setDialogState,
   }) {
-    return StreamBuilder<List<Employee>>(
-      stream: _firestoreService.getEmployeesStream(),
+    return FutureBuilder<List<Employee>>(
+      future: _loadFactoryEmployeesOnce(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
         var employees = snapshot.data!;
 
         if (searchQuery.isNotEmpty) {
-          employees = employees.where((e) =>
-            e.name.toLowerCase().contains(searchQuery) ||
-            e.clockNo.contains(searchQuery)
-          ).toList();
+          final q = searchQuery.toLowerCase();
+          employees = employees
+              .where((e) =>
+                  e.name.toLowerCase().contains(q) || e.clockNo.contains(searchQuery))
+              .toList();
         }
 
-        employees.sort((a, b) {
-          if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
-          return a.name.compareTo(b.name);
-        });
-
-        if (employees.isEmpty) return const Center(child: Text('No employees found'));
+        if (employees.isEmpty) {
+          return const Center(child: Text('No employees found'));
+        }
 
         return ListView.builder(
           itemCount: employees.length,
@@ -404,7 +449,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 setDialogState: setDialogState,
               ),
               title: Text('${emp.name} — ${emp.position}'),
-              subtitle: Text('${emp.department} · Clock ${emp.clockNo}', style: const TextStyle(fontSize: 12)),
+              subtitle: Text('${emp.department} · Clock ${emp.clockNo}',
+                  style: const TextStyle(fontSize: 12)),
               secondary: Icon(
                 emp.isOnSite ? Icons.location_on : Icons.location_off,
                 color: emp.isOnSite ? Colors.green : Colors.red[400],

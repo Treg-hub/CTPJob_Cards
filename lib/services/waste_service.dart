@@ -688,10 +688,11 @@ class WasteService {
   Future<List<Map<String, dynamic>>> getRecentLostMediaAudit(
       {int limit = 20}) async {
     try {
+      // Server cap = requested limit (no over-fetch + client take).
       final snap = await _firestore
           .collection(Collections.wasteAudit)
           .where('action', isEqualTo: 'media_lost')
-          .limit(50)
+          .limit(limit)
           .get()
           .timeout(_firestoreWriteTimeout);
       final entries = snap.docs.map((d) {
@@ -711,7 +712,7 @@ class WasteService {
           if (ad == null || bd == null) return ad == null ? 1 : -1;
           return bd.compareTo(ad);
         });
-      return entries.take(limit).toList();
+      return entries;
     } catch (_) {
       return [];
     }

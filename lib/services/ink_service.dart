@@ -597,18 +597,17 @@ class InkService {
       });
 
   /// Recent toloul recovery transactions (newest-first, non-voided).
+  /// Server-bounded via orderBy + limit; voided rows filtered client-side.
   Stream<List<InkTransaction>> watchRecentRecoveries({int limit = 15}) => _db
       .collection(Collections.inkTransactions)
       .where('type', isEqualTo: InkTxnType.recovery.value)
+      .orderBy('effective_at', descending: true)
+      .limit(limit)
       .snapshots()
-      .map((s) {
-        final l = s.docs
-            .map(InkTransaction.fromFirestore)
-            .where((t) => !t.voided)
-            .toList()
-          ..sort((a, b) => b.effectiveAt.compareTo(a.effectiveAt));
-        return l.take(limit).toList();
-      });
+      .map((s) => s.docs
+          .map(InkTransaction.fromFirestore)
+          .where((t) => !t.voided)
+          .toList());
 
   /// Records a production run: a `consumption_production` txn per input (valued
   /// at current WAC) and one `manufacture` txn for the output whose total_cost

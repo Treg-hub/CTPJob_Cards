@@ -153,6 +153,30 @@ class FirestoreService {
     }
   }
 
+  /// One-shot employees in a department (assignee picker). Prefer this over a
+  /// full-collection live listener — presence flips would otherwise re-bill
+  /// every employee doc for every open assign dialog.
+  Future<List<Employee>> getEmployeesByDepartment(String department) async {
+    try {
+      final snapshot = await _firestore
+          .collection(Collections.employees)
+          .where('department', isEqualTo: department)
+          .get();
+      final list = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return Employee.fromFirestore(data, doc.id);
+      }).toList();
+      list.sort((a, b) {
+        if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
+        return a.name.compareTo(b.name);
+      });
+      return list;
+    } catch (e) {
+      throw Exception('Failed to load department employees: $e');
+    }
+  }
+
+  /// Admin / persona tools only — live full roster. Do not use for assign UI.
   Stream<List<Employee>> getEmployeesStream() {
     return _firestore.collection(Collections.employees).snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
@@ -587,13 +611,13 @@ class FirestoreService {
         onError: controller.addError,
       ));
 
-      // Closed tab: capped recent closed only (no orderBy — avoids extra
-      // composite indexes; client sorts for display).
+      // Closed tab: most recent closed first (composite indexes required).
       subs.add(resilientSnapshots(
         () => _firestore
             .collection(Collections.jobCards)
             .where('assignedClockNos', arrayContains: clockNo)
             .where('status', whereIn: closedStatuses)
+            .orderBy('closedAt', descending: true)
             .limit(closedLimit)
             .snapshots(),
         debugName: 'my_jobs_assigned_closed',
@@ -607,6 +631,7 @@ class FirestoreService {
             .collection(Collections.jobCards)
             .where('operatorClockNo', isEqualTo: clockNo)
             .where('status', whereIn: closedStatuses)
+            .orderBy('closedAt', descending: true)
             .limit(closedLimit)
             .snapshots(),
         debugName: 'my_jobs_created_closed',

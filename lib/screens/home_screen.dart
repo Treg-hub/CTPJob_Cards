@@ -41,7 +41,6 @@ import '../widgets/geofence_health_banner.dart';
 import '../widgets/update_available_banner.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
-import 'manager_dashboard_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'my_feedback_screen.dart';
 import 'copper_dashboard_screen.dart';
@@ -74,7 +73,7 @@ import '../utils/list_load_state.dart';
 import '../utils/presence_gating.dart';
 import '../utils/screen_insets.dart';
 
-enum _ShellTab { home, myWork, dashboard, copper, waste, fleet, security }
+enum _ShellTab { home, myWork, copper, waste, fleet, security }
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -510,24 +509,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _isShellTabVisible(_ShellTab tab) => switch (tab) {
         _ShellTab.home => true,
         _ShellTab.myWork => _showMyWorkNav,
-        _ShellTab.dashboard =>
-          currentEmployee != null &&
-              currentEmployee!.position.toLowerCase().contains('manager'),
         _ShellTab.copper => _isCopperAuthorized,
         _ShellTab.waste => _showWasteModule,
         _ShellTab.fleet => _isFleetUser,
         _ShellTab.security => _showSecurityModule,
       };
 
+  /// Live open-job counts / Recent Job Cards only for managers (read discipline).
+  bool get _needsActiveJobsListener => isManager || isSuperManager;
+
   _ShellTab? _shellTabAtIndex(int index) {
     var i = 0;
     if (index == i++) return _ShellTab.home;
     if (_showMyWorkNav) {
       if (index == i++) return _ShellTab.myWork;
-    }
-    if (currentEmployee != null &&
-        currentEmployee!.position.toLowerCase().contains('manager')) {
-      if (index == i++) return _ShellTab.dashboard;
     }
     if (_isCopperAuthorized) {
       if (index == i++) return _ShellTab.copper;
@@ -577,14 +572,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   List<Map<String, dynamic>> _quickActions(WorkReportSettings? workReportSettings) {
     final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
-    final viewJobsAction = {'title': 'View Jobs', 'icon': Icons.list_alt, 'color': _jobCardsGroup, 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
     final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
 
     List<Map<String, dynamic>> result;
     if (isManager || isSuperManager) {
-      final viewJobsFactory = {'title': 'View Jobs', 'icon': Icons.factory, 'color': _jobCardsGroup, 'badgeCount': _openJobCount + _inProgressCount, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()))};
+      final viewJobsFactory = {
+        'title': 'View Jobs',
+        'icon': Icons.factory,
+        'color': _jobCardsGroup,
+        'badgeCount': _openJobCount + _inProgressCount,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
+            ),
+      };
       result = [createAction, viewJobsFactory, historyAction];
     } else {
+      // Operators: no live open-count badge (avoids factory-wide active-jobs listener).
+      final viewJobsAction = {
+        'title': 'View Jobs',
+        'icon': Icons.list_alt,
+        'color': _jobCardsGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
+            ),
+      };
       result = [createAction, viewJobsAction, historyAction];
     }
 
@@ -799,6 +812,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   void _setupActiveJobsSubscription() {
     _countSubscription?.cancel();
+    _countSubscription = null;
+    // Managers / super only — operators use My Work + View Jobs without a
+    // factory-wide open-jobs listener (Firestore Phase A).
+    if (!_needsActiveJobsListener) {
+      if (mounted &&
+          (_activeJobsSnap != null ||
+              _openJobCount != 0 ||
+              _inProgressCount != 0)) {
+        setState(() {
+          _activeJobsSnap = null;
+          _openJobCount = 0;
+          _inProgressCount = 0;
+        });
+      }
+      return;
+    }
     _countSubscription =
         _firestoreService.getActiveJobCardsWithMeta().listen((snap) {
       if (!mounted) return;
@@ -817,6 +846,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _rearmActiveJobsStreamIfStuck() {
+    if (!_needsActiveJobsListener) return;
     final snap = _activeJobsSnap;
     if (!shouldRearmActiveJobsOnResume(
       hasSnapshot: snap != null,
@@ -2215,17 +2245,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildDashboardTab() {
-    if (currentEmployee == null ||
-        role_utils.roleFromEmployee(currentEmployee) != role_utils.UserRole.manager) {
-      return Center(
-        child: Text('Access denied. Manager role required.',
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      );
-    }
-    return const ManagerDashboardScreen();
-  }
-
   Widget _buildCopperTab() {
     return Center(
       child: ElevatedButton(
@@ -2270,8 +2289,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final List<Widget> children = [
       _buildHomeTab(),
       if (_showMyWorkNav) _buildMyWorkTab(),
-      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-        _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
       if (_showWasteModule)
@@ -2337,12 +2354,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
     }
 
+    // Ensure manager open-job listener arms after async employee load / persona switch.
+    if (_needsActiveJobsListener && _countSubscription == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _needsActiveJobsListener && _countSubscription == null) {
+          _setupActiveJobsSubscription();
+        }
+      });
+    } else if (!_needsActiveJobsListener && _countSubscription != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_needsActiveJobsListener) {
+          _setupActiveJobsSubscription();
+        }
+      });
+    }
+
     final List<BottomNavigationBarItem> items = [
       const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
       if (_showMyWorkNav)
         const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Work'),
-      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-        const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
       if (_isCopperAuthorized)
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
       if (_showWasteModule)
@@ -2356,8 +2386,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final List<Widget> children = [
       _buildHomeTab(),
       if (_showMyWorkNav) _buildMyWorkTab(),
-      if (currentEmployee != null && currentEmployee!.position.toLowerCase().contains('manager'))
-        _buildDashboardTab(),
       if (_isCopperAuthorized)
         _buildCopperTab(),
       if (_showWasteModule)

@@ -163,7 +163,7 @@ Roles are **inferred from `Employee.position` and `Employee.department`** (see `
 | Role | Inference | Key Screens |
 |------|-----------|-------------|
 | Technician | `position` contains `mechanical`, `electrical`, or `technician` | Home, CreateJobCard, ViewJobCards, JobCardDetail |
-| Manager | `position` contains `manager` | ManagerDashboard, DailyReview, ViewJobCards |
+| Manager | `position` contains `manager` | ViewJobCards, Recent on Home; KPIs on CTP Pulse `/jobs` (no mobile Dashboard) |
 | Operator | neither manager nor technician | Home, CreateJobCard (on-site only), JobCardDetail |
 | Admin | `Employee.isAdmin == true` (Firestore field) | Full access to AdminScreen and all admin features |
 | Security Manager | `department == "Security"` && `position == "Manager"` | WasteHome, WasteScheduleLoad, WasteReports, WasteAdmin |

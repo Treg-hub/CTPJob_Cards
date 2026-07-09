@@ -2,6 +2,16 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Firestore Phase A mobile reads (2026-07-09)**:
+  - Manager Dashboard removed from shell; stub points to CTP Pulse `/jobs` Manager desk.
+  - Active open-jobs listener **managers/super only**; operators skip factory-wide stream.
+  - `CtpAppBar` no second employee presence listener.
+  - View Jobs: lazy selected-tab stream only.
+  - My Work closed: `orderBy(closedAt desc)` + limit 40 + indexes.
+  - Ink `watchRecentRecoveries` server limit; waste media_lost audit server limit.
+  - Assignee picker: dept one-shot + 10 min factory cache.
+  - Map: `JobCardsCoreModule.md`, `Firestore_Cost_Discipline.md`, role journeys.
+
 - **Landing: official APK download (no App Distribution register) (2026-07-09)**:
   - Landing page: single **Download app** + QR → `/releases/latest.apk`; install steps say Create account / Login **in the app**.
   - `build-landing.js` copies `app-release.apk` → `landing-deploy/releases/latest.apk` when present.

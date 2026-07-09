@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart' show realEmployee;
-import '../models/employee.dart';
 import '../providers/current_employee_provider.dart';
 import '../theme/app_theme.dart';
 
 /// Job Cards app bar — brand orange with on-site/off-site gradient (matches home shell).
 ///
-/// Subscribes to the employee doc stream when a clock number is known so pushed
-/// screens (History, View Jobs, etc.) stay in sync with presence without relying
-/// on Home invalidating [currentEmployeeProvider].
+/// Presence is read from [isOnSite] when provided, otherwise from the shared
+/// [realEmployee] / [currentEmployeeProvider] state that Home already keeps live
+/// via a single employee doc stream. This widget intentionally does **not** open
+/// a second Firestore listener (Phase A read discipline).
 class CtpAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const CtpAppBar({
     super.key,
@@ -22,7 +22,7 @@ class CtpAppBar extends ConsumerWidget implements PreferredSizeWidget {
   });
 
   final String title;
-  /// Explicit override; when null, reads live presence from the employee stream.
+  /// Explicit override when the caller already has presence (preferred).
   final bool? isOnSite;
   final List<Widget>? actions;
   final Widget? leading;
@@ -33,17 +33,17 @@ class CtpAppBar extends ConsumerWidget implements PreferredSizeWidget {
         kToolbarHeight + (bottom?.preferredSize.height ?? 0),
       );
 
-  String? _clockNo(WidgetRef ref) =>
-      realEmployee?.clockNo ??
-      ref.watch(currentEmployeeProvider).valueOrNull?.clockNo;
-
-  bool _fallbackOnSite(WidgetRef ref) {
-    final fromProvider = ref.watch(currentEmployeeProvider).valueOrNull?.isOnSite;
+  bool _resolveOnSite(WidgetRef ref) {
+    if (isOnSite != null) return isOnSite!;
+    final fromProvider =
+        ref.watch(currentEmployeeProvider).valueOrNull?.isOnSite;
     if (fromProvider != null) return fromProvider;
     return realEmployee?.isOnSite ?? true;
   }
 
-  Widget _buildBar(BuildContext context, bool onSite) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onSite = _resolveOnSite(ref);
     final appBarTheme = Theme.of(context).appBarTheme;
     return AppBar(
       title: Text(title),
@@ -66,29 +66,6 @@ class CtpAppBar extends ConsumerWidget implements PreferredSizeWidget {
       ),
       actions: actions,
       bottom: bottom,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (isOnSite != null) {
-      return _buildBar(context, isOnSite!);
-    }
-
-    final clockNo = _clockNo(ref);
-    if (clockNo == null) {
-      return _buildBar(context, _fallbackOnSite(ref));
-    }
-
-    final service = ref.read(firestoreServiceProvider);
-    return StreamBuilder<Employee>(
-      stream: service.getEmployeeStream(clockNo),
-      initialData:
-          realEmployee?.clockNo == clockNo ? realEmployee : null,
-      builder: (context, snapshot) {
-        final onSite = snapshot.data?.isOnSite ?? _fallbackOnSite(ref);
-        return _buildBar(context, onSite);
-      },
     );
   }
 }

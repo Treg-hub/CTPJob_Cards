@@ -6,6 +6,22 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-09 — Lighter Firestore reads (Manager desk on Pulse)
+
+### What you will notice
+
+- **Manager Dashboard** is no longer a tab in the mobile app. Department KPIs and analytics live on **CTP Pulse** (web) under **Job Cards**.
+- **View Jobs** only loads the status tab you are looking at (Open / In Progress / Monitoring / Closed).
+- **My Work → Closed** shows the most recently closed jobs first.
+- Open/in-progress count badges on Home are for **managers** (saves battery/data for operators).
+
+### For admins
+
+- Deploy composite indexes for My Work closed queries (`firebase/firestore.indexes.json`) before relying on Closed tab sort in production.
+- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A.
+
+---
+
 ## 2026-07-09 — Update check uses Admin publish first (build 147)
 
 ### What you will notice
