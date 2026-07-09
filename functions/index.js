@@ -1811,8 +1811,10 @@ exports.onJobCardOpenCounts = functions.firestore.onDocumentWritten(
 /** Admin one-shot recompute of counters/job_cards_open from live job_cards truth. */
 exports.reconcileOpenJobCardCounts = onCall(async (request) => {
   await assertAdmin(request);
+  // Cap scan for safety (factory open set is far below this; counter is primary path).
   const snap = await db.collection("job_cards")
     .where("status", "in", OPEN_JOB_STATUSES)
+    .limit(1000)
     .get();
   let active = 0;
   let critical = 0;
