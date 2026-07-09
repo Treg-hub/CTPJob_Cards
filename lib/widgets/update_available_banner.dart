@@ -56,8 +56,7 @@ class UpdateAvailableBanner extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () =>
-                        UpdateService().dismissSoftOffer(forBuild: offer.latestBuild),
+                    onPressed: () => UpdateService().dismissSoftOffer(),
                     child: const Text('Later'),
                   ),
                   FilledButton(

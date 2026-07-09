@@ -67,6 +67,71 @@ void main() {
     });
   });
 
+  group('resolveKillSwitchDownloadUrl', () {
+    test('prefers shared updateDownloadUrl', () {
+      expect(
+        resolveKillSwitchDownloadUrl({
+          'updateDownloadUrl': 'https://shared/app.apk',
+          'updateChannels': {
+            'default': {
+              'enabled': true,
+              'downloadUrl': 'https://channel/default.apk',
+              'latestVersion': '2.3.0',
+            },
+          },
+        }),
+        'https://shared/app.apk',
+      );
+    });
+
+    test('falls back to default channel when shared empty', () {
+      expect(
+        resolveKillSwitchDownloadUrl({
+          'updateDownloadUrl': '',
+          'updateChannels': {
+            'default': {
+              'enabled': true,
+              'downloadUrl': 'https://channel/default.apk',
+              'latestVersion': '2.3.0',
+              'latestBuild': '140',
+            },
+            'ink': {
+              'enabled': true,
+              'downloadUrl': 'https://channel/ink.apk',
+              'latestVersion': '2.3.0',
+            },
+          },
+        }),
+        'https://channel/default.apk',
+      );
+    });
+
+    test('falls back to ink channel when default has no url', () {
+      expect(
+        resolveKillSwitchDownloadUrl({
+          'updateChannels': {
+            'default': {
+              'enabled': true,
+              'latestVersion': '2.3.0',
+              'latestBuild': '100',
+            },
+            'ink': {
+              'enabled': true,
+              'downloadUrl': 'https://channel/ink.apk',
+              'latestVersion': '2.3.0',
+            },
+          },
+        }),
+        'https://channel/ink.apk',
+      );
+    });
+
+    test('returns empty when nothing configured', () {
+      expect(resolveKillSwitchDownloadUrl(null), '');
+      expect(resolveKillSwitchDownloadUrl({}), '');
+    });
+  });
+
   group('channelsFromSettingsApp', () {
     test('legacy-only doc becomes default channel', () {
       final list = channelsFromSettingsApp({

@@ -12,29 +12,41 @@ import '../screens/update_available_screen.dart';
 import '../utils/update_channels.dart';
 import '../utils/version_compare.dart';
 
-/// App updates via Remote Config + Firestore `settings/app` (channels).
+/// App updates via Firestore `settings/app` (Admin App Update Control) first,
+/// with Remote Config only as a **last-resort seed** for empty fields.
 ///
 /// * **Soft** → [softOffer] for Home banner (no auto full-screen).
 /// * **Force** (per matched channel) → full-screen [UpdateAvailableScreen].
 /// * **Kill-switch** remains `settings/app.minSupportedBuild` in main.dart.
 ///
-/// Check cadence: 24h when config is complete; 1h retry when incomplete.
+/// Priority (highest first): matched `updateChannels` → shared
+/// `updateDownloadUrl` / legacy publish fields → Remote Config gaps only.
+/// This prevents a stale RC App Distribution URL from winning over Admin Hosting.
+///
+/// Check cadence:
+/// * **Cold start / resume / employee cohort ready** → network re-check
+///   ([checkForUpdateIgnoringCooldown]) so newly published force applies
+///   without waiting 24h on long-lived sessions.
+/// * **Other silent paths** may still use [checkForUpdate] (24h when complete;
+///   1h retry when incomplete).
 class UpdateService {
   static final UpdateService _instance = UpdateService._internal();
   factory UpdateService() => _instance;
   UpdateService._internal();
 
   static const String _lastCheckKey = 'last_update_check';
+  /// Legacy key: older builds permanently hid soft offers per build. Cleared on
+  /// Later / Settings check; no longer written for suppress.
   static const String _bannerDismissedBuildKey = 'update_banner_dismissed_build';
   static const String _bannerSnoozeUntilKey = 'update_banner_snooze_until';
 
-  /// Full network check interval when publish config is complete.
+  /// Full network check interval when publish config is complete (silent path).
   static const Duration checkInterval = Duration(hours: 24);
 
   /// Short retry when keys are missing/empty.
   static const Duration incompleteConfigRetry = Duration(hours: 1);
 
-  /// Soft-offer snooze after "Later" (banner only).
+  /// Soft-offer snooze after "Later" (banner only) — not permanent per build.
   static const Duration softSnooze = Duration(hours: 24);
 
   bool _initialized = false;
@@ -68,6 +80,8 @@ class UpdateService {
   }
 
   /// Silent check (respects 24h cooldown). Soft → banner; force → full-screen.
+  /// Prefer [checkForUpdateOnResume] / [checkForUpdateIgnoringCooldown] when a
+  /// newly published force must apply without waiting for the cooldown.
   Future<void> checkForUpdate(BuildContext context) async {
     if (kIsWeb) return;
     if (_showingUpdateUi) {
@@ -86,7 +100,7 @@ class UpdateService {
             milliseconds: checkInterval.inMilliseconds - (now - lastCheck));
         debugPrint(
             'UpdateService: skipped network — next check in ${remaining.inHours}h ${remaining.inMinutes % 60}m');
-        // Force must re-block every resume even inside the 24h window.
+        // In-memory force only (same process). Resume uses network re-check.
         final cached = _lastResult;
         if (cached != null &&
             cached.hasUpdate &&
@@ -110,8 +124,8 @@ class UpdateService {
     }
   }
 
-  /// Force re-check (no cooldown) — Settings, or after employee profile loads
-  /// so cohort matching can run with clock/dept.
+  /// Network re-check with no cooldown — Home cold start (cohort), app resume
+  /// (newly published force), and deferred employee load for channel match.
   Future<void> checkForUpdateIgnoringCooldown(BuildContext context) async {
     if (kIsWeb) return;
     if (_showingUpdateUi) return;
@@ -131,6 +145,11 @@ class UpdateService {
       debugPrint('UpdateService: immediate check error — $e');
     }
   }
+
+  /// App resume: always re-fetch so Admin force published while the app was
+  /// backgrounded (or after an "up to date" check) still blocks this session.
+  Future<void> checkForUpdateOnResume(BuildContext context) =>
+      checkForUpdateIgnoringCooldown(context);
 
   Future<void> _applyResult(
     BuildContext context,
@@ -154,26 +173,17 @@ class UpdateService {
       return;
     }
 
-    // Soft: banner only (unless snoozed / dismissed for this build).
+    // Soft: banner only (unless snoozed ~24h).
     final prefs = await SharedPreferences.getInstance();
-    if (await _isSoftSuppressed(prefs, result.latestBuild)) {
+    if (await _isSoftSuppressed(prefs)) {
       softOffer.value = null;
-      debugPrint('UpdateService: soft offer suppressed (dismiss/snooze)');
+      debugPrint('UpdateService: soft offer suppressed (snooze)');
       return;
     }
     softOffer.value = result;
   }
 
-  Future<bool> _isSoftSuppressed(
-    SharedPreferences prefs,
-    String latestBuild,
-  ) async {
-    final dismissed = prefs.getString(_bannerDismissedBuildKey) ?? '';
-    if (dismissed.isNotEmpty &&
-        latestBuild.isNotEmpty &&
-        dismissed == latestBuild) {
-      return true;
-    }
+  Future<bool> _isSoftSuppressed(SharedPreferences prefs) async {
     final snoozeUntil = prefs.getInt(_bannerSnoozeUntilKey) ?? 0;
     if (snoozeUntil > DateTime.now().millisecondsSinceEpoch) {
       return true;
@@ -181,13 +191,12 @@ class UpdateService {
     return false;
   }
 
-  /// "Later" on soft banner — snooze 24h and hide for this session.
-  Future<void> dismissSoftOffer({String? forBuild}) async {
+  /// "Later" on soft banner — snooze ~24h only (not permanent for that build).
+  /// Clears any legacy per-build dismiss flag from older app versions.
+  Future<void> dismissSoftOffer() async {
     final prefs = await SharedPreferences.getInstance();
-    final build = forBuild ?? softOffer.value?.latestBuild ?? '';
-    if (build.isNotEmpty) {
-      await prefs.setString(_bannerDismissedBuildKey, build);
-    }
+    // Drop legacy permanent-dismiss so older installs recover after this update.
+    await prefs.remove(_bannerDismissedBuildKey);
     await prefs.setInt(
       _bannerSnoozeUntilKey,
       DateTime.now().add(softSnooze).millisecondsSinceEpoch,
@@ -252,6 +261,7 @@ class UpdateService {
     final currentBuild = packageInfo.buildNumber;
     debugPrint('Current app version: $currentVersion+$currentBuild');
 
+    // Start empty — Firestore Admin publish is source of truth; RC fills gaps only.
     String latestVersion = '';
     String latestBuild = '';
     String downloadUrl = '';
@@ -259,34 +269,12 @@ class UpdateService {
     String releaseNotes = '';
     String apkSha256 = '';
     String channelId = 'default';
+    String configSource = 'none';
     bool fetchSucceeded = false;
     String? error;
     Map<String, dynamic>? settingsApp;
 
-    // RC = default-channel seed only (global). Cohorts come from Firestore.
-    try {
-      await _ensureRemoteConfigReady();
-      await FirebaseRemoteConfig.instance.fetchAndActivate();
-      fetchSucceeded = true;
-
-      final rc = FirebaseRemoteConfig.instance;
-      latestVersion = rc.getString('latest_version');
-      latestBuild = rc.getString('latest_build');
-      downloadUrl = rc.getString('download_url');
-      forceUpdate = rc.getBool('force_update');
-      releaseNotes = rc.getString('release_notes');
-      apkSha256 = rc.getString('apk_sha256');
-      debugPrint(
-          'Remote Config -> latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
-    } catch (e, st) {
-      error = e.toString();
-      if (!kIsWeb) {
-        FirebaseCrashlytics.instance
-            .recordError(e, st, reason: 'remote_config_fetch', fatal: false);
-      }
-      debugPrint('Remote Config fetch failed: $e');
-    }
-
+    // ── 1) Firestore settings/app (Admin App Update Control) ───────────────
     var fromFirestore = false;
     try {
       final doc = await FirebaseFirestore.instance
@@ -315,8 +303,6 @@ class UpdateService {
       );
       if (matched != null && matched.hasPublishMetadata) {
         channelId = matched.id;
-        // Channel metadata wins over RC for the matched cohort (including
-        // default when Firestore has a full default channel).
         if (matched.latestVersion.isNotEmpty) {
           latestVersion = matched.latestVersion;
         }
@@ -326,27 +312,85 @@ class UpdateService {
           releaseNotes = matched.releaseNotes;
         }
         if (matched.apkSha256.isNotEmpty) apkSha256 = matched.apkSha256;
-        // Force is channel-authoritative when channel has version/build set.
         forceUpdate = matched.forceUpdate;
+        configSource = 'firestore:$channelId';
         debugPrint(
             'UpdateService: channel=$channelId force=$forceUpdate build=$latestBuild');
       } else {
-        // No channels / empty — merge legacy flat fields into RC gaps.
-        final merged = _mergeLegacyFlat(settingsApp, latestVersion, latestBuild,
-            downloadUrl, releaseNotes, apkSha256, forceUpdate);
-        latestVersion = merged.$1;
-        latestBuild = merged.$2;
-        downloadUrl = merged.$3;
-        releaseNotes = merged.$4;
-        apkSha256 = merged.$5;
-        forceUpdate = merged.$6;
+        // Legacy flat fields on settings/app (no channel metadata yet).
+        latestVersion = (settingsApp['publishedLatestVersion'] ?? '')
+            .toString()
+            .trim();
+        latestBuild =
+            (settingsApp['publishedLatestBuild'] ?? '').toString().trim();
+        downloadUrl =
+            (settingsApp['updateDownloadUrl'] ?? '').toString().trim();
+        releaseNotes =
+            (settingsApp['publishedReleaseNotes'] ?? '').toString().trim();
+        apkSha256 =
+            (settingsApp['publishedApkSha256'] ?? '').toString().trim();
+        forceUpdate = settingsApp['publishedForceUpdate'] == true;
+        if (latestVersion.isNotEmpty ||
+            latestBuild.isNotEmpty ||
+            downloadUrl.isNotEmpty) {
+          configSource = 'firestore:legacy';
+        }
+      }
+
+      // Shared download URL fills channel gaps (Admin field).
+      if (downloadUrl.isEmpty) {
+        final shared =
+            (settingsApp['updateDownloadUrl'] ?? '').toString().trim();
+        if (shared.isNotEmpty) downloadUrl = shared;
       }
     }
 
-    // Shared URL fallback.
-    if (downloadUrl.isEmpty && settingsApp != null) {
-      final shared = (settingsApp['updateDownloadUrl'] ?? '').toString();
-      if (shared.isNotEmpty) downloadUrl = shared;
+    // ── 2) Remote Config — only empty fields (never override Admin URL) ────
+    try {
+      await _ensureRemoteConfigReady();
+      await FirebaseRemoteConfig.instance.fetchAndActivate();
+      fetchSucceeded = true;
+
+      final rc = FirebaseRemoteConfig.instance;
+      final rcVersion = rc.getString('latest_version').trim();
+      final rcBuild = rc.getString('latest_build').trim();
+      final rcUrl = rc.getString('download_url').trim();
+      final rcNotes = rc.getString('release_notes').trim();
+      final rcSha = rc.getString('apk_sha256').trim();
+      final rcForce = rc.getBool('force_update');
+
+      debugPrint(
+          'Remote Config (gap-fill only) -> latest=$rcVersion+$rcBuild url=$rcUrl force=$rcForce');
+
+      if (latestVersion.isEmpty && rcVersion.isNotEmpty) {
+        latestVersion = rcVersion;
+        if (configSource == 'none') configSource = 'remote_config';
+      }
+      if (latestBuild.isEmpty && rcBuild.isNotEmpty) {
+        latestBuild = rcBuild;
+        if (configSource == 'none') configSource = 'remote_config';
+      }
+      if (downloadUrl.isEmpty && rcUrl.isNotEmpty) {
+        downloadUrl = rcUrl;
+        if (configSource == 'none') configSource = 'remote_config';
+      }
+      if (releaseNotes.isEmpty && rcNotes.isNotEmpty) {
+        releaseNotes = rcNotes;
+      }
+      if (apkSha256.isEmpty && rcSha.isNotEmpty) {
+        apkSha256 = rcSha;
+      }
+      // Force: only seed from RC when Firestore did not supply channel/legacy force.
+      if (!fromFirestore && rcForce) {
+        forceUpdate = true;
+      }
+    } catch (e, st) {
+      error = e.toString();
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(e, st, reason: 'remote_config_fetch', fatal: false);
+      }
+      debugPrint('Remote Config fetch failed: $e');
     }
 
     if (!fetchSucceeded &&
@@ -355,6 +399,9 @@ class UpdateService {
       fetchSucceeded = true;
       error = null;
     }
+
+    debugPrint(
+        'UpdateService: source=$configSource latest=$latestVersion+$latestBuild url=$downloadUrl force=$forceUpdate');
 
     final configComplete =
         latestVersion.isNotEmpty && downloadUrl.isNotEmpty;
@@ -384,34 +431,12 @@ class UpdateService {
       channelId: channelId,
       clockNo: clockNo,
       department: department,
+      configSource: configSource,
       fetchSucceeded: fetchSucceeded,
       configComplete: configComplete,
       hasUpdate: hasUpdate,
       error: error,
     );
-  }
-
-  (String, String, String, String, String, bool) _mergeLegacyFlat(
-    Map<String, dynamic> d,
-    String v,
-    String b,
-    String url,
-    String notes,
-    String sha,
-    bool force,
-  ) {
-    String pick(String current, dynamic published) {
-      if (current.isNotEmpty) return current;
-      return published?.toString().trim() ?? current;
-    }
-
-    v = pick(v, d['publishedLatestVersion']);
-    b = pick(b, d['publishedLatestBuild']);
-    url = pick(url, d['updateDownloadUrl']);
-    notes = pick(notes, d['publishedReleaseNotes']);
-    sha = pick(sha, d['publishedApkSha256']);
-    if (!force && d['publishedForceUpdate'] == true) force = true;
-    return (v, b, url, notes, sha, force);
   }
 
   Future<void> _showDiagnosticDialog(
@@ -482,12 +507,21 @@ class UpdateService {
               _kv('Current', '${r.currentVersion}+${r.currentBuild}'),
               _kv('Latest', latestDisplay),
               _kv('Channel', r.channelId),
+              _kv('Config source', r.configSource),
               _kv('Force update', r.forceUpdate ? 'yes' : 'no'),
               if (r.department != null && r.department!.isNotEmpty)
                 _kv('Department', r.department!),
               if (r.clockNo != null && r.clockNo!.isNotEmpty)
                 _kv('Clock', r.clockNo!),
               _kv('Download URL', urlDisplay),
+              if (r.downloadUrl.contains('appdistribution.firebase'))
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    'This URL is Firebase App Distribution (login page) — set Admin Shared download URL to the Hosting latest.apk link.',
+                    style: TextStyle(color: Colors.orange, fontSize: 12, height: 1.3),
+                  ),
+                ),
               if (r.apkSha256.isNotEmpty) _kv('SHA-256', 'set'),
               if (r.releaseNotes.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -586,6 +620,8 @@ class UpdateCheckResult {
   final String channelId;
   final String? clockNo;
   final String? department;
+  /// e.g. `firestore:default`, `firestore:legacy`, `remote_config`, `none`.
+  final String configSource;
   final bool fetchSucceeded;
   final bool configComplete;
   final bool hasUpdate;
@@ -603,6 +639,7 @@ class UpdateCheckResult {
     this.channelId = 'default',
     this.clockNo,
     this.department,
+    this.configSource = 'none',
     required this.fetchSucceeded,
     required this.configComplete,
     required this.hasUpdate,

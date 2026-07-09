@@ -373,8 +373,10 @@ class _UpdateAvailableScreenState extends State<UpdateAvailableScreen>
                   Expanded(
                     child: Text(
                       widget.forceUpdate
-                          ? 'Please install the latest version of CTP Job Cards to continue.'
-                          : 'A newer version is ready. Download and install without leaving the app.',
+                          ? 'Please install the latest version of CTP Job Cards to continue.\n\n'
+                              'On first update, Android may ask you to allow CTP Job Cards to install apps — open Settings, allow it, then return here.'
+                          : 'A newer version is ready. Download and install without leaving the app.\n\n'
+                              'First time: Android may require “Allow from this source” for CTP Job Cards before the installer opens.',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         height: 1.4,

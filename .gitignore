@@ -66,3 +66,7 @@ landing-deploy/
 
 # Flutter golden-test failure artifacts (local only)
 test/failures/
+
+# Local APK backups from pilot publish script
+landing-deploy-apk-backup/
+

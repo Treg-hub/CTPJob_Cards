@@ -6,6 +6,54 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-09 — Update check uses Admin publish first (build 147)
+
+### What you will notice
+
+- **Check for update** / in-app update now follows **Admin App Update Control** (Hosting APK URL), not an old Firebase App Distribution link from Remote Config.
+- Soft and required updates still download and install inside the app from the official company file.
+
+### For admins
+
+- Shared download URL must stay: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
+- Settings → Check for update shows **Config source** (e.g. `firestore:default`).
+- Playbook: `docs/RELEASE_PLAYBOOK.md` · `/mobile-app-release`
+
+---
+
+## 2026-07-09 — Official download page + release 2.3.0 (build 146)
+
+### What you will notice
+
+- **First install** from the company download page (**Download app** or QR) — no Firebase App Distribution register step.
+- After install: **Create account** or **Log in** inside the app (clock number + email).
+- **Updates** still install in-app from the same official APK when Admin publishes a new build.
+- Reliable required-update prompts and soft **Later** (about one day).
+
+### For admins
+
+- Shared download URL: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
+- Ship steps: `docs/RELEASE_PLAYBOOK.md` · skill `/mobile-app-release`
+
+---
+
+## 2026-07-09 — More reliable app updates (build 145)
+
+### What you will notice
+
+- **Required updates** reappear as soon as you return to the app (not only after a full restart or a long wait).
+- Soft **Later** only hides the orange banner for about a day — it can come back until you install.
+- First-time in-app install: clearer guidance when Android asks you to **allow CTP Job Cards to install apps**.
+- **Official download** is this company page (Download app) — then create account or log in inside the app. Later updates install from the same official source in-app.
+
+### For admins
+
+- Full ship steps: **`docs/RELEASE_PLAYBOOK.md`**. Channels: `docs/admin_app_update_guide.md`.
+- Shared download URL must be the Hosting APK (`…/releases/latest.apk`), not App Distribution.
+- Always set Shared download URL before raising **min supported build**.
+
+---
+
 ## 2026-07-09 — Targeted updates & department/people pickers (build 136+)
 
 ### Easier app updates (for everyone)

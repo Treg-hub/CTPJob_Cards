@@ -135,6 +135,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Site Security — cached settings loaded once in initState
   SecuritySettings? _cachedSecuritySettings;
 
+  /// When true, first-frame update check ran without employee clock/dept —
+  /// re-run channel match once the profile loads (targeted force/soft).
+  bool _pendingCohortUpdateRecheck = false;
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600 && MediaQuery.of(context).size.width < 1200;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1200;
@@ -466,6 +469,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             );
           });
           ref.invalidate(currentEmployeeProvider);
+          // If first-frame update check already ran without us, re-match channels.
+          _maybeRecheckUpdateForCohort();
         }
       }
 
@@ -477,6 +482,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       final emp = await _firestoreService.getEmployee(clockNo);
       if (emp != null && mounted) {
         _applyEmployeePresence(emp);
+      } else if (realEmployee != null && mounted) {
+        // Stub already applied above — still re-run channel match if pending.
+        _maybeRecheckUpdateForCohort();
       }
     } catch (e) {
       debugPrint('HomeScreen: deferred employee load failed: $e');
@@ -776,6 +784,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
     _resetTabIfHiddenModule();
     ref.invalidate(currentEmployeeProvider);
+    _maybeRecheckUpdateForCohort();
+  }
+
+  /// Re-resolve update channels after a deferred employee load so Ink/testers
+  /// force is not missed when the first Home check had no clock/dept.
+  void _maybeRecheckUpdateForCohort() {
+    if (kIsWeb || !_pendingCohortUpdateRecheck) return;
+    if (realEmployee == null && currentEmployee == null) return;
+    _pendingCohortUpdateRecheck = false;
+    if (!mounted) return;
+    unawaited(UpdateService().checkForUpdateIgnoringCooldown(context));
   }
 
   void _setupActiveJobsSubscription() {
@@ -854,10 +873,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _rearmActiveJobsStreamIfStuck();
     DeviceHealthService().syncPermissionsToFirestore();
 
-    // Soft banner / force screen — 24h network cadence; force re-blocks on resume.
+    // Always re-fetch on resume so a force publish while backgrounded still blocks
+    // (24h silent cooldown must not hide newly required upgrades).
     if (!kIsWeb && mounted) {
       try {
-        await UpdateService().checkForUpdate(context);
+        await UpdateService().checkForUpdateOnResume(context);
       } catch (e) {
         debugPrint('Update check on resume: $e');
       }
@@ -908,6 +928,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           } catch (e) {
             debugPrint('Update cohort re-check: $e');
           }
+        } else if (mounted) {
+          // Profile still loading — re-check when stream/stub fills in.
+          _pendingCohortUpdateRecheck = true;
         }
         try {
           await NotificationService().checkPendingJobNavigation();
