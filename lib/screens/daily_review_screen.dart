@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import '../utils/screen_insets.dart';
+import '../utils/list_load_state.dart';
 
 class DailyReviewScreen extends StatefulWidget {
   const DailyReviewScreen({super.key});
@@ -21,7 +22,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
     with SingleTickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
   final JobCardActionsService _actions = JobCardActionsService();
-  StreamSubscription<List<JobCard>>? _subscription;
+  StreamSubscription<JobCardListSnapshot>? _subscription;
   late TabController _tabController;
 
   // Cards seen in this session (frozen snapshot from first load)
@@ -32,7 +33,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   List<JobCard> _reviewedCards = [];
   JobCard? _selectedCard;
 
-  bool _isLoading = true;
+  JobCardListSnapshot? _cardsSnap;
   bool _hasMarked = false;
 
   // Date filter for Reviewed tab
@@ -118,8 +119,10 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   void _loadCards() {
     // Active jobs + last-14-days closed — review never needs the entire
     // collection history that getAllJobCards() used to stream.
-    _subscription =
-        _firestoreService.getActiveAndRecentlyClosedJobCards().listen((allCards) {
+    _subscription = _firestoreService
+        .getActiveAndRecentlyClosedJobCardsWithMeta()
+        .listen((snap) {
+      final allCards = snap.cards;
       final manager = currentEmployee;
       if (manager == null) return;
 
@@ -144,7 +147,7 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
       }
 
       setState(() {
-        _isLoading = false;
+        _cardsSnap = snap;
         _reviewedCards = reviewed;
 
         if (!_hasMarked) {
@@ -170,7 +173,6 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
       });
     }, onError: (e) {
       debugPrint('DailyReviewScreen: job cards stream error: $e');
-      if (mounted) setState(() => _isLoading = false);
     });
   }
 
@@ -229,28 +231,60 @@ class _DailyReviewScreenState extends State<DailyReviewScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: CtpAppBar(title: 'Daily Review — $_scopeLabel'),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                TabBar(
-                  controller: _tabController,
-                  tabs: [
-                    Tab(text: 'Pending Review (${_pendingCards.length})'),
-                    Tab(text: 'Reviewed (${_filteredReviewedCards.length})'),
-                  ],
+      body: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final snap = _cardsSnap;
+    switch (decideListLoadState(
+      hasSnapshot: snap != null,
+      isEmpty: snap?.cards.isEmpty ?? true,
+      isFromCache: snap?.isFromCache ?? true,
+    )) {
+      case ListLoadState.loading:
+        return const Center(child: CircularProgressIndicator());
+      case ListLoadState.waitingForServer:
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text(
+                'Waiting for connection…',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildTwoPanel(_pendingCards),
-                      _buildTwoPanel(_filteredReviewedCards, showDateFilter: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
+        );
+      case ListLoadState.empty:
+      case ListLoadState.data:
+        break;
+    }
+
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'Pending Review (${_pendingCards.length})'),
+            Tab(text: 'Reviewed (${_filteredReviewedCards.length})'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTwoPanel(_pendingCards),
+              _buildTwoPanel(_filteredReviewedCards, showDateFilter: true),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

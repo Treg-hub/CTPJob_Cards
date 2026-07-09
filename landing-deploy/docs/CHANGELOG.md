@@ -6,6 +6,38 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-09 — Targeted updates & department/people pickers (build 136+)
+
+### Easier app updates (for everyone)
+
+- **Download & install inside the app** — when an update is available, use **Update** (banner) or **Download & install** (force screen). Progress shows while the APK downloads; Android opens the system installer.
+- **Soft updates** no longer take over the whole screen — an orange **banner** on Home is enough; **Later** snoozes about a day.
+- **Force updates** (when Admin turns them on for your group) still block until you install.
+- **Check anytime** — Settings → **Check for Update**.
+
+### For admins
+
+- Full operator guide: **`docs/admin_app_update_guide.md`** (also linked from docs hub after landing rebuild).
+- **App Update Control** — three channels: **Default** (factory), **Departments** (multi-select from employee/structure lists), **People / pilot** (multi-select people, optional departments). Match order: People → Departments → Default.
+- **Force per channel** — e.g. force Ink Factory only without forcing the plant.
+- **24-hour** automatic check; force re-blocks on resume. Kill-switch (`min supported build`) remains factory-wide.
+- **Save publish** writes `settings/app.updateChannels` + legacy Default fields for older APKs. **Copy RC keys** = Default only.
+
+### First-time setup by role (unchanged)
+
+- **Security / Fleet / Ink** staff get a shorter first-run tour; classic job-card roles keep the full tour.
+
+---
+
+## 2026-07-08 — In-app install path (build 131+)
+
+### Install path
+
+- In-app APK download + system installer; install-unknown-apps permission; browser fallback.
+- Settings → Check for Update; What's changed after install (multi-build rollup).
+
+---
+
 ## 2026-07-06 — Version 2.3.0 (build 121) — My Timesheet + waste hardening + Pre Press fix
 
 Follow-up to the wide **v2.3.0** rollout. First open shows this summary in **What's changed**.

@@ -27,6 +27,7 @@ import '../widgets/waste_copper_ready_panel.dart';
 import '../models/waste_stock_source.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../utils/list_load_state.dart';
 
 // ---------------------------------------------------------------------------
 // Incoming load card — shown in the "Incoming" section of WasteHomeScreen.
@@ -366,14 +367,13 @@ class WasteHomeScreen extends ConsumerStatefulWidget {
 
 class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   final WasteService _wasteService = WasteService();
-  List<WasteLoad> _activeLoads = [];
   List<WasteLoad> _completedLoads = [];
   List<WasteLoad> _scheduledLoads = [];
   List<WasteType> _wasteTypes = [];
-  bool _isLoading = true;
   String _filter = 'all'; // all | today | week
 
-  StreamSubscription<List<WasteLoad>>? _activeLoadsSubscription;
+  late final Stream<WasteLoadListSnapshot> _activeLoadsStream =
+      _wasteService.watchActiveLoadsWithMeta();
   StreamSubscription<List<WasteLoad>>? _completedLoadsSubscription;
   StreamSubscription<List<WasteLoad>>? _scheduledSubscription;
   StreamSubscription<List<WasteType>>? _wasteTypesSubscription;
@@ -390,7 +390,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   }
 
   void _subscribeToLoads() {
-    _activeLoadsSubscription?.cancel();
     _completedLoadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
     _wasteTypesSubscription?.cancel();
@@ -398,25 +397,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
     _wasteTypesSubscription = _wasteService.watchWasteTypes().listen(
       (types) { if (mounted) setState(() => _wasteTypes = types); },
       onError: (_) {},
-    );
-
-    setState(() => _isLoading = true);
-
-    _activeLoadsSubscription = _wasteService.watchActiveLoads().listen(
-      (loads) {
-        if (mounted) setState(() { _activeLoads = loads; _isLoading = false; });
-      },
-      onError: (e) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Could not load waste loads: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
     );
 
     _completedLoadsSubscription = _wasteService.watchRecentCompleted().listen(
@@ -438,7 +418,6 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
 
   @override
   void dispose() {
-    _activeLoadsSubscription?.cancel();
     _completedLoadsSubscription?.cancel();
     _scheduledSubscription?.cancel();
     _wasteTypesSubscription?.cancel();
@@ -618,120 +597,219 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
         ),
 
         Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  padding: EdgeInsets.only(
-                    bottom: ScreenInsets.scrollBottomInHomeShell(
-                      clearFab: true,
-                      extendedFab: true,
+          child: StreamBuilder<WasteLoadListSnapshot>(
+            stream: _activeLoadsStream,
+            builder: (context, activeSnap) {
+              if (activeSnap.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_off_outlined,
+                            size: 48,
+                            color: Theme.of(context).appColors.textMuted),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Could not load waste loads',
+                          style: TextStyle(
+                              color: Theme.of(context).appColors.textMuted),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: () => setState(() {}),
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
                   ),
-                  children: [
-                    // ── Incoming (scheduled) ──────────────────────────────────
-                    ...() {
-                      final filteredScheduled = _scheduledLoads.where((load) {
-                        final date = load.scheduledFor ?? load.dateTime;
-                        if (_filter == 'today') return DateUtils.isSameDay(date, DateTime.now());
-                        if (_filter == 'week') return date.isAfter(DateTime.now().subtract(const Duration(days: 7)));
-                        return true;
-                      }).toList();
-                      if (filteredScheduled.isEmpty) return <Widget>[];
-                      return <Widget>[
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.local_shipping, color: Theme.of(context).appColors.wasteGreen, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Incoming (${filteredScheduled.length})',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Theme.of(context).appColors.wasteGreen),
-                              ),
-                            ],
+                );
+              }
+
+              final meta = activeSnap.data;
+              switch (decideListLoadState(
+                hasSnapshot: meta != null,
+                isEmpty: meta?.loads.isEmpty ?? true,
+                isFromCache: meta?.isFromCache ?? true,
+              )) {
+                case ListLoadState.loading:
+                  return const Center(child: CircularProgressIndicator());
+                case ListLoadState.waitingForServer:
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Waiting for connection…',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                         ),
-                        ...filteredScheduled.map((load) => _IncomingLoadCard(
-                          load: load,
-                          isManager: isManager || isAdmin,
-                          wasteService: _wasteService,
-                          onRefresh: _subscribeToLoads,
-                          wasteTypes: _wasteTypes,
-                        )),
-                        const Divider(height: 24, indent: 16, endIndent: 16),
-                      ];
-                    }(),
+                      ],
+                    ),
+                  );
+                case ListLoadState.empty:
+                case ListLoadState.data:
+                  break;
+              }
 
-                    // ── Active loads (in-progress) ────────────────────────────
-                    ...() {
-                      final filtered = _activeLoads.where((load) {
-                        if (_filter == 'today') return DateUtils.isSameDay(load.dateTime, DateTime.now());
-                        if (_filter == 'week') return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
-                        return true;
-                      }).toList();
+              final activeLoads = meta!.loads;
 
-                      if (filtered.isEmpty && _completedLoads.isEmpty) {
-                        return [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 40),
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.inbox_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _filter == 'all'
-                                        ? 'No waste loads yet.\nTap + New / Schedule to get started.'
-                                        : 'No loads match "${_filter == "today" ? "Today" : "This Week"}".',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Theme.of(context).appColors.textMuted),
-                                  ),
-                                  if (_filter != 'all') ...[
-                                    const SizedBox(height: 12),
-                                    TextButton(onPressed: () => setState(() => _filter = 'all'), child: const Text('Clear filter')),
-                                  ],
-                                ],
+              return ListView(
+                padding: EdgeInsets.only(
+                  bottom: ScreenInsets.scrollBottomInHomeShell(
+                    clearFab: true,
+                    extendedFab: true,
+                  ),
+                ),
+                children: [
+                  // ── Incoming (scheduled) ──────────────────────────────────
+                  ...() {
+                    final filteredScheduled = _scheduledLoads.where((load) {
+                      final date = load.scheduledFor ?? load.dateTime;
+                      if (_filter == 'today') {
+                        return DateUtils.isSameDay(date, DateTime.now());
+                      }
+                      if (_filter == 'week') {
+                        return date.isAfter(
+                            DateTime.now().subtract(const Duration(days: 7)));
+                      }
+                      return true;
+                    }).toList();
+                    if (filteredScheduled.isEmpty) return <Widget>[];
+                    return <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_shipping,
+                                color: Theme.of(context).appColors.wasteGreen,
+                                size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Incoming (${filteredScheduled.length})',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).appColors.wasteGreen,
                               ),
                             ),
-                          ),
-                        ];
-                      }
-                      return filtered.map((load) => _loadCard(load, context)).toList();
-                    }(),
+                          ],
+                        ),
+                      ),
+                      ...filteredScheduled.map((load) => _IncomingLoadCard(
+                            load: load,
+                            isManager: isManager || isAdmin,
+                            wasteService: _wasteService,
+                            onRefresh: _subscribeToLoads,
+                            wasteTypes: _wasteTypes,
+                          )),
+                      const Divider(height: 24, indent: 16, endIndent: 16),
+                    ];
+                  }(),
 
-                    // ── Recent completed (last 10) ────────────────────────────
-                    ...() {
-                      final filtered = _completedLoads.where((load) {
-                        if (_filter == 'today') return DateUtils.isSameDay(load.dateTime, DateTime.now());
-                        if (_filter == 'week') return load.dateTime.isAfter(DateTime.now().subtract(const Duration(days: 7)));
-                        return true;
-                      }).toList();
-                      if (filtered.isEmpty) return <Widget>[];
-                      return <Widget>[
+                  // ── Active loads (in-progress) ────────────────────────────
+                  ...() {
+                    final filtered = activeLoads.where((load) {
+                      if (_filter == 'today') {
+                        return DateUtils.isSameDay(load.dateTime, DateTime.now());
+                      }
+                      if (_filter == 'week') {
+                        return load.dateTime.isAfter(
+                            DateTime.now().subtract(const Duration(days: 7)));
+                      }
+                      return true;
+                    }).toList();
+
+                    if (filtered.isEmpty && _completedLoads.isEmpty) {
+                      return [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline, size: 16,
-                                  color: Theme.of(context).appColors.textMuted),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Recent completed',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).appColors.textMuted,
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inbox_outlined,
+                                    size: 48,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _filter == 'all'
+                                      ? 'No waste loads yet.\nTap + New / Schedule to get started.'
+                                      : 'No loads match "${_filter == "today" ? "Today" : "This Week"}".',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      color:
+                                          Theme.of(context).appColors.textMuted),
                                 ),
-                              ),
-                            ],
+                                if (_filter != 'all') ...[
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: () =>
+                                        setState(() => _filter = 'all'),
+                                    child: const Text('Clear filter'),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
-                        ...filtered.map((load) => Opacity(opacity: 0.65, child: _loadCard(load, context))),
                       ];
-                    }(),
-                  ],
-                ),
+                    }
+                    return filtered
+                        .map((load) => _loadCard(load, context))
+                        .toList();
+                  }(),
+
+                  // ── Recent completed (last 10) ────────────────────────────
+                  ...() {
+                    final filtered = _completedLoads.where((load) {
+                      if (_filter == 'today') {
+                        return DateUtils.isSameDay(load.dateTime, DateTime.now());
+                      }
+                      if (_filter == 'week') {
+                        return load.dateTime.isAfter(
+                            DateTime.now().subtract(const Duration(days: 7)));
+                      }
+                      return true;
+                    }).toList();
+                    if (filtered.isEmpty) return <Widget>[];
+                    return <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline,
+                                size: 16,
+                                color: Theme.of(context).appColors.textMuted),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Recent completed',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).appColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ...filtered.map((load) =>
+                          Opacity(opacity: 0.65, child: _loadCard(load, context))),
+                    ];
+                  }(),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );

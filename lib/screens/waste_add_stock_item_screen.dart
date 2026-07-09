@@ -6,11 +6,13 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
+import '../models/waste_type.dart';
 import '../services/waste_service.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 import '../utils/screen_insets.dart';
+import '../utils/waste_type_routing.dart';
 
 class WasteAddStockItemScreen extends ConsumerStatefulWidget {
   const WasteAddStockItemScreen({
@@ -28,8 +30,10 @@ class WasteAddStockItemScreen extends ConsumerStatefulWidget {
 class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScreen> {
   final WasteService _wasteService = WasteService();
   final _weightCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
+  List<WasteType> _wasteTypes = [];
   List<String> _wasteTypeOptions = [];
   String? _selectedWasteType;
   final List<String> _savedPhotoUrls = [];
@@ -42,6 +46,14 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   bool get _isEdit => widget.existingItem != null;
   bool get _photosRequired => _wasteSettings?.photosRequired ?? false;
 
+  bool get _isQtyOnly =>
+      _selectedWasteType != null &&
+      stockTypeIsQuantityOnly(_selectedWasteType!, _wasteTypes);
+
+  String get _qtyLabel => _selectedWasteType == null
+      ? 'Quantity'
+      : stockQuantityLabelFor(_selectedWasteType!, _wasteTypes);
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +64,9 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           : existing.wasteType;
       if (existing.estimatedWeightKg != null) {
         _weightCtrl.text = existing.estimatedWeightKg!.toString();
+      }
+      if (existing.quantity > 0) {
+        _qtyCtrl.text = existing.quantity.toString();
       }
       if (existing.notes != null) {
         _notesCtrl.text = existing.notes!;
@@ -72,6 +87,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
   @override
   void dispose() {
     _weightCtrl.dispose();
+    _qtyCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -84,6 +100,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           .timeout(const Duration(seconds: 10), onTimeout: () => []);
       if (mounted) {
         setState(() {
+          _wasteTypes = types;
           _wasteTypeOptions = types
               .map((t) => t.mainType)
               .where((name) => name.isNotEmpty)
@@ -92,6 +109,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
             ..sort();
           if (_selectedWasteType == null && _wasteTypeOptions.isNotEmpty) {
             _selectedWasteType = _wasteTypeOptions.first;
+            _applyTypeDefaults(_selectedWasteType);
           } else if (_selectedWasteType != null &&
               !_wasteTypeOptions.contains(_selectedWasteType)) {
             _wasteTypeOptions = [..._wasteTypeOptions, _selectedWasteType!];
@@ -101,12 +119,22 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
     } catch (_) {}
   }
 
+  void _applyTypeDefaults(String? type) {
+    if (type == null) return;
+    if (stockTypeIsQuantityOnly(type, _wasteTypes) && _qtyCtrl.text.isEmpty) {
+      _qtyCtrl.text = '1';
+    }
+  }
+
   int get _totalPhotoCount =>
       _savedPhotoUrls.length + _newLocalPhotos.length;
 
-  bool get _isValid =>
-      _selectedWasteType != null &&
-      (!_photosRequired || _totalPhotoCount >= 1);
+  bool get _isValid {
+    if (_selectedWasteType == null) return false;
+    if (_photosRequired && _totalPhotoCount < 1) return false;
+    if (_isQtyOnly) return (int.tryParse(_qtyCtrl.text) ?? 0) > 0;
+    return true;
+  }
 
   Future<void> _addPhoto(ImageSource source) async {
     if (!guardPersonaSubmit(context)) return;
@@ -128,14 +156,24 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
     });
   }
 
+  void _adjustQuantity(int delta) {
+    final current = int.tryParse(_qtyCtrl.text) ?? 1;
+    final next = (current + delta).clamp(1, 9999);
+    _qtyCtrl.text = '$next';
+    setState(() {});
+  }
+
   Future<void> _save() async {
     if (!guardPersonaSubmit(context)) return;
     if (!_isValid) return;
     setState(() => _isSaving = true);
     try {
-      final double? weight = _weightCtrl.text.isNotEmpty
+      final double? weight = !_isQtyOnly && _weightCtrl.text.isNotEmpty
           ? double.tryParse(_weightCtrl.text)
           : null;
+      final int? quantity = _isQtyOnly
+          ? int.tryParse(_qtyCtrl.text)
+          : (_qtyCtrl.text.isNotEmpty ? int.tryParse(_qtyCtrl.text) : null);
       final notes =
           _notesCtrl.text.isNotEmpty ? _notesCtrl.text.trim() : null;
 
@@ -146,6 +184,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           stockId: id,
           subtype: _selectedWasteType!,
           estimatedWeightKg: weight,
+          quantity: quantity,
           notes: notes,
           keptPhotoUrls: List.from(_savedPhotoUrls),
           newLocalPhotoPaths: List.from(_newLocalPhotos),
@@ -171,6 +210,7 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
           wasteType: _selectedWasteType!,
           subtype: _selectedWasteType!,
           estimatedWeightKg: weight,
+          quantity: quantity ?? 1,
           notes: notes,
           createdBy: resolveWriteActor(currentEmployee)?.clockNo ?? '',
           createdByName: currentEmployee?.name ?? '',
@@ -263,21 +303,69 @@ class _WasteAddStockItemScreenState extends ConsumerState<WasteAddStockItemScree
                     items: _wasteTypeOptions
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setState(() => _selectedWasteType = v),
+                    onChanged: (v) => setState(() {
+                      _selectedWasteType = v;
+                      _weightCtrl.clear();
+                      _qtyCtrl.clear();
+                      _applyTypeDefaults(v);
+                    }),
                   ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _weightCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Estimated weight (optional)',
-                suffixText: 'kg',
-                isDense: true,
-                border: OutlineInputBorder(),
+            if (_isQtyOnly) ...[
+              Text(
+                '$_qtyLabel *',
+                style: TextStyle(fontSize: 12, color: appColors.textMuted),
               ),
-              onChanged: (_) => setState(() {}),
-            ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  IconButton.outlined(
+                    onPressed: () => _adjustQuantity(-1),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _qtyCtrl,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    onPressed: () => _adjustQuantity(1),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ] else ...[
+              TextField(
+                controller: _weightCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Estimated weight (optional)',
+                  suffixText: 'kg',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _qtyCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Quantity (optional)',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: _notesCtrl,

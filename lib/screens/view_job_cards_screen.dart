@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_tile.dart';
 import '../utils/screen_insets.dart';
+import '../utils/list_load_state.dart';
 
 class ViewJobCardsScreen extends StatefulWidget {
   const ViewJobCardsScreen({
@@ -47,19 +48,14 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
   static const int _closedLimit = 200;
 
   final FirestoreService _firestoreService = FirestoreService();
-  late final Stream<List<JobCard>> _openStream;
-  late final Stream<List<JobCard>> _inProgressStream;
-  late final Stream<List<JobCard>> _monitorStream;
-  late final Stream<List<JobCard>> _closedStream;
+  late final Stream<ViewJobCardsSnapshot> _bundleStream =
+      _firestoreService.getViewJobCardsBundleWithMeta(
+        closedLimit: _closedLimit,
+      );
 
   @override
   void initState() {
     super.initState();
-    _openStream = _firestoreService.getJobCardsByStatus(JobStatus.open);
-    _inProgressStream =
-        _firestoreService.getJobCardsByStatus(JobStatus.inProgress);
-    _monitorStream = _firestoreService.getJobCardsByStatus(JobStatus.monitor);
-    _closedStream = _firestoreService.getClosedJobCards(limit: _closedLimit);
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
@@ -291,41 +287,58 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen> with SingleTick
           const SizedBox(width: 8),
         ],
       ),
-      // Four server-filtered streams (open/inProgress/monitor capped at 300,
-      // closed at the newest 200) replace the old FIVE full-collection
-      // streams this screen used to open — it downloaded every job card ever
-      // created, five times, on every visit.
-      body: StreamBuilder<List<JobCard>>(
-        stream: _openStream,
-        builder: (context, openSnap) => StreamBuilder<List<JobCard>>(
-          stream: _inProgressStream,
-          builder: (context, ipSnap) => StreamBuilder<List<JobCard>>(
-            stream: _monitorStream,
-            builder: (context, monSnap) => StreamBuilder<List<JobCard>>(
-              stream: _closedStream,
-              builder: (context, closedSnap) {
-                final snaps = [openSnap, ipSnap, monSnap, closedSnap];
-                final firstError =
-                    snaps.where((s) => s.hasError).map((s) => s.error).firstOrNull;
-                if (firstError != null) {
-                  return Center(
-                      child: Text('Error: $firstError',
-                          style: const TextStyle(color: Colors.red)));
-                }
-                if (snaps.every((s) => !s.hasData)) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+      body: StreamBuilder<ViewJobCardsSnapshot>(
+        stream: _bundleStream,
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(
+              child: Text('Error: ${snap.error}',
+                  style: const TextStyle(color: Colors.red)),
+            );
+          }
+          final meta = snap.data;
+          final allEmpty = meta == null ||
+              (meta.open.isEmpty &&
+                  meta.inProgress.isEmpty &&
+                  meta.monitor.isEmpty &&
+                  meta.closed.isEmpty);
+          switch (decideListLoadState(
+            hasSnapshot: meta != null,
+            isEmpty: allEmpty,
+            isFromCache: meta?.isFromCache ?? true,
+          )) {
+            case ListLoadState.loading:
+              return const Center(child: CircularProgressIndicator());
+            case ListLoadState.waitingForServer:
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Waiting for connection…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            case ListLoadState.empty:
+            case ListLoadState.data:
+              break;
+          }
 
-                final open = _applyFilters(openSnap.data ?? const []);
-                final inProgress = _applyFilters(ipSnap.data ?? const []);
-                final monitor = _applyFilters(monSnap.data ?? const []);
-                final closed = _applyFilters(closedSnap.data ?? const []);
-
-                return _buildTabbedLayout(open, inProgress, monitor, closed);
-              },
-            ),
-          ),
-        ),
+          final bundle = meta!;
+          return _buildTabbedLayout(
+            _applyFilters(bundle.open),
+            _applyFilters(bundle.inProgress),
+            _applyFilters(bundle.monitor),
+            _applyFilters(bundle.closed),
+          );
+        },
       ),
     );
   }

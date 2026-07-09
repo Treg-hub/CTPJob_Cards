@@ -14,12 +14,22 @@ import '../constants/collections.dart';
 import 'connectivity_service.dart';
 import 'resilient_stream.dart';
 import 'sync_service.dart';
+import '../utils/list_load_state.dart';
 import '../utils/persona_audit.dart';
 
 /// A job-card list emission that still knows whether it was served from the
 /// local cache. `isFromCache == true` + empty means "the server hasn't
 /// answered yet", NOT "there are no jobs" — see utils/list_load_state.dart.
 typedef JobCardListSnapshot = ({List<JobCard> cards, bool isFromCache});
+
+/// View Jobs tab bundle — four status buckets in one merge-safe emission.
+typedef ViewJobCardsSnapshot = ({
+  List<JobCard> open,
+  List<JobCard> inProgress,
+  List<JobCard> monitor,
+  List<JobCard> closed,
+  bool isFromCache,
+});
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -487,63 +497,133 @@ class FirestoreService {
         .map((snapshot) => parseJobCards(snapshot.docs));
   }
 
+  /// My Work: open+active jobs (assigned / created) plus a capped closed set
+  /// for the Closed tab. Four streams — emit only when all have answered so
+  /// partial cache does not pin "Waiting for connection…". Open queries keep a
+  /// server status filter so limit(80) is not polluted by old closed cards.
   Stream<JobCardListSnapshot> getMyJobCardsWithMeta(String clockNo) {
-    final controller = StreamController<JobCardListSnapshot>();
+    late StreamController<JobCardListSnapshot> controller;
+    final subs = <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
 
-    List<JobCard> assignedJobs = [];
-    List<JobCard> createdJobs = [];
-    var assignedFromCache = true;
-    var createdFromCache = true;
+    List<JobCard> assignedOpen = [];
+    List<JobCard> createdOpen = [];
+    List<JobCard> assignedClosed = [];
+    List<JobCard> createdClosed = [];
+    final ready = <String, bool>{
+      'assignedOpen': false,
+      'createdOpen': false,
+      'assignedClosed': false,
+      'createdClosed': false,
+    };
+    final fromCache = <String, bool>{
+      'assignedOpen': true,
+      'createdOpen': true,
+      'assignedClosed': true,
+      'createdClosed': true,
+    };
 
     void emit() {
-      final assignedIds = assignedJobs.map((j) => j.id!).toSet();
+      if (!allStreamSidesReady(ready.values)) return;
+      if (controller.isClosed) return;
+      final byId = <String, JobCard>{};
+      for (final j in [
+        ...assignedOpen,
+        ...createdOpen,
+        ...assignedClosed,
+        ...createdClosed,
+      ]) {
+        final id = j.id;
+        if (id == null) continue;
+        byId.putIfAbsent(id, () => j);
+      }
       controller.add((
-        cards: [
-          ...assignedJobs,
-          ...createdJobs.where((j) => !assignedIds.contains(j.id)),
-        ],
-        // Cached until BOTH sides have a server answer — an empty merged list
-        // must not render as truly empty while one side is still offline.
-        isFromCache: assignedFromCache || createdFromCache,
+        cards: byId.values.toList(),
+        isFromCache: mergedIsFromCache(
+          sidesHaveSnapshot: ready.values,
+          sidesFromCache: fromCache.values,
+        ),
       ));
     }
 
-    // Both inner listeners are resilient: previously they had NO onError at
-    // all, so one permission-denied was an unhandled zone error that silently
-    // killed both queries for the rest of the session.
-    const myWorkLimit = 80;
-    final s1 = resilientSnapshots(
-      () => _firestore
-          .collection(Collections.jobCards)
-          .where('assignedClockNos', arrayContains: clockNo)
-          .where('status', whereIn: _openJobStatuses)
-          .limit(myWorkLimit)
-          .snapshots(),
-      debugName: 'my_jobs_assigned',
-    ).listen((snap) {
-      assignedJobs = parseJobCards(snap.docs);
-      assignedFromCache = snap.metadata.isFromCache;
+    void onSide(
+      String key,
+      QuerySnapshot<Map<String, dynamic>> snap,
+      void Function(List<JobCard>) setJobs,
+    ) {
+      setJobs(parseJobCards(snap.docs));
+      ready[key] = true;
+      fromCache[key] = snap.metadata.isFromCache;
       emit();
-    }, onError: controller.addError);
+    }
 
-    final s2 = resilientSnapshots(
-      () => _firestore
-          .collection(Collections.jobCards)
-          .where('operatorClockNo', isEqualTo: clockNo)
-          .where('status', whereIn: _openJobStatuses)
-          .limit(myWorkLimit)
-          .snapshots(),
-      debugName: 'my_jobs_created',
-    ).listen((snap) {
-      createdJobs = parseJobCards(snap.docs);
-      createdFromCache = snap.metadata.isFromCache;
-      emit();
-    }, onError: controller.addError);
+    void subscribe() {
+      const openLimit = 80;
+      const closedLimit = 40;
+      final closedStatuses = _statusWhereIn(JobStatus.closed);
 
-    controller.onCancel = () {
-      s1.cancel();
-      s2.cancel();
-    };
+      subs.add(resilientSnapshots(
+        () => _firestore
+            .collection(Collections.jobCards)
+            .where('assignedClockNos', arrayContains: clockNo)
+            .where('status', whereIn: _openJobStatuses)
+            .limit(openLimit)
+            .snapshots(),
+        debugName: 'my_jobs_assigned_open',
+      ).listen(
+        (snap) => onSide('assignedOpen', snap, (j) => assignedOpen = j),
+        onError: controller.addError,
+      ));
+
+      subs.add(resilientSnapshots(
+        () => _firestore
+            .collection(Collections.jobCards)
+            .where('operatorClockNo', isEqualTo: clockNo)
+            .where('status', whereIn: _openJobStatuses)
+            .limit(openLimit)
+            .snapshots(),
+        debugName: 'my_jobs_created_open',
+      ).listen(
+        (snap) => onSide('createdOpen', snap, (j) => createdOpen = j),
+        onError: controller.addError,
+      ));
+
+      // Closed tab: capped recent closed only (no orderBy — avoids extra
+      // composite indexes; client sorts for display).
+      subs.add(resilientSnapshots(
+        () => _firestore
+            .collection(Collections.jobCards)
+            .where('assignedClockNos', arrayContains: clockNo)
+            .where('status', whereIn: closedStatuses)
+            .limit(closedLimit)
+            .snapshots(),
+        debugName: 'my_jobs_assigned_closed',
+      ).listen(
+        (snap) => onSide('assignedClosed', snap, (j) => assignedClosed = j),
+        onError: controller.addError,
+      ));
+
+      subs.add(resilientSnapshots(
+        () => _firestore
+            .collection(Collections.jobCards)
+            .where('operatorClockNo', isEqualTo: clockNo)
+            .where('status', whereIn: closedStatuses)
+            .limit(closedLimit)
+            .snapshots(),
+        debugName: 'my_jobs_created_closed',
+      ).listen(
+        (snap) => onSide('createdClosed', snap, (j) => createdClosed = j),
+        onError: controller.addError,
+      ));
+    }
+
+    controller = StreamController<JobCardListSnapshot>(
+      onListen: subscribe,
+      onCancel: () {
+        for (final s in subs) {
+          s.cancel();
+        }
+      },
+    );
 
     return controller.stream;
   }
@@ -587,72 +667,229 @@ class FirestoreService {
     return query.snapshots().map((snapshot) => parseJobCards(snapshot.docs));
   }
 
-  /// Server-filtered single-status stream. Equality-only (no orderBy) so it
-  /// needs no composite index — active-status sets are small and consumers
-  /// sort client-side. For closed jobs use [getClosedJobCards] (indexed on
-  /// closedAt) instead.
-  Stream<List<JobCard>> getJobCardsByStatus(JobStatus status, {int limit = 300}) {
-    return _firestore
+  /// Legacy + enum status strings for single-bucket queries (View Jobs, Daily
+  /// Review). Firestore stores both depending on doc age.
+  static List<String> _statusWhereIn(JobStatus status) => switch (status) {
+        JobStatus.open => ['open', 'Open'],
+        JobStatus.inProgress => ['inProgress', 'In Progress'],
+        JobStatus.monitor => ['monitor', 'monitoring', 'Monitoring'],
+        JobStatus.closed => ['closed', 'Closed'],
+      };
+
+  /// Server-filtered single-status stream with resilient retry + cache metadata.
+  Stream<JobCardListSnapshot> getJobCardsByStatusWithMeta(
+    JobStatus status, {
+    int limit = 300,
+  }) {
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.jobCards)
+          .where('status', whereIn: _statusWhereIn(status))
+          .limit(limit)
+          .snapshots(),
+      debugName: 'jobs_${status.name}',
+    ).map((snapshot) => (
+          cards: parseJobCards(snapshot.docs),
+          isFromCache: snapshot.metadata.isFromCache,
+        ));
+  }
+
+  Stream<List<JobCard>> getJobCardsByStatus(JobStatus status, {int limit = 300}) =>
+      getJobCardsByStatusWithMeta(status, limit: limit).map((m) => m.cards);
+
+  Stream<JobCardListSnapshot> getClosedJobCardsWithMeta({int? limit}) {
+    Query<Map<String, dynamic>> query = _firestore
         .collection(Collections.jobCards)
-        .where('status', isEqualTo: status.name)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) => parseJobCards(snapshot.docs));
+        .where('status', whereIn: _statusWhereIn(JobStatus.closed))
+        .orderBy('closedAt', descending: true);
+    if (limit != null) query = query.limit(limit);
+    return resilientSnapshots(
+      () => query.snapshots(),
+      debugName: 'jobs_closed',
+    ).map((snapshot) => (
+          cards: parseJobCards(snapshot.docs),
+          isFromCache: snapshot.metadata.isFromCache,
+        ));
+  }
+
+  /// View Jobs — four status streams merged safely (no spinner until all four
+  /// have answered; cache-empty shows "Waiting for connection…").
+  Stream<ViewJobCardsSnapshot> getViewJobCardsBundleWithMeta({
+    int statusLimit = 300,
+    int closedLimit = 200,
+  }) {
+    late StreamController<ViewJobCardsSnapshot> controller;
+    final subs = <StreamSubscription<JobCardListSnapshot>>[];
+
+    List<JobCard> open = [];
+    List<JobCard> inProgress = [];
+    List<JobCard> monitor = [];
+    List<JobCard> closed = [];
+    final ready = <String, bool>{
+      'open': false,
+      'inProgress': false,
+      'monitor': false,
+      'closed': false,
+    };
+    final fromCache = <String, bool>{
+      'open': true,
+      'inProgress': true,
+      'monitor': true,
+      'closed': true,
+    };
+
+    void emit() {
+      if (!allStreamSidesReady(ready.values)) return;
+      if (controller.isClosed) return;
+      controller.add((
+        open: open,
+        inProgress: inProgress,
+        monitor: monitor,
+        closed: closed,
+        isFromCache: mergedIsFromCache(
+          sidesHaveSnapshot: ready.values,
+          sidesFromCache: fromCache.values,
+        ),
+      ));
+    }
+
+    void subscribe() {
+      subs.add(getJobCardsByStatusWithMeta(JobStatus.open, limit: statusLimit)
+          .listen((snap) {
+        open = snap.cards;
+        ready['open'] = true;
+        fromCache['open'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(
+          getJobCardsByStatusWithMeta(JobStatus.inProgress, limit: statusLimit)
+              .listen((snap) {
+        inProgress = snap.cards;
+        ready['inProgress'] = true;
+        fromCache['inProgress'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(getJobCardsByStatusWithMeta(JobStatus.monitor, limit: statusLimit)
+          .listen((snap) {
+        monitor = snap.cards;
+        ready['monitor'] = true;
+        fromCache['monitor'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(getClosedJobCardsWithMeta(limit: closedLimit).listen((snap) {
+        closed = snap.cards;
+        ready['closed'] = true;
+        fromCache['closed'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+    }
+
+    controller = StreamController<ViewJobCardsSnapshot>(
+      onListen: subscribe,
+      onCancel: () {
+        for (final s in subs) {
+          s.cancel();
+        }
+      },
+    );
+    return controller.stream;
   }
 
   /// Daily Review scope: everything active plus jobs closed in the last
-  /// [closedWindow]. Replaces streaming the entire collection — closed jobs
-  /// older than the window have either been reviewed or never will be.
-  Stream<List<JobCard>> getActiveAndRecentlyClosedJobCards({
+  /// [closedWindow]. Merge waits for all four buckets before emitting.
+  Stream<JobCardListSnapshot> getActiveAndRecentlyClosedJobCardsWithMeta({
     Duration closedWindow = const Duration(days: 14),
   }) {
-    final controller = StreamController<List<JobCard>>();
+    late StreamController<JobCardListSnapshot> controller;
+    final subs = <StreamSubscription>[];
 
-    var open = <JobCard>[];
-    var inProgress = <JobCard>[];
-    var monitor = <JobCard>[];
-    var closed = <JobCard>[];
-
-    void emit() {
-      controller.add([...open, ...inProgress, ...monitor, ...closed]);
-    }
-
-    final subs = <StreamSubscription>[
-      getJobCardsByStatus(JobStatus.open).listen((j) {
-        open = j;
-        emit();
-      }, onError: controller.addError),
-      getJobCardsByStatus(JobStatus.inProgress).listen((j) {
-        inProgress = j;
-        emit();
-      }, onError: controller.addError),
-      getJobCardsByStatus(JobStatus.monitor).listen((j) {
-        monitor = j;
-        emit();
-      }, onError: controller.addError),
-      _firestore
-          .collection(Collections.jobCards)
-          .where('status', isEqualTo: 'closed')
-          .where('closedAt',
-              isGreaterThanOrEqualTo:
-                  Timestamp.fromDate(DateTime.now().subtract(closedWindow)))
-          .orderBy('closedAt', descending: true)
-          .snapshots()
-          .map((snapshot) => parseJobCards(snapshot.docs))
-          .listen((j) {
-        closed = j;
-        emit();
-      }, onError: controller.addError),
-    ];
-
-    controller.onCancel = () {
-      for (final s in subs) {
-        s.cancel();
-      }
+    List<JobCard> open = [];
+    List<JobCard> inProgress = [];
+    List<JobCard> monitor = [];
+    List<JobCard> closed = [];
+    final ready = <String, bool>{
+      'open': false,
+      'inProgress': false,
+      'monitor': false,
+      'closed': false,
+    };
+    final fromCache = <String, bool>{
+      'open': true,
+      'inProgress': true,
+      'monitor': true,
+      'closed': true,
     };
 
+    void emit() {
+      if (!allStreamSidesReady(ready.values)) return;
+      if (controller.isClosed) return;
+      controller.add((
+        cards: [...open, ...inProgress, ...monitor, ...closed],
+        isFromCache: mergedIsFromCache(
+          sidesHaveSnapshot: ready.values,
+          sidesFromCache: fromCache.values,
+        ),
+      ));
+    }
+
+    void subscribe() {
+      subs.add(getJobCardsByStatusWithMeta(JobStatus.open).listen((snap) {
+        open = snap.cards;
+        ready['open'] = true;
+        fromCache['open'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(getJobCardsByStatusWithMeta(JobStatus.inProgress).listen((snap) {
+        inProgress = snap.cards;
+        ready['inProgress'] = true;
+        fromCache['inProgress'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(getJobCardsByStatusWithMeta(JobStatus.monitor).listen((snap) {
+        monitor = snap.cards;
+        ready['monitor'] = true;
+        fromCache['monitor'] = snap.isFromCache;
+        emit();
+      }, onError: controller.addError));
+      subs.add(
+        resilientSnapshots(
+          () => _firestore
+              .collection(Collections.jobCards)
+              .where('status', whereIn: _statusWhereIn(JobStatus.closed))
+              .where(
+                'closedAt',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(
+                  DateTime.now().subtract(closedWindow),
+                ),
+              )
+              .orderBy('closedAt', descending: true)
+              .snapshots(),
+          debugName: 'jobs_recent_closed',
+        ).listen((snap) {
+          closed = parseJobCards(snap.docs);
+          ready['closed'] = true;
+          fromCache['closed'] = snap.metadata.isFromCache;
+          emit();
+        }, onError: controller.addError),
+      );
+    }
+
+    controller = StreamController<JobCardListSnapshot>(
+      onListen: subscribe,
+      onCancel: () {
+        for (final s in subs) {
+          s.cancel();
+        }
+      },
+    );
     return controller.stream;
   }
+
+  Stream<List<JobCard>> getActiveAndRecentlyClosedJobCards({
+    Duration closedWindow = const Duration(days: 14),
+  }) =>
+      getActiveAndRecentlyClosedJobCardsWithMeta(closedWindow: closedWindow)
+          .map((m) => m.cards);
 
   // ============================================================
     // TEST VERSION - WITHOUT jobCardNumber FILTER
@@ -1057,13 +1294,22 @@ class FirestoreService {
     }
   }
 
-  Stream<List<JobCard>> getClosedJobCards({int? limit}) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection(Collections.jobCards)
-        .where('status', isEqualTo: 'closed')
-        .orderBy('closedAt', descending: true);
-    if (limit != null) query = query.limit(limit);
-    return query.snapshots().map((snapshot) => parseJobCards(snapshot.docs));
+  Stream<List<JobCard>> getClosedJobCards({int? limit}) =>
+      getClosedJobCardsWithMeta(limit: limit).map((m) => m.cards);
+
+  /// Notification inbox items for [clockNo] — rules-gated on clockNum claim.
+  Stream<QuerySnapshot<Map<String, dynamic>>> getNotificationInboxSnapshots(
+    String clockNo,
+  ) {
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.notificationInbox)
+          .doc(clockNo)
+          .collection(Collections.notificationInboxItems)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      debugName: 'notification_inbox_list',
+    );
   }
 
   Stream<List<JobCard>> getInProgressJobCards() {

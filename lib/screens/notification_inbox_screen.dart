@@ -10,6 +10,7 @@ import '../utils/fleet_navigation.dart';
 import 'feedback_thread_screen.dart';
 import 'job_card_detail_screen.dart';
 import '../utils/screen_insets.dart';
+import '../utils/list_load_state.dart';
 
 // ---------------------------------------------------------------------------
 // NotificationInboxScreen
@@ -112,18 +113,42 @@ class _NotificationInboxScreenState
     return Scaffold(
       appBar: const CtpAppBar(title: 'Notification Inbox'),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _itemsRef!
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
+        stream: _firestoreService.getNotificationInboxSnapshots(clockNo),
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
           if (snap.hasError) {
             return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final docs = snap.data?.docs ?? [];
+          final querySnap = snap.data;
+          final docs = querySnap?.docs ?? [];
+          switch (decideListLoadState(
+            hasSnapshot: querySnap != null,
+            isEmpty: docs.isEmpty,
+            isFromCache: querySnap?.metadata.isFromCache ?? true,
+          )) {
+            case ListLoadState.loading:
+              return const Center(child: CircularProgressIndicator());
+            case ListLoadState.waitingForServer:
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Waiting for connection…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            case ListLoadState.empty:
+            case ListLoadState.data:
+              break;
+          }
           final unread = docs.where((d) => d.data()['read'] != true).toList();
           final read = docs.where((d) => d.data()['read'] == true).toList();
 
