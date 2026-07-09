@@ -38,6 +38,7 @@ import '../widgets/session_health_banner.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
 import '../widgets/geofence_health_banner.dart';
+import '../widgets/update_available_banner.dart';
 import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'manager_dashboard_screen.dart';
@@ -853,8 +854,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _rearmActiveJobsStreamIfStuck();
     DeviceHealthService().syncPermissionsToFirestore();
 
-    // Soft update check also runs on resume (still respects 4h cooldown),
-    // so long-lived sessions still learn about new APKs without a cold start.
+    // Soft banner / force screen — 24h network cadence; force re-blocks on resume.
     if (!kIsWeb && mounted) {
       try {
         await UpdateService().checkForUpdate(context);
@@ -895,9 +895,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         try {
+          // First pass (may lack employee for cohort match).
           await UpdateService().checkForUpdate(context);
         } catch (e) {
           debugPrint('Update check error: $e');
+        }
+        // Re-resolve channels once employee clock/dept are available.
+        if (mounted &&
+            (currentEmployee != null || realEmployee != null)) {
+          try {
+            await UpdateService().checkForUpdateIgnoringCooldown(context);
+          } catch (e) {
+            debugPrint('Update cohort re-check: $e');
+          }
         }
         try {
           await NotificationService().checkPendingJobNavigation();
@@ -2399,6 +2409,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       body: Column(
         children: [
           const SessionHealthBanner(),
+          const UpdateAvailableBanner(),
           const PersonaBanner(),
           const SyncIndicator(),
           Expanded(

@@ -24,7 +24,8 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ### For admins
 
-- **Admin → App Update Control → Publish release** — one form for the shared APK URL, soft-update version/build/notes/force flag, optional SHA-256, and min supported build. **Save publish** writes `settings/app` (clients use this when Remote Config is empty). **Copy RC keys** pastes the same values for the Firebase Remote Config console.
+- **Targeted in-app updates** — soft release = Home **banner** only (Later snoozes 24h); force = full-screen until install. Channels: **Default** (factory), **Ink** (department), **Testers** (clock list). Force can target Ink only without forcing the whole factory. Update check cadence **24 hours**. Admin → App Update Control multi-channel publish; old APKs still only see the Default channel.
+- **Admin → App Update Control → Publish release** — shared APK URL, channel metadata, force per channel, min supported build (kill-switch). **Save publish** writes `settings/app.updateChannels` + legacy Default fields. **Copy RC keys** = Default channel only.
 
 ---
 

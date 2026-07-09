@@ -22,6 +22,7 @@ import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../utils/update_channels.dart';
 
 // ---------------------------------------------------------------------------
 // AdminScreen
@@ -52,14 +53,35 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   String? selectedAreaForMachine;
   Map<String, dynamic> _structure = {};
 
-  // ── Settings — kill-switch + soft publish (settings/app) ──────────────────
+  // ── Settings — kill-switch + channel publish (settings/app) ────────────────
   final TextEditingController _minBuildController = TextEditingController();
   final TextEditingController _updateUrlController = TextEditingController();
+  // Default channel
   final TextEditingController _pubVersionController = TextEditingController();
   final TextEditingController _pubBuildController = TextEditingController();
   final TextEditingController _pubNotesController = TextEditingController();
   final TextEditingController _pubShaController = TextEditingController();
   bool _pubForceUpdate = false;
+  bool _defaultEnabled = true;
+  // Ink channel
+  bool _inkEnabled = false;
+  bool _inkForce = false;
+  final TextEditingController _inkVersionController = TextEditingController();
+  final TextEditingController _inkBuildController = TextEditingController();
+  final TextEditingController _inkNotesController = TextEditingController();
+  final TextEditingController _inkUrlController = TextEditingController();
+  final TextEditingController _inkShaController = TextEditingController();
+  final TextEditingController _inkDeptsController =
+      TextEditingController(text: 'Ink Factory');
+  // Testers channel
+  bool _testersEnabled = false;
+  bool _testersForce = false;
+  final TextEditingController _testersVersionController = TextEditingController();
+  final TextEditingController _testersBuildController = TextEditingController();
+  final TextEditingController _testersNotesController = TextEditingController();
+  final TextEditingController _testersUrlController = TextEditingController();
+  final TextEditingController _testersShaController = TextEditingController();
+  final TextEditingController _testersClocksController = TextEditingController();
   bool _killSwitchLoading = true;
   String? _thisDeviceBuildLabel;
   String? _thisDeviceVersion;
@@ -160,6 +182,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _pubBuildController.dispose();
     _pubNotesController.dispose();
     _pubShaController.dispose();
+    _inkVersionController.dispose();
+    _inkBuildController.dispose();
+    _inkNotesController.dispose();
+    _inkUrlController.dispose();
+    _inkShaController.dispose();
+    _inkDeptsController.dispose();
+    _testersVersionController.dispose();
+    _testersBuildController.dispose();
+    _testersNotesController.dispose();
+    _testersUrlController.dispose();
+    _testersShaController.dispose();
+    _testersClocksController.dispose();
     _stage1MinController.dispose();
     _stage2MinController.dispose();
     _stage3MinController.dispose();
@@ -236,18 +270,42 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         deviceBuild = info.buildNumber;
         deviceLabel = 'v${info.version} (build ${info.buildNumber})';
       } catch (_) {}
+      final channels = channelsFromSettingsApp(data);
+      UpdateChannel ch(String id) =>
+          channels.firstWhere((c) => c.id == id, orElse: () => UpdateChannel(id: id));
+      final def = ch('default');
+      final ink = ch('ink');
+      final testers = ch('testers');
       if (!mounted) return;
       setState(() {
         _minBuildController.text = (data['minSupportedBuild'] ?? '').toString();
         _updateUrlController.text = (data['updateDownloadUrl'] ?? '').toString();
-        _pubVersionController.text =
-            (data['publishedLatestVersion'] ?? '').toString();
-        _pubBuildController.text =
-            (data['publishedLatestBuild'] ?? '').toString();
-        _pubNotesController.text =
-            (data['publishedReleaseNotes'] ?? '').toString();
-        _pubShaController.text = (data['publishedApkSha256'] ?? '').toString();
-        _pubForceUpdate = data['publishedForceUpdate'] == true;
+        _defaultEnabled = def.enabled;
+        _pubVersionController.text = def.latestVersion;
+        _pubBuildController.text = def.latestBuild;
+        _pubNotesController.text = def.releaseNotes;
+        _pubShaController.text = def.apkSha256;
+        _pubForceUpdate = def.forceUpdate;
+        _inkEnabled = ink.enabled &&
+            (ink.hasPublishMetadata || ink.match.departments.isNotEmpty);
+        _inkForce = ink.forceUpdate;
+        _inkVersionController.text = ink.latestVersion;
+        _inkBuildController.text = ink.latestBuild;
+        _inkNotesController.text = ink.releaseNotes;
+        _inkUrlController.text = ink.downloadUrl;
+        _inkShaController.text = ink.apkSha256;
+        _inkDeptsController.text = ink.match.departments.isEmpty
+            ? 'Ink Factory'
+            : ink.match.departments.join(', ');
+        _testersEnabled = testers.enabled &&
+            (testers.hasPublishMetadata || testers.match.clockNos.isNotEmpty);
+        _testersForce = testers.forceUpdate;
+        _testersVersionController.text = testers.latestVersion;
+        _testersBuildController.text = testers.latestBuild;
+        _testersNotesController.text = testers.releaseNotes;
+        _testersUrlController.text = testers.downloadUrl;
+        _testersShaController.text = testers.apkSha256;
+        _testersClocksController.text = testers.match.clockNos.join(', ');
         _thisDeviceBuildLabel = deviceLabel;
         _thisDeviceVersion = deviceVersion;
         _thisDeviceBuild = deviceBuild;
@@ -269,6 +327,34 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     });
   }
 
+  void _fillInkFromThisDevice() {
+    setState(() {
+      if (_thisDeviceVersion != null) {
+        _inkVersionController.text = _thisDeviceVersion!;
+      }
+      if (_thisDeviceBuild != null) {
+        _inkBuildController.text = _thisDeviceBuild!;
+      }
+    });
+  }
+
+  void _fillTestersFromThisDevice() {
+    setState(() {
+      if (_thisDeviceVersion != null) {
+        _testersVersionController.text = _thisDeviceVersion!;
+      }
+      if (_thisDeviceBuild != null) {
+        _testersBuildController.text = _thisDeviceBuild!;
+      }
+    });
+  }
+
+  List<String> _splitCsv(String raw) => raw
+      .split(RegExp(r'[,;\n]'))
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+
   Future<void> _copyRemoteConfigSnippet() async {
     final version = _pubVersionController.text.trim();
     final build = _pubBuildController.text.trim();
@@ -276,6 +362,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final notes = _pubNotesController.text.trim();
     final sha = _pubShaController.text.trim();
     final snippet = [
+      '# Default channel only (cohorts are Firestore updateChannels)',
       'latest_version = $version',
       'latest_build = $build',
       'download_url = $url',
@@ -285,7 +372,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     ].join('\n');
     await Clipboard.setData(ClipboardData(text: snippet));
     if (mounted) {
-      _showSuccess('Remote Config key list copied to clipboard');
+      _showSuccess('Default-channel RC keys copied (cohorts use Firestore)');
     }
   }
 
@@ -366,32 +453,117 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
     final pubBuild = _pubBuildController.text.trim();
     if (pubBuild.isNotEmpty && int.tryParse(pubBuild) == null) {
-      _showError('Published latest build must be a whole number');
+      _showError('Default channel latest build must be a whole number');
       return;
     }
     final pubVersion = _pubVersionController.text.trim();
     if (pubVersion.isNotEmpty && url.isEmpty) {
       _showError(
-        'Set the shared download URL before publishing a soft update version.',
+        'Set the shared download URL before publishing a default channel version.',
       );
       return;
     }
+    if (_inkEnabled) {
+      final ib = _inkBuildController.text.trim();
+      if (ib.isNotEmpty && int.tryParse(ib) == null) {
+        _showError('Ink channel build must be a whole number');
+        return;
+      }
+      if (_inkVersionController.text.trim().isNotEmpty &&
+          url.isEmpty &&
+          _inkUrlController.text.trim().isEmpty) {
+        _showError('Ink channel needs a download URL (channel or shared).');
+        return;
+      }
+    }
+    if (_testersEnabled) {
+      final tb = _testersBuildController.text.trim();
+      if (tb.isNotEmpty && int.tryParse(tb) == null) {
+        _showError('Testers channel build must be a whole number');
+        return;
+      }
+      if (_testersClocksController.text.trim().isEmpty) {
+        _showError('Testers channel needs at least one clock number.');
+        return;
+      }
+    }
+
+    final defaultCh = UpdateChannel(
+      id: 'default',
+      enabled: _defaultEnabled,
+      latestVersion: pubVersion,
+      latestBuild: pubBuild,
+      downloadUrl: url,
+      releaseNotes: _pubNotesController.text.trim(),
+      apkSha256: _pubShaController.text.trim(),
+      forceUpdate: _pubForceUpdate,
+    );
+    final inkCh = UpdateChannel(
+      id: 'ink',
+      enabled: _inkEnabled,
+      match: UpdateChannelMatch(departments: _splitCsv(_inkDeptsController.text)),
+      latestVersion: _inkVersionController.text.trim(),
+      latestBuild: _inkBuildController.text.trim(),
+      downloadUrl: _inkUrlController.text.trim(),
+      releaseNotes: _inkNotesController.text.trim(),
+      apkSha256: _inkShaController.text.trim(),
+      forceUpdate: _inkForce,
+    );
+    final testersCh = UpdateChannel(
+      id: 'testers',
+      enabled: _testersEnabled,
+      match: UpdateChannelMatch(clockNos: _splitCsv(_testersClocksController.text)),
+      latestVersion: _testersVersionController.text.trim(),
+      latestBuild: _testersBuildController.text.trim(),
+      downloadUrl: _testersUrlController.text.trim(),
+      releaseNotes: _testersNotesController.text.trim(),
+      apkSha256: _testersShaController.text.trim(),
+      forceUpdate: _testersForce,
+    );
+
+    if (_inkEnabled &&
+        _inkForce &&
+        defaultCh.latestBuild.isNotEmpty &&
+        inkCh.latestBuild == defaultCh.latestBuild) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ink force same as default?'),
+          content: const Text(
+            'Ink force build equals the default channel build. Old APKs that '
+            'only read default/legacy fields will prompt the whole factory. '
+            'Prefer a higher ink-only build, or leave default lower.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save anyway')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+
     try {
-      await FirebaseFirestore.instance.collection('settings').doc('app').set({
+      final payload = <String, dynamic>{
         if (build != null) 'minSupportedBuild': build,
         if (url.isNotEmpty) 'updateDownloadUrl': url,
-        'publishedLatestVersion': pubVersion,
-        'publishedLatestBuild': pubBuild,
-        'publishedReleaseNotes': _pubNotesController.text.trim(),
-        'publishedApkSha256': _pubShaController.text.trim(),
-        'publishedForceUpdate': _pubForceUpdate,
+        'updateChannels': {
+          'default': defaultCh.toMap(),
+          'ink': inkCh.toMap(),
+          'testers': testersCh.toMap(),
+        },
+        // Legacy mirror of DEFAULT only — old APKs never see ink/testers.
+        ...legacyPublishFieldsFromDefault(defaultCh),
         'publishedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('app')
+          .set(payload, SetOptions(merge: true));
       if (mounted) {
         _showSuccess(
-          'Publish saved to settings/app. Clients use this when Remote Config '
-          'is empty. Optionally paste the same keys into Firebase Remote Config '
-          '(Copy RC keys).',
+          'Publish saved. New APKs use channels (Ink/Testers/Default). '
+          'Old APKs only see the Default channel. Optional: Copy RC keys for default only.',
         );
       }
     } catch (e) {
@@ -1759,6 +1931,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }).toList();
   }
 
+  Widget _channelHeader(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Settings tab ──────────────────────────────────────────────────────────
 
   Widget _buildSettingsTab() {
@@ -1766,7 +1954,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       padding: ScreenInsets.symmetricScroll(context),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-        // ── App Update Control (kill-switch + soft publish) ────────────────
+        // ── App Update Control (channels + kill-switch) ─────────────────────
         _sectionHeader('APP UPDATE CONTROL'),
         _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -1776,9 +1964,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           ]),
           const SizedBox(height: 4),
           Text(
-            'One form for the shared APK URL, soft-update metadata (clients read when '
-            'Remote Config is empty), and the hard kill-switch. Prefer this over '
-            'editing RC alone so floor devices stay in sync.',
+            'Channels: Default (everyone), Ink (department), Testers (clock list). '
+            'Soft = Home banner only. Force = full-screen until install. '
+            'Match order: Testers → Ink → Default. Old APKs only see Default.',
             style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
           ),
           if (_thisDeviceBuildLabel != null) ...[
@@ -1792,7 +1980,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           _killSwitchLoading
               ? const Center(child: CircularProgressIndicator())
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Shared download URL',
+                  Text('Shared download URL (fallback)',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
                   const SizedBox(height: 6),
                   TextField(
@@ -1801,9 +1989,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     keyboardType: TextInputType.url,
                   ),
                   const SizedBox(height: 16),
-                  Text('Soft update (prompt on Home)',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
-                  const SizedBox(height: 6),
+                  _channelHeader('Default (factory)', 'Banner if soft · full-screen if force'),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enabled', style: TextStyle(fontSize: 14)),
+                    value: _defaultEnabled,
+                    activeThumbColor: kBrandOrange,
+                    onChanged: (v) => setState(() => _defaultEnabled = v),
+                  ),
                   Row(children: [
                     Expanded(
                       child: TextField(
@@ -1816,57 +2009,174 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       child: TextField(
                         controller: _pubBuildController,
                         keyboardType: TextInputType.number,
-                        decoration: _inputDecoration('Latest build', hint: '131'),
+                        decoration: _inputDecoration('Latest build', hint: '135'),
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _fillPublishFromThisDevice,
-                      icon: const Icon(Icons.phone_android, size: 18),
-                      label: const Text('Fill version from this device'),
-                    ),
+                  TextButton.icon(
+                    onPressed: _fillPublishFromThisDevice,
+                    icon: const Icon(Icons.phone_android, size: 18),
+                    label: const Text('Fill version from this device'),
                   ),
                   TextField(
                     controller: _pubNotesController,
-                    maxLines: 3,
-                    decoration: _inputDecoration(
-                      'Short release notes (dialog)',
-                      hint: 'Optional — What’s changed sheet still uses CHANGELOG.md',
-                    ),
+                    maxLines: 2,
+                    decoration: _inputDecoration('Release notes', hint: 'Optional'),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: _pubShaController,
                     decoration: _inputDecoration('APK SHA-256 (optional)', hint: '64 hex chars'),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Force soft update (non-dismissible)', style: TextStyle(fontSize: 14)),
+                    title: const Text('Force update (default channel)', style: TextStyle(fontSize: 14)),
                     subtitle: Text(
-                      'Still not a hard block — use Min supported build to retire broken APKs.',
+                      'Full-screen block for everyone on Default. Soft = banner only.',
                       style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
                     ),
                     value: _pubForceUpdate,
                     activeThumbColor: kBrandOrange,
                     onChanged: (v) => setState(() => _pubForceUpdate = v),
                   ),
-                  const SizedBox(height: 8),
-                  Text('Hard kill-switch',
+                  const Divider(height: 28),
+                  _channelHeader('Ink Factory', 'Force only ink users when needed'),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enabled', style: TextStyle(fontSize: 14)),
+                    value: _inkEnabled,
+                    activeThumbColor: kBrandOrange,
+                    onChanged: (v) => setState(() => _inkEnabled = v),
+                  ),
+                  if (_inkEnabled) ...[
+                    TextField(
+                      controller: _inkDeptsController,
+                      decoration: _inputDecoration('Departments (comma-separated)', hint: 'Ink Factory'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inkVersionController,
+                          decoration: _inputDecoration('Version', hint: '2.3.0'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _inkBuildController,
+                          keyboardType: TextInputType.number,
+                          decoration: _inputDecoration('Build', hint: '136'),
+                        ),
+                      ),
+                    ]),
+                    TextButton.icon(
+                      onPressed: _fillInkFromThisDevice,
+                      icon: const Icon(Icons.phone_android, size: 18),
+                      label: const Text('Fill from this device'),
+                    ),
+                    TextField(
+                      controller: _inkUrlController,
+                      decoration: _inputDecoration('Channel APK URL (optional)', hint: 'Empty = shared URL'),
+                      keyboardType: TextInputType.url,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _inkNotesController,
+                      maxLines: 2,
+                      decoration: _inputDecoration('Notes', hint: 'Ink-specific changes'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _inkShaController,
+                      decoration: _inputDecoration('SHA-256 (optional)', hint: '64 hex'),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Force update Ink only', style: TextStyle(fontSize: 14)),
+                      subtitle: Text(
+                        'Does not force other departments. Keep Default build lower so old APKs stay quiet.',
+                        style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
+                      ),
+                      value: _inkForce,
+                      activeThumbColor: kBrandOrange,
+                      onChanged: (v) => setState(() => _inkForce = v),
+                    ),
+                  ],
+                  const Divider(height: 28),
+                  _channelHeader('Testers', 'Clock-number list — highest priority'),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enabled', style: TextStyle(fontSize: 14)),
+                    value: _testersEnabled,
+                    activeThumbColor: kBrandOrange,
+                    onChanged: (v) => setState(() => _testersEnabled = v),
+                  ),
+                  if (_testersEnabled) ...[
+                    TextField(
+                      controller: _testersClocksController,
+                      decoration: _inputDecoration('Clock numbers', hint: '22, 50, 101'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _testersVersionController,
+                          decoration: _inputDecoration('Version', hint: '2.4.0'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _testersBuildController,
+                          keyboardType: TextInputType.number,
+                          decoration: _inputDecoration('Build', hint: '140'),
+                        ),
+                      ),
+                    ]),
+                    TextButton.icon(
+                      onPressed: _fillTestersFromThisDevice,
+                      icon: const Icon(Icons.phone_android, size: 18),
+                      label: const Text('Fill from this device'),
+                    ),
+                    TextField(
+                      controller: _testersUrlController,
+                      decoration: _inputDecoration('Channel APK URL (optional)', hint: 'Empty = shared URL'),
+                      keyboardType: TextInputType.url,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _testersNotesController,
+                      maxLines: 2,
+                      decoration: _inputDecoration('Notes', hint: 'Dev only'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _testersShaController,
+                      decoration: _inputDecoration('SHA-256 (optional)', hint: '64 hex'),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Force update testers', style: TextStyle(fontSize: 14)),
+                      value: _testersForce,
+                      activeThumbColor: kBrandOrange,
+                      onChanged: (v) => setState(() => _testersForce = v),
+                    ),
+                  ],
+                  const Divider(height: 28),
+                  Text('Hard kill-switch (everyone)',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).appColors.textMuted)),
                   const SizedBox(height: 6),
                   TextField(
                     controller: _minBuildController,
                     keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('Min supported build', hint: 'e.g. 130 — blocks older builds at launch'),
+                    decoration: _inputDecoration('Min supported build', hint: 'Blocks ALL older builds at launch'),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Checklist: (1) bump pubspec +N (2) prepend docs/CHANGELOG.md with (build N) '
-                    '(3) upload APK to the URL above (4) Save here (5) optional: Copy RC keys into Firebase Console '
-                    '(6) raise min build only when retiring old APKs.',
+                    'Checklist: (1) bump pubspec (2) CHANGELOG (3) host APK (4) set channel(s) (5) Save '
+                    '(6) Copy RC only for Default if needed (7) min build only to retire broken APKs factory-wide. '
+                    'Checks run every 24h; force re-blocks on resume.',
                     style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted, height: 1.35),
                   ),
                   const SizedBox(height: 12),
