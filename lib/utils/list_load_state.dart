@@ -35,6 +35,21 @@ ListLoadState decideListLoadState({
   return isFromCache ? ListLoadState.waitingForServer : ListLoadState.empty;
 }
 
+/// Multi-stream merges (My Work, View Jobs, Daily Review) must not emit until
+/// every side has seen at least one snapshot — otherwise a slow/parked query
+/// leaves `isFromCache` stuck true and the UI spins forever.
+bool allStreamSidesReady(Iterable<bool> sidesHaveSnapshot) =>
+    sidesHaveSnapshot.every((ready) => ready);
+
+/// After [allStreamSidesReady], true when any side is still cache-only.
+bool mergedIsFromCache({
+  required Iterable<bool> sidesHaveSnapshot,
+  required Iterable<bool> sidesFromCache,
+}) {
+  if (!allStreamSidesReady(sidesHaveSnapshot)) return true;
+  return sidesFromCache.any((fromCache) => fromCache);
+}
+
 /// Whether a missing employee doc should be treated as a real deletion.
 /// A cache miss while offline reports `exists == false` without the server
 /// ever being asked — acting on that would wrongly log the user out.

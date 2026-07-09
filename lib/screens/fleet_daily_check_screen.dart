@@ -407,29 +407,27 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
     return Scaffold(
       appBar: FleetAppBar(title: title),
       bottomNavigationBar: _mode == _CheckMode.start
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: FilledButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: _submitting
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: theme.colorScheme.onPrimary,
-                          ),
-                        )
-                      : const Icon(Icons.check_circle_outline),
-                  label: Text(
-                    _submitting ? 'Saving…' : 'Complete safety check',
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: kBrandOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+          ? SafeBottomBar(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: FilledButton.icon(
+                onPressed: _submitting ? null : _submit,
+                icon: _submitting
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      )
+                    : const Icon(Icons.check_circle_outline),
+                label: Text(
+                  _submitting ? 'Saving…' : 'Complete safety check',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: kBrandOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             )
@@ -437,7 +435,15 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
       body: ListView(
         controller: _scrollCtrl,
         primary: false,
-        padding: ScreenInsets.symmetricScroll(context),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          ScreenInsets.scrollBottomFullScreen(
+            context,
+            extra: _mode == _CheckMode.start ? 88 : ScreenInsets.spacing,
+          ),
+        ),
         children: [
           if (_mode == _CheckMode.start) ...[
             if (_config.instructions.isNotEmpty) ...[
@@ -548,7 +554,6 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
             ),
           ],
 
-          const SizedBox(height: 80),
         ],
       ),
     );

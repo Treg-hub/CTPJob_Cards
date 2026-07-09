@@ -72,6 +72,37 @@ void main() {
     });
   });
 
+  group('merged stream helpers', () {
+    test('allStreamSidesReady requires every side', () {
+      expect(allStreamSidesReady([true, true]), isTrue);
+      expect(allStreamSidesReady([true, false]), isFalse);
+    });
+
+    test('mergedIsFromCache waits for all sides then ORs cache flags', () {
+      expect(
+        mergedIsFromCache(
+          sidesHaveSnapshot: [true, false],
+          sidesFromCache: [false, true],
+        ),
+        isTrue,
+      );
+      expect(
+        mergedIsFromCache(
+          sidesHaveSnapshot: [true, true],
+          sidesFromCache: [false, false],
+        ),
+        isFalse,
+      );
+      expect(
+        mergedIsFromCache(
+          sidesHaveSnapshot: [true, true],
+          sidesFromCache: [false, true],
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('shouldTreatEmployeeMissing', () {
     test('only a server-confirmed absence counts as missing', () {
       expect(shouldTreatEmployeeMissing(exists: false, isFromCache: false),
