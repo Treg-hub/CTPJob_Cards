@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_add_stock_item_screen.dart';
 import 'waste_stock_item_detail_screen.dart';
+import '../utils/list_load_state.dart';
 
 class WasteStockInventoryScreen extends ConsumerStatefulWidget {
   const WasteStockInventoryScreen({super.key});
@@ -93,19 +94,46 @@ class _WasteStockInventoryScreenState
           ),
           _StockSummaryCard(wasteService: _wasteService),
           Expanded(
-            child: StreamBuilder<List<WasteStockItem>>(
-              stream: _wasteService.watchAllStockOnSite(),
+            child: StreamBuilder<WasteStockListSnapshot>(
+              stream: _wasteService.watchAllStockOnSiteWithMeta(),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return _QueryErrorState(
                     onRetry: () => setState(() {}),
                   );
                 }
-                if (snap.connectionState == ConnectionState.waiting &&
-                    !snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                final meta = snap.data;
+                switch (decideListLoadState(
+                  hasSnapshot: meta != null,
+                  isEmpty: meta?.items.isEmpty ?? true,
+                  isFromCache: meta?.isFromCache ?? true,
+                )) {
+                  case ListLoadState.loading:
+                    return const Center(child: CircularProgressIndicator());
+                  case ListLoadState.waitingForServer:
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Waiting for connection…',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  case ListLoadState.empty:
+                  case ListLoadState.data:
+                    break;
                 }
-                final items = (snap.data ?? [])
+                final items = (meta!.items)
                     .where((i) => canViewWasteStockInInventory(
                           employee: currentEmployee,
                           settings: _wasteSettings,

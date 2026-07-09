@@ -27,6 +27,12 @@ import '../utils/waste_stock_snapshot.dart';
 import '../utils/waste_type_routing.dart';
 import '../models/waste_stock_source.dart';
 import 'copper_service.dart';
+import 'resilient_stream.dart';
+
+/// Waste home active-load stream carries cache metadata for loading UI.
+typedef WasteLoadListSnapshot = ({List<WasteLoad> loads, bool isFromCache});
+
+typedef WasteStockListSnapshot = ({List<WasteStockItem> items, bool isFromCache});
 
 /// Service for all WasteTrack (Waste Management) operations.
 ///
@@ -433,22 +439,29 @@ class WasteService {
   /// Active (in-flight) loads from the last [homeListWindow]: draft,
   /// pendingWeighbridge, pendingCostReview. Older stragglers remain visible
   /// in Pulse. Used by [WasteHomeScreen] together with [watchRecentCompleted].
-  Stream<List<WasteLoad>> watchActiveLoads() {
-    return _firestore
-        .collection(Collections.wasteLoads)
-        .where('is_deleted', isEqualTo: false)
-        .where('status', whereIn: [
-          WasteLoadStatus.draft.value,
-          WasteLoadStatus.pendingWeighbridge.value,
-          WasteLoadStatus.pendingCostReview.value,
-          'in_progress', // future-proofing — set by web/Pulse, no mobile enum yet
-        ])
-        .where('createdAt', isGreaterThanOrEqualTo: _homeWindowCutoff)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
+  Stream<WasteLoadListSnapshot> watchActiveLoadsWithMeta() {
+    return resilientSnapshots(
+      () => _firestore
+          .collection(Collections.wasteLoads)
+          .where('is_deleted', isEqualTo: false)
+          .where('status', whereIn: [
+            WasteLoadStatus.draft.value,
+            WasteLoadStatus.pendingWeighbridge.value,
+            WasteLoadStatus.pendingCostReview.value,
+            'in_progress', // future-proofing — set by web/Pulse, no mobile enum yet
+          ])
+          .where('createdAt', isGreaterThanOrEqualTo: _homeWindowCutoff)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      debugName: 'waste_active_loads',
+    ).map((snap) => (
+          loads: snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList(),
+          isFromCache: snap.metadata.isFromCache,
+        ));
   }
+
+  Stream<List<WasteLoad>> watchActiveLoads() =>
+      watchActiveLoadsWithMeta().map((m) => m.loads);
 
   /// The [limit] most-recently completed or cancelled loads within
   /// [homeListWindow]. Used by [WasteHomeScreen] "Recent" section.
@@ -2219,6 +2232,7 @@ class WasteService {
     required String stockId,
     required String subtype,
     double? estimatedWeightKg,
+    int? quantity,
     String? notes,
     required List<String> keptPhotoUrls,
     required List<String> newLocalPhotoPaths,
@@ -2264,6 +2278,7 @@ class WasteService {
       'subtype': subtype,
       'waste_type': subtype,
       'estimated_weight_kg': estimatedWeightKg,
+      if (quantity != null) 'quantity': quantity,
       'notes': notes,
       'photos': photoUrls,
       'updated_at': online ? FieldValue.serverTimestamp() : Timestamp.fromDate(now),
@@ -2273,6 +2288,7 @@ class WasteService {
       'subtype': subtype,
       'waste_type': subtype,
       if (estimatedWeightKg != null) 'estimated_weight_kg': estimatedWeightKg,
+      if (quantity != null) 'quantity': quantity,
       if (notes != null) 'notes': notes,
       'photos': photoUrls,
       'updated_at': now.toIso8601String(),
@@ -2328,21 +2344,18 @@ class WasteService {
   /// `is_deleted` / `status` / sort client-side so we don't depend on a
   /// 4-field composite index that may not be deployed yet.
   /// All on-site stock across every waste type (newest first).
-  Stream<List<WasteStockItem>> watchAllStockOnSite() {
-    return _firestore
-        .collection(Collections.wasteStock)
-        .snapshots()
-        .map(_filterOnSiteStockDocs)
-        .transform(
-          StreamTransformer<List<WasteStockItem>, List<WasteStockItem>>.fromHandlers(
-            handleData: (data, sink) => sink.add(data),
-            handleError: (error, stackTrace, sink) {
-              debugPrint('watchAllStockOnSite error: $error');
-              sink.add(<WasteStockItem>[]);
-            },
-          ),
-        );
+  Stream<WasteStockListSnapshot> watchAllStockOnSiteWithMeta() {
+    return resilientSnapshots(
+      () => _firestore.collection(Collections.wasteStock).snapshots(),
+      debugName: 'waste_stock_on_site',
+    ).map((snap) => (
+          items: _filterOnSiteStockDocs(snap),
+          isFromCache: snap.metadata.isFromCache,
+        ));
   }
+
+  Stream<List<WasteStockItem>> watchAllStockOnSite() =>
+      watchAllStockOnSiteWithMeta().map((m) => m.items);
 
   Stream<List<WasteStockItem>> watchStockOnSite(String wasteType) {
     return _firestore

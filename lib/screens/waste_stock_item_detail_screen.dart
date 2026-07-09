@@ -12,6 +12,8 @@ import '../theme/app_theme.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_add_stock_item_screen.dart';
 import '../utils/screen_insets.dart';
+import '../utils/waste_type_routing.dart';
+import '../models/waste_type.dart';
 
 class WasteStockItemDetailScreen extends ConsumerStatefulWidget {
   const WasteStockItemDetailScreen({super.key, required this.item});
@@ -27,6 +29,7 @@ class _WasteStockItemDetailScreenState
     extends ConsumerState<WasteStockItemDetailScreen> {
   final WasteService _wasteService = WasteService();
   WasteSettings? _wasteSettings;
+  List<WasteType> _wasteTypes = [];
   bool _deleting = false;
 
   @override
@@ -35,7 +38,17 @@ class _WasteStockItemDetailScreenState
     _wasteService.getWasteSettings().then((s) {
       if (mounted) setState(() => _wasteSettings = s);
     });
+    _wasteService.watchWasteTypes().first.then((types) {
+      if (mounted) setState(() => _wasteTypes = types);
+    }).catchError((_) {});
   }
+
+  bool _isQtyOnly(WasteStockItem item) =>
+      item.isQuantityOnlyType ||
+      stockTypeIsQuantityOnly(
+        item.subtype.isNotEmpty ? item.subtype : item.wasteType,
+        _wasteTypes,
+      );
 
   bool get _isOnSite => widget.item.status == WasteStockStatus.onSite;
 
@@ -196,14 +209,23 @@ class _WasteStockItemDetailScreenState
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.scale,
-                    label: 'Estimated weight',
-                    value: item.estimatedWeightKg != null
-                        ? '~${formatSAWeight(item.estimatedWeightKg!)}'
-                        : 'Not recorded',
-                    onSurface: onSurface,
-                  ),
+                  if (_isQtyOnly(item))
+                    _InfoRow(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Quantity on site',
+                      value:
+                          '${item.quantity} unit${item.quantity == 1 ? '' : 's'}',
+                      onSurface: onSurface,
+                    )
+                  else
+                    _InfoRow(
+                      icon: Icons.scale,
+                      label: 'Estimated weight',
+                      value: item.estimatedWeightKg != null
+                          ? '~${formatSAWeight(item.estimatedWeightKg!)}'
+                          : 'Not recorded',
+                      onSurface: onSurface,
+                    ),
                   const SizedBox(height: 4),
                   _InfoRow(
                     icon: Icons.person_outline,

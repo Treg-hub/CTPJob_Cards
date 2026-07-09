@@ -1,4 +1,5 @@
 import '../models/waste_item.dart';
+import '../models/waste_stock_source.dart';
 import '../models/waste_type.dart';
 
 /// Routing and measurement rules for waste types.
@@ -79,4 +80,19 @@ String itemMeasureLabel(WasteItem item) {
 
 String itemRateColumnLabel(WasteItem item) {
   return item.isQuantityOnly ? 'R/unit' : 'R/kg';
+}
+
+/// On-site stock uses subtype/waste_type names — align with Pulse waste_types.
+bool stockTypeIsQuantityOnly(String typeName, List<WasteType> allTypes) {
+  final type = findWasteTypeByName(typeName, allTypes);
+  if (type != null) return type.isQuantityOnly;
+  return typeName == WasteStockTypes.ibcBins;
+}
+
+String stockQuantityLabelFor(String typeName, List<WasteType> allTypes) {
+  final type = findWasteTypeByName(typeName, allTypes);
+  if (type == null) {
+    return typeName == WasteStockTypes.ibcBins ? 'Quantity (bins)' : 'Quantity';
+  }
+  return type.quantityLabelFor(typeName);
 }
