@@ -32,6 +32,7 @@ import 'services/device_health_service.dart';
 import 'services/kiosk_mode_service.dart';
 import 'services/location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'utils/update_channels.dart';
 import 'widgets/kiosk_lifecycle_guard.dart';
 
 /// Logged-in employee (never replaced by UI persona).
@@ -174,13 +175,17 @@ void main() async {
           .doc('app')
           .get()
           .timeout(const Duration(seconds: 4));
-      final minBuild = settingsDoc.data()?['minSupportedBuild'];
+      final settingsData = settingsDoc.data();
+      final minBuild = settingsData?['minSupportedBuild'];
       if (minBuild is num && minBuild > 0) {
         final info = await PackageInfo.fromPlatform();
         final currentBuild = int.tryParse(info.buildNumber) ?? 0;
         if (currentBuild > 0 && currentBuild < minBuild.toInt()) {
-          final url = settingsDoc.data()?['updateDownloadUrl'] as String? ?? '';
-          _crumb('killswitch-blocked build=$currentBuild min=$minBuild');
+          // Shared URL first, then default/channel URLs so kill-switch is not
+          // bricked when only updateChannels.*downloadUrl is set.
+          final url = resolveKillSwitchDownloadUrl(settingsData);
+          _crumb(
+              'killswitch-blocked build=$currentBuild min=$minBuild url=${url.isNotEmpty}');
           KioskModeService.instance.reassertIfEnabled();
           runApp(KioskLifecycleGuard(child: UpdateRequiredScreen(downloadUrl: url)));
           return;

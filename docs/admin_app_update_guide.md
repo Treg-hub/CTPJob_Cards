@@ -12,9 +12,9 @@ You control which devices are **offered** or **forced** to install a new APK **w
 
 | Concept | Meaning |
 |---------|---------|
-| **Soft update** | Home shows an **orange banner** (Update / Later). User can keep working. Later snoozes ~24 hours. |
-| **Force update** | **Full-screen** block until they install. Back button blocked. Re-shows on app resume if still behind. |
-| **Kill-switch** | `Min supported build` — **everyone** below that number is blocked **at app launch**. Use only for broken builds factory-wide. |
+| **Soft update** | Home shows an **orange banner** (Update / Later). User can keep working. **Later snoozes ~24 hours** (banner returns after that for the same build). |
+| **Force update** | **Full-screen** block until they install. Back button blocked. **Re-fetches on every app resume** (and cold start) so a force publish is not delayed by the soft 24h check window. |
+| **Kill-switch** | `Min supported build` — **everyone** below that number is blocked **at app launch**. Use only for broken builds factory-wide. Download URL: shared `updateDownloadUrl`, else default/channel URLs. |
 | **Channel** | A named offer (Default / Departments / People) with its own version, build, notes, URL, and force flag. |
 
 **In-app install path:** device downloads the APK URL → system installer (same as before). Shared URL falls back if a channel has no URL of its own.
@@ -114,10 +114,12 @@ This is **not** a substitute for Ink-only force. It blocks **all** devices below
 
 | Event | Behaviour |
 |-------|-----------|
-| Home open / resume | Soft: banner if offer and not snoozed. Force: full-screen. |
-| Network re-fetch | About every **24 hours** when config is complete. |
-| Force still needed | Re-blocks on resume even inside the 24h window. |
-| Settings → Check for update | Immediate check + diagnostic (channel, force, URL). |
+| Home open (cold) | Network check; re-check once employee clock/dept is available (targeted channels). Soft banner or force screen. |
+| App resume | **Always re-fetches** (no 24h skip) so newly published force still blocks. |
+| Soft “Later” | Snoozes soft banner ~**24 hours** only (not permanent for that build). |
+| Force still needed | Full-screen again after check; back blocked until installed. |
+| Kill-switch | Every cold start before login; URL from shared field or channel fallback. |
+| Settings → Check for update | Immediate check + diagnostic (channel, force, URL); clears soft snooze. |
 
 ---
 
@@ -142,12 +144,87 @@ Clients: `UpdateService`, `update_channels.dart`, `UpdateAvailableBanner`, `Upda
 | Keep Default lower when forcing one dept | Set Default force = same as Ink force for “Ink only” |
 | Use kill-switch for broken APKs | Use kill-switch for module-only releases |
 | Test with People/pilot first | Force Default accidentally during a pilot |
+| Set **Shared download URL** before raising min build | Rely only on a channel URL for factory-wide kill-switch without verifying fallback |
+
+---
+
+## Release checklist (every new APK)
+
+Use this every time you ship a Job Cards Android build.
+
+### A. Before you build
+
+1. Bump `pubspec.yaml` `version: X.Y.Z+BUILD` (build number must increase).
+2. Prepend `docs/CHANGELOG.md` with a user-facing `## … (build N)` entry — exact build number in the heading (e.g. `(build 145)`), not only `136+`.
+3. Confirm `CHANGELOG.md` is listed under Flutter assets (already wired) so What’s new ships in the APK.
+4. Note anything that needs **force**, **soft**, **pilot-only**, or **kill-switch**.
+
+### B. Build & host (official landing APK)
+
+**Canonical download URL** (first install + in-app update):
+
+```text
+https://ctp-job-cards-landing.web.app/releases/latest.apk
+```
+
+Landing page: one **Download app** button + QR → that file. Auth is **in the app** (Create account / Login), not App Distribution.
+
+5. Build the **release APK** (same signing key as previous installs):
+   ```powershell
+   cd mobile\CTPJob_Cards
+   flutter build apk --target-platform android-arm64 --release
+   ```
+6. Assemble landing + copy APK + deploy Hosting:
+   ```powershell
+   # One-shot (from mobile/CTPJob_Cards):
+   pwsh .\scripts\publish-landing-apk.ps1
+   # Or manually:
+   node build-landing.js
+   # (build-landing copies app-release.apk → landing-deploy/releases/latest.apk if present)
+   firebase deploy --only hosting:landing --project ctp-job-cards
+   ```
+   **Order matters:** `build-landing.js` wipes `landing-deploy/`; the APK is copied at the end of that script only if the release APK already exists.
+7. Confirm the URL downloads ~45–50 MB in a browser (not 404 / not App Distribution login).
+8. Optional: SHA-256 of the APK for Admin integrity check. Install that APK once on a test phone.
+
+### C. Publish in Admin (App Update Control)
+
+9. Set **Shared download URL** to  
+   `https://ctp-job-cards-landing.web.app/releases/latest.apk`  
+   (same every release if you keep overwriting `latest.apk`).
+10. Configure the right **channel**:
+    - Soft factory → Default, Force **off**
+    - One dept → Departments channel + list pickers; keep Default build **lower** if others must not force
+    - Pilot → People channel first
+11. Version + build on the channel must be **newer** than devices you want to prompt (`X.Y.Z` and build number).
+12. Paste release notes (short; What’s new sheet still uses bundled CHANGELOG).
+13. **Save publish**.
+14. Optional: **Copy RC keys** into Remote Config (Default only — cohorts are Firestore).
+
+### D. Verify before wide rollout
+
+15. **Settings → Check for update** on a pilot phone: channel, force, URL, current vs latest.
+16. Soft: banner → Update → download → allow install if prompted → system installer → reopen → **What’s changed** once.
+17. Soft: **Later** → banner gone ~24h; after snooze (or next day) soft offer can return; Settings check still works anytime.
+18. Force (pilot channel): full-screen, back blocked; background app → resume → still blocked until installed.
+19. Cold kill + reopen while force active → still blocked.
+20. If using kill-switch: set **Min supported build** only after shared URL works; open an older APK and confirm download/install path (not empty URL).
+21. **Kiosk / gate tablet**: exit kiosk → update → re-enter lock task.
+22. Smoke login + Home + one module the release touched.
+
+### E. After release
+
+23. Watch Crashlytics for `update_check_*` / install errors.
+24. If a bad build ships: raise **min supported build** to the first good build + ensure shared URL points at the good APK.
+25. Prepend factory map / mobile memory-bank only if process changes (agents handle map when code changes).
 
 ---
 
 ## Related docs
 
+- **`docs/RELEASE_PLAYBOOK.md`** — full step-by-step when shipping every new APK (host + Admin + verify)  
 - `docs/CHANGELOG.md` — release notes for operators  
 - `docs/troubleshooting.md` — update prompt issues  
 - `docs/app_features.md` — Admin capabilities overview  
 - Map: `Components/Modules/JobCardsCoreModule.md` §Startup & Update Surfaces  
+- Grok skills: `/mobile-app-release` (factory `latest.apk`) · `/mobile-pilot-release` (pilot `pilot.apk` for Departments/People)

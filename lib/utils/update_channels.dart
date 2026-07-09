@@ -295,3 +295,27 @@ Map<String, dynamic> legacyPublishFieldsFromDefault(UpdateChannel defaultChannel
       'updateDownloadUrl': defaultChannel.downloadUrl,
   };
 }
+
+/// Best APK URL for the pre-login kill-switch screen.
+///
+/// Order: shared `updateDownloadUrl` → `default` channel → preferred named
+/// channels → any channel with a URL. Empty when nothing is configured.
+String resolveKillSwitchDownloadUrl(Map<String, dynamic>? data) {
+  if (data == null || data.isEmpty) return '';
+
+  final shared = (data['updateDownloadUrl'] ?? '').toString().trim();
+  if (shared.isNotEmpty) return shared;
+
+  final channels = channelsFromSettingsApp(data);
+  for (final id in const ['default', 'ink', 'testers']) {
+    for (final c in channels) {
+      if (c.id == id && c.downloadUrl.trim().isNotEmpty) {
+        return c.downloadUrl.trim();
+      }
+    }
+  }
+  for (final c in channels) {
+    if (c.downloadUrl.trim().isNotEmpty) return c.downloadUrl.trim();
+  }
+  return '';
+}

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
   <title>CTP Job Cards – Official Internal App | CTP Gravure</title>
-  <meta name="description" content="The official internal job card tracking app for CTP Gravure. Download safely, understand your data, and get started." />
+  <meta name="description" content="Official CTP Gravure factory floor app — job cards, waste, fleet, ink, site security, and more. Download safely and create your account in the app." />
 
   <!-- Tailwind CSS CDN with custom brand config -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,7 +14,8 @@
       theme: {
         extend: {
           colors: {
-            brand: { DEFAULT: '#FF8C42', dark: '#E67A30', darker: '#CC6A1F', light: '#FFB380', pale: '#FFF3EB' },
+            /* App brand: kBrandOrange #C25F3A (factory map palette) */
+            brand: { DEFAULT: '#C25F3A', dark: '#A34F30', darker: '#8B4228', light: '#D4896A', pale: '#F8EDE8' },
             surface: '#F5F5F5',
           },
           borderRadius: { card: '12px' },
@@ -43,12 +44,12 @@
     /* Section heading accent underline */
     .section-title::after {
       content: ''; display: block; width: 40px; height: 3px;
-      background: #FF8C42; border-radius: 2px; margin-top: 8px;
+      background: #C25F3A; border-radius: 2px; margin-top: 8px;
     }
 
     /* Numbered step badge */
     .step-badge {
-      background: #FF8C42; color: #fff; font-weight: 700; font-size: 0.9rem;
+      background: #C25F3A; color: #fff; font-weight: 700; font-size: 0.9rem;
       width: 32px; height: 32px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
     }
@@ -61,7 +62,7 @@
 
     /* Feature icon pill */
     .feature-icon {
-      background: #FFF3EB; color: #FF8C42; border-radius: 10px;
+      background: #F8EDE8; color: #C25F3A; border-radius: 10px;
       width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
 
@@ -88,7 +89,7 @@
 
     /* Data table */
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .data-table th { background: #FFF3EB; color: #CC6A1F; font-weight: 700; text-align: left; padding: 8px 12px; }
+    .data-table th { background: #F8EDE8; color: #8B4228; font-weight: 700; text-align: left; padding: 8px 12px; }
     .data-table td { padding: 8px 12px; border-bottom: 1px solid #F0F0F0; vertical-align: top; color: #555; }
     .data-table tr:last-child td { border-bottom: none; }
 
@@ -101,7 +102,7 @@
     }
     .doc-card:hover {
       box-shadow: 0 4px 16px rgba(0,0,0,0.12); transform: translateY(-2px);
-      border-color: #FFB380;
+      border-color: #D4896A;
     }
 
     /* QR code container override for brand background */
@@ -121,11 +122,11 @@
       <div class="flex items-center gap-3">
         <img src="./assets/images/logo.png" alt="CTP Gravure logo" class="h-10 w-auto object-contain"
              onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';" />
-        <div id="logo-fallback" style="display:none; background:#FF8C42;"
+        <div id="logo-fallback" style="display:none; background:#C25F3A;"
              class="h-10 w-10 rounded-card flex items-center justify-center font-bold text-white text-sm">CTP</div>
         <div>
           <div class="font-bold text-gray-900 leading-tight text-base">CTP Job Cards</div>
-          <div class="text-xs text-gray-500 leading-tight">CTP Gravure · Internal App</div>
+          <div class="text-xs text-gray-500 leading-tight">CTP Gravure · Factory floor app</div>
         </div>
       </div>
       <nav class="hidden sm:flex items-center gap-5 text-sm font-medium text-gray-600">
@@ -145,16 +146,16 @@
     <section class="pt-10 pb-8">
       <div class="flex flex-wrap gap-2 mb-6">
         <span class="trust-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           Official &amp; Verified
         </span>
         <span class="trust-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
           CTP Gravure Staff Only
         </span>
         <span class="trust-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Distributed via Firebase
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Hosted on this company site
         </span>
       </div>
 
@@ -163,20 +164,21 @@
           You've reached the official download page for CTP Job Cards.
         </h1>
         <p class="text-gray-600 text-base leading-relaxed mb-5">
-          This is the authorised installation page for the <strong>CTP Gravure internal job card tracking app</strong>.
-          It is built and maintained by CTP Gravure and is intended exclusively for CTP Gravure staff —
-          operators, technicians, and managers.
+          This is the authorised installation page for the <strong>CTP Gravure factory floor app</strong>
+          (still named <em>CTP Job Cards</em>). It covers job cards and machine health, plus role-gated modules for
+          <strong>Waste Recovery</strong>, <strong>Fleet Maintenance</strong>, <strong>Ink Factory</strong>,
+          <strong>Site Security</strong>, and related tools. Built and maintained by CTP Gravure for staff only —
+          operators, technicians, managers, security, fleet, ink, and waste teams as allocated.
         </p>
         <div class="bg-surface rounded-card p-4 flex gap-3">
-          <svg class="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <svg class="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <div>
-            <p class="font-semibold text-gray-800 text-sm mb-1">Coming soon to the Google Play Store</p>
+            <p class="font-semibold text-gray-800 text-sm mb-1">How staff get the app</p>
             <p class="text-gray-600 text-sm leading-relaxed">
-              CTP Job Cards is currently being registered on the Google Play Store. Once live, staff will be able to
-              install and update the app directly through Google Play — no manual APK steps required. In the meantime,
-              the app is distributed through <strong>Firebase App Distribution</strong> — Google's official enterprise
-              platform for internal app delivery — which remains the authorised installation method until the Play Store
-              listing is active.
+              <strong>First install:</strong> download the official APK from this page (or scan the QR code), then open the app and
+              <strong>Create account</strong> with your company clock number and email (your employee profile must already exist).
+              <strong>Later updates:</strong> use the in-app update banner or full-screen prompt — same official file —
+              no need to return here unless you reinstall.
             </p>
           </div>
         </div>
@@ -200,14 +202,16 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
         </div>
         <div>
-          <div class="font-bold text-gray-900 text-base mb-1">Only one person has access to your data</div>
+          <div class="font-bold text-gray-900 text-base mb-1">Who can see what</div>
           <p class="text-gray-600 text-sm leading-relaxed">
-            <strong>Gert Peens</strong> is the sole developer and administrator of this system. He is the only
-            person at CTP who has access to the Firebase Console and the data stored there.
-            No other employees, no managers, and no third parties have access to the underlying data in the cloud.
+            <strong>In the app:</strong> colleagues only see what their role allows (e.g. managers review their
+            department’s job cards; security staff use gate tools; ink operators use ink screens).
+            <strong>Firebase Console / system administration:</strong> <strong>Gert Peens</strong> is the sole
+            developer-administrator with backend console access. Managers do not get console access.
+            Google hosts the infrastructure but does not use CTP business data for advertising.
           </p>
           <p class="text-gray-500 text-xs mt-2">
-            Questions about your data? Contact Gert directly at
+            Questions about your data? Contact Gert at
             <a href="mailto:gertp@ctpgravure.co.za" class="text-brand font-medium hover:underline">gertp@ctpgravure.co.za</a>
           </p>
         </div>
@@ -216,7 +220,7 @@
       <!-- What we collect -->
       <div class="bg-white rounded-card shadow-card p-5 mb-5">
         <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="15" x2="12" y2="15"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="15" x2="12" y2="15"/></svg>
           What the app collects from you
         </h3>
         <table class="data-table">
@@ -238,15 +242,23 @@
             </tr>
             <tr>
               <td><strong>Job card activity</strong></td>
-              <td>Job cards you create, accept, update, or close — this is the core purpose of the app and forms the maintenance record</td>
+              <td>Job cards you create, accept, update, or close — the maintenance / fault record</td>
             </tr>
             <tr>
-              <td><strong>Photos attached to job cards</strong></td>
-              <td>Photos you take and attach as evidence to a job card. These are stored securely linked to that specific job card record.</td>
+              <td><strong>Photos &amp; media you attach</strong></td>
+              <td>Evidence on job cards, fleet/waste captures, and (for security roles) document or vehicle-related images — stored with that business record</td>
+            </tr>
+            <tr>
+              <td><strong>Module work you enter</strong></td>
+              <td>Depending on your role: waste loads, fleet issues/work, ink readings or IBC actions, security gate entries, timesheet hours if enrolled — only modules allocated to you</td>
             </tr>
             <tr>
               <td><strong>Notification responses</strong></td>
-              <td>Whether you accepted a job ("Assign Self"), indicated you were unavailable ("I'm Busy"), or dismissed an alert. This gives management visibility into response accountability.</td>
+              <td>Whether you accepted a job, indicated you were busy, or dismissed an alert — for response accountability</td>
+            </tr>
+            <tr>
+              <td><strong>In-app feedback you submit</strong></td>
+              <td>Optional feedback threads to the admin team (My Feedback in the app)</td>
             </tr>
           </tbody>
         </table>
@@ -277,11 +289,11 @@
           </div>
           <div class="privacy-check">
             <svg class="privacy-check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span class="text-sm text-gray-600">Financial information of any kind</span>
+            <span class="text-sm text-gray-600">Personal banking or payroll details from your device</span>
           </div>
           <div class="privacy-check">
             <svg class="privacy-check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span class="text-sm text-gray-600">Data shared with any third-party services</span>
+            <span class="text-sm text-gray-600">Data sold or shared for advertising</span>
           </div>
         </div>
       </div>
@@ -289,7 +301,7 @@
       <!-- Firebase security explainer -->
       <div class="bg-white rounded-card shadow-card p-5 mb-5">
         <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Where your data is stored — and why Firebase is safe
         </h3>
         <p class="text-sm text-gray-600 leading-relaxed mb-4">
@@ -319,15 +331,14 @@
           </div>
           <div class="bg-surface rounded-card p-3">
             <div class="text-sm font-semibold text-gray-800 mb-1">No Advertising or Analytics</div>
-            <p class="text-xs text-gray-500">Firebase does not use your data for advertising. No third-party analytics or tracking SDKs are included in the app. Your data is used exclusively to operate the job card system.</p>
+            <p class="text-xs text-gray-500">Firebase is not used for advertising. No third-party ad or tracking SDKs. Data is used to run CTP factory operations modules you are allocated.</p>
           </div>
         </div>
         <div class="mt-4 p-3 bg-brand-pale rounded-card">
           <p class="text-xs text-brand-darker leading-relaxed">
-            <strong>In plain terms:</strong> your data sits in a locked Google data centre in Johannesburg.
-            Only Gert Peens has the key to the Firebase Console. Google protects the infrastructure but does not
-            read, sell, or access your data. The app itself only reads and writes what it needs to function as
-            a maintenance management tool — nothing more.
+            <strong>In plain terms:</strong> business data sits in a locked Google data centre in Johannesburg.
+            Gert Peens holds Firebase Console admin access. Colleagues only see what their role allows inside the app
+            or on the CTP Pulse board. Google protects infrastructure and does not sell your factory data for ads.
           </p>
         </div>
       </div>
@@ -359,18 +370,25 @@
           </summary>
           <div class="px-5 pb-5 pt-1 border-t border-gray-100">
             <p class="text-gray-600 text-sm leading-relaxed mb-3">
-              CTP Job Cards replaces the paper-based job card system at CTP Gravure with a real-time digital
-              alternative. When a fault or breakdown occurs, operators create a job card in the app.
-              The relevant on-site technicians are notified immediately on their phones — no dispatcher,
-              no radio, no delay. Managers stay informed at every step through dashboards and escalation alerts.
+              CTP Job Cards is the <strong>mobile factory floor hub</strong> for CTP Gravure. It started as a digital
+              replacement for paper job cards and now includes several modules. You only see the modules and actions
+              your role and department allow.
             </p>
+            <p class="text-sm font-semibold text-gray-800 mb-2">Job cards &amp; machine health</p>
+            <ul class="text-sm text-gray-600 space-y-1.5 mb-4">
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Create and track faults (mechanical, electrical, building, specialist types)</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Photo evidence, comments, assign / start / complete / monitor</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> On-site notifications with priority levels and escalation</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Offline queue — work continues without Wi‑Fi, then syncs</li>
+            </ul>
+            <p class="text-sm font-semibold text-gray-800 mb-2">Other modules (role-gated)</p>
             <ul class="text-sm text-gray-600 space-y-1.5">
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Create job cards for Mechanical, Electrical, and Maintenance tasks</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Attach photo evidence directly from your camera</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Track status from Open → In-Progress → Monitor → Closed</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Automatic escalation alerts when jobs go unresponded</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Full audit trail of every action on every job card</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Works offline — syncs automatically when connectivity returns</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Site Security</strong> — main-gate visitor / company-car flows, scans, on-site register</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Fleet Maintenance</strong> — report faults, mechanic work logs, daily checks where enabled</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Ink Factory</strong> — floor capture (daily readings, IBC / receive / production paths for ink roles)</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Waste Recovery</strong> — scheduled and ad-hoc loads, stock, offline-friendly capture</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>My Timesheet</strong> — monthly hours for enrolled staff (where enabled)</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> Managers also use <strong>CTP Pulse</strong> (separate web board) for KPIs and desk workflows</li>
             </ul>
           </div>
         </details>
@@ -439,7 +457,25 @@
                 </div>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">Role-Based Access</div>
-                  <div class="text-xs text-gray-500">Operators, technicians, managers, and admins each see only what their role requires.</div>
+                  <div class="text-xs text-gray-500">Job-card roles, security, fleet, ink, and waste teams each see only allocated modules and actions.</div>
+                </div>
+              </div>
+              <div class="flex gap-3 items-start">
+                <div class="feature-icon w-9 h-9 rounded-lg">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-gray-800">In-app updates</div>
+                  <div class="text-xs text-gray-500">Soft banner or required full-screen update from the official APK — no Play Store required.</div>
+                </div>
+              </div>
+              <div class="flex gap-3 items-start">
+                <div class="feature-icon w-9 h-9 rounded-lg">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-gray-800">Feedback loop</div>
+                  <div class="text-xs text-gray-500">Send feedback from the app (My Feedback) with two-way replies from admin.</div>
                 </div>
               </div>
             </div>
@@ -462,28 +498,43 @@
               <div class="flex gap-3 p-3 bg-surface rounded-card">
                 <span class="text-lg">🏭</span>
                 <div>
-                  <div class="text-sm font-semibold text-gray-800">Operators</div>
-                  <div class="text-xs text-gray-500">Discover a fault and create a job card immediately. Track its status through to closure.</div>
+                  <div class="text-sm font-semibold text-gray-800">Operators &amp; production staff</div>
+                  <div class="text-xs text-gray-500">Raise job cards, track status; some roles also use fleet report or other modules when enabled.</div>
                 </div>
               </div>
               <div class="flex gap-3 p-3 bg-surface rounded-card">
                 <span class="text-lg">🔧</span>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">Technicians (Mechanical &amp; Electrical)</div>
-                  <div class="text-xs text-gray-500">Receive job card notifications when on site. Accept jobs, record work done, and close with a detailed completion note.</div>
+                  <div class="text-xs text-gray-500">On-site job alerts, accept and complete work; fleet mechanics use fleet tools when allocated.</div>
                 </div>
               </div>
               <div class="flex gap-3 p-3 bg-surface rounded-card">
                 <span class="text-lg">📋</span>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">Managers</div>
-                  <div class="text-xs text-gray-500">Dashboard visibility, escalation alerts, daily review of all job cards in your department.</div>
+                  <div class="text-xs text-gray-500">Department dashboards, review queues, escalations; many also use CTP Pulse on the web.</div>
+                </div>
+              </div>
+              <div class="flex gap-3 p-3 bg-surface rounded-card">
+                <span class="text-lg">🛂</span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-800">Site Security</div>
+                  <div class="text-xs text-gray-500">Gate staff use the Security module (visitor / company car, on-site register). Guard-only accounts focus on Security (and Waste when enabled).</div>
+                </div>
+              </div>
+              <div class="flex gap-3 p-3 bg-surface rounded-card">
+                <span class="text-lg">🚛</span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-800">Fleet, Ink &amp; Waste teams</div>
+                  <div class="text-xs text-gray-500">Module homes for fleet reporters/mechanics, ink floor users, and waste capture — shown only when your profile is allowed.</div>
                 </div>
               </div>
             </div>
             <p class="text-xs text-gray-400 mt-3">
-              If you don't have an account yet, contact Gert Peens at
-              <a href="mailto:gertp@ctpgravure.co.za" class="text-brand hover:underline">gertp@ctpgravure.co.za</a> before installing.
+              Your employee record must exist before Create account works. Contact Gert Peens at
+              <a href="mailto:gertp@ctpgravure.co.za" class="text-brand hover:underline">gertp@ctpgravure.co.za</a>
+              if you need a profile or module access.
             </p>
           </div>
         </details>
@@ -507,7 +558,7 @@
             <div class="space-y-4">
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">1 · Location — "Allow All the Time"</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5">Required for background geofencing — the app detects when you arrive or leave the site boundary and adjusts your on-site status automatically. You must select <em>"Allow All the Time"</em>; choosing "Only While Using the App" means geofencing stops the moment you put your phone in your pocket. <strong>Only on-site/off-site status is tracked — not your precise location.</strong></div>
@@ -515,7 +566,7 @@
               </div>
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">2 · Notifications — "Allow"</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5">All job card alerts reach you through push notifications. Without this, you will receive nothing — the system will escalate past you as if no one is available.</div>
@@ -523,7 +574,7 @@
               </div>
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">3 · Battery Optimisation — "Unrestricted"</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5">Android automatically puts idle apps to sleep to conserve battery. If the app is "optimised," Android may put it to sleep while it is idle — this can cause missed notifications and prevent geofence entry and exit events from being detected. Setting it to Unrestricted keeps the app available to receive alerts at any time. Navigate to <em>Settings → Apps → CTP Job Cards → Battery → Unrestricted</em>.</div>
@@ -531,7 +582,7 @@
               </div>
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">4 · Display Over Other Apps</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5"><strong>Priority 5 faults only.</strong> A P5 job card means production is standing — someone must respond immediately. This permission lets the app display a full-screen alarm over your lock screen and any open app so a P5 fault cannot go unnoticed. Without it, P5 alerts fall back to a standard banner that can be easily missed.</div>
@@ -539,7 +590,7 @@
               </div>
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">5 · Do Not Disturb Access</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5">Allows P5 critical alarms to bypass DND mode — essential for night-shift coverage and for phones that are set to silent. Standard notifications are still silenced by DND; only P5 production-stopping faults override it.</div>
@@ -547,7 +598,7 @@
               </div>
 
               <div class="flex gap-3 items-start">
-                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 <div>
                   <div class="text-sm font-semibold text-gray-800">6 · Schedule Exact Alarms</div>
                   <div class="text-xs text-gray-500 leading-relaxed mt-0.5">The P5 alarm uses Android's alarm system (the same system as your morning alarm) to guarantee the alert fires at precisely the right time, even if the phone is in deep sleep. Find this under <em>Settings → Apps → Special App Access → Alarms &amp; Reminders</em>.</div>
@@ -571,14 +622,19 @@
           </summary>
           <div class="px-5 pb-5 pt-1 border-t border-gray-100">
             <p class="text-sm text-gray-600 leading-relaxed mb-3">
-              Unlike Play Store apps, updates are not automatic. When a new version is available:
+              The app is <strong>not</strong> on the Play Store. Updates come from the same official APK as this page:
             </p>
-            <ol class="space-y-2 text-sm text-gray-600">
-              <li class="flex gap-2"><span class="text-brand font-bold">1.</span> You will receive an email from Firebase App Distribution (Google) with the new download link.</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">2.</span> Open the link on your phone and download the new APK.</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">3.</span> Install it — Android will update the app in place. Your data is preserved.</li>
-              <li class="flex gap-2"><span class="text-brand font-bold">4.</span> <strong>Only ever install from emails sent by Firebase App Distribution or links provided by Gert Peens.</strong></li>
+            <ol class="space-y-2 text-sm text-gray-600 mb-3">
+              <li class="flex gap-2"><span class="text-brand font-bold">1.</span> <strong>Soft update:</strong> an orange banner on Home — tap <em>Update</em>, or <em>Later</em> to snooze about a day.</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">2.</span> <strong>Required update:</strong> a full-screen prompt when Admin forces a version — install before continuing.</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">3.</span> Download runs in the app; Android’s installer opens. First time, allow “install unknown apps” for CTP Job Cards if asked.</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">4.</span> Your login and offline queue are kept. After update, a short <em>What’s changed</em> sheet may appear once.</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">5.</span> You can also use <em>Settings → Check for update</em>, or reinstall from this download page if needed.</li>
             </ol>
+            <p class="text-xs text-gray-500 bg-surface rounded p-3">
+              <strong>Only install from this official page or from an in-app update.</strong>
+              Do not install APKs from WhatsApp, USB sticks, or unknown email attachments.
+            </p>
           </div>
         </details>
 
@@ -595,7 +651,7 @@
           </summary>
           <div class="px-5 pb-5 pt-1 border-t border-gray-100">
             <div class="bg-brand-pale rounded-card p-4 flex gap-3 items-start mb-4">
-              <svg class="flex-shrink-0 mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#CC6A1F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <svg class="flex-shrink-0 mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B4228" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <div>
                 <div class="text-sm font-bold text-brand-darker">Gert Peens — System Developer &amp; Administrator</div>
                 <div class="text-xs text-brand-darker mt-0.5">Sole developer, distributor, and point of contact for all app-related matters</div>
@@ -613,7 +669,7 @@
               </div>
               <div class="bg-surface rounded-card p-3">
                 <div class="font-semibold text-gray-800 mb-1">Bugs, feedback &amp; suggestions</div>
-                <p class="text-xs text-gray-500">Use the <strong>floating feedback button</strong> on the app's home screen to send a report from directly within the app, or email Gert with a description and screenshot if possible.</p>
+                <p class="text-xs text-gray-500">Open <strong>My Feedback</strong> from the app (Home feedback entry) to send a report and read replies, or email Gert with a description and screenshot if possible.</p>
               </div>
               <div class="bg-surface rounded-card p-3">
                 <div class="font-semibold text-gray-800 mb-1">Privacy or data concerns</div>
@@ -730,7 +786,7 @@
 
       <!-- Acknowledgment callout -->
       <div class="bg-brand-pale border border-brand rounded-card p-4 flex gap-3 items-start">
-        <svg class="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#CC6A1F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        <svg class="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B4228" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
         <p class="text-sm text-brand-darker leading-relaxed">
           By continuing to use the CTP Job Cards application, you acknowledge that you have read and understood this notice.
         </p>
@@ -745,15 +801,15 @@
     <section id="install" class="py-8">
       <h2 class="section-title text-xl font-bold text-gray-900 mb-2">How to Install Safely</h2>
       <p class="text-gray-500 text-sm mb-6">
-        The first step is to register your email so Firebase can verify you as an authorised user.
-        After that, installing the APK takes about 2 minutes.
+        Download the official APK from this page, install it, then create your account <strong>inside the app</strong>
+        (clock number + email + password). Your employee profile must already exist — contact Gert if Create account says no employee was found.
       </p>
 
       <div class="bg-amber-50 border border-amber-200 rounded-card p-4 flex gap-3 mb-6">
         <svg class="flex-shrink-0 mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <p class="text-sm text-amber-800">
-          <strong>Only install APK files from this page or from a Firebase email sent to your registered address.</strong>
-          If anyone sends you an APK file by WhatsApp, USB drive, or any other method — do not install it. Contact Gert first.
+          <strong>Only install the APK from this official page</strong> (or an in-app update offered by CTP Job Cards itself).
+          If anyone sends you an APK by WhatsApp, USB, or email attachment — do not install it. Contact Gert first.
         </p>
       </div>
 
@@ -762,14 +818,9 @@
         <div class="flex gap-4 items-start">
           <div class="step-badge">1</div>
           <div>
-            <div class="font-semibold text-gray-800 mb-1">Register with Firebase App Distribution</div>
-            <p class="text-sm text-gray-500 mb-2">
-              Tap <strong>"Register to Download"</strong> in the Download section below, or scan the QR code. You will be taken to the Firebase App Distribution invite page — sign in with your personal Gmail to register as an authorised user.
-            </p>
+            <div class="font-semibold text-gray-800 mb-1">Download the APK from this page</div>
             <p class="text-sm text-gray-500">
-              <strong>Note:</strong> If your Gmail has not been added to the authorised list yet, contact Gert Peens at
-              <a href="mailto:gertp@ctpgravure.co.za" class="text-brand hover:underline">gertp@ctpgravure.co.za</a>
-              before proceeding.
+              Tap <strong>Download app</strong> below (or scan the QR code). Your browser saves the file — about 45–50 MB.
             </p>
           </div>
         </div>
@@ -779,21 +830,11 @@
         <div class="flex gap-4 items-start">
           <div class="step-badge">2</div>
           <div>
-            <div class="font-semibold text-gray-800 mb-1">Download the APK from the Firebase page</div>
-            <p class="text-sm text-gray-500">Once signed in, tap the download button on the Firebase App Distribution page. Your browser will download the APK file to your phone.</p>
-          </div>
-        </div>
-
-        <div class="border-t border-gray-100"></div>
-
-        <div class="flex gap-4 items-start">
-          <div class="step-badge">3</div>
-          <div>
             <div class="font-semibold text-gray-800 mb-1">Open the APK and allow installation from this source</div>
             <p class="text-sm text-gray-500 mb-2">
               Tap the downloaded file. Android will show a security prompt:
               <em>"For your security, your phone is not allowed to install unknown apps from this source."</em>
-              <strong>This is normal and expected for all internal company apps</strong> — it simply means the app was not downloaded from the Play Store.
+              <strong>This is normal for internal company apps</strong> — the app is not from the Play Store.
             </p>
             <div class="space-y-1.5">
               <p class="text-xs text-gray-500 bg-surface rounded p-2"><strong>Android 8+:</strong> Tap <em>"Settings"</em> on the dialog → Enable <em>"Allow from this source"</em> → Press back → Tap <em>"Install"</em>.</p>
@@ -805,10 +846,23 @@
         <div class="border-t border-gray-100"></div>
 
         <div class="flex gap-4 items-start">
-          <div class="step-badge">4</div>
+          <div class="step-badge">3</div>
           <div>
             <div class="font-semibold text-gray-800 mb-1">Complete the installation</div>
-            <p class="text-sm text-gray-500">Tap <strong>Install</strong> on the Android installer screen. The app will appear on your home screen once complete.</p>
+            <p class="text-sm text-gray-500">Tap <strong>Install</strong> on the Android installer. The app appears on your home screen when done.</p>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-100"></div>
+
+        <div class="flex gap-4 items-start">
+          <div class="step-badge">4</div>
+          <div>
+            <div class="font-semibold text-gray-800 mb-1">Create account or log in</div>
+            <p class="text-sm text-gray-500">
+              Open CTP Job Cards. <strong>New users:</strong> Create account with your clock number, email, and password
+              (your employee record must already be set up). <strong>Returning users:</strong> Log in with the email and password you already use.
+            </p>
           </div>
         </div>
 
@@ -817,18 +871,8 @@
         <div class="flex gap-4 items-start">
           <div class="step-badge">5</div>
           <div>
-            <div class="font-semibold text-gray-800 mb-1">Log in with your email</div>
-            <p class="text-sm text-gray-500">Open the app and log in using the same email address you registered with. Your role and department are configured by Gert Peens on the backend — you will see only the screens relevant to your role.</p>
-          </div>
-        </div>
-
-        <div class="border-t border-gray-100"></div>
-
-        <div class="flex gap-4 items-start">
-          <div class="step-badge">6</div>
-          <div>
             <div class="font-semibold text-gray-800 mb-1">Complete the permission setup</div>
-            <p class="text-sm text-gray-500">The app walks you through all 6 permissions on first launch. Grant each one — see the "Permissions" section above for a full explanation of why each is needed.</p>
+            <p class="text-sm text-gray-500">On first launch the app walks you through permissions. Grant each one — see the "Permissions" section above for why they are needed.</p>
           </div>
         </div>
 
@@ -845,27 +889,26 @@
       <div class="bg-white rounded-card shadow-card overflow-hidden">
         <div class="bg-brand px-6 py-4">
           <div class="text-white font-bold text-lg">CTP Job Cards</div>
-          <div class="text-brand-pale text-sm">Latest release · Android APK · Distributed via Firebase App Distribution</div>
+          <div class="text-brand-pale text-sm">Latest release · Official Android APK · Hosted on this site</div>
         </div>
 
         <div class="p-5 md:p-6">
           <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
 
-            <!-- QR Code — generated from the Firebase App Distribution sign-up URL -->
+            <!-- QR Code — points at the same latest.apk URL -->
             <div class="flex flex-col items-center gap-2 flex-shrink-0">
               <div id="qr-canvas-container"
                    class="w-44 h-44 rounded-card overflow-hidden flex items-center justify-center bg-brand-pale border-2 border-brand">
                 <!-- qrcode.js renders into this div -->
               </div>
-              <span class="text-xs text-gray-400 text-center">Scan to register &amp; download</span>
+              <span class="text-xs text-gray-400 text-center">Scan to download the app</span>
             </div>
 
-            <!-- Version + two-step download flow -->
             <div class="flex-1 w-full">
               <div class="flex flex-wrap items-center gap-2 mb-4">
                 <span id="version-badge" class="bg-surface text-gray-700 text-xs font-semibold px-3 py-1 rounded-full border border-gray-200"></span>
                 <span id="updated-date" class="text-xs text-gray-400"></span>
-                <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-semibold px-3 py-1 rounded-full">✓ Stable</span>
+                <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-semibold px-3 py-1 rounded-full">✓ Official</span>
               </div>
 
               <div class="mb-5">
@@ -873,48 +916,28 @@
                 <ul id="release-notes" class="text-xs text-gray-500 space-y-1"></ul>
               </div>
 
-              <!-- Step 1: Register -->
-              <div class="bg-brand-pale border border-brand rounded-card p-4 mb-3">
-                <div class="text-xs font-bold text-brand-darker uppercase tracking-wide mb-1">Step 1 — Register with Firebase</div>
-                <p class="text-xs text-gray-600 mb-3">Tap below to register your email. Firebase will verify you as an authorised user and send you a confirmation email. You only need to do this once.</p>
-                <a id="register-btn"
-                   href="#"
-                   target="_blank" rel="noopener noreferrer"
-                   class="btn-download inline-flex items-center justify-center gap-2 w-full bg-brand hover:bg-brand-dark active:bg-brand-darker text-white font-bold rounded-card px-5 py-3 transition-colors text-sm">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                  Register to Download
-                </a>
-              </div>
-
-              <!-- Step 2: Download -->
-              <div class="border border-gray-200 rounded-card p-4">
-                <div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Step 2 — Download the App</div>
-                <p class="text-xs text-gray-500 mb-3">Already registered? Tap below to go directly to the download page. If you haven't registered yet, complete Step 1 first.</p>
-                <a id="download-btn"
-                   href="#"
-                   target="_blank" rel="noopener noreferrer"
-                   class="inline-flex items-center justify-center gap-2 w-full bg-white hover:bg-surface active:bg-gray-100 text-brand border-2 border-brand font-bold rounded-card px-5 py-3 transition-colors text-sm">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Download Latest Version
-                </a>
-              </div>
+              <a id="download-btn"
+                 href="/releases/latest.apk"
+                 class="btn-download inline-flex items-center justify-center gap-2 w-full bg-brand hover:bg-brand-dark active:bg-brand-darker text-white font-bold rounded-card px-5 py-3.5 transition-colors text-sm">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download app
+              </a>
 
               <p class="text-xs text-gray-400 mt-3">
-                Requires Android 6.0 or later · ~30 MB · Registration required before downloading
+                Requires Android 6.0 or later · ~45–50 MB · After install, create your account or log in inside the app
               </p>
             </div>
           </div>
         </div>
 
-        <!-- Security assurance strip -->
         <div class="bg-surface border-t border-gray-100 px-5 py-3 flex flex-wrap gap-4 items-center">
           <div class="flex items-center gap-1.5 text-xs text-gray-500">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Hosted on Google Firebase (africa-south1)
+            Hosted on Google Firebase Hosting
           </div>
           <div class="flex items-center gap-1.5 text-xs text-gray-500">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Data encrypted at rest and in transit
+            Same file used for in-app updates
           </div>
           <div class="flex items-center gap-1.5 text-xs text-gray-500">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -957,32 +980,32 @@
     //  is unreachable. Update these when doing a release so the
     //  page is correct even before Remote Config is fetched.
     // ─────────────────────────────────────────────────────────────
+    // Official APK always lives on this site. In-app updates should use the same
+    // absolute URL in Admin → Shared download URL.
+    var OFFICIAL_APK_PATH = '/releases/latest.apk';
+    var OFFICIAL_APK_ABS  = 'https://ctp-job-cards-landing.web.app' + OFFICIAL_APK_PATH;
+
     const RELEASE = {
-      version:     '1.2.0',
-      // Tester invite — permanent, never changes between releases
-      registerUrl: 'https://appdistribution.firebase.dev/i/91a5fb193f71eb0f',
-      // Fallback download link — overwritten by Remote Config download_url
-      downloadUrl: 'https://appdistribution.firebase.google.com/testerapps/1:296041546243:android:c4e3fec58d94ae6db60436/releases/1nd9j71886nto?utm_source=firebase-console',
+      version:     '2.3.0',
+      build:       '147',
+      // Always the Hosting file — never App Distribution (in-app + button need a real APK).
+      downloadUrl: OFFICIAL_APK_PATH,
       notes: [
-        'Initial production release',
-        'Job card creation, editing, and closure',
-        'Offline sync with automatic queue replay',
-        'Push notifications with 4-stage escalation',
-        'Full-screen P5 alarm with DND bypass',
-        'Background geofencing and on-site tracking',
+        'Factory floor app: job cards + Waste, Fleet, Ink, Site Security (role-gated)',
+        'Download here once — Create account or Log in inside the app',
+        'Updates: in-app banner or required screen from this same official APK',
       ],
     };
     // ─────────────────────────────────────────────────────────────
 
-    // Populate all release-specific DOM elements from RELEASE
     function applyConfig() {
       const version = RELEASE.build
         ? RELEASE.version + ' (build ' + RELEASE.build + ')'
         : RELEASE.version;
 
       document.getElementById('version-badge').textContent = 'Version ' + version;
-      document.getElementById('register-btn').href         = RELEASE.registerUrl;
-      document.getElementById('download-btn').href         = RELEASE.downloadUrl;
+      var dl = document.getElementById('download-btn');
+      if (dl) dl.href = RELEASE.downloadUrl || OFFICIAL_APK_PATH;
 
       const notesList = document.getElementById('release-notes');
       notesList.innerHTML = '';
@@ -994,41 +1017,35 @@
       });
     }
 
-    // Render immediately with fallback values so the page is never blank
     applyConfig();
 
-    // Footer year
     document.getElementById('year').textContent = new Date().getFullYear();
-    // Remove updated-date span — version + build from Remote Config is sufficient
     var dateEl = document.getElementById('updated-date');
     if (dateEl) dateEl.remove();
 
-    // Sticky header shadow
     var header = document.getElementById('site-header');
     window.addEventListener('scroll', function() {
       header.classList.toggle('header-scrolled', window.scrollY > 8);
     }, { passive: true });
 
-    // QR code — points to tester invite (permanent link, never changes)
+    // QR → absolute APK URL (phones need a full https link)
     (function() {
       var container = document.getElementById('qr-canvas-container');
       try {
         new QRCode(container, {
-          text: RELEASE.registerUrl,
+          text: OFFICIAL_APK_ABS,
           width: 168,
           height: 168,
           colorDark: '#1a1a1a',
-          colorLight: '#FFF3EB',
+          colorLight: '#F8EDE8',
           correctLevel: QRCode.CorrectLevel.M,
         });
       } catch (e) {
-        container.innerHTML = '<div style="padding:16px; text-align:center; font-size:11px; color:#CC6A1F;">QR code unavailable<br/>Use the download button below</div>';
+        container.innerHTML = '<div style="padding:16px; text-align:center; font-size:11px; color:#8B4228;">QR code unavailable<br/>Use the Download button</div>';
       }
     })();
 
-    // ─── Firebase Remote Config — live values override fallback ──────────────
-    // Keys read: latest_version, latest_build, download_url, release_notes
-    // To update the landing page after a new release: just update Remote Config.
+    // Remote Config: version / build / notes only. Download stays on this site.
     (function() {
       try {
         var app = firebase.initializeApp({
@@ -1041,25 +1058,26 @@
         });
 
         var rc = firebase.remoteConfig(app);
-        rc.settings.minimumFetchIntervalMillis = 0; // always fetch fresh on the landing page
+        rc.settings.minimumFetchIntervalMillis = 0;
         rc.defaultConfig = {
           latest_version: RELEASE.version,
-          latest_build:   '',
-          download_url:   RELEASE.downloadUrl,
+          latest_build:   RELEASE.build || '',
+          download_url:   OFFICIAL_APK_ABS,
           release_notes:  RELEASE.notes.join('\n'),
         };
 
         rc.fetchAndActivate().then(function() {
-          var version     = rc.getString('latest_version');
-          var build       = rc.getString('latest_build');
-          var downloadUrl = rc.getString('download_url');
-          var notes       = rc.getString('release_notes');
+          var version = rc.getString('latest_version');
+          var build   = rc.getString('latest_build');
+          var notes   = rc.getString('release_notes');
 
-          if (version)     RELEASE.version     = version;
-          if (build)       RELEASE.build        = build;
-          if (downloadUrl) RELEASE.downloadUrl  = downloadUrl;
-          if (notes)       RELEASE.notes        = notes.split('\n').map(function(n) { return n.trim(); }).filter(Boolean);
-
+          if (version) RELEASE.version = version;
+          if (build)   RELEASE.build   = build;
+          if (notes) {
+            RELEASE.notes = notes.split('\n').map(function(n) { return n.trim(); }).filter(Boolean);
+          }
+          // Keep download on Hosting latest.apk (ignore old App Distribution RC values).
+          RELEASE.downloadUrl = OFFICIAL_APK_PATH;
           applyConfig();
         }).catch(function(err) {
           console.warn('[Landing] Remote Config fetch failed — showing fallback values.', err);

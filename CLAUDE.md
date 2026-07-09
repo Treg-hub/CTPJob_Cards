@@ -218,7 +218,7 @@ All collection names are defined as constants in `lib/constants/collections.dart
 
 `WhatsNewService` shows a one-time bottom sheet with the newest `docs/CHANGELOG.md` entry the first time a user opens a new build (stamped **after** the sheet is dismissed). **Before building any release APK, prepend a user-facing entry to `docs/CHANGELOG.md`** — the top `## ` section is exactly what every updated user sees.
 
-**In-app APK updates**: `UpdateService` + `ApkInstallService` + FileProvider. **24h** network check; soft = Home banner; force = full-screen (per `updateChannels` cohort: testers/ink/default). Kill-switch `minSupportedBuild` is factory-wide. Legacy `publishedLatest*` = default channel only.
+**In-app APK updates**: `UpdateService` + `ApkInstallService` + FileProvider. Soft = Home banner (**Later** = ~24h snooze only). Force = full-screen; **resume + cold start re-fetch** (not stuck behind 24h). Cohort re-check when employee loads. Kill-switch `minSupportedBuild` factory-wide with channel URL fallback. Guide + **release checklist**: `docs/admin_app_update_guide.md`. Legacy `publishedLatest*` = default channel only.
 
 ## Cloud Functions
 

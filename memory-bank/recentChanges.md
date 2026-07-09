@@ -2,6 +2,20 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Landing: official APK download (no App Distribution register) (2026-07-09)**:
+  - Landing page: single **Download app** + QR → `/releases/latest.apk`; install steps say Create account / Login **in the app**.
+  - `build-landing.js` copies `app-release.apk` → `landing-deploy/releases/latest.apk` when present.
+  - Script: `scripts/publish-landing-apk.ps1`. Canonical URL for Admin + email: `https://ctp-job-cards-landing.web.app/releases/latest.apk`.
+  - **`docs/RELEASE_PLAYBOOK.md`** + Grok skill `/mobile-app-release`. Docs: `admin_app_update_guide.md`, root `publish.md`.
+
+- **In-app update ship hardening (2026-07-09, build 145)**:
+  - Resume always network re-fetches (`checkForUpdateOnResume`) so force published after “up to date” still blocks.
+  - Soft **Later** = ~24h snooze only (no permanent per-build dismiss; clears legacy flag).
+  - Kill-switch download URL via `resolveKillSwitchDownloadUrl` (shared → default/channel).
+  - Deferred cohort re-check when employee loads after first Home frame.
+  - Install-permission copy on update screen; full **Release checklist** in `docs/admin_app_update_guide.md`.
+  - Map: `JobCardsCoreModule.md` §Startup & Update, `Canvases/INDEX.md`.
+
 - **Ink consumption-baseline rollup moved server-side + PO exact-zero fulfil (2026-07-08)**:
   - Removed `_appendMonthlyConsumptionSnapshot` from `ink_service.dart` — the CF `onInkCountEventWritten` is now the single authority, keying each count period's consumption to the **period-midpoint month** (a 1-Jul count closes June). Old APKs still writing the legacy calendar-month rollup are self-healed by the CF (junk months after the last closed period are pruned server-side).
   - `ink_po_fulfillment.dart`: `inkPoFulfilledThreshold` 0.5 → 1e-6 (exact zero). Delivery variances (IBC fills) are now reconciled via the Pulse **Finalize order** write-off flow instead of being silently absorbed.
