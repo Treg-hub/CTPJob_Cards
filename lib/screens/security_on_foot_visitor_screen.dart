@@ -187,78 +187,83 @@ class _SecurityOnFootVisitorScreenState
     final settings = ref.watch(securitySettingsProvider).valueOrNull;
     final gate = ref.watch(selectedSecurityGateProvider);
 
+    final denyList =
+        ref.watch(securityDenyListProvider).valueOrNull ?? <SecurityDenyEntry>[];
+
     return Scaffold(
       appBar: AppBar(title: const Text('On-Foot Visitor')),
       body: settings == null
           ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<List<SecurityDenyEntry>>(
-              stream: _service.watchDenyList(),
-              builder: (context, snap) {
+          : StreamBuilder<List<String>>(
+              stream: _service.watchLookupSuggestions('host'),
+              builder: (context, hostSnap) {
                 return StreamBuilder<List<String>>(
-                  stream: _service.watchLookupSuggestions('host'),
-                  builder: (context, hostSnap) {
-                    return StreamBuilder<List<String>>(
-                      stream: _service.watchLookupSuggestions('company'),
-                      builder: (context, companySnap) {
-                        return ListView(
-                          padding: const EdgeInsets.all(16),
-                          children: [
-                            if (gate == null)
-                              Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('No gate selected.'),
-                                      const SizedBox(height: 8),
-                                      OutlinedButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('Choose a gate'),
-                                      ),
-                                    ],
-                                  ),
+                  stream: _service.watchLookupSuggestions('company'),
+                  builder: (context, companySnap) {
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        ref.invalidate(securityDenyListProvider);
+                        await ref.read(securityDenyListProvider.future);
+                      },
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (gate == null)
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('No gate selected.'),
+                                    const SizedBox(height: 8),
+                                    OutlinedButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Choose a gate'),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            OutlinedButton.icon(
-                              onPressed: _scanId,
-                              icon: const Icon(Icons.badge_outlined),
-                              label: const Text('Scan ID (optional)'),
                             ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _nameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Visitor name *',
-                                border: OutlineInputBorder(),
-                              ),
+                          OutlinedButton.icon(
+                            onPressed: _scanId,
+                            icon: const Icon(Icons.badge_outlined),
+                            label: const Text('Scan ID (optional)'),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _nameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Visitor name *',
+                              border: OutlineInputBorder(),
                             ),
-                            const SizedBox(height: 12),
-                            SecuritySuggestionField(
-                              controller: _hostCtrl,
-                              label: 'Host (optional)',
-                              suggestions: hostSnap.data ?? [],
+                          ),
+                          const SizedBox(height: 12),
+                          SecuritySuggestionField(
+                            controller: _hostCtrl,
+                            label: 'Host (optional)',
+                            suggestions: hostSnap.data ?? [],
+                          ),
+                          const SizedBox(height: 12),
+                          SecuritySuggestionField(
+                            controller: _companyCtrl,
+                            label: 'Company (optional)',
+                            suggestions: companySnap.data ?? [],
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _purposeCtrl,
+                            decoration: InputDecoration(
+                              labelText: settings.purposeOfVisitRequired
+                                  ? 'Purpose of visit *'
+                                  : 'Purpose of visit',
+                              border: const OutlineInputBorder(),
                             ),
-                            const SizedBox(height: 12),
-                            SecuritySuggestionField(
-                              controller: _companyCtrl,
-                              label: 'Company (optional)',
-                              suggestions: companySnap.data ?? [],
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _purposeCtrl,
-                              decoration: InputDecoration(
-                                labelText: settings.purposeOfVisitRequired
-                                    ? 'Purpose of visit *'
-                                    : 'Purpose of visit',
-                                border: const OutlineInputBorder(),
-                              ),
-                              maxLines: 2,
-                            ),
-                          ],
-                        );
-                      },
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
                     );
                   },
                 );
@@ -266,29 +271,24 @@ class _SecurityOnFootVisitorScreenState
             ),
       bottomNavigationBar: settings == null
           ? null
-          : StreamBuilder<List<SecurityDenyEntry>>(
-              stream: _service.watchDenyList(),
-              builder: (context, snap) {
-                return SafeBottomBar(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: FilledButton(
-                    onPressed: _submitting || gate == null
-                        ? null
-                        : () => _submit(settings, gate, snap.data ?? []),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: kBrandOrange,
-                    ),
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Log visitor in'),
-                  ),
-                );
-              },
+          : SafeBottomBar(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: FilledButton(
+                onPressed: _submitting || gate == null
+                    ? null
+                    : () => _submit(settings, gate, denyList),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: kBrandOrange,
+                ),
+                child: _submitting
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Log visitor in'),
+              ),
             ),
     );
   }

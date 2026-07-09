@@ -113,21 +113,49 @@ class SecurityService {
         );
   }
 
-  Stream<List<SecurityDenyEntry>> watchDenyList({bool activeOnly = true}) {
-    return _db.collection(Collections.securityDenyList).snapshots().map((snap) {
-      var list = snap.docs.map(SecurityDenyEntry.fromFirestore).toList();
-      if (activeOnly) list = list.where((e) => e.active).toList();
-      return list;
-    });
+  List<SecurityDenyEntry> _mapDenyList(
+    QuerySnapshot<Map<String, dynamic>> snap, {
+    required bool activeOnly,
+  }) {
+    var list = snap.docs.map(SecurityDenyEntry.fromFirestore).toList();
+    if (activeOnly) list = list.where((e) => e.active).toList();
+    return list;
   }
 
+  /// One-shot deny list (ref data — not live).
+  Future<List<SecurityDenyEntry>> fetchDenyList({bool activeOnly = true}) async {
+    final snap = await _db.collection(Collections.securityDenyList).get();
+    return _mapDenyList(snap, activeOnly: activeOnly);
+  }
+
+  /// @deprecated Prefer [fetchDenyList].
+  Stream<List<SecurityDenyEntry>> watchDenyList({bool activeOnly = true}) {
+    return _db.collection(Collections.securityDenyList).snapshots().map(
+          (snap) => _mapDenyList(snap, activeOnly: activeOnly),
+        );
+  }
+
+  List<SecurityContractor> _mapContractors(
+    QuerySnapshot<Map<String, dynamic>> snap, {
+    required bool activeOnly,
+  }) {
+    var list = snap.docs.map(SecurityContractor.fromFirestore).toList();
+    if (activeOnly) list = list.where((c) => c.active).toList();
+    list.sort((a, b) => a.name.compareTo(b.name));
+    return list;
+  }
+
+  Future<List<SecurityContractor>> fetchContractors(
+      {bool activeOnly = true}) async {
+    final snap = await _db.collection(Collections.securityContractors).get();
+    return _mapContractors(snap, activeOnly: activeOnly);
+  }
+
+  /// @deprecated Prefer [fetchContractors].
   Stream<List<SecurityContractor>> watchContractors({bool activeOnly = true}) {
-    return _db.collection(Collections.securityContractors).snapshots().map((snap) {
-      var list = snap.docs.map(SecurityContractor.fromFirestore).toList();
-      if (activeOnly) list = list.where((c) => c.active).toList();
-      list.sort((a, b) => a.name.compareTo(b.name));
-      return list;
-    });
+    return _db.collection(Collections.securityContractors).snapshots().map(
+          (snap) => _mapContractors(snap, activeOnly: activeOnly),
+        );
   }
 
   Stream<List<String>> watchLookupSuggestions(String type) {

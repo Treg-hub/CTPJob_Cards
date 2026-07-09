@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/security_contractor.dart';
+import '../models/security_deny_entry.dart';
 import '../models/security_gate.dart';
 import '../models/security_settings.dart';
 import '../models/security_vehicle.dart';
@@ -105,4 +107,16 @@ final securityServiceProvider = Provider<SecurityService>((ref) {
 final securityVehiclesProvider =
     FutureProvider.autoDispose<List<SecurityVehicle>>((ref) {
   return _securityService.fetchVehicles(activeOnly: true);
+});
+
+/// Deny list — one-shot; invalidate on pull-to-refresh.
+final securityDenyListProvider =
+    FutureProvider.autoDispose<List<SecurityDenyEntry>>((ref) {
+  return _securityService.fetchDenyList(activeOnly: true);
+});
+
+/// Security contractors — one-shot.
+final securityContractorsProvider =
+    FutureProvider.autoDispose<List<SecurityContractor>>((ref) {
+  return _securityService.fetchContractors(activeOnly: true);
 });

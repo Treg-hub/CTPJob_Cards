@@ -2,6 +2,16 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Firestore Phase B polish (2026-07-09)**:
+  - Backfill script `firebase/functions/scripts/backfill_fleet_inbox_denorm.mjs` for legacy inbox denorm.
+  - Security deny list + contractors one-shot providers; vehicle gate + on-foot use them.
+  - User-facing CHANGELOG Phase B entry.
+
+- **Firestore Phase B mobile reads (2026-07-09, build 151)**:
+  - Ink banner one-shot; waste stock one-shot + pull; shared unread inbox; roster cache;
+    View Jobs 100 + load more; ink open-period scope; security gates/vehicles one-shot;
+    copper 90d; work report candidate cache. Fleet CF denorm for urgent banner.
+
 - **Firestore Phase A mobile reads (2026-07-09)**:
   - Manager Dashboard removed from shell; stub points to CTP Pulse `/jobs` Manager desk.
   - Active open-jobs listener **managers/super only**; operators skip factory-wide stream.

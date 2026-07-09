@@ -448,7 +448,7 @@ class _SecurityVehicleGateScreenState
   }
 
   Future<List<SecurityVehicle>> _loadVehicles() async {
-    return _service.watchVehicles().first;
+    return _service.fetchVehicles(activeOnly: true);
   }
 
   /// Opens a document scanner. [afterPreviousScan] waits for the prior route's
@@ -1495,6 +1495,13 @@ class _SecurityVehicleGateScreenState
       );
     }
 
+    final denyList =
+        ref.watch(securityDenyListProvider).valueOrNull ?? <SecurityDenyEntry>[];
+    final vehicles =
+        ref.watch(securityVehiclesProvider).valueOrNull ?? <SecurityVehicle>[];
+    final contractors = ref.watch(securityContractorsProvider).valueOrNull ??
+        <SecurityContractor>[];
+
     return Scaffold(
       appBar: AppBar(title: Text(_screenTitle)),
       body: StreamBuilder<List<SecurityEntry>>(
@@ -1502,24 +1509,12 @@ class _SecurityVehicleGateScreenState
         builder: (context, entriesSnap) {
           final onSite =
               _service.computeOnSite(entriesSnap.data ?? []);
-          return StreamBuilder<List<SecurityDenyEntry>>(
-            stream: _service.watchDenyList(),
-            builder: (context, denySnap) {
-              return StreamBuilder<List<SecurityVehicle>>(
-                stream: _service.watchVehicles(),
-                builder: (context, vehicleSnap) {
-                  return StreamBuilder<List<SecurityContractor>>(
-                    stream: _service.watchContractors(),
-                    builder: (context, contractorSnap) {
-                      return StreamBuilder<List<String>>(
+          return StreamBuilder<List<String>>(
                         stream: _service.watchLookupSuggestions('host'),
                         builder: (context, hostSnap) {
                           return StreamBuilder<List<String>>(
                             stream: _service.watchLookupSuggestions('company'),
                             builder: (context, companySnap) {
-                              final vehicles = vehicleSnap.data ?? [];
-                              final contractors =
-                                  contractorSnap.data ?? [];
                               final licenceRequired =
                                   settings.driverLicenceScanRequired;
                               final recorded =
@@ -1646,65 +1641,43 @@ class _SecurityVehicleGateScreenState
                           );
                         },
                       );
-                    },
-                  );
-                },
-              );
-            },
-          );
         },
       ),
       bottomNavigationBar: gate == null
           ? null
-          : StreamBuilder<List<SecurityDenyEntry>>(
-              stream: _service.watchDenyList(),
-              builder: (context, denySnap) {
-                return StreamBuilder<List<SecurityVehicle>>(
-                  stream: _service.watchVehicles(),
-                  builder: (context, vehicleSnap) {
-                    return StreamBuilder<List<SecurityEntry>>(
-                      stream: _service.watchRecentEntries(limit: 200),
-                      builder: (context, entriesSnap) {
-                        final onSite = _service.computeOnSite(
-                          entriesSnap.data ?? [],
-                        );
-                        return StreamBuilder<List<SecurityContractor>>(
-                          stream: _service.watchContractors(),
-                          builder: (context, contractorSnap) {
-                            return SafeBottomBar(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                              child: FilledButton(
-                                onPressed: _submitting
-                                    ? null
-                                    : () => _submit(
-                                          settings,
-                                          gate,
-                                          denySnap.data ?? [],
-                                          vehicleSnap.data ?? [],
-                                          onSite,
-                                          contractorSnap.data ?? [],
-                                        ),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                  backgroundColor: kBrandOrange,
-                                ),
-                                child: _submitting
-                                    ? const SizedBox(
-                                        height: 22,
-                                        width: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Text(_submitLabel),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
+          : StreamBuilder<List<SecurityEntry>>(
+              stream: _service.watchRecentEntries(limit: 200),
+              builder: (context, entriesSnap) {
+                final onSite = _service.computeOnSite(
+                  entriesSnap.data ?? [],
+                );
+                return SafeBottomBar(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: FilledButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => _submit(
+                              settings,
+                              gate,
+                              denyList,
+                              vehicles,
+                              onSite,
+                              contractors,
+                            ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: kBrandOrange,
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(_submitLabel),
+                  ),
                 );
               },
             ),

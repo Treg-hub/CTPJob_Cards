@@ -6,6 +6,26 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-09 — Lighter Firestore reads (Phase B)
+
+### What you will notice
+
+- **Ink daily readings** banner on Home only appears when readings are still incomplete (not a constant live update).
+- **Waste on-site stock** lists load once; **pull down to refresh** when you need newer stock.
+- **View Jobs** loads 100 jobs per status tab; pull to refresh, use **Load more** for older rows.
+- **Fleet urgent banner** clears when issues are fixed without extra loading lag (server keeps inbox in sync).
+- **Copper transactions** default to the **last 90 days** (pick a custom range if needed).
+- Security gate / visitor screens use cached deny list, vehicles, and contractors (pull to refresh on Security home / on-foot).
+
+### For admins
+
+- Fleet CF already parks `issueStatus` / `issueDeleted` on inbox items. Optional one-off:  
+  `node firebase/functions/scripts/backfill_fleet_inbox_denorm.mjs --dry-run` then without `--dry-run`.
+- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A + B.
+- Pilot smoke before factory APK rollout.
+
+---
+
 ## 2026-07-09 — Lighter Firestore reads (Manager desk on Pulse)
 
 ### What you will notice

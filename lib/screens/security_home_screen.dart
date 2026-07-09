@@ -61,6 +61,8 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
         onRefresh: () async {
           ref.invalidate(securityGatesProvider);
           ref.invalidate(securityVehiclesProvider);
+          ref.invalidate(securityDenyListProvider);
+          ref.invalidate(securityContractorsProvider);
           ref.invalidate(securitySettingsProvider);
           await ref.read(securityGatesProvider.future);
         },
