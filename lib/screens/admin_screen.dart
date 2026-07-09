@@ -71,9 +71,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _inkNotesController = TextEditingController();
   final TextEditingController _inkUrlController = TextEditingController();
   final TextEditingController _inkShaController = TextEditingController();
-  final TextEditingController _inkDeptsController =
-      TextEditingController(text: 'Ink Factory');
-  // Testers channel
+  /// Department / people targets for the "departments" channel (id: ink).
+  Set<String> _inkDepartments = {};
+  Set<String> _inkClockNos = {};
+  // People / pilot channel (id: testers) — highest match priority
   bool _testersEnabled = false;
   bool _testersForce = false;
   final TextEditingController _testersVersionController = TextEditingController();
@@ -81,7 +82,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   final TextEditingController _testersNotesController = TextEditingController();
   final TextEditingController _testersUrlController = TextEditingController();
   final TextEditingController _testersShaController = TextEditingController();
-  final TextEditingController _testersClocksController = TextEditingController();
+  Set<String> _testerDepartments = {};
+  Set<String> _testerClockNos = {};
   bool _killSwitchLoading = true;
   String? _thisDeviceBuildLabel;
   String? _thisDeviceVersion;
@@ -187,13 +189,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     _inkNotesController.dispose();
     _inkUrlController.dispose();
     _inkShaController.dispose();
-    _inkDeptsController.dispose();
     _testersVersionController.dispose();
     _testersBuildController.dispose();
     _testersNotesController.dispose();
     _testersUrlController.dispose();
     _testersShaController.dispose();
-    _testersClocksController.dispose();
     _stage1MinController.dispose();
     _stage2MinController.dispose();
     _stage3MinController.dispose();
@@ -294,18 +294,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         _inkNotesController.text = ink.releaseNotes;
         _inkUrlController.text = ink.downloadUrl;
         _inkShaController.text = ink.apkSha256;
-        _inkDeptsController.text = ink.match.departments.isEmpty
-            ? 'Ink Factory'
-            : ink.match.departments.join(', ');
+        _inkDepartments = ink.match.departments.toSet();
+        if (_inkDepartments.isEmpty &&
+            (ink.hasPublishMetadata || ink.enabled)) {
+          // Sensible default for first-time ink channel setup
+          _inkDepartments = {'Ink Factory'};
+        }
+        _inkClockNos = ink.match.clockNos.toSet();
         _testersEnabled = testers.enabled &&
-            (testers.hasPublishMetadata || testers.match.clockNos.isNotEmpty);
+            (testers.hasPublishMetadata ||
+                testers.match.clockNos.isNotEmpty ||
+                testers.match.departments.isNotEmpty);
         _testersForce = testers.forceUpdate;
         _testersVersionController.text = testers.latestVersion;
         _testersBuildController.text = testers.latestBuild;
         _testersNotesController.text = testers.releaseNotes;
         _testersUrlController.text = testers.downloadUrl;
         _testersShaController.text = testers.apkSha256;
-        _testersClocksController.text = testers.match.clockNos.join(', ');
+        _testerClockNos = testers.match.clockNos.toSet();
+        _testerDepartments = testers.match.departments.toSet();
         _thisDeviceBuildLabel = deviceLabel;
         _thisDeviceVersion = deviceVersion;
         _thisDeviceBuild = deviceBuild;
@@ -349,11 +356,327 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     });
   }
 
-  List<String> _splitCsv(String raw) => raw
-      .split(RegExp(r'[,;\n]'))
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
+  /// Departments from live employees + factory structure keys.
+  List<String> get _departmentOptions {
+    final s = <String>{};
+    for (final e in _allEmployees) {
+      final d = e.department.trim();
+      if (d.isNotEmpty) s.add(d);
+    }
+    for (final k in _structure.keys) {
+      final d = k.toString().trim();
+      if (d.isNotEmpty) s.add(d);
+    }
+    final list = s.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
+  List<Employee> get _employeesSorted {
+    final list = List<Employee>.from(_allEmployees);
+    list.sort((a, b) {
+      final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      if (byName != 0) return byName;
+      return a.clockNo.compareTo(b.clockNo);
+    });
+    return list;
+  }
+
+  /// Chip labels for selected clocks: "Name (22)".
+  List<String> _employeeChipLabels(Set<String> clocks) {
+    final byClock = {for (final e in _allEmployees) e.clockNo: e};
+    final labels = <String>[];
+    final sorted = clocks.toList()..sort();
+    for (final c in sorted) {
+      final e = byClock[c];
+      if (e == null || e.name.trim().isEmpty) {
+        labels.add(c);
+      } else {
+        labels.add('${e.name.trim()} ($c)');
+      }
+    }
+    return labels;
+  }
+
+  Future<void> _pickDepartments({
+    required Set<String> selected,
+    required void Function(Set<String>) onSave,
+  }) async {
+    if (_departmentOptions.isEmpty && _allEmployees.isEmpty) {
+      await _loadEmployees();
+      await _loadStructure();
+    }
+    if (!mounted) return;
+    final options = _departmentOptions;
+    if (options.isEmpty) {
+      _showError('No departments found. Load employees or factory structure first.');
+      return;
+    }
+    final draft = Set<String>.from(selected);
+    final filterCtrl = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final q = filterCtrl.text.trim().toLowerCase();
+          final filtered = q.isEmpty
+              ? options
+              : options.where((d) => d.toLowerCase().contains(q)).toList();
+          return AlertDialog(
+            title: const Text('Select departments'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: filterCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Filter departments…',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${draft.length} selected',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(ctx).appColors.textMuted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final d = filtered[i];
+                        final on = draft.contains(d);
+                        final count = _allEmployees
+                            .where((e) => e.department.trim() == d)
+                            .length;
+                        return CheckboxListTile(
+                          dense: true,
+                          value: on,
+                          title: Text(d, style: const TextStyle(fontSize: 14)),
+                          subtitle: Text(
+                            count == 1 ? '1 employee' : '$count employees',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (v) => setLocal(() {
+                            if (v == true) {
+                              draft.add(d);
+                            } else {
+                              draft.remove(d);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => setLocal(() => draft.clear()),
+                child: const Text('Clear'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  onSave(Set<String>.from(draft));
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    filterCtrl.dispose();
+  }
+
+  Future<void> _pickEmployees({
+    required Set<String> selectedClocks,
+    required void Function(Set<String>) onSave,
+  }) async {
+    if (_allEmployees.isEmpty) {
+      await _loadEmployees();
+    }
+    if (!mounted) return;
+    if (_allEmployees.isEmpty) {
+      _showError('No employees loaded.');
+      return;
+    }
+    final draft = Set<String>.from(selectedClocks);
+    final filterCtrl = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final q = filterCtrl.text.trim().toLowerCase();
+          final list = _employeesSorted.where((e) {
+            if (q.isEmpty) return true;
+            return e.name.toLowerCase().contains(q) ||
+                e.clockNo.toLowerCase().contains(q) ||
+                e.department.toLowerCase().contains(q) ||
+                e.position.toLowerCase().contains(q);
+          }).toList();
+          return AlertDialog(
+            title: const Text('Select people'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 460,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: filterCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Search name, clock, department…',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${draft.length} selected · ${list.length} shown',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(ctx).appColors.textMuted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final e = list[i];
+                        final on = draft.contains(e.clockNo);
+                        return CheckboxListTile(
+                          dense: true,
+                          value: on,
+                          title: Text(
+                            e.name.isEmpty ? e.clockNo : e.name,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '${e.clockNo} · ${e.department} · ${e.position}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (v) => setLocal(() {
+                            if (v == true) {
+                              draft.add(e.clockNo);
+                            } else {
+                              draft.remove(e.clockNo);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => setLocal(() => draft.clear()),
+                child: const Text('Clear'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  onSave(Set<String>.from(draft));
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    filterCtrl.dispose();
+  }
+
+  Widget _selectionSummary({
+    required String title,
+    required List<String> chips,
+    required String emptyHint,
+    required VoidCallback onEdit,
+    String? subtitle,
+  }) {
+    final colors = Theme.of(context).appColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textMuted,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.checklist, size: 18),
+              label: Text(chips.isEmpty ? 'Select' : 'Edit'),
+            ),
+          ],
+        ),
+        if (subtitle != null)
+          Text(subtitle, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+        if (chips.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(emptyHint, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in chips.take(24))
+                  Chip(
+                    label: Text(c, style: const TextStyle(fontSize: 12)),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                if (chips.length > 24)
+                  Chip(
+                    label: Text('+${chips.length - 24} more',
+                        style: const TextStyle(fontSize: 12)),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 
   Future<void> _copyRemoteConfigSnippet() async {
     final version = _pubVersionController.text.trim();
@@ -476,14 +799,24 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         return;
       }
     }
+    if (_inkEnabled) {
+      if (_inkDepartments.isEmpty && _inkClockNos.isEmpty) {
+        _showError(
+          'Department channel needs at least one department or person selected.',
+        );
+        return;
+      }
+    }
     if (_testersEnabled) {
       final tb = _testersBuildController.text.trim();
       if (tb.isNotEmpty && int.tryParse(tb) == null) {
-        _showError('Testers channel build must be a whole number');
+        _showError('People channel build must be a whole number');
         return;
       }
-      if (_testersClocksController.text.trim().isEmpty) {
-        _showError('Testers channel needs at least one clock number.');
+      if (_testerClockNos.isEmpty && _testerDepartments.isEmpty) {
+        _showError(
+          'People / pilot channel needs at least one person or department selected.',
+        );
         return;
       }
     }
@@ -501,7 +834,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final inkCh = UpdateChannel(
       id: 'ink',
       enabled: _inkEnabled,
-      match: UpdateChannelMatch(departments: _splitCsv(_inkDeptsController.text)),
+      match: UpdateChannelMatch(
+        departments: _inkDepartments.toList()..sort(),
+        clockNos: _inkClockNos.toList()..sort(),
+      ),
       latestVersion: _inkVersionController.text.trim(),
       latestBuild: _inkBuildController.text.trim(),
       downloadUrl: _inkUrlController.text.trim(),
@@ -512,7 +848,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final testersCh = UpdateChannel(
       id: 'testers',
       enabled: _testersEnabled,
-      match: UpdateChannelMatch(clockNos: _splitCsv(_testersClocksController.text)),
+      match: UpdateChannelMatch(
+        clockNos: _testerClockNos.toList()..sort(),
+        departments: _testerDepartments.toList()..sort(),
+      ),
       latestVersion: _testersVersionController.text.trim(),
       latestBuild: _testersBuildController.text.trim(),
       downloadUrl: _testersUrlController.text.trim(),
@@ -1964,9 +2303,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           ]),
           const SizedBox(height: 4),
           Text(
-            'Channels: Default (everyone), Ink (department), Testers (clock list). '
+            'Channels: Default (everyone), Departments, People/pilot. '
+            'Pick departments or people from your live employee lists. '
             'Soft = Home banner only. Force = full-screen until install. '
-            'Match order: Testers → Ink → Default. Old APKs only see Default.',
+            'Match order: People → Departments → Default. Old APKs only see Default.',
             style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
           ),
           if (_thisDeviceBuildLabel != null) ...[
@@ -2040,7 +2380,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     onChanged: (v) => setState(() => _pubForceUpdate = v),
                   ),
                   const Divider(height: 28),
-                  _channelHeader('Ink Factory', 'Force only ink users when needed'),
+                  _channelHeader(
+                    'Departments channel',
+                    'Any departments (and optional people) — e.g. Ink Factory only',
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Enabled', style: TextStyle(fontSize: 14)),
@@ -2049,11 +2392,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     onChanged: (v) => setState(() => _inkEnabled = v),
                   ),
                   if (_inkEnabled) ...[
-                    TextField(
-                      controller: _inkDeptsController,
-                      decoration: _inputDecoration('Departments (comma-separated)', hint: 'Ink Factory'),
+                    _selectionSummary(
+                      title: 'Departments',
+                      chips: _inkDepartments.toList()..sort(),
+                      emptyHint: 'No departments selected.',
+                      subtitle: 'From employee list + factory structure.',
+                      onEdit: () => _pickDepartments(
+                        selected: _inkDepartments,
+                        onSave: (s) => setState(() => _inkDepartments = s),
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    _selectionSummary(
+                      title: 'People (optional)',
+                      chips: _employeeChipLabels(_inkClockNos),
+                      emptyHint: 'Optional — also include specific people.',
+                      onEdit: () => _pickEmployees(
+                        selectedClocks: _inkClockNos,
+                        onSave: (s) => setState(() => _inkClockNos = s),
+                      ),
+                    ),
                     Row(children: [
                       Expanded(
                         child: TextField(
@@ -2084,7 +2441,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     TextField(
                       controller: _inkNotesController,
                       maxLines: 2,
-                      decoration: _inputDecoration('Notes', hint: 'Ink-specific changes'),
+                      decoration: _inputDecoration('Notes', hint: 'Module-specific changes'),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -2093,9 +2450,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Force update Ink only', style: TextStyle(fontSize: 14)),
+                      title: const Text('Force update this channel only', style: TextStyle(fontSize: 14)),
                       subtitle: Text(
-                        'Does not force other departments. Keep Default build lower so old APKs stay quiet.',
+                        'Only selected departments/people. Keep Default build lower so the rest of the factory is not forced.',
                         style: TextStyle(fontSize: 11, color: Theme.of(context).appColors.textMuted),
                       ),
                       value: _inkForce,
@@ -2104,7 +2461,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     ),
                   ],
                   const Divider(height: 28),
-                  _channelHeader('Testers', 'Clock-number list — highest priority'),
+                  _channelHeader(
+                    'People / pilot channel',
+                    'Highest priority — select people and/or departments from lists',
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Enabled', style: TextStyle(fontSize: 14)),
@@ -2113,11 +2473,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     onChanged: (v) => setState(() => _testersEnabled = v),
                   ),
                   if (_testersEnabled) ...[
-                    TextField(
-                      controller: _testersClocksController,
-                      decoration: _inputDecoration('Clock numbers', hint: '22, 50, 101'),
+                    _selectionSummary(
+                      title: 'People',
+                      chips: _employeeChipLabels(_testerClockNos),
+                      emptyHint: 'No people selected.',
+                      subtitle: 'From the full employee list (searchable).',
+                      onEdit: () => _pickEmployees(
+                        selectedClocks: _testerClockNos,
+                        onSave: (s) => setState(() => _testerClockNos = s),
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    _selectionSummary(
+                      title: 'Departments (optional)',
+                      chips: _testerDepartments.toList()..sort(),
+                      emptyHint: 'Optional whole departments on this pilot channel.',
+                      onEdit: () => _pickDepartments(
+                        selected: _testerDepartments,
+                        onSave: (s) => setState(() => _testerDepartments = s),
+                      ),
+                    ),
                     Row(children: [
                       Expanded(
                         child: TextField(
@@ -2157,7 +2531,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Force update testers', style: TextStyle(fontSize: 14)),
+                      title: const Text('Force update this channel', style: TextStyle(fontSize: 14)),
                       value: _testersForce,
                       activeThumbColor: kBrandOrange,
                       onChanged: (v) => setState(() => _testersForce = v),
