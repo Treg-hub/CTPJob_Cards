@@ -1,33 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../main.dart' show currentEmployee;
+import '../main.dart' show currentEmployee, realEmployee;
 import '../models/security_entry.dart';
 import '../services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/persona_audit.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ctp_app_bar.dart';
 import 'security_visitor_sign_out_screen.dart';
 import 'security_vehicle_gate_screen.dart';
 
 /// Tabbed on-site screen: Tab 1 vehicles (grouped by entry type), Tab 2
-/// on-foot visitors. Rows are tappable for drill-in to scan-out.
+/// on-foot visitors. Same shell pattern as My Work (CtpAppBar + full-width
+/// TabBar + swipeable TabBarView).
 class SecurityOnSiteScreen extends StatelessWidget {
   const SecurityOnSiteScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final service = SecurityService();
+    final onSite =
+        realEmployee?.isOnSite ?? currentEmployee?.isOnSite ?? true;
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('On Site'),
-          // The AppBar is brand orange in both themes; the dark theme's global
-          // TabBar colours are orange, which would be orange-on-orange here.
-          // Use black to match the AppBar's black foreground (title/icons).
+        appBar: CtpAppBar(
+          title: 'On Site',
+          isOnSite: onSite,
+          // Brand-orange app bar: black tab labels match My Work / home shell.
           bottom: const TabBar(
+            isScrollable: false,
             labelColor: Colors.black,
             unselectedLabelColor: Colors.black54,
             indicatorColor: Colors.black,
@@ -38,16 +42,14 @@ class SecurityOnSiteScreen extends StatelessWidget {
           ),
         ),
         body: StreamBuilder<List<SecurityEntry>>(
-          // Time-window scoping: 7 days is enough to catch anything
-          // genuinely still on site while bounding read volume (was: an
-          // unscoped `limit: 300` across ALL entry types, which could miss
-          // a long-dwelling vehicle/visitor beyond the 300 most recent
-          // gate events).
+          // Time-window scoping: 14 days is enough for long-dwell while
+          // bounding read volume.
           stream: service.watchRecentEntriesSince(
-            since: DateTime.now().subtract(const Duration(days: 14)), // Harmonized window using createdAt for reliability
+            since: DateTime.now().subtract(const Duration(days: 14)),
           ),
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
+            if (snap.connectionState == ConnectionState.waiting &&
+                !snap.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
             final entries = snap.data ?? [];

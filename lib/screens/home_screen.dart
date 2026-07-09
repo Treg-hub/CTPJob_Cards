@@ -200,13 +200,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _fleetMechanicNavDone = false;
   bool _securityGuardNavDone = false;
 
+  /// Index of the first module tab after Home / My Work / Copper.
+  /// Must stay aligned with [_shellTabAtIndex] and the bottom-nav children list
+  /// (Manager Dashboard tab was removed — do not reserve a slot for it).
   int _indexAfterCoreTabs() {
     var idx = 1; // 0 = Home
     if (_showMyWorkNav) idx++;
-    if (currentEmployee != null &&
-        currentEmployee!.position.toLowerCase().contains('manager')) {
-      idx++;
-    }
     if (_isCopperAuthorized) idx++;
     return idx;
   }

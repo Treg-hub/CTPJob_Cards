@@ -67,11 +67,19 @@ class ApkInstallService {
     }
 
     final client = HttpClient();
+    // Avoid transparent compression so Content-Length matches on-disk APK size
+    // (gzip/deflate can make progress show a wrong "total", e.g. a tiny number).
+    client.autoUncompress = false;
     _activeClient = client;
     try {
       final uri = Uri.parse(url);
+
+      // Prefer HEAD Content-Length (Firebase Hosting / CDN) before streaming.
+      int? total = await _probeContentLength(client, uri);
+
       final request = await client.getUrl(uri);
       request.followRedirects = true;
+      request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
       final response = await request.close();
       if (_cancelled) {
         throw const ApkInstallException('Download cancelled');
@@ -82,8 +90,15 @@ class ApkInstallService {
         );
       }
 
-      final total =
-          response.contentLength >= 0 ? response.contentLength : null;
+      final fromGet = _contentLengthFromResponse(response);
+      // Trust a positive GET length; else keep HEAD. Ignore tiny/wrong totals
+      // (real release APKs are multi‑MB; a total of a few dozen bytes is noise).
+      if (fromGet != null && fromGet >= 1024 * 1024) {
+        total = fromGet;
+      } else if (total == null || total < 1024 * 1024) {
+        total = fromGet != null && fromGet >= 1024 * 1024 ? fromGet : null;
+      }
+
       var received = 0;
       final sink = file.openWrite();
       try {
@@ -93,7 +108,14 @@ class ApkInstallService {
           }
           sink.add(chunk);
           received += chunk.length;
-          onProgress?.call(received, total);
+          // If server under-reported size, stop using total so UI shows
+          // indeterminate + received-only instead of capping at e.g. "22 MB".
+          var reportTotal = total;
+          if (reportTotal != null && received > reportTotal) {
+            reportTotal = null;
+            total = null;
+          }
+          onProgress?.call(received, reportTotal);
         }
       } finally {
         await sink.close();
@@ -103,6 +125,8 @@ class ApkInstallService {
         if (await file.exists()) await file.delete();
         throw const ApkInstallException('Download was empty');
       }
+      // Final tick with real file size (authoritative for the status line).
+      onProgress?.call(received, received);
       return file;
     } on ApkInstallException {
       if (await file.exists()) {
@@ -140,6 +164,32 @@ class ApkInstallService {
     _cancelled = true;
     _activeClient?.close(force: true);
     _activeClient = null;
+  }
+
+  /// HEAD (or short probe) for Content-Length without downloading the body.
+  static Future<int?> _probeContentLength(HttpClient client, Uri uri) async {
+    try {
+      final head = await client.headUrl(uri);
+      head.followRedirects = true;
+      head.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+      final res = await head.close();
+      // Drain any body (some CDNs still send a tiny payload on HEAD).
+      await res.drain<void>();
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      return _contentLengthFromResponse(res);
+    } catch (e) {
+      debugPrint('ApkInstallService: HEAD size probe failed: $e');
+      return null;
+    }
+  }
+
+  static int? _contentLengthFromResponse(HttpClientResponse response) {
+    if (response.contentLength >= 0) return response.contentLength;
+    final raw = response.headers.value(HttpHeaders.contentLengthHeader);
+    if (raw == null || raw.isEmpty) return null;
+    final n = int.tryParse(raw.trim());
+    if (n == null || n < 0) return null;
+    return n;
   }
 
   /// When [expectedHex] is non-empty, require the file's SHA-256 to match

@@ -75,14 +75,7 @@ class _SecurityHomeScreenState extends ConsumerState<SecurityHomeScreen> {
           ScreenInsets.scrollBottomInHomeShell(),
         ),
         children: [
-          Text(
-            'Site Security',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: kBrandOrange,
-                ),
-          ),
-          const SizedBox(height: 4),
+          // Title is already on the Home shell app bar when this tab is active.
           Text(
             'Select your gate, then choose an action below.',
             style: TextStyle(

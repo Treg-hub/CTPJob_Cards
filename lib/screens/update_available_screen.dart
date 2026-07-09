@@ -125,7 +125,8 @@ class _UpdateAvailableScreenState extends State<UpdateAvailableScreen>
           if (!mounted) return;
           setState(() {
             if (total != null && total > 0) {
-              _progress = received / total;
+              // Clamp so a wrong Content-Length never shows >100%.
+              _progress = (received / total).clamp(0.0, 1.0);
               _statusLine =
                   'Downloading… ${_formatBytes(received)} / ${_formatBytes(total)}';
             } else {
@@ -135,6 +136,14 @@ class _UpdateAvailableScreenState extends State<UpdateAvailableScreen>
           });
         },
       );
+
+      if (mounted) {
+        final size = await file.length();
+        setState(() {
+          _progress = 1.0;
+          _statusLine = 'Download complete (${_formatBytes(size)})';
+        });
+      }
 
       await _install.verifySha256(file, widget.apkSha256);
       if (!mounted) return;
@@ -274,11 +283,17 @@ class _UpdateAvailableScreenState extends State<UpdateAvailableScreen>
   }
 
   static String _formatBytes(int bytes) {
+    if (bytes < 0) return '0 B';
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+      final kb = bytes / 1024;
+      return kb < 10
+          ? '${kb.toStringAsFixed(1)} KB'
+          : '${kb.toStringAsFixed(0)} KB';
     }
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    final mb = bytes / (1024 * 1024);
+    // One decimal for multi‑MB APKs so ~44 MB does not look like "22".
+    return '${mb.toStringAsFixed(1)} MB';
   }
 
   @override
