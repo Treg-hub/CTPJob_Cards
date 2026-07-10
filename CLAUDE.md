@@ -21,15 +21,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Never push implementation commits directly to `master`.** Hotfixes to CLAUDE.md or settings files are the only acceptable direct-to-master commits.
 
-### Build number hook
-Every commit auto-increments the Flutter build number in `pubspec.yaml` (`version: X.Y.Z+N`). Enable once per clone:
+### Build number (release only — not every commit)
+
+`pubspec.yaml` `version: X.Y.Z+N` is bumped **only when shipping an APK**, not on ordinary commits (CF, docs, lint).
+
+| Ritual | Skill | Hosting file |
+|--------|--------|----------------|
+| Factory | `/mobile-app-release` (monorepo skill) | `releases/latest.apk` |
+| Pilot | `/mobile-pilot-release` | `releases/pilot.apk` |
 
 ```bash
-pwsh scripts/setup-githooks.ps1   # Windows
-sh scripts/setup-githooks.sh      # macOS/Linux
+# Explicit bump (skills run this before build unless user already bumped)
+node scripts/bump-build-number.js
 ```
 
-Do not manually bump `+N` — `githooks/pre-commit` stages the updated `pubspec.yaml` for you.
+Then prepend `docs/CHANGELOG.md` with the **exact** new build number, build, publish.  
+Admin App Update Control version/build must match the binary on Hosting.
+
+`githooks/pre-commit` does **not** auto-bump. Optional: `pwsh scripts/setup-githooks.ps1` only sets hooks path (no version side effects).
 
 ## Project Overview
 

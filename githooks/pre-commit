@@ -1,9 +1,10 @@
 #!/bin/sh
-# Auto-bump Flutter build number (+N) before every commit.
-set -e
-
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
-
-node scripts/bump-build-number.js
-git add pubspec.yaml
+# Intentionally empty of version bumps.
+#
+# Build numbers (+N in pubspec.yaml) are bumped only by release rituals:
+#   /mobile-app-release  → factory latest.apk
+#   /mobile-pilot-release → pilot.apk
+# via: node scripts/bump-build-number.js
+#
+# Do not re-add auto-bump here — it desyncs hosted APKs from Admin channels.
+exit 0

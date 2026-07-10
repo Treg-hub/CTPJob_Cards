@@ -48,8 +48,8 @@ cd C:\Users\Admin\CTP-Factory-System\mobile\CTPJob_Cards
 
 | # | Step | Detail |
 |---|------|--------|
-| A1 | Bump version | `pubspec.yaml` → `version: X.Y.Z+BUILD` (**build number must increase**) |
-| A2 | Changelog | Prepend `docs/CHANGELOG.md` with `## … (build N)` using the **exact** build number |
+| A1 | Bump version | Run `node scripts/bump-build-number.js` **once** at release start (or set `X.Y.Z+BUILD` by hand). **Not** on every commit — only factory/pilot skills. Build must increase vs devices you want to update. |
+| A2 | Changelog | Prepend `docs/CHANGELOG.md` with `## … (build N)` using the **exact** build number after the bump |
 | A3 | Decide release mode | Soft factory / force group / pilot (People) / kill-switch only if broken |
 | A4 | Signing | Same keystore as all previous factory installs |
 

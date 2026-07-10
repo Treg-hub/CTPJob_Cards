@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 /**
  * Increments the Flutter build number in pubspec.yaml (the +N suffix).
- * Used by githooks/pre-commit so every commit gets a unique build number.
+ *
+ * Call this only when shipping an APK:
+ *   - /mobile-app-release  (factory latest.apk)
+ *   - /mobile-pilot-release (pilot.apk)
+ *
+ * Not used by git pre-commit (removed — auto-bump desynced channels from binaries).
+ *
+ * Usage (from mobile/CTPJob_Cards):
+ *   node scripts/bump-build-number.js
  */
 const fs = require('fs');
 const path = require('path');
