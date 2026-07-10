@@ -868,6 +868,7 @@ async function sendNotification({
   initiatedByClockNo = null,
   initiatedByName = null,
   feedbackId = null, // feedback-loop deep link (My Feedback thread)
+  forceInbox = false, // true = never FCM; always park (admin stale follow-up)
 }) {
   let emp = null;
   if (recipientClockNo) {
@@ -877,11 +878,11 @@ async function sendNotification({
     }
   }
 
-  if (prefersInboxDelivery(emp)) {
+  if (forceInbox || prefersInboxDelivery(emp)) {
     if (recipientClockNo) {
       console.log(
         `sendNotification: parking for ${recipientClockNo} ` +
-        `(delivery=${emp?.notificationDelivery || "default"}, onSite=${emp?.isOnSite})`,
+        `(forceInbox=${!!forceInbox}, delivery=${emp?.notificationDelivery || "default"}, onSite=${emp?.isOnSite})`,
       );
       await parkToInbox(recipientClockNo, {
         type: triggeredBy || "notification",
@@ -1120,6 +1121,23 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
   const added = toClockNoArray(after.assignedClockNos).filter((c) => !beforeSet.has(c));
   if (added.length === 0) return;
 
+  // Pulse admin stale follow-up: inbox is handled by onJobCardAdminFollowUp
+  // (forceInbox, richer copy). Do not also fire "New Job Assigned" push.
+  if (after.adminFollowUpNotify === true || after.skipAssignmentNotify === true) {
+    console.log(
+      `onJobCardAssigned: admin follow-up on ${event.params.jobId} — defer to onJobCardAdminFollowUp (${added.length} new assignee(s))`,
+    );
+    const cleanup = {};
+    if (after.skipAssignmentNotify === true) {
+      cleanup.skipAssignmentNotify = admin.firestore.FieldValue.delete();
+    }
+    if (after.escalationStopped !== true) cleanup.escalationStopped = true;
+    if (Object.keys(cleanup).length > 0) {
+      await event.data.after.ref.update(cleanup);
+    }
+    return;
+  }
+
   const priority = after.priority || 1;
   const level = getCreationLevel(priority);
   const jobId = event.params.jobId;
@@ -1163,6 +1181,182 @@ exports.onJobCardAssigned = functions.firestore.onDocumentUpdated({ document: "j
   if (after.escalationStopped !== true) {
     await event.data.after.ref.update({ escalationStopped: true });
   }
+});
+
+// ==================== ADMIN STALE FOLLOW-UP (Pulse isAdmin) ====================
+// Inbox-only accountability for forgotten/long-open job cards. Never FCM push.
+// Client sets adminFollowUpNotify=true + stamps (note, kind, by). Recipients:
+// new assignees, removed assignees, job creator (operatorClockNo).
+function adminFollowUpKindLabel(kind) {
+  switch (String(kind || "")) {
+    case "assign": return "updated assignees";
+    case "status": return "changed status";
+    case "close": return "closed this job";
+    case "monitor": return "moved this job to monitoring";
+    case "detail": return "added follow-up detail";
+    case "fields": return "updated job fields";
+    default: return "followed up on this job";
+  }
+}
+
+function normalizeStatusLabel(raw) {
+  const s = (raw || "").toString().trim();
+  if (!s) return "Open";
+  const lower = s.toLowerCase().replace(/\s+/g, "");
+  if (lower === "open") return "Open";
+  if (lower === "inprogress") return "In Progress";
+  if (lower === "monitor" || lower === "monitoring") return "Monitoring";
+  if (lower === "closed") return "Closed";
+  return s;
+}
+
+exports.onJobCardAdminFollowUp = functions.firestore.onDocumentUpdated({ document: "job_cards/{jobId}" }, async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (!before || !after) return;
+  // Rising edge only — avoid loops when we clear adminFollowUpNotify.
+  if (after.adminFollowUpNotify !== true) return;
+  if (before.adminFollowUpNotify === true) return;
+
+  const jobId = event.params.jobId;
+  const jobNum = after.jobCardNumber || jobId;
+  const adminName = after.adminFollowUpByName || after.lastUpdatedByName || "Admin";
+  const adminClock = after.adminFollowUpBy || after.lastUpdatedBy || null;
+  const note = (after.adminFollowUpNote || "").toString().trim();
+  const kind = after.adminFollowUpKind || "fields";
+  const kindLabel = adminFollowUpKindLabel(kind);
+
+  const beforeAssignees = toClockNoArray(before.assignedClockNos);
+  const afterAssignees = toClockNoArray(after.assignedClockNos);
+  const beforeSet = new Set(beforeAssignees);
+  const afterSet = new Set(afterAssignees);
+  const added = afterAssignees.filter((c) => !beforeSet.has(c));
+  const removed = beforeAssignees.filter((c) => !afterSet.has(c));
+
+  const statusBefore = normalizeStatusLabel(before.status);
+  const statusAfter = normalizeStatusLabel(after.status);
+  const statusChanged = statusBefore !== statusAfter;
+  const nameList = Array.isArray(after.assignedNames)
+    ? after.assignedNames.filter(Boolean).join(", ")
+    : "";
+
+  const locationLine = [after.department, after.machine, after.part]
+    .filter(Boolean)
+    .join(" · ");
+
+  const baseLines = [
+    `Admin ${adminName} ${kindLabel} (stale / desk follow-up).`,
+    locationLine ? `Location: ${locationLine}` : null,
+    statusChanged ? `Status: ${statusBefore} → ${statusAfter}` : `Status: ${statusAfter}`,
+    nameList ? `Assignees: ${nameList}` : (afterAssignees.length === 0 ? "Assignees: (none)" : null),
+    note ? `Note: ${note}` : null,
+  ].filter(Boolean);
+  const bodyBase = baseLines.join("\n");
+
+  const title = `Admin follow-up · Job #${jobNum}`;
+  const recipients = new Map(); // clockNo → role tag for logging
+
+  for (const c of added) {
+    if (c) recipients.set(String(c), "assignee_added");
+  }
+  for (const c of removed) {
+    if (c) recipients.set(String(c), "assignee_removed");
+  }
+  // Existing assignees when status/close/detail without reassignment still care.
+  if (statusChanged || kind === "close" || kind === "monitor" || kind === "detail" || kind === "fields") {
+    for (const c of afterAssignees) {
+      if (c && !recipients.has(String(c))) recipients.set(String(c), "assignee_current");
+    }
+  }
+  const creatorClock = after.operatorClockNo ? String(after.operatorClockNo) : null;
+  if (creatorClock) {
+    recipients.set(creatorClock, recipients.get(creatorClock) || "creator");
+  }
+  // Never inbox the acting admin (noise).
+  if (adminClock) recipients.delete(String(adminClock));
+
+  let parked = 0;
+  for (const [clockNo, role] of recipients.entries()) {
+    let body = bodyBase;
+    if (role === "assignee_added") {
+      body = `You were assigned on this job (admin desk — no push alert).\n${bodyBase}`;
+    } else if (role === "assignee_removed") {
+      body = `You were removed as assignee by admin.\n${bodyBase}`;
+    } else if (role === "creator") {
+      body = `A job you reported received an admin follow-up.\n${bodyBase}`;
+    }
+
+    try {
+      await sendNotification({
+        recipientClockNo: clockNo,
+        jobCardId: jobId,
+        jobCardNumber: jobNum,
+        title,
+        body,
+        level: "normal",
+        priority: after.priority || 3,
+        createdBy: after.operator || "Unknown",
+        department: after.department,
+        area: after.area,
+        machine: after.machine,
+        part: after.part,
+        triggeredBy: "admin_stale_followup",
+        initiatedByClockNo: adminClock,
+        initiatedByName: adminName,
+        forceInbox: true,
+      });
+      parked++;
+    } catch (e) {
+      console.error(`onJobCardAdminFollowUp: park failed for ${clockNo}:`, e);
+    }
+  }
+
+  // Explicit audit row (in addition to generic onJobCardWritten field diff).
+  try {
+    await db.collection("job_card_audit").add({
+      jobCardId: jobId,
+      jobCardNumber: after.jobCardNumber ?? null,
+      eventType: "admin_stale_followup",
+      action: "admin_stale_followup",
+      kind,
+      note: note || null,
+      statusBefore,
+      statusAfter,
+      assigneesBefore: beforeAssignees,
+      assigneesAfter: afterAssignees,
+      assigneesAdded: added,
+      assigneesRemoved: removed,
+      actorClockNo: adminClock,
+      actorName: adminName,
+      inboxRecipients: [...recipients.keys()],
+      inboxParked: parked,
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error(`onJobCardAdminFollowUp: audit failed for ${jobId}:`, e);
+  }
+
+  const cleanup = {
+    adminFollowUpNotify: admin.firestore.FieldValue.delete(),
+  };
+  if (after.skipAssignmentNotify === true) {
+    cleanup.skipAssignmentNotify = admin.firestore.FieldValue.delete();
+  }
+  // Stop escalation when closed or has assignees.
+  const closed = normalizeStatusLabel(after.status) === "Closed";
+  if (closed || afterAssignees.length > 0) {
+    if (after.escalationStopped !== true) cleanup.escalationStopped = true;
+  }
+
+  try {
+    await event.data.after.ref.update(cleanup);
+  } catch (e) {
+    console.error(`onJobCardAdminFollowUp: cleanup flags failed for ${jobId}:`, e);
+  }
+
+  console.log(
+    `onJobCardAdminFollowUp: job=${jobId} kind=${kind} parked=${parked} recipients=${recipients.size}`,
+  );
 });
 
 // ==================== SCHEDULED: ESCALATION (4 stages, config-driven) ====================
@@ -1741,6 +1935,8 @@ const AUDIT_SKIP_FIELDS = new Set([
   // System stamps — auditing these would bury the real actions in noise.
   "notifiedAtStage1", "notifiedAtStage2", "notifiedAtStage3", "notifiedAtStage4",
   "escalationStopped", "lastUpdatedAt",
+  // Ephemeral CF flags (admin follow-up / silent-assign handoff).
+  "adminFollowUpNotify", "skipAssignmentNotify",
   // reviewedBy is its own per-manager timestamped record on the job doc; the
   // daily-review bulk stamp would otherwise emit hundreds of entries at once.
   "reviewedBy",

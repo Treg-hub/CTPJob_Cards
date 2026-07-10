@@ -6,6 +6,56 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-10 — Pilot 2.3.0+155
+
+### What you will notice
+
+- Analyzer cleanups (waste screens unused imports, share API, update service mounted checks).
+- **Admin stale job follow-up** is on **CTP Pulse** (web, admins only) + Cloud Functions — not a new mobile screen. Affected people get an **inbox** message only (no push re-alert).
+
+### For admins
+
+- Deployed: `onJobCardAdminFollowUp` (jobcards codebase). Pulse must be deployed separately for the dialog UI.
+- Pilot channel: point Departments/People **Channel APK URL** at `…/releases/pilot.apk`. Keep **Shared / Default** on factory `latest.apk`.
+
+---
+
+## 2026-07-09 — Lighter Firestore reads (Phase B)
+
+### What you will notice
+
+- **Ink daily readings** banner on Home only appears when readings are still incomplete (not a constant live update).
+- **Waste on-site stock** lists load once; **pull down to refresh** when you need newer stock.
+- **View Jobs** loads 100 jobs per status tab; pull to refresh, use **Load more** for older rows.
+- **Fleet urgent banner** clears when issues are fixed without extra loading lag (server keeps inbox in sync).
+- **Copper transactions** default to the **last 90 days** (pick a custom range if needed).
+- Security gate / visitor screens use cached deny list, vehicles, and contractors (pull to refresh on Security home / on-foot).
+
+### For admins
+
+- Fleet CF already parks `issueStatus` / `issueDeleted` on inbox items. Optional one-off:  
+  `node firebase/functions/scripts/backfill_fleet_inbox_denorm.mjs --dry-run` then without `--dry-run`.
+- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A + B.
+- Pilot smoke before factory APK rollout.
+
+---
+
+## 2026-07-09 — Lighter Firestore reads (Manager desk on Pulse)
+
+### What you will notice
+
+- **Manager Dashboard** is no longer a tab in the mobile app. Department KPIs and analytics live on **CTP Pulse** (web) under **Job Cards**.
+- **View Jobs** only loads the status tab you are looking at (Open / In Progress / Monitoring / Closed).
+- **My Work → Closed** shows the most recently closed jobs first.
+- Open/in-progress count badges on Home are for **managers** (saves battery/data for operators).
+
+### For admins
+
+- Deploy composite indexes for My Work closed queries (`firebase/firestore.indexes.json`) before relying on Closed tab sort in production.
+- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A.
+
+---
+
 ## 2026-07-09 — Update check uses Admin publish first (build 147)
 
 ### What you will notice

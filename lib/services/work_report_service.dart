@@ -615,11 +615,11 @@ class WorkReportService {
 
       final jobHours = jobSnap.docs.fold<double>(
         0,
-        (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
+        (total, d) => total + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
       );
       final addHours = addSnap.docs.fold<double>(
         0,
-        (sum, d) => sum + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
+        (total, d) => total + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
       );
 
       await _writePeriodTotals(

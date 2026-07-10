@@ -114,6 +114,7 @@ class UpdateService {
       if (!context.mounted) return;
       final result = await _performUpdateCheck(prefs, now);
       _lastResult = result;
+      if (!context.mounted) return;
       await _applyResult(context, result);
     } catch (e, st) {
       if (!kIsWeb) {
@@ -136,6 +137,7 @@ class UpdateService {
       if (!context.mounted) return;
       final result = await _performUpdateCheck(prefs, now);
       _lastResult = result;
+      if (!context.mounted) return;
       await _applyResult(context, result);
     } catch (e, st) {
       if (!kIsWeb) {

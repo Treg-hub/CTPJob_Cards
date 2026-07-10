@@ -6,6 +6,20 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-10 — Pilot 2.3.0+155
+
+### What you will notice
+
+- Analyzer cleanups (waste screens unused imports, share API, update service mounted checks).
+- **Admin stale job follow-up** is on **CTP Pulse** (web, admins only) + Cloud Functions — not a new mobile screen. Affected people get an **inbox** message only (no push re-alert).
+
+### For admins
+
+- Deployed: `onJobCardAdminFollowUp` (jobcards codebase). Pulse must be deployed separately for the dialog UI.
+- Pilot channel: point Departments/People **Channel APK URL** at `…/releases/pilot.apk`. Keep **Shared / Default** on factory `latest.apk`.
+
+---
+
 ## 2026-07-09 — Lighter Firestore reads (Phase B)
 
 ### What you will notice

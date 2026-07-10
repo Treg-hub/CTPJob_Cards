@@ -258,9 +258,11 @@ class WorkReportPdfExporter {
     required WorkReportPeriod period,
   }) async {
     final periodLabel = WorkReportPeriodUtils.periodLabel(period.periodKey);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: 'My Timesheet — $periodLabel — ${period.employeeName}',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'My Timesheet — $periodLabel — ${period.employeeName}',
+      ),
     );
     return file;
   }

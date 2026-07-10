@@ -7,6 +7,7 @@
 ///
 /// Legacy flat `settings/app` publish fields are treated as the `default`
 /// channel so older clients and new clients stay compatible.
+library;
 
 class UpdateChannelMatch {
   const UpdateChannelMatch({

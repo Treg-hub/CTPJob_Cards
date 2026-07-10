@@ -109,9 +109,11 @@ class WorkReportCsvExporter {
     );
     await file.writeAsString(csv);
     final periodLabel = WorkReportPeriodUtils.periodLabel(period.periodKey);
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'text/csv')],
-      subject: 'My Timesheet CSV — $periodLabel — ${period.employeeName}',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'My Timesheet CSV — $periodLabel — ${period.employeeName}',
+      ),
     );
     return file;
   }
