@@ -1153,9 +1153,20 @@ class FirestoreService {
     }
   }
 
+  /// Copper module shared password.
+  /// Prefers `settings/app_secrets` (staff-restricted); falls back to legacy
+  /// `settings/app.copperPassword` until secrets are migrated off the public app doc.
   Future<String?> getCopperPassword() async {
     try {
-      final doc = await _firestore.collection(Collections.settings).doc('app').get();
+      final secrets = await _firestore
+          .collection(Collections.settings)
+          .doc('app_secrets')
+          .get();
+      final fromSecrets = secrets.data()?['copperPassword'] as String?;
+      if (fromSecrets != null && fromSecrets.isNotEmpty) return fromSecrets;
+
+      final doc =
+          await _firestore.collection(Collections.settings).doc('app').get();
       return doc.data()?['copperPassword'] as String?;
     } catch (e) {
       throw Exception('Failed to get copper password: $e');
