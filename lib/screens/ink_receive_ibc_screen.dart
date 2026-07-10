@@ -17,6 +17,7 @@ import '../utils/ink_pickers.dart';
 import '../utils/ink_receipt_validation.dart';
 import 'ink_barcode_scan_screen.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ink_guide_banner.dart';
 
 class _IbcRow {
   _IbcRow({
@@ -815,6 +816,10 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       ),
       body: Column(
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: InkGuideBanner.receiveIbcForm(),
+          ),
           if (completeCount > 0)
             Material(
               color: scheme.primaryContainer,

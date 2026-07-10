@@ -693,8 +693,8 @@ Operator **capture hub** on mobile. Management, costing, and month-end workflows
 
 | Tile | Screen |
 |------|--------|
-| Receive Stock | `InkReceiveRawMaterialScreen` |
-| Receive Ink (IBC) | `InkReceiveIbcScreen` |
+| Receive Local | `InkSelectLocalOrderScreen` → `InkReceiveRawMaterialScreen` (multi-line confirm; ad-hoc escape) |
+| Receive Ink (IBC) | `InkSelectIbcShipmentScreen` → `InkReceiveIbcScreen` |
 | Meter Readings | `InkDailyReadingsScreen` (combined ink + Toloul) |
 | Consume IBC | `InkIbcTransferScreen` |
 | Production Run | `InkProductionRunScreen` |

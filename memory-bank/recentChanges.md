@@ -2,6 +2,17 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink dismissible process tips (2026-07-10)**:
+  - `InkGuideBanner` + `inkTipsVisibleProvider`; Settings → Preferences toggle.
+  - Tips on home, Receive Local, IBC, meters, consume IBC, production.
+  - Pulse monorepo: hub-wide `InkGuideTip` + Settings restore.
+
+- **Ink Receive Local + RFO board-only (2026-07-10)**:
+  - Hub tile **Receive Local** → `InkSelectLocalOrderScreen` (outstanding local POs) → multi-line
+    `InkReceiveRawMaterialScreen` confirm; CF `applyInkPurchaseOrderReceipt` unchanged.
+  - Model: `track`, Pastel/ERP #s, `isLocalTrack` / `openLines`.
+  - Pulse (monorepo): no signed-RFO upload gate before approve. Map + docs updated.
+
 - **Firestore Phase B polish (2026-07-09)**:
   - Backfill script `firebase/functions/scripts/backfill_fleet_inbox_denorm.mjs` for legacy inbox denorm.
   - Security deny list + contractors one-shot providers; vehicle gate + on-foot use them.

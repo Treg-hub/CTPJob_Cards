@@ -16,11 +16,12 @@ import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
 import 'ink_production_run_screen.dart';
 import 'ink_select_ibc_shipment_screen.dart';
-import 'ink_receive_raw_material_screen.dart';
+import 'ink_select_local_order_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ink_guide_banner.dart';
 
 /// Ink Factory module hub — operator capture only. Management, costing and
 /// month-end workflows live in CTP Pulse (web).
@@ -80,12 +81,14 @@ class InkHomeScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             InkDailyReadingsBanner(status: readingsStatus),
           ],
+          const SizedBox(height: 8),
+          const InkGuideBanner.home(),
           const SizedBox(height: 16),
           _sectionLabel(context, 'Capture'),
           const SizedBox(height: 8),
           _ActionGrid(actions: [
-            _Action(Icons.local_shipping_outlined, 'Receive Stock',
-                builder: () => const InkReceiveRawMaterialScreen()),
+            _Action(Icons.local_shipping_outlined, 'Receive Local',
+                builder: () => const InkSelectLocalOrderScreen()),
             _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
                 builder: () => const InkSelectIbcShipmentScreen()),
             _Action(Icons.speed_outlined, 'Meter Readings',

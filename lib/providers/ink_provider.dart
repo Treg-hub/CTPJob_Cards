@@ -150,6 +150,16 @@ final inkOpenPurchaseOrdersProvider = StreamProvider<List<InkPurchaseOrder>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenPurchaseOrders(),
 );
 
+/// Open local-track POs still awaiting receipt (Receive Local list).
+final inkOpenLocalPurchaseOrdersProvider =
+    Provider<AsyncValue<List<InkPurchaseOrder>>>((ref) {
+  return ref.watch(inkOpenPurchaseOrdersProvider).whenData(
+        (list) => list
+            .where((po) => po.isLocalTrack && po.hasOpenRemaining)
+            .toList(),
+      );
+});
+
 /// Production runs in the open period (server-scoped).
 final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>((ref) {
   final from = ref.watch(inkOpenPeriodRangeProvider).fromExclusive;

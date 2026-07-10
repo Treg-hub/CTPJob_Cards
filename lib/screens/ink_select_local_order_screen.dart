@@ -2,67 +2,70 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../models/ink_shipment.dart';
+import '../models/ink_purchase_order.dart';
 import '../providers/ink_provider.dart';
-import 'ink_receive_ibc_screen.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ink_guide_banner.dart';
+import 'ink_receive_raw_material_screen.dart';
 
-/// Lists outstanding IBC shipments (awaiting receipt in Pulse) so the operator
-/// picks one before capturing IBCs against its packing list.
-class InkSelectIbcShipmentScreen extends ConsumerWidget {
-  const InkSelectIbcShipmentScreen({super.key});
+/// Lists outstanding local purchase orders (sent / partially fulfilled) so the
+/// operator picks one before confirming received quantities — mirrors
+/// [InkSelectIbcShipmentScreen] for the import IBC path.
+class InkSelectLocalOrderScreen extends ConsumerWidget {
+  const InkSelectLocalOrderScreen({super.key});
 
   static final _qty = NumberFormat('#,##0.##');
 
-  void _openReceive(BuildContext context, {InkShipment? shipment}) {
+  void _openReceive(BuildContext context, {InkPurchaseOrder? order}) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => InkReceiveIbcScreen(initialShipment: shipment),
+        builder: (_) =>
+            InkReceiveRawMaterialScreen(initialPurchaseOrder: order),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final shipmentsAsync = ref.watch(inkOpenShipmentsProvider);
+    final ordersAsync = ref.watch(inkOpenLocalPurchaseOrdersProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Receive Ink (IBC)')),
+      appBar: AppBar(title: const Text('Receive Local')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: InkGuideBanner.receiveIbcList(),
+            child: InkGuideBanner.receiveLocalList(),
           ),
           Expanded(
-            child: shipmentsAsync.when(
+            child: ordersAsync.when(
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
               error: (e, _) =>
-                  Center(child: Text('Could not load shipments: $e')),
-              data: (shipments) {
-                if (shipments.isEmpty) {
+                  Center(child: Text('Could not load orders: $e')),
+              data: (orders) {
+                if (orders.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.local_shipping_outlined,
+                        Icon(Icons.inventory_2_outlined,
                             size: 48, color: scheme.onSurfaceVariant),
                         const SizedBox(height: 16),
                         Text(
-                          'No outstanding IBC shipments',
+                          'No outstanding local orders',
                           style: Theme.of(context).textTheme.titleMedium,
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Receive without a shipment if stock arrived ad hoc, '
-                          'or ask a manager to create the shipment in CTP Pulse.',
+                          'Orders appear here after a manager marks them sent on '
+                          'CTP Pulse (RFO approved → Pastel numbers → mark sent). '
+                          'Use receive without order only for ad-hoc stock.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
@@ -70,7 +73,7 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                         FilledButton.icon(
                           onPressed: () => _openReceive(context),
                           icon: const Icon(Icons.edit_note_outlined),
-                          label: const Text('Receive without shipment'),
+                          label: const Text('Receive without order'),
                         ),
                       ],
                     ),
@@ -86,24 +89,23 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                   ),
                   children: [
                     Text(
-                      'Select the shipment you are unloading',
-                      style:
-                          Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                      'Select the order you are receiving',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                     ),
                     const SizedBox(height: 8),
-                    for (final s in shipments)
-                      _ShipmentTile(
-                        shipment: s,
+                    for (final po in orders)
+                      _LocalOrderTile(
+                        order: po,
                         qty: _qty,
-                        onTap: () => _openReceive(context, shipment: s),
+                        onTap: () => _openReceive(context, order: po),
                       ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () => _openReceive(context),
                       icon: const Icon(Icons.edit_note_outlined),
-                      label: const Text('Receive without shipment'),
+                      label: const Text('Receive without order'),
                     ),
                   ],
                 );
@@ -116,54 +118,47 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
   }
 }
 
-class _ShipmentTile extends StatelessWidget {
-  const _ShipmentTile({
-    required this.shipment,
+class _LocalOrderTile extends StatelessWidget {
+  const _LocalOrderTile({
+    required this.order,
     required this.qty,
     required this.onTap,
   });
 
-  final InkShipment shipment;
+  final InkPurchaseOrder order;
   final NumberFormat qty;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final unitCount = shipment.expectedUnits.length;
-    final receivedCount = shipment.receivedIbcCount;
-    final totalKg = shipment.expectedUnits.fold<double>(
-      0,
-      (sum, u) => sum + u.netKg,
-    );
-    final colours = shipment.itemCodes.length;
-    final progress = unitCount > 0 && receivedCount > 0
-        ? ' · $receivedCount / $unitCount received'
-        : '';
+    final open = order.openLines;
+    final statusLabel = order.status == InkPurchaseOrderStatus.partiallyFulfilled
+        ? 'Partially received'
+        : 'Sent — awaiting receipt';
+    final preview = open.take(3).map((e) =>
+        '${e.line.displayName}: ${qty.format(e.remaining)} ${e.line.unit}');
+    final more =
+        open.length > 3 ? ' · +${open.length - 3} more line(s)' : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: scheme.primaryContainer,
-          child: Text(
-            shipment.containerLetter,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: scheme.onPrimaryContainer,
-            ),
+          child: Icon(
+            Icons.local_shipping_outlined,
+            color: scheme.onPrimaryContainer,
           ),
         ),
-        title: Text(shipment.id),
+        title: Text('${order.pulseRef} · ${order.supplierName}'),
         subtitle: Text(
           [
-            if (shipment.containerNumber != null)
-              'Container ${shipment.containerNumber}',
-            'Order ${shipment.orderNumber}',
-            if (shipment.cgnaNumber != null) 'CGNA ${shipment.cgnaNumber}',
-            '$unitCount IBC${unitCount == 1 ? '' : 's'}$progress'
-                '${colours > 0 ? ' · $colours colour${colours == 1 ? '' : 's'}' : ''}'
-                '${totalKg > 0 ? ' · ${qty.format(totalKg)} kg' : ''}',
+            if (order.erpOrderNumber != null && order.erpOrderNumber!.isNotEmpty)
+              'Pastel order ${order.erpOrderNumber}',
+            statusLabel,
+            if (open.isNotEmpty)
+              '${open.length} open line(s) · ${preview.join(' · ')}$more',
           ].join('\n'),
         ),
         isThreeLine: true,

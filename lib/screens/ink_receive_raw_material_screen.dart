@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/ink_purchase_order.dart';
-import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
@@ -14,17 +13,22 @@ import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ink_guide_banner.dart';
 
-/// Phase 1a — Receive Raw Material / Solvent.
+/// Receive raw material / solvent.
 ///
-/// Operator records an incoming delivery of a raw material or toloul as a
-/// `purchase` transaction. Quantity only — the COST is deferred: the receipt is
-/// captured `cost_status: pending` and a manager enters the total cost later
-/// (which triggers the WAC re-replay). Inks are received separately via the IBC
-/// flow (Phase 1b). The operator may set the effective date (backdating is
-/// supported by the ledger).
+/// **Against a local PO** ([initialPurchaseOrder]): multi-line confirm — enter
+/// qty received per open line, one submit writes purchase txns + CF PO
+/// remaining (mirrors IBC shipment pick → receive).
+///
+/// **Ad-hoc** (no order): free-form single item + supplier (escape hatch).
+///
+/// Cost is always `pending` — manager enters total cost later on Pulse.
 class InkReceiveRawMaterialScreen extends ConsumerStatefulWidget {
-  const InkReceiveRawMaterialScreen({super.key});
+  const InkReceiveRawMaterialScreen({super.key, this.initialPurchaseOrder});
+
+  /// Order chosen on [InkSelectLocalOrderScreen].
+  final InkPurchaseOrder? initialPurchaseOrder;
 
   @override
   ConsumerState<InkReceiveRawMaterialScreen> createState() =>
@@ -34,51 +38,36 @@ class InkReceiveRawMaterialScreen extends ConsumerStatefulWidget {
 class _InkReceiveRawMaterialScreenState
     extends ConsumerState<InkReceiveRawMaterialScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _qtyCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController();
+  final Map<String, TextEditingController> _lineQtyCtrls = {};
   String? _itemCode;
   String? _supplier;
   DateTime _effectiveAt = DateTime.now();
   bool _submitting = false;
+  late final InkPurchaseOrder? _purchaseOrder;
 
-  /// When set, receiving against this Pulse-created pallet shipment: supplier
-  /// is Siegwerk and the item list is restricted to its lines.
-  InkShipment? _shipment;
+  bool get _againstPo => _purchaseOrder != null;
 
-  /// When set, links receipt to a sent local PO and deducts inbound remaining.
-  InkPurchaseOrder? _purchaseOrder;
-
-  void _selectShipment(InkShipment? s) {
-    setState(() {
-      _shipment = s;
-      if (s != null) {
-        _purchaseOrder = null;
-        _supplier = 'Siegwerk';
-        if (_itemCode != null && !s.itemCodes.contains(_itemCode)) {
-          _itemCode = null;
-        }
+  @override
+  void initState() {
+    super.initState();
+    _purchaseOrder = widget.initialPurchaseOrder;
+    if (_purchaseOrder != null) {
+      _supplier = _purchaseOrder!.supplierName;
+      for (final open in _purchaseOrder!.openLines) {
+        _lineQtyCtrls[open.line.itemCode] = TextEditingController();
       }
-    });
-  }
-
-  void _selectPurchaseOrder(InkPurchaseOrder? po) {
-    setState(() {
-      _purchaseOrder = po;
-      if (po != null) {
-        _shipment = null;
-        _supplier = po.supplierName;
-        final codes = {for (final l in po.lines) l.itemCode};
-        if (_itemCode != null && !codes.contains(_itemCode)) {
-          _itemCode = null;
-        }
-      }
-    });
+    }
   }
 
   @override
   void dispose() {
-    _qtyCtrl.dispose();
     _notesCtrl.dispose();
+    _qtyCtrl.dispose();
+    for (final c in _lineQtyCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -87,11 +76,103 @@ class _InkReceiveRawMaterialScreenState
     if (dt != null) setState(() => _effectiveAt = dt);
   }
 
-  Future<void> _submit() async {
+  List<({String itemCode, double qty, String unit, String displayName})>
+      _parseLineQtys() {
+    final out =
+        <({String itemCode, double qty, String unit, String displayName})>[];
+    final po = _purchaseOrder!;
+    for (final open in po.openLines) {
+      final raw = _lineQtyCtrls[open.line.itemCode]?.text.trim() ?? '';
+      if (raw.isEmpty) continue;
+      final qty = double.tryParse(raw);
+      if (qty == null || qty <= 0) continue;
+      out.add((
+        itemCode: open.line.itemCode,
+        qty: qty,
+        unit: open.line.unit,
+        displayName: open.line.displayName,
+      ));
+    }
+    return out;
+  }
+
+  Future<void> _submitAgainstPo() async {
+    if (!guardPersonaSubmit(context)) return;
+    final lines = _parseLineQtys();
+    if (lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Enter quantity received for at least one line'),
+      ));
+      return;
+    }
+    final allowed =
+        await confirmClosedPeriodOverride(context, ref, _effectiveAt);
+    if (!allowed) return;
+
+    setState(() => _submitting = true);
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
+    final po = _purchaseOrder!;
+    final notes =
+        _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
+    final service = ref.read(inkServiceProvider);
+
+    var recorded = 0;
+    Object? lastError;
+    for (final line in lines) {
+      final txn = InkTransaction(
+        type: InkTxnType.purchase,
+        stockItemCode: line.itemCode,
+        quantityDelta: line.qty,
+        effectiveAt: _effectiveAt,
+        costStatus: InkCostStatus.pending,
+        supplierName: po.supplierName,
+        actorClockNo: emp?.clockNo ?? '',
+        actorName: emp?.name ?? '',
+        idempotencyKey: const Uuid().v4(),
+        notes: notes,
+        purchaseOrderId: po.id,
+      );
+      try {
+        await service.recordRawMaterialReceipt(
+          txn: txn,
+          purchaseOrderId: po.id,
+        );
+        recorded++;
+      } catch (e) {
+        lastError = e;
+        break;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (lastError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          recorded == 0
+              ? 'Failed to record: $lastError'
+              : 'Recorded $recorded of ${lines.length} lines, then failed: $lastError. '
+                  'Re-open the order to finish remaining lines.',
+        ),
+      ));
+      if (recorded > 0) Navigator.pop(context);
+      return;
+    }
+    final n = lines.length;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        n == 1
+            ? 'Receipt recorded — cost pending manager entry.'
+            : '$n line receipts recorded — cost pending manager entry.',
+      ),
+    ));
+    Navigator.pop(context);
+  }
+
+  Future<void> _submitAdHoc() async {
     if (!guardPersonaSubmit(context)) return;
     if (!_formKey.currentState!.validate()) return;
     if (_itemCode == null || _supplier == null) return;
-    if (!guardPersonaSubmit(context)) return;
     final allowed =
         await confirmClosedPeriodOverride(context, ref, _effectiveAt);
     if (!allowed) return;
@@ -109,15 +190,9 @@ class _InkReceiveRawMaterialScreenState
       actorName: emp?.name ?? '',
       idempotencyKey: const Uuid().v4(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      shipmentId: _shipment?.id,
-      purchaseOrderId: _purchaseOrder?.id,
     );
     try {
-      await ref.read(inkServiceProvider).recordRawMaterialReceipt(
-            txn: txn,
-            shipmentId: _shipment?.id,
-            purchaseOrderId: _purchaseOrder?.id,
-          );
+      await ref.read(inkServiceProvider).recordRawMaterialReceipt(txn: txn);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Receipt recorded — cost pending manager entry.')));
@@ -132,242 +207,294 @@ class _InkReceiveRawMaterialScreenState
 
   @override
   Widget build(BuildContext context) {
-    final itemsAsync = ref.watch(inkStockItemsProvider);
-    final suppliersAsync = ref.watch(inkActiveSuppliersProvider);
     final df = DateFormat('EEE d MMM yyyy HH:mm');
+    final qtyFmt = NumberFormat('#,##0.##');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Receive Raw Material')),
-      body: itemsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (allItems) {
-          var items = allItems
-              .where((i) =>
-                  i.itemClass == InkItemClass.raw ||
-                  i.itemClass == InkItemClass.solvent)
-              .toList();
-          if (_shipment != null) {
-            final codes = _shipment!.itemCodes.toSet();
-            final filtered =
-                items.where((i) => codes.contains(i.itemCode)).toList();
-            if (filtered.isNotEmpty) items = filtered;
-          } else if (_purchaseOrder != null) {
-            final codes = {for (final l in _purchaseOrder!.lines) l.itemCode};
-            final filtered =
-                items.where((i) => codes.contains(i.itemCode)).toList();
-            if (filtered.isNotEmpty) items = filtered;
-          }
-          InkStockItem? selected;
-          for (final i in items) {
-            if (i.itemCode == _itemCode) selected = i;
-          }
-          double? expectedKg;
-          if (_shipment != null) {
-            for (final l in _shipment!.lines) {
-              if (l.itemCode == _itemCode) {
-                expectedKg = l.expectedKg;
-                break;
-              }
-            }
-          }
-          final shipments =
-              ref.watch(inkOpenPalletShipmentsProvider).valueOrNull ?? [];
-          final allPos =
-              ref.watch(inkOpenPurchaseOrdersProvider).valueOrNull ?? [];
-          final openPos = _itemCode == null
-              ? allPos
-              : allPos
-                  .where((po) => po.remainingFor(_itemCode!) > 0)
-                  .toList();
-          return Form(
-            key: _formKey,
-            child: ListView(
-              padding: ScreenInsets.symmetricScroll(context),
-              children: [
-                if (allPos.isNotEmpty) ...[
-                  DropdownButtonFormField<String>(
-                    // ignore: deprecated_member_use
-                    value: _purchaseOrder?.id,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Purchase order (optional)',
-                      helperText:
-                          'Link to a sent local PO to deduct inbound qty',
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('None')),
-                      for (final po in openPos)
-                        DropdownMenuItem(
-                          value: po.id,
-                          child: Text(_poLabel(po, selected?.unit)),
-                        ),
-                    ],
-                    onChanged: (id) {
-                      final match = allPos.where((p) => p.id == id).toList();
-                      _selectPurchaseOrder(match.isEmpty ? null : match.first);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (shipments.isNotEmpty) ...[
-                  DropdownButtonFormField<String>(
-                    // ignore: deprecated_member_use
-                    value: _shipment?.id,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Shipment (optional)',
-                        helperText: 'Link this receipt to a pallet shipment'),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('None — free text')),
-                      for (final s in shipments)
-                        DropdownMenuItem(
-                            value: s.id,
-                            child: Text(s.containerNumber != null
-                                ? '${s.id} · ${s.containerNumber}'
-                                : s.id)),
-                    ],
-                    onChanged: (id) {
-                      final match =
-                          shipments.where((s) => s.id == id).toList();
-                      _selectShipment(match.isEmpty ? null : match.first);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                DropdownButtonFormField<String>(
-                  // ignore: deprecated_member_use
-                  value: _itemCode,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Item'),
-                  items: [
-                    for (final i in items)
-                      DropdownMenuItem(
-                          value: i.itemCode,
-                          child: Text('${i.displayName} (${i.unit})')),
-                  ],
-                  onChanged: (v) => setState(() => _itemCode = v),
-                  validator: (v) => v == null ? 'Select an item' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _qtyCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Quantity received',
-                    suffixText: selected?.unit ?? '',
-                  ),
-                  validator: (v) {
-                    final d = double.tryParse((v ?? '').trim());
-                    if (d == null || d <= 0) {
-                      return 'Enter a quantity greater than 0';
-                    }
-                    return null;
-                  },
-                ),
-                if (expectedKg != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Expected on shipment: '
-                      '${NumberFormat('#,##0.##').format(expectedKg)} '
-                      '${selected?.unit ?? 'KG'}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                if (_purchaseOrder != null && _itemCode != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Remaining on PO: '
-                      '${NumberFormat('#,##0.##').format(_purchaseOrder!.remainingFor(_itemCode!))} '
-                      '${selected?.unit ?? ''}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                suppliersAsync.when(
-                  loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text('Suppliers error: $e'),
-                  data: (suppliers) => DropdownButtonFormField<String>(
-                    // ignore: deprecated_member_use
-                    value: _supplier,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Supplier'),
-                    items: [
-                      for (final s in suppliers)
-                        DropdownMenuItem(value: s.name, child: Text(s.name)),
-                    ],
-                    onChanged: _purchaseOrder != null || _shipment != null
-                        ? null
-                        : (v) => setState(() => _supplier = v),
-                    validator: (v) => v == null ? 'Select a supplier' : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _pickDate,
-                  icon: const Icon(Icons.event),
-                  label: Text('Effective date: ${df.format(_effectiveAt)}'),
-                  style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      alignment: Alignment.centerLeft),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _notesCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Notes (optional)'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Row(children: [
-                      Icon(Icons.info_outline, size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                          child: Text(
-                              'Cost is entered by a manager once the supplier '
-                              'documents arrive. Stock goes up now; WAC updates '
-                              'when the cost is captured.')),
-                    ]),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: _submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.check),
-                  label: const Text('Record receipt'),
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52)),
-                ),
-              ],
-            ),
-          );
-        },
+      appBar: AppBar(
+        title: Text(_againstPo ? 'Confirm receipt' : 'Receive without order'),
       ),
+      body: _againstPo
+          ? _buildAgainstPo(context, df, qtyFmt)
+          : _buildAdHoc(context, df),
     );
   }
 
-  String _poLabel(InkPurchaseOrder po, String? unit) {
-    final rem = _itemCode != null
-        ? po.remainingFor(_itemCode!)
-        : po.remainingKgByItem.values.fold<double>(0, (a, b) => a + b);
-    final u = unit ?? '';
-    return '${po.pulseRef} · ${po.supplierName} · '
-        '${NumberFormat('#,##0').format(rem)} $u remaining';
+  Widget _buildAgainstPo(
+    BuildContext context,
+    DateFormat df,
+    NumberFormat qtyFmt,
+  ) {
+    final po = _purchaseOrder!;
+    final open = po.openLines;
+    final scheme = Theme.of(context).colorScheme;
+
+    return ListView(
+      padding: ScreenInsets.symmetricScroll(context),
+      children: [
+        const InkGuideBanner.receiveLocalConfirm(),
+        const SizedBox(height: 12),
+        Card(
+          color: scheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  po.pulseRef,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(po.supplierName),
+                if (po.erpOrderNumber != null &&
+                    po.erpOrderNumber!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Pastel order ${po.erpOrderNumber}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+                if (po.pastelRfoNumber != null &&
+                    po.pastelRfoNumber!.isNotEmpty)
+                  Text(
+                    'Pastel RFO ${po.pastelRfoNumber}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Enter quantity received for each line. Leave blank if not on this delivery.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 12),
+        if (open.isEmpty)
+          const Text('No open remaining qty on this order.')
+        else
+          for (final e in open) ...[
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.line.displayName,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Remaining on order: ${qtyFmt.format(e.remaining)} ${e.line.unit}'
+                      '${e.line.finalKg > 0 ? ' · ordered ${qtyFmt.format(e.line.finalKg)} ${e.line.unit}' : ''}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _lineQtyCtrls[e.line.itemCode],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Quantity received',
+                        suffixText: e.line.unit,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _pickDate,
+          icon: const Icon(Icons.event),
+          label: Text('Effective date: ${df.format(_effectiveAt)}'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            alignment: Alignment.centerLeft,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _notesCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Notes (optional)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: scheme.surfaceContainerHighest,
+          child: const Padding(
+            padding: EdgeInsets.all(12),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 18),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Over/under remaining is allowed — residual stays on the '
+                  'order until fully received or a manager finalizes on Pulse. '
+                  'Cost is entered by a manager later.',
+                ),
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: _submitting ? null : _submitAgainstPo,
+          icon: _submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check),
+          label: const Text('Confirm receipt'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdHoc(BuildContext context, DateFormat df) {
+    final itemsAsync = ref.watch(inkStockItemsProvider);
+    final suppliersAsync = ref.watch(inkActiveSuppliersProvider);
+
+    return itemsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (allItems) {
+        final items = allItems
+            .where((i) =>
+                i.itemClass == InkItemClass.raw ||
+                i.itemClass == InkItemClass.solvent)
+            .toList();
+        InkStockItem? selected;
+        for (final i in items) {
+          if (i.itemCode == _itemCode) selected = i;
+        }
+        return Form(
+          key: _formKey,
+          child: ListView(
+            padding: ScreenInsets.symmetricScroll(context),
+            children: [
+              const InkGuideBanner.receiveLocalAdHoc(),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                // ignore: deprecated_member_use
+                value: _itemCode,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Item'),
+                items: [
+                  for (final i in items)
+                    DropdownMenuItem(
+                      value: i.itemCode,
+                      child: Text('${i.displayName} (${i.unit})'),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _itemCode = v),
+                validator: (v) => v == null ? 'Select an item' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _qtyCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Quantity received',
+                  suffixText: selected?.unit ?? '',
+                ),
+                validator: (v) {
+                  final d = double.tryParse((v ?? '').trim());
+                  if (d == null || d <= 0) {
+                    return 'Enter a quantity greater than 0';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              suppliersAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Suppliers error: $e'),
+                data: (suppliers) => DropdownButtonFormField<String>(
+                  // ignore: deprecated_member_use
+                  value: _supplier,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Supplier'),
+                  items: [
+                    for (final s in suppliers)
+                      DropdownMenuItem(value: s.name, child: Text(s.name)),
+                  ],
+                  onChanged: (v) => setState(() => _supplier = v),
+                  validator: (v) => v == null ? 'Select a supplier' : null,
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _pickDate,
+                icon: const Icon(Icons.event),
+                label: Text('Effective date: ${df.format(_effectiveAt)}'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  alignment: Alignment.centerLeft,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration:
+                    const InputDecoration(labelText: 'Notes (optional)'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Row(children: [
+                    Icon(Icons.info_outline, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Cost is entered by a manager once the supplier '
+                        'documents arrive. Stock goes up now; WAC updates '
+                        'when the cost is captured.',
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _submitting ? null : _submitAdHoc,
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check),
+                label: const Text('Record receipt'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

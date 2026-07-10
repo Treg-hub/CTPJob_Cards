@@ -14,6 +14,7 @@ import '../main.dart' show currentEmployee, personaAllowTestSubmissions, persona
 import '../providers/persona_provider.dart';
 import '../models/fleet_settings.dart';
 import '../providers/fleet_tips_provider.dart';
+import '../providers/ink_tips_provider.dart';
 import '../providers/job_card_tips_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
@@ -376,6 +377,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       activeThumbColor: const Color(0xFFFF8C42),
                       onChanged: (value) =>
                           ref.read(jobCardTipsVisibleProvider.notifier).setVisible(value),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.water_drop_outlined, color: Color(0xFF06B6D4)),
+                      title: const Text('Ink Factory Tips'),
+                      subtitle: const Text(
+                        'Show guidance banners on Receive Local, IBC, meters, and other Ink capture screens',
+                      ),
+                      value: ref.watch(inkTipsVisibleProvider),
+                      activeThumbColor: const Color(0xFF06B6D4),
+                      onChanged: (value) =>
+                          ref.read(inkTipsVisibleProvider.notifier).setVisible(value),
                     ),
                   ],
                 ),

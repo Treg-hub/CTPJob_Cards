@@ -10,6 +10,7 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
+import '../widgets/ink_guide_banner.dart';
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
 /// 1/2 also allowed); the screen previews inputs consumed and output produced
@@ -142,6 +143,8 @@ class _State extends ConsumerState<InkProductionRunScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const InkGuideBanner.production(),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 // ignore: deprecated_member_use
                 value: _recipeId,

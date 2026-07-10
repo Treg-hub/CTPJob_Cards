@@ -11,6 +11,7 @@ import 'ink_barcode_scan_screen.dart';
 import 'ink_ibc_consume_confirm_screen.dart';
 import '../utils/screen_insets.dart';
 import '../utils/user_facing_error.dart';
+import '../widgets/ink_guide_banner.dart';
 
 /// Consume IBC — scan-first flow with colour tabs as fallback. Confirm on a
 /// full screen (wash + time). Tab labels show how many IBCs were consumed this
@@ -203,12 +204,13 @@ class _ScanLanding extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
-        32,
+        16,
         24,
         ScreenInsets.scrollBottomFullScreen(context),
       ),
       child: Column(
         children: [
+          const InkGuideBanner.consumeIbc(),
           const Spacer(),
           Icon(Icons.qr_code_scanner, size: 88, color: scheme.primary),
           const SizedBox(height: 24),

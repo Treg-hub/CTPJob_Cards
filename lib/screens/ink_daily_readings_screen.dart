@@ -16,7 +16,7 @@ import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
-
+import '../widgets/ink_guide_banner.dart';
 
 const _maxConsumptionByKeyword = <String, double>{
   'black': 1500,
@@ -352,6 +352,10 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
       ),
       body: Column(
         children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: InkGuideBanner.meterReadings(),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: canEditDate
