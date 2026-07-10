@@ -2,6 +2,18 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Android R8 minify + ProGuard starter (2026-07-10)**:
+  - `build.gradle.kts` release: `isMinifyEnabled` + `isShrinkResources`.
+  - `proguard-rules.pro`: keep `com.ctp.jobcards.**`, Flutter, Firebase/GMS, ML Kit, WorkManager, FileProvider.
+  - Pilot smoke required before factory latest (see RELEASE_PLAYBOOK).
+
+- **Safe area tiers 1–3 + ink manager screen removal (2026-07-10)**:
+  - Timesheet hub/job lines/additional + sheets use `ScreenInsets`.
+  - Fleet mechanic/reporter lists, work records, machine action sheet bottom safe.
+  - Ink daily readings, production run, IBC register list pads.
+  - Waste stock inventory FAB clearance; feedback admin/thread lists.
+  - **Deleted** unlinked mobile ink manager screens (Pulse-only workflows).
+
 - **Ink dismissible process tips (2026-07-10)**:
   - `InkGuideBanner` + `inkTipsVisibleProvider`; Settings → Preferences toggle.
   - Tips on home, Receive Local, IBC, meters, consume IBC, production.

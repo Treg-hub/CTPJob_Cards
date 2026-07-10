@@ -16,6 +16,7 @@ import '../utils/work_report_csv.dart';
 import '../utils/work_report_daily_hours.dart';
 import '../utils/work_report_pdf.dart';
 import '../utils/work_report_period_utils.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import 'work_report_additional_work_screen.dart';
 import 'work_report_job_lines_screen.dart';
@@ -364,7 +365,7 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
               );
 
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: ScreenInsets.symmetricScroll(context, horizontal: 16, vertical: 16),
                 children: [
                   if (_isAdminView)
                     Card(

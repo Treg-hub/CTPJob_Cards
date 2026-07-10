@@ -9,6 +9,7 @@ import '../utils/formatters.dart';
 import '../utils/role.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/waste_app_bar.dart';
 import 'waste_add_stock_item_screen.dart';
 import 'waste_stock_item_detail_screen.dart';
@@ -129,7 +130,12 @@ class _WasteStockInventoryScreenState
                   onRefresh: () async => setState(() => _stockLoadToken++),
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+                    padding: ScreenInsets.listPadding(
+                      context,
+                      horizontal: 12,
+                      top: 8,
+                      clearFab: true,
+                    ),
                     itemCount: items.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (_, i) => _StockItemCard(

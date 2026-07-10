@@ -6,6 +6,27 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-10 — Pilot 2.3.0+157 (Receive Local + tips)
+
+### What you will notice
+
+- **Receive Local** (was “Receive Stock”): lists **outstanding local purchase orders** after a manager marks them sent on CTP Pulse. Tap an order, enter **quantity received** per open line, confirm. Partial deliveries stay listed until fully received.
+- **Receive without order** is still available for ad-hoc stock (secondary button).
+- Cyan **process tips** on Ink hub, Receive Local, Receive Ink (IBC), meters, consume IBC, and production. Tap **×** to hide; restore in **Settings → Preferences → Ink Factory Tips**.
+- **Receive Ink (IBC)** still list-first for import shipments.
+
+### For managers (Pulse)
+
+- RFO PDF is for **board explanation** only — no need to upload a signed RFO back into Pulse.
+- Workflow: generate/download RFO → **Mark RFO approved** → Pastel RFO # + order # → mark sent → operators see the order under **Receive Local**.
+- Deploy Pulse hosting separately for board tips + RFO flow.
+
+### For admins
+
+- Pilot channel: **Version 2.3.0 / Build 157**, **Channel APK URL** = `https://ctp-job-cards-landing.web.app/releases/pilot.apk`. Keep Shared/Default on factory `latest.apk`.
+
+---
+
 ## 2026-07-10 — Pilot 2.3.0+155
 
 ### What you will notice

@@ -501,7 +501,7 @@ The Ink Factory module is a full stock-inventory system for raw materials, solve
 ### What it does
 
 - **Stock on hand** — Live balances and weighted-average costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105, Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue, Black — received as IBCs, never manufactured), and manufactured products (CoverWax, Gravure Binder).
-- **Receive stock (raw materials)** — Operator records incoming raw materials from a supplier. Cost is entered later by a manager when the invoice arrives (deferred-cost pattern).
+- **Receive Local** — List of outstanding local purchase orders (sent from Pulse); operator confirms quantity received per line. Ad-hoc receive without order remains as escape. Cost is entered later by a manager (deferred-cost pattern).
 - **Receive ink IBCs** — Operator scans the IBC barcode (GS1-128 / SSCC label), weight and colour are auto-filled from the scan. The audit register records every IBC number received.
 - **Consume IBC** — Transfers an IBC from the audit register into the tank. Records Toloul wash consumption and **auto-creates an IBC Bins on-site waste stock item** (by IBC number) for security to collect on a later load.
 - **Daily Readings** — Combined screen for ink meters and Toloul meter points. Enter all readings on one page with one submit.

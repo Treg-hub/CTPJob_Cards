@@ -11,6 +11,7 @@ import '../services/fleet_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_issue_sort.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_issue_widgets.dart';
 import '../widgets/fleet_mechanic_widgets.dart';
 import '../widgets/fleet_urgent_inbox_banner.dart';
@@ -312,7 +313,12 @@ class _MechanicIssueList extends StatelessWidget {
             : sortFleetIssuesByPriority(raw);
 
         return ListView(
-          padding: const EdgeInsets.all(12),
+          padding: ScreenInsets.listPadding(
+            context,
+            horizontal: 12,
+            top: 12,
+            inHomeShell: true,
+          ),
           children: [
             if (pinned.isNotEmpty) ...[
               FleetPinnedOosSection(issues: pinned, onTap: onTap),

@@ -14,6 +14,7 @@ import '../services/fleet_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_daily_check_gate.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_asset_grid.dart';
 import '../widgets/fleet_machine_action_sheet.dart';
@@ -209,12 +210,14 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
                 onDismissGuide: _dismissGuide,
                 onMachineTap: _onMachineTap,
                 badgePriority: _badgePriority,
+                inHomeShell: !widget.standalone,
               ),
               _ReportsTab(
                 service: _service,
                 clockNo: emp?.clockNo,
                 showAllOpen: _showAllOpen,
                 onShowAllOpenChanged: (v) => setState(() => _showAllOpen = v),
+                inHomeShell: !widget.standalone,
               ),
             ],
           ),
@@ -242,6 +245,7 @@ class _MachinesTab extends StatelessWidget {
     required this.onDismissGuide,
     required this.onMachineTap,
     required this.badgePriority,
+    this.inHomeShell = true,
   });
 
   final FleetService service;
@@ -252,6 +256,7 @@ class _MachinesTab extends StatelessWidget {
   final VoidCallback onDismissGuide;
   final void Function(FleetAsset asset) onMachineTap;
   final int Function(FleetCheckBadge badge) badgePriority;
+  final bool inHomeShell;
 
   @override
   Widget build(BuildContext context) {
@@ -335,7 +340,13 @@ class _MachinesTab extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            4,
+            16,
+            // Standalone route needs system inset; home tab already clears via bottom nav.
+            12 + (inHomeShell ? 0 : ScreenInsets.bottomSafe(context)),
+          ),
           child: Text(
             'Check due / Done badges are reminders only. Use Report Problem on the home screen for a shortcut.',
             style: TextStyle(fontSize: 11, color: colors.textMuted),
@@ -352,12 +363,14 @@ class _ReportsTab extends StatelessWidget {
     required this.clockNo,
     required this.showAllOpen,
     required this.onShowAllOpenChanged,
+    this.inHomeShell = true,
   });
 
   final FleetService service;
   final String? clockNo;
   final bool showAllOpen;
   final ValueChanged<bool> onShowAllOpenChanged;
+  final bool inHomeShell;
 
   @override
   Widget build(BuildContext context) {
@@ -382,10 +395,14 @@ class _ReportsTab extends StatelessWidget {
         const SizedBox(height: 4),
         Expanded(
           child: showAllOpen
-              ? FleetReporterAllOpenList(service: service)
+              ? FleetReporterAllOpenList(
+                  service: service,
+                  inHomeShell: inHomeShell,
+                )
               : FleetReporterMyReportsList(
                   service: service,
                   clockNo: clockNo,
+                  inHomeShell: inHomeShell,
                   emptyHint:
                       'Tap Machines above or use Report Problem on the home screen.',
                 ),
@@ -401,12 +418,14 @@ class FleetReporterMyReportsList extends StatelessWidget {
     super.key,
     required this.service,
     required this.clockNo,
+    this.inHomeShell = true,
     this.emptyHint =
         'Tap a machine on the Machines tab or use Report Problem on the home screen.',
   });
 
   final FleetService service;
   final String? clockNo;
+  final bool inHomeShell;
   final String emptyHint;
 
   @override
@@ -450,7 +469,12 @@ class FleetReporterMyReportsList extends StatelessWidget {
           );
         }
         return ListView.separated(
-          padding: const EdgeInsets.all(12),
+          padding: ScreenInsets.listPadding(
+            context,
+            horizontal: 12,
+            top: 12,
+            inHomeShell: inHomeShell,
+          ),
           itemCount: issues.length,
           separatorBuilder: (_, __) => const SizedBox(height: 6),
           itemBuilder: (context, index) {
@@ -471,8 +495,13 @@ class FleetReporterMyReportsList extends StatelessWidget {
 
 /// All open floor issues — reporter-friendly labels.
 class FleetReporterAllOpenList extends StatelessWidget {
-  const FleetReporterAllOpenList({super.key, required this.service});
+  const FleetReporterAllOpenList({
+    super.key,
+    required this.service,
+    this.inHomeShell = true,
+  });
   final FleetService service;
+  final bool inHomeShell;
 
   @override
   Widget build(BuildContext context) {
@@ -495,7 +524,12 @@ class FleetReporterAllOpenList extends StatelessWidget {
           );
         }
         return ListView.separated(
-          padding: const EdgeInsets.all(12),
+          padding: ScreenInsets.listPadding(
+            context,
+            horizontal: 12,
+            top: 12,
+            inHomeShell: inHomeShell,
+          ),
           itemCount: issues.length,
           separatorBuilder: (_, __) => const SizedBox(height: 6),
           itemBuilder: (context, index) {

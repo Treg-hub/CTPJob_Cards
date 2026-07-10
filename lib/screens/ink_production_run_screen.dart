@@ -10,6 +10,7 @@ import '../providers/ink_provider.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ink_guide_banner.dart';
 
 /// Phase 1f — Production Run. Operator picks a recipe and pot count (default 3,
@@ -130,7 +131,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
               child: Center(
                   child: Text(
                       'No active recipes. A manager must define one '
-                      '(Ink hub → Recipes).')),
+                      'on CTP Pulse (Ink → Setup).')),
             );
           }
           InkRecipe? recipe;
@@ -141,7 +142,7 @@ class _State extends ConsumerState<InkProductionRunScreen> {
           final outputQty = (recipe?.outputPerPot ?? 0) * _pots;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: ScreenInsets.symmetricScroll(context, horizontal: 16, vertical: 16),
             children: [
               const InkGuideBanner.production(),
               const SizedBox(height: 12),

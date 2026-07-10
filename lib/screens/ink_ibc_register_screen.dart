@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/screen_insets.dart';
 
 /// IBC register — **This period** summary tab (consumed grouped by colour) plus
 /// colour tabs for the full register (search, status filter, manager void).
@@ -247,7 +248,7 @@ class _PeriodSummaryTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: ScreenInsets.listPadding(context, horizontal: 16, top: 12),
       children: [
         Text(
           'Consumed since last count',
@@ -472,7 +473,11 @@ class _RegisterColourTabState extends State<_RegisterColourTab>
                   ),
                 )
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                  padding: ScreenInsets.listPadding(
+                    context,
+                    horizontal: 12,
+                    top: 4,
+                  ),
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, indent: 56),

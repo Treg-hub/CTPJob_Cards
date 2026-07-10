@@ -16,6 +16,7 @@ import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
+import '../utils/screen_insets.dart';
 import '../widgets/ink_guide_banner.dart';
 
 const _maxConsumptionByKeyword = <String, double>{
@@ -426,7 +427,7 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
           ],
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(12),
+              padding: ScreenInsets.listPadding(context, horizontal: 12, top: 12),
               children: [
                 // ── Ink Meters ─────────────────────────────────────────────
                 _sectionLabel(context, 'Ink Meters'),
@@ -436,7 +437,7 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       'No metered items — a manager must set conversion factors '
-                      '(Ink hub → Conversion Factors).',
+                      'on CTP Pulse (Ink → Setup).',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context)
                               .colorScheme
@@ -469,7 +470,7 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       'No meter points — a manager must add them '
-                      '(Ink hub → Toloul Meter Points).',
+                      'on CTP Pulse (Ink → Setup).',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context)
                               .colorScheme

@@ -745,15 +745,11 @@ The form stays open after submit (fields clear, date resets to now) to allow bac
 
 ---
 
-### Deprecated meter / void screens (not linked from navigation)
+### Removed manager screens (2026-07-10) — use CTP Pulse
 
-| Screen | Status |
-|--------|--------|
-| `ink_daily_readings_screen.dart` | **Canonical** — combined ink + toloul daily readings; home/Ink hub banner via `inkDailyReadingsStatusProvider` |
-| ~~`ink_meter_point_entry_screen.dart`~~ | **Removed** (2026-06-29) — use `InkDailyReadingsScreen` |
-| ~~`ink_meter_readings_grid_screen.dart`~~ | **Removed** (2026-06-29) — use `InkDailyReadingsScreen` |
-| ~~`ink_meter_sessions_screen.dart`~~ | **Removed** (2026-06-29) — void on Pulse `/ink/ledger-tools` |
-| `ink_production_history_screen.dart` | **Deprecated** for voids — read-only on mobile; void on Pulse `/ink/production` |
+Operator capture only remains on mobile. These files were **deleted** (were already unlinked from navigation; manager work lives on Pulse):
+
+`ink_pending_costs`, `ink_month_end_*`, `ink_flagged_review`, `ink_adjustment`, `ink_corrections`, `ink_revaluation`, `ink_value_adjustment`, `ink_recipe_management`, `ink_supplier_management`, `ink_conversion_factor`, `ink_meter_point_management`, `ink_stock_screen`, `ink_production_history`.
 
 `InkDailyReadingsScreen` is the **only** operator meter capture path (ink + toloul, one submit).
 
@@ -763,7 +759,7 @@ The form stays open after submit (fields clear, date resets to now) to allow bac
 
 `lib/screens/ink_production_run_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Operator picks a recipe (CoverWax or Gravure Binder) and a pot count (1 / 2 / 3). The screen previews the inputs consumed and the output produced with an estimated cost (managers only). Submitting records a `consumption_production` transaction per input and a `manufacture` transaction for the output. The 10 most recent production runs are shown below the form as a history list.
+Operator picks a recipe (CoverWax or Gravure Binder) and a pot count (1 / 2 / 3). Recipes are maintained on **CTP Pulse → Ink → Setup**. Submitting records consumption + manufacture txns. Recent runs list is period-scoped.
 
 ---
 
@@ -771,7 +767,7 @@ Operator picks a recipe (CoverWax or Gravure Binder) and a pot count (1 / 2 / 3)
 
 `lib/screens/ink_receive_ibc_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Scans ink IBCs (GS1-128 barcode labels). The barcode parser reads the SSCC (IBC number), weight, charge number, and colour from the label. Multiple IBCs can be scanned and batched before submitting. On submit, one cost-pending `purchase` transaction is written per colour for the total kg received, and each IBC is registered in the IBC audit register.
+Scans ink IBCs (GS1-128 barcode labels). List-first via `InkSelectIbcShipmentScreen`. On submit, cost-pending purchases + IBC register (CF path).
 
 ---
 
@@ -779,29 +775,13 @@ Scans ink IBCs (GS1-128 barcode labels). The barcode parser reads the SSCC (IBC 
 
 `lib/screens/ink_ibc_register_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Searchable register of all ink IBCs, tabbed by colour (Yellow / Red / Blue / Black). Each tab shows IBC numbers with receive date, charge number, order number, CGNA, and status. A status filter chip (All / Received / Consumed) sits above the tabs. Managers can **void consumption** — this auto-disposes the linked `waste_stock` item if still on site.
+Searchable register of all ink IBCs, tabbed by colour. Period summary + void consumption (manager) where still allowed.
 
 ### Consume IBC (Waste cross-link)
 
 `lib/screens/ink_ibc_transfer_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
-Marks an IBC as consumed (transferred to tank). Atomically creates `waste_stock/stock_ibc_{number}` as an **IBC Bins** on-site item (qty 1, no stock photo). Security links it to a waste load on **collection day** via **Begin Collection → From stock**.
-
----
-
-### Pending Costs
-
-`lib/screens/ink_pending_costs_screen.dart` — **Roles:** Ink manager, Admin
-
-Lists all `purchase` transactions still in `cost_status: pending` (invoice not yet received). Manager enters the total cost; the server re-runs the WAC replay from that transaction forward to incorporate the finalised cost.
-
----
-
-### Month-end Report
-
-`lib/screens/ink_month_end_report_screen.dart` — **Roles:** Ink manager, Admin
-
-Free date-range report using count events as period boundaries. Shows opening WAC/balance/value, purchases, manufacturing, consumption, recovery, adjustments, revaluations, and closing balance per item. Exports as Summary CSV, Summary PDF, or full Transaction-list PDF. Toloul Recovery and Toloul Usage totals for the period are shown at the bottom.
+Marks an IBC as consumed (transferred to tank). Waste stock pool cross-link for collection day.
 
 ---
 

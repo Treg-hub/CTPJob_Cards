@@ -56,6 +56,14 @@ android {
 
     buildTypes {
         release {
+            // R8 minify + resource shrink — verified ~5–6 MB vs minify off (same commit).
+            // Rules: proguard-rules.pro. Pilot-smoke FCM/geofence/scanner before factory latest.apk.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {

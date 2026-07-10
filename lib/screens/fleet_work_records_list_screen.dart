@@ -8,6 +8,7 @@ import '../main.dart' show currentEmployee;
 import '../models/fleet_work_record.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/fleet_app_bar.dart';
 import '../widgets/fleet_filter_dropdown.dart';
 import 'fleet_work_record_detail_screen.dart';
@@ -140,7 +141,12 @@ class _FleetWorkRecordsListScreenState
                 );
               }
               return ListView.separated(
-                padding: const EdgeInsets.all(12),
+                padding: ScreenInsets.listPadding(
+                  context,
+                  horizontal: 12,
+                  top: 12,
+                  inHomeShell: widget.embedded,
+                ),
                 itemCount: records.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 6),
                 itemBuilder: (context, index) => WorkRecordTile(

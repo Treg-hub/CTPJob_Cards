@@ -7,6 +7,7 @@ import '../constants/collections.dart';
 import '../models/feedback_item.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/screen_insets.dart';
 import 'feedback_thread_screen.dart';
 
 /// Admin-only feedback triage board.
@@ -216,7 +217,11 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
                 : visible.isEmpty
                     ? _emptyState('No ${_filter!.label.toLowerCase()} feedback', Icons.filter_alt_off_outlined)
                     : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                        padding: ScreenInsets.listPadding(
+                          context,
+                          horizontal: 12,
+                          top: 4,
+                        ),
                         itemCount: visible.length,
                         itemBuilder: (context, i) => _feedbackCard(visible[i], colors),
                       ),

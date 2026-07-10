@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../utils/persona_audit.dart';
+import '../utils/screen_insets.dart';
 
 /// Public two-way thread on a single feedback item.
 ///
@@ -126,7 +127,7 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
         final comments = (snap.data?.docs ?? []).map(FeedbackComment.fromDoc).toList();
         return ListView(
           controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          padding: ScreenInsets.listPadding(context, horizontal: 12, top: 8),
           children: [
             _originalCard(item, colors),
             if (comments.isEmpty && snap.connectionState != ConnectionState.waiting)

@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-10 — Pilot 2.3.0+158 (minify + safe area + cleanup)
+
+### What you will notice
+
+- **Smaller install** — release APK uses R8 minify (~**47 MB** vs ~**52.5 MB** without minify on the same code).
+- **Bottom safe area** fixed on My Timesheet, Fleet lists, Ink meters/production/IBC register, waste stock, feedback.
+- **Receive Local** + ink process tips (from +157) included.
+- Unused Ink **manager** screens removed from the app (use **CTP Pulse** for costing/month-end/setup).
+
+### For admins
+
+- Pilot: **2.3.0 / 158**, Channel APK URL = `…/releases/pilot.apk`. Keep Shared/Default on factory `latest.apk`.
+- Smoke release-only paths before factory: FCM, geofence, Ink scan, Security disc if used.
+- Mapping: `build/app/outputs/mapping/release/mapping.txt` after release builds.
+
+---
+
 ## 2026-07-10 — Pilot 2.3.0+157 (Receive Local + tips)
 
 ### What you will notice

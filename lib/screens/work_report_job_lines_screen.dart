@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../utils/role.dart';
 import '../utils/work_report_period_utils.dart';
 import '../utils/work_report_soft_lock.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 
 class WorkReportJobLinesScreen extends ConsumerStatefulWidget {
@@ -182,7 +183,11 @@ class _WorkReportJobLinesScreenState
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: ScreenInsets.listPadding(
+                          context,
+                          horizontal: 12,
+                          top: 0,
+                        ),
                         itemCount: lines.length,
                         itemBuilder: (context, index) {
                           return _JobLineTile(

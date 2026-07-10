@@ -408,7 +408,7 @@ class _FleetDailyCheckScreenState extends ConsumerState<FleetDailyCheckScreen> {
       appBar: FleetAppBar(title: title),
       bottomNavigationBar: _mode == _CheckMode.start
           ? SafeBottomBar(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: FilledButton.icon(
                 onPressed: _submitting ? null : _submit,
                 icon: _submitting

@@ -7,6 +7,7 @@ import '../screens/fleet_report_wizard_screen.dart' show openFleetReportWizard;
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/presence_gating.dart';
+import '../utils/screen_insets.dart';
 
 /// Machine tile tap — report a fault or open the daily safety checklist.
 Future<void> showFleetMachineActionSheet(
@@ -50,7 +51,12 @@ class _FleetMachineActionSheet extends StatelessWidget {
     final colors = theme.appColors;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        16 + ScreenInsets.bottomSafe(context),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

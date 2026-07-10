@@ -13,6 +13,7 @@ import '../services/work_report_service.dart';
 import '../utils/role.dart';
 import '../utils/work_report_period_utils.dart';
 import '../utils/work_report_soft_lock.dart';
+import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/work_report_job_link_picker.dart';
 
@@ -93,7 +94,12 @@ class WorkReportAdditionalWorkScreen extends ConsumerWidget {
                 );
               }
               return ListView.builder(
-                padding: const EdgeInsets.all(12),
+                padding: ScreenInsets.listPadding(
+                  context,
+                  horizontal: 12,
+                  top: 12,
+                  clearFab: editable,
+                ),
                 itemCount: lines.length,
                 itemBuilder: (context, index) {
                   final line = lines[index];
@@ -283,7 +289,9 @@ class WorkReportAdditionalWorkScreen extends ConsumerWidget {
                 left: 16,
                 right: 16,
                 top: 16,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom +
+                    ScreenInsets.bottomSafe(ctx) +
+                    16,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

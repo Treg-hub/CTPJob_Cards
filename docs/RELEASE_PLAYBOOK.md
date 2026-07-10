@@ -59,6 +59,22 @@ cd C:\Users\Admin\CTP-Factory-System\mobile\CTPJob_Cards
 |---|------|----------------|
 | B1 | Build | `flutter build apk --target-platform android-arm64 --release` |
 | B2 | Output | `build\app\outputs\flutter-apk\app-release.apk` |
+| B3 | R8 minify | Release uses `isMinifyEnabled` + `isShrinkResources` + `android/app/proguard-rules.pro` (keeps `com.ctp.jobcards.**`, Firebase/GMS, ML Kit, WorkManager). First ship after rule changes: **pilot.apk only**. |
+| B4 | Mapping (optional) | After build: `build/app/outputs/mapping/release/mapping.txt` — archive for Crashlytics deobfuscation if stack traces are obfuscated. |
+
+#### Release-only smoke (after minify / ProGuard changes)
+
+Do **not** promote to factory `latest.apk` until:
+
+1. Sign-in / claims load  
+2. FCM or real job notification (banner / full-loud if possible)  
+3. Geofence / on-site flip (or reboot → BootReceiver re-register)  
+4. Ink **Receive Ink (IBC)** barcode scan  
+5. Security disc/licence scan (if that cohort is piloting)  
+6. Stay on-site long enough for WorkManager tick (or force a location check)  
+7. Timesheet PDF / share if used  
+8. In-app update install path (FileProvider) if testing updates  
+9. Kiosk tablet only if that device is in the pilot
 
 ### C. Host APK on landing (official file)
 
