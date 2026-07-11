@@ -6,6 +6,30 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-11 — Pilot 2.3.0+161 (Copper tab + My Work)
+
+### What you will notice
+
+- **Copper** bottom tab (admins + Pre Press managers only) opens copper straight away — **no clock-number prompt**.
+- **My Work** no longer stuck on “Waiting for connection…” after security rules refresh; **Retry** button if needed.
+- Copper: no shared password; access by role only.
+
+### For admins
+
+- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 161**.
+- Factory **latest.apk** stays lower (e.g. 159) until promoted.
+
+---
+
+## 2026-07-11 — Copper tab: open directly (no clock entry)
+
+### What you will notice
+
+- **Copper** bottom tab (admins + Pre Press managers only) opens the copper screen straight away — **no clock-number prompt**.
+- Others never see the tab; server rules still block copper data.
+
+---
+
 ## 2026-07-11 — Pilot 2.3.0+160 (My Work connection fix)
 
 ### What you will notice
