@@ -46,9 +46,14 @@ function isCriticalPriority(priority) {
   return (Number(priority) || 3) >= 4;
 }
 
+/** Soft-deleted jobs never count as open (missing is_deleted = active). */
+function isJobCardDeleted(data) {
+  return data != null && data.is_deleted === true;
+}
+
 /** Active/critical contribution for a single job_cards doc snapshot. */
 function countContribution(data) {
-  if (!data || !isOpenJobStatus(data.status)) {
+  if (!data || isJobCardDeleted(data) || !isOpenJobStatus(data.status)) {
     return { active: 0, critical: 0 };
   }
   return {
@@ -69,6 +74,7 @@ function deltaForTransition(before, after) {
 
 function countingFieldsChanged(before, after) {
   if (!before || !after) return true;
+  if (isJobCardDeleted(before) !== isJobCardDeleted(after)) return true;
   const bStatus = normalizeJobStatus(before.status);
   const aStatus = normalizeJobStatus(after.status);
   if (bStatus !== aStatus) return true;
@@ -81,6 +87,7 @@ module.exports = {
   normalizeJobStatus,
   isOpenJobStatus,
   isCriticalPriority,
+  isJobCardDeleted,
   countContribution,
   deltaForTransition,
   countingFieldsChanged,

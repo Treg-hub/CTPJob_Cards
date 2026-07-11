@@ -38,11 +38,18 @@ class FirestoreService {
   /// One corrupted document used to error the entire stream emission and
   /// blank every job list for every user — a skipped doc is logged to
   /// Crashlytics (non-fatal) so it can be repaired, while the rest render.
-  static List<JobCard> parseJobCards(Iterable<DocumentSnapshot> docs) {
+  /// Parses job card docs. Soft-deleted (`is_deleted == true`) are skipped
+  /// unless [includeDeleted] is true. Missing `is_deleted` = active.
+  static List<JobCard> parseJobCards(
+    Iterable<DocumentSnapshot> docs, {
+    bool includeDeleted = false,
+  }) {
     final cards = <JobCard>[];
     for (final doc in docs) {
       try {
-        cards.add(JobCard.fromFirestore(doc));
+        final card = JobCard.fromFirestore(doc);
+        if (!includeDeleted && card.isDeleted) continue;
+        cards.add(card);
       } catch (e, st) {
         debugPrint('⚠️ Skipping unparseable job card ${doc.id}: $e');
         if (!kIsWeb) {
@@ -448,11 +455,64 @@ class FirestoreService {
     }
   }
 
+  /// Admin soft-delete — never hard-deletes (rules: allow delete: if false).
+  /// Prefer [softDeleteJobCard] with actor clocks for audit fields.
   Future<void> deleteJobCard(String jobCardId) async {
+    final actor = resolveWriteActor();
+    await softDeleteJobCard(
+      jobCardId: jobCardId,
+      byClockNo: actor?.clockNo ?? '',
+      byName: actor?.name ?? 'Admin',
+    );
+  }
+
+  /// Soft-delete a job card (admin claim required by rules).
+  Future<void> softDeleteJobCard({
+    required String jobCardId,
+    required String byClockNo,
+    required String byName,
+    String? reason,
+  }) async {
+    assertPersonaSubmitAllowed();
     try {
-      await _firestore.collection(Collections.jobCards).doc(jobCardId).delete();
+      final payload = <String, dynamic>{
+        'is_deleted': true,
+        'deleted_at': FieldValue.serverTimestamp(),
+        'deleted_by_clock_no': byClockNo,
+        'deleted_by_name': byName,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+      };
+      if (reason != null && reason.trim().isNotEmpty) {
+        payload['delete_reason'] = reason.trim();
+      }
+      await _firestore
+          .collection(Collections.jobCards)
+          .doc(jobCardId)
+          .update(withPersonaAudit(payload));
     } catch (e) {
-      throw Exception('Failed to delete job card: $e');
+      throw Exception('Failed to soft-delete job card: $e');
+    }
+  }
+
+  /// Restore a soft-deleted job card (admin claim required by rules).
+  Future<void> restoreJobCard({
+    required String jobCardId,
+    required String byClockNo,
+    required String byName,
+  }) async {
+    assertPersonaSubmitAllowed();
+    try {
+      await _firestore.collection(Collections.jobCards).doc(jobCardId).update(
+            withPersonaAudit({
+              'is_deleted': false,
+              'restored_at': FieldValue.serverTimestamp(),
+              'restored_by_clock_no': byClockNo,
+              'restored_by_name': byName,
+              'lastUpdatedAt': FieldValue.serverTimestamp(),
+            }),
+          );
+    } catch (e) {
+      throw Exception('Failed to restore job card: $e');
     }
   }
 

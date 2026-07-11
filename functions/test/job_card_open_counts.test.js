@@ -32,3 +32,18 @@ test('countingFieldsChanged ignores comment-only updates', () => {
     false,
   );
 });
+
+test('soft-delete of open job decrements active', () => {
+  const d = deltaForTransition(
+    { status: 'open', priority: 4, is_deleted: false },
+    { status: 'open', priority: 4, is_deleted: true },
+  );
+  assert.equal(d.activeDelta, -1);
+  assert.equal(d.criticalDelta, -1);
+});
+
+test('missing is_deleted still counts as open', () => {
+  const d = deltaForTransition(null, { status: 'open', priority: 3 });
+  assert.equal(d.activeDelta, 1);
+  assert.equal(d.criticalDelta, 0);
+});

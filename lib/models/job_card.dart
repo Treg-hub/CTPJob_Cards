@@ -98,6 +98,9 @@ class JobCard {
   final List<Map<String, dynamic>> notesLog;
   final List<Map<String, dynamic>> correctiveActionLog;
 
+  /// Admin soft-delete (2026-07-11). Missing / false = active in lists.
+  final bool isDeleted;
+
   const JobCard({
     this.id,
     this.jobCardNumber,
@@ -117,6 +120,7 @@ class JobCard {
     this.correctiveAction = '',
     this.reoccurrenceCount = 1,
     this.status = JobStatus.open,
+    this.isDeleted = false,
     this.createdAt,
     this.assignedAt,
     this.startedAt,
@@ -159,6 +163,7 @@ class JobCard {
       correctiveAction: data['correctiveAction'] as String? ?? '',
       reoccurrenceCount: data['reoccurrenceCount'] as int? ?? 1,
       status: JobStatusExtension.fromString(data['status'] as String? ?? 'Open'),
+      isDeleted: data['is_deleted'] == true,
       createdAt: parseTimestamp(data['createdAt']),
       assignedAt: parseTimestamp(data['assignedAt']),
       startedAt: parseTimestamp(data['startedAt']),

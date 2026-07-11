@@ -2015,9 +2015,11 @@ exports.reconcileOpenJobCardCounts = onCall(async (request) => {
   let active = 0;
   let critical = 0;
   for (const doc of snap.docs) {
-    if (!isOpenJobStatus(doc.data().status)) continue;
+    const data = doc.data();
+    if (data.is_deleted === true) continue;
+    if (!isOpenJobStatus(data.status)) continue;
     active += 1;
-    if (isCriticalPriority(doc.data().priority)) critical += 1;
+    if (isCriticalPriority(data.priority)) critical += 1;
   }
   await openCounterRef().set({
     active,
