@@ -6,6 +6,43 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-11 — Copper tab: open directly (no clock entry)
+
+### What you will notice
+
+- **Copper** bottom tab (admins + Pre Press managers only) opens the copper screen straight away — **no clock-number prompt**.
+- Others never see the tab; server rules still block copper data.
+
+---
+
+## 2026-07-11 — Pilot 2.3.0+160 (My Work connection fix)
+
+### What you will notice
+
+- **My Work** no longer stays stuck on “Waiting for connection…” when one of its job lists was still on a cold cache after login (seen after security rules refresh, especially Ink Factory operators).
+- **Retry** button on that screen, and app resume reloads My Work cleanly.
+
+### For admins
+
+- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 160**.
+- Factory **latest.apk** unchanged until promoted.
+
+---
+
+## 2026-07-11 — Copper access by role (no password)
+
+### What you will notice
+
+- **Copper** opens for **admins** and **Pre Press managers** only — **no shared password**.
+- Hard-coded clock list (22 / 5421 / 20) removed; access follows your department and position.
+
+### For admins
+
+- Ensure Pre Press managers have department **Pre Press** and a position containing **Manager**.
+- Residual `copperPassword` on server can be cleared with `clear_copper_password.mjs` after rules deploy.
+
+---
+
 ## 2026-07-11 — Factory 2.3.0+159 (copper password + security)
 
 ### What you will notice

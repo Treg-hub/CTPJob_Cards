@@ -51,11 +51,15 @@ bool isSuperManager(Employee? employee) {
   return (employee?.department.toLowerCase() ?? '') == 'general';
 }
 
-/// Copper inventory whitelist — used by HomeScreen to show the Copper tab.
-const Set<String> _copperAuthorizedClockNos = {'22', '5421', '20'};
-
+/// Copper inventory access — used by HomeScreen to show the Copper tab.
+/// Matches Firestore `canAccessCopper`: admin **or** Pre Press manager
+/// (department Pre Press + position contains "manager"). No hard-coded clocks.
 bool isCopperAuthorized(Employee? employee) {
-  return _copperAuthorizedClockNos.contains(employee?.clockNo ?? '');
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  final dept = employee.department.trim().toLowerCase();
+  final pos = employee.position.trim().toLowerCase();
+  return dept == 'pre press' && pos.contains('manager');
 }
 
 /// True when [employee] has the `isAdmin` flag set in their Firestore document.

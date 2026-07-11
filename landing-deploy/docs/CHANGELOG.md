@@ -6,6 +6,65 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-11 — Pilot 2.3.0+160 (My Work connection fix)
+
+### What you will notice
+
+- **My Work** no longer stays stuck on “Waiting for connection…” when one of its job lists was still on a cold cache after login (seen after security rules refresh, especially Ink Factory operators).
+- **Retry** button on that screen, and app resume reloads My Work cleanly.
+
+### For admins
+
+- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 160**.
+- Factory **latest.apk** unchanged until promoted.
+
+---
+
+## 2026-07-11 — Copper access by role (no password)
+
+### What you will notice
+
+- **Copper** opens for **admins** and **Pre Press managers** only — **no shared password**.
+- Hard-coded clock list (22 / 5421 / 20) removed; access follows your department and position.
+
+### For admins
+
+- Ensure Pre Press managers have department **Pre Press** and a position containing **Manager**.
+- Residual `copperPassword` on server can be cleared with `clear_copper_password.mjs` after rules deploy.
+
+---
+
+## 2026-07-11 — Factory 2.3.0+159 (copper password + security)
+
+### What you will notice
+
+- **Copper module password** now reads from the secure server settings (`app_secrets`). Required after the factory security migration so Copper unlock keeps working for clocks 22 / 5421 / 20.
+- Job Cards create/edit and other floor modules unchanged for this purpose.
+
+### For admins
+
+- Factory download: **2.3.0 / 159** → `…/releases/latest.apk`. Publish Default + Shared to this build.
+- Copper users should update to this build (or newer). Older APKs may fail Copper password after secrets moved off `settings/app`.
+
+---
+
+## 2026-07-10 — Pilot 2.3.0+158 (minify + safe area + cleanup)
+
+### What you will notice
+
+- **Smaller install** — release APK uses R8 minify (~**47 MB** vs ~**52.5 MB** without minify on the same code).
+- **Bottom safe area** fixed on My Timesheet, Fleet lists, Ink meters/production/IBC register, waste stock, feedback.
+- **Receive Local** + ink process tips (from +157) included.
+- Unused Ink **manager** screens removed from the app (use **CTP Pulse** for costing/month-end/setup).
+
+### For admins
+
+- Pilot: **2.3.0 / 158**, Channel APK URL = `…/releases/pilot.apk`. Keep Shared/Default on factory `latest.apk`.
+- Smoke release-only paths before factory: FCM, geofence, Ink scan, Security disc if used.
+- Mapping: `build/app/outputs/mapping/release/mapping.txt` after release builds.
+
+---
+
 ## 2026-07-10 — Pilot 2.3.0+157 (Receive Local + tips)
 
 ### What you will notice

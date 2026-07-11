@@ -210,6 +210,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return idx;
   }
 
+  int _copperTabIndex() {
+    if (!_isCopperAuthorized) return -1;
+    var idx = 1; // after Home
+    if (_showMyWorkNav) idx++;
+    return idx;
+  }
+
+  bool get _isOnCopperTab {
+    final idx = _copperTabIndex();
+    return idx >= 0 && _selectedIndex == idx;
+  }
+
   int _wasteTabIndex() {
     if (!_showWasteModule) return -1;
     return _indexAfterCoreTabs();
@@ -315,6 +327,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   String get _appBarTitle {
+    if (_isOnCopperTab) return 'Copper';
     if (_isOnWasteTab) return 'Waste Recovery';
     if (_isOnFleetTab) return 'Fleet Maintenance';
     if (_isOnSecurityTab) return 'Site Security';
@@ -893,6 +906,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     ]);
     _retryFailedModuleSettings();
     _rearmActiveJobsStreamIfStuck();
+    // My Work: four-stream merge can stick on cache-only empty after a rules/
+    // claims blip — drop the cached stream so the tab re-subscribes cleanly.
+    if (mounted && _myWorkStream != null) {
+      setState(() {
+        _myWorkStream = null;
+        _myWorkClockNo = null;
+      });
+    }
     DeviceHealthService().syncPermissionsToFirestore();
 
     // Always re-fetch on resume so a force publish while backgrounded still blocks
@@ -1751,6 +1772,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
+                  const SizedBox(height: 16),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await AuthClaimsService.refreshClaims();
+                      if (!mounted) return;
+                      setState(() {
+                        _myWorkStream = null;
+                        _myWorkClockNo = null;
+                      });
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Retry'),
+                  ),
                 ],
               ),
             );
@@ -2236,44 +2270,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
+  /// Copper tab — only mounted when [isCopperAuthorized] (admin / Pre Press manager).
+  /// No clock-number or password dialog; Firestore rules enforce the same gate.
   Widget _buildCopperTab() {
-    return Center(
-      child: ElevatedButton(
-        onPressed: _showCopperAuthDialog,
-        child: const Text('Access Copper Storage'),
-      ),
-    );
-  }
-
-  void _showCopperAuthDialog() {
-    final clockController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enter Clock Number'),
-        content: TextField(
-          controller: clockController,
-          decoration: const InputDecoration(labelText: 'Clock Card Number'),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              if (['22', '5421', '20'].contains(clockController.text.trim())) {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperDashboardScreen()));
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Access denied. Only authorized clock cards allowed.'), backgroundColor: Colors.red),
-                );
-              }
-            },
-            child: const Text('Access'),
-          ),
-        ],
-      ),
-    );
+    return const CopperDashboardScreen();
   }
 
   void _onItemTapped(int index) {
@@ -2474,7 +2474,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           onTap: _onItemTapped,
         ),
       ),
-      floatingActionButton: (_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab)
+      floatingActionButton: (_isOnCopperTab ||
+              _isOnWasteTab ||
+              _isOnFleetTab ||
+              _isOnSecurityTab)
           ? null
           : FloatingActionButton(
               onPressed: _openMyFeedback,

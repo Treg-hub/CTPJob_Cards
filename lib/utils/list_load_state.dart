@@ -41,13 +41,20 @@ ListLoadState decideListLoadState({
 bool allStreamSidesReady(Iterable<bool> sidesHaveSnapshot) =>
     sidesHaveSnapshot.every((ready) => ready);
 
-/// After [allStreamSidesReady], true when any side is still cache-only.
+/// After [allStreamSidesReady], true only while **every** side is still
+/// cache-only (full cold-cache).
+///
+/// Previously used `.any`: one hung cache-only empty leg (common after a
+/// permission-denied / claims retry that never re-emitted a server snap)
+/// pinned multi-stream UIs like My Work on "Waiting for connection…" forever
+/// even when the other three legs already had server confirmation.
+/// With `.every`, once any side is server-confirmed we unblock empty/data.
 bool mergedIsFromCache({
   required Iterable<bool> sidesHaveSnapshot,
   required Iterable<bool> sidesFromCache,
 }) {
   if (!allStreamSidesReady(sidesHaveSnapshot)) return true;
-  return sidesFromCache.any((fromCache) => fromCache);
+  return sidesFromCache.every((fromCache) => fromCache);
 }
 
 /// Whether a missing employee doc should be treated as a real deletion.

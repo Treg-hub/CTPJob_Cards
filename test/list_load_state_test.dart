@@ -78,7 +78,9 @@ void main() {
       expect(allStreamSidesReady([true, false]), isFalse);
     });
 
-    test('mergedIsFromCache waits for all sides then ORs cache flags', () {
+    test('mergedIsFromCache waits until all sides ready; cold-cache only if all cache',
+        () {
+      // Not all ready → treat as still cache (block empty state).
       expect(
         mergedIsFromCache(
           sidesHaveSnapshot: [true, false],
@@ -86,6 +88,7 @@ void main() {
         ),
         isTrue,
       );
+      // All server-confirmed.
       expect(
         mergedIsFromCache(
           sidesHaveSnapshot: [true, true],
@@ -93,10 +96,19 @@ void main() {
         ),
         isFalse,
       );
+      // One server + one cache: do NOT pin waiting forever (My Work hang fix).
       expect(
         mergedIsFromCache(
           sidesHaveSnapshot: [true, true],
           sidesFromCache: [false, true],
+        ),
+        isFalse,
+      );
+      // Full cold cache — still waiting.
+      expect(
+        mergedIsFromCache(
+          sidesHaveSnapshot: [true, true],
+          sidesFromCache: [true, true],
         ),
         isTrue,
       );

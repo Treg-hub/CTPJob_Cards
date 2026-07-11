@@ -299,13 +299,42 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen> w
 
   @override
   Widget build(BuildContext context) {
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    // Defence in depth: tab is only mounted for authorized users; block push routes too.
+    if (!isCopperAuthorized(employee)) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Copper is limited to admins and Pre Press managers.\n'
+              'You do not have access.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Nested under Home shell when used as a tab — no second AppBar.
+    // When pushed (e.g. Admin tile), show a local app bar with back.
+    final isPushedRoute = ModalRoute.of(context)?.canPop ?? false;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Copper Management', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.amber,
-        elevation: 0,
-      ),
+      appBar: isPushedRoute
+          ? AppBar(
+              title: const Text('Copper Management',
+                  style: TextStyle(color: Colors.black)),
+              backgroundColor: Colors.amber,
+              elevation: 0,
+            )
+          : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isLargeScreen = constraints.maxWidth > 1200;
