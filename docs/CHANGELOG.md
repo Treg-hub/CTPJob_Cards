@@ -6,6 +6,20 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-11 — Factory 2.3.0+159 (copper password + security)
+
+### What you will notice
+
+- **Copper module password** now reads from the secure server settings (`app_secrets`). Required after the factory security migration so Copper unlock keeps working for clocks 22 / 5421 / 20.
+- Job Cards create/edit and other floor modules unchanged for this purpose.
+
+### For admins
+
+- Factory download: **2.3.0 / 159** → `…/releases/latest.apk`. Publish Default + Shared to this build.
+- Copper users should update to this build (or newer). Older APKs may fail Copper password after secrets moved off `settings/app`.
+
+---
+
 ## 2026-07-10 — Pilot 2.3.0+158 (minify + safe area + cleanup)
 
 ### What you will notice
