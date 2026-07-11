@@ -8,6 +8,8 @@ The CTP Job Cards platform is the **central CTP mobile app** (still branded Job 
 
 The platform is built on Google Firebase — enterprise-grade cloud infrastructure — and is designed to be always available, offline-capable, and scalable without requiring any on-site IT infrastructure.
 
+**Data access (board-level):** Unauthenticated public access is denied. Modules such as **Waste, Fleet, Site Security, Ink, and Copper** are limited to the staff who use them (server rules, not only the app screens). **Job Cards** remain factory-wide for create and complete work; finished records stay in the system (archived / soft-delete for admin cleanup — not wiped). Admin accounts should use strong unique passwords; multi-factor authentication for admins is planned when the identity platform upgrade is ready.
+
 ---
 
 ## The Problem It Solves

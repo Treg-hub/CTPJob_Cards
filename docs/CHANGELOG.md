@@ -6,6 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-11 — Factory 2.3.0+162 (soft-delete + My Work + Copper)
+
+### What you will notice
+
+- **Job cards stay in the system** — closed jobs are archived; any admin cleanup is **soft-delete** only (hidden from floor lists, kept for audit). Staff create/complete jobs as usual.
+- **My Work** no longer stuck on “Waiting for connection…” after login/security refresh; **Retry** if needed.
+- **Copper** tab (admins + Pre Press managers only) opens directly — **no password**, no clock prompt.
+- Soft-deleted jobs (if any) no longer appear in active lists or open-job KPIs.
+
+### For admins
+
+- Factory download: **2.3.0 / 162** → `https://ctp-job-cards-landing.web.app/releases/latest.apk`.
+- Publish Default + Shared channels to **2.3.0 / 162** with that Shared download URL.
+- Soft-delete API is ready for admin tools; floor apps do not hard-delete job cards.
+
+---
+
 ## 2026-07-11 — Pilot 2.3.0+161 (Copper tab + My Work)
 
 ### What you will notice

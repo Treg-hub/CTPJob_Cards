@@ -13,7 +13,7 @@ There are four **job-card** roles derived from your position, plus module-specif
 | **Operator** | Reports faults and creates job cards when a machine or process has an issue |
 | **Technician** | Receives job card notifications, attends to faults, and closes jobs when resolved |
 | **Manager** | Oversees job cards in their department, monitors escalations, and ensures quality |
-| **Admin** | Manages the system, employee accounts, and geofence configuration |
+| **Admin** | Manages the system, employee accounts, and geofence configuration. Job cards you close stay in history; they are not wiped when finished. |
 | **Security Guard** | Site Security + Waste field capture — **module hub home, no job-card tiles or My Work** (see **Site Security — Guard Guide** in Documentation) |
 | **Security Manager** | Gate oversight, waste scheduling, company car costs — keeps full manager job-card Home **plus** Security/Waste tabs (see **Site Security — Manager Guide**) |
 
