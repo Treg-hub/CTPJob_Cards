@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee.dart';
 import '../main.dart' show realEmployee;
@@ -121,12 +122,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         FirebaseCrashlytics.instance
             .recordError(e, st, reason: 'registration_link_failed');
       }
-      // The auth account exists but isn't linked yet. Retrying Create Account
-      // with the same email/password resumes here via the sign-in fallback.
-      _showSnack(
-          'Account created but not yet linked — check your connection and '
-          'tap Create Account again to retry.',
-          Colors.orange);
+      final msg = _linkFailureMessage(e);
+      _showSnack(msg, Colors.orange);
       return;
     }
 
@@ -174,6 +171,32 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
       _showSnack('Account created successfully!', Colors.green);
     }
+  }
+
+  /// Maps Phase-1 linkEmployeeAccount errors to user-facing copy.
+  String _linkFailureMessage(Object e) {
+    if (e is FirebaseFunctionsException) {
+      final details = (e.message ?? '').toLowerCase();
+      if (details.contains('email does not match') ||
+          details.contains('company email')) {
+        return 'Use the company email registered for this clock number, '
+            'or ask an admin for help.';
+      }
+      if (details.contains('locked for registration')) {
+        return 'This clock number is locked for registration — ask an admin.';
+      }
+      if (details.contains('already linked')) {
+        return 'This clock number is already linked to another account.';
+      }
+      if (e.code == 'not-found') {
+        return 'No employee found with that clock card number.';
+      }
+      if (e.message != null && e.message!.isNotEmpty) {
+        return e.message!;
+      }
+    }
+    return 'Account created but not yet linked — check your connection and '
+        'tap Create Account again to retry.';
   }
 
   void _showSnack(String message, Color color) {

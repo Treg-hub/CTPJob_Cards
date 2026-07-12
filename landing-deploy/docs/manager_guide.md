@@ -21,7 +21,7 @@ A job card with vague information is almost useless for analysis, reporting, or 
 | **Operator** | Discovers a fault and creates the job card. Responsible for accurate, complete information at the point of entry. |
 | **Technician** | Receives the job card, attends to the fault, and closes it out with a completion note. |
 | **Manager** | Oversees all job cards in their department. Responsible for quality, escalation response, and pattern identification. |
-| **Admin** | Manages system configuration, employee accounts, and geofence settings. |
+| **Admin** | Manages system configuration, employee accounts, and geofence settings. Job cards are never permanently wiped from the phone/app — cleanup is **soft-delete** (hidden from floor lists; retained for audit). |
 | **Security Manager** | Keeps this manager job-card Home **plus** Waste and Security tabs; Pulse desk for security oversight (see Site Security — Manager Guide). |
 | **Security Guard** | Does **not** use this guide for day-to-day work — module hub home only (Site Security — Guard Guide). |
 

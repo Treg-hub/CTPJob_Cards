@@ -4,6 +4,7 @@ import '../models/job_card.dart';
 import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import '../models/work_report_settings.dart';
+import '../services/module_claims.dart';
 
 enum UserRole { technician, manager, admin, operator }
 
@@ -104,10 +105,11 @@ bool isSecurityDeptManager(Employee? employee) {
       employee.position.toLowerCase().contains('manager');
 }
 
-/// WasteTrack Security Manager — dept/position OR waste_settings clock list.
+/// WasteTrack Security Manager — claims flag OR dept/position OR waste_settings.
 bool isSecurityManager(Employee? employee, WasteSettings? settings) {
   if (employee == null) return false;
   if (isWasteAdmin(employee)) return true;
+  if (ModuleClaims.instance.isSecurityManager == true) return true;
   if (isSecurityDeptManager(employee)) return true;
   if (settings == null) return false;
   return _clockNoInSecurityAllowList(
@@ -116,10 +118,14 @@ bool isSecurityManager(Employee? employee, WasteSettings? settings) {
   );
 }
 
-/// WasteTrack Security Guard — manager, dept/position, OR waste_settings list.
+/// WasteTrack Security Guard — claims / manager / dept / waste_settings list.
 bool isSecurityGuard(Employee? employee, WasteSettings? settings) {
   if (employee == null) return false;
   if (isSecurityManager(employee, settings)) return true;
+  if (ModuleClaims.instance.isSecurityStaff == true ||
+      ModuleClaims.instance.isWasteStaff == true) {
+    return true;
+  }
   if (isSecurityDeptGuard(employee)) return true;
   if (settings == null) return false;
   return _clockNoInSecurityAllowList(
@@ -150,8 +156,10 @@ bool canViewCopperReadyPanel(Employee? employee, WasteSettings? settings) {
 // =============================================================================
 
 bool _isSiteSecurityManager(Employee? employee, SecuritySettings? settings) {
-  if (employee == null || settings == null) return false;
+  if (employee == null) return false;
   if (isAdmin(employee)) return true;
+  if (ModuleClaims.instance.isSecurityManager == true) return true;
+  if (settings == null) return false;
   if (isSecurityDeptManager(employee)) return true;
   return _clockNoInSecurityAllowList(
     employee.clockNo,
@@ -160,8 +168,10 @@ bool _isSiteSecurityManager(Employee? employee, SecuritySettings? settings) {
 }
 
 bool _isSiteSecurityGuard(Employee? employee, SecuritySettings? settings) {
-  if (employee == null || settings == null) return false;
+  if (employee == null) return false;
   if (_isSiteSecurityManager(employee, settings)) return true;
+  if (ModuleClaims.instance.isSecurityStaff == true) return true;
+  if (settings == null) return false;
   if (isSecurityDeptGuard(employee)) return true;
   return _clockNoInSecurityAllowList(
     employee.clockNo,
@@ -223,19 +233,25 @@ bool _clockNoInAllowList(String? clockNo, List<String> allowList) {
 
 /// True when the employee's clock number is in the mechanic allow-list.
 bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
-  if (employee == null || settings == null) return false;
+  if (employee == null) return false;
+  if (ModuleClaims.instance.isFleetMechanic == true) return true;
+  if (settings == null) return false;
   return _clockNoInAllowList(employee.clockNo, settings.mechanicClockNos);
 }
 
 /// True when the employee's department is in the configurable reporter allow-list.
 bool isFleetReporter(Employee? employee, FleetSettings? settings) {
-  if (employee == null || settings == null) return false;
+  if (employee == null) return false;
+  if (ModuleClaims.instance.isFleetReporter == true) return true;
+  if (settings == null) return false;
   return settings.reporterDepartments.contains(employee.department);
 }
 
 /// True when the employee's clock number is in the cost-manager allow-list.
 bool isFleetCostManager(Employee? employee, FleetSettings? settings) {
-  if (employee == null || settings == null) return false;
+  if (employee == null) return false;
+  if (ModuleClaims.instance.isFleetCostManager == true) return true;
+  if (settings == null) return false;
   return _clockNoInAllowList(employee.clockNo, settings.costManagerClockNos);
 }
 
@@ -349,6 +365,7 @@ bool isInkMeterUser(Employee? employee) =>
 /// Any Ink Factory user (operators + managers), plus admins. Shows the Ink hub.
 bool isInkUser(Employee? employee) {
   if (employee == null) return false;
+  if (ModuleClaims.instance.isInkStaff == true) return true;
   return employee.department == inkDepartment || isAdmin(employee);
 }
 

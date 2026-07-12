@@ -29,6 +29,11 @@ class Employee {
   final String? clientDevice;
   final String? notificationDelivery;
 
+  /// Last APK/web package version reported via presence sync (PackageInfo).
+  /// Null on older builds that have not opened a Phase-0+ app yet.
+  final String? clientAppVersion;
+  final String? clientBuildNumber;
+
   const Employee({
     required this.clockNo,
     required this.name,
@@ -44,9 +49,23 @@ class Employee {
     this.clientPlatform,
     this.clientDevice,
     this.notificationDelivery,
+    this.clientAppVersion,
+    this.clientBuildNumber,
   });
 
   bool get isInboxOnlyDelivery => notificationDelivery == 'inbox_only';
+
+  /// Admin On-site label, e.g. `v1.2.3 (build 160)` or null if never reported.
+  String? get clientVersionLabel {
+    final v = clientAppVersion?.trim();
+    final b = clientBuildNumber?.trim();
+    if ((v == null || v.isEmpty) && (b == null || b.isEmpty)) return null;
+    if (v != null && v.isNotEmpty && b != null && b.isNotEmpty) {
+      return 'v$v (build $b)';
+    }
+    if (v != null && v.isNotEmpty) return 'v$v';
+    return 'build $b';
+  }
 
   String get displayName => '$name ($clockNo) - $position';
 
@@ -72,6 +91,8 @@ class Employee {
       clientPlatform: data['clientPlatform'] as String?,
       clientDevice: data['clientDevice'] as String?,
       notificationDelivery: data['notificationDelivery'] as String?,
+      clientAppVersion: data['clientAppVersion'] as String?,
+      clientBuildNumber: data['clientBuildNumber']?.toString(),
     );
   }
 
@@ -105,6 +126,8 @@ class Employee {
     String? clientPlatform,
     String? clientDevice,
     String? notificationDelivery,
+    String? clientAppVersion,
+    String? clientBuildNumber,
   }) {
     return Employee(
       clockNo: clockNo ?? this.clockNo,
@@ -122,6 +145,8 @@ class Employee {
       clientDevice: clientDevice ?? this.clientDevice,
       notificationDelivery:
           notificationDelivery ?? this.notificationDelivery,
+      clientAppVersion: clientAppVersion ?? this.clientAppVersion,
+      clientBuildNumber: clientBuildNumber ?? this.clientBuildNumber,
     );
   }
 }

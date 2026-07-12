@@ -6,6 +6,27 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-12 — Factory + Pilot 2.3.0+163 (security hardening)
+
+### What you will notice
+
+- **Create account** gives clearer messages when something blocks linking (wrong company email, clock locked for registration, or already linked).
+- **Security / Fleet / Ink / Waste** access can follow server role flags as well as the existing allow-lists — behaviour stays the same for staff already on the lists.
+- Opening the app reports **which build you are on** (quietly) so managers can see who still needs the update.
+- Assign-to pickers prefer a safer employee list from the server when available (no sensitive account fields in the list).
+
+### For admins
+
+- Factory + pilot binaries: **2.3.0 / 163**
+  - Factory / landing Download: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
+  - Pilot channel URL (if still used): `https://ctp-job-cards-landing.web.app/releases/pilot.apk` (same build when promoting pilot)
+- Publish **Default + Shared** to **2.3.0 / 163**, Shared download URL = factory `latest.apk`, Force **off** unless you need a hard push.
+- **On Site** shows each person’s app version/build (or “Unknown” until they open this APK once).
+- Registration: optional **company email match** and **registration_locked** on employee rows (server-side); existing linked accounts are not broken.
+- Deploy Cloud Functions with this release so presence version reporting and tighter `linkEmployeeAccount` rules are live.
+
+---
+
 ## 2026-07-11 — Factory 2.3.0+162 (soft-delete + My Work + Copper)
 
 ### What you will notice

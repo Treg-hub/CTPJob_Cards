@@ -162,7 +162,7 @@ The priority badge colour-codes urgency at a glance — red for P5, orange for P
 
 - Pull-to-refresh updates the list in real time
 - Jobs automatically reorder as priorities are updated
-- Closed jobs are archived, not deleted
+- Closed jobs are archived, not deleted. **Admin cleanup** (when used) is a **soft-delete** only — the record stays in the system for audit; floor staff never hard-delete job cards.
 
 ---
 

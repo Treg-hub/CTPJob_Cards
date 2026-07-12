@@ -5,9 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 
+import 'module_claims.dart';
+
 /// Refreshes the signed-in user's Firebase custom claims (role, department,
-/// isAdmin) by calling the server `setCustomClaims` callable, then force-
-/// refreshing the local ID token so Firestore rules see the new claims at once.
+/// isAdmin, Phase-1 module flags) by calling the server `setCustomClaims`
+/// callable, then force-refreshing the local ID token so Firestore rules see
+/// the new claims at once.
 ///
 /// SECURITY: `isAdmin` is derived SERVER-SIDE from the locked `admins/{uid}`
 /// collection — the client cannot grant itself admin. This call is what lets a
@@ -41,7 +44,10 @@ class AuthClaimsService {
 
   static Future<void> _doRefresh() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      ModuleClaims.instance.clear();
+      return;
+    }
     try {
       await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('setCustomClaims')
@@ -49,7 +55,10 @@ class AuthClaimsService {
           .timeout(const Duration(seconds: 8));
       // Force a token refresh so the freshly-set claims land in the local token
       // now, instead of after the next natural (~1h) refresh.
-      await user.getIdTokenResult(true);
+      final token = await user.getIdTokenResult(true);
+      ModuleClaims.instance.applyFromTokenClaims(
+        Map<String, dynamic>.from(token.claims ?? const {}),
+      );
       debugPrint('✅ Custom claims refreshed for ${user.uid}');
       if (!kIsWeb) {
         unawaited(FirebaseCrashlytics.instance

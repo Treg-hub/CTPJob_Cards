@@ -117,6 +117,18 @@ exports.updateEmployeePresence = onCall(async (request) => {
   if (typeof innerData.clientDevice === "string") {
     update.clientDevice = innerData.clientDevice;
   }
+  // App version/build from PackageInfo — Admin On-site uses these to chase soft updates.
+  if (typeof innerData.clientAppVersion === "string" && innerData.clientAppVersion.length <= 32) {
+    update.clientAppVersion = innerData.clientAppVersion;
+    update.clientReportedAt = now;
+  }
+  if (typeof innerData.clientBuildNumber === "string" && innerData.clientBuildNumber.length <= 16) {
+    update.clientBuildNumber = innerData.clientBuildNumber;
+    update.clientReportedAt = now;
+  } else if (typeof innerData.clientBuildNumber === "number" && Number.isFinite(innerData.clientBuildNumber)) {
+    update.clientBuildNumber = String(Math.trunc(innerData.clientBuildNumber));
+    update.clientReportedAt = now;
+  }
   if (typeof innerData.notificationDelivery === "string") {
     const mode = innerData.notificationDelivery;
     if (mode === "push" || mode === "inbox_only") {
@@ -177,10 +189,14 @@ exports.updateEmployeePresence = onCall(async (request) => {
 /**
  * linkEmployeeAccount — links the caller's Firebase Auth uid (+ email) to an
  * employee doc identified by clockNo, during registration / login self-heal.
- * Replaces the client write of `uid` to employees so the collection can be
- * locked. Security: only links a doc that is currently UNCLAIMED (no uid) or
- * already owned by this same uid — it can never steal a clock number already
- * linked to a different account (an improvement over the old client flow).
+ *
+ * Security (Phase 1 soft — does NOT break already-linked users):
+ *   • Own-uid heal always allowed (existingUid === caller).
+ *   • Cannot steal a clock already linked to another uid.
+ *   • registration_locked === true blocks NEW binds (admin can lock high-value
+ *     unclaimed clocks without affecting anyone already registered).
+ *   • When employees.email is seeded/non-empty, Auth email must match
+ *     (case-insensitive). Empty email → allow (compat for unseeded roster).
  */
 exports.linkEmployeeAccount = onCall(async (request) => {
   if (!request.auth) {
@@ -192,23 +208,75 @@ exports.linkEmployeeAccount = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "clockNo is required.");
   }
   const uid = request.auth.uid;
-  const email = (request.auth.token && request.auth.token.email) || innerData.email || null;
+  const authEmailRaw =
+    (request.auth.token && request.auth.token.email) || innerData.email || null;
+  const authEmail =
+    typeof authEmailRaw === "string" ? authEmailRaw.trim().toLowerCase() : "";
   const ref = db.collection("employees").doc(clockNo);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) {
       throw new HttpsError("not-found", "No employee with that clock number.");
     }
-    const existingUid = snap.data().uid;
-    if (existingUid && existingUid !== uid) {
-      throw new HttpsError("permission-denied", "This clock number is already linked to another account.");
+    const data = snap.data() || {};
+    const existingUid = data.uid;
+    // Already linked to this caller — heal / re-stamp only (never re-check locks).
+    if (existingUid && existingUid === uid) {
+      tx.set(
+        ref,
+        {
+          uid,
+          email: authEmail || data.email || null,
+          uidHealedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return;
     }
-    tx.set(ref, {
-      uid,
-      email,
-      registeredAt: snap.data().registeredAt || admin.firestore.FieldValue.serverTimestamp(),
-      uidHealedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    if (existingUid && existingUid !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "This clock number is already linked to another account.",
+      );
+    }
+    // New bind
+    if (data.registration_locked === true) {
+      throw new HttpsError(
+        "permission-denied",
+        "This clock number is locked for registration — ask an admin to unlock it.",
+      );
+    }
+    const seededEmail =
+      typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+    if (seededEmail) {
+      if (!authEmail) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Sign in with the company email registered for this clock number.",
+        );
+      }
+      if (authEmail !== seededEmail) {
+        throw new HttpsError(
+          "permission-denied",
+          "Email does not match the employee record for this clock number.",
+        );
+      }
+    } else {
+      console.warn(
+        `linkEmployeeAccount: clock ${clockNo} has no seeded email — allowing bind (compat).`,
+      );
+    }
+    tx.set(
+      ref,
+      {
+        uid,
+        email: authEmail || data.email || null,
+        registeredAt:
+          data.registeredAt || admin.firestore.FieldValue.serverTimestamp(),
+        uidHealedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
   });
   return { success: true, clockNo };
 });
@@ -299,6 +367,9 @@ async function rebuildEmployeeRoster() {
 const ROSTER_NOISE_FIELDS = new Set([
   "presenceUpdatedAt", "presenceSource", "fcmTokenUpdatedAt",
   "lastOnSiteAt", "lastOffSiteAt", "lastUpdatedAt", "updatedAt", "lastSeenAt",
+  // Client telemetry heartbeats (version chase / platform) — not used for escalation routing.
+  "clientPlatform", "clientDevice", "clientAppVersion", "clientBuildNumber",
+  "clientReportedAt", "notificationDelivery", "permissions", "fcmToken",
 ]);
 
 exports.onEmployeeWritten = functions.firestore.onDocumentWritten(

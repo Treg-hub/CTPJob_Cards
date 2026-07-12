@@ -163,7 +163,40 @@ class FirestoreService {
   /// One-shot employees in a department (assignee picker). Prefer this over a
   /// full-collection live listener — presence flips would otherwise re-bill
   /// every employee doc for every open assign dialog.
+  ///
+  /// Phase 2: try `getSafeEmployeeDirectory` first (no uid/email/fcm); fall back
+  /// to a direct employees query so older backends / offline still work.
   Future<List<Employee>> getEmployeesByDepartment(String department) async {
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'africa-south1')
+          .httpsCallable('getSafeEmployeeDirectory')
+          .call({'department': department})
+          .timeout(const Duration(seconds: 8));
+      final raw = result.data;
+      final list = <Employee>[];
+      if (raw is Map && raw['employees'] is List) {
+        for (final item in raw['employees'] as List) {
+          if (item is! Map) continue;
+          final clockNo = '${item['clockNo'] ?? ''}';
+          if (clockNo.isEmpty) continue;
+          list.add(Employee(
+            clockNo: clockNo,
+            name: '${item['name'] ?? ''}',
+            position: '${item['position'] ?? ''}',
+            department: '${item['department'] ?? department}',
+            isOnSite: item['isOnSite'] == true,
+          ));
+        }
+      }
+      list.sort((a, b) {
+        if (a.isOnSite != b.isOnSite) return a.isOnSite ? -1 : 1;
+        return a.name.compareTo(b.name);
+      });
+      if (list.isNotEmpty) return list;
+    } catch (e) {
+      debugPrint('getSafeEmployeeDirectory failed — employees fallback: $e');
+    }
+
     try {
       final snapshot = await _firestore
           .collection(Collections.employees)
@@ -251,6 +284,8 @@ class FirestoreService {
     String? source,
     String? clientPlatform,
     String? clientDevice,
+    String? clientAppVersion,
+    String? clientBuildNumber,
     String? notificationDelivery,
   }) async {
     final payload = <String, dynamic>{};
@@ -259,6 +294,10 @@ class FirestoreService {
     if (permissions != null) payload['permissions'] = permissions;
     if (clientPlatform != null) payload['clientPlatform'] = clientPlatform;
     if (clientDevice != null) payload['clientDevice'] = clientDevice;
+    if (clientAppVersion != null) payload['clientAppVersion'] = clientAppVersion;
+    if (clientBuildNumber != null) {
+      payload['clientBuildNumber'] = clientBuildNumber;
+    }
     if (notificationDelivery != null) {
       payload['notificationDelivery'] = notificationDelivery;
     }
