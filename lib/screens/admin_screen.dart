@@ -15,10 +15,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/employee_roster_cache.dart';
 import '../services/firestore_service.dart';
 import '../models/employee.dart';
-import 'copper_dashboard_screen.dart';
+import 'admin_modules_screen.dart';
+import 'admin_tools_screen.dart';
 import 'geofence_editor_screen.dart';
-import 'feedback_admin_screen.dart';
-import 'scan_tester_screen.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_theme.dart';
@@ -1074,6 +1073,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return null;
   }
 
+  /// Soft-update chase label from presence fields (null → Unknown on older APKs).
+  String _clientAppVersionLabel(Map<String, dynamic> data) {
+    final v = (data['clientAppVersion'] as String?)?.trim();
+    final b = data['clientBuildNumber']?.toString().trim();
+    final hasV = v != null && v.isNotEmpty;
+    final hasB = b != null && b.isNotEmpty;
+    if (!hasV && !hasB) return 'App: Unknown';
+    if (hasV && hasB) return 'App: v$v (build $b)';
+    if (hasV) return 'App: v$v';
+    return 'App: build $b';
+  }
+
   Widget _inboxOnlyBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1708,7 +1719,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin'),
+        title: const Text('Factory Admin'),
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         bottom: TabBar(
@@ -1719,7 +1730,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           labelColor: kBrandOrange,
           unselectedLabelColor: Theme.of(context).appColors.textMuted,
           tabs: const [
-            Tab(icon: Icon(Icons.tune, size: 18), text: 'Settings'),
+            Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Overview'),
             Tab(icon: Icon(Icons.people_outline, size: 18), text: 'Employees'),
             Tab(icon: Icon(Icons.account_tree_outlined, size: 18), text: 'Structures'),
             Tab(icon: Icon(Icons.location_on_outlined, size: 18), text: 'On Site'),
@@ -1730,7 +1741,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildSettingsTab(),
+          _buildOverviewTab(),
           _buildEmployeesTab(),
           _buildStructuresTab(),
           _buildOnsiteTab(),
@@ -1779,6 +1790,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         // (surfaces sessions where geofence/permissions likely stopped working).
         final now = DateTime.now();
         var flaggedCount = 0;
+        var unknownAppCount = 0;
         final grouped = <String, List<Map<String, dynamic>>>{};
         for (final doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
@@ -1787,6 +1799,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               : null;
           final stuck = since != null && now.difference(since).inHours >= 14;
           if (stuck) flaggedCount++;
+          final ver = (data['clientAppVersion'] as String?)?.trim();
+          final build = data['clientBuildNumber']?.toString().trim();
+          if ((ver == null || ver.isEmpty) && (build == null || build.isEmpty)) {
+            unknownAppCount++;
+          }
           grouped
               .putIfAbsent((data['department'] as String? ?? 'Unknown').trim(), () => [])
               .add({...data, 'id': doc.id, 'since': since, 'stuck': stuck});
@@ -1822,6 +1839,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 ),
               ]),
             ),
+          if (unknownAppCount > 0)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: Row(children: [
+                Icon(Icons.phone_android_outlined, size: 16, color: Colors.orange.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$unknownAppCount with unknown app version — open the latest APK once so presence can report build',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange.shade900, fontSize: 12),
+                  ),
+                ),
+              ]),
+            ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(12),
@@ -1848,6 +1881,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                             emp['since'] != null
                                 ? '${emp['position'] as String? ?? '—'}  •  on site ${_onSiteDuration(emp['since'] as DateTime)}'
                                 : (emp['position'] as String? ?? '—'),
+                            _clientAppVersionLabel(emp),
                             if (_clientDeliveryLabel(emp) != null)
                               _clientDeliveryLabel(emp)!,
                           ].join('\n'),
@@ -2290,13 +2324,147 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     );
   }
 
-  // ── Settings tab ──────────────────────────────────────────────────────────
+  // When a detail form is pushed on top of this screen, parent setState must
+  // also rebuild that pushed body (closures capture this State).
+  VoidCallback? _rebuildDetailPage;
 
-  Widget _buildSettingsTab() {
-    return SingleChildScrollView(
+  void _pushAdminPage(String title, WidgetBuilder bodyBuilder) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            backgroundColor: Theme.of(ctx).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: StatefulBuilder(
+            builder: (context, setLocal) {
+              _rebuildDetailPage = () => setLocal(() {});
+              return bodyBuilder(context);
+            },
+          ),
+        ),
+      ),
+    ).whenComplete(() {
+      _rebuildDetailPage = null;
+    });
+  }
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _rebuildDetailPage?.call();
+  }
+
+  Widget _hubTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color? iconColor,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: Theme.of(context).appColors.cardSurface,
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Icon(icon, color: iconColor ?? kBrandOrange),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  // ── Overview tab (grouped hub — detail forms open on push) ────────────────
+
+  Widget _buildOverviewTab() {
+    final muted = Theme.of(context).appColors.textMuted;
+    return ListView(
       padding: ScreenInsets.symmetricScroll(context),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      children: [
+        Text(
+          'Grouped by job. Forms open on their own screen — Feedback triage is on Home for admins.',
+          style: TextStyle(fontSize: 12, color: muted, height: 1.35),
+        ),
+        const SizedBox(height: 16),
+        _sectionHeader('APP & RELEASES'),
+        _hubTile(
+          icon: Icons.system_update,
+          title: 'App releases',
+          subtitle: 'Publish channels, soft/force update, kill-switch',
+          onTap: () => _pushAdminPage(
+            'App releases',
+            (_) => SingleChildScrollView(
+              padding: ScreenInsets.symmetricScroll(context),
+              child: _buildAppReleasesBody(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _sectionHeader('JOB CARDS'),
+        _hubTile(
+          icon: Icons.notifications_active_outlined,
+          title: 'Escalation rules',
+          subtitle: 'Unassigned job stages and who gets notified',
+          onTap: () => _pushAdminPage(
+            'Escalation rules',
+            (_) => SingleChildScrollView(
+              padding: ScreenInsets.symmetricScroll(context),
+              child: _buildEscalationConfigSection(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _sectionHeader('SITE'),
+        _hubTile(
+          icon: Icons.map_outlined,
+          title: 'Site & location',
+          subtitle: 'Geofence editor and location force-checks',
+          onTap: () => _pushAdminPage(
+            'Site & location',
+            (_) => SingleChildScrollView(
+              padding: ScreenInsets.symmetricScroll(context),
+              child: _buildLocationBody(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _sectionHeader('MODULES'),
+        _hubTile(
+          icon: Icons.extension_outlined,
+          title: 'Module gates',
+          subtitle: 'Waste / Fleet on-off and Copper dashboard',
+          iconColor: const Color(0xFF22863A),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminModulesScreen()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _sectionHeader('TOOLS'),
+        _hubTile(
+          icon: Icons.build_outlined,
+          title: 'Developer & device tools',
+          subtitle: 'Scan Tester, notification diagnostics, kiosk',
+          iconColor: const Color(0xFF3B82F6),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminToolsScreen()),
+          ),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildAppReleasesBody() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── App Update Control (channels + kill-switch) ─────────────────────
         _sectionHeader('APP UPDATE CONTROL'),
         _settingsCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2578,8 +2746,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   ]),
                 ]),
         ])),
+    ]);
+  }
 
-        // ── Location ────────────────────────────────────────────────────────
+  Widget _buildLocationBody() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _sectionHeader('LOCATION'),
         _settingsCard(child: Column(children: [
           ListTile(
@@ -2619,70 +2790,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             ),
           ]),
         ])),
-
-        // ── Access ──────────────────────────────────────────────────────────
-        _sectionHeader('ACCESS'),
-        _settingsCard(child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.inventory_2_outlined, color: kBrandOrange),
-          title: const Text('Copper Storage', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          subtitle: Text('View and manage copper inventory', style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            if (_currentClockNo == '22') {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CopperDashboardScreen()));
-            } else {
-              _showError('Admin access required');
-            }
-          },
-        )),
-
-        // ── Scan Tester ─────────────────────────────────────────────────────
-        _sectionHeader('DEVELOPER'),
-        _settingsCard(child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.qr_code_scanner, color: kBrandOrange),
-          title: const Text('Scan Tester', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          subtitle: Text(
-            'Capture raw barcodes on-device for parser development',
-            style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted),
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () async {
-            final clockNo = _currentClockNo;
-            if (clockNo == null) {
-              _showError('Employee not loaded');
-              return;
-            }
-            final emp = await _firestoreService.getEmployee(clockNo);
-            if (!mounted) return;
-            if (emp == null) {
-              _showError('Employee record not found');
-              return;
-            }
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)),
-            );
-          },
-        )),
-
-        // ── Feedback ────────────────────────────────────────────────────────
-        _sectionHeader('FEEDBACK'),
-        _settingsCard(child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.feedback_outlined, color: kBrandOrange),
-          title: const Text('User Feedback', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          subtitle: Text('Review and track feedback submitted from the app', style: TextStyle(fontSize: 12, color: Theme.of(context).appColors.textMuted)),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedbackAdminScreen())),
-        )),
-
-        // ── Escalation ──────────────────────────────────────────────────────
-        _sectionHeader('ESCALATION RULES'),
-        _buildEscalationConfigSection(),
-      ]),
-    );
+    ]);
   }
 
   Widget _buildEscalationConfigSection() {

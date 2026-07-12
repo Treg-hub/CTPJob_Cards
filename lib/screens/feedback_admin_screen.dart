@@ -18,9 +18,9 @@ import 'feedback_thread_screen.dart';
 /// implementation notes. Public replies to the submitter go through the
 /// two-way thread (FeedbackThreadScreen → feedback_comments subcollection);
 /// status changes and replies notify the submitter via Cloud Functions.
-/// This is an internal tracking tool: the entry point lives in the admin
-/// Settings tab and the screen is gated again on `isAdmin` here so it can
-/// never be opened by a non-admin who deep-links in.
+/// Entry points: Home Quick Actions **Feedback** tile (admins) and deep-link;
+/// the screen is gated again on `isAdmin` here so it can never be opened by a
+/// non-admin who deep-links in.
 
 class FeedbackAdminScreen extends StatefulWidget {
   const FeedbackAdminScreen({super.key});

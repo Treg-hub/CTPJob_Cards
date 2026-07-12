@@ -1,6 +1,6 @@
 # Admin guide — App Update Control (in-app APK)
 
-**Who this is for:** Admins who publish Job Cards Android APKs from **Admin → Settings → App Update Control**.  
+**Who this is for:** Admins who publish Job Cards Android APKs from **Settings → Factory Admin → Overview → App releases**.  
 **Audience:** Operators install via **in-app download** (not Play Store).  
 **Last updated:** 2026-07-09 (targeted channels, soft banner, department/people pickers).
 
@@ -187,7 +187,7 @@ Landing page: one **Download app** button + QR → that file. Auth is **in the a
 7. Confirm the URL downloads ~45–50 MB in a browser (not 404 / not App Distribution login).
 8. Optional: SHA-256 of the APK for Admin integrity check. Install that APK once on a test phone.
 
-### C. Publish in Admin (App Update Control)
+### C. Publish in Admin (App releases)
 
 9. Set **Shared download URL** to  
    `https://ctp-job-cards-landing.web.app/releases/latest.apk`  

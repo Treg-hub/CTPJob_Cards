@@ -301,15 +301,17 @@ Cloud Functions (`createFleetWorkRecord`, `onFleetIssueCreated`, `onFleetIssueUp
 
 ## Admin Screens (Job Cards core)
 
-Admin-only screens reached from the Home **Admin** tile / Admin Settings. All gated on `Employee.isAdmin`.
+Admin-only screens reached from Settings → **Factory Admin** (or Home Quick Actions for Feedback). All gated on `Employee.isAdmin`.
 
 | File | Access | Purpose |
 |---|---|---|
-| `admin_screen.dart` | admin | 6-tab control panel: Employees, Structures, Settings, Job Cards, On Site, Comms |
+| `admin_screen.dart` | admin | Factory Admin: **Overview** hub + Employees / Structures / On Site / Comms tabs |
+| `admin_modules_screen.dart` | admin | Waste/Fleet module gates + Copper dashboard shortcut |
+| `admin_tools_screen.dart` | admin | Scan Tester, notification diagnostics, kiosk |
 | `geofence_editor_screen.dart` | admin | Map editor for the site geofence boundary (`config/geofence`) |
 | `copper_dashboard_screen.dart` | admin (clock 22) | Copper inventory dashboard (whitelist-gated) |
-| `feedback_admin_screen.dart` | admin | **User Feedback triage board** — reviews `feedback` submissions; sets status `New → Planned → Implemented → Declined` + PRIVATE notes; "Reply to submitter / Thread (N)" opens the public two-way thread (`feedback_thread_screen.dart`). Reached from Settings → Feedback. |
-| `scan_tester_screen.dart` | admin | **Scan Tester** — PDF417 capture to `pulse_scan_samples`. Driver licence RSA decrypt. Review in Pulse Settings. |
+| `feedback_admin_screen.dart` | admin | **User Feedback triage board** — Home Quick Actions **Feedback** tile. Status `New → Planned → Implemented → Declined` + PRIVATE notes; thread via `feedback_thread_screen.dart`. |
+| `scan_tester_screen.dart` | admin | **Scan Tester** — PDF417 capture to `pulse_scan_samples`. Via Factory Admin → Tools. |
 | `security_home_screen.dart` | `isSecurityUser` | Site Security hub — gate selector + action cards. Add company car cost tile: `isSecurityCostManager` only. |
 | `security_vehicle_scan_in_screen.dart` | `isSecurityUser` | Vehicle scan in — disc + driver licence + occupants. |
 | `security_vehicle_scan_out_screen.dart` | `isSecurityUser` | Vehicle scan out — disc on departing vehicle. |

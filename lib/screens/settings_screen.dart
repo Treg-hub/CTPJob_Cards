@@ -1,6 +1,5 @@
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
-import '../utils/persona_audit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -12,27 +11,22 @@ import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee, personaAllowTestSubmissions, personaEmployee, realEmployee;
 import '../providers/persona_provider.dart';
-import '../models/fleet_settings.dart';
 import '../providers/fleet_tips_provider.dart';
 import '../providers/ink_tips_provider.dart';
 import '../providers/job_card_tips_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
-import '../services/fleet_service.dart';
 import '../services/kiosk_mode_service.dart';
 import '../services/notification_service.dart';
 import '../services/update_service.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
-import '../services/waste_service.dart';
 import '../utils/role.dart' show isAdmin;
 import 'admin_screen.dart';
 import 'documentation_screen.dart';
 import 'kiosk_mode_screen.dart';
-import 'notification_diagnostics_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'notification_test_screen.dart';
-import 'scan_tester_screen.dart';
 import 'login_screen.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
@@ -49,17 +43,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   final FirestoreService _firestoreService = FirestoreService();
   final LocationService _locationService = LocationService();
-  final WasteService _wasteService = WasteService();
-  final FleetService _fleetService = FleetService();
 
   bool isOnSite = true;
   Stream<QuerySnapshot>? _inboxStream;
-
-  // Module toggles (admin-only)
-  bool? _wasteEnabled;
-  bool? _fleetEnabled;
-  FleetSettings? _fleetSettings;
-  bool _moduleSaving = false;
 
   // Kiosk Mode — whether THIS device is currently locked to the app
   bool _kioskEnabled = false;
@@ -71,53 +57,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _initializeLocalNotifications();
     _setupInboxStream();
     _loadKioskState();
-    if (isAdmin(currentEmployee)) {
-      _loadModuleStates();
-    }
   }
 
   Future<void> _loadKioskState() async {
     final enabled = await KioskModeService.instance.isKioskModeEnabled();
     if (mounted) setState(() => _kioskEnabled = enabled);
-  }
-
-  Future<void> _loadModuleStates() async {
-    final wasteOn = await _wasteService.getWasteMasterEnabled();
-    final fleetSettings = await _fleetService.getSettings();
-    if (mounted) {
-      setState(() {
-        _wasteEnabled = wasteOn;
-        _fleetSettings = fleetSettings;
-        _fleetEnabled = fleetSettings.fleetEnabled;
-      });
-    }
-  }
-
-  Future<void> _setWasteEnabled(bool value) async {
-    if (!guardPersonaSubmit(context)) return;
-    setState(() { _wasteEnabled = value; _moduleSaving = true; });
-    try {
-      await _wasteService.setWasteMasterEnabled(value);
-    } catch (_) {
-      if (mounted) setState(() => _wasteEnabled = !value);
-    } finally {
-      if (mounted) setState(() => _moduleSaving = false);
-    }
-  }
-
-  Future<void> _setFleetEnabled(bool value) async {
-    if (!guardPersonaSubmit(context)) return;
-    if (_fleetSettings == null) return;
-    setState(() { _fleetEnabled = value; _moduleSaving = true; });
-    try {
-      final updated = _fleetSettings!.copyWith(fleetEnabled: value);
-      await _fleetService.saveSettings(updated);
-      if (mounted) setState(() => _fleetSettings = updated);
-    } catch (_) {
-      if (mounted) setState(() => _fleetEnabled = !value);
-    } finally {
-      if (mounted) setState(() => _moduleSaving = false);
-    }
   }
 
   void _setupInboxStream() {
@@ -558,101 +502,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ],
 
-              // ── Modules ──────────────────────────────────────────
+              // ── Factory Admin (gateway only — tools live under Admin Overview) ──
               if (isAdminUser) ...[
                 const SizedBox(height: 16),
-                _SectionHeader('Modules'),
-                Card(
-                  elevation: 2,
-                  child: Column(
-                    children: [
-                      SwitchListTile(
-                        secondary: const Icon(Icons.delete_outline, color: Color(0xFF22863A)),
-                        title: const Text('Waste Management'),
-                        subtitle: Text(_wasteEnabled == null
-                            ? 'Loading…'
-                            : _wasteEnabled!
-                                ? 'Enabled — guards can submit loads'
-                                : 'Disabled — Waste tab hidden for all users'),
-                        value: _wasteEnabled ?? true,
-                        activeThumbColor: const Color(0xFF22863A),
-                        onChanged: _moduleSaving || _wasteEnabled == null
-                            ? null
-                            : _setWasteEnabled,
-                      ),
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                      SwitchListTile(
-                        secondary: const Icon(Icons.directions_car_outlined, color: Color(0xFFFF8C42)),
-                        title: const Text('Fleet Maintenance'),
-                        subtitle: Text(_fleetEnabled == null
-                            ? 'Loading…'
-                            : _fleetEnabled!
-                                ? 'Enabled — Fleet tab visible to eligible users'
-                                : 'Disabled — Fleet tab hidden for all users'),
-                        value: _fleetEnabled ?? false,
-                        activeThumbColor: const Color(0xFFFF8C42),
-                        onChanged: _moduleSaving || _fleetEnabled == null
-                            ? null
-                            : _setFleetEnabled,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // ── Admin ────────────────────────────────────────────
-              if (isAdminUser) ...[
-                const SizedBox(height: 16),
-                _SectionHeader('Admin'),
+                _SectionHeader('Factory Admin'),
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.amber.shade300, width: 1),
                     borderRadius: BorderRadius.circular(12),
                     color: Colors.amber.shade50.withValues(alpha: isDark ? 0.05 : 1.0),
                   ),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.settings, color: Color(0xFF14B8A6)),
-                        title: const Text('Admin Settings'),
-                        subtitle: const Text('Employees, structures, escalation config, job cards'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
-                      ),
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                      ListTile(
-                        leading: const Icon(Icons.bug_report, color: Colors.purple),
-                        title: const Text('Notification Diagnostics'),
-                        subtitle: const Text('Advanced fullscreen & permission testing'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationDiagnosticsScreen())),
-                      ),
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                      ListTile(
-                        leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF3B82F6)),
-                        title: const Text('Scan Tester'),
-                        subtitle: const Text('Capture raw barcode payloads for parser development'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          final emp = currentEmployee;
-                          if (emp == null) return;
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => ScanTesterScreen(employee: emp)));
-                        },
-                      ),
-                      if (!kIsWeb && !_kioskEnabled) ...[
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                        ListTile(
-                          leading: const Icon(Icons.lock_outline, color: Colors.deepOrange),
-                          title: const Text('Kiosk Mode'),
-                          subtitle: const Text('Lock this device to Job Cards only (main-gate tablets)'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const KioskModeScreen()));
-                            if (mounted) _loadKioskState();
-                          },
-                        ),
-                      ],
-                    ],
+                  child: ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF14B8A6)),
+                    title: const Text('Factory Admin'),
+                    subtitle: const Text(
+                      'Releases, escalation, people, site, modules, and tools',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AdminScreen()),
+                    ),
                   ),
                 ),
               ],

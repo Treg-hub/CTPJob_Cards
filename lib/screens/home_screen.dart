@@ -43,6 +43,7 @@ import 'create_job_card_screen.dart';
 import 'view_job_cards_screen.dart';
 import 'job_card_detail_screen.dart';
 import 'my_feedback_screen.dart';
+import 'feedback_admin_screen.dart';
 import 'copper_dashboard_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
@@ -681,8 +682,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         },
       ];
     }
+    // Admin feedback triage — kept on Home so it stays one tap away after
+    // Factory Admin Overview regrouping (no longer under Admin Settings dump).
+    if (role_utils.isAdmin(currentEmployee)) {
+      result = [
+        ...result,
+        {
+          'title': 'Feedback',
+          'icon': Icons.feedback_outlined,
+          'color': const Color(0xFF7C3AED),
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const FeedbackAdminScreen()),
+              ),
+        },
+      ];
+    }
     // Vehicle at Gate / On-Foot Visitor are reached from the Security tab, not
-    // the Home quick actions. Scan Tester (admin) lives under Settings.
+    // the Home quick actions. Scan Tester lives under Factory Admin → Tools.
     return result;
   }
 

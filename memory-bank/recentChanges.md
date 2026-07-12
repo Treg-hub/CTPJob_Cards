@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Factory Admin IA + Home Feedback tile (2026-07-12)**:
+  - Personal Settings slimmed: device/prefs only + single **Factory Admin** gateway (removed Modules toggles, Scan Tester, diagnostics, kiosk duplicates).
+  - Admin first tab renamed **Overview** hub → App releases, Escalation rules, Site & location, Module gates (`admin_modules_screen.dart`), Tools (`admin_tools_screen.dart`).
+  - Employees / Structures / On Site / Comms tabs unchanged.
+  - Admin feedback triage: Home Quick Actions **Feedback** tile (`isAdmin`) → `FeedbackAdminScreen` (no longer buried in Admin Settings dump).
+
 - **Android R8 minify + ProGuard starter (2026-07-10)**:
   - `build.gradle.kts` release: `isMinifyEnabled` + `isShrinkResources`.
   - `proguard-rules.pro`: keep `com.ctp.jobcards.**`, Flutter, Firebase/GMS, ML Kit, WorkManager, FileProvider.
