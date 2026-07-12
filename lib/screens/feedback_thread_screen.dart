@@ -1,13 +1,18 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../constants/collections.dart';
 import '../main.dart' show realEmployee;
 import '../models/feedback_item.dart';
+import '../services/feedback_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
+import '../widgets/fleet_photo_viewer.dart';
 import '../utils/persona_audit.dart';
 import '../utils/screen_insets.dart';
 
@@ -32,6 +37,7 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
+  final List<String> _pendingPhotos = [];
 
   bool _viewerIsAdmin = false;
   bool _sending = false;
@@ -60,23 +66,59 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
     setState(() => _viewerIsAdmin = emp?.isAdmin ?? false);
   }
 
+  Future<void> _addPhoto() async {
+    if (_pendingPhotos.length >= FeedbackService.maxPhotosPerMessage) return;
+    if (!guardPersonaSubmit(context)) return;
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add photo'),
+        content: const Text('Camera or gallery?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+            child: const Text('Camera'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+            child: const Text('Gallery'),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !mounted) return;
+    final path = await FeedbackService.instance.pickAndCompressPhoto(source);
+    if (path == null || !mounted) return;
+    setState(() => _pendingPhotos.add(path));
+  }
+
   Future<void> _sendComment() async {
     if (!guardPersonaSubmit(context)) return;
     final text = _composer.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _pendingPhotos.isEmpty) return;
     final me = writeAttributionEmployee ?? realEmployee;
     if (me == null) return;
     setState(() => _sending = true);
     try {
-      await _feedbackRef.collection(Collections.feedbackComments).add({
+      final commentRef = _feedbackRef.collection(Collections.feedbackComments).doc();
+      List<String> photoUrls = const [];
+      if (_pendingPhotos.isNotEmpty) {
+        photoUrls = await FeedbackService.instance.uploadPhotos(
+          feedbackId: widget.feedbackId,
+          localPaths: List<String>.from(_pendingPhotos),
+        );
+      }
+      await commentRef.set({
         'text': text,
         'byClockNo': me.clockNo,
         'byName': me.name,
         'byIsAdmin': _viewerIsAdmin,
         'createdAt': FieldValue.serverTimestamp(),
+        if (photoUrls.isNotEmpty) 'photoUrls': photoUrls,
         ...personaAuditFields(),
       });
       _composer.clear();
+      setState(() => _pendingPhotos.clear());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,6 +189,22 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
     );
   }
 
+  Widget _photoStrip(List<String> urls, {double size = 72}) {
+    if (urls.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SizedBox(
+        height: size,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: urls.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (_, i) => FleetPhotoThumb(urls: urls, index: i, size: size),
+        ),
+      ),
+    );
+  }
+
   Widget _originalCard(FeedbackItem item, AppColors colors) {
     final fmt = DateFormat('d MMM yyyy HH:mm');
     final statusColor = feedbackStatusColor(context, item.status);
@@ -184,8 +242,13 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
                   style: TextStyle(fontSize: 11, color: colors.textMuted)),
             ),
           const SizedBox(height: 8),
-          Text(item.feedback.isEmpty ? '(empty)' : item.feedback,
-              style: const TextStyle(fontSize: 14, height: 1.3)),
+          Text(
+            item.feedback.isEmpty
+                ? (item.photoUrls.isNotEmpty ? '(photo)' : '(empty)')
+                : item.feedback,
+            style: const TextStyle(fontSize: 14, height: 1.3),
+          ),
+          _photoStrip(item.photoUrls),
         ]),
       ),
     );
@@ -222,8 +285,11 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
                   style: TextStyle(fontSize: 10, color: colors.textMuted)),
             ],
           ]),
-          const SizedBox(height: 4),
-          Text(c.text, style: const TextStyle(fontSize: 13.5, height: 1.3)),
+          if (c.text.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(c.text, style: const TextStyle(fontSize: 13.5, height: 1.3)),
+          ],
+          _photoStrip(c.photoUrls, size: 64),
         ]),
       ),
     );
@@ -231,41 +297,97 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
 
   Widget _composerBar() {
     final colors = Theme.of(context).appColors;
+    final canAddMore = _pendingPhotos.length < FeedbackService.maxPhotosPerMessage;
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 6, 8, 8),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
         color: colors.cardSurface,
-        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(
-            child: TextField(
-              controller: _composer,
-              minLines: 1,
-              maxLines: 4,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: _viewerIsAdmin ? 'Reply to this feedback…' : 'Add a comment…',
-                isDense: true,
-                filled: true,
-                fillColor: colors.inputFill,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_pendingPhotos.isNotEmpty)
+              SizedBox(
+                height: 56,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 6, left: 4),
+                  itemCount: _pendingPhotos.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(_pendingPhotos[i]),
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      if (!_sending)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Material(
+                            color: Colors.black87,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => setState(() => _pendingPhotos.removeAt(i)),
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(Icons.close, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          IconButton(
-            onPressed: _sending ? null : _sendComment,
-            icon: _sending
-                ? const SizedBox(
-                    width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.send_rounded),
-            color: kBrandOrange,
-          ),
-        ]),
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              IconButton(
+                onPressed: (_sending || !canAddMore) ? null : _addPhoto,
+                icon: const Icon(Icons.add_a_photo_outlined),
+                color: kBrandOrange,
+                tooltip: canAddMore
+                    ? 'Add photo'
+                    : 'Max ${FeedbackService.maxPhotosPerMessage} photos',
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _composer,
+                  minLines: 1,
+                  maxLines: 4,
+                  enabled: !_sending,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: _viewerIsAdmin ? 'Reply to this feedback…' : 'Add a comment…',
+                    isDense: true,
+                    filled: true,
+                    fillColor: colors.inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                onPressed: _sending ? null : _sendComment,
+                icon: _sending
+                    ? const SizedBox(
+                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.send_rounded),
+                color: kBrandOrange,
+              ),
+            ]),
+          ],
+        ),
       ),
     );
   }

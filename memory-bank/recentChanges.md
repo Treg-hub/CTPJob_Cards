@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Feedback loop photos (2026-07-12)**:
+  - Submit + thread replies can attach up to 3 compressed photos (`photoUrls` on parent + comments).
+  - Mint doc id → upload `feedback/{id}/photos/*` → create (submitters cannot update parent).
+  - `FeedbackService` + Storage rules own/admin read; My Feedback / Thread / Admin show thumbs.
+  - Map: `Components/Collections/feedback.md`, `JobCardsCoreModule.md`, `docs/COLLECTIONS.md`.
+
 - **Factory Admin IA + Home Feedback tile (2026-07-12)**:
   - Personal Settings slimmed: device/prefs only + single **Factory Admin** gateway (removed Modules toggles, Scan Tester, diagnostics, kiosk duplicates).
   - Admin first tab renamed **Overview** hub → App releases, Escalation rules, Site & location, Module gates (`admin_modules_screen.dart`), Tools (`admin_tools_screen.dart`).

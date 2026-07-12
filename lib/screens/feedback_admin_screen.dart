@@ -8,6 +8,7 @@ import '../models/feedback_item.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/fleet_photo_viewer.dart';
 import 'feedback_thread_screen.dart';
 
 /// Admin-only feedback triage board.
@@ -328,8 +329,29 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
           // The feedback itself.
           Padding(
             padding: const EdgeInsets.only(right: 6),
-            child: Text(item.feedback.isEmpty ? '(empty)' : item.feedback, style: const TextStyle(fontSize: 14, height: 1.3)),
+            child: Text(
+              item.feedback.isEmpty
+                  ? (item.photoUrls.isNotEmpty ? '(photo)' : '(empty)')
+                  : item.feedback,
+              style: const TextStyle(fontSize: 14, height: 1.3),
+            ),
           ),
+          if (item.photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: item.photoUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (_, i) => FleetPhotoThumb(
+                  urls: item.photoUrls,
+                  index: i,
+                  size: 64,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Status selector.

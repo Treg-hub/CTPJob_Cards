@@ -89,6 +89,15 @@ Color feedbackStatusColor(BuildContext context, FeedbackStatus s) {
   }
 }
 
+List<String> _parsePhotoUrls(dynamic raw) {
+  if (raw is! List) return const [];
+  return raw
+      .whereType<String>()
+      .map((u) => u.trim())
+      .where((u) => u.isNotEmpty)
+      .toList();
+}
+
 /// Parsed view of a `feedback` document, tolerant of legacy docs that predate
 /// the triage fields (`status`, `adminNotes`, …).
 class FeedbackItem {
@@ -102,6 +111,8 @@ class FeedbackItem {
   final DateTime? notesUpdatedAt;
   final DateTime? lastCommentAt;
   final int commentCount;
+  /// Download URLs for photos attached at submit time (optional).
+  final List<String> photoUrls;
 
   FeedbackItem({
     required this.id,
@@ -114,6 +125,7 @@ class FeedbackItem {
     required this.notesUpdatedAt,
     required this.lastCommentAt,
     required this.commentCount,
+    this.photoUrls = const [],
   });
 
   factory FeedbackItem.fromDoc(DocumentSnapshot doc) {
@@ -131,6 +143,7 @@ class FeedbackItem {
       // Maintained server-side by the onFeedbackCommentCreated CF.
       lastCommentAt: ts(data['lastCommentAt']),
       commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
+      photoUrls: _parsePhotoUrls(data['photoUrls']),
     );
   }
 }
@@ -144,6 +157,8 @@ class FeedbackComment {
   final String byName;
   final bool byIsAdmin;
   final DateTime? createdAt;
+  /// Download URLs for photos attached to this reply (optional).
+  final List<String> photoUrls;
 
   FeedbackComment({
     required this.id,
@@ -152,6 +167,7 @@ class FeedbackComment {
     required this.byName,
     required this.byIsAdmin,
     required this.createdAt,
+    this.photoUrls = const [],
   });
 
   factory FeedbackComment.fromDoc(DocumentSnapshot doc) {
@@ -164,6 +180,7 @@ class FeedbackComment {
       byIsAdmin: data['byIsAdmin'] == true,
       createdAt:
           data['createdAt'] is Timestamp ? (data['createdAt'] as Timestamp).toDate() : null,
+      photoUrls: _parsePhotoUrls(data['photoUrls']),
     );
   }
 }
