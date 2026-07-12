@@ -6,6 +6,22 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-12 — Pilot 2.3.0+164 (Ink Factory — security hardening)
+
+### What you will notice
+
+- Same security work as factory **163**: clearer **Create account** link messages, module role flags (Security / Fleet / Ink / Waste) with existing allow-list fallback, quiet app build reporting for managers, safer assign-to employee lists when the server supports them.
+- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
+
+### For admins
+
+- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 164**.
+- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
+- **Default + Shared** stay on factory **2.3.0 / 163** (or lower), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
+- Landing **Download app** still serves factory `latest.apk`, not this pilot.
+
+---
+
 ## 2026-07-12 — Factory + Pilot 2.3.0+163 (security hardening)
 
 ### What you will notice
