@@ -51,7 +51,7 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 - **Stores (proposed)**: See `../../../docs/Stores_Module_Design.md` (official future-planning design spec — not for current implementation). Digitize manual employee **requisitions** for consumables in the central mobile hub. Volume ~20 req/day (2-5 items). QR/scan proof of collection at crib (replaces paper signature/duplicate). Special items via clerk notification + QR pickup. Direct issues rare (urgent breakdown). High-value (copper nuggets) needs manager release flag. Small items: transaction-level QR (no per-bolt scanning). Returns for wrong size supported. Pastel CSV import via simple daily export. Weekly per-shift/dept reports with costing planned. Gating via `stores_settings` clock lists. Rugged tablet recommended for dirty/greasy crib. Embedded in central Job Cards + Pulse. (Planning spec only.)
 - Geofence / Notifications / Presence (core services): always-on for signed-in (geofence auto in background, presence updates employees.isOnSite/fcm, feeds notification_inbox + escalation). See rules + geofence_editor in Admin.
 
-**Off-Site Client Gating (2026-07-02)** — `lib/utils/presence_gating.dart` + route guards on module roots. **Server write enforcement still deferred** (see memory-bank/decisions.md). Only `Employee.isAdmin` bypasses off-site restrictions (managers are not exempt).
+**Off-Site Client Gating (2026-07-02; on-site hydrate 2026-07-13)** — `lib/utils/presence_gating.dart` + route guards on module roots. **Server write enforcement still deferred** (see memory-bank/decisions.md). Only `Employee.isAdmin` bypasses off-site restrictions (managers are not exempt). Walking back on-site **while the app stays open** runs `_hydrateAfterBecameOnSite` (2s debounce) + `RetryTriggers.notifyBecameOnSite()` so parked streams / Recent Job Cards recover without kill/reopen (resume path already hydrated).
 
 | Surface | On-site | Off-site (floor) | Off-site (`isAdmin`) |
 |---|---|---|---|
@@ -60,6 +60,8 @@ Roles are **derived** from `Employee.position` and `Employee.department` (see `l
 | My Work + job detail updates | Yes | Yes | Yes |
 | Create Job Card | Yes | Blocked (disabled tile + route guard) | Allowed |
 | View Jobs / History / Manager Dashboard | Unchanged | Unchanged | Unchanged |
+
+**Admin UI persona (2026-07-13)**: while testing as another employee, `ModuleClaims.suppressTokenClaimsForUi` hides the real session's token module flags so Home tiles match the persona's department / `*_settings` lists (not the admin's `isInkStaff` / Fleet / Waste grants).
 
 **Detailed Module Screens & User Flows (Phase 8 map enhancement)**:
 For exact screens per module, what each does (purpose, reads/writes, UI), and user flows for users with access (role-specific step-by-step):

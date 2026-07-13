@@ -19,6 +19,7 @@ import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
 import '../services/notification_service.dart';
+import '../services/resilient_stream.dart';
 import '../services/update_service.dart';
 import '../services/whats_new_service.dart';
 import '../theme/app_theme.dart';
@@ -117,6 +118,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Debounces on/off-site snackbars so GPS jitter at the fence boundary can't
   // spam them — the notice only fires once the new state has held briefly.
   Timer? _presenceNoticeDebounce;
+  // Shorter debounce for stream/settings hydrate when becoming on-site (must
+  // not wait for the 45s snackbar window or Home stays on skeletons).
+  Timer? _onsiteHydrateDebounce;
   int _pendingReviewCount = 0;
   StreamSubscription<List<JobCard>>? _reviewCountSubscription;
   StreamSubscription<RemoteMessage>? _messagingSubscription;
@@ -347,6 +351,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // armed for the previous user/clockNo can't fire after a switch.
     _employeeSubscription?.cancel();
     _presenceNoticeDebounce?.cancel();
+    _onsiteHydrateDebounce?.cancel();
     _employeeSubscription = _firestoreService
         .getEmployeeStream(clockNo)
         .listen((emp) {
@@ -360,11 +365,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
       _resetTabIfHiddenModule();
       ref.invalidate(currentEmployeeProvider);
-      // React only to a genuine change, and debounce it: GPS jitter at the
-      // fence boundary flips isOnSite back and forth, which previously fired a
-      // snackbar on every flip. Wait for the new state to settle, and if it
-      // oscillated back in the meantime, fire nothing.
+      // React only to a genuine change, and debounce snackbars: GPS jitter at
+      // the fence boundary flips isOnSite back and forth. Data hydrate runs
+      // immediately on became-on-site so Recent Jobs / modules don't stay on
+      // skeletons until a cold restart (resume-only rearm was not enough).
       if (prevIsOnSite != null && prevIsOnSite != isNowOnsite) {
+        if (isNowOnsite) {
+          _onsiteHydrateDebounce?.cancel();
+          _onsiteHydrateDebounce = Timer(const Duration(seconds: 2), () {
+            if (!mounted || !isOnSite) return;
+            unawaited(_hydrateAfterBecameOnSite());
+          });
+        } else {
+          _onsiteHydrateDebounce?.cancel();
+        }
         _presenceNoticeDebounce?.cancel();
         _presenceNoticeDebounce = Timer(const Duration(seconds: 45), () {
           if (!mounted || isOnSite != isNowOnsite) return;
@@ -906,6 +920,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!_testMode) {
       final onSite = await _locationService.checkCurrentLocation();
       if (onSite != null && mounted) {
+        final wasOffSite = !isOnSite;
         setState(() {
           isOnSite = onSite;
           if (realEmployee != null) {
@@ -914,6 +929,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         });
         ref.invalidate(currentEmployeeProvider);
         _resetTabIfHiddenModule();
+        if (onSite && wasOffSite) {
+          RetryTriggers.instance.notifyBecameOnSite();
+        }
       }
     }
 
@@ -943,6 +961,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         debugPrint('Update check on resume: $e');
       }
     }
+  }
+
+  /// Foreground geofence / presence flip off→on (app never paused). Resume
+  /// already hydrates via [_onAppResumed]; this path covers staying open while
+  /// walking back on-site — otherwise parked resilient streams and a null
+  /// [_activeJobsSnap] leave Recent Job Cards on skeletons until kill/reopen.
+  Future<void> _hydrateAfterBecameOnSite() async {
+    debugPrint('HomeScreen: became on-site — waking streams + reloading settings');
+    RetryTriggers.instance.notifyBecameOnSite();
+    unawaited(AuthClaimsService.refreshClaims());
+
+    await Future.wait([
+      _loadFleetSettings(preferServer: true),
+      _loadWasteSettings(preferServer: true),
+      _loadSecuritySettings(preferServer: true),
+    ]);
+    if (!mounted) return;
+    _retryFailedModuleSettings();
+    _rearmActiveJobsStreamIfStuck();
+    // If the listener is alive but never emitted (parked mid-flight with a
+    // live sub), force a clean re-subscribe — same effect as cold start.
+    if (_needsActiveJobsListener && _activeJobsSnap == null) {
+      _setupActiveJobsSubscription();
+    }
+    if (_myWorkStream != null) {
+      setState(() {
+        _myWorkStream = null;
+        _myWorkClockNo = null;
+      });
+    }
+    ref.invalidate(inkSettingsProvider);
+    ref.invalidate(inkDailyReadingsStatusProvider);
   }
 
   @override
@@ -1057,6 +1107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _moduleSettingsConnSub?.cancel();
     _testModeTimer?.cancel();
     _presenceNoticeDebounce?.cancel();
+    _onsiteHydrateDebounce?.cancel();
     super.dispose();
   }
 

@@ -3,6 +3,9 @@
 /// Populated by [AuthClaimsService] after `setCustomClaims`. Old tokens / failed
 /// refresh leave flags unset — [role.dart] then falls back to `*_settings` lists
 /// so live behaviour is unchanged until claims are present.
+///
+/// Admin UI persona testing must not use these flags: they always describe the
+/// **real** Firebase session. See [suppressTokenClaimsForUi].
 class ModuleClaims {
   ModuleClaims._();
   static final ModuleClaims instance = ModuleClaims._();
@@ -14,6 +17,27 @@ class ModuleClaims {
   bool? isSecurityStaff;
   bool? isWasteStaff;
   bool? isInkStaff;
+
+  /// When true, [role.dart] ignores token module flags and derives access only
+  /// from the effective (persona) employee + `*_settings` lists. Set by
+  /// [PersonaNotifier] for the duration of admin role testing.
+  bool suppressTokenClaimsForUi = false;
+
+  /// Token flags for UI gating — null while persona testing so helpers fall
+  /// through to department / clock-list checks on the persona employee.
+  bool? get uiIsFleetMechanic =>
+      suppressTokenClaimsForUi ? null : isFleetMechanic;
+  bool? get uiIsFleetReporter =>
+      suppressTokenClaimsForUi ? null : isFleetReporter;
+  bool? get uiIsFleetCostManager =>
+      suppressTokenClaimsForUi ? null : isFleetCostManager;
+  bool? get uiIsSecurityManager =>
+      suppressTokenClaimsForUi ? null : isSecurityManager;
+  bool? get uiIsSecurityStaff =>
+      suppressTokenClaimsForUi ? null : isSecurityStaff;
+  bool? get uiIsWasteStaff =>
+      suppressTokenClaimsForUi ? null : isWasteStaff;
+  bool? get uiIsInkStaff => suppressTokenClaimsForUi ? null : isInkStaff;
 
   bool get hasAny =>
       isFleetMechanic != null ||
