@@ -928,6 +928,68 @@ class InkService {
         return list;
       });
 
+  static const _receivedThisPeriodFetchLimit = 40;
+
+  /// Fulfilled local POs whose fulfill/update falls in the open count period.
+  /// One-shot (cost discipline) — Receive Local "Received this period" section.
+  Future<List<InkPurchaseOrder>> fetchReceivedLocalOrdersThisPeriod({
+    DateTime? periodFromExclusive,
+  }) async {
+    final snap = await _db
+        .collection(Collections.inkPurchaseOrders)
+        .where('status', isEqualTo: 'fulfilled')
+        .orderBy('updated_at', descending: true)
+        .limit(_receivedThisPeriodFetchLimit)
+        .get();
+    final list = <InkPurchaseOrder>[];
+    for (final doc in snap.docs) {
+      final po = InkPurchaseOrder.fromFirestore(doc);
+      if (!po.isLocalTrack) continue;
+      final at = po.receivedAtForPeriod;
+      if (at == null) continue;
+      if (periodFromExclusive != null && !at.isAfter(periodFromExclusive)) {
+        continue;
+      }
+      list.add(po);
+    }
+    list.sort((a, b) {
+      final ad = a.receivedAtForPeriod ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = b.receivedAtForPeriod ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return list;
+  }
+
+  /// IBC shipments past awaiting/receiving whose last unit scan (or update)
+  /// falls in the open count period. One-shot for Receive Ink "Received" list.
+  Future<List<InkShipment>> fetchReceivedIbcShipmentsThisPeriod({
+    DateTime? periodFromExclusive,
+  }) async {
+    final snap = await _db
+        .collection(Collections.inkShipments)
+        .where('packaging_mode', isEqualTo: 'ibc')
+        .where('status', whereIn: ['received', 'awaiting_grn', 'costed'])
+        .orderBy('updated_at', descending: true)
+        .limit(_receivedThisPeriodFetchLimit)
+        .get();
+    final list = <InkShipment>[];
+    for (final doc in snap.docs) {
+      final s = InkShipment.fromFirestore(doc);
+      final at = s.receivedAtForPeriod;
+      if (at == null) continue;
+      if (periodFromExclusive != null && !at.isAfter(periodFromExclusive)) {
+        continue;
+      }
+      list.add(s);
+    }
+    list.sort((a, b) {
+      final ad = a.receivedAtForPeriod ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = b.receivedAtForPeriod ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return list;
+  }
+
   static DateTime _calendarDayStart(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 

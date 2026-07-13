@@ -26,6 +26,7 @@ class InkGuideBanner extends ConsumerWidget {
       : text =
             'Orders appear after a manager marks them sent on Pulse (RFO approved → '
             'Pastel numbers → sent). Tap an order, enter what arrived per line. '
+            'Greyed Received rows are already taken in this count period (reference only). '
             'Use Receive without order only for true ad-hoc stock.',
         icon = Icons.local_shipping_outlined;
 
@@ -48,6 +49,7 @@ class InkGuideBanner extends ConsumerWidget {
   const InkGuideBanner.receiveIbcList({super.key})
       : text =
             'Pick the open shipment you are unloading. Packing-list checks apply. '
+            'Greyed Received rows are already taken in this count period (reference only). '
             'Receive without shipment only for ad-hoc IBCs (manager still costs later).',
         icon = Icons.propane_tank_outlined;
 

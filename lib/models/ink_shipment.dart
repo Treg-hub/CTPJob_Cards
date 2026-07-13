@@ -22,17 +22,23 @@ class InkReceivedUnit {
     required this.ref,
     required this.itemCode,
     required this.netKg,
+    this.scannedAt,
   });
 
   final String ref;
   final String itemCode;
   final double netKg;
+  final DateTime? scannedAt;
 
-  factory InkReceivedUnit.fromMap(Map<String, dynamic> m) => InkReceivedUnit(
-        ref: m['ref'] as String? ?? '',
-        itemCode: m['item_code'] as String? ?? '',
-        netKg: (m['net_kg'] as num?)?.toDouble() ?? 0,
-      );
+  factory InkReceivedUnit.fromMap(Map<String, dynamic> m) {
+    final scannedRaw = m['scanned_at'];
+    return InkReceivedUnit(
+      ref: m['ref'] as String? ?? '',
+      itemCode: m['item_code'] as String? ?? '',
+      netKg: (m['net_kg'] as num?)?.toDouble() ?? 0,
+      scannedAt: scannedRaw is Timestamp ? scannedRaw.toDate() : null,
+    );
+  }
 }
 
 /// An expected unit (IBC serial / pallet) from the packing list.
@@ -97,6 +103,7 @@ class InkShipment {
     this.lines = const [],
     this.expectedUnits = const [],
     this.receivedUnits = const [],
+    this.updatedAt,
   });
 
   final String id;
@@ -110,6 +117,7 @@ class InkShipment {
   final List<InkShipmentLine> lines;
   final List<InkExpectedUnit> expectedUnits;
   final List<InkReceivedUnit> receivedUnits;
+  final DateTime? updatedAt;
 
   bool get isIbc => packagingMode == 'ibc';
 
@@ -124,10 +132,22 @@ class InkShipment {
   List<String> get itemCodes =>
       {for (final l in lines) l.itemCode}.toList(growable: false);
 
+  /// Prefer latest unit scan; fall back to shipment [updatedAt].
+  DateTime? get receivedAtForPeriod {
+    DateTime? latest;
+    for (final u in receivedUnits) {
+      final at = u.scannedAt;
+      if (at == null) continue;
+      if (latest == null || at.isAfter(latest)) latest = at;
+    }
+    return latest ?? updatedAt;
+  }
+
   factory InkShipment.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     List<Map<String, dynamic>> maps(String k) =>
         ((d[k] as List?) ?? []).whereType<Map<String, dynamic>>().toList();
+    final updatedRaw = d['updated_at'];
     return InkShipment(
       id: doc.id,
       orderNumber: d['order_number'] as String? ?? '',
@@ -140,6 +160,7 @@ class InkShipment {
       lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
       receivedUnits: maps('received_units').map(InkReceivedUnit.fromMap).toList(),
+      updatedAt: updatedRaw is Timestamp ? updatedRaw.toDate() : null,
     );
   }
 }

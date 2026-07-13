@@ -82,6 +82,8 @@ class InkPurchaseOrder {
     this.erpOrderNumber,
     this.pastelRfoNumber,
     this.estimatedArrival,
+    this.updatedAt,
+    this.finalizedAt,
   });
 
   final String id;
@@ -94,6 +96,8 @@ class InkPurchaseOrder {
   final String? erpOrderNumber;
   final String? pastelRfoNumber;
   final DateTime? estimatedArrival;
+  final DateTime? updatedAt;
+  final DateTime? finalizedAt;
 
   double remainingFor(String itemCode) => remainingKgByItem[itemCode] ?? 0;
 
@@ -101,6 +105,9 @@ class InkPurchaseOrder {
       remainingKgByItem.values.fold<double>(0, (a, b) => a + b);
 
   bool get hasOpenRemaining => totalRemaining > 1e-6;
+
+  /// When the PO became fulfilled (finalize write-off) or last receipt update.
+  DateTime? get receivedAtForPeriod => finalizedAt ?? updatedAt;
 
   /// Prefer frozen [track]; legacy docs fall back to line item codes.
   bool get isLocalTrack {
@@ -165,6 +172,8 @@ class InkPurchaseOrder {
     if (etaRaw is Timestamp) {
       eta = etaRaw.toDate();
     }
+    DateTime? asDate(dynamic raw) =>
+        raw is Timestamp ? raw.toDate() : null;
     return InkPurchaseOrder(
       id: doc.id,
       pulseRef: d['pulse_ref'] as String? ?? doc.id,
@@ -176,6 +185,8 @@ class InkPurchaseOrder {
       erpOrderNumber: d['erp_order_number'] as String?,
       pastelRfoNumber: d['pastel_rfo_number'] as String?,
       estimatedArrival: eta,
+      updatedAt: asDate(d['updated_at']),
+      finalizedAt: asDate(d['finalized_at']),
     );
   }
 }
