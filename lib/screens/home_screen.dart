@@ -269,7 +269,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final idx = _fleetTabIndex();
     if (idx < 0) return;
     _fleetMechanicNavDone = true;
-    setState(() => _selectedIndex = idx);
+    _setShellTab(idx);
   }
 
   void _openFleetMachinesTab() {
@@ -306,7 +306,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     ref.read(fleetReporterShellTabProvider.notifier).state = 0;
     final idx = _fleetTabIndex();
-    if (idx >= 0) setState(() => _selectedIndex = idx);
+    if (idx >= 0) _setShellTab(idx);
   }
 
   void _maybeOpenModuleTabForSecurityGuard() {
@@ -316,14 +316,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final securityIdx = _securityTabIndex();
     if (securityIdx >= 0) {
       _securityGuardNavDone = true;
-      setState(() => _selectedIndex = securityIdx);
+      _setShellTab(securityIdx);
       return;
     }
 
     final wasteIdx = _wasteTabIndex();
     if (wasteIdx >= 0) {
       _securityGuardNavDone = true;
-      setState(() => _selectedIndex = wasteIdx);
+      _setShellTab(wasteIdx);
     }
   }
 
@@ -508,7 +508,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!mounted) return;
     final currentTab = _shellTabAtIndex(_selectedIndex);
     if (currentTab == null || !_isShellTabVisible(currentTab)) {
-      setState(() => _selectedIndex = 0);
+      _setShellTab(0);
     }
   }
 
@@ -1072,7 +1072,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _messagingSubscription = FirebaseMessaging.onMessageOpenedApp.listen((message) {
         if (!mounted) return;
         if (message.data['notificationType'] == 'assigned') {
-          setState(() => _selectedIndex = 1);
+          _setShellTab(1);
         }
       });
     } catch (e) {
@@ -1264,7 +1264,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             subtitle: 'Gate scans, company cars, visitors',
             icon: Icons.shield_outlined,
             color: kBrandOrange,
-            onTap: () => setState(() => _selectedIndex = securityIdx),
+            onTap: () => _setShellTab(securityIdx),
           ),
         if (wasteIdx >= 0)
           _buildModuleHubCard(
@@ -1272,7 +1272,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             subtitle: 'Incoming loads, begin collections, stock',
             icon: Icons.delete_outline,
             color: const Color(0xFF2D6A4F),
-            onTap: () => setState(() => _selectedIndex = wasteIdx),
+            onTap: () => _setShellTab(wasteIdx),
           ),
         if (wasteIdx < 0 && securityIdx < 0)
           Padding(
@@ -1617,7 +1617,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 .toList()
               ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
 
-            var topJobs = recentJobs.take(20).toList();
+            var topJobs = recentJobs.take(30).toList();
 
         if ((isManager || isSuperManager) && _showDeptOnly) {
           topJobs = topJobs.where(_isInManagerScope).toList();
@@ -2294,25 +2294,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return const CopperDashboardScreen();
   }
 
-  void _onItemTapped(int index) {
-    final List<Widget> children = [
-      _buildHomeTab(),
-      if (_showMyWorkNav) _buildMyWorkTab(),
-      if (_isCopperAuthorized)
-        _buildCopperTab(),
-      if (_showWasteModule)
-        _buildWasteTab(),
-      if (_isFleetUser)
-        _buildFleetTab(),
-      if (_showSecurityModule)
-        _buildSecurityTab(),
-    ];
-
-    if (index >= children.length) return;
-
+  void _setShellTab(int index) {
+    if (!mounted) return;
     setState(() {
+      final prev = _selectedIndex;
       _selectedIndex = index;
+      // C5: drop My Work listener when leaving that tab.
+      final myWorkIdx = _showMyWorkNav ? 1 : -1;
+      if (myWorkIdx >= 0 && prev == myWorkIdx && index != myWorkIdx) {
+        _myWorkStream = null;
+        _myWorkClockNo = null;
+      }
     });
+  }
+
+  void _onItemTapped(int index) {
+    final tabCount = 1 +
+        (_showMyWorkNav ? 1 : 0) +
+        (_isCopperAuthorized ? 1 : 0) +
+        (_showWasteModule ? 1 : 0) +
+        (_isFleetUser ? 1 : 0) +
+        (_showSecurityModule ? 1 : 0);
+    if (index < 0 || index >= tabCount) return;
+    _setShellTab(index);
   }
 
   // ---------------------------------------------------------------------------
@@ -2341,7 +2345,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (prev?.employee?.clockNo != next.employee?.clockNo) {
         _myWorkStream = null;
         _myWorkClockNo = null;
-        if (mounted) setState(() => _selectedIndex = 0);
+        if (mounted) _setShellTab(0);
       }
     });
     ref.watch(personaProvider);
@@ -2392,20 +2396,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.shield_outlined), label: 'Security'),
     ];
 
-    final List<Widget> children = [
-      _buildHomeTab(),
-      if (_showMyWorkNav) _buildMyWorkTab(),
-      if (_isCopperAuthorized)
-        _buildCopperTab(),
-      if (_showWasteModule)
-        _buildWasteTab(),
-      if (_isFleetUser)
-        _buildFleetTab(),
-      if (_showSecurityModule)
-        _buildSecurityTab(),
+    // Lazy builders — only the selected shell tab is mounted so module
+    // Firestore listeners dispose when switching away (C3 / C5).
+    final List<Widget Function()> tabBuilders = [
+      () => _buildHomeTab(),
+      if (_showMyWorkNav) () => _buildMyWorkTab(),
+      if (_isCopperAuthorized) () => _buildCopperTab(),
+      if (_showWasteModule) () => _buildWasteTab(),
+      if (_isFleetUser) () => _buildFleetTab(),
+      if (_showSecurityModule) () => _buildSecurityTab(),
     ];
 
-    if (_selectedIndex >= children.length) {
+    if (_selectedIndex >= tabBuilders.length) {
       _selectedIndex = 0;
     }
 
@@ -2473,9 +2475,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           const PersonaBanner(),
           const SyncIndicator(),
           Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: children,
+            child: KeyedSubtree(
+              key: ValueKey<int>(_selectedIndex),
+              child: tabBuilders[_selectedIndex](),
             ),
           ),
         ],

@@ -582,7 +582,7 @@ class FirestoreService {
     'Monitoring',
   ];
 
-  static const int _homeActiveJobLimit = 150;
+  static const int _homeActiveJobLimit = 30;
 
   Stream<JobCardListSnapshot> getActiveJobCardsWithMeta() {
     return resilientSnapshots(

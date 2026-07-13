@@ -452,6 +452,7 @@ class WasteService {
           ])
           .where('createdAt', isGreaterThanOrEqualTo: _homeWindowCutoff)
           .orderBy('createdAt', descending: true)
+          .limit(100)
           .snapshots(),
       debugName: 'waste_active_loads',
     ).map((snap) => (

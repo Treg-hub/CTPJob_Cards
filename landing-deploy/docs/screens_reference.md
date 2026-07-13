@@ -343,19 +343,21 @@ Visibility into the "Monitoring" state — jobs that were marked completed but k
 
 `lib/screens/admin_screen.dart` — **Roles:** Admin only
 
-The control panel. Five scrollable tabs with outlined icons. Opens on **Settings** by default (`initialIndex: 0`). Tab order: **Settings → Employees → Structures → On Site → Comms**.
+The factory control panel. Title **Factory Admin**. Five scrollable tabs; opens on **Overview** (`initialIndex: 0`). Tab order: **Overview → Employees → Structures → On Site → Comms**.
 
 > **Job card export / bulk delete** is not in Admin on mobile. Use **CTP Pulse** (`/jobs`) for read-only job oversight, history, and exports.
 
-#### Tab: Settings
+#### Tab: Overview
 
-Grouped cards (default tab):
+Categorised hub (not a dump of forms). Each row opens a focused screen:
 
-- **App Update Control / Publish release** — multi-channel publish on `settings/app` (`updateChannels`: `default`, `ink`/departments, `testers`/people). Pick **departments** and **people** from live employee/structure lists (searchable multi-select). Soft = Home banner; force = full-screen (per channel). Legacy `publishedLatest*` mirrors Default for old APKs. `minSupportedBuild` = factory kill-switch at launch. Shared `updateDownloadUrl` fallback. **Copy RC keys** = Default only. Operator guide: `docs/admin_app_update_guide.md`.
-- **Location** — Force Location Check Now (manually triggers `LocationService.checkCurrentLocation`); Simulate 30-min WorkManager Check
-- **Access** — **Escalation Config** per-stage cards with Enable toggle, minutes input, recipient checkboxes (including a *Job Creator (Operator)* option). Writes to `notification_configs/global`. Prompts to confirm when re-enabling stages so open jobs aren't flooded. Writes `enabled_at = now` on any stage transitioning from disabled → enabled. **Reset Escalation Stamps** calls `clearEscalationStamps` CF.
-- **Modules** — enable/disable Waste Management and Fleet Maintenance
-- **Feedback** — opens the **User Feedback** admin board (see [User Feedback](#user-feedback)) for reviewing and triaging feedback submitted from the Home screen FAB
+- **App releases** — multi-channel publish on `settings/app` (`updateChannels`: `default`, `ink`/departments, `testers`/people). Soft/force per channel; `minSupportedBuild` kill-switch. Guide: `docs/admin_app_update_guide.md`.
+- **Escalation rules** — per-stage enable/minutes/recipients → `notification_configs/global`; Reset Escalation Stamps CF.
+- **Site & location** — Geofence editor + Force Check / Simulate 30-min.
+- **Module gates** → `admin_modules_screen.dart` — Waste / Fleet toggles + Copper dashboard (clock `22`).
+- **Developer & device tools** → `admin_tools_screen.dart` — Scan Tester, Notification Diagnostics, Kiosk.
+
+> **Feedback triage** is on Home Quick Actions (**Feedback** tile for admins), not under Overview.
 
 #### Tab: Employees
 
@@ -404,7 +406,7 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 
 `lib/screens/feedback_admin_screen.dart` — **Roles:** Admin only
 
-Internal triage board for the feedback employees submit via the **Give Feedback** FAB on the Home screen (written to the `feedback` collection). Reached from **Admin → Settings → Feedback**. Gated on `Employee.isAdmin` — regular staff never see it; they only get the "feedback submitted" confirmation.
+Internal triage board for the feedback employees submit via the **Give Feedback** FAB on the Home screen (written to the `feedback` collection). Reached from Home Quick Actions **Feedback** tile (admins only). Gated on `Employee.isAdmin` — regular staff never see it; they only get the "feedback submitted" confirmation.
 
 #### Capabilities
 
@@ -434,8 +436,7 @@ Per-user preferences and self-service tooling. Organised into labelled sections:
 - **Notifications** — link to [Notification Inbox](#notification-inbox) with live unread count badge; link to [Notification Tests](#notification-tests)
 - **App & Connectivity** — Reset Permissions, Check for Update, Refresh FCM Token
 - **App Permissions** — live status for Notifications, System Alert Window, Notification Policy, Battery Optimisation. Tapping any row jumps to the OS settings page
-- **Modules** *(Admin only)* — enable/disable **Waste Management** (writes `wasteTrackEnabled` to SharedPreferences) and **Fleet Maintenance** (writes `fleet_enabled` to `fleet_settings/config` in Firestore). Turning a module off hides its tab from all users immediately.
-- **Admin** *(Admin only)* — amber-bordered card containing links to Admin Settings and Notification Diagnostics
+- **Factory Admin** *(Admin only)* — single gateway to `AdminScreen` (releases, escalation, people, site, modules, tools). Module toggles and Scan Tester / diagnostics / kiosk live under Factory Admin → Overview, not here.
 - **Account** — Log Out
 
 ### Notification Inbox
