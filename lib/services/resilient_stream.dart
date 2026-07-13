@@ -37,7 +37,7 @@ class RetryTriggers with WidgetsBindingObserver {
   final StreamController<String> _events = StreamController<String>.broadcast();
   final StreamController<void> _authSuspect = StreamController<void>.broadcast();
 
-  /// 'connectivity' | 'claims' | 'auth' | 'resume'.
+  /// 'connectivity' | 'claims' | 'auth' | 'resume' | 'presence'.
   Stream<String> get events => _events.stream;
 
   /// Fired when repeated permission-denied failures suggest the SESSION
@@ -48,6 +48,10 @@ class RetryTriggers with WidgetsBindingObserver {
   void _emit(String event) {
     if (!_events.isClosed) _events.add(event);
   }
+
+  /// Wake parked resilient streams when the employee becomes on-site while the
+  /// app stays in the foreground (geofence / presence flip — no lifecycle resume).
+  void notifyBecameOnSite() => _emit('presence');
 
   void flagAuthSuspect() {
     if (!_authSuspect.isClosed) _authSuspect.add(null);

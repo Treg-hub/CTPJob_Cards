@@ -109,7 +109,7 @@ bool isSecurityDeptManager(Employee? employee) {
 bool isSecurityManager(Employee? employee, WasteSettings? settings) {
   if (employee == null) return false;
   if (isWasteAdmin(employee)) return true;
-  if (ModuleClaims.instance.isSecurityManager == true) return true;
+  if (ModuleClaims.instance.uiIsSecurityManager == true) return true;
   if (isSecurityDeptManager(employee)) return true;
   if (settings == null) return false;
   return _clockNoInSecurityAllowList(
@@ -122,8 +122,8 @@ bool isSecurityManager(Employee? employee, WasteSettings? settings) {
 bool isSecurityGuard(Employee? employee, WasteSettings? settings) {
   if (employee == null) return false;
   if (isSecurityManager(employee, settings)) return true;
-  if (ModuleClaims.instance.isSecurityStaff == true ||
-      ModuleClaims.instance.isWasteStaff == true) {
+  if (ModuleClaims.instance.uiIsSecurityStaff == true ||
+      ModuleClaims.instance.uiIsWasteStaff == true) {
     return true;
   }
   if (isSecurityDeptGuard(employee)) return true;
@@ -158,7 +158,7 @@ bool canViewCopperReadyPanel(Employee? employee, WasteSettings? settings) {
 bool _isSiteSecurityManager(Employee? employee, SecuritySettings? settings) {
   if (employee == null) return false;
   if (isAdmin(employee)) return true;
-  if (ModuleClaims.instance.isSecurityManager == true) return true;
+  if (ModuleClaims.instance.uiIsSecurityManager == true) return true;
   if (settings == null) return false;
   if (isSecurityDeptManager(employee)) return true;
   return _clockNoInSecurityAllowList(
@@ -170,7 +170,7 @@ bool _isSiteSecurityManager(Employee? employee, SecuritySettings? settings) {
 bool _isSiteSecurityGuard(Employee? employee, SecuritySettings? settings) {
   if (employee == null) return false;
   if (_isSiteSecurityManager(employee, settings)) return true;
-  if (ModuleClaims.instance.isSecurityStaff == true) return true;
+  if (ModuleClaims.instance.uiIsSecurityStaff == true) return true;
   if (settings == null) return false;
   if (isSecurityDeptGuard(employee)) return true;
   return _clockNoInSecurityAllowList(
@@ -234,7 +234,7 @@ bool _clockNoInAllowList(String? clockNo, List<String> allowList) {
 /// True when the employee's clock number is in the mechanic allow-list.
 bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
   if (employee == null) return false;
-  if (ModuleClaims.instance.isFleetMechanic == true) return true;
+  if (ModuleClaims.instance.uiIsFleetMechanic == true) return true;
   if (settings == null) return false;
   return _clockNoInAllowList(employee.clockNo, settings.mechanicClockNos);
 }
@@ -242,7 +242,7 @@ bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
 /// True when the employee's department is in the configurable reporter allow-list.
 bool isFleetReporter(Employee? employee, FleetSettings? settings) {
   if (employee == null) return false;
-  if (ModuleClaims.instance.isFleetReporter == true) return true;
+  if (ModuleClaims.instance.uiIsFleetReporter == true) return true;
   if (settings == null) return false;
   return settings.reporterDepartments.contains(employee.department);
 }
@@ -250,7 +250,7 @@ bool isFleetReporter(Employee? employee, FleetSettings? settings) {
 /// True when the employee's clock number is in the cost-manager allow-list.
 bool isFleetCostManager(Employee? employee, FleetSettings? settings) {
   if (employee == null) return false;
-  if (ModuleClaims.instance.isFleetCostManager == true) return true;
+  if (ModuleClaims.instance.uiIsFleetCostManager == true) return true;
   if (settings == null) return false;
   return _clockNoInAllowList(employee.clockNo, settings.costManagerClockNos);
 }
@@ -365,7 +365,7 @@ bool isInkMeterUser(Employee? employee) =>
 /// Any Ink Factory user (operators + managers), plus admins. Shows the Ink hub.
 bool isInkUser(Employee? employee) {
   if (employee == null) return false;
-  if (ModuleClaims.instance.isInkStaff == true) return true;
+  if (ModuleClaims.instance.uiIsInkStaff == true) return true;
   return employee.department == inkDepartment || isAdmin(employee);
 }
 
