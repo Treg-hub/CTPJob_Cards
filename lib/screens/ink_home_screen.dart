@@ -60,7 +60,13 @@ class InkHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ink Factory')),
-      body: ListView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(inkStockItemsProvider);
+          ref.invalidate(inkSettingsProvider);
+          await ref.read(inkStockItemsProvider.future);
+        },
+        child: ListView(
         padding: EdgeInsets.fromLTRB(
           12,
           12,
@@ -161,6 +167,7 @@ class InkHomeScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -107,6 +107,8 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('IBC consumption voided — back to received.')));
+        ref.invalidate(inkAllIbcsProvider);
+        ref.invalidate(inkReceivedIbcsProvider);
       }
     } catch (e) {
       if (mounted) {
@@ -127,6 +129,16 @@ class _State extends ConsumerState<InkIbcRegisterScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('IBC Register'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              ref.invalidate(inkAllIbcsProvider);
+              ref.invalidate(inkReceivedIbcsProvider);
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           isScrollable: true,

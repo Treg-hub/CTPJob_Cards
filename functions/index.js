@@ -2322,3 +2322,28 @@ exports.onFeedbackCommentCreated = functions.firestore.onDocumentCreated(
       feedbackId,
     });
   });
+
+// ==================== SCHEDULED: DATA RETENTION PURGE ====================
+// Policy 2026-07-12: app_geofence + notifications + read inbox items = 90d;
+// security_entries (+ photos) = 180d; geo_fence_logs wiped + rules-denied.
+const { runRetentionPurge } = require("./retention_purge");
+
+exports.purgeRetentionDataWeekly = functions.scheduler.onSchedule({
+  schedule: "0 2 * * 0",
+  region: "europe-west1",
+  timeZone: "Africa/Johannesburg",
+  memory: "512MiB",
+  timeoutSeconds: 540,
+}, async () => {
+  await runRetentionPurge();
+});
+
+/** Admin-only manual trigger (same purge as weekly schedule). */
+exports.purgeRetentionDataNow = onCall({
+  region: "africa-south1",
+  memory: "512MiB",
+  timeoutSeconds: 540,
+}, async (request) => {
+  await assertAdmin(request);
+  return runRetentionPurge();
+});

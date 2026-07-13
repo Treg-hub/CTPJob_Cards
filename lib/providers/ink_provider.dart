@@ -30,9 +30,9 @@ final inkSettingsProvider = StreamProvider<InkSettings>(
   (ref) => ref.watch(inkServiceProvider).watchSettings(),
 );
 
-/// All active stock items with their cached balance/WAC.
-final inkStockItemsProvider = StreamProvider<List<InkStockItem>>(
-  (ref) => ref.watch(inkServiceProvider).watchStockItems(),
+/// All active stock items with their cached balance/WAC (one-shot; pull-to-refresh).
+final inkStockItemsProvider = FutureProvider.autoDispose<List<InkStockItem>>(
+  (ref) => ref.watch(inkServiceProvider).fetchStockItemsOnce(),
 );
 
 /// Item ledger for the open period only (mobile).
@@ -108,13 +108,15 @@ final inkAllRecipesProvider = StreamProvider<List<InkRecipe>>(
   (ref) => ref.watch(inkServiceProvider).watchRecipes(activeOnly: false),
 );
 
-final inkReceivedIbcsProvider = StreamProvider<List<InkIbc>>(
-  (ref) =>
-      ref.watch(inkServiceProvider).watchIbcs(status: InkIbcStatus.received),
+final inkReceivedIbcsProvider =
+    FutureProvider.autoDispose<List<InkIbc>>(
+  (ref) => ref
+      .watch(inkServiceProvider)
+      .fetchIbcsOnce(status: InkIbcStatus.received),
 );
 
-final inkAllIbcsProvider = StreamProvider<List<InkIbc>>(
-  (ref) => ref.watch(inkServiceProvider).watchIbcs(),
+final inkAllIbcsProvider = FutureProvider.autoDispose<List<InkIbc>>(
+  (ref) => ref.watch(inkServiceProvider).fetchIbcsOnce(),
 );
 
 final inkIbcsConsumedThisPeriodProvider = Provider<List<InkIbc>>((ref) {

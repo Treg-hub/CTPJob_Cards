@@ -6,18 +6,23 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## 2026-07-12 — Feedback photos (ship with next APK)
+## 2026-07-12 — Pilot 2.3.0+165 (Ink Factory — feedback photos)
 
 ### What you will notice
 
 - When you **Give Feedback**, you can attach up to **3 photos** (camera or gallery) — useful for screenshots or a picture of the problem.
 - In a feedback **thread**, you and the CTP team can attach photos on replies the same way.
 - Tap a photo thumbnail to view it full screen.
+- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
 
 ### For admins
 
 - Triage board shows photo thumbnails on submissions; reply from the thread with photos if needed.
-- **Deploy required**: Storage rules from `/firebase` (`feedback/{id}/photos/**`) before the APK that uses this feature.
+- **Deploy required**: Storage rules from `/firebase` (`feedback/{id}/photos/**`) before the APK that uses this feature (if not already live).
+- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 165**.
+- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
+- **Default + Shared** stay on factory **2.3.0 / 163** (or lower / current factory build), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
+- Landing **Download app** still serves factory `latest.apk`, not this pilot.
 
 ---
 

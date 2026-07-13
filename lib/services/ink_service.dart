@@ -134,6 +134,26 @@ class InkService {
         return filtered;
       });
 
+  /// One-shot stock list (prefer over [watchStockItems] for hub screens).
+  Future<List<InkStockItem>> fetchStockItemsOnce({bool activeOnly = true}) async {
+    final s = await _db.collection(Collections.inkStockItems).get();
+    final items = <InkStockItem>[];
+    for (final doc in s.docs) {
+      try {
+        items.add(InkStockItem.fromFirestore(doc));
+      } catch (e) {
+        debugPrint('Skipping unparseable ink_stock_items/${doc.id}: $e');
+      }
+    }
+    final filtered =
+        activeOnly ? items.where((i) => i.active).toList() : items;
+    filtered.sort((a, b) {
+      final c = a.displayOrder.compareTo(b.displayOrder);
+      return c != 0 ? c : a.displayName.compareTo(b.displayName);
+    });
+    return filtered;
+  }
+
   Stream<InkStockItem?> watchStockItem(String itemCode) => resilientSnapshots(
         () => _db.collection(Collections.inkStockItems).doc(itemCode).snapshots(),
         debugName: 'ink_stock_item_$itemCode',
@@ -803,6 +823,24 @@ class InkService {
         filtered.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
         return filtered;
       });
+
+  /// One-shot IBC list (prefer over [watchIbcs] for hub screens).
+  Future<List<InkIbc>> fetchIbcsOnce({InkIbcStatus? status}) async {
+    final s = await _db.collection(Collections.inkIbcs).get();
+    final list = <InkIbc>[];
+    for (final doc in s.docs) {
+      final ibc = InkIbc.tryFromFirestore(doc);
+      if (ibc != null) {
+        list.add(ibc);
+      }
+    }
+    var filtered = list;
+    if (status != null) {
+      filtered = list.where((i) => i.status == status).toList();
+    }
+    filtered.sort((a, b) => b.receivedDate.compareTo(a.receivedDate));
+    return filtered;
+  }
 
   /// Returns register entries for the given 8-digit IBC numbers. Used before
   /// `recordInkIbcReceipt` so operators see conflicts instead of a CF stack trace.

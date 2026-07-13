@@ -27,7 +27,7 @@ abstract final class ScreenInsets {
     return bottom;
   }
 
-  /// Bottom padding for content inside [HomeScreen]'s IndexedStack body.
+  /// Bottom padding for content inside [HomeScreen]'s shell body (selected tab only).
   /// The outer bottom nav already consumes vertical space; only FAB overlap
   /// within module tabs needs extra clearance.
   static double scrollBottomInHomeShell({
