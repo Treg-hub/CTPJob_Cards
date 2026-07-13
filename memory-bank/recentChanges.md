@@ -2,6 +2,11 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Ink daily readings void baseline (2026-07-13)**:
+  - Bug: after Pulse void of a meter session, Daily Readings unlocked fields (today-captured already skipped voided) but **Last** still used the voided cumulative reading → re-enter same dial → Δ≈0.
+  - Fix: `watchLatestMeterReadings` / `watchRecentMeterReadings` (+ toloul point latest/recent) exclude voided via `lib/utils/ink_meter_baselines.dart`; unit tests in `test/ink_meter_baselines_test.dart`.
+  - Map: `InkModule.md`, `ink_transactions.md`, `Canvases/INDEX.md`.
+
 - **Persona ModuleClaims + off→on-site hydrate (2026-07-13)**:
   - Persona QA: `ModuleClaims.suppressTokenClaimsForUi` while testing — `role.dart` uses `uiIs*` getters so admin token flags (`isInkStaff`, Fleet, Waste/Security) no longer leak into other personas' Home tiles/tabs.
   - Off→on-site while app stays open: `_hydrateAfterBecameOnSite` (2s debounce) + `RetryTriggers.notifyBecameOnSite()` reloads module settings, re-arms stuck active-jobs / My Work, invalidates ink providers — fixes Recent Job Cards skeletons that previously needed kill/reopen.
