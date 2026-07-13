@@ -15,6 +15,7 @@ import '../models/ink_production_run.dart';
 import '../models/ink_purchase_order.dart';
 import '../models/ink_recipe.dart';
 import '../models/ink_shipment.dart';
+import '../utils/ink_meter_baselines.dart';
 import '../utils/ink_po_fulfillment.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
@@ -542,6 +543,7 @@ class InkService {
   /// Latest cumulative meter value per item (from `consumption_meter` txns), so
   /// the meter screen can compute the next reading's delta. Bounded to the last
   /// 180 days — any item without a reading in 6 months is effectively dormant.
+  /// Voided sessions are excluded so void-and-re-enter uses the prior baseline.
   Stream<Map<String, double>> watchLatestMeterReadings() {
     final cutoff = Timestamp.fromDate(
       DateTime.now().subtract(const Duration(days: 180)),
@@ -552,23 +554,25 @@ class InkService {
         .where('effective_at', isGreaterThanOrEqualTo: cutoff)
         .snapshots()
         .map((s) {
-          final latest = <String, ({DateTime at, double reading})>{};
+          final rows = <({String key, DateTime at, double reading, bool voided})>[];
           for (final doc in s.docs) {
             final t = InkTransaction.fromFirestore(doc);
             if (t.meterReading == null) continue;
-            final cur = latest[t.stockItemCode];
-            if (cur == null || t.effectiveAt.isAfter(cur.at)) {
-              latest[t.stockItemCode] =
-                  (at: t.effectiveAt, reading: t.meterReading!);
-            }
+            rows.add((
+              key: t.stockItemCode,
+              at: t.effectiveAt,
+              reading: t.meterReading!,
+              voided: t.voided,
+            ));
           }
-          return {for (final e in latest.entries) e.key: e.value.reading};
+          return latestNonVoidedMeterReadings(rows);
         });
   }
 
   /// The most recent [limit] meter readings per item (newest first) — for the
   /// grid view that shows the previous few days alongside the entry field.
   /// Bounded to the last 90 days so the stream doesn't scan the full ledger.
+  /// Voided sessions are excluded (same rule as [watchLatestMeterReadings]).
   Stream<Map<String, List<({DateTime at, double reading})>>>
       watchRecentMeterReadings({int limit = 4}) {
     final cutoff = Timestamp.fromDate(
@@ -580,19 +584,18 @@ class InkService {
         .where('effective_at', isGreaterThanOrEqualTo: cutoff)
         .snapshots()
         .map((s) {
-          final byItem = <String, List<({DateTime at, double reading})>>{};
+          final rows = <({String key, DateTime at, double reading, bool voided})>[];
           for (final doc in s.docs) {
             final t = InkTransaction.fromFirestore(doc);
             if (t.meterReading == null) continue;
-            (byItem[t.stockItemCode] ??= [])
-                .add((at: t.effectiveAt, reading: t.meterReading!));
+            rows.add((
+              key: t.stockItemCode,
+              at: t.effectiveAt,
+              reading: t.meterReading!,
+              voided: t.voided,
+            ));
           }
-          for (final key in byItem.keys.toList()) {
-            final list = byItem[key]!
-              ..sort((a, b) => b.at.compareTo(a.at)); // newest first
-            if (list.length > limit) byItem[key] = list.sublist(0, limit);
-          }
-          return byItem;
+          return recentNonVoidedMeterReadings(rows, limit: limit);
         });
   }
 
@@ -1525,27 +1528,25 @@ class InkService {
         .where('reading_date', isGreaterThanOrEqualTo: since)
         .snapshots()
         .map((s) {
-            final byPoint = <String, List<({DateTime at, double reading})>>{};
-            for (final doc in s.docs) {
-              final d = doc.data();
-              final pid = d['point_id'] as String?;
-              if (pid == null) continue;
-              final at =
-                  (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000);
-              final reading = (d['reading'] as num?)?.toDouble() ?? 0;
-              (byPoint[pid] ??= []).add((at: at, reading: reading));
-            }
-            for (final key in byPoint.keys.toList()) {
-              final list = byPoint[key]!
-                ..sort((a, b) => b.at.compareTo(a.at));
-              if (list.length > limit) byPoint[key] = list.sublist(0, limit);
-            }
-            return byPoint;
-          });
+          final rows = <({String key, DateTime at, double reading, bool voided})>[];
+          for (final doc in s.docs) {
+            final d = doc.data();
+            final pid = d['point_id'] as String?;
+            if (pid == null) continue;
+            rows.add((
+              key: pid,
+              at: (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000),
+              reading: (d['reading'] as num?)?.toDouble() ?? 0,
+              voided: d['voided'] as bool? ?? false,
+            ));
+          }
+          return recentNonVoidedMeterReadings(rows, limit: limit);
+        });
   }
 
   /// Latest cumulative reading per meter point (for delta computation).
   /// Uses a 45-day window; daily readings always fall inside this window.
+  /// Soft-voided rows (if any) are skipped; session void deletes toloul docs.
   Stream<Map<String, double>> watchLatestMeterPointReadings() {
     final since = Timestamp.fromDate(_meterPointReadingsSince());
     return _db
@@ -1553,21 +1554,20 @@ class InkService {
         .where('reading_date', isGreaterThanOrEqualTo: since)
         .snapshots()
         .map((s) {
-        final latest = <String, ({DateTime at, double reading})>{};
-        for (final doc in s.docs) {
-          final d = doc.data();
-          final pid = d['point_id'] as String?;
-          if (pid == null) continue;
-          final at =
-              (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000);
-          final reading = (d['reading'] as num?)?.toDouble() ?? 0;
-          final cur = latest[pid];
-          if (cur == null || at.isAfter(cur.at)) {
-            latest[pid] = (at: at, reading: reading);
+          final rows = <({String key, DateTime at, double reading, bool voided})>[];
+          for (final doc in s.docs) {
+            final d = doc.data();
+            final pid = d['point_id'] as String?;
+            if (pid == null) continue;
+            rows.add((
+              key: pid,
+              at: (d['reading_date'] as Timestamp?)?.toDate() ?? DateTime(2000),
+              reading: (d['reading'] as num?)?.toDouble() ?? 0,
+              voided: d['voided'] as bool? ?? false,
+            ));
           }
-        }
-        return {for (final e in latest.entries) e.key: e.value.reading};
-      });
+          return latestNonVoidedMeterReadings(rows);
+        });
   }
 
   /// Item codes with a non-voided ink meter reading captured today.
