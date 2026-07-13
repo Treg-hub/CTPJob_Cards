@@ -6,7 +6,7 @@ Entries are newest-first. When you update from an older build, the app shows eve
 
 ---
 
-## 2026-07-13 — Ink receive — Received this period (pending APK)
+## 2026-07-13 — 2.3.0+166 — Receive lists: Received this period
 
 ### What you will notice
 
