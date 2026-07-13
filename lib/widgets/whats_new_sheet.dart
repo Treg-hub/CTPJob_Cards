@@ -6,12 +6,14 @@ import '../theme/app_theme.dart';
 import '../utils/doc_catalog.dart';
 import '../utils/screen_insets.dart';
 
-/// Bottom sheet shown once after an app update with the newest changelog
-/// entry. See WhatsNewService for when it fires.
+/// Bottom sheet shown once after an app update with changelog entries since
+/// the user's last seen build (full roll-up). See WhatsNewService.
 Future<void> showWhatsNewSheet(
   BuildContext context, {
   required String markdown,
   required String versionLabel,
+  int? sinceBuild,
+  int entryCount = 1,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -24,6 +26,8 @@ Future<void> showWhatsNewSheet(
     builder: (ctx) => _WhatsNewSheet(
       markdown: markdown,
       versionLabel: versionLabel,
+      sinceBuild: sinceBuild,
+      entryCount: entryCount,
     ),
   );
 }
@@ -31,8 +35,15 @@ Future<void> showWhatsNewSheet(
 class _WhatsNewSheet extends StatelessWidget {
   final String markdown;
   final String versionLabel;
+  final int? sinceBuild;
+  final int entryCount;
 
-  const _WhatsNewSheet({required this.markdown, required this.versionLabel});
+  const _WhatsNewSheet({
+    required this.markdown,
+    required this.versionLabel,
+    this.sinceBuild,
+    this.entryCount = 1,
+  });
 
   void _openFullChangelog(BuildContext context) {
     Navigator.of(context).pop();
@@ -40,6 +51,16 @@ class _WhatsNewSheet extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DocViewerScreen(entry: entry)),
     );
+  }
+
+  String get _subtitle {
+    if (sinceBuild != null && entryCount > 1) {
+      return 'Everything since build $sinceBuild · now $versionLabel';
+    }
+    if (entryCount > 1) {
+      return '$entryCount updates · now $versionLabel';
+    }
+    return 'You updated to $versionLabel';
   }
 
   @override
@@ -80,7 +101,7 @@ class _WhatsNewSheet extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'You updated to $versionLabel',
+                        _subtitle,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),

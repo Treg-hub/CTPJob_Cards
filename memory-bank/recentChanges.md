@@ -2,6 +2,23 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Staff-facing docs transparency (2026-07-13)**:
+  - **Keep** escalation + screens in catalog for buy-in; rewrote plain-language `docs/escalation_system.md` + `docs/screens_reference.md`.
+  - Engineering copies → `dev-docs/escalation_system_engineering.md` + `screens_reference_engineering.md`.
+  - Scrubbed `app_features.md` / `troubleshooting.md` (no Firestore grant-admin, Hosting/playbook internals).
+  - Catalog titles: **How Escalation Works**, **Screens Guide**. Map: `JobCardsCoreModule.md` §Documentation.
+
+- **Ink receive lists — Received this period (2026-07-13)**:
+  - Receive Local / Receive Ink (IBC) pickers show greyed **Received this period** rows (fulfilled local POs; `received`/`awaiting_grn`/`costed` IBC shipments) scoped to the open count-to-count window via `inkOpenPeriodRangeProvider`.
+  - One-shot fetches `limit(40)`; Received rows snackbar only (no re-receive). Outstanding queues unchanged.
+  - Index: `ink_shipments` packaging_mode + status + updated_at. Map: `InkModule.md`, receiving guide, collections, `Canvases/INDEX.md`, `06-data-flows`, `screens_reference.md`.
+
+- **Floor-safe release docs + What's changed full roll-up (2026-07-13)**:
+  - `WhatsNewService`: parse `2.3.0+N` headings; roll up **all** builds since last seen (no cap 5); strip `### For admins` in sheet + Changelog viewer; subtitle shows "Everything since build N".
+  - Scrubbed `docs/CHANGELOG.md` (staff bullets only); Pilot checklist → `dev-docs/`; `build-landing.js` docs allowlist.
+  - Skills: `.cursor/skills/mobile-app-release` + `mobile-pilot-release` (and `.grok/` twins) — floor-safe changelog rules.
+  - Map: `JobCardsCoreModule.md`, `Canvases/INDEX.md`, factory `CHANGELOG.md`.
+
 - **Ink daily readings void baseline (2026-07-13)**:
   - Bug: after Pulse void of a meter session, Daily Readings unlocked fields (today-captured already skipped voided) but **Last** still used the voided cumulative reading → re-enter same dial → Δ≈0.
   - Fix: `watchLatestMeterReadings` / `watchRecentMeterReadings` (+ toloul point latest/recent) exclude voided via `lib/utils/ink_meter_baselines.dart`; unit tests in `test/ink_meter_baselines_test.dart`.

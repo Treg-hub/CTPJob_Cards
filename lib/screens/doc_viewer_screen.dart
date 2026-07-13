@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/doc_entry.dart';
+import '../services/whats_new_service.dart';
 import '../utils/screen_insets.dart';
 
 class DocViewerScreen extends StatefulWidget {
@@ -25,7 +26,11 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
 
   Future<void> _load() async {
     try {
-      final content = await rootBundle.loadString(widget.entry.assetPath);
+      var content = await rootBundle.loadString(widget.entry.assetPath);
+      // Floor-safe: never show admin/ops subsections from the bundled changelog.
+      if (widget.entry.id == 'CHANGELOG') {
+        content = WhatsNewService.stripAdminSections(content);
+      }
       if (mounted) setState(() { _markdown = content; _error = null; });
     } catch (e) {
       if (mounted) setState(() { _error = e; _markdown = null; });

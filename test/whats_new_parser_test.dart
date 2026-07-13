@@ -74,15 +74,27 @@ Append-only log of user-visible changes.
     const changelog = '''
 # Title
 
-## 2026-07-08 — Version 2.3.0 (build 131) — Newest
+## 2026-07-12 — Pilot 2.3.0+165 — Newest
 
-- New feature
+### What you will notice
+
+- Feedback photos
+
+### For admins
+
+- Pilot URL secret stuff
 
 ---
 
-## 2026-07-06 — Version 2.3.0 (build 121) — Mid
+## 2026-07-08 — Version 2.3.0 (build 131) — Mid
 
 - Mid feature
+
+---
+
+## 2026-07-06 — Version 2.3.0 (build 121) — Mid-low
+
+- Mid-low feature
 
 ---
 
@@ -91,25 +103,41 @@ Append-only log of user-visible changes.
 - Old feature
 ''';
 
-    test('null lastSeen returns only the latest entry', () {
+    test('null lastSeen returns only the latest entry (admin stripped)', () {
       final md = WhatsNewService.extractEntriesSince(changelog, null);
+      expect(md, contains('2.3.0+165'));
+      expect(md, contains('Feedback photos'));
+      expect(md, isNot(contains('Pilot URL')));
+      expect(md, isNot(contains('build 131')));
+    });
+
+    test('rolls up ALL numbered builds newer than lastSeen (no cap)', () {
+      final md = WhatsNewService.extractEntriesSince(changelog, 38);
+      expect(md, contains('2.3.0+165'));
+      expect(md, contains('build 131'));
+      expect(md, contains('build 121'));
+      expect(md, isNot(contains('build 38')));
+      expect(md, isNot(contains('Pilot URL')));
+      expect(WhatsNewService.countRolledUpEntries(md!), 3);
+    });
+
+    test('respects maxEntries when positive', () {
+      final md = WhatsNewService.extractEntriesSince(
+        changelog,
+        38,
+        maxEntries: 2,
+      );
+      expect(md, contains('2.3.0+165'));
       expect(md, contains('build 131'));
       expect(md, isNot(contains('build 121')));
     });
 
-    test('rolls up numbered builds newer than lastSeen', () {
-      final md = WhatsNewService.extractEntriesSince(changelog, 38);
-      expect(md, contains('build 131'));
-      expect(md, contains('build 121'));
-      expect(md, isNot(contains('build 38')));
-    });
-
     test('when already past all numbered builds falls back to latest', () {
       final md = WhatsNewService.extractEntriesSince(changelog, 200);
-      expect(md, contains('build 131'));
+      expect(md, contains('2.3.0+165'));
     });
 
-    test('parseBuildFromHeading supports paren and bare forms', () {
+    test('parseBuildFromHeading supports paren, bare, and +build forms', () {
       expect(
         WhatsNewService.parseBuildFromHeading('## x (build 121) — y'),
         121,
@@ -118,7 +146,41 @@ Append-only log of user-visible changes.
         WhatsNewService.parseBuildFromHeading('## Version 2.3.0 build 99'),
         99,
       );
+      expect(
+        WhatsNewService.parseBuildFromHeading(
+          '## 2026-07-12 — Pilot 2.3.0+165 (Ink)',
+        ),
+        165,
+      );
+      expect(
+        WhatsNewService.parseBuildFromHeading('## Factory 2.3.0+163'),
+        163,
+      );
       expect(WhatsNewService.parseBuildFromHeading('## No number here'), isNull);
+    });
+
+    test('stripAdminSections removes For admins blocks', () {
+      const entry = '''
+## 2026-07-12 — 2.3.0+165
+
+### What you will notice
+
+- Photos
+
+### For admins
+
+- Deploy Storage rules
+- pilot.apk URL
+
+### What else
+
+- More staff text
+''';
+      final cleaned = WhatsNewService.stripAdminSections(entry);
+      expect(cleaned, contains('Photos'));
+      expect(cleaned, contains('More staff text'));
+      expect(cleaned, isNot(contains('pilot.apk')));
+      expect(cleaned, isNot(contains('For admins')));
     });
   });
 }

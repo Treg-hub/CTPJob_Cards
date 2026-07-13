@@ -49,7 +49,7 @@ cd C:\Users\Admin\CTP-Factory-System\mobile\CTPJob_Cards
 | # | Step | Detail |
 |---|------|--------|
 | A1 | Bump version | Run `node scripts/bump-build-number.js` **once** at release start (or set `X.Y.Z+BUILD` by hand). **Not** on every commit — only factory/pilot skills. Build must increase vs devices you want to update. |
-| A2 | Changelog | Prepend `docs/CHANGELOG.md` with `## … (build N)` using the **exact** build number after the bump |
+| A2 | Changelog | Prepend `docs/CHANGELOG.md` with `## … — X.Y.Z+N — title` (or `(build N)`). **Staff-only** under `### What you will notice`. **Never** put pilot URLs, channel/Admin steps, deploy/CF notes, clocks, or secrets in this file — it ships to every phone. Admin checklist stays in chat / this playbook / `admin_app_update_guide.md`. |
 | A3 | Decide release mode | Soft factory / force group / pilot (People) / kill-switch only if broken |
 | A4 | Signing | Same keystore as all previous factory installs |
 

@@ -53,7 +53,7 @@ Live:
 - Role-based access
 - Light & dark theme
 - Notification action buttons
-- Copper Inventory module (clock-number restricted)
+- Copper Inventory module (role-restricted — admins and Pre Press managers)
 - WasteTrack module (Security department field capture; managers on Pulse for weighbridge)
 - Site Security module (gate scan in/out, company cars, on-foot visitors — guards: module hub home, no job-card tiles)
 - Fleet Maintenance module (Hyster forklifts & grabs)
@@ -69,9 +69,9 @@ Planned:
 
 *Job-card roles plus module-specific access*
 
-Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is controlled by the `isAdmin` boolean field on the employee's Firestore document. To grant or revoke Admin, edit that field directly — no code change or app release is needed.
+Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from your **position** and department in the employee directory — there is no separate “role picker” for most people. **Admin** is granted only by Factory Admin (not by changing something yourself in the app).
 
-**Site Security guards** (`isSiteSecurityGuardOnly`) use a **module hub** on Home — Waste + Security module cards only; no Create Job Card, My Work, or View Jobs. **Security managers** keep the standard job-card Home plus Security and Waste tabs. See the in-app **Site Security** guides under Documentation.
+**Site Security guards** use a **module hub** on Home — Waste + Security module cards only; no Create Job Card, My Work, or View Jobs. **Security managers** keep the standard job-card Home plus Security and Waste tabs. See the in-app **Site Security** guides under Documentation.
 
 ### Operator
 
@@ -97,7 +97,7 @@ Full system access. Manages employee accounts, configures geofence boundaries, a
 
 **Key Screens:** Admin Screen · Geofence Editor · User Feedback · Employee Management · Settings (Modules)
 
-> **Admin access is controlled per user in Firestore.** Set `isAdmin: true` on an employee's Firestore document to grant Admin. No code change required — takes effect on next app launch by that user.
+> **Admin access** is controlled by Factory Admin for named people. It is not something staff turn on for themselves.
 
 ### Authentication
 
@@ -234,7 +234,7 @@ The geofencing system also generates automatic notifications when technicians cr
 
 *Four configurable stages — no fault can be silently ignored*
 
-If a job card is not accepted by a technician, the escalation system automatically notifies progressively more senior recipients at timed intervals. Escalation is driven by **Cloud Functions** deployed to Google Cloud (`africa-south1`), running independently of any device or person.
+If a job card is not accepted by a technician, the escalation system automatically notifies progressively more senior recipients at timed intervals. Escalation runs on the company servers independently of any one phone — see **How escalation works** in Documentation.
 
 > Escalation stops **immediately** the moment any technician taps "Assign Self" or "I'm Busy" on any notification. If a job is escalated but then accepted, all further escalation stages are cancelled.
 
@@ -272,10 +272,10 @@ Legend:
 
 ### How It Works
 
-- **Background Tracking** — The `BackgroundGeofenceService` runs continuously using Android WorkManager, even when the app is closed. It uses `geolocator` to monitor position relative to the configured site boundary polygon.
-- **Battery Permission Required** — Android's battery optimiser can kill background services. Users must set the app to **Unrestricted** battery usage to ensure geofencing works overnight and during extended off-screen periods.
-- **Entry & Exit Events** — The `GeofenceReceiver` fires on entry and exit. Each event updates the employee's Firestore document, sends an automatic on-site/off-site notification, and adjusts notification routing instantly.
-- **Configurable Boundary** — Admins use the **Geofence Editor Screen** to define and adjust the site boundary polygon on a map. Changes take effect immediately for all users without a software update.
+- **Background tracking** — the app can keep checking whether you are inside the factory boundary even when the screen is off (when permissions allow it).
+- **Battery permission required** — set CTP Job Cards to **Unrestricted** battery so overnight / background checks are not killed by the phone.
+- **Entry & exit** — arriving or leaving the site updates your **on-site / off-site** status and changes who gets job alerts.
+- **Configurable boundary** — Admins adjust the site map boundary; changes apply for everyone without a new app install.
 
 > **Location is not used for surveillance.** The system records only whether an employee is inside or outside the configured site boundary — not their precise location or movement within the site.
 
@@ -290,32 +290,19 @@ Users must grant **"Allow All the Time"** location access (not "Only While Using
 
 *Works without connectivity — syncs automatically when back online*
 
-CTP Job Cards is **offline-first**. If connectivity is lost, the app continues to function. All writes that cannot reach Firestore are queued locally in a Hive database and replayed automatically when the connection is restored.
+CTP Job Cards is **offline-first**. If connectivity is lost, the app continues to work for many actions. Changes that could not reach the server are **queued on the phone** and sent automatically when the connection returns.
 
 ### Sync Flow
 
-`App Action (user creates/updates job)` → `Check Connectivity (connectivity_plus)` → `Queue Locally (Hive sync_queue)` → `Sync to Firestore (on reconnect)`
+`You save something` → `If online: goes to the company system` → `If offline: waits in a local queue` → `When back online: queue sends in order`
 
 ### How It Works
 
-- **SyncService** initialises at app startup and listens to the `connectivity_plus` stream
-- Failed writes (Firestore offline) are stored as `SyncQueueItem` objects in a Hive box named `sync_queue`
-- When connectivity is restored, `SyncService` replays all queued items in order, correctly restoring Firestore `Timestamp` fields so list screens are not corrupted on reconnect
-- The **sync badge** at the top of the Home screen shows a live indicator when items are queued — orange while waiting for connectivity, pulsing while syncing
-- Firestore's built-in offline persistence also caches recent reads, so the UI remains usable even when offline
+- A sync service watches your connection and drains the queue when you are back online
+- The **sync badge** on Home shows when items are waiting (orange) or sending
+- Recent data you already loaded can still appear while offline
 
 > **Job card creation requires connectivity.** Creating a job card while offline would mean no technicians are notified — the fault would sit silently in the queue. The Create Job Card screen shows a full-width red banner when offline and disables the Save button until connectivity is restored. Use this time to move to a signal area before submitting.
-
-> The sync queue uses **Hive** (a fast key-value store) for local persistence. `SyncQueueItem` is a `@HiveType`-annotated model — if you modify it, run `flutter pub run build_runner build` to regenerate the Hive adapters.
-
-### Local Storage Summary
-
-| Storage | Contents | Purpose |
-|---------|----------|---------|
-| **Hive — sync_queue** | `SyncQueueItem` objects | Offline write queue — replayed on reconnect |
-| **SharedPreferences** | `loggedInClockNo` | Persists the logged-in employee session |
-| **SharedPreferences** | `permissionsCompleted` | Tracks whether onboarding permission flow has been completed |
-| **Firestore offline cache** | Recent document snapshots | Read cache — UI works without network for cached data |
 
 ---
 
@@ -436,11 +423,11 @@ Every action taken on a job card — creation, status change, assignment, notifi
 
 Admins have access to all data across all departments plus system configuration tools not available to any other role. Admin Settings has **five tabs** and opens on **Settings** by default: **Settings → Employees → Structures → On Site → Comms**.
 
-- **Settings** — Escalation config (per-stage timer, recipients, enable/disable), location tools, access and module controls, and the User Feedback board link. Includes **App Update Control** (full operator guide: `docs/admin_app_update_guide.md`): shared APK URL; **channels** (Default / Departments / People) with multi-select from employee + department lists; **soft** = Home banner only; **force** = full-screen install for that channel only; **min supported build** = factory-wide launch kill-switch. Network check every 24h.
-- **Employees** — Searchable card list with add / edit / bulk-delete. On-site status is a tappable pill on each card. CSV template and import in the toolbar. FCM token is edited in the employee dialog, not on the list.
-- **Structures** — Manage the department → area → machine hierarchy with search, count stats, and expandable cards. Cascading deletes with confirmation.
-- **On Site** — Real-time panel showing every employee currently marked on-site, grouped by department. Updates live as employees arrive and leave.
-- **Comms** — Broadcast an update notification to all employees. A pre-filled message template is provided and can be edited. After sending, a result summary shows sent / parked (off-site users) / no-token counts. Recent broadcasts are listed at the bottom of the tab.
+- **Settings** — Escalation timing and recipients, location tools, module access, feedback board. **App Update Control** lets Factory Admin publish soft or required updates to everyone, a department, or named people; a factory-wide “minimum build” can block very old installs when needed.
+- **Employees** — Searchable list with add / edit; on-site status on each card; CSV import for HR bulk updates.
+- **Structures** — Department → area → machine hierarchy.
+- **On Site** — Who is currently on site, by department (live).
+- **Comms** — Broadcast a message to staff; off-site people may get it later via inbox.
 
 > **Job card export and bulk delete** are not in the mobile Admin screen. Use **CTP Pulse** for job history, KPIs, and read-only oversight.
 
@@ -448,18 +435,11 @@ Admins have access to all data across all departments plus system configuration 
 
 **User Feedback** — Admin-only screen accessible from Admin → Settings → Feedback. Lists everything staff have submitted via the **Give Feedback** button on the Home screen, and lets an admin track each item through **New → Planned → Implemented → Declined** and attach private implementation notes. Filter chips with live counts show at a glance what's still outstanding versus done. It's an internal tracking tool — only admins can see it; staff just get a confirmation when they submit.
 
-### Technology Stack
+### Technology (for curiosity)
 
-| Component | Provider | Properties |
-|-----------|----------|------------|
-| Database | Google Firebase Firestore | Real-time, offline-capable, serverless, auto-scaling |
-| Push Notifications | Firebase Cloud Messaging (FCM) | Enterprise-grade delivery, high-volume capable |
-| Cloud Functions | Google Cloud Functions (africa-south1) | Serverless escalation logic — no server to maintain |
-| Authentication | Firebase Auth | Email + password with custom tokens linked to clock numbers |
-| Mobile App | Flutter (Dart) | Android primary; iOS and web capable; offline-first |
-| Local Storage | Hive + SharedPreferences | Offline queue, session persistence |
+The app runs on phones (Flutter). Company data and alerts use a cloud backend so lists stay shared and escalation keeps running even if one phone is off. You do not need to configure any of that — Factory Admin and IT handle it.
 
-> **No on-premises infrastructure required.** No server to maintain, no single point of hardware failure. All data is encrypted at rest and in transit. Backed by Google's 99.99% availability SLA with automatic scaling.
+> **No factory server to babysit for this app.** Data is stored securely in the company cloud. Availability and backups are handled there.
 
 ---
 
@@ -521,10 +501,10 @@ The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter poi
 
 | Role | How you're recognised | What you can do |
 |------|----------------------|-----------------|
-| **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
-| **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator capture on mobile + full management on **CTP Pulse** (`/ink`): pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
-| **Lurgi operator** | `department == "Lurgi"` | Daily Readings screen only (ink + Toloul meters) |
-| **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
+| **Ink operator** | Ink Factory department | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
+| **Ink manager** | Manager in Ink Factory, or Admin | All operator capture on mobile + full management on **CTP Pulse** (`/ink`): pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
+| **Lurgi operator** | Lurgi department | Daily Readings screen only (ink + Toloul meters) |
+| **Admin** | Factory Admin grant | Full access to all Ink Factory screens |
 
 > **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
 

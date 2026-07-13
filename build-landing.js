@@ -67,25 +67,30 @@ copyFile(
 );
 
 // ─── Docs ────────────────────────────────────────────────────────────────────
-// Defence in depth: even though the dev-only docs were moved to dev-docs/,
-// this filter explicitly excludes anything that should never reach the web.
-const DOC_BLOCKLIST = new Set([
-  'firebase_security_rules.html',
-  'firebase_security_rules.md',
-  'firebase_security_rules.pdf',
-  'cloud_functions_deployment.html',
-  'cloud_functions_deployment.md',
-  'cloud_functions_deployment.pdf',
+// Allowlist only — never publish playbooks, admin update guides, pilot checklists,
+// or engineering refs to public Hosting (defence in depth vs APK bundling).
+const DOC_ALLOWLIST = new Set([
+  'CHANGELOG.md',
+  'employee_guide.md',
+  'manager_guide.md',
+  'executive_overview.md',
+  'app_features.md',
+  'troubleshooting.md',
+  'waste_user_guide.md',
+  'fleet_user_guide.md',
+  'fleet_mechanic_guide.md',
+  'fleet_reporter_guide.md',
+  'security_guard_guide.md',
+  'security_manager_mobile_guide.md',
 ]);
 
 copyDir(
   path.join(ROOT, 'docs'),
   path.join(OUT, 'docs'),
   (src, entry) => {
-    if (entry.isDirectory() && entry.name === 'architecture') return false;
-    if (entry.isDirectory() && entry.name.startsWith('.')) return false;
-    if (entry.isFile() && DOC_BLOCKLIST.has(entry.name)) return false;
-    return true;
+    if (entry.isDirectory()) return false; // no nested folders on public landing
+    if (entry.isFile() && entry.name.startsWith('.')) return false;
+    return DOC_ALLOWLIST.has(entry.name);
   },
 );
 
