@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-14 - 2.3.0+166 - Consume IBC confirm works with both barcode formats
+
+### What you will notice
+
+- **Confirm consumption** no longer fails with a permission error when the IBC was scanned or looked up by barcode.
+- Both the older last-8 barcode style and the newer full SSCC-style codes resolve to the same IBC, so either format works on Consume.
+- Marking an IBC damaged or sending it for wash still works the same way after you confirm.
+
+---
+
 ## 2026-07-12 — Pilot 2.3.0+165 (Ink Factory — feedback photos)
 
 ### What you will notice
