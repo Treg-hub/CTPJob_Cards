@@ -77,12 +77,15 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
   bool get _isWide => MediaQuery.of(context).size.width >= 1000;
 
-  /// Hides the Pre Press Spec type unless the selected department is Pre Press.
+  /// Pre Press Spec only when dept is Pre Press; Post Press Spec only for Post Press.
   List<JobType> get _availableJobTypes {
-    if (selectedDepartment != 'Pre Press') {
-      return JobType.values.where((t) => t != JobType.specialist).toList();
-    }
-    return JobType.values;
+    return JobType.values.where((t) {
+      if (t == JobType.specialist) return selectedDepartment == 'Pre Press';
+      if (t == JobType.postPressSpecialist) {
+        return selectedDepartment == 'Post Press';
+      }
+      return true;
+    }).toList();
   }
 
   @override
@@ -851,7 +854,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                            selectedArea = null;
                            selectedMachine = null;
                            part = '';
-                           if (jobType == JobType.specialist && dept != 'Pre Press') {
+                           if ((jobType == JobType.specialist && dept != 'Pre Press') ||
+                               (jobType == JobType.postPressSpecialist &&
+                                   dept != 'Post Press')) {
                              jobType = null;
                            }
                          }),
@@ -990,6 +995,22 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                       ),
                       child: const Text(
                         'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  ),
+                if (jobType == JobType.postPressSpecialist)
+                  JobCardTip(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withValues(alpha: 30),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.teal.withValues(alpha: 120)),
+                      ),
+                      child: const Text(
+                        'Post Press Specialist jobs are auto-assigned to the specialist. Use only for Post Press equipment.',
                         style: TextStyle(fontSize: 12.5),
                       ),
                     ),
@@ -1175,7 +1196,9 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                                selectedArea = null;
                                selectedMachine = null;
                                part = '';
-                               if (jobType == JobType.specialist && dept != 'Pre Press') {
+                               if ((jobType == JobType.specialist && dept != 'Pre Press') ||
+                                   (jobType == JobType.postPressSpecialist &&
+                                       dept != 'Post Press')) {
                                  jobType = null;
                                }
                              }),
@@ -1310,6 +1333,22 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                             ),
                             child: const Text(
                               'Pre Press Specialist jobs are auto-assigned to the specialist. Use only for Pre Press equipment.',
+                              style: TextStyle(fontSize: 12.5),
+                            ),
+                          ),
+                        ),
+                      if (jobType == JobType.postPressSpecialist)
+                        JobCardTip(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 30),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.teal.withValues(alpha: 120)),
+                            ),
+                            child: const Text(
+                              'Post Press Specialist jobs are auto-assigned to the specialist. Use only for Post Press equipment.',
                               style: TextStyle(fontSize: 12.5),
                             ),
                           ),

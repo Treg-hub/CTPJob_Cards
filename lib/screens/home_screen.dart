@@ -576,7 +576,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       return job.type == JobType.mechanical ||
              job.type == JobType.mechanicalElectrical ||
              job.type == JobType.building ||
-             job.type == JobType.specialist;
+             job.type == JobType.specialist ||
+             job.type == JobType.postPressSpecialist;
     }
     return job.department == emp.department;
   }

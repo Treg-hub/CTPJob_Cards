@@ -242,6 +242,8 @@ class JobTypeIcons extends StatelessWidget {
         icons.add(Icon(Icons.home_repair_service, size: size, color: color));
       case JobType.specialist:
         icons.add(Icon(Icons.precision_manufacturing, size: size, color: color));
+      case JobType.postPressSpecialist:
+        icons.add(Icon(Icons.content_cut, size: size, color: color));
     }
     return Row(mainAxisSize: MainAxisSize.min, children: icons);
   }

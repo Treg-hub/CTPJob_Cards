@@ -7,7 +7,8 @@ enum JobType {
   mechanicalElectrical('Mech/Elec'),
   maintenance('Maintenance'),
   building('Building'),
-  specialist('Pre Press Spec');
+  specialist('Pre Press Spec'),
+  postPressSpecialist('Post Press Spec');
 
   const JobType(this.displayName);
   final String displayName;
@@ -37,7 +38,12 @@ enum JobType {
       case 'building':
         return JobType.building;
       case 'specialist':
+      case 'prepressspec':
+      case 'prepressspecialist':
         return JobType.specialist;
+      case 'postpressspecialist':
+      case 'postpressspec':
+        return JobType.postPressSpecialist;
     }
     return JobType.mechanical;
   }

@@ -544,8 +544,9 @@ function defaultNotificationConfig() {
       "mech/elec":   ["onsite_mechanics", "onsite_electricians"],
       "building":    ["onsite_building_maintenance", "onsite_workshop_manager"],
       "specialist":  ["onsite_prepress_specialist", "onsite_workshop_manager"],
+      "postPressSpecialist": ["onsite_postpress_specialist", "onsite_workshop_manager"],
     },
-    excluded_job_types: ["maintenance", "building", "specialist"],
+    excluded_job_types: ["maintenance", "building", "specialist", "postPressSpecialist"],
   };
 }
 
@@ -571,11 +572,21 @@ async function getNotificationConfig() {
   }
 
   // Merge with defaults so partially-migrated docs (missing top-level keys) still work.
+  // Deep-merge creation_recipients_by_type so new job types (e.g. postPressSpecialist)
+  // pick up defaults without requiring a manual Firestore config rewrite.
+  const mergedCreation = {
+    ...(defaults.creation_recipients_by_type || {}),
+    ...(data.creation_recipients_by_type || {}),
+  };
+  const mergedExcluded = Array.from(new Set([
+    ...(defaults.excluded_job_types || []),
+    ...(data.excluded_job_types || []),
+  ]));
   const merged = {
     ...data,
     stages: data.stages || defaults.stages,
-    creation_recipients_by_type: data.creation_recipients_by_type || defaults.creation_recipients_by_type,
-    excluded_job_types: data.excluded_job_types || defaults.excluded_job_types,
+    creation_recipients_by_type: mergedCreation,
+    excluded_job_types: mergedExcluded,
   };
 
   if (!data.stages) {
@@ -647,6 +658,8 @@ async function resolveRecipientsFromRules(ruleNames, jobType, department, operat
       allRecipients.push(...(await getOnsiteBuildingMaintenance(allEmps)));
     } else if (rule === "onsite_prepress_specialist") {
       allRecipients.push(...(await getOnsitePrepressSpecialist(allEmps)));
+    } else if (rule === "onsite_postpress_specialist") {
+      allRecipients.push(...(await getOnsitePostpressSpecialist(allEmps)));
     } else if (rule === "offsite_managers") {
       allRecipients.push(...(await getOffsiteRelevantManagers(jobType, allEmps)));
     } else if (rule === "offsite_dept_managers") {
@@ -881,6 +894,24 @@ async function getOnsitePrepressSpecialist(allEmps = null) {
     .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
 }
 
+function isPostpressSpecialistEmployee(emp) {
+  const pos = (emp.position || "").toLowerCase();
+  // Prefer the specific phrase so Pre/Post Press titles never cross-match.
+  if (pos.includes("pre press specialist")) return false;
+  return pos.includes("post press specialist") ||
+    (emp.department === "Post Press" && pos.includes("specialist"));
+}
+
+async function getOnsitePostpressSpecialist(allEmps = null) {
+  if (allEmps) {
+    return allEmps.filter((e) => e.isOnSite === true && isPostpressSpecialistEmployee(e));
+  }
+  const snaps = await db.collection("employees").where("isOnSite", "==", true).get();
+  return snaps.docs
+    .filter((doc) => isPostpressSpecialistEmployee(doc.data()))
+    .map((doc) => ({ token: doc.data().fcmToken, clockNo: doc.id, ...doc.data() }));
+}
+
 async function getOnsiteDeptForemenShiftLeaders(dept, allEmps = null) {
   if (allEmps) {
     return allEmps.filter((e) => {
@@ -1096,15 +1127,22 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
   const job = event.data.data();
   await notifyCreationRecipients(jobId, job, { triggeredBy: "job_created" });
 
-  // Auto-assign Pre Press Specialist jobs to the on-site specialist.
+  // Auto-assign specialist jobs to the matching on-site specialist.
   // If the specialist is off-site the job remains open — the Workshop Manager
   // was still notified via creation notification and can assign manually.
-  if (job.type === "specialist") {
+  const specialistType =
+    job.type === "specialist" ? "pre" :
+    job.type === "postPressSpecialist" ? "post" :
+    null;
+  if (specialistType) {
+    const label = specialistType === "pre" ? "Pre Press Specialist" : "Post Press Specialist";
     try {
       const allEmps = await getAllEmployeesCached();
-      const specialists = await getOnsitePrepressSpecialist(allEmps);
+      const specialists = specialistType === "pre"
+        ? await getOnsitePrepressSpecialist(allEmps)
+        : await getOnsitePostpressSpecialist(allEmps);
       if (specialists.length === 0) {
-        console.log(`onJobCardCreated: specialist job ${jobId} — no on-site specialist found, skipping auto-assign`);
+        console.log(`onJobCardCreated: ${job.type} job ${jobId} — no on-site specialist found, skipping auto-assign`);
       } else {
         const specialist = specialists[0];
         const now = admin.firestore.Timestamp.now();
@@ -1117,7 +1155,7 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
           assignedAt:        now,
           escalationStopped: true,
           assignmentHistory: admin.firestore.FieldValue.arrayUnion({
-            assignedByName:    "Auto-assigned (Pre Press Specialist)",
+            assignedByName:    `Auto-assigned (${label})`,
             assignedByClockNo: "system",
             assigneeClockNos:  [specialist.clockNo],
             assigneeNames:     [specialist.name || specialist.clockNo],
@@ -1125,11 +1163,11 @@ exports.onJobCardCreated = functions.firestore.onDocumentCreated({ document: "jo
             isUnassign:        false,
           }),
         });
-        console.log(`onJobCardCreated: specialist job ${jobId} auto-assigned to ${specialist.clockNo}`);
+        console.log(`onJobCardCreated: ${job.type} job ${jobId} auto-assigned to ${specialist.clockNo}`);
       }
     } catch (e) {
       // Non-fatal — specialist was still notified via creation notification
-      console.error(`onJobCardCreated: auto-assign failed for specialist job ${jobId}:`, e);
+      console.error(`onJobCardCreated: auto-assign failed for ${job.type} job ${jobId}:`, e);
     }
   }
 });

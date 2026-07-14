@@ -30,7 +30,9 @@ UserRole roleFromEmployee(Employee? employee) {
       pos.contains('technician') ||
       pos.contains('building maintenance') ||
       pos.contains('pre press specialist') ||
-      (employee.department == 'Pre Press' && pos.contains('specialist'))) {
+      pos.contains('post press specialist') ||
+      (employee.department == 'Pre Press' && pos.contains('specialist')) ||
+      (employee.department == 'Post Press' && pos.contains('specialist'))) {
     return UserRole.technician;
   }
   return UserRole.operator;
@@ -305,6 +307,21 @@ bool isPrepressSpecialist(Employee? employee) {
   // Live roster: one specialist is Workshop | Pre Press Specialist (dept mismatch).
   return pos.contains('pre press specialist') ||
       (employee.department == 'Pre Press' && pos.contains('specialist'));
+}
+
+// =============================================================================
+// POST PRESS SPECIALIST role helpers
+// =============================================================================
+
+/// True when the employee is the Post Press Specialist.
+/// Position title is authoritative (mirrors Pre Press); dept+specialist is fallback.
+bool isPostpressSpecialist(Employee? employee) {
+  if (employee == null) return false;
+  final pos = employee.position.toLowerCase();
+  // Prefer the specific phrase so Pre/Post Press titles never cross-match.
+  if (pos.contains('pre press specialist')) return false;
+  return pos.contains('post press specialist') ||
+      (employee.department == 'Post Press' && pos.contains('specialist'));
 }
 
 // =============================================================================
