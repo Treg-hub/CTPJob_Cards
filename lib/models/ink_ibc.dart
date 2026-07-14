@@ -22,7 +22,11 @@ enum InkIbcStatus {
 /// An IBC in the audit register (`ink_ibcs`). Receiving an IBC counts as
 /// receiving ink (a batch `purchase` is recorded separately per colour). The
 /// IBC is later transferred to a tank, at which point its wash toloul is logged
-/// as a `consumption_toloul_wash`. The document id is the IBC number.
+/// as a `consumption_toloul_wash`.
+///
+/// **Doc id**: legacy stock uses last-8 `ibc_number`; Wave B receipts use full
+/// SSCC (18+ digits) when present, with `ibc_number` still last-8. Always prefer
+/// [id] (Firestore `doc.id`) for updates — never assume last-8 alone.
 class InkIbc {
   const InkIbc({
     this.id,
