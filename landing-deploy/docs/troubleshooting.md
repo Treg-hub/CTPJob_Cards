@@ -36,24 +36,20 @@ This guide covers the most common symptoms users hit in production and the faste
 - Wrong people got forced / nobody got the offer
 - “Later” stopped the banner but you want it back
 
-### What the app does (v2.3.0+ with channel builds)
+### What the app does (updates)
 
-1. **Soft** offers show a **banner** only (not a blocking dialog). **Update** installs in-app; **Later** snoozes ~**24 hours** (banner can return for the same build after the snooze).
-2. **Force** (per publish channel) is full-screen; the app **re-fetches on every resume** so a new force is not stuck behind an “up to date” cache for 24h.
-3. **Who is targeted** is decided by Admin channels: People (clock list) → Departments → Default. Channel match re-runs when the employee profile loads if it was missing at first open. See `docs/admin_app_update_guide.md`.
-4. **Kill-switch** (`min supported build`) blocks **everyone** below that build at launch — different from channel force. Needs a download URL (shared or channel fallback).
+1. **Soft** offers show a **banner** only (not a blocking dialog). **Update** installs in-app; **Later** snoozes about a day (the banner can return for the same build after that).
+2. **Force** updates (when Admin requires them for your group) take over the screen until you install; coming back to the app will ask again until done.
+3. **Who is offered an update** is decided by Factory Admin (everyone, a department, or named people). If something looks wrong, ask Admin — do not change update settings yourself.
+4. A factory-wide **minimum build** can block very old installs at launch when Admin turns that on (different from a one-group force).
 
 ### Check, in order
 
-1. **Settings → Check for update** — shows channel, force flag, URL, current vs latest build.
-2. **URL should be Hosting**, not App Distribution:  
-   `https://ctp-job-cards-landing.web.app/releases/latest.apk`  
-   On **build 147+**, Admin/Firestore is read first; RC only fills empty fields. Older builds could keep a stale RC App Distribution URL — upgrade or set Shared download URL and Save. Diagnostic shows **Config source** (`firestore:…` vs `remote_config`).
-3. Confirm Admin published the right channel and selected the right departments/people (list pickers, not free text).
-4. Confirm your `employees.department` matches a selected department (e.g. `Ink Factory`).
-5. Confirm Default build is **not** equal to a Departments force build if you only meant to force one dept (old APKs only read Default).
-6. Install the APK URL manually once if download fails (network / “install unknown apps” permission). See `docs/RELEASE_PLAYBOOK.md`.
-
+1. **Settings → Check for update** — shows whether an update is available and your current build.
+2. Use **Download & install** from the banner or update screen when offered.
+3. If download fails, allow **install unknown apps** for CTP Job Cards when Android asks, then try again.
+4. If the wrong people seem forced, or nobody gets the update, contact Factory Admin (they control publish channels).
+5. You can also reinstall from the company **Download app** page if Admin asks you to.
 ---
 
 ## Notifications not arriving
@@ -69,12 +65,11 @@ This guide covers the most common symptoms users hit in production and the faste
 1. **Notifications permission** — Settings → Apps → CTP Job Cards → Notifications → "Allowed". On Android 13+, the app must hold `POST_NOTIFICATIONS`.
 2. **Battery optimization** — Settings → Apps → CTP Job Cards → Battery → Unrestricted. Aggressive battery savers (Samsung, Xiaomi, Huawei) kill background FCM listeners after a few minutes idle. This is the #1 cause.
 3. **DND bypass** — for P4/P5 to break through Do Not Disturb, the app needs DND access. Settings → Sound & Vibration → Do Not Disturb → App exceptions.
-4. **FCM token registered** — open Settings inside the app and tap "Refresh FCM Token". If the token is null or stale, the Cloud Function has no way to reach you.
-5. **On-site status** — geofencing only alerts on-site technicians. If you're showing as off-site when you're physically on site, see "Geofence not triggering" below.
-6. **Home health banner** — if orange "On-site alerts may not work" (or "Some alerts may not reach you") appears at the top of Home, tap **Fix** and grant every listed permission. Settings → App Permissions shows the same six checks with a **Fix all permissions** button.
+4. **Push token** — open Settings inside the app and tap **Refresh FCM Token** (or the equivalent refresh control). If the token is missing, alerts cannot reach this phone.
+5. **On-site status** — geofencing only alerts on-site technicians for new work. If you're showing as off-site when you're physically on site, see "Geofence not triggering" below.
+6. **Home health banner** — if orange "On-site alerts may not work" (or "Some alerts may not reach you") appears at the top of Home, tap **Fix** and grant every listed permission. Settings → App Permissions shows the same checks with a **Fix all permissions** button.
 
-If all of those check out, ask Admin to look at the `notifications` Firestore collection — it logs every send attempt and lists exactly which clock numbers were targeted. Admin can send a **targeted broadcast** (Admin → Comms → Targeted Message) to specific clock numbers asking users to fix permissions.
-
+If all of those check out, ask Admin to check the notification send log and, if needed, send a **targeted message** (Admin → Comms) asking people to fix permissions.
 ---
 
 ## Full-screen P5 alarm not firing
@@ -226,14 +221,14 @@ These are sent to the operator who created the job, at each escalation stage, *r
 
 ### Disabling for a specific job type
 
-Add the job type to `excluded_job_types` in `notification_configs/global`. The Cloud Function skips initial notification *and* all escalation stages for excluded types. Common example: `"maintenance"`.
+Ask Factory Admin — some job types (for example maintenance) can be excluded from escalation so they are not chased the same way. That is an Admin configuration change, not something staff toggle themselves.
 
 ---
 
 ## Where to look when nothing else works
 
-- **`notifications` Firestore collection** — every notification ever sent, with `sentTo`, `level`, `priority`, and timestamp. Authoritative log.
-- **`job_card_audit` Firestore collection** — append-only log of every job card mutation, with who and when.
-- **Firebase Console → Functions → Logs** — `escalateNotifications` logs each stage's query results; useful for tracing why a job did or didn't escalate.
-- **`memory-bank/learnings.md`** (if present) — running list of gotchas the team has hit before.
-- **Diagnostics screen inside the app** — surfaces FCM token, on-site status, last geofence event, and sync queue size in one place.
+1. **Settings → App Permissions** / Home health banner — fix anything still red/orange.  
+2. **Settings → Check for update** — install if behind.  
+3. Sign out and back in once.  
+4. Ask Factory Admin — they can check the send log, your on-site status, and escalation settings.  
+5. **Diagnostics** (if Admin has enabled it for you) — FCM token, on-site status, last geofence event, sync queue size.

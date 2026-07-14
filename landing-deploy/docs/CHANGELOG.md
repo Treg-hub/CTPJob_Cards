@@ -1,10 +1,17 @@
 # CTP Job Cards — Documentation Changelog
 
-Append-only log of user-visible changes. Add a new entry at the top each release; do not edit historical entries except to fix factual errors.
+What's new in the app. Staff see this after an update (**What's changed**) and under **Settings → Documentation → Changelog**.
 
-The role guides, the onboarding flow, and the reference docs all draw from this log. Whatever you write here is what staff will read next time they open the docs portal.
+Entries are newest-first. When you update from an older build, the app shows every release you missed.
 
 ---
+
+## 2026-07-13 — 2.3.0+166 — Receive lists: Received this period
+
+### What you will notice
+
+- On **Receive Local** and **Receive Ink (IBC)**, orders/shipments you already took in during the **current count period** stay visible at the bottom, greyed and marked **Received** (reference only — you cannot receive them again).
+- After the next month-end count, those Received rows clear so you only see this period’s work.
 
 ## 2026-07-12 — Pilot 2.3.0+165 (Ink Factory — feedback photos)
 
@@ -13,34 +20,12 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - When you **Give Feedback**, you can attach up to **3 photos** (camera or gallery) — useful for screenshots or a picture of the problem.
 - In a feedback **thread**, you and the CTP team can attach photos on replies the same way.
 - Tap a photo thumbnail to view it full screen.
-- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
-
-### For admins
-
-- Triage board shows photo thumbnails on submissions; reply from the thread with photos if needed.
-- **Deploy required**: Storage rules from `/firebase` (`feedback/{id}/photos/**`) before the APK that uses this feature (if not already live).
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 165**.
-- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
-- **Default + Shared** stay on factory **2.3.0 / 163** (or lower / current factory build), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
-- Landing **Download app** still serves factory `latest.apk`, not this pilot.
-
----
 
 ## 2026-07-12 — Pilot 2.3.0+164 (Ink Factory — security hardening)
 
 ### What you will notice
 
 - Same security work as factory **163**: clearer **Create account** link messages, module role flags (Security / Fleet / Ink / Waste) with existing allow-list fallback, quiet app build reporting for managers, safer assign-to employee lists when the server supports them.
-- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
-
-### For admins
-
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 164**.
-- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
-- **Default + Shared** stay on factory **2.3.0 / 163** (or lower), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
-- Landing **Download app** still serves factory `latest.apk`, not this pilot.
-
----
 
 ## 2026-07-12 — Factory + Pilot 2.3.0+163 (security hardening)
 
@@ -51,18 +36,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - Opening the app reports **which build you are on** (quietly) so managers can see who still needs the update.
 - Assign-to pickers prefer a safer employee list from the server when available (no sensitive account fields in the list).
 
-### For admins
-
-- Factory + pilot binaries: **2.3.0 / 163**
-  - Factory / landing Download: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
-  - Pilot channel URL (if still used): `https://ctp-job-cards-landing.web.app/releases/pilot.apk` (same build when promoting pilot)
-- Publish **Default + Shared** to **2.3.0 / 163**, Shared download URL = factory `latest.apk`, Force **off** unless you need a hard push.
-- **On Site** shows each person’s app version/build (or “Unknown” until they open this APK once).
-- Registration: optional **company email match** and **registration_locked** on employee rows (server-side); existing linked accounts are not broken.
-- Deploy Cloud Functions with this release so presence version reporting and tighter `linkEmployeeAccount` rules are live.
-
----
-
 ## 2026-07-11 — Factory 2.3.0+162 (soft-delete + My Work + Copper)
 
 ### What you will notice
@@ -72,14 +45,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Copper** tab (admins + Pre Press managers only) opens directly — **no password**, no clock prompt.
 - Soft-deleted jobs (if any) no longer appear in active lists or open-job KPIs.
 
-### For admins
-
-- Factory download: **2.3.0 / 162** → `https://ctp-job-cards-landing.web.app/releases/latest.apk`.
-- Publish Default + Shared channels to **2.3.0 / 162** with that Shared download URL.
-- Soft-delete API is ready for admin tools; floor apps do not hard-delete job cards.
-
----
-
 ## 2026-07-11 — Pilot 2.3.0+161 (Copper tab + My Work)
 
 ### What you will notice
@@ -87,13 +52,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Copper** bottom tab (admins + Pre Press managers only) opens copper straight away — **no clock-number prompt**.
 - **My Work** no longer stuck on “Waiting for connection…” after security rules refresh; **Retry** button if needed.
 - Copper: no shared password; access by role only.
-
-### For admins
-
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 161**.
-- Factory **latest.apk** stays lower (e.g. 159) until promoted.
-
----
 
 ## 2026-07-11 — Copper tab: open directly (no clock entry)
 
@@ -111,40 +69,19 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **My Work** no longer stays stuck on “Waiting for connection…” when one of its job lists was still on a cold cache after login (seen after security rules refresh, especially Ink Factory operators).
 - **Retry** button on that screen, and app resume reloads My Work cleanly.
 
-### For admins
-
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 160**.
-- Factory **latest.apk** unchanged until promoted.
-
----
-
 ## 2026-07-11 — Copper access by role (no password)
 
 ### What you will notice
 
 - **Copper** opens for **admins** and **Pre Press managers** only — **no shared password**.
-- Hard-coded clock list (22 / 5421 / 20) removed; access follows your department and position.
-
-### For admins
-
-- Ensure Pre Press managers have department **Pre Press** and a position containing **Manager**.
-- Residual `copperPassword` on server can be cleared with `clear_copper_password.mjs` after rules deploy.
-
----
+- Hard-coded access list removed; access follows your department and position.
 
 ## 2026-07-11 — Factory 2.3.0+159 (copper password + security)
 
 ### What you will notice
 
-- **Copper module password** now reads from the secure server settings (`app_secrets`). Required after the factory security migration so Copper unlock keeps working for clocks 22 / 5421 / 20.
+- **Copper module password** now reads from the secure server settings (`secure server settings`). Required after the factory security migration so Copper unlock keeps working for authorised Copper users.
 - Job Cards create/edit and other floor modules unchanged for this purpose.
-
-### For admins
-
-- Factory download: **2.3.0 / 159** → `…/releases/latest.apk`. Publish Default + Shared to this build.
-- Copper users should update to this build (or newer). Older APKs may fail Copper password after secrets moved off `settings/app`.
-
----
 
 ## 2026-07-10 — Pilot 2.3.0+158 (minify + safe area + cleanup)
 
@@ -154,14 +91,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Bottom safe area** fixed on My Timesheet, Fleet lists, Ink meters/production/IBC register, waste stock, feedback.
 - **Receive Local** + ink process tips (from +157) included.
 - Unused Ink **manager** screens removed from the app (use **CTP Pulse** for costing/month-end/setup).
-
-### For admins
-
-- Pilot: **2.3.0 / 158**, Channel APK URL = `…/releases/pilot.apk`. Keep Shared/Default on factory `latest.apk`.
-- Smoke release-only paths before factory: FCM, geofence, Ink scan, Security disc if used.
-- Mapping: `build/app/outputs/mapping/release/mapping.txt` after release builds.
-
----
 
 ## 2026-07-10 — Pilot 2.3.0+157 (Receive Local + tips)
 
@@ -178,25 +107,12 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - Workflow: generate/download RFO → **Mark RFO approved** → Pastel RFO # + order # → mark sent → operators see the order under **Receive Local**.
 - Deploy Pulse hosting separately for board tips + RFO flow.
 
-### For admins
-
-- Pilot channel: **Version 2.3.0 / Build 157**, **Channel APK URL** = `https://ctp-job-cards-landing.web.app/releases/pilot.apk`. Keep Shared/Default on factory `latest.apk`.
-
----
-
 ## 2026-07-10 — Pilot 2.3.0+155
 
 ### What you will notice
 
 - Analyzer cleanups (waste screens unused imports, share API, update service mounted checks).
 - **Admin stale job follow-up** is on **CTP Pulse** (web, admins only) + Cloud Functions — not a new mobile screen. Affected people get an **inbox** message only (no push re-alert).
-
-### For admins
-
-- Deployed: `onJobCardAdminFollowUp` (jobcards codebase). Pulse must be deployed separately for the dialog UI.
-- Pilot channel: point Departments/People **Channel APK URL** at `…/releases/pilot.apk`. Keep **Shared / Default** on factory `latest.apk`.
-
----
 
 ## 2026-07-09 — Lighter Firestore reads (Phase B)
 
@@ -209,15 +125,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Copper transactions** default to the **last 90 days** (pick a custom range if needed).
 - Security gate / visitor screens use cached deny list, vehicles, and contractors (pull to refresh on Security home / on-foot).
 
-### For admins
-
-- Fleet CF already parks `issueStatus` / `issueDeleted` on inbox items. Optional one-off:  
-  `node firebase/functions/scripts/backfill_fleet_inbox_denorm.mjs --dry-run` then without `--dry-run`.
-- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A + B.
-- Pilot smoke before factory APK rollout.
-
----
-
 ## 2026-07-09 — Lighter Firestore reads (Manager desk on Pulse)
 
 ### What you will notice
@@ -227,27 +134,12 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **My Work → Closed** shows the most recently closed jobs first.
 - Open/in-progress count badges on Home are for **managers** (saves battery/data for operators).
 
-### For admins
-
-- Deploy composite indexes for My Work closed queries (`firebase/firestore.indexes.json`) before relying on Closed tab sort in production.
-- See monorepo `docs/Firestore_Cost_Discipline.md` Phase A.
-
----
-
 ## 2026-07-09 — Update check uses Admin publish first (build 147)
 
 ### What you will notice
 
 - **Check for update** / in-app update now follows **Admin App Update Control** (Hosting APK URL), not an old Firebase App Distribution link from Remote Config.
 - Soft and required updates still download and install inside the app from the official company file.
-
-### For admins
-
-- Shared download URL must stay: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
-- Settings → Check for update shows **Config source** (e.g. `firestore:default`).
-- Playbook: `docs/RELEASE_PLAYBOOK.md` · `/mobile-app-release`
-
----
 
 ## 2026-07-09 — Official download page + release 2.3.0 (build 146)
 
@@ -258,13 +150,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Updates** still install in-app from the same official APK when Admin publishes a new build.
 - Reliable required-update prompts and soft **Later** (about one day).
 
-### For admins
-
-- Shared download URL: `https://ctp-job-cards-landing.web.app/releases/latest.apk`
-- Ship steps: `docs/RELEASE_PLAYBOOK.md` · skill `/mobile-app-release`
-
----
-
 ## 2026-07-09 — More reliable app updates (build 145)
 
 ### What you will notice
@@ -274,14 +159,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - First-time in-app install: clearer guidance when Android asks you to **allow CTP Job Cards to install apps**.
 - **Official download** is this company page (Download app) — then create account or log in inside the app. Later updates install from the same official source in-app.
 
-### For admins
-
-- Full ship steps: **`docs/RELEASE_PLAYBOOK.md`**. Channels: `docs/admin_app_update_guide.md`.
-- Shared download URL must be the Hosting APK (`…/releases/latest.apk`), not App Distribution.
-- Always set Shared download URL before raising **min supported build**.
-
----
-
 ## 2026-07-09 — Targeted updates & department/people pickers (build 136+)
 
 ### Easier app updates (for everyone)
@@ -290,14 +167,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - **Soft updates** no longer take over the whole screen — an orange **banner** on Home is enough; **Later** snoozes about a day.
 - **Force updates** (when Admin turns them on for your group) still block until you install.
 - **Check anytime** — Settings → **Check for Update**.
-
-### For admins
-
-- Full operator guide: **`docs/admin_app_update_guide.md`** (also linked from docs hub after landing rebuild).
-- **App Update Control** — three channels: **Default** (factory), **Departments** (multi-select from employee/structure lists), **People / pilot** (multi-select people, optional departments). Match order: People → Departments → Default.
-- **Force per channel** — e.g. force Ink Factory only without forcing the plant.
-- **24-hour** automatic check; force re-blocks on resume. Kill-switch (`min supported build`) remains factory-wide.
-- **Save publish** writes `settings/app.updateChannels` + legacy Default fields for older APKs. **Copy RC keys** = Default only.
 
 ### First-time setup by role (unchanged)
 
@@ -318,7 +187,7 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 Follow-up to the wide **v2.3.0** rollout. First open shows this summary in **What's changed**.
 
-### New — My Timesheet (pilot: clock 10338)
+### New — My Timesheet (pilot workers)
 
 - **Home tile** — enabled workers see **My Timesheet** (teal). Admins configure enrolment in **CTP Pulse → Settings → My Timesheet**.
 - **Job hours** — pick a calendar month; job cards you were assigned to, started, or completed in that period appear with editable hours and an optional billing summary line per job.
@@ -559,16 +428,6 @@ When copper in the sell bucket reaches **400 kg**, the system auto-creates **Cop
 
 ## 2026-06-23 — Admin layout refresh, Ink capture on mobile, read optimisations
 
-### Admin — Settings first, five tabs, no Job Cards tab
-
-The Admin screen now opens on **Settings** (the tab you use most often). There are **five** tabs — **Settings**, **Employees**, **Structures**, **On Site**, and **Comms** — in that order.
-
-The old **Job Cards** tab (spreadsheet export and bulk delete) has been **removed from the mobile app**. Job card browsing, history, and KPIs live on **CTP Pulse** (`/jobs`) — use the web board for read-only oversight and exports. Mobile Admin stays focused on people, structure, escalation, and comms.
-
-**Employees** is no longer a wide spreadsheet. You get a searchable **card list**: clock number, name, position, department, and an on-site / off-site pill you can tap to toggle. CSV template download, import, and bulk delete sit in a toolbar card at the top. FCM token editing moved into the **Edit employee** dialog (not shown on every row).
-
-**Structures** has a stats row (department / area / machine counts), a search box, and expandable cards per department. Add-new forms for departments, areas, and machines sit in the same card style as Settings. Duplicate names are blocked with a clear message.
-
 ### Ink Factory — operators capture on mobile; managers use CTP Pulse
 
 The Ink Factory hub on mobile is **capture-only**: receive stock, meter readings, production, Toloul recovery, IBC register, and stock balances. The old manager tile grid (pending costs, month-end, recipes, corrections, and so on) is **gone from the app**.
@@ -786,14 +645,6 @@ On any completed load, tap the **share icon** (↑) in the load detail app bar t
 - The pilot-mode controls have been removed from the Waste Admin screen. WasteTrack is now a full production module — no clock-number restriction or pilot list.
 - The disabled state for Waste now shows a plain "Waste Management is disabled — contact your administrator" message instead of pilot-mode wording.
 
-### Developer / maintenance changes
-
-- **Update service** — In-app update checks now run every 4 hours (was 24 hours). When Remote Config keys are not yet published, the service retries after 1 hour instead of waiting the full interval — prevents a misconfigured RC from silencing update prompts indefinitely.
-- **AppColors null crash fixed** — `Theme.of(context).appColors` now falls back to the light theme defaults instead of throwing a null check error when a dialog or route loses the theme extension context. Resolves a Crashlytics crash (1.2.1).
-- **USE_FULL_SCREEN_INTENT permission** — The Android 14+ full-screen intent settings redirect has been moved from `MainActivity.onCreate` (which fired on every cold start) to the user-initiated permissions flow inside the app. The system settings page no longer appears automatically on first launch.
-
----
-
 ## 2026-06-04 — Crash fix, in-app docs fixes, Fleet user guide
 
 ### User-facing changes
@@ -802,14 +653,6 @@ On any completed load, tap the **share icon** (↑) in the load detail app bar t
 - **WasteTrack User Guide now opens correctly** — The in-app WasteTrack User Guide was showing raw page boilerplate instead of its content. The guide is now bundled correctly and displays as intended.
 - **New: Fleet Maintenance User Guide** — A full Fleet Maintenance guide is now available in Settings → Documentation for fleet users (reporters, the Hyster mechanic, cost managers, and admins). It covers reporting forklift/grab faults, logging work, recording costs, and reports. It only appears for users with Fleet access when the module is enabled.
 - **Documentation list cleaned up** — Two developer-only references (Cloud Functions Deployment, Firebase Security Rules) that could not open in-app have been removed from the documentation list. They remain available to developers outside the app.
-
-### Developer / maintenance changes
-
-- **Firestore stream `onError` handlers** — Added `onError` callbacks to all five Firestore `.snapshots()` stream subscriptions in `home_screen.dart` (employee stream, open jobs, in-progress jobs, review count) and `daily_review_screen.dart` (all job cards). Previously a `PlatformException(channel-error)` from the Firestore Pigeon transport propagated as an unhandled stream error and crashed the app. The error is now caught, logged to debug output, and the screen remains functional with its last known data.
-- **FCM subscription leak fixed** — `FirebaseMessaging.onMessageOpenedApp.listen()` in `HomeScreen` was never stored or cancelled on `dispose()`. Each login session added a permanent listener that accumulated in memory and could trigger `setState()` on disposed widgets. Now stored in `_messagingSubscription` and cancelled in `dispose()`.
-- **Landing page — Remote Config driven** — `ctp-job-cards-landing.web.app` now fetches `latest_version`, `latest_build`, `download_url`, and `release_notes` from Firebase Remote Config on every page load. Future releases only require a Remote Config update — no HTML edits or redeployment needed. Fallback values in the HTML ensure the page renders instantly even if Remote Config is unreachable.
-
----
 
 ## 2026-06-03 — CTP Pulse web dashboard: theme & contrast fixes
 
@@ -848,15 +691,6 @@ A new **Fleet** tab for tracking forklift and grab maintenance — separate from
 | Cost Manager | Your clock number is on the cost-manager list | Enter costs, view reports, export CSV |
 | Fleet Admin | System admin | Manage assets and all settings |
 
-### Developer / architecture changes
-
-- New `fleet_*` Firestore collections (`fleet_assets`, `fleet_issues`, `fleet_work_records` + `fleet_work_parts`, `fleet_cost_lines`, `fleet_types`, `fleet_settings`, `fleet_counters`, `fleet_audit`). Same signed-in auth model as WasteTrack; role enforcement is client-side.
-- Cloud Functions in the monorepo `firebase/functions` codebase: `createFleetWorkRecord` (atomic FM-number), `onFleetIssueCreated` (OOS notifications + asset badge), `onFleetIssueUpdated` (clears badge on resolve).
-- CTP Pulse gains a **Fleet Maintenance** board module (open issues, work hours MTD, cost MTD, avg resolution time) plus a `/fleet` detail page with cost-by-asset and cost-by-category charts and a live open-issues table. Access via the `fleet` board module in `/admin/users`.
-- See `docs/architecture/visualization.md` for the full role/screen matrix and `docs/COLLECTIONS.md` for the schemas.
-
----
-
 ## 2026-06-03 — Job Card History screen, Firestore read cost fixes
 
 ### User-facing changes
@@ -872,16 +706,6 @@ A new **Fleet** tab for tracking forklift and grab maintenance — separate from
 **Create Job Card — similar jobs panel**
 
 - The "previous jobs for this machine" sidebar previously downloaded every job card in the system and filtered on-device. It now uses server-filtered indexed queries — only the records that match the current department → area → machine → part selection are fetched.
-
-### Developer / architecture changes
-
-- **`FirestoreService.getInProgressJobCards()`** — new server-filtered stream for `status == inProgress` jobs.
-- **`FirestoreService.searchClosedJobCards()`** — new one-shot fetch with server-side equality filters (department, area, machine) and an optional date range on `closedAt`, plus cursor-based pagination. Type and priority filtering applied client-side on the returned page.
-- **Home screen count badge** — the two `getAllJobCards()` live listeners used to count the open/in-progress badge and render the recent jobs panel have been replaced with `getOpenJobCards()` + `getInProgressJobCards()` streams. Closed documents are never downloaded to the home screen.
-- **`closed_jobs_screen.dart` removed** — superseded by `job_card_history_screen.dart`.
-- **3 new Firestore composite indexes** in `firestore.indexes.json`: `status + department + closedAt DESC`, `+ area`, `+ machine`. Required for the server-side history queries. Deploy with `firebase deploy --only firestore:indexes`.
-
----
 
 ## 2026-06-02 — WasteTrack UX overhaul, notification inbox fixes
 
@@ -914,14 +738,6 @@ A new **Fleet** tab for tracking forklift and grab maintenance — separate from
 **Notification inbox**
 
 - **On-site status indicator in app bar** — The notification inbox screen's app bar now shows the same orange → green (on-site) / orange → red (off-site) gradient as every other screen in the app.
-
-### Developer / architecture changes
-
-- **Firestore rules: notification_inbox added** — The `notification_inbox/{clockNo}/items` subcollection was missing from the Firestore security rules, causing permission denied errors when the Flutter app tried to read or mark inbox items. Rule added to the Job Cards tier. Deployed to production.
-- **`WasteLoad` model: `contractorName`, `collectedByName` fields** — Both are now stored on the load document at creation/collection time and read back for display, avoiding secondary lookups.
-- **`WasteService.getLoad()`** — New method for fetching a single load by ID, used by the post-creation navigation.
-
----
 
 ## 2026-06-01 — WasteTrack module, offsite notification inbox, admin on-site view, settings redesign
 
@@ -961,15 +777,6 @@ A full waste management module is now integrated into the app for Security depar
   - Weight boxes on the load detail screen now use dark text when no weighbridge data has been entered (was grey-on-grey).
   - Disabled-state block icons across create, home, and reports screens are now a darker grey.
   - The empty items placeholder in the begin-collection screen has a more visible border.
-
-### Developer / architecture changes
-
-- **WasteTrack collections** — 11 new Firestore collections added under the `waste_` prefix (see `lib/constants/collections.dart`).
-- **`createWasteLoad` Cloud Function** — Callable function in `africa-south1` handles atomic load creation and daily sequence numbering.
-- **`lib/constants/collections.dart`** — New canonical constants file for all Firestore collection names. All services now use constants instead of inline string literals.
-- **Functions codebase named `jobcards`** — Deploys from this repo are now scoped to Job Cards functions only; cannot accidentally wipe WasteTrack/Overtime functions in the shared Firebase project.
-
----
 
 ## 2026-05-23 — Dashboard overhaul, screen consistency, and UI improvements
 
