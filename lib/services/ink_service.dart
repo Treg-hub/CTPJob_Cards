@@ -1158,7 +1158,9 @@ class InkService {
       throw StateError(
           'No connection — consuming an IBC needs to be online. Reconnect and try again.');
     }
-    final ibcRef = _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber);
+    // Doc id may be legacy last-8 OR full SSCC (Wave B receipts). Never assume
+    // ibcNumber alone — merge-set on a missing short id is a create (rules deny).
+    final ibcRef = await _resolveInkIbcRef(ibc);
     final washKey = 'ibcwash_${ibc.ibcNumber}';
     final washRef = _db.collection(Collections.inkTransactions).doc(washKey);
 
@@ -1183,6 +1185,54 @@ class InkService {
     }
   }
 
+  /// Prefer Firestore [InkIbc.id] (legacy last-8 or full SSCC), then SSCC digits,
+  /// then operator last-8. Matches CF [ibcDocId] so old + new register stock both consume.
+  static String inkIbcDocId(InkIbc ibc) {
+    final id = ibc.id?.trim();
+    if (id != null && id.isNotEmpty) return id;
+    final sscc = (ibc.sscc ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    if (sscc.length >= 18) return sscc;
+    return ibc.ibcNumber;
+  }
+
+  /// Resolves the real `ink_ibcs` doc for legacy (doc id = last-8) and SSCC-id
+  /// receipts (doc id = 18+ digits, `ibc_number` = last-8). Throws if missing so
+  /// we never merge-create under a wrong id.
+  Future<DocumentReference<Map<String, dynamic>>> _resolveInkIbcRef(
+    InkIbc ibc,
+  ) async {
+    final col = _db.collection(Collections.inkIbcs);
+    final ssccDigits = (ibc.sscc ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    final candidates = <String>[
+      inkIbcDocId(ibc),
+      if (ssccDigits.length >= 18) ssccDigits,
+      ibc.ibcNumber,
+    ];
+    final seen = <String>{};
+    for (final candidate in candidates) {
+      if (!seen.add(candidate)) continue;
+      final ref = col.doc(candidate);
+      if ((await ref.get()).exists) return ref;
+    }
+
+    final q = await col
+        .where('ibc_number', isEqualTo: ibc.ibcNumber)
+        .limit(5)
+        .get();
+    if (q.docs.isEmpty) {
+      throw StateError(
+        'IBC ${ibc.ibcNumber} was not found in the register. '
+        'Refresh and try again, or receive it first.',
+      );
+    }
+    for (final d in q.docs) {
+      if (d.data()['status'] == InkIbcStatus.received.value) {
+        return d.reference;
+      }
+    }
+    return q.docs.first.reference;
+  }
+
   Future<void> _runTransferIbcTxn({
     required InkIbc ibc,
     required DocumentReference<Map<String, dynamic>> ibcRef,
@@ -1200,6 +1250,12 @@ class InkService {
       // Idempotency guard: the old deterministic-doc-id waste_stock scheme
       // gave this for free; the shared pool model needs it explicit here.
       final ibcSnap = await txn.get(ibcRef);
+      if (!ibcSnap.exists) {
+        throw StateError(
+          'IBC ${ibc.ibcNumber} was not found in the register. '
+          'Refresh and try again.',
+        );
+      }
       final ibcData = ibcSnap.data();
       final alreadyTransferred =
           InkIbcStatus.fromValue(ibcData?['status'] as String?) ==
@@ -1282,6 +1338,7 @@ class InkService {
     _guardWrite();
     await WasteStockCrosslink.assertIbcStockVoidable(_db, ibc.ibcNumber);
 
+    final ibcRef = await _resolveInkIbcRef(ibc);
     final washRef =
         _db.collection(Collections.inkTransactions).doc('ibcwash_${ibc.ibcNumber}');
     final washSnap = await washRef.get();
@@ -1301,7 +1358,7 @@ class InkService {
       );
     }
     batch.set(
-      _db.collection(Collections.inkIbcs).doc(ibc.ibcNumber),
+      ibcRef,
       {
         'status': InkIbcStatus.received.value,
         'transferred_date': FieldValue.delete(),
