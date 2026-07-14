@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-14 — 2.3.0+168 — Post Press Specialist job type
+
+### What you will notice
+
+- Post Press Specialist is available as a job type when creating and viewing job cards.
+- Post Press Specialist roles show the matching badge and home behaviour for that role.
+- On-site Post Press Specialist auto-assign works the same way Pre Press Specialist does for matching jobs.
+
+---
+
 ## 2026-07-14 - 2.3.0+167 - Confirm consumption works for all IBC barcodes
 
 ### What you will notice

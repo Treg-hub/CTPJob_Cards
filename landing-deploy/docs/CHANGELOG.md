@@ -6,6 +6,36 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-14 — 2.3.0+168 — Post Press Specialist job type
+
+### What you will notice
+
+- Post Press Specialist is available as a job type when creating and viewing job cards.
+- Post Press Specialist roles show the matching badge and home behaviour for that role.
+- On-site Post Press Specialist auto-assign works the same way Pre Press Specialist does for matching jobs.
+
+---
+
+## 2026-07-14 - 2.3.0+167 - Confirm consumption works for all IBC barcodes
+
+### What you will notice
+
+- Scanning or looking up an IBC and confirming consumption no longer fails with a permission error.
+- Both the older 8-digit barcodes and the newer longer barcode formats work the same way on Consume.
+- Wash litres and the damaged toggle still work as before after you confirm.
+
+---
+
+## 2026-07-14 - 2.3.0+166 - Consume IBC confirm works with both barcode formats
+
+### What you will notice
+
+- **Confirm consumption** no longer fails with a permission error when the IBC was scanned or looked up by barcode.
+- Both the older last-8 barcode style and the newer full SSCC-style codes resolve to the same IBC, so either format works on Consume.
+- Marking an IBC damaged or sending it for wash still works the same way after you confirm.
+
+---
+
 ## 2026-07-12 — Pilot 2.3.0+165 (Ink Factory — feedback photos)
 
 ### What you will notice
@@ -13,16 +43,11 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 - When you **Give Feedback**, you can attach up to **3 photos** (camera or gallery) — useful for screenshots or a picture of the problem.
 - In a feedback **thread**, you and the CTP team can attach photos on replies the same way.
 - Tap a photo thumbnail to view it full screen.
-- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
 
 ### For admins
 
 - Triage board shows photo thumbnails on submissions; reply from the thread with photos if needed.
 - **Deploy required**: Storage rules from `/firebase` (`feedback/{id}/photos/**`) before the APK that uses this feature (if not already live).
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 165**.
-- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
-- **Default + Shared** stay on factory **2.3.0 / 163** (or lower / current factory build), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
-- Landing **Download app** still serves factory `latest.apk`, not this pilot.
 
 ---
 
@@ -31,14 +56,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 ### What you will notice
 
 - Same security work as factory **163**: clearer **Create account** link messages, module role flags (Security / Fleet / Ink / Waste) with existing allow-list fallback, quiet app build reporting for managers, safer assign-to employee lists when the server supports them.
-- Ink Factory staff on the **pilot channel** get this build first; the rest of the factory stays on **latest.apk** until promoted.
-
-### For admins
-
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 164**.
-- **Departments** → enable **Ink Factory**; Channel APK URL = pilot.apk; Force **off** (soft).
-- **Default + Shared** stay on factory **2.3.0 / 163** (or lower), Shared URL = `…/releases/latest.apk` — do **not** point Shared at pilot.apk.
-- Landing **Download app** still serves factory `latest.apk`, not this pilot.
 
 ---
 
@@ -90,7 +107,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ### For admins
 
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 161**.
 - Factory **latest.apk** stays lower (e.g. 159) until promoted.
 
 ---
@@ -113,7 +129,6 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ### For admins
 
-- **Pilot only:** `https://ctp-job-cards-landing.web.app/releases/pilot.apk` — channel Version/Build **2.3.0 / 160**.
 - Factory **latest.apk** unchanged until promoted.
 
 ---
