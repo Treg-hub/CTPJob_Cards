@@ -239,6 +239,16 @@ bool isFleetMechanic(Employee? employee, FleetSettings? settings) {
   return _clockNoInAllowList(employee.clockNo, settings.mechanicClockNos);
 }
 
+/// Floor Hyster Mechanic by job title (shell auto-nav only).
+///
+/// Admins get `isFleetMechanic` on the ID token for RBAC via
+/// [ModuleClaims], which must not trigger Home → Fleet auto-nav.
+/// Matches the legacy CF fallback (`position == "Hyster Mechanic"`).
+bool isHysterMechanicByPosition(Employee? employee) {
+  if (employee == null) return false;
+  return employee.position.trim().toLowerCase() == 'hyster mechanic';
+}
+
 /// True when the employee's department is in the configurable reporter allow-list.
 bool isFleetReporter(Employee? employee, FleetSettings? settings) {
   if (employee == null) return false;

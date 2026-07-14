@@ -269,7 +269,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (_fleetMechanicNavDone || !mounted || _pendingJobId != null) return;
     final settings = _cachedFleetSettings;
     if (settings == null || !settings.fleetEnabled) return;
-    if (!role_utils.isFleetMechanic(currentEmployee, settings)) return;
+    // Position title only — not isFleetMechanic (admins get that claim for
+    // RBAC and must not be auto-sent to Fleet on load/resume).
+    if (!role_utils.isHysterMechanicByPosition(currentEmployee)) return;
     final idx = _fleetTabIndex();
     if (idx < 0) return;
     _fleetMechanicNavDone = true;

@@ -2,6 +2,11 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Fleet shell auto-nav uses Hyster Mechanic position (2026-07-14)**:
+  - Bug: admins (and anyone with elevated `isFleetMechanic` ModuleClaims from `setCustomClaims`) were auto-sent to the Fleet tab on load/resume — Ink Factory managers / isAdmin included.
+  - Fix: `_maybeOpenFleetTabForMechanic` now gates on `isHysterMechanicByPosition` (job title `Hyster Mechanic` only), not `isFleetMechanic` / token flags. RBAC access unchanged.
+  - Tests: `role_test.dart`. Map: `FleetModule.md`, `set-custom-claims.md`, `Module Allocation & Visibility.md`, `Canvases/INDEX.md`.
+
 - **Ink daily readings void baseline (2026-07-13)**:
   - Bug: after Pulse void of a meter session, Daily Readings unlocked fields (today-captured already skipped voided) but **Last** still used the voided cumulative reading → re-enter same dial → Δ≈0.
   - Fix: `watchLatestMeterReadings` / `watchRecentMeterReadings` (+ toloul point latest/recent) exclude voided via `lib/utils/ink_meter_baselines.dart`; unit tests in `test/ink_meter_baselines_test.dart`.
