@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-15 — 2.3.0+171 — Ink receive lists show what arrived this period
+
+### What you will notice
+
+- On **Receive Local**, orders already fully received in the current count period appear under **Received this period** (greyed — for reference only).
+- On **Receive Ink (IBC)**, shipments already received in the current count period appear the same way under **Received this period**.
+- Outstanding orders and shipments still appear at the top so you can receive them as usual.
+
+---
+
 ## 2026-07-15 — 2.3.0+170 — My Timesheet PDF polish and notes
 
 ### What you will notice
