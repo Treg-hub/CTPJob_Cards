@@ -1,6 +1,15 @@
 # AGENTS.md — Rules for Grok & Cline on CTPJob_Cards
 
-These rules apply whenever working on code that will be committed or pushed to this repository.
+These rules apply whenever working on code that will be committed or pushed to **this** repository (`github.com/Treg-hub/CTPJob_Cards`).
+
+## Monorepo umbrella (dual-repo — read this)
+
+- This app is often cloned at `CTP-Factory-System/mobile/CTPJob_Cards/` but is **its own Git remote** (gitignored in the monorepo).
+- **Push Flutter / jobcards CF changes here**, not as monorepo commits (monorepo does not track this tree).
+- Shared backend rules + `wastetrack-overtime` CFs + Obsidian map live in the **monorepo** — follow monorepo root `AGENTS.md` for those paths.
+- **CF codebase `jobcards` only** from this tree (`firebase.json` → `codebase: jobcards`). Never blanket-deploy functions in a way that deletes monorepo `wastetrack-overtime` functions.
+- **Never deploy** monorepo Firestore rules/indexes from this folder — rules SSoT is monorepo `/firebase` only (`npm run fb:test` + `fb:deploy:*` from monorepo root).
+- Single-repo absorb is a **future** project; do not invent merges.
 
 ## Core Principles
 - Follow the 12 coding principles in .clinerules/02-coding-principles.md
