@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-15 — 2.3.0+172 — Fix received IBC shipments on Receive Ink
+
+### What you will notice
+
+- On **Receive Ink (IBC)**, shipments already received in the current count period now show under **Received this period** (this was missing on some devices).
+- Outstanding shipments still appear at the top as before.
+
+---
+
 ## 2026-07-15 — 2.3.0+171 — Ink receive lists + IBC wash confirm
 
 ### What you will notice

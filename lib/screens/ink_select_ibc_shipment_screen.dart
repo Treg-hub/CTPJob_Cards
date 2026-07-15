@@ -152,6 +152,13 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    if (receivedAsync.hasError && received.isEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'Could not load received shipments. Pull to refresh or try again.',
+                        style: TextStyle(color: scheme.error, fontSize: 13),
+                      ),
+                    ],
                     if (received.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       Text(

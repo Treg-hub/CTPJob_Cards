@@ -962,6 +962,11 @@ class InkService {
 
   /// IBC shipments past awaiting/receiving whose last unit scan (or update)
   /// falls in the open count period. One-shot for Receive Ink "Received" list.
+  ///
+  /// Uses packaging_mode + status only (same composite path as open shipments).
+  /// Client-side period filter + sort — avoids depending on
+  /// packaging_mode+status+updated_at composite (was missing in prod and
+  /// failed-precondition silently emptied the list).
   Future<List<InkShipment>> fetchReceivedIbcShipmentsThisPeriod({
     DateTime? periodFromExclusive,
   }) async {
@@ -969,7 +974,6 @@ class InkService {
         .collection(Collections.inkShipments)
         .where('packaging_mode', isEqualTo: 'ibc')
         .where('status', whereIn: ['received', 'awaiting_grn', 'costed'])
-        .orderBy('updated_at', descending: true)
         .limit(_receivedThisPeriodFetchLimit)
         .get();
     final list = <InkShipment>[];
