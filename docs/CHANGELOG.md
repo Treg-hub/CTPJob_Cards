@@ -6,6 +6,26 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-15 — 2.3.0+172 — Fix received IBC shipments on Receive Ink
+
+### What you will notice
+
+- On **Receive Ink (IBC)**, shipments already received in the current count period now show under **Received this period** (this was missing on some devices).
+- Outstanding shipments still appear at the top as before.
+
+---
+
+## 2026-07-15 — 2.3.0+171 — Ink receive lists + IBC wash confirm
+
+### What you will notice
+
+- On **Receive Local**, orders already fully received in the current count period appear under **Received this period** (greyed — for reference only).
+- On **Receive Ink (IBC)**, shipments already received in the current count period appear the same way under **Received this period**.
+- Outstanding orders and shipments still appear at the top so you can receive them as usual.
+- On **Consume IBC**, if you leave **Toloul used to wash** blank, the app asks you to confirm no wash was used. You can go back and enter litres, or confirm no wash (flagged for manager review on Pulse).
+
+---
+
 ## 2026-07-15 — 2.3.0+170 — My Timesheet PDF polish and notes
 
 ### What you will notice

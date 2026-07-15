@@ -56,6 +56,38 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
 
   DateTime get _effectiveAt => _useCustomTime ? _customAt : DateTime.now();
 
+  /// When wash is blank/0, require explicit confirm that no toloul was used.
+  /// Returns `true` to proceed (flagged zero wash), `false` to stay and enter litres.
+  Future<bool> _confirmZeroWashIfNeeded(double washLitres) async {
+    if (washLitres > 0) return true;
+    final scheme = Theme.of(context).colorScheme;
+    final go = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded, color: scheme.error, size: 36),
+        title: const Text('No toloul wash entered'),
+        content: const Text(
+          'IBC wash normally uses toloul. Confirm that no toloul was used to '
+          'wash this IBC?\n\n'
+          '• Enter wash — go back and type the litres used\n'
+          '• Confirm no wash — continue without wash (flagged for manager review)',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Enter wash'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm no wash'),
+          ),
+        ],
+      ),
+    );
+    return go == true;
+  }
+
   Future<void> _submit() async {
     if (!guardPersonaSubmit(context)) return;
     final tolul = widget.tolulItemCode;
@@ -63,6 +95,12 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
     final wash = double.tryParse(_washCtrl.text.trim()) ?? 0;
     if (wash < 0) return;
     if (!_damageReasonValid) return;
+
+    final zeroWashConfirmed = wash <= 0;
+    if (zeroWashConfirmed) {
+      final proceed = await _confirmZeroWashIfNeeded(wash);
+      if (!proceed || !mounted) return;
+    }
 
     if (!guardPersonaSubmit(context)) return;
     setState(() => _submitting = true);
@@ -85,9 +123,10 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
             markDamaged: _markDamaged,
             damageReason:
                 _markDamaged ? _damageReasonCtrl.text.trim() : null,
+            zeroWashConfirmed: zeroWashConfirmed,
           );
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(context, zeroWashConfirmed ? 'zero_wash' : true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -159,7 +198,8 @@ class _State extends ConsumerState<InkIbcConsumeConfirmScreen> {
             decoration: const InputDecoration(
               labelText: 'Toloul used to wash',
               suffixText: 'LTS',
-              helperText: 'Leave blank if no wash was used',
+              helperText:
+                  'Enter litres used. Leave blank only if no wash — you will be asked to confirm (flagged for review).',
             ),
           ),
           const SizedBox(height: 20),

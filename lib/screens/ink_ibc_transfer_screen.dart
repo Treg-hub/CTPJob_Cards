@@ -59,7 +59,7 @@ class _State extends ConsumerState<InkIbcTransferScreen>
 
   Future<void> _openConfirm(InkIbc ibc) async {
     final items = ref.read(inkStockItemsProvider).valueOrNull ?? [];
-    final ok = await Navigator.push<bool>(
+    final result = await Navigator.push<Object?>(
       context,
       MaterialPageRoute(
         builder: (_) => InkIbcConsumeConfirmScreen(
@@ -69,12 +69,18 @@ class _State extends ConsumerState<InkIbcTransferScreen>
         ),
       ),
     );
-    if (ok == true && mounted) {
-      setState(() => _showPickList = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('IBC consumed; wash recorded.')),
-      );
-    }
+    if (result == null || !mounted) return;
+    setState(() => _showPickList = false);
+    final zeroWash = result == 'zero_wash';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          zeroWash
+              ? 'IBC consumed with no wash — flagged for manager review.'
+              : 'IBC consumed; wash recorded.',
+        ),
+      ),
+    );
   }
 
   Future<void> _scan() async {

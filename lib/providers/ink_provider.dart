@@ -162,6 +162,24 @@ final inkOpenLocalPurchaseOrdersProvider =
       );
 });
 
+/// Fulfilled local POs received in the open count-to-count period (one-shot).
+final inkReceivedLocalOrdersThisPeriodProvider =
+    FutureProvider.autoDispose<List<InkPurchaseOrder>>((ref) {
+  final from = ref.watch(inkOpenPeriodRangeProvider).fromExclusive;
+  return ref.watch(inkServiceProvider).fetchReceivedLocalOrdersThisPeriod(
+        periodFromExclusive: from,
+      );
+});
+
+/// IBC shipments fully received in the open count-to-count period (one-shot).
+final inkReceivedIbcShipmentsThisPeriodProvider =
+    FutureProvider.autoDispose<List<InkShipment>>((ref) {
+  final from = ref.watch(inkOpenPeriodRangeProvider).fromExclusive;
+  return ref.watch(inkServiceProvider).fetchReceivedIbcShipmentsThisPeriod(
+        periodFromExclusive: from,
+      );
+});
+
 /// Production runs in the open period (server-scoped).
 final inkProductionRunsProvider = StreamProvider<List<InkProductionRun>>((ref) {
   final from = ref.watch(inkOpenPeriodRangeProvider).fromExclusive;
