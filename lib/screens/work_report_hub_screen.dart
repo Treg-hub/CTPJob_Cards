@@ -15,6 +15,7 @@ import '../utils/work_report_csv.dart';
 import '../utils/work_report_daily_hours.dart';
 import '../utils/work_report_pdf.dart';
 import '../utils/work_report_period_utils.dart';
+import '../utils/work_report_soft_lock.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import 'work_report_job_lines_screen.dart';
@@ -35,6 +36,10 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
   bool _exportingCsv = false;
   bool _refreshingJobs = false;
   bool _autoRefreshTried = false;
+  bool _savingNotes = false;
+  final _notesCtrl = TextEditingController();
+  String _notesLoadedFor = '';
+  String _notesBaseline = '';
 
   String get _actorClockNo => currentEmployee?.clockNo ?? '';
 
@@ -56,6 +61,98 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
         ref.read(workReportSubjectClockProvider.notifier).state =
             widget.initialSubjectClockNo;
       });
+    }
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncNotesFromPeriod(WorkReportPeriod? period, String periodKey) {
+    final key = '${_subjectClockNo}_$periodKey';
+    final text = period?.notes ?? '';
+    final dirty = _notesCtrl.text.trim() != _notesBaseline.trim();
+    if (_notesLoadedFor == key) {
+      // Period doc arrived after first paint — adopt server notes if user idle.
+      if (!dirty && text != _notesBaseline) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _notesBaseline = text;
+            _notesCtrl.text = text;
+          });
+        });
+      }
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _notesLoadedFor = key;
+        _notesBaseline = text;
+        _notesCtrl.text = text;
+      });
+    });
+  }
+
+  Future<void> _saveNotes(WorkReportService service) async {
+    if (currentEmployee == null) return;
+    final settings =
+        ref.read(workReportSettingsProvider).valueOrNull ??
+            WorkReportSettings.defaults;
+    final periodKey = ref.read(workReportPeriodKeyProvider);
+    final period = await service
+        .watchPeriod(_subjectClockNo, periodKey)
+        .first
+        .timeout(const Duration(seconds: 8));
+    if (!mounted) return;
+    final ok = await confirmWorkReportEdit(
+      context,
+      period: period,
+      periodKey: periodKey,
+      settings: settings,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _savingNotes = true);
+    try {
+      if (period == null) {
+        final subject = await FirestoreService().getEmployee(_subjectClockNo);
+        if (subject != null) {
+          await service.ensurePeriodHeader(
+            clockNo: _subjectClockNo,
+            periodKey: periodKey,
+            subject: subject,
+            actor: currentEmployee!,
+            settings: settings,
+          );
+        }
+      }
+      await service.updatePeriodNotes(
+        clockNo: _subjectClockNo,
+        periodKey: periodKey,
+        notes: _notesCtrl.text,
+        actor: currentEmployee!,
+        settings: settings,
+      );
+      _notesBaseline = _notesCtrl.text.trim();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notes saved')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notes save failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingNotes = false);
     }
   }
 
@@ -417,7 +514,9 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
             stream: jobLinesStream,
             builder: (context, jobSnap) {
               final jobLines = jobSnap.data ?? const [];
-              final daily = WorkReportDailyHours.fromJobLines(jobLines);
+              final daily = WorkReportDailyHours.fromJobLines(jobLines)
+                  .where((d) => d.hours > 0.001)
+                  .toList();
               final hoursFmt = NumberFormat('#,##0.#');
               final totalHours = period?.totalHours ??
                   jobLines.fold<double>(0, (s, l) => s + l.hours);
@@ -426,6 +525,9 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                 periodKey: periodKey,
                 settings: settings,
               );
+              _syncNotesFromPeriod(period, periodKey);
+              final notesDirty =
+                  _notesCtrl.text.trim() != _notesBaseline.trim();
 
               return ListView(
                 padding: ScreenInsets.symmetricScroll(
@@ -655,6 +757,44 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                       jobLines.isEmpty
                           ? 'Job cards for week'
                           : 'Job cards (${jobLines.length})',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Notes (optional)',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  Text(
+                    'Shown at the bottom of the PDF for Accounts / manager.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notesCtrl,
+                    enabled: editable && !_savingNotes,
+                    maxLines: 3,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      hintText: 'e.g. Standby Thursday, call-out hours…',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonal(
+                      onPressed: !editable || _savingNotes || !notesDirty
+                          ? null
+                          : () => _saveNotes(service),
+                      child: Text(
+                        _savingNotes
+                            ? 'Saving…'
+                            : (notesDirty ? 'Save notes' : 'Notes saved'),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
