@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-15 — 2.3.0+169 — My Timesheet weekly + job work date
+
+### What you will notice
+
+- My Timesheet is now week by week (Monday to Sunday). Use the arrows to move between weeks.
+- Each job line has a work date for the timesheet. It starts as the job card create date and you can change it without changing the job card itself.
+- You enter hours and an optional billing summary on each job line. There is no separate additional-work screen.
+- PDF and CSV share are in the top bar on My Timesheet.
+- Editing an older week asks you to confirm first.
+
+---
+
 ## 2026-07-14 — 2.3.0+168 — Post Press Specialist job type
 
 ### What you will notice
