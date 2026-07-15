@@ -70,7 +70,8 @@ class InkGuideBanner extends ConsumerWidget {
   /// Consume / transfer IBC.
   const InkGuideBanner.consumeIbc({super.key})
       : text =
-            'Transfer an IBC into use: scan or pick colour, confirm wash toloul. '
+            'Transfer an IBC into use: scan or pick colour, enter wash toloul litres. '
+            'If you leave wash blank you must confirm no toloul was used (flagged for review). '
             'Mark damaged only if the drum should not enter waste stock.',
         icon = Icons.swap_horiz;
 

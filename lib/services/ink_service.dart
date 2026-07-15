@@ -1199,6 +1199,11 @@ class InkService {
   /// consume time), the IBC still transfers normally in the ink ledger, but
   /// is excluded from waste stock entirely — [damageReason] is required in
   /// that case and is recorded on the `ink_ibcs` doc.
+  ///
+  /// Zero wash: pass [washLitres] `0` with [zeroWashConfirmed] `true` after the
+  /// operator confirms no toloul was used. Writes a 0 L wash row soft-flagged
+  /// for manager review (`over_max` + reason — same soft-flag path as meter
+  /// over-max so CF replay keeps `flagged_for_review`).
   Future<void> transferIbc({
     required InkIbc ibc,
     required String tolulItemCode,
@@ -1208,10 +1213,15 @@ class InkService {
     required String actorName,
     bool markDamaged = false,
     String? damageReason,
+    bool zeroWashConfirmed = false,
   }) async {
     _guardWrite();
     assert(!markDamaged || (damageReason != null && damageReason.trim().isNotEmpty),
         'damageReason is required when markDamaged is true');
+    assert(
+      washLitres > 0 || zeroWashConfirmed,
+      'zeroWashConfirmed is required when washLitres is 0',
+    );
     // The waste-pool write inside this transaction is shared read-modify-write
     // state — transactions can't run offline, so fail fast with a clear message.
     final online =
@@ -1238,6 +1248,7 @@ class InkService {
         actorName: actorName,
         markDamaged: markDamaged,
         damageReason: damageReason,
+        zeroWashConfirmed: zeroWashConfirmed,
       ).timeout(const Duration(seconds: 15));
     } on TimeoutException {
       // The timeout does not cancel the transaction — it may still commit,
@@ -1306,6 +1317,7 @@ class InkService {
     required String actorName,
     required bool markDamaged,
     required String? damageReason,
+    required bool zeroWashConfirmed,
   }) async {
     await _db.runTransaction((txn) async {
       // Firestore requires every read before any write in a transaction.
@@ -1325,7 +1337,8 @@ class InkService {
       final alreadyDamaged = ibcData?['damage_flag'] == true;
       if (alreadyTransferred || alreadyDamaged) return;
 
-      final washSnap = washLitres > 0 ? await txn.get(washRef) : null;
+      final recordWash = washLitres > 0 || zeroWashConfirmed;
+      final washSnap = recordWash ? await txn.get(washRef) : null;
       final transferredAt = Timestamp.fromDate(effectiveAt);
 
       final IbcPoolRead? poolRead = markDamaged
@@ -1368,6 +1381,9 @@ class InkService {
       }
 
       if (washSnap != null && !washSnap.exists) {
+        // Soft flag for zero wash: set over_max so CF replay keeps
+        // flagged_for_review (same path as meter over-max soft flags).
+        final zeroWash = washLitres <= 0 && zeroWashConfirmed;
         txn.set(
           washRef,
           InkTransaction(
@@ -1380,6 +1396,13 @@ class InkService {
             actorClockNo: actorClockNo,
             actorName: actorName,
             idempotencyKey: washRef.id,
+            flaggedForReview: zeroWash,
+            overMax: zeroWash,
+            flagReason: zeroWash
+                ? 'IBC wash: operator confirmed no toloul used '
+                    '(IBC ${ibc.ibcNumber})'
+                : null,
+            notes: zeroWash ? 'Zero wash confirmed at consume' : null,
           ).toFirestore(),
         );
       }
