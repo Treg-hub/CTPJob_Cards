@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-15 — 2.3.0+170 — My Timesheet PDF polish and notes
+
+### What you will notice
+
+- My Timesheet PDF looks cleaner (header, job table, total hours) and special characters no longer show as blank boxes.
+- You can add optional Notes on the timesheet hub; they appear at the bottom of the PDF, with space to write more by hand if needed.
+
+---
+
 ## 2026-07-15 — 2.3.0+169 — My Timesheet weekly + job work date
 
 ### What you will notice
