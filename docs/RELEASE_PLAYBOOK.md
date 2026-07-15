@@ -82,7 +82,7 @@ Do **not** promote to factory `latest.apk` until:
 |---|------|----------------|
 | C1 | Assemble + deploy | **Preferred:** `pwsh .\scripts\publish-landing-apk.ps1` |
 | C1b | Manual | `node build-landing.js` then `firebase deploy --only hosting:landing --project ctp-job-cards` |
-| C2 | Order | `build-landing.js` **wipes** `landing-deploy/`. APK is copied **at the end** only if `app-release.apk` already exists. Always build APK **before** `build-landing.js`. |
+| C2 | Order | `build-landing.js` **wipes** `landing-deploy/`. APK is copied **at the end** only if `app-release.apk` already exists. Always build APK **before** `build-landing.js`. **`landing-deploy/` is not in git** (build artifact only); edit staff docs in `docs/` then rebuild. |
 | C3 | Verify | Browser (or incognito): open canonical URL → large APK download, **not** Google login, **not** 404 |
 | C4 | Optional archive | Keep a local copy named `ctp-job-cards-X.Y.Z-BUILD.apk` for rollback |
 
