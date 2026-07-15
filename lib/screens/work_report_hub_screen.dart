@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
-import '../models/work_report_additional_line.dart';
 import '../models/work_report_job_line.dart';
 import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
@@ -18,7 +17,6 @@ import '../utils/work_report_pdf.dart';
 import '../utils/work_report_period_utils.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
-import 'work_report_additional_work_screen.dart';
 import 'work_report_job_lines_screen.dart';
 import 'work_report_preview_screen.dart';
 
@@ -75,7 +73,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     )) {
       return;
     }
-    // Auto-refresh when never refreshed, or header missing (first open).
     final needs = period == null || period.jobLinesRefreshedAt == null;
     _autoRefreshTried = true;
     if (!needs) return;
@@ -86,7 +83,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
       ({
         WorkReportPeriod period,
         List<WorkReportJobLine> jobLines,
-        List<WorkReportAdditionalLine> additional,
       })?> _loadExportData(WorkReportService service) async {
     final periodKey = ref.read(workReportPeriodKeyProvider);
     final clockNo = _subjectClockNo;
@@ -102,13 +98,9 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
         .watchJobLines(clockNo, periodKey)
         .first
         .timeout(const Duration(seconds: 10));
-    final additional = await service
-        .watchAdditionalLines(clockNo, periodKey)
-        .first
-        .timeout(const Duration(seconds: 10));
 
     service.validateDailyHoursCap(
-      additionalLines: additional,
+      jobLines: jobLines,
       settings: settings,
     );
 
@@ -130,20 +122,19 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
 
     if (periodForExport == null) {
       throw WorkReportValidationException(
-        'Add job card or additional work lines before exporting',
+        'Add job card lines before exporting',
       );
     }
 
-    if (jobLines.isEmpty && additional.isEmpty) {
+    if (jobLines.isEmpty) {
       throw WorkReportValidationException(
-        'Add job card or additional work lines before exporting',
+        'Add job card lines before exporting',
       );
     }
 
     return (
       period: periodForExport,
       jobLines: jobLines,
-      additional: additional,
     );
   }
 
@@ -170,7 +161,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
       final bytes = await WorkReportPdfExporter.buildPdfBytes(
         period: data.period,
         jobLines: data.jobLines,
-        additionalLines: data.additional,
         settings: settings,
         postPdfEditCount: postPdfEdits,
       );
@@ -236,7 +226,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
       await WorkReportCsvExporter.generateAndShare(
         period: data.period,
         jobLines: data.jobLines,
-        additionalLines: data.additional,
         settings: settings,
       );
     } on WorkReportValidationException catch (e) {
@@ -299,6 +288,26 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     }
   }
 
+  void _shiftPeriod(int direction, WorkReportSettings settings) {
+    final key = ref.read(workReportPeriodKeyProvider);
+    final next = direction < 0
+        ? WorkReportPeriodUtils.previousPeriodKey(
+            key,
+            editablePeriodsBack: settings.editablePeriodsBack,
+            periodMode: settings.defaultPeriodMode,
+            periodStartDay: settings.periodStartDay,
+          )
+        : WorkReportPeriodUtils.nextPeriodKey(
+            key,
+            editablePeriodsBack: settings.editablePeriodsBack,
+            periodMode: settings.defaultPeriodMode,
+            periodStartDay: settings.periodStartDay,
+          );
+    if (next == null) return;
+    _autoRefreshTried = false;
+    ref.read(workReportPeriodKeyProvider.notifier).state = next;
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(workReportSettingsProvider);
@@ -309,7 +318,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
       periodMode: settings.defaultPeriodMode,
       periodStartDay: settings.periodStartDay,
     );
-    // Keep selected key valid when settings load / mode changes.
     if (!selectable.contains(periodKey) && selectable.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(workReportPeriodKeyProvider.notifier).state = selectable.first;
@@ -317,8 +325,6 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     }
     final service = ref.watch(workReportServiceProvider);
     final periodStream = service.watchPeriod(_subjectClockNo, periodKey);
-    final additionalStream =
-        service.watchAdditionalLines(_subjectClockNo, periodKey);
     final jobLinesStream = service.watchJobLines(_subjectClockNo, periodKey);
     final editable = WorkReportPeriodUtils.isPeriodEditable(
       periodKey,
@@ -326,6 +332,30 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
       periodMode: settings.defaultPeriodMode,
       periodStartDay: settings.periodStartDay,
     );
+    final isPast = WorkReportPeriodUtils.isPastPeriod(
+      periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    );
+    final isCurrent = WorkReportPeriodUtils.isCurrentPeriod(
+      periodKey,
+      periodMode: settings.defaultPeriodMode,
+      periodStartDay: settings.periodStartDay,
+    );
+    final canGoBack = WorkReportPeriodUtils.previousPeriodKey(
+          periodKey,
+          editablePeriodsBack: settings.editablePeriodsBack,
+          periodMode: settings.defaultPeriodMode,
+          periodStartDay: settings.periodStartDay,
+        ) !=
+        null;
+    final canGoForward = WorkReportPeriodUtils.nextPeriodKey(
+          periodKey,
+          editablePeriodsBack: settings.editablePeriodsBack,
+          periodMode: settings.defaultPeriodMode,
+          periodStartDay: settings.periodStartDay,
+        ) !=
+        null;
 
     if (!canUseWorkReportModule(currentEmployee, settings)) {
       return Scaffold(
@@ -337,6 +367,44 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
     return Scaffold(
       appBar: CtpAppBar(
         title: _isAdminView ? 'Timesheet (admin)' : 'My Timesheet',
+        actions: [
+          if (_exportingCsv)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'Export CSV',
+              onPressed: () => _exportCsv(service),
+              icon: const Icon(Icons.table_chart_outlined),
+            ),
+          if (_generatingPdf)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'Preview & share PDF',
+              onPressed: () => _generatePdf(service),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+        ],
       ),
       body: StreamBuilder(
         stream: periodStream,
@@ -346,18 +414,13 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
             _maybeAutoRefresh(service, settings, period);
           });
           return StreamBuilder(
-            stream: additionalStream,
-            builder: (context, addSnap) {
-              return StreamBuilder(
-                stream: jobLinesStream,
-                builder: (context, jobSnap) {
-              final additional = addSnap.data ?? const [];
+            stream: jobLinesStream,
+            builder: (context, jobSnap) {
               final jobLines = jobSnap.data ?? const [];
-              final daily = WorkReportDailyHours.fromAdditionalLines(additional);
+              final daily = WorkReportDailyHours.fromJobLines(jobLines);
               final hoursFmt = NumberFormat('#,##0.#');
               final totalHours = period?.totalHours ??
-                  (jobLines.fold<double>(0, (s, l) => s + l.hours) +
-                      additional.fold<double>(0, (s, l) => s + l.hours));
+                  jobLines.fold<double>(0, (s, l) => s + l.hours);
               final softWarn = service.monthlyHoursSoftWarning(
                 totalHours: totalHours,
                 periodKey: periodKey,
@@ -365,7 +428,11 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
               );
 
               return ListView(
-                padding: ScreenInsets.symmetricScroll(context, horizontal: 16, vertical: 16),
+                padding: ScreenInsets.symmetricScroll(
+                  context,
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 children: [
                   if (_isAdminView)
                     Card(
@@ -378,38 +445,116 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                   if (isAdmin(currentEmployee))
                     _AdminWorkerPicker(settings: settings),
                   const SizedBox(height: 8),
-                  Text('Period', style: Theme.of(context).textTheme.titleSmall),
-                  if (settings.isFactoryPeriodMode)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Factory pay period (day ${settings.periodStartDay} open)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Theme.of(context).appColors.textMuted,
+
+                  // Week navigator
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Previous week',
+                            onPressed: canGoBack
+                                ? () => _shiftPeriod(-1, settings)
+                                : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  WorkReportPeriodUtils.periodShortLabel(
+                                    periodKey,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  WorkReportPeriodUtils.periodLabel(periodKey),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color:
+                                        Theme.of(context).appColors.textMuted,
+                                  ),
+                                ),
+                                if (isCurrent)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Current week',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .appColors
+                                            .wasteGreen,
+                                      ),
+                                    ),
+                                  )
+                                else if (isPast)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Past week — edits are audited',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Next week',
+                            onPressed: canGoForward
+                                ? () => _shiftPeriod(1, settings)
+                                : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (isPast) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .errorContainer
+                          .withValues(alpha: 0.35),
+                      child: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.history, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'You are viewing a past week. Changes require confirmation '
+                                'and are written to the audit trail.',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final key in selectable)
-                        ChoiceChip(
-                          label: Text(WorkReportPeriodUtils.periodLabel(
-                            key,
-                            periodMode: settings.defaultPeriodMode,
-                            periodStartDay: settings.periodStartDay,
-                          )),
-                          selected: periodKey == key,
-                          onSelected: (_) {
-                            _autoRefreshTried = false;
-                            ref.read(workReportPeriodKeyProvider.notifier).state =
-                                key;
-                          },
-                        ),
-                    ],
-                  ),
+                  ],
+
                   if (period?.hasPdf == true) ...[
                     const SizedBox(height: 12),
                     _PdfWarningBanner(period: period!),
@@ -423,25 +568,14 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                           .withValues(alpha: 0.35),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Text(softWarn, style: const TextStyle(fontSize: 12)),
+                        child: Text(
+                          softWarn,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                   ],
                   const SizedBox(height: 16),
-                  _SummaryCard(
-                    label: 'Job card hours',
-                    value: period?.totalJobHours ??
-                        jobLines.fold<double>(0, (s, l) => s + l.hours),
-                    color: kBrandOrange,
-                  ),
-                  const SizedBox(height: 8),
-                  _SummaryCard(
-                    label: 'Additional hours',
-                    value: period?.totalAdditionalHours ??
-                        additional.fold<double>(0, (s, l) => s + l.hours),
-                    color: Theme.of(context).appColors.statusOpen,
-                  ),
-                  const SizedBox(height: 8),
                   _SummaryCard(
                     label: 'Total hours',
                     value: totalHours,
@@ -451,12 +585,11 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                   if (daily.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Additional work by day',
+                      'Hours by day',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     Text(
-                      'Job card hours are period totals (no daily split). '
-                      'Cap applies to additional work only.',
+                      'Based on each job line’s timesheet work date.',
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).appColors.textMuted,
@@ -470,7 +603,8 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                         for (final d in daily)
                           _DailyHoursChip(
                             label: d.chipLabel(hoursFmt.format(d.hours)),
-                            overCap: d.hours > settings.maxHoursPerDay + 0.001,
+                            overCap:
+                                d.hours > settings.maxHoursPerDay + 0.001,
                             maxHours: settings.maxHoursPerDay,
                           ),
                       ],
@@ -517,57 +651,22 @@ class _WorkReportHubScreenState extends ConsumerState<WorkReportHubScreen> {
                       ),
                     ),
                     icon: const Icon(Icons.assignment),
-                    label: const Text('Job cards for period'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WorkReportAdditionalWorkScreen(
-                          subjectClockNo: _subjectClockNo,
-                          periodKey: periodKey,
-                        ),
-                      ),
-                    ),
-                    icon: const Icon(Icons.note_add),
-                    label: const Text('Additional work'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed:
-                        _generatingPdf ? null : () => _generatePdf(service),
-                    icon: _generatingPdf
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.picture_as_pdf),
-                    label: Text(_generatingPdf ? 'Preparing…' : 'Preview & share PDF'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).appColors.wasteGreen,
-                      foregroundColor: onColor(
-                        Theme.of(context).appColors.wasteGreen,
-                      ),
+                    label: Text(
+                      jobLines.isEmpty
+                          ? 'Job cards for week'
+                          : 'Job cards (${jobLines.length})',
                     ),
                   ),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed:
-                        _exportingCsv ? null : () => _exportCsv(service),
-                    icon: _exportingCsv
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.table_chart_outlined),
-                    label: Text(_exportingCsv ? 'Exporting…' : 'Export CSV'),
+                  Text(
+                    'Use the PDF / CSV icons in the top bar to export this week.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
                   ),
                 ],
-              );
-                },
               );
             },
           );

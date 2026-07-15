@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
-import '../models/work_report_additional_line.dart';
 import '../models/work_report_job_line.dart';
 import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
@@ -70,25 +69,25 @@ class WorkReportService {
         .where('clockNo', isEqualTo: clockNo)
         .where('periodKey', isEqualTo: periodKey)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WorkReportJobLine.fromFirestore(d.id, d.data()))
-            .toList()
-          ..sort((a, b) => b.jobCardNumber.compareTo(a.jobCardNumber)));
-  }
-
-  Stream<List<WorkReportAdditionalLine>> watchAdditionalLines(
-    String clockNo,
-    String periodKey,
-  ) {
-    return _db
-        .collection(Collections.workReportAdditionalLines)
-        .where('clockNo', isEqualTo: clockNo)
-        .where('periodKey', isEqualTo: periodKey)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => WorkReportAdditionalLine.fromFirestore(d.id, d.data()))
-            .toList()
-          ..sort((a, b) => b.workDate.compareTo(a.workDate)));
+        .map((snap) {
+      final lines = snap.docs
+          .map((d) => WorkReportJobLine.fromFirestore(d.id, d.data()))
+          .toList();
+      lines.sort((a, b) {
+        final da = a.workDate;
+        final db = b.workDate;
+        if (da != null && db != null) {
+          final c = db.compareTo(da);
+          if (c != 0) return c;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        return b.jobCardNumber.compareTo(a.jobCardNumber);
+      });
+      return lines;
+    });
   }
 
   /// Last successful candidate pull (per clock) — avoids re-pull on rebuild.
@@ -282,6 +281,7 @@ class WorkReportService {
         d.data()['jobCardId'] as String: d.id,
     };
     final includedIds = included.map((j) => j.id!).toSet();
+    final jobsById = {for (final j in included) j.id!: j};
 
     var added = 0;
     for (final job in included) {
@@ -295,6 +295,7 @@ class WorkReportService {
         jobCardNumber: job.jobCardNumber ?? 0,
         correctiveActionSnapshot: job.correctiveAction,
         jobMeta: WorkReportJobMeta.fromJobCard(job),
+        workDate: WorkReportJobLine.defaultWorkDateFromJob(job),
       );
       await _writeDoc(
         collection: Collections.workReportJobLines,
@@ -303,6 +304,27 @@ class WorkReportService {
         data: line.toFirestore(),
       );
       added++;
+    }
+
+    // Backfill workDate on existing lines that never had one (from job create date).
+    for (final doc in existingSnap.docs) {
+      final data = doc.data();
+      if (data['workDate'] != null) continue;
+      final jobId = data['jobCardId'] as String? ?? '';
+      final job = jobsById[jobId];
+      if (job == null) continue;
+      await _writeDoc(
+        collection: Collections.workReportJobLines,
+        docId: doc.id,
+        operation: 'update',
+        data: {
+          'workDate': Timestamp.fromDate(
+            WorkReportJobLine.defaultWorkDateFromJob(job),
+          ),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        merge: true,
+      );
     }
 
     for (final doc in existingSnap.docs) {
@@ -379,9 +401,14 @@ class WorkReportService {
     bool isAdminEdit = false,
     String? previousHours,
     String? previousSummary,
+    String? previousWorkDate,
+    WorkReportSettings? settings,
   }) async {
     if (line.hours < 0) {
       throw WorkReportValidationException('Hours cannot be negative');
+    }
+    if (line.workDate == null) {
+      throw WorkReportValidationException('Work date is required');
     }
     final data = line.toFirestore();
     await _writeDoc(
@@ -392,7 +419,15 @@ class WorkReportService {
       merge: true,
     );
 
-    final shouldAudit = (isAdminEdit && isAdmin(actor)) ||
+    final s = settings ?? WorkReportSettings.defaults;
+    final isPast = WorkReportPeriodUtils.isPastPeriod(
+      line.periodKey,
+      periodMode: s.defaultPeriodMode,
+      periodStartDay: s.periodStartDay,
+    );
+    // Always audit past-period edits, admin edits, and post-PDF edits.
+    final shouldAudit = isPast ||
+        (isAdminEdit && isAdmin(actor)) ||
         await _periodHasPdf(line.clockNo, line.periodKey);
     if (shouldAudit) {
       if (previousHours != null && previousHours != line.hours.toString()) {
@@ -401,7 +436,7 @@ class WorkReportService {
           targetId: line.id,
           clockNo: line.clockNo,
           periodKey: line.periodKey,
-          field: 'hours',
+          field: isPast ? 'hours (past period)' : 'hours',
           oldValue: previousHours,
           newValue: line.hours.toString(),
           actor: actor,
@@ -413,9 +448,24 @@ class WorkReportService {
           targetId: line.id,
           clockNo: line.clockNo,
           periodKey: line.periodKey,
-          field: 'billingSummary',
+          field: isPast ? 'billingSummary (past period)' : 'billingSummary',
           oldValue: previousSummary,
           newValue: line.billingSummary,
+          actor: actor,
+        );
+      }
+      final newDateStr = line.workDate != null
+          ? WorkReportJobLine.dateOnly(line.workDate!).toIso8601String()
+          : '';
+      if (previousWorkDate != null && previousWorkDate != newDateStr) {
+        await _writeAudit(
+          targetCollection: Collections.workReportJobLines,
+          targetId: line.id,
+          clockNo: line.clockNo,
+          periodKey: line.periodKey,
+          field: isPast ? 'workDate (past period)' : 'workDate',
+          oldValue: previousWorkDate,
+          newValue: newDateStr,
           actor: actor,
         );
       }
@@ -424,86 +474,7 @@ class WorkReportService {
       line.clockNo,
       line.periodKey,
       actor.clockNo,
-      jobHoursHint: null,
     );
-  }
-
-  Future<void> upsertAdditionalLine({
-    required WorkReportAdditionalLine line,
-    required Employee actor,
-    required WorkReportSettings settings,
-    bool isCreate = false,
-    bool isAdminEdit = false,
-    WorkReportAdditionalLine? previous,
-  }) async {
-    _validateAdditionalLine(line, settings);
-    final data = line.toFirestore(isCreate: isCreate);
-    await _writeDoc(
-      collection: Collections.workReportAdditionalLines,
-      docId: line.id,
-      operation: 'set',
-      data: data,
-      merge: !isCreate,
-    );
-
-    final shouldAudit = (isAdminEdit && isAdmin(actor)) ||
-        await _periodHasPdf(line.clockNo, line.periodKey);
-    if (shouldAudit && previous != null) {
-      for (final field in ['hours', 'description', 'workDate']) {
-        final oldVal = _fieldValue(previous, field);
-        final newVal = _fieldValue(line, field);
-        if (oldVal != newVal) {
-          await _writeAudit(
-            targetCollection: Collections.workReportAdditionalLines,
-            targetId: line.id,
-            clockNo: line.clockNo,
-            periodKey: line.periodKey,
-            field: field,
-            oldValue: oldVal,
-            newValue: newVal,
-            actor: actor,
-          );
-        }
-      }
-    } else if (shouldAudit && isCreate) {
-      await _writeAudit(
-        targetCollection: Collections.workReportAdditionalLines,
-        targetId: line.id,
-        clockNo: line.clockNo,
-        periodKey: line.periodKey,
-        field: 'create',
-        oldValue: '',
-        newValue: '${line.hours}h ${line.description}',
-        actor: actor,
-      );
-    }
-    await _recomputePeriodTotals(line.clockNo, line.periodKey, actor.clockNo);
-  }
-
-  Future<void> deleteAdditionalLine({
-    required WorkReportAdditionalLine line,
-    required Employee actor,
-  }) async {
-    final hadPdf = await _periodHasPdf(line.clockNo, line.periodKey);
-    await _writeDoc(
-      collection: Collections.workReportAdditionalLines,
-      docId: line.id,
-      operation: 'delete',
-      data: {},
-    );
-    if (hadPdf || isAdmin(actor)) {
-      await _writeAudit(
-        targetCollection: Collections.workReportAdditionalLines,
-        targetId: line.id,
-        clockNo: line.clockNo,
-        periodKey: line.periodKey,
-        field: 'delete',
-        oldValue: '${line.hours}h ${line.description}',
-        newValue: '',
-        actor: actor,
-      );
-    }
-    await _recomputePeriodTotals(line.clockNo, line.periodKey, actor.clockNo);
   }
 
   Future<void> recordPdfGenerated({
@@ -527,28 +498,29 @@ class WorkReportService {
     }, SetOptions(merge: true));
   }
 
-  /// Cap applies to **additional work** by calendar day (job lines have no work date).
+  /// Cap applies to job-line hours summed by timesheet [workDate].
   void validateDailyHoursCap({
-    required List<WorkReportAdditionalLine> additionalLines,
+    required List<WorkReportJobLine> jobLines,
     required WorkReportSettings settings,
   }) {
     final byDay = <String, double>{};
-    for (final line in additionalLines) {
-      final key =
-          '${line.workDate.year}-${line.workDate.month}-${line.workDate.day}';
+    for (final line in jobLines) {
+      final wd = line.workDate;
+      if (wd == null) continue;
+      final key = '${wd.year}-${wd.month}-${wd.day}';
       byDay[key] = (byDay[key] ?? 0) + line.hours;
     }
     for (final entry in byDay.entries) {
       if (entry.value > settings.maxHoursPerDay + 0.001) {
         throw WorkReportValidationException(
-          'Additional work on ${entry.key} exceeds ${settings.maxHoursPerDay}h '
+          'Hours on ${entry.key} exceed ${settings.maxHoursPerDay}h '
           '(${entry.value.toStringAsFixed(1)}h)',
         );
       }
     }
   }
 
-  /// Soft monthly guidance: total hours vs max/day × weekdays in period.
+  /// Soft guidance: total hours vs max/day × weekdays in period (week or month).
   String? monthlyHoursSoftWarning({
     required double totalHours,
     required String periodKey,
@@ -562,7 +534,8 @@ class WorkReportService {
     if (days <= 0) return null;
     final softCap = settings.maxHoursPerDay * days;
     if (totalHours > softCap + 0.001) {
-      return 'Total ${totalHours.toStringAsFixed(1)}h exceeds rough month cap '
+      final unit = WorkReportPeriodUtils.isWeekKey(periodKey) ? 'week' : 'period';
+      return 'Total ${totalHours.toStringAsFixed(1)}h exceeds rough $unit cap '
           '(${softCap.toStringAsFixed(0)}h = ${settings.maxHoursPerDay}h × $days weekdays). '
           'Review before sharing with Accounts.';
     }
@@ -574,25 +547,21 @@ class WorkReportService {
     required String periodKey,
     required String actorClockNo,
     required List<WorkReportJobLine> jobLines,
-    required List<WorkReportAdditionalLine> additionalLines,
   }) async {
     final jobHours = jobLines.fold<double>(0, (s, l) => s + l.hours);
-    final addHours = additionalLines.fold<double>(0, (s, l) => s + l.hours);
     await _writePeriodTotals(
       clockNo,
       periodKey,
       actorClockNo,
       jobHours,
-      addHours,
     );
   }
 
   Future<void> _recomputePeriodTotals(
     String clockNo,
     String periodKey,
-    String actorClockNo, {
-    double? jobHoursHint,
-  }) async {
+    String actorClockNo,
+  ) async {
     final online = await ConnectivityService().isOnline();
     if (!online) {
       // Offline: avoid clobbering totals with incomplete server reads.
@@ -607,17 +576,8 @@ class WorkReportService {
           .where('clockNo', isEqualTo: clockNo)
           .where('periodKey', isEqualTo: periodKey)
           .get();
-      final addSnap = await _db
-          .collection(Collections.workReportAdditionalLines)
-          .where('clockNo', isEqualTo: clockNo)
-          .where('periodKey', isEqualTo: periodKey)
-          .get();
 
       final jobHours = jobSnap.docs.fold<double>(
-        0,
-        (total, d) => total + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
-      );
-      final addHours = addSnap.docs.fold<double>(
         0,
         (total, d) => total + ((d.data()['hours'] as num?)?.toDouble() ?? 0),
       );
@@ -627,7 +587,6 @@ class WorkReportService {
         periodKey,
         actorClockNo,
         jobHours,
-        addHours,
       );
     } catch (e) {
       debugPrint('Work report totals recompute failed: $e');
@@ -639,7 +598,6 @@ class WorkReportService {
     String periodKey,
     String actorClockNo,
     double jobHours,
-    double addHours,
   ) async {
     final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
     await _writeDoc(
@@ -648,51 +606,13 @@ class WorkReportService {
       operation: 'set',
       data: {
         'totalJobHours': jobHours,
-        'totalAdditionalHours': addHours,
-        'totalHours': jobHours + addHours,
+        'totalAdditionalHours': 0,
+        'totalHours': jobHours,
         'lastUpdatedByClockNo': actorClockNo,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
       },
       merge: true,
     );
-  }
-
-  void _validateAdditionalLine(
-    WorkReportAdditionalLine line,
-    WorkReportSettings settings,
-  ) {
-    if (line.hours <= 0) {
-      throw WorkReportValidationException('Additional work hours must be > 0');
-    }
-    if (line.description.trim().isEmpty) {
-      throw WorkReportValidationException('Description is required');
-    }
-    if (!WorkReportPeriodUtils.isDateInPeriod(
-      line.workDate,
-      line.periodKey,
-      periodMode: settings.defaultPeriodMode,
-      periodStartDay: settings.periodStartDay,
-    )) {
-      throw WorkReportValidationException('Date must fall within the period');
-    }
-    if (line.hours > settings.maxHoursPerDay) {
-      throw WorkReportValidationException(
-        'A single entry cannot exceed ${settings.maxHoursPerDay}h',
-      );
-    }
-  }
-
-  String _fieldValue(WorkReportAdditionalLine line, String field) {
-    switch (field) {
-      case 'hours':
-        return line.hours.toString();
-      case 'description':
-        return line.description;
-      case 'workDate':
-        return line.workDate.toIso8601String();
-      default:
-        return '';
-    }
   }
 
   Future<void> _writeAudit({

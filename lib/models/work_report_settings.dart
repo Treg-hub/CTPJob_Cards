@@ -54,7 +54,7 @@ class WorkReportSettings {
   final bool includeSignatureBlock;
   /// Note on PDF when edits occurred after the last generated PDF.
   final bool includePostPdfEditNote;
-  /// `calendar_month` (1st–last) or `factory_month` (e.g. 26th–25th).
+  /// `calendar_week` (Mon–Sun, primary), legacy `calendar_month` / `factory_month`.
   final String defaultPeriodMode;
   /// Day of month the factory period opens (only for factory_month). Default 26.
   final int periodStartDay;
@@ -63,17 +63,22 @@ class WorkReportSettings {
     this.enabled = false,
     this.enabledClockNos = const [],
     this.timezone = 'Africa/Johannesburg',
-    this.editablePeriodsBack = 1,
+    this.editablePeriodsBack = 8,
     this.maxHoursPerDay = 24,
     this.inclusionRules = const WorkReportInclusionRules(),
     this.includeZeroHourJobs = true,
     this.includeSignatureBlock = true,
     this.includePostPdfEditNote = true,
-    this.defaultPeriodMode = 'calendar_month',
+    this.defaultPeriodMode = 'calendar_week',
     this.periodStartDay = 26,
   });
 
   static const WorkReportSettings defaults = WorkReportSettings();
+
+  bool get isWeeklyPeriodMode =>
+      defaultPeriodMode == 'calendar_week' ||
+      defaultPeriodMode != 'calendar_month' &&
+          defaultPeriodMode != 'factory_month';
 
   bool get isFactoryPeriodMode =>
       defaultPeriodMode == 'factory_month' && periodStartDay > 1;
@@ -101,12 +106,18 @@ class WorkReportSettings {
 
   factory WorkReportSettings.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    final mode = data['default_period_mode'] as String? ?? 'calendar_month';
+    // Product is weekly timesheets; coerce legacy month modes to calendar_week.
+    final rawMode = data['default_period_mode'] as String? ?? 'calendar_week';
+    final mode = (rawMode == 'calendar_month' || rawMode == 'factory_month')
+        ? 'calendar_week'
+        : 'calendar_week';
+    final back = data['editable_periods_back'] as int? ?? 8;
     return WorkReportSettings(
       enabled: data['enabled'] as bool? ?? false,
       enabledClockNos: _parseClockNoList(data['enabled_clock_nos']),
       timezone: data['timezone'] as String? ?? 'Africa/Johannesburg',
-      editablePeriodsBack: data['editable_periods_back'] as int? ?? 1,
+      // Month lookback of 1 was common; for weeks allow at least 4 navigable weeks.
+      editablePeriodsBack: back < 4 ? 8 : back,
       maxHoursPerDay: (data['max_hours_per_day'] as num?)?.toDouble() ?? 24,
       inclusionRules: WorkReportInclusionRules.fromMap(
         data['job_inclusion_rules'] as Map<String, dynamic>?,
@@ -115,8 +126,7 @@ class WorkReportSettings {
       includeSignatureBlock: data['include_signature_block'] as bool? ?? true,
       includePostPdfEditNote:
           data['include_post_pdf_edit_note'] as bool? ?? true,
-      defaultPeriodMode:
-          mode == 'factory_month' ? 'factory_month' : 'calendar_month',
+      defaultPeriodMode: mode,
       periodStartDay: (data['period_start_day'] as num?)?.toInt() ?? 26,
     );
   }

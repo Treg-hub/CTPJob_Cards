@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../models/work_report_additional_line.dart';
 import '../models/work_report_job_line.dart';
 import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
@@ -26,13 +25,22 @@ class WorkReportCsvExporter {
   static String buildCsv({
     required WorkReportPeriod period,
     required List<WorkReportJobLine> jobLines,
-    required List<WorkReportAdditionalLine> additionalLines,
     required WorkReportSettings settings,
   }) {
     final jobs = filterJobLines(jobLines, settings)
-      ..sort((a, b) => a.jobCardNumber.compareTo(b.jobCardNumber));
-    final add = [...additionalLines]
-      ..sort((a, b) => a.workDate.compareTo(b.workDate));
+      ..sort((a, b) {
+        final da = a.workDate;
+        final db = b.workDate;
+        if (da != null && db != null) {
+          final c = da.compareTo(db);
+          if (c != 0) return c;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        return a.jobCardNumber.compareTo(b.jobCardNumber);
+      });
 
     final rows = <List<dynamic>>[
       ['CTP My Timesheet'],
@@ -48,41 +56,33 @@ class WorkReportCsvExporter {
         period.position,
       ],
       [],
-      ['Section', 'Job #', 'Type', 'Location', 'Date', 'Hours', 'Description', 'Billing summary', 'Linked job #'],
+      [
+        'Job #',
+        'Type',
+        'Location',
+        'Work date',
+        'Hours',
+        'Work done',
+        'Billing summary',
+      ],
     ];
 
     for (final line in jobs) {
       rows.add([
-        'Job card',
         line.jobCardNumber > 0 ? line.jobCardNumber : '',
         line.jobMeta.type,
         line.jobMeta.locationLabel,
-        '',
+        line.workDate != null
+            ? DateFormat('yyyy-MM-dd').format(line.workDate!)
+            : '',
         _hours.format(line.hours),
         line.correctiveActionSnapshot.replaceAll('\n', ' '),
         line.billingSummary.replaceAll('\n', ' '),
-        '',
-      ]);
-    }
-
-    for (final line in add) {
-      rows.add([
-        'Additional',
-        '',
-        '',
-        '',
-        DateFormat('yyyy-MM-dd').format(line.workDate),
-        _hours.format(line.hours),
-        line.description.replaceAll('\n', ' '),
-        '',
-        line.linkedJobCardNumber ?? '',
       ]);
     }
 
     rows.addAll([
       [],
-      ['Summary', 'Job card hours', _hours.format(period.totalJobHours)],
-      ['Summary', 'Additional hours', _hours.format(period.totalAdditionalHours)],
       ['Summary', 'Total hours', _hours.format(period.totalHours)],
       [],
       ['Generated', DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())],
@@ -94,13 +94,11 @@ class WorkReportCsvExporter {
   static Future<File> generateAndShare({
     required WorkReportPeriod period,
     required List<WorkReportJobLine> jobLines,
-    required List<WorkReportAdditionalLine> additionalLines,
     required WorkReportSettings settings,
   }) async {
     final csv = buildCsv(
       period: period,
       jobLines: jobLines,
-      additionalLines: additionalLines,
       settings: settings,
     );
     final dir = await getTemporaryDirectory();
