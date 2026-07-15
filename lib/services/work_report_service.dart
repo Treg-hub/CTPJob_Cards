@@ -477,6 +477,47 @@ class WorkReportService {
     );
   }
 
+  /// Save free-text notes for the period (shown on PDF Notes section).
+  Future<void> updatePeriodNotes({
+    required String clockNo,
+    required String periodKey,
+    required String notes,
+    required Employee actor,
+    WorkReportSettings? settings,
+  }) async {
+    final s = settings ?? WorkReportSettings.defaults;
+    final isPast = WorkReportPeriodUtils.isPastPeriod(
+      periodKey,
+      periodMode: s.defaultPeriodMode,
+      periodStartDay: s.periodStartDay,
+    );
+    final id = WorkReportPeriodUtils.periodDocId(clockNo, periodKey);
+    final trimmed = notes.trim();
+    await _writeDoc(
+      collection: Collections.workReportPeriods,
+      docId: id,
+      operation: 'set',
+      data: {
+        'notes': trimmed,
+        'lastUpdatedByClockNo': actor.clockNo,
+        'lastUpdatedAt': FieldValue.serverTimestamp(),
+      },
+      merge: true,
+    );
+    if (isPast || await _periodHasPdf(clockNo, periodKey)) {
+      await _writeAudit(
+        targetCollection: Collections.workReportPeriods,
+        targetId: id,
+        clockNo: clockNo,
+        periodKey: periodKey,
+        field: isPast ? 'notes (past period)' : 'notes',
+        oldValue: '',
+        newValue: trimmed.length > 80 ? '${trimmed.substring(0, 80)}...' : trimmed,
+        actor: actor,
+      );
+    }
+  }
+
   Future<void> recordPdfGenerated({
     required String clockNo,
     required String periodKey,

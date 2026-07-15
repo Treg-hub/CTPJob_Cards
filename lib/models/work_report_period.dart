@@ -17,6 +17,8 @@ class WorkReportPeriod {
   final DateTime? lastUpdatedAt;
   final String lastUpdatedByClockNo;
   final DateTime? jobLinesRefreshedAt;
+  /// Free-text notes for the period (shown on PDF Notes section).
+  final String notes;
 
   const WorkReportPeriod({
     required this.id,
@@ -35,6 +37,7 @@ class WorkReportPeriod {
     this.lastUpdatedAt,
     this.lastUpdatedByClockNo = '',
     this.jobLinesRefreshedAt,
+    this.notes = '',
   });
 
   bool get hasPdf => pdfGeneratedAt != null;
@@ -66,6 +69,7 @@ class WorkReportPeriod {
       lastUpdatedAt: _ts(data['lastUpdatedAt']),
       lastUpdatedByClockNo: data['lastUpdatedByClockNo'] as String? ?? '',
       jobLinesRefreshedAt: _ts(data['jobLinesRefreshedAt']),
+      notes: data['notes'] as String? ?? '',
     );
   }
 
@@ -80,6 +84,7 @@ class WorkReportPeriod {
         'totalJobHours': totalJobHours,
         'totalAdditionalHours': totalAdditionalHours,
         'totalHours': totalHours,
+        'notes': notes,
         if (pdfGeneratedAt != null)
           'pdfGeneratedAt': Timestamp.fromDate(pdfGeneratedAt!),
         'pdfVersion': pdfVersion,
