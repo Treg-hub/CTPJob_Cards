@@ -7,7 +7,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
-import '../models/work_report_additional_line.dart';
 import '../models/work_report_job_line.dart';
 import '../models/work_report_period.dart';
 import '../models/work_report_settings.dart';
@@ -18,11 +17,11 @@ import 'work_report_period_utils.dart';
 class WorkReportPdfExporter {
   static final _hours = NumberFormat('#,##0.##');
   static final _fileDate = DateFormat('yyyy-MM-dd_HHmm');
+  static final _day = DateFormat('d MMM yyyy');
 
   static Future<Uint8List> buildPdfBytes({
     required WorkReportPeriod period,
     required List<WorkReportJobLine> jobLines,
-    required List<WorkReportAdditionalLine> additionalLines,
     required WorkReportSettings settings,
     int postPdfEditCount = 0,
   }) async {
@@ -33,10 +32,20 @@ class WorkReportPdfExporter {
     final generated = DateFormat('d MMM yyyy HH:mm').format(DateTime.now());
 
     final sortedJobs = WorkReportCsvExporter.filterJobLines(jobLines, settings)
-      ..sort((a, b) => a.jobCardNumber.compareTo(b.jobCardNumber));
-    final sortedAdd = [...additionalLines]
-      ..sort((a, b) => a.workDate.compareTo(b.workDate));
-    final daily = WorkReportDailyHours.fromAdditionalLines(sortedAdd);
+      ..sort((a, b) {
+        final da = a.workDate;
+        final db = b.workDate;
+        if (da != null && db != null) {
+          final c = da.compareTo(db);
+          if (c != 0) return c;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        return a.jobCardNumber.compareTo(b.jobCardNumber);
+      });
+    final daily = WorkReportDailyHours.fromJobLines(sortedJobs);
 
     doc.addPage(
       pw.MultiPage(
@@ -68,7 +77,7 @@ class WorkReportPdfExporter {
           ],
           if (daily.isNotEmpty) ...[
             pw.SizedBox(height: 12),
-            pw.Text('Additional work by day',
+            pw.Text('Hours by day',
                 style:
                     pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
@@ -102,6 +111,7 @@ class WorkReportPdfExporter {
             pw.TableHelper.fromTextArray(
               headers: const [
                 'Job #',
+                'Date',
                 'Type',
                 'Location',
                 'Hours',
@@ -112,6 +122,7 @@ class WorkReportPdfExporter {
                 for (final line in sortedJobs)
                   [
                     line.jobCardNumber > 0 ? '#${line.jobCardNumber}' : '—',
+                    line.workDate != null ? _day.format(line.workDate!) : '—',
                     line.jobMeta.type,
                     _clean(line.jobMeta.locationLabel),
                     _hours.format(line.hours),
@@ -126,50 +137,17 @@ class WorkReportPdfExporter {
                   const pw.BoxDecoration(color: PdfColors.grey300),
               cellAlignments: {
                 0: pw.Alignment.centerLeft,
-                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
               },
               columnWidths: {
-                4: const pw.FlexColumnWidth(2.2),
-                5: const pw.FlexColumnWidth(1.8),
+                5: const pw.FlexColumnWidth(2.0),
+                6: const pw.FlexColumnWidth(1.6),
               },
-            ),
-          pw.SizedBox(height: 16),
-          pw.Text('Additional work',
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          if (sortedAdd.isEmpty)
-            pw.Text('No additional work.', style: const pw.TextStyle(fontSize: 9))
-          else
-            pw.TableHelper.fromTextArray(
-              headers: const [
-                'Date',
-                'Hours',
-                'Description',
-                'Linked job',
-              ],
-              data: [
-                for (final line in sortedAdd)
-                  [
-                    DateFormat('d MMM yyyy').format(line.workDate),
-                    _hours.format(line.hours),
-                    _clean(line.description),
-                    _linkedJobLabel(line.linkedJobCardNumber, sortedJobs),
-                  ],
-              ],
-              headerStyle:
-                  pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
-              cellStyle: const pw.TextStyle(fontSize: 7),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignments: {1: pw.Alignment.centerRight},
-              columnWidths: {2: const pw.FlexColumnWidth(2.5)},
             ),
           pw.SizedBox(height: 12),
           pw.TableHelper.fromTextArray(
             headers: const ['', 'Hours'],
             data: [
-              ['Job card work', _hours.format(period.totalJobHours)],
-              ['Additional work', _hours.format(period.totalAdditionalHours)],
               ['Total', _hours.format(period.totalHours)],
             ],
             headerStyle:
@@ -270,22 +248,5 @@ class WorkReportPdfExporter {
   static String _clean(String text) {
     final t = text.replaceAll('\n', ' ').trim();
     return t.isEmpty ? '—' : t;
-  }
-
-  static String _linkedJobLabel(
-    int? jobNumber,
-    List<WorkReportJobLine> jobLines,
-  ) {
-    if (jobNumber == null) return '—';
-    for (final line in jobLines) {
-      if (line.jobCardNumber == jobNumber) {
-        final machine = line.jobMeta.machine.trim();
-        if (machine.isNotEmpty) return '#$jobNumber · $machine';
-        final loc = line.jobMeta.locationLabel.trim();
-        if (loc.isNotEmpty) return '#$jobNumber · $loc';
-        break;
-      }
-    }
-    return '#$jobNumber';
   }
 }

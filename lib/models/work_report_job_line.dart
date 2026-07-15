@@ -62,6 +62,8 @@ class WorkReportJobLine {
   final String correctiveActionSnapshot;
   final WorkReportJobMeta jobMeta;
   final bool orphan;
+  /// Timesheet-only work date (does not change the job card). Defaults to job create date.
+  final DateTime? workDate;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -76,6 +78,7 @@ class WorkReportJobLine {
     this.correctiveActionSnapshot = '',
     this.jobMeta = const WorkReportJobMeta(),
     this.orphan = false,
+    this.workDate,
     this.createdAt,
     this.updatedAt,
   });
@@ -88,7 +91,18 @@ class WorkReportJobLine {
     return null;
   }
 
+  /// Calendar date only (local midnight).
+  static DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Default timesheet date from job card create time (not the job card field itself).
+  static DateTime defaultWorkDateFromJob(JobCard job) {
+    final created = job.createdAt;
+    if (created != null) return dateOnly(created);
+    return dateOnly(DateTime.now());
+  }
+
   factory WorkReportJobLine.fromFirestore(String id, Map<String, dynamic> data) {
+    final rawWork = _ts(data['workDate']);
     return WorkReportJobLine(
       id: id,
       clockNo: data['clockNo'] as String? ?? '',
@@ -103,6 +117,7 @@ class WorkReportJobLine {
         data['jobMeta'] as Map<String, dynamic>?,
       ),
       orphan: data['orphan'] as bool? ?? false,
+      workDate: rawWork != null ? dateOnly(rawWork) : null,
       createdAt: _ts(data['createdAt']),
       updatedAt: _ts(data['updatedAt']),
     );
@@ -118,9 +133,34 @@ class WorkReportJobLine {
         'correctiveActionSnapshot': correctiveActionSnapshot,
         'jobMeta': jobMeta.toFirestore(),
         'orphan': orphan,
+        if (workDate != null)
+          'workDate': Timestamp.fromDate(dateOnly(workDate!)),
         'createdAt': createdAt != null
             ? Timestamp.fromDate(createdAt!)
             : FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
+
+  WorkReportJobLine copyWith({
+    double? hours,
+    String? billingSummary,
+    DateTime? workDate,
+    bool clearWorkDate = false,
+  }) {
+    return WorkReportJobLine(
+      id: id,
+      clockNo: clockNo,
+      periodKey: periodKey,
+      jobCardId: jobCardId,
+      jobCardNumber: jobCardNumber,
+      hours: hours ?? this.hours,
+      billingSummary: billingSummary ?? this.billingSummary,
+      correctiveActionSnapshot: correctiveActionSnapshot,
+      jobMeta: jobMeta,
+      orphan: orphan,
+      workDate: clearWorkDate ? null : (workDate ?? this.workDate),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 }

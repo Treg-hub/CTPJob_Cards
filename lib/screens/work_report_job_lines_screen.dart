@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/employee.dart';
@@ -104,9 +105,18 @@ class _WorkReportJobLinesScreenState
     WorkReportJobLine line, {
     required String? prevHours,
     required String? prevSummary,
+    required String? prevWorkDate,
   }) async {
     if (currentEmployee == null) return;
-    final ok = await confirmWorkReportEditAfterPdf(context, period: _period);
+    final settings =
+        ref.read(workReportSettingsProvider).valueOrNull ??
+            WorkReportSettings.defaults;
+    final ok = await confirmWorkReportEdit(
+      context,
+      period: _period,
+      periodKey: widget.periodKey,
+      settings: settings,
+    );
     if (!ok) return;
     try {
       await service.upsertJobLine(
@@ -115,6 +125,8 @@ class _WorkReportJobLinesScreenState
         isAdminEdit: _isAdminEdit,
         previousHours: prevHours,
         previousSummary: prevSummary,
+        previousWorkDate: prevWorkDate,
+        settings: settings,
       );
       await _loadPeriod();
     } catch (e) {
@@ -193,9 +205,14 @@ class _WorkReportJobLinesScreenState
                           return _JobLineTile(
                             line: lines[index],
                             editable: _editable,
-                            onSave: (updated, prevH, prevS) =>
-                                _saveLine(service, updated,
-                                    prevHours: prevH, prevSummary: prevS),
+                            onSave: (updated, prevH, prevS, prevD) =>
+                                _saveLine(
+                              service,
+                              updated,
+                              prevHours: prevH,
+                              prevSummary: prevS,
+                              prevWorkDate: prevD,
+                            ),
                           );
                         },
                       ),
@@ -221,6 +238,7 @@ class _JobLineTile extends StatefulWidget {
     WorkReportJobLine updated,
     String? prevHours,
     String? prevSummary,
+    String? prevWorkDate,
   ) onSave;
 
   @override
@@ -228,8 +246,11 @@ class _JobLineTile extends StatefulWidget {
 }
 
 class _JobLineTileState extends State<_JobLineTile> {
+  static final _dateFmt = DateFormat('d MMM yyyy');
+
   late final TextEditingController _hoursCtrl;
   late final TextEditingController _summaryCtrl;
+  DateTime? _workDate;
   bool _expanded = false;
   bool _dirty = false;
 
@@ -240,6 +261,7 @@ class _JobLineTileState extends State<_JobLineTile> {
       text: widget.line.hours == 0 ? '' : widget.line.hours.toString(),
     );
     _summaryCtrl = TextEditingController(text: widget.line.billingSummary);
+    _workDate = widget.line.workDate;
     _hoursCtrl.addListener(_markDirty);
     _summaryCtrl.addListener(_markDirty);
   }
@@ -247,8 +269,15 @@ class _JobLineTileState extends State<_JobLineTile> {
   void _markDirty() {
     final hours = double.tryParse(_hoursCtrl.text.trim()) ?? 0;
     final dirty = hours != widget.line.hours ||
-        _summaryCtrl.text.trim() != widget.line.billingSummary;
+        _summaryCtrl.text.trim() != widget.line.billingSummary ||
+        !_sameDate(_workDate, widget.line.workDate);
     if (dirty != _dirty) setState(() => _dirty = dirty);
+  }
+
+  bool _sameDate(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   @override
@@ -257,10 +286,12 @@ class _JobLineTileState extends State<_JobLineTile> {
     if (oldWidget.line.id != widget.line.id ||
         (!_dirty &&
             (oldWidget.line.hours != widget.line.hours ||
-                oldWidget.line.billingSummary != widget.line.billingSummary))) {
+                oldWidget.line.billingSummary != widget.line.billingSummary ||
+                !_sameDate(oldWidget.line.workDate, widget.line.workDate)))) {
       _hoursCtrl.text =
           widget.line.hours == 0 ? '' : widget.line.hours.toString();
       _summaryCtrl.text = widget.line.billingSummary;
+      _workDate = widget.line.workDate;
       _dirty = false;
     }
   }
@@ -272,8 +303,34 @@ class _JobLineTileState extends State<_JobLineTile> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    if (!widget.editable) return;
+    final initial = _workDate ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Timesheet work date',
+    );
+    if (picked == null) return;
+    setState(() {
+      _workDate = WorkReportJobLine.dateOnly(picked);
+    });
+    _markDirty();
+  }
+
   void _commit() {
     final hours = double.tryParse(_hoursCtrl.text.trim()) ?? 0;
+    if (_workDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pick a work date for this job line'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     final updated = WorkReportJobLine(
       id: widget.line.id,
       clockNo: widget.line.clockNo,
@@ -285,13 +342,18 @@ class _JobLineTileState extends State<_JobLineTile> {
       correctiveActionSnapshot: widget.line.correctiveActionSnapshot,
       jobMeta: widget.line.jobMeta,
       orphan: widget.line.orphan,
+      workDate: _workDate,
       createdAt: widget.line.createdAt,
       updatedAt: widget.line.updatedAt,
     );
+    final prevDate = widget.line.workDate != null
+        ? WorkReportJobLine.dateOnly(widget.line.workDate!).toIso8601String()
+        : '';
     widget.onSave(
       updated,
       widget.line.hours.toString(),
       widget.line.billingSummary,
+      prevDate,
     );
     setState(() => _dirty = false);
   }
@@ -301,6 +363,9 @@ class _JobLineTileState extends State<_JobLineTile> {
     final line = widget.line;
     final scheme = Theme.of(context).colorScheme;
     final orphanBg = scheme.surfaceContainerHighest.withValues(alpha: 0.55);
+    final dateLabel =
+        _workDate != null ? _dateFmt.format(_workDate!) : 'Tap to set date';
+
     return Card(
       color: line.orphan ? orphanBg : null,
       child: ExpansionTile(
@@ -314,9 +379,10 @@ class _JobLineTileState extends State<_JobLineTile> {
         ),
         subtitle: Text(
           [
+            if (_workDate != null) _dateFmt.format(_workDate!),
             line.jobMeta.locationLabel,
             if (_dirty) '• Unsaved',
-          ].where((s) => s.trim().isNotEmpty).join(' '),
+          ].where((s) => s.trim().isNotEmpty).join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -338,6 +404,21 @@ class _JobLineTileState extends State<_JobLineTile> {
                     ),
                   ),
                 const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: widget.editable ? _pickDate : null,
+                  icon: const Icon(Icons.calendar_today, size: 18),
+                  label: Text(dateLabel),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Text(
+                    'Timesheet date only — does not change the job card.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                ),
                 TextField(
                   controller: _hoursCtrl,
                   enabled: widget.editable,

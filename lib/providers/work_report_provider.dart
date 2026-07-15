@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/work_report_settings.dart';
 import '../services/work_report_service.dart';
+import '../utils/work_report_period_utils.dart';
 
 final workReportServiceProvider = Provider<WorkReportService>((ref) {
   return WorkReportService();
@@ -15,6 +16,5 @@ final workReportSettingsProvider = StreamProvider<WorkReportSettings>((ref) {
 final workReportSubjectClockProvider = StateProvider<String?>((ref) => null);
 
 final workReportPeriodKeyProvider = StateProvider<String>((ref) {
-  final now = DateTime.now();
-  return '${now.year}-${now.month.toString().padLeft(2, '0')}';
+  return WorkReportPeriodUtils.weekKeyFor(DateTime.now());
 });
