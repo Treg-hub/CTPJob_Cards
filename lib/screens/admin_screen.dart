@@ -373,6 +373,63 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return list;
   }
 
+  /// Positions currently used on employee records (for add/edit combobox).
+  List<String> get _positionOptions {
+    final s = <String>{};
+    for (final e in _allEmployees) {
+      final p = e.position.trim();
+      if (p.isNotEmpty) s.add(p);
+    }
+    final list = s.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
+  /// Combobox: pick an existing value or type a new one (Autocomplete).
+  Widget _employeeComboField({
+    required TextEditingController controller,
+    required String label,
+    required List<String> options,
+    String? helperText,
+  }) {
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: controller.text),
+      optionsMaxHeight: 220,
+      optionsBuilder: (TextEditingValue tev) {
+        final q = tev.text.trim().toLowerCase();
+        final sorted = List<String>.from(options)
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        if (q.isEmpty) return sorted;
+        return sorted.where((o) => o.toLowerCase().contains(q));
+      },
+      onSelected: (String selection) {
+        controller.text = selection;
+        controller.selection =
+            TextSelection.collapsed(offset: selection.length);
+      },
+      fieldViewBuilder: (
+        BuildContext context,
+        TextEditingController textController,
+        FocusNode focusNode,
+        VoidCallback onFieldSubmitted,
+      ) {
+        return TextField(
+          controller: textController,
+          focusNode: focusNode,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: helperText ?? 'Select existing or type a new value',
+            helperMaxLines: 2,
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+          ),
+          onChanged: (v) => controller.text = v,
+          onSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+    );
+  }
+
   List<Employee> get _employeesSorted {
     final list = List<Employee>.from(_allEmployees);
     list.sort((a, b) {
@@ -1333,9 +1390,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               const SizedBox(height: 12),
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name *')),
               const SizedBox(height: 12),
-              TextField(controller: posCtrl, decoration: const InputDecoration(labelText: 'Position *')),
+              _employeeComboField(
+                controller: posCtrl,
+                label: 'Position *',
+                options: _positionOptions,
+                helperText: 'Positions in use on the roster, or type a new title',
+              ),
               const SizedBox(height: 12),
-              TextField(controller: deptCtrl, decoration: const InputDecoration(labelText: 'Department *')),
+              _employeeComboField(
+                controller: deptCtrl,
+                label: 'Department *',
+                options: _departmentOptions,
+                helperText: 'Departments from roster + factory structure, or type new',
+              ),
               const SizedBox(height: 12),
               TextField(controller: fcmCtrl, decoration: const InputDecoration(labelText: 'FCM Token')),
               const SizedBox(height: 12),
@@ -1389,9 +1456,12 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 final msg = ScaffoldMessenger.of(ctx);
                 try {
                   final emp = Employee(
-                    clockNo: cnCtrl.text, name: nameCtrl.text, position: posCtrl.text,
-                    department: deptCtrl.text, isOnSite: isOnSite,
-                    fcmToken: fcmCtrl.text.isEmpty ? null : fcmCtrl.text,
+                    clockNo: cnCtrl.text.trim(),
+                    name: nameCtrl.text.trim(),
+                    position: posCtrl.text.trim(),
+                    department: deptCtrl.text.trim(),
+                    isOnSite: isOnSite,
+                    fcmToken: fcmCtrl.text.trim().isEmpty ? null : fcmCtrl.text.trim(),
                     fcmTokenUpdatedAt: existing?.fcmTokenUpdatedAt,
                     registrationLocked: registrationLocked,
                     uid: existing?.uid,
