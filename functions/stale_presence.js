@@ -11,6 +11,10 @@
  *
  * Proof window: 2 hours (aligned with the schedule). A healthy phone should
  * have ~4 WorkManager checks in that window.
+ *
+ * Exemption — iPhone/iPad Safari web: no geofence, deliberately left isOnSite
+ * true so they stay in onsite escalation recipient queries; notifications are
+ * always parked via notificationDelivery=inbox_only. Never clear those.
  */
 const admin = require("firebase-admin");
 
@@ -40,8 +44,26 @@ function isPresenceProof(doc) {
 }
 
 /**
+ * iPhone/iPad web (and any inbox_only client): no native geofence heartbeats by
+ * design — must not be treated as OEM-stuck Android zombies.
+ * @param {FirebaseFirestore.DocumentData|undefined|null} emp
+ * @returns {boolean}
+ */
+function isGeofenceExempt(emp) {
+  if (!emp) return false;
+  if (emp.notificationDelivery === "inbox_only") return true;
+  const platform = String(emp.clientPlatform || "").toLowerCase();
+  const device = String(emp.clientDevice || "").toLowerCase();
+  if (platform === "web" && (device === "iphone" || device === "ipad")) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Clear stuck isOnSite flags when app_geofence has no recent check/enter proof.
- * @returns {Promise<{scanned:number, cleared:number, clearedClockNos:string[], staleMs:number, elapsedMs:number}>}
+ * Skips inbox_only / iPhone-iPad web (deliberate non-geofence on-site).
+ * @returns {Promise<object>}
  */
 async function runStalePresenceClear() {
   const db = admin.firestore();
@@ -71,6 +93,7 @@ async function runStalePresenceClear() {
     .get();
 
   const clearedClockNos = [];
+  const skippedExemptClockNos = [];
   // Batch in chunks of 400 (each clear = employee update + app_geofence add).
   let batch = db.batch();
   let opsInBatch = 0;
@@ -85,6 +108,12 @@ async function runStalePresenceClear() {
   for (const empDoc of onSiteSnap.docs) {
     const clockNo = empDoc.id;
     if (alive.has(clockNo)) continue;
+
+    const emp = empDoc.data() || {};
+    if (isGeofenceExempt(emp)) {
+      skippedExemptClockNos.push(clockNo);
+      continue;
+    }
 
     batch.set(
       empDoc.ref,
@@ -122,6 +151,8 @@ async function runStalePresenceClear() {
     scanned: onSiteSnap.size,
     cleared: clearedClockNos.length,
     clearedClockNos,
+    skippedExempt: skippedExemptClockNos.length,
+    skippedExemptClockNos,
     recentProofDocs: recentSnap.size,
     aliveCount: alive.size,
     staleMs: STALE_MS,
@@ -131,8 +162,85 @@ async function runStalePresenceClear() {
   return summary;
 }
 
+/**
+ * One-shot heal: restore inbox_only / iPhone-iPad web users who were incorrectly
+ * cleared by an earlier stale_presence_cf run (before the exemption shipped).
+ * @returns {Promise<object>}
+ */
+async function restoreExemptClearedByStaleCf() {
+  const db = admin.firestore();
+  const started = Date.now();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  // Single-field equality only (no composite index). Filter isOnSite in memory.
+  const snap = await db
+    .collection("employees")
+    .where("presenceSource", "==", "stale_presence_cf")
+    .get();
+
+  const restoredClockNos = [];
+  let batch = db.batch();
+  let opsInBatch = 0;
+
+  const commitBatch = async () => {
+    if (opsInBatch === 0) return;
+    await batch.commit();
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  for (const empDoc of snap.docs) {
+    const emp = empDoc.data() || {};
+    if (emp.isOnSite === true) continue;
+    if (!isGeofenceExempt(emp)) continue;
+
+    const clockNo = empDoc.id;
+    batch.set(
+      empDoc.ref,
+      {
+        isOnSite: true,
+        presenceSource: "stale_presence_cf_restore",
+        presenceUpdatedAt: now,
+        lastOnSiteAt: now,
+      },
+      { merge: true },
+    );
+    opsInBatch++;
+
+    const logRef = db.collection("app_geofence").doc();
+    batch.set(logRef, {
+      clockNo,
+      eventType: "enter",
+      source: "stale_presence_cf_restore",
+      isOnSite: true,
+      notes: "Restore iPhone/web inbox_only user incorrectly cleared by stale_presence_cf",
+      timestamp: now,
+      createdAt: now,
+    });
+    opsInBatch++;
+    restoredClockNos.push(clockNo);
+
+    if (opsInBatch >= 400) {
+      await commitBatch();
+    }
+  }
+
+  await commitBatch();
+
+  const summary = {
+    candidates: snap.size,
+    restored: restoredClockNos.length,
+    restoredClockNos,
+    elapsedMs: Date.now() - started,
+  };
+  console.log("restoreExemptClearedByStaleCf complete:", JSON.stringify(summary));
+  return summary;
+}
+
 module.exports = {
   runStalePresenceClear,
+  restoreExemptClearedByStaleCf,
+  isGeofenceExempt,
   STALE_MS,
   PROOF_EVENT_TYPES,
   PROOF_SOURCES,
