@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart' show currentEmployee;
 import '../services/kiosk_mode_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 
 /// Device-lockdown setup for a dedicated kiosk tablet (e.g. the main-gate
@@ -55,7 +56,7 @@ class _KioskModeScreenState extends State<KioskModeScreen> {
     });
   }
 
-  bool get _isAdmin => currentEmployee?.isAdmin ?? false;
+  bool get _isAdmin => role_utils.isAdmin(currentEmployee);
 
   Future<void> _saveExitCode() async {
     final code = _codeController.text.trim();

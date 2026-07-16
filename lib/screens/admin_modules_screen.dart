@@ -6,6 +6,7 @@ import '../services/fleet_service.dart';
 import '../services/waste_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/persona_audit.dart';
+import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 import 'copper_dashboard_screen.dart';
 
@@ -78,8 +79,9 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
   }
 
   void _openCopper() {
-    final clock = currentEmployee?.clockNo;
-    if (clock == '22') {
+    // Phase 9: dual isAdmin / copper gate — not hard-coded clock 22.
+    final emp = currentEmployee;
+    if (role_utils.isAdmin(emp) || role_utils.isCopperAuthorized(emp)) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CopperDashboardScreen()),
@@ -87,7 +89,7 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Admin access required'),
+          content: Text('Admin or Pre Press manager access required'),
           backgroundColor: Colors.red,
         ),
       );

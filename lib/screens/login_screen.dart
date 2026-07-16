@@ -122,6 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('loggedInClockNo', employee.clockNo);
       await prefs.setString('loggedInPosition', employee.position);
       await prefs.setString('loggedInDepartment', employee.department);
+      // loggedInAdmin is finalized after setCustomClaims (Phase 9 dual isAdmin).
       await prefs.setBool('loggedInAdmin', employee.isAdmin);
       realEmployee = employee;
 
@@ -133,12 +134,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // config writes need isAdmin. Non-fatal for offline — never blocks login.
       await AuthClaimsService.refreshClaims();
 
-      // Phase 8.4 fail-loud: if claims refresh left clockNum empty while we
-      // have an employee clock, warn so inbox silence is not silent.
+      // Phase 9: prefer token isAdmin for session + prefs (matches rules).
+      // Phase 8.4: fail-loud if clockNum missing after successful refresh path.
       try {
         final token = await FirebaseAuth.instance.currentUser?.getIdTokenResult();
+        final claims = token?.claims;
+        if (claims != null && claims.containsKey('isAdmin')) {
+          final claimAdmin = claims['isAdmin'] == true;
+          await prefs.setBool('loggedInAdmin', claimAdmin);
+          if (realEmployee != null && realEmployee!.isAdmin != claimAdmin) {
+            realEmployee = realEmployee!.copyWith(isAdmin: claimAdmin);
+          }
+        }
         final claimClock =
-            (token?.claims?['clockNum'] as String?)?.trim() ?? '';
+            (claims?['clockNum'] as String?)?.trim() ?? '';
         if (claimClock.isEmpty && employee.clockNo.trim().isNotEmpty && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

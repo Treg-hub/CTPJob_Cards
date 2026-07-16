@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'module_claims.dart';
 
@@ -58,6 +59,15 @@ class AuthClaimsService {
       final token = await user.getIdTokenResult(true);
       final claims = Map<String, dynamic>.from(token.claims ?? const {});
       ModuleClaims.instance.applyFromTokenClaims(claims);
+      // Phase 9: keep SharedPreferences admin flag aligned with claim (cold start).
+      if (claims.containsKey('isAdmin')) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('loggedInAdmin', claims['isAdmin'] == true);
+        } catch (_) {
+          /* prefs optional */
+        }
+      }
       // Phase 8.4: clockNum is required for notification_inbox/{clockNo}/items.
       // Refresh succeeded but missing clockNum → loud log (inbox would be empty).
       final clockNum = (claims['clockNum'] as String?)?.trim() ?? '';
@@ -78,7 +88,10 @@ class AuthClaimsService {
         unawaited(FirebaseCrashlytics.instance
             .setCustomKey('claims_refresh_last', 'ok'));
       }
-      debugPrint('✅ Custom claims refreshed for ${user.uid}');
+      debugPrint(
+        '✅ Custom claims refreshed for ${user.uid} '
+        '(isAdmin=${ModuleClaims.instance.isAdmin})',
+      );
       _completed.add(true);
     } catch (e, st) {
       if (!kIsWeb) {

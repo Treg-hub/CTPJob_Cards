@@ -7,6 +7,7 @@ import '../constants/collections.dart';
 import '../models/feedback_item.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 import '../widgets/fleet_photo_viewer.dart';
 import 'feedback_thread_screen.dart';
@@ -51,7 +52,8 @@ class _FeedbackAdminScreenState extends State<FeedbackAdminScreen> {
     bool isAdmin = false;
     if (clockNo != null) {
       final emp = await _firestoreService.getEmployee(clockNo);
-      isAdmin = emp?.isAdmin ?? false;
+      // Phase 9 dual isAdmin (claim first, then employee flag).
+      isAdmin = role_utils.isAdmin(emp);
     }
     if (!mounted) return;
     setState(() {

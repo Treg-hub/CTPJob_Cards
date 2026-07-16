@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/fleet_photo_viewer.dart';
 import '../utils/persona_audit.dart';
+import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 
 /// Public two-way thread on a single feedback item.
@@ -63,7 +64,7 @@ class _FeedbackThreadScreenState extends State<FeedbackThreadScreen> {
     if (clockNo == null) return;
     final emp = await _firestoreService.getEmployee(clockNo);
     if (!mounted) return;
-    setState(() => _viewerIsAdmin = emp?.isAdmin ?? false);
+    setState(() => _viewerIsAdmin = role_utils.isAdmin(emp));
   }
 
   Future<void> _addPhoto() async {

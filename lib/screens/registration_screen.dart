@@ -153,6 +153,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // the FCM token save below. Non-fatal, has its own 8 s timeout.
     await AuthClaimsService.refreshClaims();
 
+    // Phase 9: session admin flag from claim (AuthClaimsService also updates prefs).
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdTokenResult();
+      final claims = token?.claims;
+      if (claims != null && claims.containsKey('isAdmin')) {
+        final claimAdmin = claims['isAdmin'] == true;
+        await prefs.setBool('loggedInAdmin', claimAdmin);
+        if (realEmployee != null && realEmployee!.isAdmin != claimAdmin) {
+          realEmployee = realEmployee!.copyWith(isAdmin: claimAdmin);
+        }
+      }
+    } catch (_) {
+      /* best-effort */
+    }
+
     if (!kIsWeb) {
       try {
         await NotificationService()

@@ -65,8 +65,21 @@ bool isCopperAuthorized(Employee? employee) {
   return dept == 'pre press' && pos.contains('manager');
 }
 
-/// True when [employee] has the `isAdmin` flag set in their Firestore document.
+/// Dual isAdmin (audit Phase 9) — matches server truth when claims are present.
+///
+/// 1. **Token claim** (`ModuleClaims.isAdmin` from `setCustomClaims` /
+///    locked `admins/{uid}`) when claims have been applied. This is what
+///    Firestore rules use (`request.auth.token.isAdmin`).
+/// 2. **Fallback:** [Employee.isAdmin] from the employees doc / session stub
+///    when claims are not loaded yet (cold start, offline refresh failure).
+///
+/// During persona testing ([ModuleClaims.suppressTokenClaimsForUi]), only the
+/// persona employee flag is used so real admins can preview non-admin roles.
+///
+/// Server writes still enforce the claim — UI may briefly lag until claims refresh.
 bool isAdmin(Employee? employee) {
+  final claim = ModuleClaims.instance.uiIsAdmin;
+  if (claim != null) return claim;
   return employee?.isAdmin ?? false;
 }
 
@@ -74,13 +87,13 @@ bool isAdmin(Employee? employee) {
 // WASTE TRACK (WasteTrack) role helpers
 // =============================================================================
 // All roles are config-driven via WasteSettings (waste_settings/config).
-//   - Admin:            reuses isAdmin() — Employee.isAdmin Firestore field
+//   - Admin:            reuses isAdmin() — claim-first dual (Phase 9)
 //   - Security Manager: clockNo in WasteSettings.managerClockNos
 //   - Security Guard:   clockNo in WasteSettings.guardClockNos
 // =============================================================================
 
 /// Returns true if this user should have full WasteTrack Admin rights
-/// (reuses the global isAdmin check).
+/// (reuses the global dual isAdmin check).
 bool isWasteAdmin(Employee? employee) {
   return isAdmin(employee);
 }
@@ -222,7 +235,7 @@ bool canViewWasteStockInInventory({
 //   - Fleet Mechanic:     clockNo in fleet_settings.mechanicClockNos
 //   - Fleet Reporter:     employee.department in fleet_settings.reporterDepartments
 //   - Fleet Cost Manager: employee.clockNo in fleet_settings.costManagerClockNos
-//   - Fleet Admin:        reuses isAdmin() — Employee.isAdmin Firestore field
+//   - Fleet Admin:        reuses isAdmin() — claim-first dual (Phase 9)
 // =============================================================================
 
 bool _clockNoInAllowList(String? clockNo, List<String> allowList) {
