@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-16 — 2.3.0+174 — Employee position and department pickers
+
+### What you will notice
+
+- On **Factory Admin → Employees**, when you add or edit someone, **Position** and **Department** open a full list of values already in use (tap the arrow). You can still type a new value if needed.
+- Registration lock and the other admin hire tools from the previous pilot build are still included.
+
+---
+
 ## 2026-07-16 — 2.3.0+173 — Admin hire tools and job status polish
 
 ### What you will notice
