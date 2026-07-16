@@ -2422,3 +2422,121 @@ exports.clearStaleOnSitePresenceNow = onCall({
   await assertAdmin(request);
   return runStalePresenceClear();
 });
+// ==================== DEPT REQUESTS (DR-NNNN manager notes) ====================
+// Manager-to-manager cross-dept requests. Create is CF-only for atomic DR number
+// (counters/deptRequests Wave B). No notification_inbox / FCM — Home tile only.
+// onDeptRequestCommentCreated maintains lastCommentAt / commentCount / lastActivityAt.
+
+function isManagerPositionToken(token) {
+  if (!token) return false;
+  if (token.isAdmin === true) return true;
+  const pos = String(token.position || "");
+  return /manager/i.test(pos);
+}
+
+/**
+ * createDeptRequest — mint DR-NNNN and write dept_requests/{id}.
+ * Requires clockNum + position manager (or isAdmin) claims.
+ * Idempotent when client_ref supplied (becomes doc id).
+ */
+exports.createDeptRequest = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const token = request.auth.token || {};
+  if (!isManagerPositionToken(token)) {
+    throw new HttpsError("permission-denied", "Managers only.");
+  }
+  const clockNo = token.clockNum;
+  if (!clockNo) {
+    throw new HttpsError("failed-precondition", "No clockNum claim — call setCustomClaims first.");
+  }
+  const fromDepartment = String(token.department || "").trim();
+  if (!fromDepartment) {
+    throw new HttpsError("failed-precondition", "No department claim — call setCustomClaims first.");
+  }
+
+  const inner = request.data || {};
+  const clientRef = typeof inner.client_ref === "string" && inner.client_ref.length > 0
+    ? inner.client_ref
+    : undefined;
+  const targetDepartment = String(inner.targetDepartment || "").trim();
+  const area = String(inner.area || "").trim();
+  const message = String(inner.message || "").trim();
+  const photoUrls = Array.isArray(inner.photoUrls)
+    ? inner.photoUrls.filter((u) => typeof u === "string" && u.trim().length > 0).slice(0, 3)
+    : [];
+  const createdByName = String(inner.createdByName || token.name || "").trim() || "Manager";
+
+  if (!targetDepartment || !area) {
+    throw new HttpsError("invalid-argument", "targetDepartment and area are required.");
+  }
+  if (!message && photoUrls.length === 0) {
+    throw new HttpsError("invalid-argument", "Message or photos required.");
+  }
+
+  const counterRef = db.collection("counters").doc("deptRequests");
+  const reqRef = clientRef
+    ? db.collection("dept_requests").doc(clientRef)
+    : db.collection("dept_requests").doc();
+
+  const locationPath = `${targetDepartment} > ${area}`;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  const result = await db.runTransaction(async (tx) => {
+    if (clientRef) {
+      const existing = await tx.get(reqRef);
+      if (existing.exists) {
+        const d = existing.data() || {};
+        return {
+          id: reqRef.id,
+          requestNumber: d.requestNumber,
+          deduped: true,
+        };
+      }
+    }
+    const counterSnap = await tx.get(counterRef);
+    const next = counterSnap.exists ? (counterSnap.data().nextNumber ?? 1) : 1;
+    const requestNumber = `DR-${String(next).padStart(4, "0")}`;
+    tx.set(counterRef, { nextNumber: next + 1 }, { merge: true });
+    tx.set(reqRef, {
+      requestNumber,
+      requestNumberSeq: next,
+      message,
+      photoUrls,
+      fromDepartment,
+      targetDepartment,
+      area,
+      locationPath,
+      status: "open",
+      createdByClockNo: String(clockNo),
+      createdByName,
+      createdByUid: request.auth.uid,
+      createdAt: now,
+      lastActivityAt: now,
+      commentCount: 0,
+      client_ref: clientRef || null,
+    });
+    return { id: reqRef.id, requestNumber, deduped: false };
+  });
+
+  return { success: true, ...result };
+});
+
+/**
+ * onDeptRequestCommentCreated — bump thread metadata only (no inbox / push).
+ */
+exports.onDeptRequestCommentCreated = functions.firestore.onDocumentCreated(
+  { document: "dept_requests/{requestId}/comments/{commentId}" },
+  async (event) => {
+    const comment = event.data.data();
+    if (!comment) return;
+    const requestId = event.params.requestId;
+    const ref = db.collection("dept_requests").doc(requestId);
+    await ref.set({
+      lastCommentAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      commentCount: admin.firestore.FieldValue.increment(1),
+    }, { merge: true });
+    console.log(`onDeptRequestCommentCreated: ${requestId} comment meta updated`);
+  });

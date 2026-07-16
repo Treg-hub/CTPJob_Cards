@@ -11,6 +11,7 @@ import 'package:android_intent_plus/android_intent.dart' as android_intent;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart' show currentEmployee, personaAllowTestSubmissions, personaEmployee, realEmployee;
 import '../providers/persona_provider.dart';
+import '../providers/dept_request_tips_provider.dart';
 import '../providers/fleet_tips_provider.dart';
 import '../providers/ink_tips_provider.dart';
 import '../providers/job_card_tips_provider.dart';
@@ -333,6 +334,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       activeThumbColor: const Color(0xFF06B6D4),
                       onChanged: (value) =>
                           ref.read(inkTipsVisibleProvider.notifier).setVisible(value),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.swap_horiz, color: Color(0xFFD97706)),
+                      title: const Text('Dept Request Tips'),
+                      subtitle: const Text(
+                        'Show guidance banners on Dept Requests list and create screens',
+                      ),
+                      value: ref.watch(deptRequestTipsVisibleProvider),
+                      activeThumbColor: const Color(0xFFD97706),
+                      onChanged: (value) =>
+                          ref.read(deptRequestTipsVisibleProvider.notifier).setVisible(value),
                     ),
                   ],
                 ),

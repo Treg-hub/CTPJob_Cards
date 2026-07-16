@@ -46,13 +46,17 @@ import 'job_card_detail_screen.dart';
 import 'my_feedback_screen.dart';
 import 'feedback_admin_screen.dart';
 import 'copper_dashboard_screen.dart';
+import 'dept_requests_screen.dart';
+import 'dept_request_admin_screen.dart';
 import 'notification_inbox_screen.dart';
 import 'settings_screen.dart';
 import 'daily_review_screen.dart';
 import 'job_card_history_screen.dart';
 import 'work_report_hub_screen.dart';
 import '../models/work_report_settings.dart';
+import '../models/dept_request.dart';
 import '../providers/work_report_provider.dart';
+import '../services/dept_request_service.dart';
 import 'waste_home_screen.dart';
 import 'fleet_home_screen.dart';
 import 'fleet_reporter_home_screen.dart';
@@ -102,6 +106,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   StreamSubscription<JobCardListSnapshot>? _countSubscription;
   StreamSubscription<List<JobCard>>? _inProgressSub;
   StreamSubscription<Employee>? _employeeSubscription;
+  /// Open/acked Dept Requests for my department (Home tile badge).
+  int _deptRequestOpenCount = 0;
+  bool _deptRequestHasNew = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _deptRequestSub;
 
   // Streams are created ONCE and held in state: a stream built inline in a
   // build method re-subscribes a fresh Firestore listener on every rebuild,
@@ -607,7 +615,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
             ),
       };
-      result = [createAction, viewJobsFactory, historyAction];
+      // Dept Requests: manager title only (rules use position contains manager).
+      if (isManager || role_utils.isAdmin(currentEmployee)) {
+        result = [
+          createAction,
+          viewJobsFactory,
+          historyAction,
+          {
+            'title': 'Dept Requests',
+            'icon': Icons.swap_horiz,
+            'color': const Color(0xFFD97706), // amber — manager group
+            'badgeCount': _deptRequestOpenCount,
+            'attention': _deptRequestHasNew && _deptRequestOpenCount > 0,
+            'onTap': () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DeptRequestsScreen()),
+              );
+              if (mounted) _setupDeptRequestSubscription();
+            },
+          },
+        ];
+      } else {
+        result = [createAction, viewJobsFactory, historyAction];
+      }
     } else {
       // Operators: no live open-count badge (avoids factory-wide active-jobs listener).
       final viewJobsAction = {
@@ -700,8 +731,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // Admin feedback triage — kept on Home so it stays one tap away after
     // Factory Admin Overview regrouping (no longer under Admin Settings dump).
     if (role_utils.isAdmin(currentEmployee)) {
+      // Pure admin (no manager title) still needs the create/list surface.
+      final hasDeptTile =
+          result.any((a) => a['title'] == 'Dept Requests');
       result = [
         ...result,
+        if (!hasDeptTile)
+          {
+            'title': 'Dept Requests',
+            'icon': Icons.swap_horiz,
+            'color': const Color(0xFFD97706),
+            'badgeCount': _deptRequestOpenCount,
+            'attention': _deptRequestHasNew && _deptRequestOpenCount > 0,
+            'onTap': () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DeptRequestsScreen()),
+              );
+              if (mounted) _setupDeptRequestSubscription();
+            },
+          },
         {
           'title': 'Feedback',
           'icon': Icons.feedback_outlined,
@@ -710,6 +759,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 context,
                 MaterialPageRoute(
                     builder: (_) => const FeedbackAdminScreen()),
+              ),
+        },
+        {
+          'title': 'All Dept Req',
+          'icon': Icons.hub_outlined,
+          'color': const Color(0xFFD97706),
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const DeptRequestAdminScreen()),
               ),
         },
       ];
@@ -1068,6 +1127,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     } catch (e) {
       debugPrint('Error setting up job count subscription: $e');
     }
+    try {
+      _setupDeptRequestSubscription();
+    } catch (e) {
+      debugPrint('Error setting up dept request subscription: $e');
+    }
 
     if (kIsWeb && isManager) {
       // Review count: open+inProgress only (closed jobs don't need review)
@@ -1103,6 +1167,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _countSubscription?.cancel();
     _inProgressSub?.cancel();
+    _deptRequestSub?.cancel();
     _reviewCountSubscription?.cancel();
     _messagingSubscription?.cancel();
     _moduleSettingsConnSub?.cancel();
@@ -1110,6 +1175,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _presenceNoticeDebounce?.cancel();
     _onsiteHydrateDebounce?.cancel();
     super.dispose();
+  }
+
+  void _setupDeptRequestSubscription() {
+    _deptRequestSub?.cancel();
+    _deptRequestSub = null;
+    // Match rules/CF: position manager (or admin) — not super-manager-by-dept alone.
+    if (!(isManager || role_utils.isAdmin(currentEmployee))) {
+      if (mounted && (_deptRequestOpenCount != 0 || _deptRequestHasNew)) {
+        setState(() {
+          _deptRequestOpenCount = 0;
+          _deptRequestHasNew = false;
+        });
+      }
+      return;
+    }
+    final dept = currentEmployee?.department ?? realEmployee?.department ?? '';
+    if (dept.isEmpty) return;
+    _deptRequestSub = DeptRequestService.instance
+        .queryForTargetDept(dept)
+        .snapshots()
+        .listen((snap) async {
+      if (!mounted) return;
+      final items = snap.docs.map(DeptRequest.fromDoc).toList();
+      final active = items.where((i) => i.isActive).toList();
+      final lastVisit = await DeptRequestService.instance.lastVisitedAt();
+      var hasNew = false;
+      if (active.isNotEmpty) {
+        for (final i in active) {
+          final act = i.lastActivityAt ?? i.createdAt;
+          if (act == null) {
+            hasNew = true;
+            break;
+          }
+          if (lastVisit == null || act.isAfter(lastVisit)) {
+            hasNew = true;
+            break;
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _deptRequestOpenCount = active.length;
+        _deptRequestHasNew = hasNew;
+      });
+    }, onError: (e) {
+      debugPrint('HomeScreen: dept request stream error: $e');
+    });
   }
 
   @override
@@ -1467,6 +1579,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             action['onTap'] as VoidCallback,
             disabledReason: action['disabledReason'] as String?,
             badgeCount: action['badgeCount'] as int?,
+            attention: action['attention'] as bool? ?? false,
           )),
       if (kIsWeb && (isManager || isSuperManager))
         _DailyReviewTile(
@@ -1503,7 +1616,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap,
-      {String? disabledReason, int? badgeCount}) {
+      {String? disabledReason, int? badgeCount, bool attention = false}) {
     final disabled = disabledReason != null;
     // Flat tile tinted with its group colour (wash + matching border) so
     // linked tiles read as a set. Disabled tiles fall back to a neutral
@@ -1571,22 +1684,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
 
     if (badgeCount != null && badgeCount > 0) {
+      Widget badge = Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: attention ? Colors.deepOrange : Colors.red,
+          shape: BoxShape.circle,
+          boxShadow: attention
+              ? [
+                  BoxShadow(
+                    color: Colors.deepOrange.withValues(alpha: 0.55),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          badgeCount.toString(),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+      );
+      if (attention) {
+        badge = _PulsingBadge(child: badge);
+      }
       card = Stack(
         fit: StackFit.expand,
         children: [
           card,
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              child: Text(
-                badgeCount.toString(),
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
+          Positioned(top: 8, right: 8, child: badge),
         ],
       );
     }
@@ -2434,6 +2560,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
     }
 
+    // Dept Requests Home badge — arm when manager profile is ready.
+    final needDeptReq = isManager || role_utils.isAdmin(currentEmployee);
+    if (needDeptReq && _deptRequestSub == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _setupDeptRequestSubscription();
+      });
+    } else if (!needDeptReq && _deptRequestSub != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _setupDeptRequestSubscription();
+      });
+    }
+
     final List<BottomNavigationBarItem> items = [
       const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
       if (_showMyWorkNav)
@@ -2571,6 +2709,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+}
+
+/// Subtle pulse for Home Dept Request badge when there is unread activity.
+class _PulsingBadge extends StatefulWidget {
+  final Widget child;
+  const _PulsingBadge({required this.child});
+
+  @override
+  State<_PulsingBadge> createState() => _PulsingBadgeState();
+}
+
+class _PulsingBadgeState extends State<_PulsingBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.55, end: 1.0).animate(
+        CurvedAnimation(parent: _c, curve: Curves.easeInOut),
+      ),
+      child: widget.child,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
