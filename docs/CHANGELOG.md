@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-16 — 2.3.0+175 — Dept Requests for managers
+
+### What you will notice
+
+- Managers get a new Home tile **Dept Requests** to leave a short note for another department (or your own) with department and area, optional photos, and a reply thread.
+- Opening a request for your department marks it seen; mark **Done** when it is handled. Open items older than two days show a gentle reminder.
+- Admins can open **All Dept Req** on Home to see every request.
+- Guidance tips on Dept Requests can be hidden and turned back on under **Settings → Preferences**.
+
+---
+
 ## 2026-07-16 — 2.3.0+174 — Employee position and department pickers
 
 ### What you will notice
