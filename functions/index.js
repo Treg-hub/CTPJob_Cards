@@ -2385,3 +2385,30 @@ exports.purgeRetentionDataNow = onCall({
   await assertAdmin(request);
   return runRetentionPurge();
 });
+
+// ==================== SCHEDULED: STALE ON-SITE (missing heartbeat) ====================
+// OEM/battery killers stop WorkManager 30-min checks → employees stay isOnSite
+// for days and keep getting loud on-site pushes off-site. Every 2h, clear anyone
+// still marked on-site with no recent app_geofence check/enter proof (2h window).
+const { runStalePresenceClear } = require("./stale_presence");
+
+exports.clearStaleOnSitePresence = functions.scheduler.onSchedule({
+  schedule: "every 2 hours",
+  region: "europe-west1",
+  timeZone: "Africa/Johannesburg",
+  memory: "256MiB",
+  timeoutSeconds: 120,
+}, async () => {
+  console.log("clearStaleOnSitePresence: started");
+  await runStalePresenceClear();
+});
+
+/** Admin-only manual trigger (same clear as the 2h schedule). */
+exports.clearStaleOnSitePresenceNow = onCall({
+  region: "africa-south1",
+  memory: "256MiB",
+  timeoutSeconds: 120,
+}, async (request) => {
+  await assertAdmin(request);
+  return runStalePresenceClear();
+});
