@@ -1311,15 +1311,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   void _showEmployeeDialog([Employee? employee]) {
     final isEdit = employee != null;
-    final cnCtrl = TextEditingController(text: employee?.clockNo ?? '');
-    final nameCtrl = TextEditingController(text: employee?.name ?? '');
-    final posCtrl = TextEditingController(text: employee?.position ?? '');
-    final deptCtrl = TextEditingController(text: employee?.department ?? '');
-    final fcmCtrl = TextEditingController(text: employee?.fcmToken ?? '');
-    bool isOnSite = employee?.isOnSite ?? true;
+    final existing = employee;
+    final cnCtrl = TextEditingController(text: existing?.clockNo ?? '');
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final posCtrl = TextEditingController(text: existing?.position ?? '');
+    final deptCtrl = TextEditingController(text: existing?.department ?? '');
+    final fcmCtrl = TextEditingController(text: existing?.fcmToken ?? '');
+    bool isOnSite = existing?.isOnSite ?? true;
     // Default unlocked so existing open registration behaviour is unchanged
     // until admin locks high-value clocks.
-    bool registrationLocked = employee?.registrationLocked ?? false;
+    bool registrationLocked = existing?.registrationLocked ?? false;
 
     showDialog(
       context: context,
@@ -1360,12 +1361,12 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 onChanged: (v) => setS(() => registrationLocked = v),
                 contentPadding: EdgeInsets.zero,
               ),
-              if (isEdit) ...[
+              if (existing != null) ...[
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    employee!.isAccountLinked
+                    existing.isAccountLinked
                         ? 'Account linked (uid present)'
                         : 'Not linked yet — unlock to allow first registration',
                     style: TextStyle(fontSize: 12, color: Theme.of(ctx).appColors.textMuted),
@@ -1391,10 +1392,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     clockNo: cnCtrl.text, name: nameCtrl.text, position: posCtrl.text,
                     department: deptCtrl.text, isOnSite: isOnSite,
                     fcmToken: fcmCtrl.text.isEmpty ? null : fcmCtrl.text,
-                    fcmTokenUpdatedAt: employee?.fcmTokenUpdatedAt,
+                    fcmTokenUpdatedAt: existing?.fcmTokenUpdatedAt,
                     registrationLocked: registrationLocked,
-                    uid: employee?.uid,
-                    isAdmin: employee?.isAdmin ?? false,
+                    uid: existing?.uid,
+                    isAdmin: existing?.isAdmin ?? false,
                   );
                   if (isEdit) {
                     await _firestoreService.updateEmployee(emp);
