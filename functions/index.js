@@ -1621,24 +1621,34 @@ exports.autoCloseMonitoringJobs = functions.scheduler.onSchedule({
   for (const doc of monitoringJobs.docs) {
     const job = doc.data();
     const monitoringStartedAt = job.monitoringStartedAt?.toDate();
-    const lastUpdatedAt = job.lastUpdatedAt?.toDate();
+    if (!monitoringStartedAt) continue;
 
-    if (monitoringStartedAt && lastUpdatedAt) {
-      const sevenDaysAfterStart = new Date(monitoringStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
-      if (lastUpdatedAt <= sevenDaysAfterStart) {
-        const autoNote = `\n\n[${now.toDate().toLocaleString()}] Auto-closed: 7-day monitoring complete, no adjustments.`;
-        batch.update(doc.ref, {
-          status: "closed",
-          closedAt: now,
-          monitoringStartedAt: null,
-          notes: (job.notes || "") + autoNote,
-        });
-        closedCount++;
-      }
+    // Query already filters monitoringStartedAt <= 7d ago. Close when there is
+    // no post-window activity: missing lastUpdatedAt is treated as "no activity"
+    // so aged monitor jobs still auto-close (audit Phase 5.2).
+    const lastUpdatedAt = job.lastUpdatedAt?.toDate?.()
+      || (job.lastUpdatedAt instanceof Date ? job.lastUpdatedAt : null);
+    const sevenDaysAfterStart = new Date(
+      monitoringStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000,
+    );
+    const noPostWindowActivity =
+      !lastUpdatedAt || lastUpdatedAt <= sevenDaysAfterStart;
+
+    if (noPostWindowActivity) {
+      const autoNote =
+        `\n\n[${now.toDate().toLocaleString()}] Auto-closed: 7-day monitoring complete, no adjustments.`;
+      batch.update(doc.ref, {
+        status: "closed",
+        closedAt: now,
+        monitoringStartedAt: null,
+        notes: (job.notes || "") + autoNote,
+      });
+      closedCount++;
     }
   }
 
   if (closedCount > 0) await batch.commit();
+  console.log(`autoCloseMonitoringJobs: closed ${closedCount} of ${monitoringJobs.size}`);
 });
 
 // ==================== ALERT RESPONSE HANDLER (Busy + Dismissed) ====================

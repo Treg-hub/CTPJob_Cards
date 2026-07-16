@@ -432,11 +432,34 @@ class JobCard {
 }
 
 extension JobStatusExtension on JobStatus {
+  /// Parse Firestore / UI status strings.
+  ///
+  /// Accepts enum [name]s (`open`, `inProgress`, `monitor`, `closed`) and
+  /// display/legacy forms used historically or on Pulse (`Open`, `In Progress`,
+  /// `Monitoring`, `Closed`). Unknown values default to [JobStatus.open].
   static JobStatus fromString(String value) {
-    // Legacy Firestore docs stored 'monitor' before the enum was renamed to 'inProgress'+'monitor'
-    return JobStatus.values.firstWhere(
-      (status) => status.name == value,
-      orElse: () => JobStatus.open,
-    );
+    final raw = value.trim();
+    if (raw.isEmpty) return JobStatus.open;
+
+    for (final status in JobStatus.values) {
+      if (status.name == raw) return status;
+    }
+
+    // Align with Pulse normalizeStatus / openStatuses (spaces stripped, case-insensitive).
+    final lower = raw.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    switch (lower) {
+      case 'open':
+        return JobStatus.open;
+      case 'inprogress':
+        return JobStatus.inProgress;
+      case 'monitor':
+      case 'monitoring':
+        return JobStatus.monitor;
+      case 'closed':
+      case 'completed': // legacy label in some notes/docs — not a live write value
+        return JobStatus.closed;
+      default:
+        return JobStatus.open;
+    }
   }
 }
