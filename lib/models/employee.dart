@@ -96,6 +96,11 @@ class Employee {
     );
   }
 
+  /// Client write payload for employees docs.
+  ///
+  /// **Does not include [isAdmin]** — admin is owned by locked `admins/{uid}`
+  /// + `setCustomClaims` (Phase 9 dual isAdmin). Writing `isAdmin` here was a
+  /// legacy path; merge sets must not re-stamp or clear the field.
   Map<String, dynamic> toFirestore() {
     return {
       'clockNo': clockNo,
@@ -104,7 +109,6 @@ class Employee {
       'department': department,
       'fcmToken': fcmToken,
       'isOnSite': isOnSite,
-      'isAdmin': isAdmin,
       'fcmTokenUpdatedAt': fcmTokenUpdatedAt != null
           ? Timestamp.fromDate(fcmTokenUpdatedAt!)
           : null,
