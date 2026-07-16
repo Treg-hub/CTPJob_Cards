@@ -130,8 +130,29 @@ class _LoginScreenState extends State<LoginScreen> {
       // Mint/refresh server-derived custom claims FIRST (role, department,
       // clockNum, isAdmin from the locked admins/{uid} registry). The presence
       // CF used by the FCM-token save below needs the clockNum claim, and admin
-      // config writes need isAdmin. Non-fatal — never blocks login.
-        await AuthClaimsService.refreshClaims();
+      // config writes need isAdmin. Non-fatal for offline — never blocks login.
+      await AuthClaimsService.refreshClaims();
+
+      // Phase 8.4 fail-loud: if claims refresh left clockNum empty while we
+      // have an employee clock, warn so inbox silence is not silent.
+      try {
+        final token = await FirebaseAuth.instance.currentUser?.getIdTokenResult();
+        final claimClock =
+            (token?.claims?['clockNum'] as String?)?.trim() ?? '';
+        if (claimClock.isEmpty && employee.clockNo.trim().isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Account claims missing clock number — notification inbox may not work. '
+                'Sign out and back in, or ask an admin to re-link your employee profile.',
+              ),
+              duration: Duration(seconds: 8),
+            ),
+          );
+        }
+      } catch (_) {
+        /* ignore — snackbar is best-effort */
+      }
 
       ClientPlatformService().syncToFirestore();
 

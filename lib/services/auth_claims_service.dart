@@ -56,14 +56,29 @@ class AuthClaimsService {
       // Force a token refresh so the freshly-set claims land in the local token
       // now, instead of after the next natural (~1h) refresh.
       final token = await user.getIdTokenResult(true);
-      ModuleClaims.instance.applyFromTokenClaims(
-        Map<String, dynamic>.from(token.claims ?? const {}),
-      );
-      debugPrint('✅ Custom claims refreshed for ${user.uid}');
-      if (!kIsWeb) {
+      final claims = Map<String, dynamic>.from(token.claims ?? const {});
+      ModuleClaims.instance.applyFromTokenClaims(claims);
+      // Phase 8.4: clockNum is required for notification_inbox/{clockNo}/items.
+      // Refresh succeeded but missing clockNum → loud log (inbox would be empty).
+      final clockNum = (claims['clockNum'] as String?)?.trim() ?? '';
+      if (clockNum.isEmpty) {
+        debugPrint(
+          '⚠️ CLAIMS MISSING clockNum after setCustomClaims — '
+          'notification inbox will not load until employee profile is linked.',
+        );
+        if (!kIsWeb) {
+          unawaited(FirebaseCrashlytics.instance
+              .setCustomKey('claims_clocknum_missing', '1'));
+          unawaited(FirebaseCrashlytics.instance
+              .setCustomKey('claims_refresh_last', 'ok_no_clocknum'));
+        }
+      } else if (!kIsWeb) {
+        unawaited(FirebaseCrashlytics.instance
+            .setCustomKey('claims_clocknum_missing', '0'));
         unawaited(FirebaseCrashlytics.instance
             .setCustomKey('claims_refresh_last', 'ok'));
       }
+      debugPrint('✅ Custom claims refreshed for ${user.uid}');
       _completed.add(true);
     } catch (e, st) {
       if (!kIsWeb) {
