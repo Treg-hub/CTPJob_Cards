@@ -1289,6 +1289,26 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     } catch (e) { _showError('Error: $e'); }
   }
 
+  /// Toggle [Employee.registrationLocked] without opening the full editor.
+  /// Matches `linkEmployeeAccount` field `registration_locked` (Phase 11 prep).
+  Future<void> _setRegistrationLocked(Employee emp, bool locked) async {
+    try {
+      await _firestoreService.updateEmployee(
+        emp.copyWith(registrationLocked: locked),
+      );
+      EmployeeRosterCache.instance.invalidate();
+      await _loadEmployees();
+      if (!mounted) return;
+      _showSuccess(
+        locked
+            ? 'Registration locked for #${emp.clockNo} — new sign-ups blocked'
+            : 'Registration unlocked for #${emp.clockNo} — new hire can register',
+      );
+    } catch (e) {
+      _showError('Could not update registration lock: $e');
+    }
+  }
+
   void _showEmployeeDialog([Employee? employee]) {
     final isEdit = employee != null;
     final cnCtrl = TextEditingController(text: employee?.clockNo ?? '');
@@ -1297,6 +1317,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     final deptCtrl = TextEditingController(text: employee?.department ?? '');
     final fcmCtrl = TextEditingController(text: employee?.fcmToken ?? '');
     bool isOnSite = employee?.isOnSite ?? true;
+    // Default unlocked so existing open registration behaviour is unchanged
+    // until admin locks high-value clocks.
+    bool registrationLocked = employee?.registrationLocked ?? false;
 
     showDialog(
       context: context,
@@ -1321,6 +1344,34 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 onChanged: (v) => setS(() => isOnSite = v),
                 contentPadding: EdgeInsets.zero,
               ),
+              SwitchListTile(
+                title: const Text('Registration locked'),
+                subtitle: Text(
+                  registrationLocked
+                      ? 'New users cannot claim this clock (already linked can still re-login).'
+                      : 'Anyone with the clock number can register if email rules allow.',
+                  style: TextStyle(fontSize: 12, color: Theme.of(ctx).appColors.textMuted),
+                ),
+                secondary: Icon(
+                  registrationLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                  color: registrationLocked ? Colors.orange : null,
+                ),
+                value: registrationLocked,
+                onChanged: (v) => setS(() => registrationLocked = v),
+                contentPadding: EdgeInsets.zero,
+              ),
+              if (isEdit) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    employee!.isAccountLinked
+                        ? 'Account linked (uid present)'
+                        : 'Not linked yet — unlock to allow first registration',
+                    style: TextStyle(fontSize: 12, color: Theme.of(ctx).appColors.textMuted),
+                  ),
+                ),
+              ],
             ]),
           ),
           actions: [
@@ -1341,6 +1392,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     department: deptCtrl.text, isOnSite: isOnSite,
                     fcmToken: fcmCtrl.text.isEmpty ? null : fcmCtrl.text,
                     fcmTokenUpdatedAt: employee?.fcmTokenUpdatedAt,
+                    registrationLocked: registrationLocked,
+                    uid: employee?.uid,
+                    isAdmin: employee?.isAdmin ?? false,
                   );
                   if (isEdit) {
                     await _firestoreService.updateEmployee(emp);
@@ -2054,22 +2108,50 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (emp.registrationLocked)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Icon(Icons.lock, size: 14, color: Colors.orange.shade700),
+                              ),
                             _buildPresencePill(emp),
                           ]),
                           const SizedBox(height: 4),
                           Text(
                             [
                               '${emp.position} · ${emp.department}',
+                              if (emp.registrationLocked)
+                                'Registration locked'
+                              else if (!emp.isAccountLinked)
+                                'Open for registration'
+                              else
+                                'Account linked',
                               if (emp.isInboxOnlyDelivery)
                                 'Inbox only · ${emp.clientDevice ?? 'web'}',
                             ].join('\n'),
                             style: TextStyle(fontSize: 12, color: colors.textMuted),
-                            maxLines: 3,
+                            maxLines: 4,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ]),
                       ),
                       Column(children: [
+                        IconButton(
+                          icon: Icon(
+                            emp.registrationLocked
+                                ? Icons.lock_outline
+                                : Icons.lock_open_outlined,
+                            size: 18,
+                            color: emp.registrationLocked ? Colors.orange : null,
+                          ),
+                          tooltip: emp.registrationLocked
+                              ? 'Unlock registration (allow new hire)'
+                              : 'Lock registration (block new claims)',
+                          onPressed: () => _setRegistrationLocked(
+                            emp,
+                            !emp.registrationLocked,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           tooltip: 'Edit',

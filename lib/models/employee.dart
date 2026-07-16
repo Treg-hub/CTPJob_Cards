@@ -10,6 +10,13 @@ class Employee {
   final bool isAdmin;
   final DateTime? fcmTokenUpdatedAt;
 
+  /// When true, [linkEmployeeAccount] refuses **new** binds (admin unlock for hire).
+  /// Already-linked users can still re-heal their own uid. Phase 11 prep.
+  final bool registrationLocked;
+
+  /// Firebase Auth uid if this clock is linked (read-only display for admin).
+  final String? uid;
+
   /// Bumped server-side when this employee's custom auth claims are minted or
   /// changed (Phase 3 RBAC). Clients watch it and force an ID-token refresh.
   /// Read-only on the client: intentionally NOT written by toFirestore so an
@@ -43,6 +50,8 @@ class Employee {
     this.isOnSite = true,
     this.isAdmin = false,
     this.fcmTokenUpdatedAt,
+    this.registrationLocked = false,
+    this.uid,
     this.claimsVersion,
     this.lastOnSiteAt,
     this.lastOffSiteAt,
@@ -54,6 +63,9 @@ class Employee {
   });
 
   bool get isInboxOnlyDelivery => notificationDelivery == 'inbox_only';
+
+  /// True when an Auth account is already bound to this clock.
+  bool get isAccountLinked => uid != null && uid!.trim().isNotEmpty;
 
   /// Admin On-site label, e.g. `v1.2.3 (build 160)` or null if never reported.
   String? get clientVersionLabel {
@@ -81,6 +93,8 @@ class Employee {
       fcmTokenUpdatedAt: data['fcmTokenUpdatedAt'] != null
           ? (data['fcmTokenUpdatedAt'] as Timestamp).toDate()
           : null,
+      registrationLocked: data['registration_locked'] == true,
+      uid: data['uid'] as String?,
       claimsVersion: data['claimsVersion'] as int?,
       lastOnSiteAt: data['lastOnSiteAt'] is Timestamp
           ? (data['lastOnSiteAt'] as Timestamp).toDate()
@@ -109,6 +123,8 @@ class Employee {
       'department': department,
       'fcmToken': fcmToken,
       'isOnSite': isOnSite,
+      // snake_case matches linkEmployeeAccount CF field.
+      'registration_locked': registrationLocked,
       'fcmTokenUpdatedAt': fcmTokenUpdatedAt != null
           ? Timestamp.fromDate(fcmTokenUpdatedAt!)
           : null,
@@ -124,6 +140,8 @@ class Employee {
     bool? isOnSite,
     bool? isAdmin,
     DateTime? fcmTokenUpdatedAt,
+    bool? registrationLocked,
+    String? uid,
     int? claimsVersion,
     DateTime? lastOnSiteAt,
     DateTime? lastOffSiteAt,
@@ -142,6 +160,8 @@ class Employee {
       isOnSite: isOnSite ?? this.isOnSite,
       isAdmin: isAdmin ?? this.isAdmin,
       fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
+      registrationLocked: registrationLocked ?? this.registrationLocked,
+      uid: uid ?? this.uid,
       claimsVersion: claimsVersion ?? this.claimsVersion,
       lastOnSiteAt: lastOnSiteAt ?? this.lastOnSiteAt,
       lastOffSiteAt: lastOffSiteAt ?? this.lastOffSiteAt,
