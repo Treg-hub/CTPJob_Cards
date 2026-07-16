@@ -385,48 +385,112 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return list;
   }
 
-  /// Combobox: pick an existing value or type a new one (Autocomplete).
+  /// Combobox: type freely, or open a sheet of values already in use.
+  /// (Autocomplete inside [AlertDialog] often never shows the options list.)
   Widget _employeeComboField({
+    required BuildContext dialogContext,
     required TextEditingController controller,
     required String label,
     required List<String> options,
     String? helperText,
   }) {
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: controller.text),
-      optionsMaxHeight: 220,
-      optionsBuilder: (TextEditingValue tev) {
-        final q = tev.text.trim().toLowerCase();
-        final sorted = List<String>.from(options)
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        if (q.isEmpty) return sorted;
-        return sorted.where((o) => o.toLowerCase().contains(q));
-      },
-      onSelected: (String selection) {
-        controller.text = selection;
+    Future<void> openPicker() async {
+      final picked = await showModalBottomSheet<String>(
+        context: dialogContext,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetCtx) {
+          var filter = '';
+          return StatefulBuilder(
+            builder: (sheetCtx, setSheet) {
+              final q = filter.trim().toLowerCase();
+              final filtered = q.isEmpty
+                  ? options
+                  : options
+                      .where((o) => o.toLowerCase().contains(q))
+                      .toList(growable: false);
+              final height = MediaQuery.sizeOf(sheetCtx).height * 0.55;
+              return SizedBox(
+                height: height,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(
+                        'Choose $label',
+                        style: Theme.of(sheetCtx).textTheme.titleMedium,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          hintText: 'Filter list…',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onChanged: (v) => setSheet(() => filter = v),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                options.isEmpty
+                                    ? 'No existing values yet — type a new one in the form'
+                                    : 'No matches — type a new value in the form',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Theme.of(sheetCtx).appColors.textMuted,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) {
+                                final value = filtered[i];
+                                final selected = value == controller.text.trim();
+                                return ListTile(
+                                  title: Text(value),
+                                  trailing: selected
+                                      ? const Icon(Icons.check, color: kBrandOrange)
+                                      : null,
+                                  onTap: () => Navigator.pop(sheetCtx, value),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+      if (picked != null) {
+        controller.text = picked;
         controller.selection =
-            TextSelection.collapsed(offset: selection.length);
-      },
-      fieldViewBuilder: (
-        BuildContext context,
-        TextEditingController textController,
-        FocusNode focusNode,
-        VoidCallback onFieldSubmitted,
-      ) {
-        return TextField(
-          controller: textController,
-          focusNode: focusNode,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            labelText: label,
-            helperText: helperText ?? 'Select existing or type a new value',
-            helperMaxLines: 2,
-            suffixIcon: const Icon(Icons.arrow_drop_down),
-          ),
-          onChanged: (v) => controller.text = v,
-          onSubmitted: (_) => onFieldSubmitted(),
-        );
-      },
+            TextSelection.collapsed(offset: picked.length);
+      }
+    }
+
+    return TextField(
+      controller: controller,
+      textCapitalization: TextCapitalization.words,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helperText ?? 'Select from list or type a new value',
+        helperMaxLines: 2,
+        suffixIcon: IconButton(
+          tooltip: 'Show existing values',
+          icon: const Icon(Icons.arrow_drop_down),
+          onPressed: openPicker,
+        ),
+      ),
     );
   }
 
@@ -1366,7 +1430,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
-  void _showEmployeeDialog([Employee? employee]) {
+  Future<void> _showEmployeeDialog([Employee? employee]) async {
+    // Ensure roster/structure are loaded so position/department pickers have options.
+    if (_allEmployees.isEmpty) {
+      await _loadEmployees();
+    }
+    if (_structure.isEmpty) {
+      try {
+        await _loadStructure();
+      } catch (_) {
+        /* structure optional for dept list */
+      }
+    }
+
     final isEdit = employee != null;
     final existing = employee;
     final cnCtrl = TextEditingController(text: existing?.clockNo ?? '');
@@ -1378,7 +1454,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     // Default unlocked so existing open registration behaviour is unchanged
     // until admin locks high-value clocks.
     bool registrationLocked = existing?.registrationLocked ?? false;
+    final positionOptions = List<String>.from(_positionOptions);
+    final departmentOptions = List<String>.from(_departmentOptions);
 
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1391,17 +1470,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name *')),
               const SizedBox(height: 12),
               _employeeComboField(
+                dialogContext: ctx,
                 controller: posCtrl,
                 label: 'Position *',
-                options: _positionOptions,
-                helperText: 'Positions in use on the roster, or type a new title',
+                options: positionOptions,
+                helperText: 'Tap ▼ for positions in use, or type a new title',
               ),
               const SizedBox(height: 12),
               _employeeComboField(
+                dialogContext: ctx,
                 controller: deptCtrl,
                 label: 'Department *',
-                options: _departmentOptions,
-                helperText: 'Departments from roster + factory structure, or type new',
+                options: departmentOptions,
+                helperText: 'Tap ▼ for departments in use, or type a new one',
               ),
               const SizedBox(height: 12),
               TextField(controller: fcmCtrl, decoration: const InputDecoration(labelText: 'FCM Token')),
