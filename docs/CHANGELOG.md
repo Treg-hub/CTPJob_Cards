@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-16 — 2.3.0+173 — Admin hire tools and job status polish
+
+### What you will notice
+
+- Job cards that use status labels like **In Progress** or **Monitoring** open and display more reliably.
+- **Factory Admin → Employees:** lock or unlock registration for a clock number so new hires can register when ready.
+- **Factory Admin → Employees:** pick **Position** and **Department** from values already in use, or type a new one.
+- If your account is missing a clock number after sign-in, you get a clear message so notification inbox issues are not silent.
+
+---
+
 ## 2026-07-15 — 2.3.0+172 — Fix received IBC shipments on Receive Ink
 
 ### What you will notice
