@@ -2,6 +2,12 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Fleet auto-nav + on-site/update hydrate (2026-07-17)**:
+  - Fleet shell auto-nav uses `isHysterMechanicByPosition` only (not `isFleetMechanic` claim — admins no longer jump to Fleet on load/resume). Settles after non-empty position so late claims cannot re-trigger.
+  - Shared `_hydrateShellData` for became-on-site, resume, post-update bootstrap; GPS no longer blocks stream/settings recovery; `RetryTriggers.notifyForceResubscribe` tears down alive-but-stuck listeners.
+  - Once-per-build post-APK bootstrap via `lastSuccessfulBootstrapBuild`.
+  - Tests: `isHysterMechanicByPosition` in `role_test.dart`. Map: Fleet card.
+
 - **Ink daily readings void baseline (2026-07-13)**:
   - Bug: after Pulse void of a meter session, Daily Readings unlocked fields (today-captured already skipped voided) but **Last** still used the voided cumulative reading → re-enter same dial → Δ≈0.
   - Fix: `watchLatestMeterReadings` / `watchRecentMeterReadings` (+ toloul point latest/recent) exclude voided via `lib/utils/ink_meter_baselines.dart`; unit tests in `test/ink_meter_baselines_test.dart`.

@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 
@@ -277,11 +278,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (_fleetMechanicNavDone || !mounted || _pendingJobId != null) return;
     final settings = _cachedFleetSettings;
     if (settings == null || !settings.fleetEnabled) return;
-    if (!role_utils.isFleetMechanic(currentEmployee, settings)) return;
-    final idx = _fleetTabIndex();
-    if (idx < 0) return;
-    _fleetMechanicNavDone = true;
-    _setShellTab(idx);
+    final emp = currentEmployee;
+    if (emp == null) return;
+
+    // Position title only — not isFleetMechanic. Admins get that claim for
+    // RBAC via setCustomClaims and must not be auto-sent to Fleet on load/resume.
+    if (role_utils.isHysterMechanicByPosition(emp)) {
+      final idx = _fleetTabIndex();
+      if (idx < 0) return;
+      _fleetMechanicNavDone = true;
+      _setShellTab(idx);
+      return;
+    }
+
+    // Non-Hyster users: settle once we know their title so a later admin
+    // isFleetMechanic claim cannot jump the shell to Fleet mid-session.
+    if (emp.position.trim().isNotEmpty) {
+      _fleetMechanicNavDone = true;
+    }
   }
 
   void _openFleetMachinesTab() {
@@ -373,6 +387,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       });
       _resetTabIfHiddenModule();
       ref.invalidate(currentEmployeeProvider);
+      // Re-evaluate floor auto-nav once position is known (settings may have
+      // loaded earlier with a stub employee).
+      _maybeOpenFleetTabForMechanic();
       // React only to a genuine change, and debounce snackbars: GPS jitter at
       // the fence boundary flips isOnSite back and forth. Data hydrate runs
       // immediately on became-on-site so Recent Jobs / modules don't stay on
@@ -382,7 +399,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           _onsiteHydrateDebounce?.cancel();
           _onsiteHydrateDebounce = Timer(const Duration(seconds: 2), () {
             if (!mounted || !isOnSite) return;
-            unawaited(_hydrateAfterBecameOnSite());
+            unawaited(_hydrateShellData(reason: 'became-on-site'));
           });
         } else {
           _onsiteHydrateDebounce?.cancel();
@@ -894,6 +911,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
     _resetTabIfHiddenModule();
     ref.invalidate(currentEmployeeProvider);
+    _maybeOpenFleetTabForMechanic();
     _maybeRecheckUpdateForCohort();
   }
 
@@ -968,17 +986,98 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  static const _bootstrapBuildPrefsKey = 'lastSuccessfulBootstrapBuild';
+
+  /// Shared recovery for off→on presence, warm resume, and post-APK cold start.
+  ///
+  /// [forceStreams] tears down alive-but-stuck resilient listeners (not only
+  /// parked ones). GPS is never awaited here — callers schedule it separately
+  /// so a 30s location timeout cannot leave Home on skeletons.
+  Future<void> _hydrateShellData({
+    required String reason,
+    bool forceStreams = true,
+  }) async {
+    debugPrint('HomeScreen: hydrate ($reason) forceStreams=$forceStreams');
+    unawaited(AuthClaimsService.refreshClaims());
+    if (forceStreams) {
+      RetryTriggers.instance.notifyForceResubscribe();
+    } else {
+      RetryTriggers.instance.notifyBecameOnSite();
+    }
+
+    await Future.wait([
+      _loadFleetSettings(preferServer: true),
+      _loadWasteSettings(preferServer: true),
+      _loadSecuritySettings(preferServer: true),
+    ]);
+    if (!mounted) return;
+    _retryFailedModuleSettings();
+    // Re-arm Home active-jobs when still loading or cache-only empty (covers
+    // alive-but-stuck listeners that force-resubscribe alone may not refresh
+    // on this outer subscription).
+    _rearmActiveJobsStreamIfStuck();
+    // My Work: four-stream merge can stick on cache-only empty after a rules/
+    // claims blip — drop the cached stream so the tab re-subscribes cleanly.
+    if (_myWorkStream != null) {
+      setState(() {
+        _myWorkStream = null;
+        _myWorkClockNo = null;
+      });
+    }
+    ref.invalidate(inkSettingsProvider);
+    ref.invalidate(inkDailyReadingsStatusProvider);
+  }
+
+  /// After APK install the process is new; claims/streams often race and leave
+  /// Home empty until kill/reopen. Once per build number, run a full hydrate
+  /// without waiting for GPS.
+  Future<void> _maybeBootstrapAfterUpdate() async {
+    if (kIsWeb) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final info = await PackageInfo.fromPlatform();
+      final build = info.buildNumber;
+      if (build.isEmpty) return;
+      final last = prefs.getString(_bootstrapBuildPrefsKey);
+      if (last == build) return;
+      debugPrint(
+          'HomeScreen: post-update bootstrap build=$build (was ${last ?? 'none'})');
+      await _hydrateShellData(reason: 'post-update', forceStreams: true);
+      if (!mounted) return;
+      await prefs.setString(_bootstrapBuildPrefsKey, build);
+    } catch (e) {
+      debugPrint('HomeScreen: post-update bootstrap failed: $e');
+    }
+  }
+
   /// Warm resume after geofence / notification tap can leave Home in a stale
-  /// off-site or partially-hydrated state until a cold restart. Mirror the
-  /// cold-start path: refresh claims, presence, module settings, and re-arm
-  /// job streams that are still showing cache-only skeletons.
+  /// off-site or partially-hydrated state until a cold restart.
+  ///
+  /// GPS is started in parallel and must not gate stream/settings recovery
+  /// (Geolocator can take up to 30s after update or when walking on-site).
   Future<void> _onAppResumed() async {
     unawaited(AuthClaimsService.refreshClaims());
+    unawaited(_refreshEmployeeOnResume());
 
-    await _refreshEmployeeOnResume();
+    // Presence correction runs alongside hydrate — never blocks it.
+    final Future<bool?>? gpsFuture =
+        _testMode ? null : _locationService.checkCurrentLocation();
 
-    if (!_testMode) {
-      final onSite = await _locationService.checkCurrentLocation();
+    final wasOffSiteBefore = !isOnSite;
+    await _hydrateShellData(
+      reason: 'resume',
+      // Force only when we were off-site or jobs still look stuck; always-on
+      // force on every resume would thrash Firestore listeners.
+      forceStreams: wasOffSiteBefore ||
+          shouldRearmActiveJobsOnResume(
+            hasSnapshot: _activeJobsSnap != null,
+            isEmpty: _activeJobsSnap?.cards.isEmpty ?? true,
+            isFromCache: _activeJobsSnap?.isFromCache ?? true,
+          ),
+    );
+
+    if (gpsFuture != null) {
+      final onSite = await gpsFuture;
       if (onSite != null && mounted) {
         final wasOffSite = !isOnSite;
         setState(() {
@@ -990,26 +1089,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ref.invalidate(currentEmployeeProvider);
         _resetTabIfHiddenModule();
         if (onSite && wasOffSite) {
-          RetryTriggers.instance.notifyBecameOnSite();
+          // GPS discovered on-site after hydrate started off-site — full wake.
+          unawaited(_hydrateShellData(reason: 'resume-gps-on-site'));
         }
       }
     }
 
-    await Future.wait([
-      _loadFleetSettings(preferServer: true),
-      _loadWasteSettings(preferServer: true),
-      _loadSecuritySettings(preferServer: true),
-    ]);
-    _retryFailedModuleSettings();
-    _rearmActiveJobsStreamIfStuck();
-    // My Work: four-stream merge can stick on cache-only empty after a rules/
-    // claims blip — drop the cached stream so the tab re-subscribes cleanly.
-    if (mounted && _myWorkStream != null) {
-      setState(() {
-        _myWorkStream = null;
-        _myWorkClockNo = null;
-      });
-    }
     DeviceHealthService().syncPermissionsToFirestore();
 
     // Always re-fetch on resume so a force publish while backgrounded still blocks
@@ -1021,38 +1106,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         debugPrint('Update check on resume: $e');
       }
     }
-  }
-
-  /// Foreground geofence / presence flip off→on (app never paused). Resume
-  /// already hydrates via [_onAppResumed]; this path covers staying open while
-  /// walking back on-site — otherwise parked resilient streams and a null
-  /// [_activeJobsSnap] leave Recent Job Cards on skeletons until kill/reopen.
-  Future<void> _hydrateAfterBecameOnSite() async {
-    debugPrint('HomeScreen: became on-site — waking streams + reloading settings');
-    RetryTriggers.instance.notifyBecameOnSite();
-    unawaited(AuthClaimsService.refreshClaims());
-
-    await Future.wait([
-      _loadFleetSettings(preferServer: true),
-      _loadWasteSettings(preferServer: true),
-      _loadSecuritySettings(preferServer: true),
-    ]);
-    if (!mounted) return;
-    _retryFailedModuleSettings();
-    _rearmActiveJobsStreamIfStuck();
-    // If the listener is alive but never emitted (parked mid-flight with a
-    // live sub), force a clean re-subscribe — same effect as cold start.
-    if (_needsActiveJobsListener && _activeJobsSnap == null) {
-      _setupActiveJobsSubscription();
-    }
-    if (_myWorkStream != null) {
-      setState(() {
-        _myWorkStream = null;
-        _myWorkClockNo = null;
-      });
-    }
-    ref.invalidate(inkSettingsProvider);
-    ref.invalidate(inkDailyReadingsStatusProvider);
   }
 
   @override
@@ -1083,6 +1136,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     if (!kIsWeb) {
       _notificationService.refreshToken();
+      // Post-APK install: claims/streams race often leaves Home empty until
+      // force-kill — hydrate once per build without waiting for GPS.
+      unawaited(_maybeBootstrapAfterUpdate());
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         try {
