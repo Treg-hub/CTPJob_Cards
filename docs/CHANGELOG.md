@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-17 — 2.3.0+177 — Copper process and clearer tabs
+
+### What you will notice
+
+- On **Copper**, commercial sales are recorded when a Copper Waste load is completed — not from a sale button on Copper.
+- Sorting uses separate **Reuse** and **Sell** amounts; small leftovers in **To Reuse** clear more reliably (use **All** if needed).
+- A collection status area shows progress toward the collection threshold and can open **Waste** when stock is ready.
+- Admins can **Adjust** a copper bucket or **Zero dust** (tiny leftovers) with a short reason.
+- **Dept Requests** and **Fleet** tab labels are easier to read and better aligned.
+
+---
+
 ## 2026-07-17 — 2.3.0+176 — Home stability after updates and return to site
 
 ### What you will notice
