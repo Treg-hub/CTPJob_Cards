@@ -90,4 +90,37 @@ void main() {
       expect(isOperatorRestrictedForJob(emp, _job()), isFalse);
     });
   });
+
+  group('isHysterMechanicByPosition — Fleet shell auto-nav', () {
+    test('exact Hyster Mechanic title matches', () {
+      final emp = _emp(
+        clockNo: '50',
+        department: 'Workshop',
+        position: 'Hyster Mechanic',
+      );
+      expect(isHysterMechanicByPosition(emp), isTrue);
+    });
+
+    test('case and trim insensitive', () {
+      final emp = _emp(
+        clockNo: '50',
+        department: 'Workshop',
+        position: '  hyster mechanic  ',
+      );
+      expect(isHysterMechanicByPosition(emp), isTrue);
+    });
+
+    test('admin / ink manager title does not match', () {
+      final emp = _emp(
+        clockNo: '22',
+        department: 'Ink Factory',
+        position: 'Manager',
+      );
+      expect(isHysterMechanicByPosition(emp), isFalse);
+    });
+
+    test('null employee is false', () {
+      expect(isHysterMechanicByPosition(null), isFalse);
+    });
+  });
 }

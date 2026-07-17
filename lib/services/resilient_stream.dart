@@ -37,7 +37,7 @@ class RetryTriggers with WidgetsBindingObserver {
   final StreamController<String> _events = StreamController<String>.broadcast();
   final StreamController<void> _authSuspect = StreamController<void>.broadcast();
 
-  /// 'connectivity' | 'claims' | 'auth' | 'resume' | 'presence'.
+  /// 'connectivity' | 'claims' | 'auth' | 'resume' | 'presence' | 'force'.
   Stream<String> get events => _events.stream;
 
   /// Fired when repeated permission-denied failures suggest the SESSION
@@ -52,6 +52,13 @@ class RetryTriggers with WidgetsBindingObserver {
   /// Wake parked resilient streams when the employee becomes on-site while the
   /// app stays in the foreground (geofence / presence flip — no lifecycle resume).
   void notifyBecameOnSite() => _emit('presence');
+
+  /// Force every resilient stream to drop its live subscription and re-listen.
+  ///
+  /// Use after off→on presence, post-update cold start, or when Home is still
+  /// on cache-only skeletons: a live listener can be "alive" but stuck and
+  /// would ignore ordinary [notifyBecameOnSite] / resume events.
+  void notifyForceResubscribe() => _emit('force');
 
   void flagAuthSuspect() {
     if (!_authSuspect.isClosed) _authSuspect.add(null);
@@ -164,9 +171,21 @@ Stream<T> resilientSnapshots<T>(
     onListen: () {
       subscribe();
       triggerSub = RetryTriggers.instance.events.listen((event) {
+        if (parkedUntilAuth && event != 'auth' && event != 'force') return;
+        if (event == 'force') {
+          // Alive-but-stuck listeners (post-update / presence) need a full
+          // tear-down; ordinary triggers only resurrect parked streams.
+          retryTimer?.cancel();
+          retryTimer = null;
+          sub?.cancel();
+          sub = null;
+          attempt = 0;
+          debugPrint('🔄 stream[$debugName] force-resubscribing');
+          subscribe();
+          return;
+        }
         // Only act when the stream is actually down (dead sub, no timer).
         if (sub != null || retryTimer != null) return;
-        if (parkedUntilAuth && event != 'auth') return;
         attempt = 0;
         debugPrint('🔄 stream[$debugName] resubscribing on $event');
         subscribe();
