@@ -16,6 +16,29 @@ class CopperService {
   static const String inventoryPath = 'copper_inventory/main';
   static const String transCollection = 'copper_transactions';
 
+  /// Floor scales to 0.1 kg. Snap display/storage to that precision.
+  static double roundKg(double kg) => (kg * 10).roundToDouble() / 10;
+
+  /// Half a display unit — remainder under this is float dust, treat as empty.
+  static const double kgDust = 0.05;
+
+  /// Subtract [amount] from [available] without going negative; zero dust leftovers.
+  static double subtractKg(double available, double amount) {
+    final left = available - amount;
+    if (left <= kgDust) return 0.0;
+    return roundKg(left);
+  }
+
+  /// Whether [available] covers [requested] (float-safe, allows tiny overshoot).
+  static bool hasEnoughKg(double available, double requested) =>
+      available + kgDust >= requested;
+
+  /// Amount actually taken when depleting a bucket (never more than available).
+  static double takeKg(double available, double requested) {
+    if (requested >= available - kgDust) return available;
+    return requested;
+  }
+
   Stream<CopperInventory> getInventoryStream() {
     return _firestore.doc(inventoryPath).snapshots().map((doc) => CopperInventory.fromFirestore(doc));
   }
@@ -69,18 +92,20 @@ class CopperService {
 
   Future<void> performAddToSort(double amountKg, String comments, String userId) async {
     _guardWrite();
+    final amount = roundKg(amountKg);
+    if (amount <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      final newInv = inv.copyWith(sortKg: inv.sortKg + amountKg, lastUpdated: now);
+      final newInv = inv.copyWith(sortKg: roundKg(inv.sortKg + amount), lastUpdated: now);
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
         id: id,
         type: CopperTransaction.addToSort,
-        amountKg: amountKg,
+        amountKg: amount,
         fromBucket: 'baths',
         toBucket: 'sort',
         timestamp: now,
@@ -92,6 +117,8 @@ class CopperService {
 
   Future<void> performPlateBars(double amountKg, String comments, String userId) async {
     _guardWrite();
+    final amount = roundKg(amountKg);
+    if (amount <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
@@ -99,15 +126,15 @@ class CopperService {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
       final newInv = inv.copyWith(
-        sellKg: inv.sellKg + amountKg,
-        sellRodsKg: inv.sellRodsKg + amountKg,
+        sellKg: roundKg(inv.sellKg + amount),
+        sellRodsKg: roundKg(inv.sellRodsKg + amount),
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
         id: id,
         type: CopperTransaction.plateBars,
-        amountKg: amountKg,
+        amountKg: amount,
         fromBucket: 'bars',
         toBucket: 'sell',
         timestamp: now,
@@ -120,52 +147,76 @@ class CopperService {
 
   Future<void> performSort(double reuseKg, double sellKg, String comments, String userId) async {
     _guardWrite();
+    final reuse = roundKg(reuseKg);
+    final sell = roundKg(sellKg);
+    if (reuse < 0 || sell < 0) throw Exception('Amounts cannot be negative');
+    final totalKg = roundKg(reuse + sell);
+    if (totalKg <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
-    final totalKg = reuseKg + sellKg;
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      if (inv.sortKg < totalKg) throw Exception('Insufficient sort kg');
+      if (!hasEnoughKg(inv.sortKg, totalKg)) {
+        throw Exception(
+          'Insufficient sort kg (have ${roundKg(inv.sortKg).toStringAsFixed(1)}, '
+          'need ${totalKg.toStringAsFixed(1)})',
+        );
+      }
       final newInv = inv.copyWith(
-        sortKg: inv.sortKg - totalKg,
-        reuseKg: inv.reuseKg + reuseKg,
-        sellKg: inv.sellKg + sellKg,
-        sellNuggetsKg: inv.sellNuggetsKg + sellKg,
+        sortKg: subtractKg(inv.sortKg, totalKg),
+        reuseKg: roundKg(inv.reuseKg + reuse),
+        sellKg: roundKg(inv.sellKg + sell),
+        sellNuggetsKg: roundKg(inv.sellNuggetsKg + sell),
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-         id: id,
-         type: CopperTransaction.sort,
-         amountKg: totalKg,
-         fromBucket: 'sort',
-         toBucket: 'reuse: ${reuseKg.toStringAsFixed(1)}kg, sell: ${sellKg.toStringAsFixed(1)}kg',
-         timestamp: now,
-         comments: comments,
-         userId: userId,
-       ).toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.sort,
+        amountKg: totalKg,
+        fromBucket: 'sort',
+        toBucket:
+            'reuse: ${reuse.toStringAsFixed(1)}kg, sell: ${sell.toStringAsFixed(1)}kg',
+        timestamp: now,
+        comments: comments,
+        userId: userId,
+      ).toFirestore());
       await _maybeCreateCopperWasteStock(tx, newInv, userId, now);
     });
   }
 
   Future<void> performUseReuse(double amountKg, String comments, String userId) async {
     _guardWrite();
+    final requested = roundKg(amountKg);
+    if (requested <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
     if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      if (inv.reuseKg < amountKg) throw Exception('Insufficient reuse kg');
-      final newInv = inv.copyWith(reuseKg: inv.reuseKg - amountKg, lastUpdated: now);
+      if (!hasEnoughKg(inv.reuseKg, requested)) {
+        throw Exception(
+          'Insufficient reuse kg (have ${roundKg(inv.reuseKg).toStringAsFixed(1)}, '
+          'asked ${requested.toStringAsFixed(1)})',
+        );
+      }
+      // Clear the bucket when the operator takes "all" of a displayed remainder
+      // (e.g. UI shows 0.1 kg but float store is 0.0999…).
+      final taken = takeKg(inv.reuseKg, requested);
+      final newInv = inv.copyWith(
+        reuseKg: subtractKg(inv.reuseKg, taken),
+        lastUpdated: now,
+      );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
         id: id,
         type: CopperTransaction.useReuse,
-        amountKg: amountKg,
+        amountKg: roundKg(taken),
         fromBucket: 'reuse',
+        toBucket: 'used',
         timestamp: now,
         comments: comments,
         userId: userId,
@@ -173,27 +224,179 @@ class CopperService {
     });
   }
 
+  /// Removed from product path — all commercial sales go through Waste load
+  /// completion (`recordSaleFromWasteLoad`). Kept only so old call sites fail loudly.
+  @Deprecated('Sales are recorded via Waste load completion only')
   Future<void> performRecordSale(double amountKg, double rPerKg, String comments, String userId) async {
+    throw Exception(
+      'Record Sale is disabled on Copper. Complete a Copper Waste collection '
+      'to record the commercial sale.',
+    );
+  }
+
+  /// True when a bucket has a displayable leftover ≤ 0.1 kg (float dust).
+  static bool isDustKg(double kg) => kg > 0 && roundKg(kg) <= 0.1;
+
+  /// Admin: zero sort/reuse/sell (and rod/nugget subs when sell clears) when dust.
+  Future<void> performZeroDust({
+    required String userId,
+    required String comments,
+  }) async {
     _guardWrite();
+    if (comments.trim().isEmpty) {
+      throw Exception('Comment required when zeroing dust');
+    }
     final id = _uuid.v4();
     final now = Timestamp.now();
-    final totalValueR = amountKg * rPerKg;
-    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      if (inv.sellKg < amountKg) throw Exception('Insufficient sell kg');
-      final newInv = inv.copyWith(sellKg: inv.sellKg - amountKg, currentRPerKg: rPerKg, lastUpdated: now);
+      final parts = <String>[];
+      var sort = inv.sortKg;
+      var reuse = inv.reuseKg;
+      var sell = inv.sellKg;
+      var rods = inv.sellRodsKg;
+      var nuggets = inv.sellNuggetsKg;
+      var totalCleared = 0.0;
+
+      if (isDustKg(sort)) {
+        totalCleared += sort;
+        parts.add('sort ${roundKg(sort).toStringAsFixed(1)}');
+        sort = 0;
+      }
+      if (isDustKg(reuse)) {
+        totalCleared += reuse;
+        parts.add('reuse ${roundKg(reuse).toStringAsFixed(1)}');
+        reuse = 0;
+      }
+      if (isDustKg(sell)) {
+        totalCleared += sell;
+        parts.add('sell ${roundKg(sell).toStringAsFixed(1)}');
+        sell = 0;
+        rods = 0;
+        nuggets = 0;
+      } else {
+        if (isDustKg(rods)) {
+          totalCleared += rods;
+          parts.add('rods ${roundKg(rods).toStringAsFixed(1)}');
+          rods = 0;
+        }
+        if (isDustKg(nuggets)) {
+          totalCleared += nuggets;
+          parts.add('nuggets ${roundKg(nuggets).toStringAsFixed(1)}');
+          nuggets = 0;
+        }
+        sell = roundKg(rods + nuggets);
+      }
+
+      if (parts.isEmpty) {
+        throw Exception('No dust ≤ 0.1 kg to clear');
+      }
+
+      final newInv = inv.copyWith(
+        sortKg: sort,
+        reuseKg: reuse,
+        sellKg: sell,
+        sellRodsKg: rods,
+        sellNuggetsKg: nuggets,
+        lastUpdated: now,
+      );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
       tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
         id: id,
-        type: CopperTransaction.recordSale,
-        amountKg: amountKg,
-        fromBucket: 'sell',
+        type: CopperTransaction.zeroDust,
+        amountKg: roundKg(totalCleared),
+        fromBucket: parts.join(', '),
+        toBucket: 'cleared',
         timestamp: now,
-        comments: comments,
-        rPerKg: rPerKg,
-        totalValueR: totalValueR,
+        comments: comments.trim(),
+        userId: userId,
+      ).toFirestore());
+    });
+  }
+
+  /// Admin: apply a signed delta to one bucket (sort | reuse | sell).
+  Future<void> performAdjust({
+    required String bucket,
+    required double deltaKg,
+    required String comments,
+    required String userId,
+  }) async {
+    _guardWrite();
+    final delta = roundKg(deltaKg);
+    if (delta == 0) throw Exception('Delta must not be 0');
+    if (comments.trim().isEmpty) {
+      throw Exception('Comment required for adjust');
+    }
+    final b = bucket.trim().toLowerCase();
+    if (b != 'sort' && b != 'reuse' && b != 'sell') {
+      throw Exception('Bucket must be sort, reuse, or sell');
+    }
+    final id = _uuid.v4();
+    final now = Timestamp.now();
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final inv = CopperInventory.fromFirestore(invDoc);
+      double nextSort = inv.sortKg;
+      double nextReuse = inv.reuseKg;
+      double nextSell = inv.sellKg;
+      double nextRods = inv.sellRodsKg;
+      double nextNuggets = inv.sellNuggetsKg;
+
+      if (b == 'sort') {
+        nextSort = roundKg(inv.sortKg + delta);
+        if (nextSort < 0) throw Exception('Sort would go negative');
+      } else if (b == 'reuse') {
+        nextReuse = roundKg(inv.reuseKg + delta);
+        if (nextReuse < 0) throw Exception('Reuse would go negative');
+      } else {
+        nextSell = roundKg(inv.sellKg + delta);
+        if (nextSell < 0) throw Exception('Sell would go negative');
+        // Keep subtype total aligned with sell when adjusting sell alone.
+        final sub = roundKg(nextRods + nextNuggets);
+        if (sub <= 0 || nextSell == 0) {
+          nextRods = 0;
+          nextNuggets = nextSell;
+        } else {
+          // Prefer putting positive delta on nuggets; negative reduce nuggets then rods.
+          if (delta > 0) {
+            nextNuggets = roundKg(nextNuggets + delta);
+          } else {
+            var left = -delta;
+            final fromNuggets = takeKg(nextNuggets, left);
+            nextNuggets = subtractKg(nextNuggets, fromNuggets);
+            left = roundKg(left - fromNuggets);
+            if (left > 0) {
+              nextRods = subtractKg(nextRods, left);
+            }
+          }
+          nextSell = roundKg(nextRods + nextNuggets);
+        }
+      }
+
+      final newInv = inv.copyWith(
+        sortKg: nextSort,
+        reuseKg: nextReuse,
+        sellKg: nextSell,
+        sellRodsKg: nextRods,
+        sellNuggetsKg: nextNuggets,
+        lastUpdated: now,
+      );
+      tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
+      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
+        id: id,
+        type: CopperTransaction.adjust,
+        amountKg: delta.abs(),
+        fromBucket: b,
+        toBucket: delta > 0 ? '+$delta' : '$delta',
+        timestamp: now,
+        comments: comments.trim(),
         userId: userId,
       ).toFirestore());
     });

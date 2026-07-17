@@ -201,7 +201,9 @@ class _FleetMechanicHomeScreenState extends ConsumerState<FleetMechanicHomeScree
           const FleetMechanicGuideBanner(),
           TabBar(
             controller: _tabController,
+            // Centre the tab strip (scrollable default packs to the start).
             isScrollable: true,
+            tabAlignment: TabAlignment.center,
             labelStyle:
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             tabs: tabs,

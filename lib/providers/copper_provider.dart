@@ -32,53 +32,42 @@ class CopperNotifier extends StateNotifier<AsyncValue<CopperInventory>> {
     }
   }
 
+  /// Do not flip inventory to loading/error on write — the screen owns the
+  /// submit spinner, and a failed write must keep the last known buckets visible.
   Future<void> performAddToSort(double kg, String comments, String clockNo) async {
-    state = const AsyncValue.loading();
-    try {
-      await _service.performAddToSort(kg, comments, clockNo);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-      rethrow;
-    }
+    await _service.performAddToSort(kg, comments, clockNo);
   }
 
   Future<void> performPlateBars(double kg, String comments, String clockNo) async {
-    state = const AsyncValue.loading();
-    try {
-      await _service.performPlateBars(kg, comments, clockNo);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-      rethrow;
-    }
+    await _service.performPlateBars(kg, comments, clockNo);
   }
 
   Future<void> performUseReuse(double kg, String comments, String clockNo) async {
-    state = const AsyncValue.loading();
-    try {
-      await _service.performUseReuse(kg, comments, clockNo);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-      rethrow;
-    }
-  }
-
-  Future<void> performRecordSale(double kg, double rPerKg, String comments, String clockNo) async {
-    state = const AsyncValue.loading();
-    try {
-      await _service.performRecordSale(kg, rPerKg, comments, clockNo);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-      rethrow;
-    }
+    await _service.performUseReuse(kg, comments, clockNo);
   }
 
   Future<void> performSort(double kgToReuse, double kgToSell, String comments, String clockNo) async {
-    state = const AsyncValue.loading();
-    try {
-      await _service.performSort(kgToReuse, kgToSell, comments, clockNo);
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-      rethrow;
-    }
+    await _service.performSort(kgToReuse, kgToSell, comments, clockNo);
+  }
+
+  Future<void> performZeroDust({
+    required String comments,
+    required String clockNo,
+  }) async {
+    await _service.performZeroDust(userId: clockNo, comments: comments);
+  }
+
+  Future<void> performAdjust({
+    required String bucket,
+    required double deltaKg,
+    required String comments,
+    required String clockNo,
+  }) async {
+    await _service.performAdjust(
+      bucket: bucket,
+      deltaKg: deltaKg,
+      comments: comments,
+      userId: clockNo,
+    );
   }
 }

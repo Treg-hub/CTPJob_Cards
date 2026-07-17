@@ -9,6 +9,7 @@ import '../widgets/ctp_app_bar.dart';
 import '../utils/fleet_navigation.dart';
 import 'feedback_thread_screen.dart';
 import 'job_card_detail_screen.dart';
+import 'waste_stock_inventory_screen.dart';
 import '../utils/screen_insets.dart';
 import '../utils/list_load_state.dart';
 
@@ -72,6 +73,16 @@ class _NotificationInboxScreenState
         issueId.isNotEmpty &&
         type.startsWith('fleet_')) {
       await openFleetIssue(ctx, issueId);
+      return;
+    }
+
+    // Copper ready for collection → Waste stock (manager inventory).
+    if (type == 'copper_ready_collection' || type == 'copper_sell') {
+      if (!ctx.mounted) return;
+      await Navigator.push(
+        ctx,
+        MaterialPageRoute(builder: (_) => const WasteStockInventoryScreen()),
+      );
       return;
     }
 
@@ -403,6 +414,7 @@ class _NotifTile extends StatelessWidget {
       case 'busy_response':
         return Icons.do_not_disturb_on;
       case 'copper_sell':
+      case 'copper_ready_collection':
         return Icons.monetization_on;
       case 'fleet_oos_issue':
         return Icons.warning_amber_rounded;
@@ -437,6 +449,7 @@ class _NotifTile extends StatelessWidget {
       case 'busy_response':
         return Colors.red;
       case 'copper_sell':
+      case 'copper_ready_collection':
         return Colors.amber.shade700;
       case 'fleet_oos_issue':
         return Colors.red.shade700;

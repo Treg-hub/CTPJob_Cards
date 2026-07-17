@@ -5,9 +5,14 @@ class CopperTransaction {
   static const String plateBars = 'plate_bars';
   static const String sort = 'sort';
   static const String useReuse = 'use_reuse';
+  /// Legacy — commercial sales now go only via Waste (`record_sale_from_waste`).
   static const String recordSale = 'record_sale';
   static const String prepareForCollection = 'prepare_for_collection';
   static const String recordSaleFromWaste = 'record_sale_from_waste';
+  /// Admin correction (delta on a single bucket).
+  static const String adjust = 'adjust';
+  /// Admin: clear float/display dust ≤ 0.1 kg on buckets.
+  static const String zeroDust = 'zero_dust';
 
   final String id;
   final String type;

@@ -50,13 +50,6 @@ class _DeptRequestsScreenState extends ConsumerState<DeptRequestsScreen>
     return Scaffold(
       appBar: CtpAppBar(
         title: 'Dept Requests',
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(text: 'To my dept'),
-            Tab(text: 'I raised'),
-          ],
-        ),
         actions: [
           IconButton(
             tooltip: _showDone ? 'Hide done' : 'Show done',
@@ -79,6 +72,16 @@ class _DeptRequestsScreenState extends ConsumerState<DeptRequestsScreen>
       ),
       body: Column(
         children: [
+          // Match View Job Cards: full-width centred body tabs (theme colours),
+          // not AppBar tabs on the orange gradient (hard to read).
+          TabBar(
+            controller: _tabs,
+            isScrollable: false,
+            tabs: const [
+              Tab(text: 'To my dept'),
+              Tab(text: 'I raised'),
+            ],
+          ),
           DeptRequestTip(
             dismissible: true,
             child: Container(
