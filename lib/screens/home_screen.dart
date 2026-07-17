@@ -2525,7 +2525,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   /// Copper tab — only mounted when [isCopperAuthorized] (admin / Pre Press manager).
   /// No clock-number or password dialog; Firestore rules enforce the same gate.
   Widget _buildCopperTab() {
-    return const CopperDashboardScreen();
+    return CopperDashboardScreen(
+      onOpenWaste: () {
+        final wasteIdx = _wasteTabIndex();
+        if (wasteIdx >= 0) {
+          _setShellTab(wasteIdx);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Waste module is not available on this account. '
+                'Ask a Security manager to collect copper stock.',
+              ),
+            ),
+          );
+        }
+      },
+    );
   }
 
   void _setShellTab(int index) {

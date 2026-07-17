@@ -121,7 +121,15 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
       case CopperTransaction.plateBars: return Icons.build;
       case CopperTransaction.sort: return Icons.sort;
       case CopperTransaction.useReuse: return Icons.remove;
-      case CopperTransaction.recordSale: return Icons.sell;
+      case CopperTransaction.recordSale:
+      case CopperTransaction.recordSaleFromWaste:
+        return Icons.sell;
+      case CopperTransaction.prepareForCollection:
+        return Icons.inventory_2_outlined;
+      case CopperTransaction.adjust:
+        return Icons.tune;
+      case CopperTransaction.zeroDust:
+        return Icons.cleaning_services_outlined;
       default: return Icons.help;
     }
   }
@@ -132,7 +140,14 @@ class _CopperTransactionsScreenState extends ConsumerState<CopperTransactionsScr
       case CopperTransaction.plateBars: return Colors.purple;
       case CopperTransaction.sort: return Colors.green;
       case CopperTransaction.useReuse: return Colors.red;
-      case CopperTransaction.recordSale: return Colors.amber;
+      case CopperTransaction.recordSale:
+      case CopperTransaction.recordSaleFromWaste:
+        return Colors.amber;
+      case CopperTransaction.prepareForCollection:
+        return Colors.orange;
+      case CopperTransaction.adjust:
+      case CopperTransaction.zeroDust:
+        return Colors.blueGrey;
       default: return Colors.grey;
     }
   }
