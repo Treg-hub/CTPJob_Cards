@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-17 — 2.3.0+176 — Home stability after updates and return to site
+
+### What you will notice
+
+- After an app update, Home and job lists should load without needing to force-close and reopen the app.
+- When you return to the factory with the app still open, modules and Recent Jobs refresh more reliably.
+- Admins and multi-module users stay on **Home** instead of being taken to **Fleet** unexpectedly; Hyster Mechanics still open Fleet as usual.
+
+---
+
 ## 2026-07-16 — 2.3.0+175 — Dept Requests for managers
 
 ### What you will notice
