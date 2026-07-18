@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/copper_inventory.dart';
 import '../models/waste_stock_item.dart';
-import '../models/waste_stock_source.dart';
 import '../services/copper_service.dart';
 import '../services/waste_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 
-/// Manager-only summary of copper ready to sell (below 400 kg in copper module,
-/// or on-site waste_stock after the threshold auto-creates stock).
+/// Manager-only summary of copper staged for collection (copper module sell
+/// mirrors + on-site copper waste stock pools Security can link to a load).
 class WasteCopperReadyPanel extends StatelessWidget {
   const WasteCopperReadyPanel({
     super.key,
@@ -33,13 +32,12 @@ class WasteCopperReadyPanel extends StatelessWidget {
             final inv = copperSnap.data;
             final stock = (stockSnap.data ?? [])
                 .where((i) =>
-                    i.source == WasteStockSource.copperThreshold &&
-                    !i.isDeleted)
+                    i.source.isCopperSellStaging &&
+                    !i.isDeleted &&
+                    i.status == WasteStockStatus.onSite)
                 .toList();
 
-            final pendingInModule = inv == null
-                ? 0.0
-                : inv.sellKg;
+            final pendingInModule = inv == null ? 0.0 : inv.sellKg;
             final rodsPending = inv?.sellRodsKg ?? 0.0;
             final nuggetsPending = inv?.sellNuggetsKg ?? 0.0;
             final onSiteKg = stock.fold<double>(
@@ -52,16 +50,18 @@ class WasteCopperReadyPanel extends StatelessWidget {
             }
 
             final lines = <String>[];
-            if (pendingInModule > 0) {
+            if (pendingInModule > 0 || onSiteKg > 0) {
+              final showKg =
+                  pendingInModule > 0 ? pendingInModule : onSiteKg;
               lines.add(
-                'In copper module: ${formatSAWeight(pendingInModule)}'
+                'Staged for collection: ${formatSAWeight(showKg)}'
                 '${rodsPending > 0 || nuggetsPending > 0 ? ' (Rods ${formatSAWeight(rodsPending)} · Nuggets ${formatSAWeight(nuggetsPending)})' : ''}'
-                '${pendingInModule < kCopperWasteStockThresholdKg ? ' — collection stock at ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg' : ''}',
+                ' — link from stock when collecting Copper Waste',
               );
             }
-            if (onSiteKg > 0) {
+            if (stock.isNotEmpty) {
               lines.add(
-                'On-site awaiting collection: ${formatSAWeight(onSiteKg)}'
+                'On-site waste stock: ${formatSAWeight(onSiteKg)}'
                 ' (${stock.length} item${stock.length == 1 ? '' : 's'})',
               );
             }
@@ -72,7 +72,8 @@ class WasteCopperReadyPanel extends StatelessWidget {
                 color: surfaceBg,
                 borderRadius: BorderRadius.circular(10),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -81,7 +82,7 @@ class WasteCopperReadyPanel extends StatelessWidget {
                           Icon(Icons.sell_outlined, size: 18, color: onSurface),
                           const SizedBox(width: 8),
                           Text(
-                            'Copper ready to sell',
+                            'Copper ready to collect',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: onSurface,

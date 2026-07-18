@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
-import '../models/waste_stock_source.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../providers/copper_provider.dart';
 import '../providers/current_employee_provider.dart';
 import '../models/copper_inventory.dart';
@@ -50,10 +51,31 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
             (double.tryParse(_sellKgController.text) ?? 0),
       );
 
+  static const _migratePrefsKey = 'copper_sell_stock_migrated_v1';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _maybeMigrateSellToWasteStock();
+  }
+
+  /// Ship-time: stage existing To Sell into waste stock pools once per device.
+  Future<void> _maybeMigrateSellToWasteStock() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_migratePrefsKey) == true) return;
+      final employee = ref.read(currentEmployeeProvider).valueOrNull;
+      if (employee == null || !isCopperAuthorized(employee)) return;
+      final actor = resolveWriteActor(employee);
+      if (actor == null) return;
+      await CopperService().migrateSellBucketsToWasteStockPools(
+        userId: actor.clockNo,
+      );
+      await prefs.setBool(_migratePrefsKey, true);
+    } catch (_) {
+      // Retry next open if rules/network not ready.
+    }
   }
 
   @override
@@ -76,12 +98,11 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
       case 'addToSort':
         return 'Copper scraped from baths → To Sort bucket.';
       case 'plateBars':
-        return 'Plate bars go straight to To Sell (rods). At '
-            '${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg total sell, '
-            'waste stock is auto-created for collection.';
+        return 'Plate bars go to To Sell (rods) and immediately stage '
+            'Waste stock for Security to collect and sell.';
       case 'removeFromSort':
         return 'Enter how much goes to Reuse (back to process) and how much to '
-            'Sell (nuggets). Total is taken from To Sort.';
+            'Sell (nuggets). Sell kg is staged as Waste stock for collection.';
       case 'useReuse':
         return 'Take copper from To Reuse (returned to baths / used). '
             'Use “All” for a stuck remainder like 0.1 kg.';
@@ -355,13 +376,35 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
   }
 
   Widget _buildStatusCard(CopperInventory inv, ColorScheme scheme) {
-    final threshold = kCopperWasteStockThresholdKg;
     final sell = CopperService.roundKg(inv.sellKg);
-    final progress = (sell / threshold).clamp(0.0, 1.0);
-    final batchOpen = inv.activeCopperWasteBatchId != null &&
-        inv.activeCopperWasteBatchId!.isNotEmpty;
-    final show = sell > 0 || batchOpen;
-    if (!show) return const SizedBox.shrink();
+    final rods = CopperService.roundKg(inv.sellRodsKg);
+    final nuggets = CopperService.roundKg(inv.sellNuggetsKg);
+    if (sell <= 0 && rods <= 0 && nuggets <= 0) {
+      return Card(
+        margin: const EdgeInsets.only(top: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Collection / sell',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Nothing staged for collection yet. Plate bars or sort metal to '
+                'Sell — that creates Waste stock Security can link to a Copper load.',
+                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Card(
       margin: const EdgeInsets.only(top: 12),
@@ -371,7 +414,7 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Collection status',
+              'Staged for collection',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: scheme.onSurface,
@@ -379,28 +422,18 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              batchOpen
-                  ? 'Waste batch open — collect via Waste (sales record on load complete).'
-                  : 'To Sell: ${sell.toStringAsFixed(1)} / ${threshold.toStringAsFixed(0)} kg '
-                      'until auto waste stock',
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              'To Sell ${sell.toStringAsFixed(1)} kg is also on Waste stock '
+              '(Rods ${rods.toStringAsFixed(1)} · Nuggets ${nuggets.toStringAsFixed(1)}). '
+              'Security collects via Waste → link Rods/Nuggets to the load. '
+              'Commercial sale records when the load is completed — not from this screen.',
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.35),
             ),
-            if (!batchOpen) ...[
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: progress,
-                backgroundColor: scheme.surfaceContainerHighest,
-                color: Colors.amber.shade700,
-              ),
-            ],
-            if (inv.sellRodsKg > 0 || inv.sellNuggetsKg > 0) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Rods ${CopperService.roundKg(inv.sellRodsKg).toStringAsFixed(1)} kg · '
-                'Nuggets ${CopperService.roundKg(inv.sellNuggetsKg).toStringAsFixed(1)} kg',
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-              ),
-            ],
+            const SizedBox(height: 10),
+            Text(
+              'To remove from sell: Security takes stock on a load (inventory drops), '
+              'or an admin uses Adjust / Zero dust. Use from Reuse only affects To Reuse.',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, height: 1.35),
+            ),
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerRight,
@@ -463,8 +496,9 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                 child: Padding(
                   padding: const EdgeInsets.all(10),
                   child: Text(
-                    'Sales are recorded when a Copper Waste load is completed — '
-                    'not from this screen.',
+                    'Moving metal to To Sell stages Waste stock (Rods / Nuggets) '
+                    'for Security. They schedule a Copper Waste load, link that stock, '
+                    'and complete the load to record the sale. You cannot sell from this tab.',
                     style: TextStyle(
                       fontSize: 13,
                       color: scheme.onSurfaceVariant,

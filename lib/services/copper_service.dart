@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/copper_inventory.dart';
 import '../models/copper_transaction.dart';
+import '../models/waste_stock_item.dart';
 import '../models/waste_stock_source.dart';
 import '../services/connectivity_service.dart';
 import '../utils/persona_audit.dart';
@@ -39,8 +40,16 @@ class CopperService {
     return requested;
   }
 
+  static bool isCopperSellSource(String? source) {
+    final s = WasteStockSource.fromString(source);
+    return s.isCopperSellStaging;
+  }
+
   Stream<CopperInventory> getInventoryStream() {
-    return _firestore.doc(inventoryPath).snapshots().map((doc) => CopperInventory.fromFirestore(doc));
+    return _firestore
+        .doc(inventoryPath)
+        .snapshots()
+        .map((doc) => CopperInventory.fromFirestore(doc));
   }
 
   Future<void> initializeInventory() async {
@@ -84,68 +93,96 @@ class CopperService {
   Future<void> updateTransactionComments(String id, String comments) async {
     _guardWrite();
     try {
-      await _firestore.collection(transCollection).doc(id).update({'comments': comments});
+      await _firestore
+          .collection(transCollection)
+          .doc(id)
+          .update({'comments': comments});
     } catch (e) {
       throw Exception('Failed to update transaction comments: $e');
     }
   }
 
-  Future<void> performAddToSort(double amountKg, String comments, String userId) async {
+  Future<void> performAddToSort(
+      double amountKg, String comments, String userId) async {
     _guardWrite();
     final amount = roundKg(amountKg);
     if (amount <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
-    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      final newInv = inv.copyWith(sortKg: roundKg(inv.sortKg + amount), lastUpdated: now);
+      final newInv =
+          inv.copyWith(sortKg: roundKg(inv.sortKg + amount), lastUpdated: now);
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.addToSort,
-        amountKg: amount,
-        fromBucket: 'baths',
-        toBucket: 'sort',
-        timestamp: now,
-        comments: comments,
-        userId: userId,
-      ).toFirestore());
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.addToSort,
+            amountKg: amount,
+            fromBucket: 'baths',
+            toBucket: 'sort',
+            timestamp: now,
+            comments: comments,
+            userId: userId,
+          ).toFirestore());
     });
   }
 
-  Future<void> performPlateBars(double amountKg, String comments, String userId) async {
+  Future<void> performPlateBars(
+      double amountKg, String comments, String userId) async {
     _guardWrite();
     final amount = roundKg(amountKg);
     if (amount <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
-    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
     await _firestore.runTransaction((tx) async {
+      // Reads first (inventory + rods pool pointer + pool doc).
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final pool = await _readCopperPool(tx, kCopperRodsPoolPointerDocId);
       final inv = CopperInventory.fromFirestore(invDoc);
       final newInv = inv.copyWith(
         sellKg: roundKg(inv.sellKg + amount),
         sellRodsKg: roundKg(inv.sellRodsKg + amount),
         lastUpdated: now,
+        clearActiveCopperWasteBatchId: true,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.plateBars,
-        amountKg: amount,
-        fromBucket: 'bars',
-        toBucket: 'sell',
-        timestamp: now,
-        comments: comments,
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.plateBars,
+            amountKg: amount,
+            fromBucket: 'bars',
+            toBucket: 'sell_waste_stock',
+            timestamp: now,
+            comments: comments.isEmpty
+                ? 'Staged to Waste stock (Rods)'
+                : comments,
+            userId: userId,
+          ).toFirestore());
+      _addKgToCopperPool(
+        tx: tx,
+        pool: pool,
+        pointerDocId: kCopperRodsPoolPointerDocId,
+        subtype: WasteStockTypes.copperRods,
+        addKg: amount,
         userId: userId,
-      ).toFirestore());
-      await _maybeCreateCopperWasteStock(tx, newInv, userId, now);
+        now: now,
+      );
     });
   }
 
-  Future<void> performSort(double reuseKg, double sellKg, String comments, String userId) async {
+  Future<void> performSort(
+      double reuseKg, double sellKg, String comments, String userId) async {
     _guardWrite();
     final reuse = roundKg(reuseKg);
     final sell = roundKg(sellKg);
@@ -154,9 +191,14 @@ class CopperService {
     if (totalKg <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
-    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final CopperPoolRead? pool = sell > 0
+          ? await _readCopperPool(tx, kCopperNuggetsPoolPointerDocId)
+          : null;
       final inv = CopperInventory.fromFirestore(invDoc);
       if (!hasEnoughKg(inv.sortKg, totalKg)) {
         throw Exception(
@@ -170,30 +212,47 @@ class CopperService {
         sellKg: roundKg(inv.sellKg + sell),
         sellNuggetsKg: roundKg(inv.sellNuggetsKg + sell),
         lastUpdated: now,
+        clearActiveCopperWasteBatchId: true,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.sort,
-        amountKg: totalKg,
-        fromBucket: 'sort',
-        toBucket:
-            'reuse: ${reuse.toStringAsFixed(1)}kg, sell: ${sell.toStringAsFixed(1)}kg',
-        timestamp: now,
-        comments: comments,
-        userId: userId,
-      ).toFirestore());
-      await _maybeCreateCopperWasteStock(tx, newInv, userId, now);
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.sort,
+            amountKg: totalKg,
+            fromBucket: 'sort',
+            toBucket: sell > 0
+                ? 'reuse: ${reuse.toStringAsFixed(1)}kg, sell_waste: ${sell.toStringAsFixed(1)}kg'
+                : 'reuse: ${reuse.toStringAsFixed(1)}kg, sell: 0kg',
+            timestamp: now,
+            comments: comments,
+            userId: userId,
+          ).toFirestore());
+      if (sell > 0 && pool != null) {
+        _addKgToCopperPool(
+          tx: tx,
+          pool: pool,
+          pointerDocId: kCopperNuggetsPoolPointerDocId,
+          subtype: WasteStockTypes.copperNuggets,
+          addKg: sell,
+          userId: userId,
+          now: now,
+        );
+      }
     });
   }
 
-  Future<void> performUseReuse(double amountKg, String comments, String userId) async {
+  Future<void> performUseReuse(
+      double amountKg, String comments, String userId) async {
     _guardWrite();
     final requested = roundKg(amountKg);
     if (requested <= 0) throw Exception('Amount must be greater than 0');
     final id = _uuid.v4();
     final now = Timestamp.now();
-    if (!await ConnectivityService().isOnline()) throw Exception('Copper operations require online connection');
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Copper operations require online connection');
+    }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
@@ -203,44 +262,38 @@ class CopperService {
           'asked ${requested.toStringAsFixed(1)})',
         );
       }
-      // Clear the bucket when the operator takes "all" of a displayed remainder
-      // (e.g. UI shows 0.1 kg but float store is 0.0999…).
       final taken = takeKg(inv.reuseKg, requested);
       final newInv = inv.copyWith(
         reuseKg: subtractKg(inv.reuseKg, taken),
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.useReuse,
-        amountKg: roundKg(taken),
-        fromBucket: 'reuse',
-        toBucket: 'used',
-        timestamp: now,
-        comments: comments,
-        userId: userId,
-      ).toFirestore());
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.useReuse,
+            amountKg: roundKg(taken),
+            fromBucket: 'reuse',
+            toBucket: 'used',
+            timestamp: now,
+            comments: comments,
+            userId: userId,
+          ).toFirestore());
     });
   }
 
-  /// Removed from product path — all commercial sales go through Waste load
-  /// completion (`recordSaleFromWasteLoad`). Kept only so old call sites fail loudly.
   @Deprecated('Sales are recorded via Waste load completion only')
-  Future<void> performRecordSale(double amountKg, double rPerKg, String comments, String userId) async {
+  Future<void> performRecordSale(
+      double amountKg, double rPerKg, String comments, String userId) async {
     throw Exception(
       'Record Sale is disabled on Copper. Complete a Copper Waste collection '
       'to record the commercial sale.',
     );
   }
 
-  /// True when a bucket has a displayable leftover ≤ 0.1 kg (float dust).
   static bool isDustKg(double kg) => kg > 0 && roundKg(kg) <= 0.1;
 
-  /// Admin: zero only buckets that are themselves dust (≤ 0.1 kg).
-  ///
-  /// Never recompute [sellKg] from rods+nuggets — that wiped real sell stock when
-  /// subtypes were 0 / desynced while clearing reuse dust.
   Future<void> performZeroDust({
     required String userId,
     required String comments,
@@ -256,6 +309,9 @@ class CopperService {
     }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final rodsPool = await _readCopperPool(tx, kCopperRodsPoolPointerDocId);
+      final nuggetsPool =
+          await _readCopperPool(tx, kCopperNuggetsPoolPointerDocId);
       final inv = CopperInventory.fromFirestore(invDoc);
       final parts = <String>[];
       var sort = inv.sortKg;
@@ -264,6 +320,8 @@ class CopperService {
       var rods = inv.sellRodsKg;
       var nuggets = inv.sellNuggetsKg;
       var totalCleared = 0.0;
+      var rodsCleared = 0.0;
+      var nuggetsCleared = 0.0;
 
       if (isDustKg(sort)) {
         totalCleared += sort;
@@ -275,12 +333,11 @@ class CopperService {
         parts.add('reuse ${roundKg(reuse).toStringAsFixed(1)}');
         reuse = 0;
       }
-
-      // Sell + subtypes: only clear a field if THAT field is dust.
-      // Do not force sell = rods + nuggets (destroys real sell when subtypes lag).
       if (isDustKg(sell)) {
         totalCleared += sell;
         parts.add('sell ${roundKg(sell).toStringAsFixed(1)}');
+        rodsCleared = rods;
+        nuggetsCleared = nuggets;
         sell = 0;
         rods = 0;
         nuggets = 0;
@@ -288,16 +345,17 @@ class CopperService {
         if (isDustKg(rods)) {
           totalCleared += rods;
           parts.add('rods ${roundKg(rods).toStringAsFixed(1)}');
+          rodsCleared = rods;
           rods = 0;
+          sell = roundKg(nuggets);
         }
         if (isDustKg(nuggets)) {
           totalCleared += nuggets;
           parts.add('nuggets ${roundKg(nuggets).toStringAsFixed(1)}');
+          nuggetsCleared = nuggets;
           nuggets = 0;
+          sell = roundKg(rods);
         }
-        // Keep sell_kg as the authority; only reduce it if both subtypes are 0
-        // after dust clear and sell itself was dust-sized (handled above).
-        // If subtypes under-count sell, leave sell alone for Adjust to fix.
       }
 
       if (parts.isEmpty) {
@@ -313,20 +371,37 @@ class CopperService {
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.zeroDust,
-        amountKg: roundKg(totalCleared),
-        fromBucket: parts.join(', '),
-        toBucket: 'cleared',
-        timestamp: now,
-        comments: comments.trim(),
-        userId: userId,
-      ).toFirestore());
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.zeroDust,
+            amountKg: roundKg(totalCleared),
+            fromBucket: parts.join(', '),
+            toBucket: 'cleared',
+            timestamp: now,
+            comments: comments.trim(),
+            userId: userId,
+          ).toFirestore());
+      if (rodsCleared > 0) {
+        _reduceCopperPoolBy(
+          tx: tx,
+          pool: rodsPool,
+          reduceKg: rodsCleared,
+          now: now,
+        );
+      }
+      if (nuggetsCleared > 0) {
+        _reduceCopperPoolBy(
+          tx: tx,
+          pool: nuggetsPool,
+          reduceKg: nuggetsCleared,
+          now: now,
+        );
+      }
     });
   }
 
-  /// Admin: apply a signed delta to one bucket (sort | reuse | sell).
   Future<void> performAdjust({
     required String bucket,
     required double deltaKg,
@@ -350,12 +425,20 @@ class CopperService {
     }
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final rodsPool = b == 'sell'
+          ? await _readCopperPool(tx, kCopperRodsPoolPointerDocId)
+          : null;
+      final nuggetsPool = b == 'sell'
+          ? await _readCopperPool(tx, kCopperNuggetsPoolPointerDocId)
+          : null;
       final inv = CopperInventory.fromFirestore(invDoc);
       double nextSort = inv.sortKg;
       double nextReuse = inv.reuseKg;
       double nextSell = inv.sellKg;
       double nextRods = inv.sellRodsKg;
       double nextNuggets = inv.sellNuggetsKg;
+      double rodsDelta = 0;
+      double nuggetsDelta = 0;
 
       if (b == 'sort') {
         nextSort = roundKg(inv.sortKg + delta);
@@ -366,26 +449,22 @@ class CopperService {
       } else {
         nextSell = roundKg(inv.sellKg + delta);
         if (nextSell < 0) throw Exception('Sell would go negative');
-        // Keep subtype total aligned with sell when adjusting sell alone.
-        final sub = roundKg(nextRods + nextNuggets);
-        if (sub <= 0 || nextSell == 0) {
-          nextRods = 0;
-          nextNuggets = nextSell;
+        if (delta > 0) {
+          nextNuggets = roundKg(nextNuggets + delta);
+          nuggetsDelta = delta;
         } else {
-          // Prefer putting positive delta on nuggets; negative reduce nuggets then rods.
-          if (delta > 0) {
-            nextNuggets = roundKg(nextNuggets + delta);
-          } else {
-            var left = -delta;
-            final fromNuggets = takeKg(nextNuggets, left);
-            nextNuggets = subtractKg(nextNuggets, fromNuggets);
-            left = roundKg(left - fromNuggets);
-            if (left > 0) {
-              nextRods = subtractKg(nextRods, left);
-            }
+          var left = -delta;
+          final fromNuggets = takeKg(nextNuggets, left);
+          nextNuggets = subtractKg(nextNuggets, fromNuggets);
+          nuggetsDelta = -fromNuggets;
+          left = roundKg(left - fromNuggets);
+          if (left > 0) {
+            final fromRods = takeKg(nextRods, left);
+            nextRods = subtractKg(nextRods, fromRods);
+            rodsDelta = -fromRods;
           }
-          nextSell = roundKg(nextRods + nextNuggets);
         }
+        nextSell = roundKg(nextRods + nextNuggets);
       }
 
       final newInv = inv.copyWith(
@@ -397,20 +476,116 @@ class CopperService {
         lastUpdated: now,
       );
       tx.update(_firestore.doc(inventoryPath), newInv.toFirestore());
-      tx.set(_firestore.collection(transCollection).doc(id), CopperTransaction(
-        id: id,
-        type: CopperTransaction.adjust,
-        amountKg: delta.abs(),
-        fromBucket: b,
-        toBucket: delta > 0 ? '+$delta' : '$delta',
-        timestamp: now,
-        comments: comments.trim(),
-        userId: userId,
-      ).toFirestore());
+      tx.set(
+          _firestore.collection(transCollection).doc(id),
+          CopperTransaction(
+            id: id,
+            type: CopperTransaction.adjust,
+            amountKg: delta.abs(),
+            fromBucket: b,
+            toBucket: delta > 0 ? '+$delta' : '$delta',
+            timestamp: now,
+            comments: comments.trim(),
+            userId: userId,
+          ).toFirestore());
+      if (b == 'sell' && rodsPool != null && nuggetsPool != null) {
+        if (rodsDelta > 0) {
+          _addKgToCopperPool(
+            tx: tx,
+            pool: rodsPool,
+            pointerDocId: kCopperRodsPoolPointerDocId,
+            subtype: WasteStockTypes.copperRods,
+            addKg: rodsDelta,
+            userId: userId,
+            now: now,
+          );
+        } else if (rodsDelta < 0) {
+          _reduceCopperPoolBy(
+            tx: tx,
+            pool: rodsPool,
+            reduceKg: -rodsDelta,
+            now: now,
+          );
+        }
+        if (nuggetsDelta > 0) {
+          _addKgToCopperPool(
+            tx: tx,
+            pool: nuggetsPool,
+            pointerDocId: kCopperNuggetsPoolPointerDocId,
+            subtype: WasteStockTypes.copperNuggets,
+            addKg: nuggetsDelta,
+            userId: userId,
+            now: now,
+          );
+        } else if (nuggetsDelta < 0) {
+          _reduceCopperPoolBy(
+            tx: tx,
+            pool: nuggetsPool,
+            reduceKg: -nuggetsDelta,
+            now: now,
+          );
+        }
+      }
     });
   }
 
-  /// Records commercial sale when a Copper Waste load completes. Does not touch sell buckets.
+  /// When copper waste stock is marked loaded, reduce inventory sell mirrors.
+  Future<void> deductSellForLoadedStockIds(List<String> stockIds) async {
+    if (stockIds.isEmpty) return;
+    if (!await ConnectivityService().isOnline()) return;
+
+    for (final stockId in stockIds) {
+      try {
+        await _firestore.runTransaction((tx) async {
+          final stockRef =
+              _firestore.collection(Collections.wasteStock).doc(stockId);
+          final stockSnap = await tx.get(stockRef);
+          if (!stockSnap.exists) return;
+          final data = stockSnap.data() ?? {};
+          if (!isCopperSellSource(data['source'] as String?)) return;
+          // Only deduct once when transitioning — weight still on doc.
+          final weight =
+              ((data['estimated_weight_kg'] as num?)?.toDouble() ?? 0);
+          if (weight <= 0) return;
+          final subtype = (data['subtype'] as String?) ?? '';
+          final invDoc = await tx.get(_firestore.doc(inventoryPath));
+          final inv = CopperInventory.fromFirestore(invDoc);
+          final now = Timestamp.now();
+          var rods = inv.sellRodsKg;
+          var nuggets = inv.sellNuggetsKg;
+          if (subtype == WasteStockTypes.copperRods) {
+            rods = subtractKg(rods, weight);
+          } else if (subtype == WasteStockTypes.copperNuggets) {
+            nuggets = subtractKg(nuggets, weight);
+          } else {
+            // Unknown subtype: reduce total sell proportionally via nuggets first.
+            final takeN = takeKg(nuggets, weight);
+            nuggets = subtractKg(nuggets, takeN);
+            final left = roundKg(weight - takeN);
+            if (left > 0) rods = subtractKg(rods, left);
+          }
+          final sell = roundKg(rods + nuggets);
+          tx.update(_firestore.doc(inventoryPath), inv.copyWith(
+            sellKg: sell,
+            sellRodsKg: rods,
+            sellNuggetsKg: nuggets,
+            lastUpdated: now,
+            clearActiveCopperWasteBatchId: true,
+          ).toFirestore());
+          // Zero weight on loaded stock so re-mark is idempotent.
+          tx.update(stockRef, {
+            'estimated_weight_kg': 0,
+            'updated_at': now,
+          });
+        });
+      } catch (e) {
+        // Non-fatal: load path must not fail if inventory already adjusted.
+        debugPrint('deductSellForLoadedStockIds $stockId: $e');
+      }
+    }
+  }
+
+  /// Records commercial sale when a Copper Waste load completes.
   Future<void> recordSaleFromWasteLoad({
     required String loadId,
     required String? loadNumber,
@@ -430,139 +605,272 @@ class CopperService {
     }
 
     await _firestore.runTransaction((tx) async {
-      final existing = await tx.get(_firestore.collection(transCollection).doc(docId));
+      final existing =
+          await tx.get(_firestore.collection(transCollection).doc(docId));
       if (existing.exists) return;
 
-      tx.set(_firestore.collection(transCollection).doc(docId), CopperTransaction(
-        id: docId,
-        type: CopperTransaction.recordSaleFromWaste,
-        amountKg: amountKg,
-        fromBucket: 'waste_load',
-        toBucket: 'sold',
-        timestamp: now,
-        comments: comments.isNotEmpty
-            ? comments
-            : 'Recorded from waste load ${loadNumber ?? loadId}',
-        rPerKg: rPerKg,
-        totalValueR: totalValueR,
-        userId: userId,
-        wasteLoadId: loadId,
-        wasteLoadNumber: loadNumber,
-        copperSubtype: subtype,
-      ).toFirestore());
+      tx.set(
+          _firestore.collection(transCollection).doc(docId),
+          CopperTransaction(
+            id: docId,
+            type: CopperTransaction.recordSaleFromWaste,
+            amountKg: amountKg,
+            fromBucket: 'waste_load',
+            toBucket: 'sold',
+            timestamp: now,
+            comments: comments.isNotEmpty
+                ? comments
+                : 'Recorded from waste load ${loadNumber ?? loadId}',
+            rPerKg: rPerKg,
+            totalValueR: totalValueR,
+            userId: userId,
+            wasteLoadId: loadId,
+            wasteLoadNumber: loadNumber,
+            copperSubtype: subtype,
+          ).toFirestore());
 
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
       final inv = CopperInventory.fromFirestore(invDoc);
-      tx.update(_firestore.doc(inventoryPath), inv.copyWith(
-        currentRPerKg: rPerKg,
-        lastUpdated: now,
-      ).toFirestore());
+      tx.update(
+          _firestore.doc(inventoryPath),
+          inv
+              .copyWith(
+                currentRPerKg: rPerKg,
+                lastUpdated: now,
+              )
+              .toFirestore());
     });
   }
 
-  Future<void> _maybeCreateCopperWasteStock(
+  /// One-time / ship-time: ensure on-site waste pools mirror inventory sell.
+  Future<void> migrateSellBucketsToWasteStockPools({
+    required String userId,
+  }) async {
+    _guardWrite();
+    if (!await ConnectivityService().isOnline()) {
+      throw Exception('Migration requires online connection');
+    }
+    final now = Timestamp.now();
+    await _firestore.runTransaction((tx) async {
+      final invDoc = await tx.get(_firestore.doc(inventoryPath));
+      final rodsPool = await _readCopperPool(tx, kCopperRodsPoolPointerDocId);
+      final nuggetsPool =
+          await _readCopperPool(tx, kCopperNuggetsPoolPointerDocId);
+      final inv = CopperInventory.fromFirestore(invDoc);
+      final rods = roundKg(inv.sellRodsKg);
+      final nuggets = roundKg(inv.sellNuggetsKg);
+      if (rods <= 0 && nuggets <= 0) return;
+
+      if (rods > 0) {
+        _setCopperPoolAbsolute(
+          tx: tx,
+          pool: rodsPool,
+          pointerDocId: kCopperRodsPoolPointerDocId,
+          subtype: WasteStockTypes.copperRods,
+          weightKg: rods,
+          userId: userId,
+          now: now,
+        );
+      }
+      if (nuggets > 0) {
+        _setCopperPoolAbsolute(
+          tx: tx,
+          pool: nuggetsPool,
+          pointerDocId: kCopperNuggetsPoolPointerDocId,
+          subtype: WasteStockTypes.copperNuggets,
+          weightKg: nuggets,
+          userId: userId,
+          now: now,
+        );
+      }
+      // Keep inventory as-is (mirror). Clear legacy batch flag.
+      tx.update(_firestore.doc(inventoryPath), {
+        'last_updated': now,
+        'active_copper_waste_batch_id': FieldValue.delete(),
+      });
+      final auditId = 'migrate_copper_sell_stock_${now.millisecondsSinceEpoch}';
+      tx.set(
+          _firestore.collection(transCollection).doc(auditId),
+          CopperTransaction(
+            id: auditId,
+            type: CopperTransaction.adjust,
+            amountKg: roundKg(rods + nuggets),
+            fromBucket: 'sell_split_repair',
+            toBucket:
+                'waste_stock rods: ${rods.toStringAsFixed(1)}kg, nuggets: ${nuggets.toStringAsFixed(1)}kg',
+            timestamp: now,
+            comments:
+                'Ship migration: stage copper To Sell into waste stock pools for Security collection',
+            userId: userId,
+          ).toFirestore());
+    });
+  }
+
+  // ── Sell pool helpers (pointer + running on_site waste_stock) ────────────
+
+  Future<CopperPoolRead> _readCopperPool(
     Transaction tx,
-    CopperInventory inv,
-    String userId,
-    Timestamp now,
+    String pointerDocId,
   ) async {
-    if (inv.sellKg < kCopperWasteStockThresholdKg) return;
-    if (inv.activeCopperWasteBatchId != null &&
-        inv.activeCopperWasteBatchId!.isNotEmpty) {
+    final pointerRef =
+        _firestore.collection(Collections.wasteStockPoolPointers).doc(pointerDocId);
+    final pointerSnap = await tx.get(pointerRef);
+    final poolId = pointerSnap.data()?['current_pool_stock_id'] as String?;
+    DocumentSnapshot<Map<String, dynamic>>? poolSnap;
+    if (poolId != null && poolId.isNotEmpty) {
+      poolSnap =
+          await tx.get(_firestore.collection(Collections.wasteStock).doc(poolId));
+    }
+    return CopperPoolRead(
+      pointerRef: pointerRef,
+      poolId: poolId,
+      poolSnap: poolSnap,
+    );
+  }
+
+  bool _poolIsOpen(CopperPoolRead pool) {
+    final data = pool.poolSnap?.data();
+    if (data == null || pool.poolSnap?.exists != true) return false;
+    if (data['is_deleted'] == true) return false;
+    final status = (data['status'] as String?) ?? 'on_site';
+    return status == WasteStockStatus.onSite.value;
+  }
+
+  void _addKgToCopperPool({
+    required Transaction tx,
+    required CopperPoolRead pool,
+    required String pointerDocId,
+    required String subtype,
+    required double addKg,
+    required String userId,
+    required Timestamp now,
+  }) {
+    final amount = roundKg(addKg);
+    if (amount <= 0) return;
+
+    if (_poolIsOpen(pool) && pool.poolId != null) {
+      final poolRef =
+          _firestore.collection(Collections.wasteStock).doc(pool.poolId);
+      final current =
+          (pool.poolSnap!.data()?['estimated_weight_kg'] as num?)?.toDouble() ??
+              0;
+      tx.update(poolRef, {
+        'estimated_weight_kg': roundKg(current + amount),
+        'updated_at': now,
+        'source': WasteStockSource.copperSell.value,
+      });
       return;
     }
 
-    final batchId = _uuid.v4();
-    final stockIds = <String>[];
-
-    if (inv.sellRodsKg > 0) {
-      final stockId = 'copper_stock_rods_$batchId';
-      stockIds.add(stockId);
-      tx.set(_firestore.collection(Collections.wasteStock).doc(stockId), {
-        'waste_type': WasteStockTypes.copperWaste,
-        'subtype': WasteStockTypes.copperRods,
-        'photos': <String>[],
-        'quantity': 1,
-        'estimated_weight_kg': inv.sellRodsKg,
-        'source': WasteStockSource.copperThreshold.value,
-        'source_ref': 'copper_batch:$batchId',
-        'visibility': WasteStockVisibility.managerOnly.value,
-        'auto_created': true,
-        'status': 'on_site',
-        'created_by': userId,
-        'created_by_name': 'System (copper threshold)',
-        'is_deleted': false,
-        'created_at': now,
-        'updated_at': now,
-        'notes': 'Auto-created when copper sell bucket reached ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg',
-      });
-    }
-
-    if (inv.sellNuggetsKg > 0) {
-      final stockId = 'copper_stock_nuggets_$batchId';
-      stockIds.add(stockId);
-      tx.set(_firestore.collection(Collections.wasteStock).doc(stockId), {
-        'waste_type': WasteStockTypes.copperWaste,
-        'subtype': WasteStockTypes.copperNuggets,
-        'photos': <String>[],
-        'quantity': 1,
-        'estimated_weight_kg': inv.sellNuggetsKg,
-        'source': WasteStockSource.copperThreshold.value,
-        'source_ref': 'copper_batch:$batchId',
-        'visibility': WasteStockVisibility.managerOnly.value,
-        'auto_created': true,
-        'status': 'on_site',
-        'created_by': userId,
-        'created_by_name': 'System (copper threshold)',
-        'is_deleted': false,
-        'created_at': now,
-        'updated_at': now,
-        'notes': 'Auto-created when copper sell bucket reached ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg',
-      });
-    }
-
-    if (stockIds.isEmpty) return;
-
-    tx.update(_firestore.doc(inventoryPath), inv.copyWith(
-      sellKg: 0,
-      sellRodsKg: 0,
-      sellNuggetsKg: 0,
-      activeCopperWasteBatchId: batchId,
-      lastUpdated: now,
-    ).toFirestore());
-
-    final auditId = 'copper_prepare_$batchId';
-    tx.set(_firestore.collection(transCollection).doc(auditId), CopperTransaction(
-      id: auditId,
-      type: CopperTransaction.prepareForCollection,
-      amountKg: inv.sellKg,
-      fromBucket: 'sell',
-      toBucket: 'waste_stock:${stockIds.join(',')}',
-      timestamp: now,
-      comments: 'Auto-created waste stock at ${kCopperWasteStockThresholdKg.toStringAsFixed(0)} kg threshold',
-      userId: userId,
-    ).toFirestore());
-  }
-
-  /// Clears [activeCopperWasteBatchId] when all threshold stock has left on_site.
-  Future<void> clearActiveBatchIfNoOnSiteThresholdStock() async {
-    final invSnap = await _firestore.doc(inventoryPath).get();
-    final inv = CopperInventory.fromFirestore(invSnap);
-    if (inv.activeCopperWasteBatchId == null) return;
-
-    final stockSnap = await _firestore
-        .collection(Collections.wasteStock)
-        .where('source', isEqualTo: WasteStockSource.copperThreshold.value)
-        .where('status', isEqualTo: 'on_site')
-        .limit(1)
-        .get();
-
-    final hasOnSite = stockSnap.docs.any((d) => d.data()['is_deleted'] != true);
-    if (hasOnSite) return;
-
-    await _firestore.doc(inventoryPath).update({
-      'active_copper_waste_batch_id': FieldValue.delete(),
-      'last_updated': FieldValue.serverTimestamp(),
+    final newId = _uuid.v4();
+    final poolRef = _firestore.collection(Collections.wasteStock).doc(newId);
+    tx.set(poolRef, {
+      'waste_type': WasteStockTypes.copperWaste,
+      'subtype': subtype,
+      'photos': <String>[],
+      'quantity': 1,
+      'estimated_weight_kg': amount,
+      'source': WasteStockSource.copperSell.value,
+      'source_ref': 'copper_sell_pool:$pointerDocId',
+      'visibility': WasteStockVisibility.managerOnly.value,
+      'auto_created': true,
+      'status': WasteStockStatus.onSite.value,
+      'created_by': userId,
+      'created_by_name': 'System (copper sell stage)',
+      'is_deleted': false,
+      'created_at': now,
+      'updated_at': now,
+      'notes':
+          'Staged from Copper module when Pre Press moved metal to To Sell',
     });
+    tx.set(pool.pointerRef, {
+      'current_pool_stock_id': newId,
+      'updated_at': now,
+    }, SetOptions(merge: true));
   }
+
+  void _setCopperPoolAbsolute({
+    required Transaction tx,
+    required CopperPoolRead pool,
+    required String pointerDocId,
+    required String subtype,
+    required double weightKg,
+    required String userId,
+    required Timestamp now,
+  }) {
+    final weight = roundKg(weightKg);
+    if (weight <= 0) return;
+
+    if (_poolIsOpen(pool) && pool.poolId != null) {
+      tx.update(
+        _firestore.collection(Collections.wasteStock).doc(pool.poolId),
+        {
+          'estimated_weight_kg': weight,
+          'updated_at': now,
+          'source': WasteStockSource.copperSell.value,
+        },
+      );
+      return;
+    }
+    _addKgToCopperPool(
+      tx: tx,
+      pool: pool,
+      pointerDocId: pointerDocId,
+      subtype: subtype,
+      addKg: weight,
+      userId: userId,
+      now: now,
+    );
+  }
+
+  void _reduceCopperPoolBy({
+    required Transaction tx,
+    required CopperPoolRead pool,
+    required double reduceKg,
+    required Timestamp now,
+  }) {
+    final reduce = roundKg(reduceKg);
+    if (reduce <= 0 || !_poolIsOpen(pool) || pool.poolId == null) return;
+    final current =
+        (pool.poolSnap!.data()?['estimated_weight_kg'] as num?)?.toDouble() ??
+            0;
+    final next = subtractKg(current, reduce);
+    final poolRef =
+        _firestore.collection(Collections.wasteStock).doc(pool.poolId);
+    if (next <= 0) {
+      tx.update(poolRef, {
+        'estimated_weight_kg': 0,
+        'status': WasteStockStatus.disposed.value,
+        'updated_at': now,
+      });
+    } else {
+      tx.update(poolRef, {
+        'estimated_weight_kg': next,
+        'updated_at': now,
+      });
+    }
+  }
+
+  /// Legacy no-op — continuous pools replaced threshold batches.
+  @Deprecated('Threshold batch model removed')
+  Future<void> clearActiveBatchIfNoOnSiteThresholdStock() async {
+    try {
+      await _firestore.doc(inventoryPath).update({
+        'active_copper_waste_batch_id': FieldValue.delete(),
+        'last_updated': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+}
+
+class CopperPoolRead {
+  const CopperPoolRead({
+    required this.pointerRef,
+    required this.poolId,
+    required this.poolSnap,
+  });
+
+  final DocumentReference<Map<String, dynamic>> pointerRef;
+  final String? poolId;
+  final DocumentSnapshot<Map<String, dynamic>>? poolSnap;
 }

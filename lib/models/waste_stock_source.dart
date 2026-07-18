@@ -5,7 +5,10 @@ enum WasteStockSource {
   /// Consolidated IBC pool doc accumulated across multiple ink IBC consumes
   /// (and any split-off doc derived from one) — see waste_stock_crosslink.dart.
   inkConsumePool('ink_consume_pool'),
-  copperThreshold('copper_threshold');
+  /// Legacy: created at old 400 kg threshold. Treated like [copperSell] for link/deduct.
+  copperThreshold('copper_threshold'),
+  /// Continuous stage: plate bars / sort-to-sell → on-site copper waste stock pools.
+  copperSell('copper_sell');
 
   const WasteStockSource(this.value);
   final String value;
@@ -18,10 +21,17 @@ enum WasteStockSource {
         return WasteStockSource.inkConsumePool;
       case 'copper_threshold':
         return WasteStockSource.copperThreshold;
+      case 'copper_sell':
+        return WasteStockSource.copperSell;
       default:
         return WasteStockSource.manual;
     }
   }
+
+  /// Copper staged for collection (continuous sell pools or legacy threshold).
+  bool get isCopperSellStaging =>
+      this == WasteStockSource.copperSell ||
+      this == WasteStockSource.copperThreshold;
 }
 
 /// Who may browse this stock item in inventory views (collection picker may differ).
@@ -47,13 +57,12 @@ abstract final class WasteStockTypes {
   static const String copperNuggets = 'Nuggets';
 }
 
-/// Minimum sell bucket total before copper auto-creates waste_stock.
-const double kCopperWasteStockThresholdKg = 400.0;
-
 /// Doc id (within `Collections.wasteStockPoolPointers`) for the deterministic
-/// "current open IBC pool" lookup used by [WasteStockCrosslink] — a
-/// transactional read of this single known doc is what makes
-/// find-or-create-the-pool safe under concurrent writers (a transactional
-/// *query* for "does a pool exist" would not serialize against a concurrent
-/// transaction doing the same query).
+/// "current open IBC pool" lookup used by [WasteStockCrosslink].
 const String kIbcPoolPointerDocId = 'ibc_bins';
+
+/// Open copper rods sell pool pointer (`waste_stock_pool_pointers/copper_rods`).
+const String kCopperRodsPoolPointerDocId = 'copper_rods';
+
+/// Open copper nuggets sell pool pointer (`waste_stock_pool_pointers/copper_nuggets`).
+const String kCopperNuggetsPoolPointerDocId = 'copper_nuggets';
