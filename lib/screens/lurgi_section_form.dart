@@ -93,12 +93,18 @@ class _LurgiSectionFormScreenState
   bool _draftBannerShown = false;
   /// After successful save+pop, do not re-write draft from dispose.
   bool _suppressDraftPersist = false;
+  /// User typed / tapped In-Out — never wipe with a late Firestore seed.
+  bool _dirty = false;
   /// Entry stamp; admins may override for period testing (ink pattern).
   DateTime _effectiveAt = DateTime.now();
 
   String get _dateKey => lurgiDateKey(_effectiveAt);
 
   String get _draftKey => widget.section.name;
+
+  void _markDirty() {
+    if (!_dirty) _dirty = true;
+  }
 
   @override
   void initState() {
@@ -119,6 +125,7 @@ class _LurgiSectionFormScreenState
     _tank3 = TextEditingController(text: draft?.tank3 ?? '');
     if (draft != null && !draft.isEmpty) {
       _loadedDraft = true;
+      _dirty = true;
       _tank1Dir = draft.tank1Dir;
       _tank2Dir = draft.tank2Dir;
       _tank3Dir = draft.tank3Dir;
@@ -146,6 +153,7 @@ class _LurgiSectionFormScreenState
       _seededForKey = null;
       // Date change: allow Firestore seed for the new day.
       _loadedDraft = false;
+      _dirty = false;
     });
   }
 
@@ -206,52 +214,24 @@ class _LurgiSectionFormScreenState
     super.dispose();
   }
 
-  void _clearFields() {
-    for (final c in [
-      _gasMech,
-      _gasElec,
-      _boiler,
-      _softener,
-      _fresh,
-      _effluent,
-      _air1,
-      _air2,
-      _geyserTemp,
-      _geyserComments,
-      _tank1,
-      _tank2,
-      _tank3,
-    ]) {
-      c.clear();
-    }
-    _tank1Dir = null;
-    _tank2Dir = null;
-    _tank3Dir = null;
-    _gasMechReset = false;
-    _gasElecReset = false;
-    _boilerReset = false;
-    _softenerReset = false;
-    _freshReset = false;
-    _effluentReset = false;
-    _air1Reset = false;
-    _air2Reset = false;
-  }
-
   void _scheduleSeed(LurgiDailyRound? dayRound, {required bool loaded}) {
-    // Keep in-progress draft; do not overwrite with server values.
-    if (_loadedDraft) return;
+    // Keep draft / in-progress edits — never wipe after user interaction.
+    if (_loadedDraft || _dirty) return;
     if (!loaded || _seededForKey == _dateKey) return;
     // Avoid setState / controller writes during build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _seededForKey == _dateKey || _loadedDraft) return;
+      if (!mounted || _seededForKey == _dateKey || _loadedDraft || _dirty) {
+        return;
+      }
       _seededForKey = _dateKey;
-      _clearFields();
+      // Controllers start empty — only fill from server. Do NOT clearFields()
+      // (that raced with early In/Out taps and wiped selection).
       if (dayRound == null) {
         setState(() {});
         return;
       }
       void setIf(TextEditingController c, double? v) {
-        if (v != null) c.text = _fmt(v);
+        if (v != null && c.text.trim().isEmpty) c.text = _fmt(v);
       }
 
       setIf(_gasMech, dayRound.gasMechanical);
@@ -263,16 +243,17 @@ class _LurgiSectionFormScreenState
       setIf(_air1, dayRound.airMeter1);
       setIf(_air2, dayRound.airMeter2);
       setIf(_geyserTemp, dayRound.geyserTemp);
-      if (dayRound.geyserComments != null) {
+      if (dayRound.geyserComments != null &&
+          _geyserComments.text.trim().isEmpty) {
         _geyserComments.text = dayRound.geyserComments!;
       }
       setIf(_tank1, dayRound.tank1Litres);
       setIf(_tank2, dayRound.tank2Litres);
       setIf(_tank3, dayRound.tank3Litres);
       setState(() {
-        _tank1Dir = dayRound.tank1Direction;
-        _tank2Dir = dayRound.tank2Direction;
-        _tank3Dir = dayRound.tank3Direction;
+        _tank1Dir ??= dayRound.tank1Direction;
+        _tank2Dir ??= dayRound.tank2Direction;
+        _tank3Dir ??= dayRound.tank3Direction;
       });
     });
   }
@@ -641,21 +622,30 @@ class _LurgiSectionFormScreenState
                     label: 'Tank 1',
                     controller: _tank1,
                     direction: _tank1Dir,
-                    onDir: (v) => setState(() => _tank1Dir = v),
+                    onDir: (v) => setState(() {
+                      _markDirty();
+                      _tank1Dir = v;
+                    }),
                   ),
                   _tankRow(
                     context,
                     label: 'Tank 2',
                     controller: _tank2,
                     direction: _tank2Dir,
-                    onDir: (v) => setState(() => _tank2Dir = v),
+                    onDir: (v) => setState(() {
+                      _markDirty();
+                      _tank2Dir = v;
+                    }),
                   ),
                   _tankRow(
                     context,
                     label: 'Tank 3',
                     controller: _tank3,
                     direction: _tank3Dir,
-                    onDir: (v) => setState(() => _tank3Dir = v),
+                    onDir: (v) => setState(() {
+                      _markDirty();
+                      _tank3Dir = v;
+                    }),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -783,7 +773,10 @@ class _LurgiSectionFormScreenState
                       '${delta != null ? ' · $deltaLabel: ${_qty.format(delta)}' : ''}'
                   : 'No previous reading yet',
             ),
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) {
+              _markDirty();
+              setState(() {});
+            },
             validator: (v) => _reqNum(v, label),
           ),
           if (previous != null &&
@@ -795,7 +788,10 @@ class _LurgiSectionFormScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Meter was reset'),
               value: reset,
-              onChanged: (v) => onReset(v ?? false),
+              onChanged: (v) {
+                _markDirty();
+                onReset(v ?? false);
+              },
             )
           else if (previous != null)
             CheckboxListTile(
@@ -803,7 +799,10 @@ class _LurgiSectionFormScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Meter was reset'),
               value: reset,
-              onChanged: (v) => onReset(v ?? false),
+              onChanged: (v) {
+                _markDirty();
+                onReset(v ?? false);
+              },
             ),
         ],
       ),
@@ -818,6 +817,7 @@ class _LurgiSectionFormScreenState
     required ValueChanged<String?> onDir,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final missing = direction == null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -832,48 +832,134 @@ class _LurgiSectionFormScreenState
               suffixText: 'L',
               border: const OutlineInputBorder(),
             ),
+            onChanged: (_) => _markDirty(),
             validator: (v) => _reqNum(v, '$label level'),
           ),
           const SizedBox(height: 8),
           Text(
-            'Flow',
+            'Flow (required)',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                  color: missing ? scheme.error : scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
           ),
           const SizedBox(height: 6),
-          // Large segmented toggle — easier on the floor than a dropdown.
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'in',
-                label: Text('In'),
-                icon: Icon(Icons.arrow_downward, size: 18),
+          // Dual large buttons — SegmentedButton was not selecting reliably
+          // on this form (emptySelectionAllowed + late seed wipe).
+          Row(
+            children: [
+              Expanded(
+                child: _flowChoiceButton(
+                  context,
+                  label: 'In',
+                  subtitle: 'Into tank',
+                  icon: Icons.arrow_downward,
+                  selected: direction == 'in',
+                  selectedColor: scheme.primary,
+                  onTap: () => onDir('in'),
+                ),
               ),
-              ButtonSegment(
-                value: 'out',
-                label: Text('Out'),
-                icon: Icon(Icons.arrow_upward, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _flowChoiceButton(
+                  context,
+                  label: 'Out',
+                  subtitle: 'To pressroom',
+                  icon: Icons.arrow_upward,
+                  selected: direction == 'out',
+                  selectedColor: scheme.tertiary,
+                  onTap: () => onDir('out'),
+                ),
               ),
             ],
-            emptySelectionAllowed: true,
-            showSelectedIcon: false,
-            selected: direction == null ? <String>{} : {direction},
-            onSelectionChanged: (set) {
-              if (set.isEmpty) {
-                onDir(null);
-              } else {
-                onDir(set.first);
-              }
-            },
-            style: ButtonStyle(
-              visualDensity: VisualDensity.comfortable,
-              padding: WidgetStateProperty.all(
-                const EdgeInsets.symmetric(vertical: 12),
+          ),
+          if (missing)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Tap In or Out for $label',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.error,
+                    ),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _flowChoiceButton(
+    BuildContext context, {
+    required String label,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+    required Color selectedColor,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = selected
+        ? selectedColor
+        : scheme.surfaceContainerHighest.withValues(alpha: 0.6);
+    final fg = selected ? scheme.onPrimary : scheme.onSurface;
+    // When tertiary used for Out, onPrimary may not contrast — use onTertiary.
+    final textColor = selected
+        ? (selectedColor == scheme.tertiary
+            ? scheme.onTertiary
+            : scheme.onPrimary)
+        : scheme.onSurface;
+
+    return Material(
+      color: bg,
+      elevation: selected ? 1 : 0,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? selectedColor
+                  : scheme.outline.withValues(alpha: 0.7),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 22, color: selected ? textColor : fg),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: selected ? textColor : fg,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: (selected ? textColor : fg)
+                            .withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
