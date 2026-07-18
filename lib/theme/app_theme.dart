@@ -6,6 +6,9 @@ const kBrandOrange = Color(0xFFC25F3A);
 /// Ink Factory + Daily Readings quick actions and home banner.
 const kInkModule = Color(0xFF06B6D4);
 
+/// Lurgi home quick-action tile colour (same family as [AppColors.lurgiAccent]).
+const kLurgiModule = Color(0xFF5B21B6); // Violet 800 — readable on light tiles + white text
+
 /// Factory toloul tank low-stock alert — matches home tile critical red (priority5).
 const kLowStockRed = Color(0xFFB71C1C);
 
@@ -28,6 +31,9 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.wasteGreen,
     required this.wasteGreenSurface,
     required this.wasteGreenDark,
+    required this.lurgiAccent,
+    required this.lurgiSurface,
+    required this.lurgiDark,
   });
 
   final Color priority1;
@@ -47,6 +53,11 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color wasteGreen;
   final Color wasteGreenSurface;
   final Color wasteGreenDark;
+  /// Module accent for icons / badges (dark enough on white; light enough on dark surfaces).
+  final Color lurgiAccent;
+  /// Soft fill for status/summary cards (paired with [onColor] or onSurface text).
+  final Color lurgiSurface;
+  final Color lurgiDark;
 
   @override
   ThemeExtension<AppColors> copyWith({
@@ -67,6 +78,9 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? wasteGreen,
     Color? wasteGreenSurface,
     Color? wasteGreenDark,
+    Color? lurgiAccent,
+    Color? lurgiSurface,
+    Color? lurgiDark,
   }) {
     return AppColors(
       priority1: priority1 ?? this.priority1,
@@ -86,6 +100,9 @@ class AppColors extends ThemeExtension<AppColors> {
       wasteGreen: wasteGreen ?? this.wasteGreen,
       wasteGreenSurface: wasteGreenSurface ?? this.wasteGreenSurface,
       wasteGreenDark: wasteGreenDark ?? this.wasteGreenDark,
+      lurgiAccent: lurgiAccent ?? this.lurgiAccent,
+      lurgiSurface: lurgiSurface ?? this.lurgiSurface,
+      lurgiDark: lurgiDark ?? this.lurgiDark,
     );
   }
 
@@ -110,6 +127,9 @@ class AppColors extends ThemeExtension<AppColors> {
       wasteGreen: Color.lerp(wasteGreen, other.wasteGreen, t)!,
       wasteGreenSurface: Color.lerp(wasteGreenSurface, other.wasteGreenSurface, t)!,
       wasteGreenDark: Color.lerp(wasteGreenDark, other.wasteGreenDark, t)!,
+      lurgiAccent: Color.lerp(lurgiAccent, other.lurgiAccent, t)!,
+      lurgiSurface: Color.lerp(lurgiSurface, other.lurgiSurface, t)!,
+      lurgiDark: Color.lerp(lurgiDark, other.lurgiDark, t)!,
     );
   }
 }
@@ -134,6 +154,10 @@ const AppColors lightAppColors = AppColors(
   wasteGreen: Color(0xFF2E7D32),
   wasteGreenSurface: Color(0xFFE8F5E9),
   wasteGreenDark: Color(0xFF1B5E20),
+  // Violet 800 / soft surface / Violet 900 — text on surface uses onSurface (not white).
+  lurgiAccent: Color(0xFF5B21B6),
+  lurgiSurface: Color(0xFFEDE9FE),
+  lurgiDark: Color(0xFF4C1D95),
 );
 
 const AppColors darkAppColors = AppColors(
@@ -154,6 +178,9 @@ const AppColors darkAppColors = AppColors(
   wasteGreen: Color(0xFF4CAF50),
   wasteGreenSurface: Color(0xFF1A2D1A),
   wasteGreenDark: Color(0xFF388E3C),
+  lurgiAccent: Color(0xFFA78BFA), // Violet 300 — readable on dark surfaces
+  lurgiSurface: Color(0xFF2E1065),
+  lurgiDark: Color(0xFFC4B5FD),
 );
 
 extension AppThemeExtension on ThemeData {

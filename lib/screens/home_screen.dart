@@ -64,6 +64,7 @@ import 'fleet_reporter_home_screen.dart';
 import 'fleet_report_wizard_screen.dart';
 import 'ink_home_screen.dart';
 import 'ink_daily_readings_screen.dart';
+import 'lurgi_home_screen.dart';
 import 'security_home_screen.dart';
 
 import '../models/fleet_settings.dart';
@@ -612,6 +613,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // fleet shares slate, and Daily Review is gold.
   static const Color _jobCardsGroup = kBrandOrange;
   static const Color _inkGroup = kInkModule;
+  static const Color _lurgiGroup = kLurgiModule;
   static const Color _fleetGroup = Color(0xFF64748B); // slate
   // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
   // carries its own amber constant so its pulse animation can override it.
@@ -714,7 +716,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ];
       }
     }
-    if (_canUseOnSiteModules && role_utils.isInkMeterUser(currentEmployee)) {
+    // Lurgi hub (dept + admin). Pure Lurgi staff use the hub for Daily Readings.
+    if (_canUseOnSiteModules && role_utils.isLurgiUser(currentEmployee)) {
+      result = [
+        ...result,
+        {
+          'title': 'Lurgi',
+          'icon': Icons.factory_outlined,
+          'color': _lurgiGroup,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LurgiHomeScreen()),
+              ),
+        },
+      ];
+    }
+    // Ink (and non-Lurgi meter users): standalone Daily Readings on Home.
+    // Lurgi dept opens the same screen from the Lurgi hub.
+    if (_canUseOnSiteModules &&
+        role_utils.isInkMeterUser(currentEmployee) &&
+        currentEmployee?.department != role_utils.lurgiDepartment) {
       result = [
         ...result,
         {

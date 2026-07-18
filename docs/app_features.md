@@ -511,7 +511,7 @@ The Ink Factory module is a full stock-inventory system for raw materials, solve
 
 ### Daily Readings — ink meters + Toloul meters on one screen
 
-The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter points and all Toloul meter points on a single scrollable page. The Lurgi operator enters both in one sitting at 06:00 each morning.
+The **Daily Readings** screen (Ink hub **Meter Readings** tile, and **Lurgi hub → Daily Readings**) shows all ink meter points and all Toloul meter points on a single scrollable page. The Lurgi operator enters both in one sitting at 06:00 each morning, alongside the Lurgi morning ops round.
 
 - **Ink meters** — cumulative reading entry for Yellow, Red, Blue, Black, and Gravure Binder. Each card shows the last few readings as a history strip. The delta (litres consumed since the last reading) is computed automatically and converted to kg using a conversion factor. If the new reading is below the last, a "meter was reset" checkbox appears.
 - **Toloul meters** — the same entry pattern for the Toloul Recovery and Toloul Usage meter points. These record how much solvent each press consumed and are used for month-end Toloul reporting. They do not affect stock levels.
@@ -523,7 +523,7 @@ The **Daily Readings** screen (also the Lurgi home tile) shows all ink meter poi
 |------|----------------------|-----------------|
 | **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
 | **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator capture on mobile + full management on **CTP Pulse** (`/ink`): pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
-| **Lurgi operator** | `department == "Lurgi"` | Daily Readings screen only (ink + Toloul meters) |
+| **Lurgi operator** | `department == "Lurgi"` | **Lurgi hub**: Morning Round (utilities/water/air/geyser/tanks), Daily Readings (ink + Toloul meters), Ink Factory Recovery **view-only** |
 | **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
 
 > **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
