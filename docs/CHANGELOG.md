@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-18 — 2.3.0+179 — Copper stock on Waste loads
+
+### What you will notice
+
+- Security can link **Copper Rods** and **Nuggets** from on-site stock when collecting a copper waste load (including loads labeled Copper Nuggets or Rods).
+- Copper stock staged by Pre Press shows correctly under **From stock** / **Link stock**.
+- The **Copper** screen is simpler: clear buckets, a short “ready for collection” note, and a cleaner save form.
+
+---
+
 ## 2026-07-18 — 2.3.0+178 — Copper ready for Waste collection
 
 ### What you will notice
