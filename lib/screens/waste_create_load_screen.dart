@@ -13,6 +13,7 @@ import '../models/waste_item.dart';
 import '../models/waste_load.dart';
 import '../models/waste_settings.dart';
 import '../models/waste_stock_item.dart';
+import '../models/waste_stock_source.dart';
 import '../models/waste_type.dart';
 import '../utils/formatters.dart';
 import '../utils/role.dart' as role_utils;
@@ -620,14 +621,21 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
 
   Future<void> _addItemsFromStock() async {
     if (!guardPersonaSubmit(context)) return;
+    final copper = _selectedTypes.any((t) => loadUsesCopperStock(t.mainType));
     final picked = await WasteStockLinkSheet.show(
       context,
-      wasteType: kPaperWasteStockParent,
+      wasteType: copper
+          ? WasteStockTypes.copperWaste
+          : stockLinkParentType(
+              resolveLoadMainWasteType(_selectedTypes, _wasteTypes),
+            ),
       subtypeFilter: stockSubtypeFilterForChips(_selectedTypes, _wasteTypes),
       initialSelectedIds: _selectedStockIds,
-      title: 'Add from on-site stock',
-      subtitle:
-          'Select saved stock for this load. Items already ticked above stay selected.',
+      includeManagerOnlyStock: copper,
+      title: copper ? 'Add copper stock' : 'Add from on-site stock',
+      subtitle: copper
+          ? 'Rods and Nuggets staged from Pre Press. Items already ticked stay selected.'
+          : 'Select saved stock for this load. Items already ticked above stay selected.',
     );
     if (picked == null || !mounted) return;
     setState(() {

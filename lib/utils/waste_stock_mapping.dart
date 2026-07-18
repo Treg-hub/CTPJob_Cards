@@ -77,12 +77,51 @@ bool loadUsesPaperStock(String? mainWasteType, List<WasteType> allTypes) {
       flatWasteTypeNames(allTypes).contains(mainWasteType);
 }
 
+/// Copper stock is stored as waste_type "Copper Waste" + subtype Rods/Nuggets.
+/// Loads may be labeled Copper Waste, Rods, Nuggets, or "Copper Nuggets".
+const kCopperStockFamilyNames = {
+  WasteStockTypes.copperWaste,
+  WasteStockTypes.copperRods,
+  WasteStockTypes.copperNuggets,
+  'Copper Rods',
+  'Copper Nuggets',
+};
+
+bool isCopperStockFamilyName(String? name) {
+  if (name == null || name.isEmpty) return false;
+  if (kCopperStockFamilyNames.contains(name)) return true;
+  final lower = name.toLowerCase();
+  return lower.contains('copper') &&
+      (lower.contains('rod') ||
+          lower.contains('nugget') ||
+          lower == 'copper waste');
+}
+
+bool loadUsesCopperStock(String? mainWasteType) =>
+    isCopperStockFamilyName(mainWasteType);
+
+/// Subtype filter that matches staged copper waste_stock rows.
+Set<String> copperStockSubtypeFilter() => {
+      WasteStockTypes.copperWaste,
+      WasteStockTypes.copperRods,
+      WasteStockTypes.copperNuggets,
+      'Copper Rods',
+      'Copper Nuggets',
+    };
+
+bool stockItemIsCopper(WasteStockItem item) {
+  if (item.source.isCopperSellStaging) return true;
+  if (item.wasteType == WasteStockTypes.copperWaste) return true;
+  return isCopperStockFamilyName(item.subtype) ||
+      isCopperStockFamilyName(item.wasteType);
+}
+
 /// Loads that support linking on-site stock at collection (not only at schedule).
 bool loadCanLinkOnSiteStock(String? mainWasteType, List<WasteType> allTypes) {
   if (mainWasteType == null || mainWasteType.isEmpty) return false;
   if (loadUsesPaperStock(mainWasteType, allTypes)) return true;
   if (mainWasteType == WasteStockTypes.ibcBins) return true;
-  if (mainWasteType == WasteStockTypes.copperWaste) return true;
+  if (loadUsesCopperStock(mainWasteType)) return true;
   return flatWasteTypeNames(allTypes).contains(mainWasteType);
 }
 
@@ -110,12 +149,33 @@ String stockLinkParentType(String? mainWasteType) {
   if (mainWasteType == null || mainWasteType.isEmpty) {
     return kPaperWasteStockParent;
   }
+  if (loadUsesCopperStock(mainWasteType)) {
+    return WasteStockTypes.copperWaste;
+  }
   if (mainWasteType == kPaperWasteStockParent ||
-      mainWasteType == WasteStockTypes.ibcBins ||
-      mainWasteType == WasteStockTypes.copperWaste) {
+      mainWasteType == WasteStockTypes.ibcBins) {
     return mainWasteType;
   }
   return mainWasteType;
+}
+
+/// Filter for [WasteStockLinkSheet] from a load's main type (collection / schedule).
+Set<String>? stockSubtypeFilterForLoadMainType(
+  String? mainWasteType,
+  List<WasteType> allTypes,
+) {
+  if (mainWasteType == null || mainWasteType.isEmpty) return null;
+  if (loadUsesCopperStock(mainWasteType)) {
+    return copperStockSubtypeFilter();
+  }
+  if (mainWasteType == kPaperWasteStockParent) return null;
+  if (loadUsesPaperStock(mainWasteType, allTypes)) {
+    return {mainWasteType};
+  }
+  if (mainWasteType == WasteStockTypes.ibcBins) {
+    return {WasteStockTypes.ibcBins};
+  }
+  return {mainWasteType};
 }
 
 Set<String> expandStockFilter(Iterable<String> names) {
@@ -150,6 +210,10 @@ Set<String> stockSubtypeFilterForChips(
 ) {
   if (selectedChips.isEmpty) return {};
 
+  if (selectedChips.any((c) => loadUsesCopperStock(c.mainType))) {
+    return copperStockSubtypeFilter();
+  }
+
   final onlyPaperChip = selectedChips.length == 1 &&
       selectedChips.first.mainType == kPaperWasteStockParent;
   if (onlyPaperChip) return paperStockSubtypes(allTypes);
@@ -159,6 +223,28 @@ Set<String> stockSubtypeFilterForChips(
 
 bool stockItemMatchesFilter(WasteStockItem item, Set<String> filter) {
   if (filter.isEmpty) return true;
+
+  // Copper: load may say "Copper Nuggets" while stock is waste_type Copper Waste
+  // + subtype Nuggets / Rods (continuous sell pools).
+  final filterCopper = filter.any(isCopperStockFamilyName);
+  if (filterCopper && stockItemIsCopper(item)) {
+    final wantsRods = filter.any((f) {
+      final l = f.toLowerCase();
+      return l == 'rods' || l.contains('rod');
+    });
+    final wantsNuggets = filter.any((f) {
+      final l = f.toLowerCase();
+      return l == 'nuggets' || l.contains('nugget');
+    });
+    final wantsAllCopper = filter.contains(WasteStockTypes.copperWaste) ||
+        (!wantsRods && !wantsNuggets);
+    if (wantsAllCopper) return true;
+    final st = item.subtype.toLowerCase();
+    if (wantsRods && (st == 'rods' || st.contains('rod'))) return true;
+    if (wantsNuggets && (st == 'nuggets' || st.contains('nugget'))) return true;
+    return false;
+  }
+
   final subtype = item.subtype.isNotEmpty ? item.subtype : item.wasteType;
   if (filter.contains(subtype) || filter.contains(item.wasteType)) {
     return true;

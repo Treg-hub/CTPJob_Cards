@@ -114,20 +114,30 @@ class _IncomingLoadCard extends StatelessWidget {
                 ),
               ),
 
-              if (usesPaperStock && isManager) ...[
+              if (isManager &&
+                  loadCanLinkOnSiteStock(load.mainWasteType, wasteTypes)) ...[
                 const SizedBox(height: 14),
                 const Text('On-site stock',
                     style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
                 const SizedBox(height: 6),
                 OutlinedButton.icon(
                   onPressed: () async {
+                    final copper = loadUsesCopperStock(load.mainWasteType);
                     final picked = await WasteStockLinkSheet.show(
                       ctx,
-                      wasteType: kPaperWasteStockParent,
-                      subtypeFilter: load.mainWasteType == kPaperWasteStockParent
-                          ? null
-                          : {load.mainWasteType},
+                      wasteType: stockLinkParentType(load.mainWasteType),
+                      subtypeFilter: stockSubtypeFilterForLoadMainType(
+                        load.mainWasteType,
+                        wasteTypes,
+                      ),
                       initialSelectedIds: selectedStockIds,
+                      includeManagerOnlyStock: copper,
+                      title: copper
+                          ? 'Link copper stock'
+                          : 'Link on-site stock',
+                      subtitle: copper
+                          ? 'Rods and Nuggets staged from Pre Press for this collection.'
+                          : null,
                     );
                     if (picked != null) {
                       setSheet(() => selectedStockIds = picked);

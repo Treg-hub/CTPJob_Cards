@@ -96,16 +96,13 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
   String _typeHelp(String type) {
     switch (type) {
       case 'addToSort':
-        return 'Copper scraped from baths → To Sort bucket.';
+        return 'Baths → To Sort.';
       case 'plateBars':
-        return 'Plate bars go to To Sell (rods) and immediately stage '
-            'Waste stock for Security to collect and sell.';
+        return '→ To Sell as rods and Waste stock for Security.';
       case 'removeFromSort':
-        return 'Enter how much goes to Reuse (back to process) and how much to '
-            'Sell (nuggets). Sell kg is staged as Waste stock for collection.';
+        return 'Split sort into reuse and/or sell (nuggets → Waste stock).';
       case 'useReuse':
-        return 'Take copper from To Reuse (returned to baths / used). '
-            'Use “All” for a stuck remainder like 0.1 kg.';
+        return 'Take from To Reuse (back to process). Use All for small leftovers.';
       default:
         return '';
     }
@@ -379,69 +376,56 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
     final sell = CopperService.roundKg(inv.sellKg);
     final rods = CopperService.roundKg(inv.sellRodsKg);
     final nuggets = CopperService.roundKg(inv.sellNuggetsKg);
-    if (sell <= 0 && rods <= 0 && nuggets <= 0) {
-      return Card(
-        margin: const EdgeInsets.only(top: 12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Collection / sell',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Nothing staged for collection yet. Plate bars or sort metal to '
-                'Sell — that creates Waste stock Security can link to a Copper load.',
-                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.35),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    final staged = sell > 0 || rods > 0 || nuggets > 0;
 
-    return Card(
-      margin: const EdgeInsets.only(top: 12),
+    return Material(
+      color: staged
+          ? Colors.amber.withValues(alpha: 0.12)
+          : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Staged for collection',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
+            Icon(
+              staged ? Icons.inventory_2_outlined : Icons.info_outline,
+              size: 20,
+              color: staged ? Colors.amber.shade800 : scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    staged ? 'Ready for Waste collection' : 'How sell works',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    staged
+                        ? 'Rods ${rods.toStringAsFixed(1)} kg · Nuggets ${nuggets.toStringAsFixed(1)} kg '
+                            '(${sell.toStringAsFixed(1)} kg total) are on Waste stock. '
+                            'Security links them on a Copper load to sell.'
+                        : 'Plate bars or sort to Sell stages Waste stock for Security. '
+                            'Sale is recorded when the waste load is completed.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'To Sell ${sell.toStringAsFixed(1)} kg is also on Waste stock '
-              '(Rods ${rods.toStringAsFixed(1)} · Nuggets ${nuggets.toStringAsFixed(1)}). '
-              'Security collects via Waste → link Rods/Nuggets to the load. '
-              'Commercial sale records when the load is completed — not from this screen.',
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.35),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'To remove from sell: Security takes stock on a load (inventory drops), '
-              'or an admin uses Adjust / Zero dust. Use from Reuse only affects To Reuse.',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, height: 1.35),
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _openWaste,
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Open Waste'),
-              ),
+            TextButton(
+              onPressed: _openWaste,
+              child: const Text('Waste'),
             ),
           ],
         ),
@@ -469,15 +453,6 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Current Copper Buckets',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 12),
               Row(
                 children: [
                   _buildBucketCard('To Sort', inv.sortKg, Colors.blue, Icons.sort),
@@ -488,27 +463,10 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   _buildBucketCard('To Sell', inv.sellKg, Colors.amber, Icons.sell),
                 ],
               ),
+              const SizedBox(height: 10),
               _buildStatusCard(inv, scheme),
-              const SizedBox(height: 12),
-              Material(
-                color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Text(
-                    'Moving metal to To Sell stages Waste stock (Rods / Nuggets) '
-                    'for Security. They schedule a Copper Waste load, link that stock, '
-                    'and complete the load to record the sale. You cannot sell from this tab.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: scheme.onSurfaceVariant,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
               if (admin) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -527,19 +485,23 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   ],
                 ),
               ],
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               Text(
-                'New Transaction',
+                'Record movement',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: scheme.onSurface,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: _selectedType,
-                decoration: const InputDecoration(labelText: 'Transaction Type'),
+                decoration: const InputDecoration(
+                  labelText: 'Type',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
                 items: const [
                   DropdownMenuItem(
                     value: 'addToSort',
@@ -547,11 +509,11 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   ),
                   DropdownMenuItem(
                     value: 'plateBars',
-                    child: Text('Plate Bars to Sell'),
+                    child: Text('Plate bars → Sell (rods)'),
                   ),
                   DropdownMenuItem(
                     value: 'removeFromSort',
-                    child: Text('Remove from Sort (reuse + sell)'),
+                    child: Text('Sort → Reuse + Sell'),
                   ),
                   DropdownMenuItem(
                     value: 'useReuse',
@@ -560,13 +522,13 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                 ],
                 onChanged: (v) => setState(() => _selectedType = v!),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 _typeHelp(_selectedType),
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   color: scheme.onSurfaceVariant,
-                  height: 1.35,
+                  height: 1.3,
                 ),
               ),
               const SizedBox(height: 12),
@@ -575,28 +537,32 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   controller: _reuseKgController,
                   decoration: InputDecoration(
                     labelText: 'Reuse (kg)',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
                     helperText:
-                        'Available in sort: ${CopperService.roundKg(inv.sortKg).toStringAsFixed(1)} kg',
+                        'In sort: ${CopperService.roundKg(inv.sortKg).toStringAsFixed(1)} kg',
                   ),
                   keyboardType: _decimalKeyboard,
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 TextField(
                   controller: _sellKgController,
                   decoration: const InputDecoration(
                     labelText: 'Sell (kg)',
-                    helperText: 'Goes to To Sell as nuggets',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    helperText: 'Nuggets → Waste stock',
                   ),
                   keyboardType: _decimalKeyboard,
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   'Total from sort: ${_sortTotal.toStringAsFixed(1)} kg',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: _sortTotal >= 0 ? scheme.onSurface : Colors.red,
                   ),
                 ),
@@ -605,6 +571,8 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   controller: _amountController,
                   decoration: InputDecoration(
                     labelText: 'Amount (kg)',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
                     helperText: _selectedType == 'useReuse'
                         ? 'Available: ${CopperService.roundKg(inv.reuseKg).toStringAsFixed(1)} kg'
                         : null,
@@ -619,23 +587,31 @@ class _CopperDashboardScreenState extends ConsumerState<CopperDashboardScreen>
                   onChanged: (_) => setState(() {}),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               TextField(
                 controller: _commentsController,
-                decoration: const InputDecoration(labelText: 'Comments'),
+                decoration: const InputDecoration(
+                  labelText: 'Comments (optional)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
                 maxLines: 2,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: _isLoading ? null : _executeTransaction,
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Execute Transaction',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                      ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Save'),
                 ),
               ),
             ],

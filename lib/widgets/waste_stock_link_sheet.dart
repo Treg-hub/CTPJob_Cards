@@ -178,7 +178,15 @@ class _WasteStockLinkSheetState extends State<WasteStockLinkSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'No on-site stock for ${widget.wasteType}.',
+                  widget.includeManagerOnlyStock &&
+                          (widget.wasteType == WasteStockTypes.copperWaste ||
+                              (widget.subtypeFilter?.any((s) =>
+                                      s.toLowerCase().contains('copper') ||
+                                      s == WasteStockTypes.copperRods ||
+                                      s == WasteStockTypes.copperNuggets) ??
+                                  false))
+                      ? 'No copper Rods/Nuggets on site yet. Pre Press stages them when metal is moved to To Sell on the Copper tab.'
+                      : 'No on-site stock for ${widget.wasteType}.',
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),

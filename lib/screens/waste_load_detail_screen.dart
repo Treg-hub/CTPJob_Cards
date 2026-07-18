@@ -96,11 +96,13 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   bool get _usesPaperStock =>
       loadUsesPaperStock(_currentLoad.mainWasteType, _wasteTypes);
 
-  Set<String>? get _stockSubtypeFilter {
-    if (_currentLoad.mainWasteType == kPaperWasteStockParent) return null;
-    if (_usesPaperStock) return {_currentLoad.mainWasteType};
-    return null;
-  }
+  bool get _usesCopperStock =>
+      loadUsesCopperStock(_currentLoad.mainWasteType);
+
+  Set<String>? get _stockSubtypeFilter => stockSubtypeFilterForLoadMainType(
+        _currentLoad.mainWasteType,
+        _wasteTypes,
+      );
   bool get _isScheduled => _currentLoad.status == WasteLoadStatus.scheduled;
 
   /// Can a user delete a specific item?
@@ -253,13 +255,18 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
     if (_currentLoad.id == null) return;
     final picked = await WasteStockLinkSheet.show(
       context,
-      wasteType: kPaperWasteStockParent,
+      wasteType: stockLinkParentType(_currentLoad.mainWasteType),
       subtypeFilter: _stockSubtypeFilter,
       initialSelectedIds: _currentLoad.selectedStockIds,
-      title: _isScheduled ? 'Link stock for collection' : 'Select on-site stock',
-      subtitle: _isScheduled
-          ? 'The guard will see these items when they start collection.'
-          : 'Choose stock items to add to this load.',
+      includeManagerOnlyStock: _usesCopperStock,
+      title: _usesCopperStock
+          ? 'Link copper stock'
+          : (_isScheduled ? 'Link stock for collection' : 'Select on-site stock'),
+      subtitle: _usesCopperStock
+          ? 'Rods and Nuggets staged from Pre Press for collection.'
+          : (_isScheduled
+              ? 'The guard will see these items when they start collection.'
+              : 'Choose stock items to add to this load.'),
     );
     if (picked == null || !mounted) return;
 

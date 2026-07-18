@@ -21,7 +21,6 @@ import '../utils/waste_begin_collection_draft.dart';
 import '../utils/waste_save_messages.dart';
 import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
-import '../models/waste_stock_source.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
@@ -393,14 +392,16 @@ class _WasteBeginCollectionScreenState
     final picked = await WasteStockLinkSheet.show(
       context,
       wasteType: stockLinkParentType(widget.load.mainWasteType),
-      subtypeFilter: widget.load.mainWasteType == WasteStockTypes.copperWaste
-          ? {WasteStockTypes.copperRods, WasteStockTypes.copperNuggets}
+      subtypeFilter: loadUsesCopperStock(widget.load.mainWasteType)
+          ? copperStockSubtypeFilter()
           : stockSubtypeFilterForChips(_effectiveAllowedTypes, _wasteTypes),
       initialSelectedIds: alreadyOnLoad.toList(),
+      // Copper sell pools are manager_only; guards must still link on collection day.
       includeManagerOnlyStock: true,
       title: 'Add saved stock',
-      subtitle:
-          'Select on-site stock to include. Pre-linked items are already listed — add any extra stock found at the gate.',
+      subtitle: loadUsesCopperStock(widget.load.mainWasteType)
+          ? 'Copper Rods and Nuggets staged from Pre Press. Select what goes on this load.'
+          : 'Select on-site stock to include. Pre-linked items are already listed — add any extra stock found at the gate.',
     );
     if (picked == null || !mounted) return;
 
