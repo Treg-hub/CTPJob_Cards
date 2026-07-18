@@ -56,6 +56,10 @@ class LurgiService {
   }
 
   /// Merge one or more morning sections into today's (or [round.dateKey]) doc.
+  ///
+  /// [effectiveAt] stamps section `*_at` fields (admin test backdate). Defaults
+  /// to now. First [recorded_at] uses server time unless [effectiveAt] is set
+  /// and the doc is new (then client timestamp for period testing).
   Future<void> saveRoundSections({
     required LurgiDailyRound round,
     required String actorClockNo,
@@ -65,15 +69,18 @@ class LurgiService {
     bool air = false,
     bool geyser = false,
     bool tanks = false,
+    DateTime? effectiveAt,
   }) async {
     _guardWrite();
     if (!utilities && !water && !air && !geyser && !tanks) {
       throw ArgumentError('At least one section required');
     }
+    final now = effectiveAt ?? DateTime.now();
     final existing = await fetchRound(round.dateKey);
     final withRecorded = LurgiDailyRound(
       id: round.id,
       dateKey: round.dateKey,
+      // null → toMergeMap writes serverTimestamp (unless admin effectiveAt below)
       recordedAt: existing?.recordedAt ?? round.recordedAt,
       updatedAt: round.updatedAt,
       actorClockNo: actorClockNo,
@@ -118,11 +125,14 @@ class LurgiService {
       includeTanks: tanks,
       actorClockNo: actorClockNo,
       actorName: actorName,
-      now: DateTime.now(),
+      now: now,
     );
     // Preserve first recorded_at on merge when doc exists.
     if (existing?.recordedAt != null) {
       data.remove('recorded_at');
+    } else if (effectiveAt != null) {
+      // Admin backdate: client timestamp so date_key aligns with period tests.
+      data['recorded_at'] = Timestamp.fromDate(effectiveAt);
     }
     await _roundRef(round.dateKey).set(data, SetOptions(merge: true));
   }

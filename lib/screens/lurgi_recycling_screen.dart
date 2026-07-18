@@ -7,8 +7,10 @@ import '../models/lurgi_daily_round.dart';
 import '../models/lurgi_recycling_run.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../providers/lurgi_drafts.dart';
 import '../providers/lurgi_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/ink_pickers.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
@@ -33,23 +35,65 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
 
   late DateTime _startAt;
   late DateTime _finishAt;
-  final _steamTemp = TextEditingController();
-  final _steamPress = TextEditingController();
-  final _litres = TextEditingController();
-  final _dirtyLevel = TextEditingController();
+  late final TextEditingController _steamTemp;
+  late final TextEditingController _steamPress;
+  late final TextEditingController _litres;
+  late final TextEditingController _dirtyLevel;
   bool _cleaned = false;
   bool _submitting = false;
+  bool _loadedDraft = false;
+  bool _draftBannerShown = false;
 
   @override
   void initState() {
     super.initState();
+    final draft = ref.read(lurgiRecyclingDraftProvider);
     final now = DateTime.now();
-    _finishAt = now;
-    _startAt = now.subtract(const Duration(hours: 2));
+    if (draft != null && !draft.isEmpty) {
+      _loadedDraft = true;
+      _steamTemp = TextEditingController(text: draft.steamTemp);
+      _steamPress = TextEditingController(text: draft.steamPress);
+      _litres = TextEditingController(text: draft.litres);
+      _dirtyLevel = TextEditingController(text: draft.dirtyLevel);
+      _cleaned = draft.cleaned;
+      _startAt = draft.startAtMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(draft.startAtMs!)
+          : now.subtract(const Duration(hours: 2));
+      _finishAt = draft.finishAtMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(draft.finishAtMs!)
+          : now;
+    } else {
+      _steamTemp = TextEditingController();
+      _steamPress = TextEditingController();
+      _litres = TextEditingController();
+      _dirtyLevel = TextEditingController();
+      _finishAt = now;
+      _startAt = now.subtract(const Duration(hours: 2));
+    }
+  }
+
+  void _persistDraft() {
+    final draft = LurgiRecyclingDraft(
+      steamTemp: _steamTemp.text,
+      steamPress: _steamPress.text,
+      litres: _litres.text,
+      dirtyLevel: _dirtyLevel.text,
+      cleaned: _cleaned,
+      startAtMs: _startAt.millisecondsSinceEpoch,
+      finishAtMs: _finishAt.millisecondsSinceEpoch,
+    );
+    ref.read(lurgiRecyclingDraftProvider.notifier).state =
+        draft.isEmpty ? null : draft;
+  }
+
+  void _clearDraft() {
+    ref.read(lurgiRecyclingDraftProvider.notifier).state = null;
+    _loadedDraft = false;
   }
 
   @override
   void dispose() {
+    _persistDraft();
     _steamTemp.dispose();
     _steamPress.dispose();
     _litres.dispose();
@@ -59,6 +103,24 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
 
   Future<void> _pickTime({required bool start}) async {
     final initial = start ? _startAt : _finishAt;
+    final emp = ref.read(currentEmployeeProvider).valueOrNull;
+    final adminStamp =
+        role_utils.isAdmin(emp) || role_utils.isAdmin(currentEmployee);
+
+    if (adminStamp) {
+      // Full date+time so admins can backdate runs into an open count period.
+      final dt = await pickInkDateTime(context, initial);
+      if (dt == null || !mounted) return;
+      setState(() {
+        if (start) {
+          _startAt = dt;
+        } else {
+          _finishAt = dt;
+        }
+      });
+      return;
+    }
+
     final t = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
@@ -97,7 +159,8 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
     try {
       await ref.read(lurgiServiceProvider).addRecyclingRun(
             LurgiRecyclingRun(
-              dateKey: lurgiDateKey(),
+              // Bucket by start day (admin may backdate start/finish).
+              dateKey: lurgiDateKey(_startAt),
               startAt: _startAt,
               finishAt: _finishAt,
               steamTemp: _parse(_steamTemp.text)!,
@@ -120,6 +183,7 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
         _finishAt = now;
         _startAt = now.subtract(const Duration(hours: 2));
       });
+      _clearDraft();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Recycling run logged.')),
       );
@@ -148,15 +212,32 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
       );
     }
 
-    final todayKey = lurgiDateKey();
-    final runsAsync = ref.watch(lurgiTodayRecyclingRunsProvider);
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final canEditDate = role_utils.isAdmin(emp);
+    final dayKey = lurgiDateKey(_startAt);
+    final runsAsync = ref.watch(lurgiRecyclingRunsForDayProvider(dayKey));
     final periodAsync = ref.watch(lurgiPeriodRecyclingRunsProvider);
-    final summary = ref.watch(lurgiTodayRecyclingSummaryProvider);
+    final dayRuns = runsAsync.valueOrNull ?? [];
+    final summary = LurgiRecyclingDaySummary.fromRuns(dayRuns);
     final periodSummary = ref.watch(lurgiPeriodRecyclingSummaryProvider);
     final settingsAsync = ref.watch(inkSettingsProvider);
     final periodFrom = settingsAsync.valueOrNull?.latestActiveCountDate;
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
+    final dayLabel =
+        canEditDate && dayKey != lurgiDateKey() ? 'Selected day' : 'Today';
+    if (_loadedDraft && !_draftBannerShown) {
+      _draftBannerShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Draft restored — unsaved run kept'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Recycling Machine')),
@@ -168,8 +249,20 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
             settingsLoading: settingsAsync.isLoading,
           ),
           const SizedBox(height: 10),
+          if (_loadedDraft)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Unsaved draft — leave and return any time; cleared after save.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.primary,
+                    ),
+              ),
+            ),
           Text(
-            'Date: $todayKey · log each cycle when dirty toloul is processed.',
+            canEditDate
+                ? 'Admin: start/finish pick full date+time · date_key from start ($dayKey).'
+                : 'Date: $dayKey · log each cycle when dirty toloul is processed.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -188,7 +281,7 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Today · ${summary.runCount} run${summary.runCount == 1 ? '' : 's'} · '
+                    '$dayLabel · ${summary.runCount} run${summary.runCount == 1 ? '' : 's'} · '
                     '${_qty.format(summary.totalLitresRecycled)} L',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
@@ -227,14 +320,22 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => _pickTime(start: true),
-                        child: Text('Start ${_time.format(_startAt)}'),
+                        child: Text(
+                          canEditDate
+                              ? 'Start ${_df.format(_startAt)}'
+                              : 'Start ${_time.format(_startAt)}',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => _pickTime(start: false),
-                        child: Text('Finish ${_time.format(_finishAt)}'),
+                        child: Text(
+                          canEditDate
+                              ? 'Finish ${_df.format(_finishAt)}'
+                              : 'Finish ${_time.format(_finishAt)}',
+                        ),
                       ),
                     ),
                   ],
@@ -272,7 +373,9 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            "TODAY'S RUNS",
+            canEditDate && dayKey != lurgiDateKey()
+                ? 'RUNS · $dayKey'
+                : "TODAY'S RUNS",
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   letterSpacing: 0.6,
                   fontWeight: FontWeight.w700,
@@ -288,15 +391,20 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
             error: (e, _) => Text('Could not load: $e'),
             data: (runs) {
               if (runs.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No recycling runs logged today.'),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    canEditDate && dayKey != lurgiDateKey()
+                        ? 'No recycling runs for $dayKey.'
+                        : 'No recycling runs logged today.',
+                  ),
                 );
               }
               return Column(
                 children: [
                   for (final r in runs)
-                    _runCard(r, scheme, appColors, showFullDate: false),
+                    _runCard(r, scheme, appColors,
+                        showFullDate: canEditDate && dayKey != lurgiDateKey()),
                 ],
               );
             },
@@ -321,7 +429,7 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
             error: (e, _) => Text('Could not load period: $e'),
             data: (runs) {
               final earlier =
-                  runs.where((r) => r.dateKey != todayKey).toList();
+                  runs.where((r) => r.dateKey != dayKey).toList();
               if (periodFrom == null && !settingsAsync.isLoading) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
