@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-18 — 2.3.0+178 — Copper ready for Waste collection
+
+### What you will notice
+
+- When copper is moved to **To Sell** (plate bars or sort to sell), it also appears as **Waste stock** (Rods and Nuggets) for collection.
+- Security can open **Waste**, use **From stock**, and link those copper items to a Copper Waste load.
+- Completing the waste load still records the commercial sale; there is no sale button on the Copper tab.
+- Copper screen text explains staged stock and how it is collected; leftover tiny amounts can still be cleared by admins with a reason.
+- The old “wait for 400 kg before stock appears” step is gone — stock updates as you stage metal for sell.
+
+---
+
 ## 2026-07-17 — 2.3.0+177 — Copper process and clearer tabs
 
 ### What you will notice
