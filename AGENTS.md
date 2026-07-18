@@ -41,6 +41,15 @@ These rules apply whenever working on code that will be committed or pushed to *
 - Keep changes surgical.
 - Update relevant Memory Bank files after significant work.
 
+## Tabbed screens (required pattern)
+
+Whenever you build a multi-tab screen (status lists, module history, etc.):
+
+1. Put **`TabBar` in the body** under the `AppBar` — **not** `AppBar(bottom: TabBar(...))`.
+2. Pair with **`TabBarView`** in a `Column` + `Expanded` (same as **View Jobs** / **My Work**).
+3. Rely on **`ThemeData.tabBarTheme`** in `main.dart` for label/indicator colours (black on surface). App-bar-bottom tabs sit on brand orange and break contrast / theme.
+4. Use `TabController` + `SingleTickerProviderStateMixin` (or `DefaultTabController`) with `isScrollable: false` for equal-width centred tabs unless the design needs scroll.
+
 ## Communication
 - Be explicit about assumptions.
 - Clearly state what the user still needs to do.

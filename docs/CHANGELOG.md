@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-18 — 2.3.0+181 — Lurgi capture polish
+
+### What you will notice
+
+- Toloul tank **In / Out** is a large toggle (not a dropdown).
+- Morning Round sections are clearly separated in cards.
+- Chemicals and Recycling show **earlier days in the current month-end count period** under today's form.
+- Ink Factory Recovery and period lists only show the **open count period** (since the last month-end count).
+- Period History tabs match the rest of the app's tab style.
+
+---
+
 ## 2026-07-18 — 2.3.0+180 — Lurgi department hub
 
 ### What you will notice

@@ -6,12 +6,14 @@ import '../main.dart' show currentEmployee, realEmployee;
 import '../models/lurgi_chemical_usage.dart';
 import '../models/lurgi_daily_round.dart';
 import '../providers/current_employee_provider.dart';
+import '../providers/ink_provider.dart';
 import '../providers/lurgi_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
+import '../widgets/lurgi_period_banner.dart';
 
 /// Multi-entry effluent chemical usage. Day total = sum of all entries.
 class LurgiChemicalsScreen extends ConsumerStatefulWidget {
@@ -26,6 +28,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _qty = NumberFormat('#,##0.##');
   final _time = DateFormat('HH:mm');
+  final _day = DateFormat('EEE d MMM');
   final _caustic = TextEditingController();
   final _hcl = TextEditingController();
   final _salt = TextEditingController();
@@ -123,8 +126,13 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
       );
     }
 
+    final todayKey = lurgiDateKey();
     final entriesAsync = ref.watch(lurgiTodayChemicalUsageProvider);
+    final periodAsync = ref.watch(lurgiPeriodChemicalUsageProvider);
     final totals = ref.watch(lurgiTodayChemicalTotalsProvider);
+    final periodTotals = ref.watch(lurgiPeriodChemicalTotalsProvider);
+    final settingsAsync = ref.watch(inkSettingsProvider);
+    final periodFrom = settingsAsync.valueOrNull?.latestActiveCountDate;
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
 
@@ -133,8 +141,13 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
       body: ListView(
         padding: ScreenInsets.symmetricScroll(context),
         children: [
+          LurgiPeriodBanner(
+            periodFrom: periodFrom,
+            settingsLoading: settingsAsync.isLoading,
+          ),
+          const SizedBox(height: 10),
           Text(
-            'Date: ${lurgiDateKey()} · add as you dose — day total is the sum of all entries.',
+            'Date: $todayKey · add as you dose — day total is the sum of all entries.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -153,27 +166,19 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Today · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'}',
+                    'Today · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(totals.totalKg)} kg',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: appColors.lurgiDark,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Caustic ${_qty.format(totals.causticSodaKg)} kg · '
-                    'HCl ${_qty.format(totals.hydrochloricAcidKg)} kg · '
-                    'NaCl ${_qty.format(totals.sodiumChlorideKg)} kg · '
-                    'Naccolaint ${_qty.format(totals.naccolaintKg)} kg',
-                    style: TextStyle(color: scheme.onSurface),
-                  ),
-                  Text(
-                    'Total ${_qty.format(totals.totalKg)} kg',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
+                  if (periodFrom != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Open period · ${periodTotals.entryCount} entr${periodTotals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(periodTotals.totalKg)} kg',
+                      style: TextStyle(color: scheme.onSurface),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -244,34 +249,91 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
               }
               return Column(
                 children: [
-                  for (final e in entries)
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(
-                          '${_qty.format(e.totalKg)} kg total',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          [
-                            _time.format(e.recordedAt),
-                            if (e.actorName.isNotEmpty) e.actorName,
-                            'C ${_qty.format(e.causticSodaKg)} · '
-                                'HCl ${_qty.format(e.hydrochloricAcidKg)} · '
-                                'NaCl ${_qty.format(e.sodiumChlorideKg)} · '
-                                'N ${_qty.format(e.naccolaintKg)}',
-                            if (e.comments != null) e.comments!,
-                          ].join('\n'),
-                        ),
-                        isThreeLine: true,
-                      ),
-                    ),
+                  for (final e in entries) _entryCard(e, scheme, showDate: false),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text(
+            'EARLIER THIS COUNT PERIOD',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  letterSpacing: 0.6,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+          periodAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Text('Could not load period: $e'),
+            data: (entries) {
+              final earlier =
+                  entries.where((e) => e.dateKey != todayKey).toList();
+              if (periodFrom == null && !settingsAsync.isLoading) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No active count period — history hidden.',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                );
+              }
+              if (earlier.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No earlier chemical entries in this open period.',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (final e in earlier) _entryCard(e, scheme, showDate: true),
                 ],
               );
             },
           ),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  Widget _entryCard(
+    LurgiChemicalUsage e,
+    ColorScheme scheme, {
+    required bool showDate,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Text(
+          '${_qty.format(e.totalKg)} kg total',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
+        ),
+        subtitle: Text(
+          [
+            if (showDate) '${_day.format(e.recordedAt)} · ${_time.format(e.recordedAt)}',
+            if (!showDate) _time.format(e.recordedAt),
+            if (e.actorName.isNotEmpty) e.actorName,
+            'C ${_qty.format(e.causticSodaKg)} · '
+                'HCl ${_qty.format(e.hydrochloricAcidKg)} · '
+                'NaCl ${_qty.format(e.sodiumChlorideKg)} · '
+                'N ${_qty.format(e.naccolaintKg)}',
+            if (e.comments != null) e.comments!,
+          ].join('\n'),
+        ),
+        isThreeLine: true,
       ),
     );
   }
