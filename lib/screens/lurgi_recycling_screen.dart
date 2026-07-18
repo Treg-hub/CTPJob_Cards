@@ -6,12 +6,14 @@ import '../main.dart' show currentEmployee, realEmployee;
 import '../models/lurgi_daily_round.dart';
 import '../models/lurgi_recycling_run.dart';
 import '../providers/current_employee_provider.dart';
+import '../providers/ink_provider.dart';
 import '../providers/lurgi_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
+import '../widgets/lurgi_period_banner.dart';
 
 /// Multi-run toloul recycling machine log.
 class LurgiRecyclingScreen extends ConsumerStatefulWidget {
@@ -27,6 +29,7 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
   final _qty = NumberFormat('#,##0.##');
   final _time = DateFormat('HH:mm');
   final _df = DateFormat('EEE d MMM HH:mm');
+  final _day = DateFormat('EEE d MMM');
 
   late DateTime _startAt;
   late DateTime _finishAt;
@@ -145,8 +148,13 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
       );
     }
 
+    final todayKey = lurgiDateKey();
     final runsAsync = ref.watch(lurgiTodayRecyclingRunsProvider);
+    final periodAsync = ref.watch(lurgiPeriodRecyclingRunsProvider);
     final summary = ref.watch(lurgiTodayRecyclingSummaryProvider);
+    final periodSummary = ref.watch(lurgiPeriodRecyclingSummaryProvider);
+    final settingsAsync = ref.watch(inkSettingsProvider);
+    final periodFrom = settingsAsync.valueOrNull?.latestActiveCountDate;
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
 
@@ -155,8 +163,13 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
       body: ListView(
         padding: ScreenInsets.symmetricScroll(context),
         children: [
+          LurgiPeriodBanner(
+            periodFrom: periodFrom,
+            settingsLoading: settingsAsync.isLoading,
+          ),
+          const SizedBox(height: 10),
           Text(
-            'Date: ${lurgiDateKey()} · log each cycle when dirty toloul is processed.',
+            'Date: $todayKey · log each cycle when dirty toloul is processed.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -171,13 +184,26 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(
-                'Today · ${summary.runCount} run${summary.runCount == 1 ? '' : 's'} · '
-                '${_qty.format(summary.totalLitresRecycled)} L recycled',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: appColors.lurgiDark,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Today · ${summary.runCount} run${summary.runCount == 1 ? '' : 's'} · '
+                    '${_qty.format(summary.totalLitresRecycled)} L',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: appColors.lurgiDark,
+                    ),
+                  ),
+                  if (periodFrom != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Open period · ${periodSummary.runCount} run${periodSummary.runCount == 1 ? '' : 's'} · '
+                      '${_qty.format(periodSummary.totalLitresRecycled)} L',
+                      style: TextStyle(color: scheme.onSurface),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -270,35 +296,95 @@ class _LurgiRecyclingScreenState extends ConsumerState<LurgiRecyclingScreen> {
               return Column(
                 children: [
                   for (final r in runs)
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.recycling_outlined,
-                          color: appColors.lurgiAccent,
-                        ),
-                        title: Text(
-                          '${_qty.format(r.litresRecycled)} L · '
-                          '${_time.format(r.startAt)}–${_time.format(r.finishAt)}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          [
-                            'Steam ${_qty.format(r.steamTemp)} / ${_qty.format(r.steamPress)}',
-                            'Dirty ${_qty.format(r.dirtyToloulLevelLitres)} L'
-                                '${r.machineCleaned ? ' · cleaned' : ''}',
-                            if (r.actorName.isNotEmpty) r.actorName,
-                            _df.format(r.startAt),
-                          ].join(' · '),
-                        ),
-                      ),
-                    ),
+                    _runCard(r, scheme, appColors, showFullDate: false),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text(
+            'EARLIER THIS COUNT PERIOD',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  letterSpacing: 0.6,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+          periodAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Text('Could not load period: $e'),
+            data: (runs) {
+              final earlier =
+                  runs.where((r) => r.dateKey != todayKey).toList();
+              if (periodFrom == null && !settingsAsync.isLoading) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No active count period — history hidden.',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                );
+              }
+              if (earlier.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No earlier recycling runs in this open period.',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (final r in earlier)
+                    _runCard(r, scheme, appColors, showFullDate: true),
                 ],
               );
             },
           ),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  Widget _runCard(
+    LurgiRecyclingRun r,
+    ColorScheme scheme,
+    AppColors appColors, {
+    required bool showFullDate,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(
+          Icons.recycling_outlined,
+          color: appColors.lurgiAccent,
+        ),
+        title: Text(
+          '${_qty.format(r.litresRecycled)} L · '
+          '${_time.format(r.startAt)}–${_time.format(r.finishAt)}',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
+        ),
+        subtitle: Text(
+          [
+            if (showFullDate) _day.format(r.startAt),
+            'Steam ${_qty.format(r.steamTemp)} / ${_qty.format(r.steamPress)}',
+            'Dirty ${_qty.format(r.dirtyToloulLevelLitres)} L'
+                '${r.machineCleaned ? ' · cleaned' : ''}',
+            if (r.actorName.isNotEmpty) r.actorName,
+            if (!showFullDate) _df.format(r.startAt),
+          ].join(' · '),
+        ),
       ),
     );
   }

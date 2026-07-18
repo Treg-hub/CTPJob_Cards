@@ -153,7 +153,13 @@ class LurgiService {
       for (final doc in s.docs) {
         try {
           final t = InkTransaction.fromFirestore(doc);
-          if (!t.voided) list.add(t);
+          if (t.voided) continue;
+          // Defense in depth: open period is exclusive of count date.
+          if (periodFromExclusive != null &&
+              !t.effectiveAt.isAfter(periodFromExclusive)) {
+            continue;
+          }
+          list.add(t);
         } catch (e) {
           debugPrint('Skipping unparseable recovery ${doc.id}: $e');
         }
@@ -188,16 +194,21 @@ class LurgiService {
     });
   }
 
-  /// Open count-period chemical history (after [periodFromExclusive], or last 60 days).
+  /// Open count-period chemical history.
+  /// When [requirePeriodBound] is true and [periodFromExclusive] is null, returns empty
+  /// (never falls back to unscoped / 60-day history).
   Stream<List<LurgiChemicalUsage>> watchChemicalUsageForOpenPeriod({
     DateTime? periodFromExclusive,
     int limit = 100,
+    bool requirePeriodBound = true,
   }) {
-    Query<Map<String, dynamic>> q =
-        _db.collection(Collections.lurgiChemicalUsage);
+    if (requirePeriodBound && periodFromExclusive == null) {
+      return Stream.value(const <LurgiChemicalUsage>[]);
+    }
     final from = periodFromExclusive ??
         DateTime.now().subtract(const Duration(days: 60));
-    q = q
+    final q = _db
+        .collection(Collections.lurgiChemicalUsage)
         .where('recorded_at', isGreaterThan: Timestamp.fromDate(from))
         .orderBy('recorded_at', descending: true)
         .limit(limit);
@@ -210,6 +221,11 @@ class LurgiService {
         try {
           final e = LurgiChemicalUsage.fromFirestore(doc);
           if (e.voided) continue;
+          // Client-side belt: recorded_at must be strictly after period bound.
+          if (periodFromExclusive != null &&
+              !e.recordedAt.isAfter(periodFromExclusive)) {
+            continue;
+          }
           list.add(e);
         } catch (e) {
           debugPrint('Skipping unparseable chemical ${doc.id}: $e');
@@ -258,7 +274,11 @@ class LurgiService {
   Stream<List<LurgiRecyclingRun>> watchRecyclingRunsForOpenPeriod({
     DateTime? periodFromExclusive,
     int limit = 50,
+    bool requirePeriodBound = true,
   }) {
+    if (requirePeriodBound && periodFromExclusive == null) {
+      return Stream.value(const <LurgiRecyclingRun>[]);
+    }
     final from = periodFromExclusive ??
         DateTime.now().subtract(const Duration(days: 60));
     final q = _db
@@ -275,6 +295,10 @@ class LurgiService {
         try {
           final r = LurgiRecyclingRun.fromFirestore(doc);
           if (r.voided) continue;
+          if (periodFromExclusive != null &&
+              !r.startAt.isAfter(periodFromExclusive)) {
+            continue;
+          }
           list.add(r);
         } catch (e) {
           debugPrint('Skipping unparseable recycling run ${doc.id}: $e');

@@ -346,139 +346,154 @@ class _LurgiSectionFormScreenState
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            if (widget.section.includeUtilities) ...[
-              _sectionHeader(context, 'Gas / Boiler / Softener'),
-              _meterField(
+            if (widget.section.includeUtilities)
+              _sectionBlock(
                 context,
-                controller: _gasMech,
-                label: 'Gas — mechanical',
-                previous: previous?.gasMechanical,
-                reset: _gasMechReset,
-                onReset: (v) => setState(() => _gasMechReset = v),
+                title: 'Gas / Boiler / Softener',
+                children: [
+                  _meterField(
+                    context,
+                    controller: _gasMech,
+                    label: 'Gas — mechanical',
+                    previous: previous?.gasMechanical,
+                    reset: _gasMechReset,
+                    onReset: (v) => setState(() => _gasMechReset = v),
+                  ),
+                  _meterField(
+                    context,
+                    controller: _gasElec,
+                    label: 'Gas — electrical',
+                    previous: previous?.gasElectrical,
+                    reset: _gasElecReset,
+                    onReset: (v) => setState(() => _gasElecReset = v),
+                  ),
+                  _meterField(
+                    context,
+                    controller: _boiler,
+                    label: 'Boiler feed (water)',
+                    previous: previous?.boilerFeed,
+                    reset: _boilerReset,
+                    onReset: (v) => setState(() => _boilerReset = v),
+                  ),
+                  _meterField(
+                    context,
+                    controller: _softener,
+                    label: 'Softener (water)',
+                    previous: previous?.softener,
+                    reset: _softenerReset,
+                    onReset: (v) => setState(() => _softenerReset = v),
+                  ),
+                ],
               ),
-              _meterField(
+            if (widget.section.includeWater)
+              _sectionBlock(
                 context,
-                controller: _gasElec,
-                label: 'Gas — electrical',
-                previous: previous?.gasElectrical,
-                reset: _gasElecReset,
-                onReset: (v) => setState(() => _gasElecReset = v),
+                title: 'Fresh & Effluent water',
+                children: [
+                  _meterField(
+                    context,
+                    controller: _fresh,
+                    label: 'Fresh water meter',
+                    previous: previous?.freshWater,
+                    reset: _freshReset,
+                    onReset: (v) => setState(() => _freshReset = v),
+                    deltaLabel: 'Intake today',
+                  ),
+                  _meterField(
+                    context,
+                    controller: _effluent,
+                    label: 'Effluent meter',
+                    previous: previous?.effluent,
+                    reset: _effluentReset,
+                    onReset: (v) => setState(() => _effluentReset = v),
+                    deltaLabel: 'Discharge today',
+                  ),
+                  _waterNetHint(previous),
+                ],
               ),
-              _meterField(
+            if (widget.section.includeAir)
+              _sectionBlock(
                 context,
-                controller: _boiler,
-                label: 'Boiler feed (water)',
-                previous: previous?.boilerFeed,
-                reset: _boilerReset,
-                onReset: (v) => setState(() => _boilerReset = v),
+                title: 'Air condenser',
+                children: [
+                  _meterField(
+                    context,
+                    controller: _air1,
+                    label: 'Meter 1',
+                    previous: previous?.airMeter1,
+                    reset: _air1Reset,
+                    onReset: (v) => setState(() => _air1Reset = v),
+                  ),
+                  _meterField(
+                    context,
+                    controller: _air2,
+                    label: 'Meter 2',
+                    previous: previous?.airMeter2,
+                    reset: _air2Reset,
+                    onReset: (v) => setState(() => _air2Reset = v),
+                  ),
+                ],
               ),
-              _meterField(
+            if (widget.section.includeGeyser)
+              _sectionBlock(
                 context,
-                controller: _softener,
-                label: 'Softener (water)',
-                previous: previous?.softener,
-                reset: _softenerReset,
-                onReset: (v) => setState(() => _softenerReset = v),
+                title: 'Geyser',
+                children: [
+                  TextFormField(
+                    controller: _geyserTemp,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Geyser temperature',
+                      suffixText: '°C',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => _reqNum(v, 'temperature'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _geyserComments,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Comments (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.section.includeWater) ...[
-              _sectionHeader(context, 'Fresh & Effluent water'),
-              _meterField(
+            if (widget.section.includeTanks)
+              _sectionBlock(
                 context,
-                controller: _fresh,
-                label: 'Fresh water meter',
-                previous: previous?.freshWater,
-                reset: _freshReset,
-                onReset: (v) => setState(() => _freshReset = v),
-                deltaLabel: 'Intake today',
+                title: 'Toloul tanks (litres)',
+                children: [
+                  _tankRow(
+                    context,
+                    label: 'Tank 1',
+                    controller: _tank1,
+                    direction: _tank1Dir,
+                    onDir: (v) => setState(() => _tank1Dir = v),
+                  ),
+                  _tankRow(
+                    context,
+                    label: 'Tank 2',
+                    controller: _tank2,
+                    direction: _tank2Dir,
+                    onDir: (v) => setState(() => _tank2Dir = v),
+                  ),
+                  _tankRow(
+                    context,
+                    label: 'Tank 3',
+                    controller: _tank3,
+                    direction: _tank3Dir,
+                    onDir: (v) => setState(() => _tank3Dir = v),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'In = recovering into tank · Out = pumping to overhead for pressroom',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
-              _meterField(
-                context,
-                controller: _effluent,
-                label: 'Effluent meter',
-                previous: previous?.effluent,
-                reset: _effluentReset,
-                onReset: (v) => setState(() => _effluentReset = v),
-                deltaLabel: 'Discharge today',
-              ),
-              _waterNetHint(previous),
-              const SizedBox(height: 16),
-            ],
-            if (widget.section.includeAir) ...[
-              _sectionHeader(context, 'Air condenser'),
-              _meterField(
-                context,
-                controller: _air1,
-                label: 'Meter 1',
-                previous: previous?.airMeter1,
-                reset: _air1Reset,
-                onReset: (v) => setState(() => _air1Reset = v),
-              ),
-              _meterField(
-                context,
-                controller: _air2,
-                label: 'Meter 2',
-                previous: previous?.airMeter2,
-                reset: _air2Reset,
-                onReset: (v) => setState(() => _air2Reset = v),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.section.includeGeyser) ...[
-              _sectionHeader(context, 'Geyser'),
-              TextFormField(
-                controller: _geyserTemp,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Geyser temperature',
-                  suffixText: '°C',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => _reqNum(v, 'temperature'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _geyserComments,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Comments (optional)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.section.includeTanks) ...[
-              _sectionHeader(context, 'Toloul tanks (litres)'),
-              _tankRow(
-                context,
-                label: 'Tank 1',
-                controller: _tank1,
-                direction: _tank1Dir,
-                onDir: (v) => setState(() => _tank1Dir = v),
-              ),
-              _tankRow(
-                context,
-                label: 'Tank 2',
-                controller: _tank2,
-                direction: _tank2Dir,
-                onDir: (v) => setState(() => _tank2Dir = v),
-              ),
-              _tankRow(
-                context,
-                label: 'Tank 3',
-                controller: _tank3,
-                direction: _tank3Dir,
-                onDir: (v) => setState(() => _tank3Dir = v),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'In = recovering into tank · Out = pumping to overhead for pressroom',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-            ],
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: _submitting ? null : () => _submit(previous),
@@ -533,16 +548,38 @@ class _LurgiSectionFormScreenState
     );
   }
 
-  Widget _sectionHeader(BuildContext context, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10, top: 4),
-      child: Text(
-        text.toUpperCase(),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              letterSpacing: 0.6,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+  /// Clear visual block so multi-section Morning Round stays scannable.
+  Widget _sectionBlock(
+    BuildContext context, {
+    required String title,
+    required List<Widget> children,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 0,
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title.toUpperCase(),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurfaceVariant,
+                  ),
             ),
+            const Divider(height: 16),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -610,47 +647,59 @@ class _LurgiSectionFormScreenState
     required String? direction,
     required ValueChanged<String?> onDir,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: 3,
-            child: TextFormField(
-              controller: controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: '$label level',
-                suffixText: 'L',
-                border: const OutlineInputBorder(),
-              ),
-              validator: (v) => _reqNum(v, '$label level'),
+          TextFormField(
+            controller: controller,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: '$label level',
+              suffixText: 'L',
+              border: const OutlineInputBorder(),
             ),
+            validator: (v) => _reqNum(v, '$label level'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Flow',
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  // ignore: deprecated_member_use
-                  value: direction,
-                  isExpanded: true,
-                  hint: const Text('In/Out'),
-                  items: const [
-                    DropdownMenuItem(value: 'in', child: Text('In')),
-                    DropdownMenuItem(value: 'out', child: Text('Out')),
-                  ],
-                  onChanged: onDir,
+          const SizedBox(height: 8),
+          Text(
+            'Flow',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
+          ),
+          const SizedBox(height: 6),
+          // Large segmented toggle — easier on the floor than a dropdown.
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'in',
+                label: Text('In'),
+                icon: Icon(Icons.arrow_downward, size: 18),
+              ),
+              ButtonSegment(
+                value: 'out',
+                label: Text('Out'),
+                icon: Icon(Icons.arrow_upward, size: 18),
+              ),
+            ],
+            emptySelectionAllowed: true,
+            showSelectedIcon: false,
+            selected: direction == null ? <String>{} : {direction},
+            onSelectionChanged: (set) {
+              if (set.isEmpty) {
+                onDir(null);
+              } else {
+                onDir(set.first);
+              }
+            },
+            style: ButtonStyle(
+              visualDensity: VisualDensity.comfortable,
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
           ),
