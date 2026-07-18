@@ -112,6 +112,14 @@ class Collections {
   static const String inkPurchaseOrders = 'ink_purchase_orders'; // forecast/reorder PO workflow (Pulse); mobile links receipts
   static const String inkAudit = 'ink_audit';
 
+  // ----- Lurgi department (lurgi_ prefix) -----
+  // Morning ops: utilities, water, air, geyser, tanks (one doc/day).
+  // Phase 2 multi-entry: chemicals + recycling runs (auto ids, date_key filter).
+  // Ink stock recovery remains ink_transactions only.
+  static const String lurgiDailyRounds = 'lurgi_daily_rounds';
+  static const String lurgiChemicalUsage = 'lurgi_chemical_usage';
+  static const String lurgiRecyclingRuns = 'lurgi_recycling_runs';
+
   // ----- My Timesheet / Work Report (work_report_ prefix) -----
   static const String workReportSettings = 'work_report_settings';
   static const String workReportPeriods = 'work_report_periods';

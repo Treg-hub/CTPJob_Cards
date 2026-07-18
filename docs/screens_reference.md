@@ -674,11 +674,17 @@ Shows loads that are queued locally (created or updated offline and not yet sync
 
 ## Ink Factory Module
 
-Screens for the Ink Factory stock-inventory module. Accessible via the **Ink Factory** home tile (Ink Factory department staff) and the **Daily Readings** home tile (Lurgi department staff). Roles: Ink operator (`department == "Ink Factory"`), Ink manager (position contains "manager" in the Ink Factory department), Lurgi user (`department == "Lurgi"`), and Admin. Other employees do not see these tiles.
+Screens for the Ink Factory stock-inventory module. Accessible via the **Ink Factory** home tile (Ink Factory department staff). Lurgi staff open ink/toloul **Daily Readings** from the **Lurgi** hub (not a standalone Home tile). Roles: Ink operator (`department == "Ink Factory"`), Ink manager (position contains "manager" in the Ink Factory department), Lurgi user (`department == "Lurgi"`), and Admin. Other employees do not see these tiles.
+
+### Lurgi Home (Phase 1)
+
+`lib/screens/lurgi_home_screen.dart` — **Roles:** Lurgi department, Admin
+
+Department hub for morning ops + multi-entry logs. Tiles: **Morning Round**, section shortcuts (Toloul Tanks, Gas/Boiler/Softener, Fresh & Effluent, Air Condenser, Geyser), **Daily Readings**, **Effluent Chemicals** (multi-entry), **Recycling Machine** (multi-run), **Ink Factory Recovery** (read-only). Screens: `lurgi_section_form.dart`, `lurgi_chemicals_screen.dart`, `lurgi_recycling_screen.dart`, `lurgi_ink_factory_recovery_screen.dart`. Collections: `lurgi_daily_rounds`, `lurgi_chemical_usage`, `lurgi_recycling_runs`.
 
 ### Ink Home
 
-`lib/screens/ink_home_screen.dart` — **Roles:** Ink operator, Ink manager, Admin, Lurgi (via Daily Readings tile only — not this hub)
+`lib/screens/ink_home_screen.dart` — **Roles:** Ink operator, Ink manager, Admin
 
 Operator **capture hub** on mobile. Management, costing, and month-end workflows live on **CTP Pulse** (`https://ctp-pulse.web.app/ink`), opened via the **Management & costing** card.
 
@@ -710,7 +716,7 @@ Operator **capture hub** on mobile. Management, costing, and month-end workflows
 
 `lib/screens/ink_daily_readings_screen.dart` — **Roles:** Ink operator, Ink manager, Lurgi user, Admin
 
-Single combined screen for all daily meter readings. Shown via the **Daily Readings** home tile for Lurgi staff and via the **Meter Readings** capture tile in the Ink hub for Ink Factory staff.
+Single combined screen for all daily meter readings. Shown via **Lurgi hub → Daily Readings** for Lurgi staff, via the **Daily Readings** home tile for Ink (and other non-Lurgi meter users), and via the **Meter Readings** capture tile in the Ink hub.
 
 #### Layout
 

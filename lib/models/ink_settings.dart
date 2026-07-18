@@ -14,6 +14,7 @@ class InkSettings {
     this.closedPeriods = const [],
     this.periodsNeedingReissue = const [],
     this.toloulFactoryLowLitres = kDefaultToloulFactoryLowLitres,
+    this.latestActiveCountDate,
   });
 
   final bool inkEnabled;
@@ -25,6 +26,10 @@ class InkSettings {
 
   /// Factory toloul tank (L) below this level turns the hub summary card red.
   final double toloulFactoryLowLitres;
+
+  /// Server-maintained open count-to-count lower bound (`effective_at` exclusive).
+  /// Used by Lurgi recovery view (Lurgi cannot read `ink_count_events`).
+  final DateTime? latestActiveCountDate;
 
   static const InkSettings defaults = InkSettings();
 
@@ -40,6 +45,9 @@ class InkSettings {
 
   factory InkSettings.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
+    final rawCount = d['latest_active_count_date'];
+    DateTime? latestCount;
+    if (rawCount is Timestamp) latestCount = rawCount.toDate();
     return InkSettings(
       inkEnabled: d['ink_enabled'] as bool? ?? true,
       closedPeriods: (d['closed_periods'] as List<dynamic>?)
@@ -54,6 +62,7 @@ class InkSettings {
       toloulFactoryLowLitres:
           (d['toloul_factory_low_litres'] as num?)?.toDouble() ??
               kDefaultToloulFactoryLowLitres,
+      latestActiveCountDate: latestCount,
     );
   }
 
@@ -62,6 +71,7 @@ class InkSettings {
         'closed_periods': closedPeriods,
         'periods_needing_reissue': periodsNeedingReissue,
         'toloul_factory_low_litres': toloulFactoryLowLitres,
+        // latest_active_count_date is CF-only — clients never write it here.
       };
 
   InkSettings copyWith({
@@ -69,6 +79,7 @@ class InkSettings {
     List<String>? closedPeriods,
     List<String>? periodsNeedingReissue,
     double? toloulFactoryLowLitres,
+    DateTime? latestActiveCountDate,
   }) =>
       InkSettings(
         inkEnabled: inkEnabled ?? this.inkEnabled,
@@ -77,5 +88,7 @@ class InkSettings {
             periodsNeedingReissue ?? this.periodsNeedingReissue,
         toloulFactoryLowLitres:
             toloulFactoryLowLitres ?? this.toloulFactoryLowLitres,
+        latestActiveCountDate:
+            latestActiveCountDate ?? this.latestActiveCountDate,
       );
 }

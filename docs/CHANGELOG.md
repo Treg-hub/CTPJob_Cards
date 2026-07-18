@@ -6,6 +6,21 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-18 — 2.3.0+180 — Lurgi department hub
+
+### What you will notice
+
+- **Lurgi** home tile opens a department hub (replaces the standalone Daily Readings tile for Lurgi staff).
+- **Morning Round** captures gas/boiler/softener, fresh & effluent water, air condenser, geyser, and toloul tank levels (litres + In/Out).
+- Section tiles let you open one log at a time; the hub shows which sections are done today.
+- **Daily Readings** (ink + Toloul meters) stays available from the Lurgi hub — same screen as before.
+- **Effluent Chemicals** — add doses any time; today's total is the sum of all entries.
+- **Recycling Machine** — log each still cycle; multiple runs per day supported.
+- **Ink Factory Recovery** is view-only: see what Ink Factory posted; you cannot edit stock recovery from Lurgi.
+- **Period history** shows chemicals, recycling, and recovery since the last month-end count.
+
+---
+
 ## 2026-07-18 — 2.3.0+179 — Copper stock on Waste loads
 
 ### What you will notice

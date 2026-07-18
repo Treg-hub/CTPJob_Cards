@@ -386,8 +386,10 @@ const String inkDepartment = 'Ink Factory';
 // =============================================================================
 // LURGI role helpers
 // =============================================================================
-// Lurgi operates the ink and toloul meters daily (target 06:00). During the
-// transition rollout, Ink Factory users also retain meter-entry access.
+// Lurgi hub: morning ops (utilities/water/air/geyser/tanks) + existing ink/toloul
+// Daily Readings + view-only Ink Factory Recovery. Ink stock recovery stays
+// Ink Factory. During transition, Ink Factory users also retain meter-entry
+// access via isInkMeterUser.
 // =============================================================================
 
 const String lurgiDepartment = 'Lurgi';
@@ -398,7 +400,7 @@ bool isLurgiUser(Employee? employee) {
   return employee.department == lurgiDepartment || isAdmin(employee);
 }
 
-/// Can enter meter readings — Lurgi (primary duty) or Ink Factory (transition).
+/// Can enter ink/toloul Daily Readings — Lurgi (primary) or Ink Factory.
 bool isInkMeterUser(Employee? employee) =>
     isLurgiUser(employee) || isInkUser(employee);
 
