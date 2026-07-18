@@ -237,7 +237,10 @@ class CopperService {
   /// True when a bucket has a displayable leftover ≤ 0.1 kg (float dust).
   static bool isDustKg(double kg) => kg > 0 && roundKg(kg) <= 0.1;
 
-  /// Admin: zero sort/reuse/sell (and rod/nugget subs when sell clears) when dust.
+  /// Admin: zero only buckets that are themselves dust (≤ 0.1 kg).
+  ///
+  /// Never recompute [sellKg] from rods+nuggets — that wiped real sell stock when
+  /// subtypes were 0 / desynced while clearing reuse dust.
   Future<void> performZeroDust({
     required String userId,
     required String comments,
@@ -272,6 +275,9 @@ class CopperService {
         parts.add('reuse ${roundKg(reuse).toStringAsFixed(1)}');
         reuse = 0;
       }
+
+      // Sell + subtypes: only clear a field if THAT field is dust.
+      // Do not force sell = rods + nuggets (destroys real sell when subtypes lag).
       if (isDustKg(sell)) {
         totalCleared += sell;
         parts.add('sell ${roundKg(sell).toStringAsFixed(1)}');
@@ -289,7 +295,9 @@ class CopperService {
           parts.add('nuggets ${roundKg(nuggets).toStringAsFixed(1)}');
           nuggets = 0;
         }
-        sell = roundKg(rods + nuggets);
+        // Keep sell_kg as the authority; only reduce it if both subtypes are 0
+        // after dust clear and sell itself was dust-sized (handled above).
+        // If subtypes under-count sell, leave sell alone for Adjust to fix.
       }
 
       if (parts.isEmpty) {
