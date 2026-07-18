@@ -95,6 +95,8 @@ class _LurgiSectionFormScreenState
   bool _suppressDraftPersist = false;
   /// User typed / tapped In-Out — never wipe with a late Firestore seed.
   bool _dirty = false;
+  /// Applied once: In/Out defaults from today or last round.
+  bool _dirsDefaulted = false;
   /// Entry stamp; admins may override for period testing (ink pattern).
   DateTime _effectiveAt = DateTime.now();
 
@@ -142,6 +144,7 @@ class _LurgiSectionFormScreenState
             DateTime.fromMillisecondsSinceEpoch(draft.effectiveAtMs!);
       }
       _seededForKey = lurgiDateKey(_effectiveAt);
+      // Leave _dirsDefaulted false so null draft dirs still pick up last entry.
     }
   }
 
@@ -154,6 +157,10 @@ class _LurgiSectionFormScreenState
       // Date change: allow Firestore seed for the new day.
       _loadedDraft = false;
       _dirty = false;
+      _dirsDefaulted = false;
+      _tank1Dir = null;
+      _tank2Dir = null;
+      _tank3Dir = null;
     });
   }
 
@@ -250,10 +257,32 @@ class _LurgiSectionFormScreenState
       setIf(_tank1, dayRound.tank1Litres);
       setIf(_tank2, dayRound.tank2Litres);
       setIf(_tank3, dayRound.tank3Litres);
+      // Directions defaulted separately (today → else previous entry).
+      setState(() {});
+    });
+  }
+
+  /// In/Out defaults: today's saved value if re-editing, else last entry.
+  /// Uses `??=` so user/draft choices are never overwritten.
+  void _scheduleDefaultDirs(
+    LurgiDailyRound? dayRound,
+    LurgiDailyRound? previous, {
+    required bool ready,
+  }) {
+    if (!ready || _dirsDefaulted) return;
+    final d1 = dayRound?.tank1Direction ?? previous?.tank1Direction;
+    final d2 = dayRound?.tank2Direction ?? previous?.tank2Direction;
+    final d3 = dayRound?.tank3Direction ?? previous?.tank3Direction;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _dirsDefaulted) return;
+      _dirsDefaulted = true;
+      if (d1 == null && d2 == null && d3 == null) return;
+      // Only fill still-null dirs (draft/user taps win).
+      if (_tank1Dir != null && _tank2Dir != null && _tank3Dir != null) return;
       setState(() {
-        _tank1Dir ??= dayRound.tank1Direction;
-        _tank2Dir ??= dayRound.tank2Direction;
-        _tank3Dir ??= dayRound.tank3Direction;
+        _tank1Dir ??= d1;
+        _tank2Dir ??= d2;
+        _tank3Dir ??= d3;
       });
     });
   }
@@ -443,6 +472,11 @@ class _LurgiSectionFormScreenState
     final dayRound = dayAsync.valueOrNull;
     final previous = prevAsync.valueOrNull;
     _scheduleSeed(dayRound, loaded: !dayAsync.isLoading);
+    _scheduleDefaultDirs(
+      dayRound,
+      previous,
+      ready: !dayAsync.isLoading && !prevAsync.isLoading,
+    );
     final df = DateFormat('EEE d MMM HH:mm');
     if (_loadedDraft && !_draftBannerShown) {
       _draftBannerShown = true;
@@ -779,21 +813,10 @@ class _LurgiSectionFormScreenState
             },
             validator: (v) => _reqNum(v, label),
           ),
+          // Reset only when a reading is entered and is below last (or already ticked).
           if (previous != null &&
               current != null &&
-              !reset &&
-              current < previous)
-            CheckboxListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Meter was reset'),
-              value: reset,
-              onChanged: (v) {
-                _markDirty();
-                onReset(v ?? false);
-              },
-            )
-          else if (previous != null)
+              (reset || current < previous))
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -855,7 +878,6 @@ class _LurgiSectionFormScreenState
                   subtitle: 'Into tank',
                   icon: Icons.arrow_downward,
                   selected: direction == 'in',
-                  selectedColor: scheme.primary,
                   onTap: () => onDir('in'),
                 ),
               ),
@@ -867,7 +889,6 @@ class _LurgiSectionFormScreenState
                   subtitle: 'To pressroom',
                   icon: Icons.arrow_upward,
                   selected: direction == 'out',
-                  selectedColor: scheme.tertiary,
                   onTap: () => onDir('out'),
                 ),
               ),
@@ -894,20 +915,13 @@ class _LurgiSectionFormScreenState
     required String subtitle,
     required IconData icon,
     required bool selected,
-    required Color selectedColor,
     required VoidCallback onTap,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = selected
-        ? selectedColor
-        : scheme.surfaceContainerHighest.withValues(alpha: 0.6);
+    // Same selected colours for In and Out (primary + onPrimary).
+    final bg =
+        selected ? scheme.primary : scheme.surfaceContainerHighest.withValues(alpha: 0.6);
     final fg = selected ? scheme.onPrimary : scheme.onSurface;
-    // When tertiary used for Out, onPrimary may not contrast — use onTertiary.
-    final textColor = selected
-        ? (selectedColor == scheme.tertiary
-            ? scheme.onTertiary
-            : scheme.onPrimary)
-        : scheme.onSurface;
 
     return Material(
       color: bg,
@@ -923,7 +937,7 @@ class _LurgiSectionFormScreenState
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
-                  ? selectedColor
+                  ? scheme.primary
                   : scheme.outline.withValues(alpha: 0.7),
               width: selected ? 2 : 1,
             ),
@@ -931,7 +945,7 @@ class _LurgiSectionFormScreenState
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: selected ? textColor : fg),
+              Icon(icon, size: 22, color: fg),
               const SizedBox(width: 8),
               Flexible(
                 child: Column(
@@ -943,15 +957,14 @@ class _LurgiSectionFormScreenState
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
-                        color: selected ? textColor : fg,
+                        color: fg,
                       ),
                     ),
                     Text(
                       subtitle,
                       style: TextStyle(
                         fontSize: 11,
-                        color: (selected ? textColor : fg)
-                            .withValues(alpha: 0.85),
+                        color: fg.withValues(alpha: 0.85),
                       ),
                     ),
                   ],
