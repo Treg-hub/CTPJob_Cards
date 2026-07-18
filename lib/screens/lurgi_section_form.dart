@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import '../main.dart' show currentEmployee, realEmployee;
 import '../models/lurgi_daily_round.dart';
 import '../providers/current_employee_provider.dart';
+import '../providers/lurgi_drafts.dart';
 import '../providers/lurgi_provider.dart';
+import '../utils/ink_pickers.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
@@ -83,31 +85,111 @@ class _LurgiSectionFormScreenState
   bool _effluentReset = false;
   bool _air1Reset = false;
   bool _air2Reset = false;
-  bool _seeded = false;
+  /// Date key last seeded into controllers (re-seed when admin changes day).
+  String? _seededForKey;
   bool _submitting = false;
+  /// Prefer restored draft over Firestore seed until user changes day / saves.
+  bool _loadedDraft = false;
+  bool _draftBannerShown = false;
+  /// After successful save+pop, do not re-write draft from dispose.
+  bool _suppressDraftPersist = false;
+  /// Entry stamp; admins may override for period testing (ink pattern).
+  DateTime _effectiveAt = DateTime.now();
 
-  String get _dateKey => lurgiDateKey();
+  String get _dateKey => lurgiDateKey(_effectiveAt);
+
+  String get _draftKey => widget.section.name;
 
   @override
   void initState() {
     super.initState();
-    _gasMech = TextEditingController();
-    _gasElec = TextEditingController();
-    _boiler = TextEditingController();
-    _softener = TextEditingController();
-    _fresh = TextEditingController();
-    _effluent = TextEditingController();
-    _air1 = TextEditingController();
-    _air2 = TextEditingController();
-    _geyserTemp = TextEditingController();
-    _geyserComments = TextEditingController();
-    _tank1 = TextEditingController();
-    _tank2 = TextEditingController();
-    _tank3 = TextEditingController();
+    final draft = ref.read(lurgiSectionFormDraftProvider(_draftKey));
+    _gasMech = TextEditingController(text: draft?.gasMech ?? '');
+    _gasElec = TextEditingController(text: draft?.gasElec ?? '');
+    _boiler = TextEditingController(text: draft?.boiler ?? '');
+    _softener = TextEditingController(text: draft?.softener ?? '');
+    _fresh = TextEditingController(text: draft?.fresh ?? '');
+    _effluent = TextEditingController(text: draft?.effluent ?? '');
+    _air1 = TextEditingController(text: draft?.air1 ?? '');
+    _air2 = TextEditingController(text: draft?.air2 ?? '');
+    _geyserTemp = TextEditingController(text: draft?.geyserTemp ?? '');
+    _geyserComments = TextEditingController(text: draft?.geyserComments ?? '');
+    _tank1 = TextEditingController(text: draft?.tank1 ?? '');
+    _tank2 = TextEditingController(text: draft?.tank2 ?? '');
+    _tank3 = TextEditingController(text: draft?.tank3 ?? '');
+    if (draft != null && !draft.isEmpty) {
+      _loadedDraft = true;
+      _tank1Dir = draft.tank1Dir;
+      _tank2Dir = draft.tank2Dir;
+      _tank3Dir = draft.tank3Dir;
+      _gasMechReset = draft.gasMechReset;
+      _gasElecReset = draft.gasElecReset;
+      _boilerReset = draft.boilerReset;
+      _softenerReset = draft.softenerReset;
+      _freshReset = draft.freshReset;
+      _effluentReset = draft.effluentReset;
+      _air1Reset = draft.air1Reset;
+      _air2Reset = draft.air2Reset;
+      if (draft.effectiveAtMs != null) {
+        _effectiveAt =
+            DateTime.fromMillisecondsSinceEpoch(draft.effectiveAtMs!);
+      }
+      _seededForKey = lurgiDateKey(_effectiveAt);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt == null || !mounted) return;
+    setState(() {
+      _effectiveAt = dt;
+      _seededForKey = null;
+      // Date change: allow Firestore seed for the new day.
+      _loadedDraft = false;
+    });
+  }
+
+  LurgiSectionFormDraft _captureDraft() => LurgiSectionFormDraft(
+        gasMech: _gasMech.text,
+        gasElec: _gasElec.text,
+        boiler: _boiler.text,
+        softener: _softener.text,
+        fresh: _fresh.text,
+        effluent: _effluent.text,
+        air1: _air1.text,
+        air2: _air2.text,
+        geyserTemp: _geyserTemp.text,
+        geyserComments: _geyserComments.text,
+        tank1: _tank1.text,
+        tank2: _tank2.text,
+        tank3: _tank3.text,
+        tank1Dir: _tank1Dir,
+        tank2Dir: _tank2Dir,
+        tank3Dir: _tank3Dir,
+        gasMechReset: _gasMechReset,
+        gasElecReset: _gasElecReset,
+        boilerReset: _boilerReset,
+        softenerReset: _softenerReset,
+        freshReset: _freshReset,
+        effluentReset: _effluentReset,
+        air1Reset: _air1Reset,
+        air2Reset: _air2Reset,
+        effectiveAtMs: _effectiveAt.millisecondsSinceEpoch,
+      );
+
+  void _persistDraft() {
+    final draft = _captureDraft();
+    ref.read(lurgiSectionFormDraftProvider(_draftKey).notifier).state =
+        draft.isEmpty ? null : draft;
+  }
+
+  void _clearDraft() {
+    ref.read(lurgiSectionFormDraftProvider(_draftKey).notifier).state = null;
   }
 
   @override
   void dispose() {
+    if (!_suppressDraftPersist) _persistDraft();
     _gasMech.dispose();
     _gasElec.dispose();
     _boiler.dispose();
@@ -124,35 +206,73 @@ class _LurgiSectionFormScreenState
     super.dispose();
   }
 
-  void _scheduleSeed(LurgiDailyRound? today) {
-    if (_seeded || today == null) return;
+  void _clearFields() {
+    for (final c in [
+      _gasMech,
+      _gasElec,
+      _boiler,
+      _softener,
+      _fresh,
+      _effluent,
+      _air1,
+      _air2,
+      _geyserTemp,
+      _geyserComments,
+      _tank1,
+      _tank2,
+      _tank3,
+    ]) {
+      c.clear();
+    }
+    _tank1Dir = null;
+    _tank2Dir = null;
+    _tank3Dir = null;
+    _gasMechReset = false;
+    _gasElecReset = false;
+    _boilerReset = false;
+    _softenerReset = false;
+    _freshReset = false;
+    _effluentReset = false;
+    _air1Reset = false;
+    _air2Reset = false;
+  }
+
+  void _scheduleSeed(LurgiDailyRound? dayRound, {required bool loaded}) {
+    // Keep in-progress draft; do not overwrite with server values.
+    if (_loadedDraft) return;
+    if (!loaded || _seededForKey == _dateKey) return;
     // Avoid setState / controller writes during build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _seeded) return;
-      _seeded = true;
+      if (!mounted || _seededForKey == _dateKey || _loadedDraft) return;
+      _seededForKey = _dateKey;
+      _clearFields();
+      if (dayRound == null) {
+        setState(() {});
+        return;
+      }
       void setIf(TextEditingController c, double? v) {
         if (v != null) c.text = _fmt(v);
       }
 
-      setIf(_gasMech, today.gasMechanical);
-      setIf(_gasElec, today.gasElectrical);
-      setIf(_boiler, today.boilerFeed);
-      setIf(_softener, today.softener);
-      setIf(_fresh, today.freshWater);
-      setIf(_effluent, today.effluent);
-      setIf(_air1, today.airMeter1);
-      setIf(_air2, today.airMeter2);
-      setIf(_geyserTemp, today.geyserTemp);
-      if (today.geyserComments != null) {
-        _geyserComments.text = today.geyserComments!;
+      setIf(_gasMech, dayRound.gasMechanical);
+      setIf(_gasElec, dayRound.gasElectrical);
+      setIf(_boiler, dayRound.boilerFeed);
+      setIf(_softener, dayRound.softener);
+      setIf(_fresh, dayRound.freshWater);
+      setIf(_effluent, dayRound.effluent);
+      setIf(_air1, dayRound.airMeter1);
+      setIf(_air2, dayRound.airMeter2);
+      setIf(_geyserTemp, dayRound.geyserTemp);
+      if (dayRound.geyserComments != null) {
+        _geyserComments.text = dayRound.geyserComments!;
       }
-      setIf(_tank1, today.tank1Litres);
-      setIf(_tank2, today.tank2Litres);
-      setIf(_tank3, today.tank3Litres);
+      setIf(_tank1, dayRound.tank1Litres);
+      setIf(_tank2, dayRound.tank2Litres);
+      setIf(_tank3, dayRound.tank3Litres);
       setState(() {
-        _tank1Dir = today.tank1Direction;
-        _tank2Dir = today.tank2Direction;
-        _tank3Dir = today.tank3Direction;
+        _tank1Dir = dayRound.tank1Direction;
+        _tank2Dir = dayRound.tank2Direction;
+        _tank3Dir = dayRound.tank3Direction;
       });
     });
   }
@@ -264,6 +384,8 @@ class _LurgiSectionFormScreenState
 
     final emp = writeAttributionEmployee ??
         ref.read(currentEmployeeProvider).valueOrNull;
+    final adminStamp =
+        role_utils.isAdmin(emp) || role_utils.isAdmin(currentEmployee);
     setState(() => _submitting = true);
     try {
       final round = LurgiDailyRound(
@@ -294,12 +416,17 @@ class _LurgiSectionFormScreenState
             air: s.includeAir,
             geyser: s.includeGeyser,
             tanks: s.includeTanks,
+            // Only pin section timestamps when admin overrode the clock.
+            effectiveAt: adminStamp ? _effectiveAt : null,
           );
       if (!mounted) return;
+      _clearDraft();
+      _loadedDraft = false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${widget.section.title} saved.')),
       );
       if (widget.section != LurgiSection.all) {
+        _suppressDraftPersist = true;
         Navigator.pop(context);
       }
     } catch (e) {
@@ -328,11 +455,26 @@ class _LurgiSectionFormScreenState
       );
     }
 
-    final todayAsync = ref.watch(lurgiTodayRoundProvider);
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final canEditDate = role_utils.isAdmin(emp);
+    final dayAsync = ref.watch(lurgiRoundForDateProvider(_dateKey));
     final prevAsync = ref.watch(lurgiPreviousRoundProvider(_dateKey));
-    final today = todayAsync.valueOrNull;
+    final dayRound = dayAsync.valueOrNull;
     final previous = prevAsync.valueOrNull;
-    _scheduleSeed(today);
+    _scheduleSeed(dayRound, loaded: !dayAsync.isLoading);
+    final df = DateFormat('EEE d MMM HH:mm');
+    if (_loadedDraft && !_draftBannerShown) {
+      _draftBannerShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Draft restored — unsaved entries kept'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.section.title)),
@@ -341,10 +483,38 @@ class _LurgiSectionFormScreenState
         child: ListView(
           padding: ScreenInsets.symmetricScroll(context),
           children: [
-            Text(
-              'Date: $_dateKey · logged in as ${currentEmployee?.name ?? "—"}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (_loadedDraft)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Unsaved draft — leave and return any time; cleared after save.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
+            if (canEditDate)
+              OutlinedButton.icon(
+                onPressed: _pickDate,
+                icon: const Icon(Icons.event),
+                label: Text('Entry date: ${df.format(_effectiveAt)}'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  alignment: Alignment.centerLeft,
+                ),
+              )
+            else
+              Text(
+                'Date: $_dateKey · logged in as ${currentEmployee?.name ?? "—"}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (canEditDate) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Admin test override · date_key $_dateKey · ${currentEmployee?.name ?? "—"}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             if (widget.section.includeUtilities)
               _sectionBlock(

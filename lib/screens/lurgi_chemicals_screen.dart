@@ -7,8 +7,10 @@ import '../models/lurgi_chemical_usage.dart';
 import '../models/lurgi_daily_round.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../providers/lurgi_drafts.dart';
 import '../providers/lurgi_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/ink_pickers.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
@@ -29,21 +31,68 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
   final _qty = NumberFormat('#,##0.##');
   final _time = DateFormat('HH:mm');
   final _day = DateFormat('EEE d MMM');
-  final _caustic = TextEditingController();
-  final _hcl = TextEditingController();
-  final _salt = TextEditingController();
-  final _naccolaint = TextEditingController();
-  final _comments = TextEditingController();
+  late final TextEditingController _caustic;
+  late final TextEditingController _hcl;
+  late final TextEditingController _salt;
+  late final TextEditingController _naccolaint;
+  late final TextEditingController _comments;
   bool _submitting = false;
+  bool _loadedDraft = false;
+  bool _draftBannerShown = false;
+  /// Admin test override for date_key + recorded_at (ink pattern).
+  DateTime _effectiveAt = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = ref.read(lurgiChemicalsDraftProvider);
+    _caustic = TextEditingController(text: draft?.caustic ?? '');
+    _hcl = TextEditingController(text: draft?.hcl ?? '');
+    _salt = TextEditingController(text: draft?.salt ?? '');
+    _naccolaint = TextEditingController(text: draft?.naccolaint ?? '');
+    _comments = TextEditingController(text: draft?.comments ?? '');
+    if (draft != null && !draft.isEmpty) {
+      _loadedDraft = true;
+      if (draft.effectiveAtMs != null) {
+        _effectiveAt =
+            DateTime.fromMillisecondsSinceEpoch(draft.effectiveAtMs!);
+      }
+    }
+  }
+
+  void _persistDraft() {
+    final draft = LurgiChemicalsDraft(
+      caustic: _caustic.text,
+      hcl: _hcl.text,
+      salt: _salt.text,
+      naccolaint: _naccolaint.text,
+      comments: _comments.text,
+      effectiveAtMs: _effectiveAt.millisecondsSinceEpoch,
+    );
+    ref.read(lurgiChemicalsDraftProvider.notifier).state =
+        draft.isEmpty ? null : draft;
+  }
+
+  void _clearDraft() {
+    ref.read(lurgiChemicalsDraftProvider.notifier).state = null;
+    _loadedDraft = false;
+  }
 
   @override
   void dispose() {
+    _persistDraft();
     _caustic.dispose();
     _hcl.dispose();
     _salt.dispose();
     _naccolaint.dispose();
     _comments.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt == null || !mounted) return;
+    setState(() => _effectiveAt = dt);
   }
 
   double _parseOrZero(String raw) {
@@ -75,12 +124,15 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
 
     final emp = writeAttributionEmployee ??
         ref.read(currentEmployeeProvider).valueOrNull;
+    final adminStamp =
+        role_utils.isAdmin(emp) || role_utils.isAdmin(currentEmployee);
+    final stamp = adminStamp ? _effectiveAt : DateTime.now();
     setState(() => _submitting = true);
     try {
       await ref.read(lurgiServiceProvider).addChemicalUsage(
             LurgiChemicalUsage(
-              dateKey: lurgiDateKey(),
-              recordedAt: DateTime.now(),
+              dateKey: lurgiDateKey(stamp),
+              recordedAt: stamp,
               causticSodaKg: c,
               hydrochloricAcidKg: h,
               sodiumChlorideKg: s,
@@ -98,6 +150,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
       _salt.clear();
       _naccolaint.clear();
       _comments.clear();
+      _clearDraft();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chemical usage added.')),
       );
@@ -126,15 +179,35 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
       );
     }
 
-    final todayKey = lurgiDateKey();
-    final entriesAsync = ref.watch(lurgiTodayChemicalUsageProvider);
+    final emp = ref.watch(currentEmployeeProvider).valueOrNull;
+    final canEditDate = role_utils.isAdmin(emp);
+    final dayKey =
+        canEditDate ? lurgiDateKey(_effectiveAt) : lurgiDateKey();
+    final entriesAsync = ref.watch(lurgiChemicalUsageForDayProvider(dayKey));
     final periodAsync = ref.watch(lurgiPeriodChemicalUsageProvider);
-    final totals = ref.watch(lurgiTodayChemicalTotalsProvider);
+    final dayEntries = entriesAsync.valueOrNull ?? [];
+    final totals = LurgiChemicalDayTotals.fromEntries(dayEntries);
     final periodTotals = ref.watch(lurgiPeriodChemicalTotalsProvider);
     final settingsAsync = ref.watch(inkSettingsProvider);
     final periodFrom = settingsAsync.valueOrNull?.latestActiveCountDate;
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
+    final df = DateFormat('EEE d MMM HH:mm');
+    final dayLabel = canEditDate && dayKey != lurgiDateKey()
+        ? 'Selected day'
+        : 'Today';
+    if (_loadedDraft && !_draftBannerShown) {
+      _draftBannerShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Draft restored — unsaved entry kept'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Effluent Chemicals')),
@@ -146,12 +219,42 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
             settingsLoading: settingsAsync.isLoading,
           ),
           const SizedBox(height: 10),
-          Text(
-            'Date: $todayKey · add as you dose — day total is the sum of all entries.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-          ),
+          if (_loadedDraft)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Unsaved draft — leave and return any time; cleared after save.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.primary,
+                    ),
+              ),
+            ),
+          if (canEditDate)
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              icon: const Icon(Icons.event),
+              label: Text('Entry date: ${df.format(_effectiveAt)}'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                alignment: Alignment.centerLeft,
+              ),
+            )
+          else
+            Text(
+              'Date: $dayKey · add as you dose — day total is the sum of all entries.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          if (canEditDate) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Admin test override · date_key $dayKey · add as you dose.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
           const SizedBox(height: 12),
           Card(
             margin: EdgeInsets.zero,
@@ -166,7 +269,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Today · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(totals.totalKg)} kg',
+                    '$dayLabel · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(totals.totalKg)} kg',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: appColors.lurgiDark,
@@ -226,7 +329,9 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            "TODAY'S ENTRIES",
+            canEditDate && dayKey != lurgiDateKey()
+                ? 'ENTRIES · $dayKey'
+                : "TODAY'S ENTRIES",
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   letterSpacing: 0.6,
                   fontWeight: FontWeight.w700,
@@ -242,9 +347,13 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
             error: (e, _) => Text('Could not load: $e'),
             data: (entries) {
               if (entries.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No chemical entries yet today.'),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    canEditDate && dayKey != lurgiDateKey()
+                        ? 'No chemical entries for $dayKey.'
+                        : 'No chemical entries yet today.',
+                  ),
                 );
               }
               return Column(
@@ -274,7 +383,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
             error: (e, _) => Text('Could not load period: $e'),
             data: (entries) {
               final earlier =
-                  entries.where((e) => e.dateKey != todayKey).toList();
+                  entries.where((e) => e.dateKey != dayKey).toList();
               if (periodFrom == null && !settingsAsync.isLoading) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),

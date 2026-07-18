@@ -17,6 +17,12 @@ final lurgiOpenPeriodFromProvider = Provider<AsyncValue<DateTime?>>((ref) {
   return ref.watch(inkSettingsProvider).whenData((s) => s.latestActiveCountDate);
 });
 
+/// Morning-round document for a `yyyy-MM-dd` key (null until first section saved).
+final lurgiRoundForDateProvider =
+    StreamProvider.family<LurgiDailyRound?, String>((ref, dateKey) {
+  return ref.watch(lurgiServiceProvider).watchRound(dateKey);
+});
+
 /// Today's morning-round document (null until first section saved).
 final lurgiTodayRoundProvider = StreamProvider<LurgiDailyRound?>((ref) {
   final key = lurgiDateKey();
@@ -47,6 +53,12 @@ final lurgiInkFactoryRecoveriesProvider =
   );
 });
 
+/// Effluent chemical entries for a calendar day (newest first).
+final lurgiChemicalUsageForDayProvider =
+    StreamProvider.family<List<LurgiChemicalUsage>, String>((ref, dateKey) {
+  return ref.watch(lurgiServiceProvider).watchChemicalUsageForDay(dateKey);
+});
+
 /// Today's effluent chemical entries (newest first).
 final lurgiTodayChemicalUsageProvider =
     StreamProvider<List<LurgiChemicalUsage>>((ref) {
@@ -57,6 +69,12 @@ final lurgiTodayChemicalUsageProvider =
 final lurgiTodayChemicalTotalsProvider = Provider<LurgiChemicalDayTotals>((ref) {
   final entries = ref.watch(lurgiTodayChemicalUsageProvider).valueOrNull ?? [];
   return LurgiChemicalDayTotals.fromEntries(entries);
+});
+
+/// Recycling machine runs for a calendar day (newest first).
+final lurgiRecyclingRunsForDayProvider =
+    StreamProvider.family<List<LurgiRecyclingRun>, String>((ref, dateKey) {
+  return ref.watch(lurgiServiceProvider).watchRecyclingRunsForDay(dateKey);
 });
 
 /// Today's recycling machine runs (newest first).
