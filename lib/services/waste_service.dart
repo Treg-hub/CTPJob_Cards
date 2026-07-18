@@ -2461,7 +2461,8 @@ class WasteService {
           });
         }
         await batch.commit().timeout(_firestoreWriteTimeout);
-        await CopperService().clearActiveBatchIfNoOnSiteThresholdStock();
+        // Mirror model: copper To Sell tracks on-site pools — deduct when loaded.
+        await CopperService().deductSellForLoadedStockIds(stockIds);
         return;
       } catch (_) {
         // Fall through to queue below.
@@ -2477,7 +2478,10 @@ class WasteService {
         documentId: id,
       );
     }
-    await CopperService().clearActiveBatchIfNoOnSiteThresholdStock();
+    // Offline queue: deduct best-effort when back online (batch path preferred).
+    try {
+      await CopperService().deductSellForLoadedStockIds(stockIds);
+    } catch (_) {}
   }
 
   /// Force-queues stock-loaded updates without a connectivity check.
