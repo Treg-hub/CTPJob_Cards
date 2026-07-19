@@ -167,8 +167,10 @@
           This is the authorised installation page for the <strong>CTP Gravure factory floor app</strong>
           (still named <em>CTP Job Cards</em>). It covers job cards and machine health, plus role-gated modules for
           <strong>Waste Recovery</strong>, <strong>Fleet Maintenance</strong>, <strong>Ink Factory</strong>,
-          <strong>Site Security</strong>, and related tools. Built and maintained by CTP Gravure for staff only —
-          operators, technicians, managers, security, fleet, ink, and waste teams as allocated.
+          <strong>Site Security</strong>, <strong>Lurgi</strong>, <strong>Copper</strong> (Pre Press), and related tools.
+          Built and maintained by CTP Gravure for staff only — operators, technicians, managers, security, fleet, ink,
+          waste, and other teams as allocated. Enrolment is <strong>phased by department and role</strong> — you may not
+          see every module.
         </p>
         <div class="bg-surface rounded-card p-4 flex gap-3">
           <svg class="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C25F3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -250,7 +252,7 @@
             </tr>
             <tr>
               <td><strong>Module work you enter</strong></td>
-              <td>Depending on your role: waste loads, fleet issues/work, ink readings or IBC actions, security gate entries, timesheet hours if enrolled — only modules allocated to you</td>
+              <td>Depending on your role: waste loads, fleet issues/work, ink readings or IBC actions, security gate entries, Lurgi rounds/chemicals, Copper stock actions, timesheet hours if enrolled — only modules allocated to you</td>
             </tr>
             <tr>
               <td><strong>Notification responses</strong></td>
@@ -311,7 +313,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="bg-surface rounded-card p-3">
             <div class="text-sm font-semibold text-gray-800 mb-1">South Africa Data Region</div>
-            <p class="text-xs text-gray-500">Data is stored in the <strong>africa-south1</strong> (Johannesburg) cloud region. It does not leave South Africa.</p>
+            <p class="text-xs text-gray-500">Primary business data is stored in the <strong>africa-south1</strong> (Johannesburg) Firebase region. Some scheduled server jobs run in other Google regions for technical reasons; your operational records remain on CTP’s Firebase project.</p>
           </div>
           <div class="bg-surface rounded-card p-3">
             <div class="text-sm font-semibold text-gray-800 mb-1">Encrypted at Rest &amp; in Transit</div>
@@ -327,7 +329,7 @@
           </div>
           <div class="bg-surface rounded-card p-3">
             <div class="text-sm font-semibold text-gray-800 mb-1">Role-Restricted Access</div>
-            <p class="text-xs text-gray-500">What you can read or write in the app is enforced by Firestore security rules — your role determines your access level. Operators cannot see technician-only data and vice versa.</p>
+            <p class="text-xs text-gray-500">What you can read or write is enforced by Firestore security rules and role/module gates. You only see modules and actions allocated to your profile — not every factory screen.</p>
           </div>
           <div class="bg-surface rounded-card p-3">
             <div class="text-sm font-semibold text-gray-800 mb-1">No Advertising or Analytics</div>
@@ -387,6 +389,8 @@
               <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Fleet Maintenance</strong> — report faults, mechanic work logs, daily checks where enabled</li>
               <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Ink Factory</strong> — floor capture (daily readings, IBC / receive / production paths for ink roles)</li>
               <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Waste Recovery</strong> — scheduled and ad-hoc loads, stock, offline-friendly capture</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Lurgi</strong> — morning rounds, chemicals, recycling (when your department is rolled on)</li>
+              <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>Copper</strong> — Pre Press sort / reuse / sell stock (linked to waste removal)</li>
               <li class="flex gap-2"><span class="text-brand font-bold">→</span> <strong>My Timesheet</strong> — monthly hours for enrolled staff (where enabled)</li>
               <li class="flex gap-2"><span class="text-brand font-bold">→</span> Managers also use <strong>CTP Pulse</strong> (separate web board) for KPIs and desk workflows</li>
             </ul>
@@ -554,6 +558,7 @@
             <p class="text-gray-500 text-xs mb-4 mt-2">
               The app guides you through these permissions during first-time setup. Each one enables a specific function.
               Denying any of them will cause the app to not work correctly.
+              <strong>Camera</strong> is also requested when you take photos (jobs, security documents, waste evidence, ink delivery notes) — grant it when prompted for those features.
             </p>
             <div class="space-y-4">
 
@@ -987,12 +992,12 @@
 
     const RELEASE = {
       version:     '2.3.0',
-      build:       '147',
+      build:       '181',
       // Always the Hosting file — never App Distribution (in-app + button need a real APK).
       downloadUrl: OFFICIAL_APK_PATH,
       notes: [
-        'Factory floor app: job cards + Waste, Fleet, Ink, Site Security (role-gated)',
-        'Download here once — Create account or Log in inside the app',
+        'Factory floor app: job cards + Waste, Fleet, Ink, Site Security, Lurgi, Copper (role-gated)',
+        'Download here once — Create account (clock number + email + password) or Log in inside the app',
         'Updates: in-app banner or required screen from this same official APK',
       ],
     };
