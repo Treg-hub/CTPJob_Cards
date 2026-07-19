@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 
@@ -1189,6 +1191,71 @@ class InkService {
         receiptKey: txn.idempotencyKey,
       );
     }
+  }
+
+  /// Upload signed transporter delivery-note photo, then CF
+  /// `attachInkDeliveryNote` writes `delivery_note` on the shipment or local
+  /// PO (Wave B — clients cannot set those fields). Mirrors Pulse
+  /// `uploadDeliveryNoteFile` + `attachInkDeliveryNote`.
+  ///
+  /// [kind] is `shipment` or `local_po`. Requires network (Storage + callable).
+  Future<void> attachDeliveryNote({
+    required String kind,
+    required String docId,
+    required String localFilePath,
+    required String contentType,
+    required String capturedBy,
+  }) async {
+    _guardWrite();
+    if (kind != 'shipment' && kind != 'local_po') {
+      throw ArgumentError("kind must be 'shipment' or 'local_po'");
+    }
+    final id = docId.trim();
+    if (id.isEmpty) {
+      throw ArgumentError('docId is required');
+    }
+    final file = File(localFilePath);
+    if (!file.existsSync()) {
+      throw StateError(
+        'Photo was cleaned up before upload — take or pick it again.',
+      );
+    }
+    final online =
+        await ConnectivityService().isOnline().catchError((_) => false);
+    if (!online) {
+      throw StateError(
+        'No connection — delivery note upload needs to be online. '
+        'Reconnect and try again.',
+      );
+    }
+
+    final ext = contentType.contains('pdf')
+        ? '.pdf'
+        : contentType.contains('png')
+            ? '.png'
+            : '.jpg';
+    final safeType = contentType.isNotEmpty
+        ? contentType
+        : (ext == '.pdf' ? 'application/pdf' : 'image/jpeg');
+    final storagePath = kind == 'shipment'
+        ? 'ink/$id/delivery-note-${DateTime.now().millisecondsSinceEpoch}$ext'
+        : 'ink/orders/$id/delivery-note-${DateTime.now().millisecondsSinceEpoch}$ext';
+
+    await FirebaseStorage.instance.ref(storagePath).putFile(
+          file,
+          SettableMetadata(contentType: safeType),
+        );
+
+    final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('attachInkDeliveryNote');
+    await callable.call<Map<String, dynamic>>({
+      'kind': kind,
+      'doc_id': id,
+      'storage_path': storagePath,
+      'content_type': safeType,
+      'captured_by': capturedBy,
+      'source': 'mobile',
+    });
   }
 
   /// Transfers an IBC to a tank: marks it transferred and records the toloul

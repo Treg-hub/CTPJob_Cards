@@ -791,7 +791,7 @@
         <tr><td><strong style="color:var(--text-muted);">Stage 4</strong></td><td>60 min after creation</td><td class="no">OFF by default</td><td>Admin-configurable — final tier</td></tr>
       </tbody>
     </table>
-    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 5 minutes</strong>, in a Google data centre in Belgium. It does not forget. It does not sleep.</p>
+    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 5 minutes</strong> in a Google European region (scheduled cloud job). It does not forget. It does not sleep.</p>
     <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log.</div>
   </div>
 </section>
@@ -909,12 +909,12 @@
         <tr><td class="role">Fleet</td><td>Problem report + daily safety check</td><td>Asset, urgency, hour meter, photos — machine logbook</td></tr>
         <tr><td class="role">Site Security</td><td>Visitor / contractor / company car in-out</td><td>Who is on site, when, vehicle details — gate record (not job cards for guards)</td></tr>
         <tr><td class="role">Waste</td><td>Schedule / collect / evidence (when enabled)</td><td>Load, weight evidence, photos — recovery trail for the desk</td></tr>
-        <tr><td class="role">Ink Factory</td><td>Meters, production, receive, IBC</td><td>Quantities and times — stock and cost on the management board</td></tr>
+        <tr><td class="role">Ink Factory</td><td>Meters, production, receive, IBC</td><td>Quantities and times — live stock trail for the management board</td></tr>
         <tr><td class="role">Lurgi</td><td>Morning round, chemicals, recycling</td><td>Readings and entries for department visibility (when your area is live)</td></tr>
         <tr><td class="role">Copper</td><td>Sort / reuse / sell (Pre Press)</td><td>Stock staged into waste for removal tracking</td></tr>
       </tbody>
     </table>
-    <div class="callout">Managers use <strong>CTP Pulse</strong> (web) for costing and queues. Floor capture stays on the phone. You are not asked for data without a job to do.</div>
+    <div class="callout">Managers use <strong>CTP Pulse</strong> (web) for desk queues and oversight. Floor capture stays on the phone. You are not asked for data without a job to do.</div>
   </div>
 </section>
 
@@ -932,10 +932,10 @@
       </div>
       <div class="card">
         <h3>What happens next</h3>
-        <p>Managers cost and close periods on <strong>Pulse</strong>. Floor enters <strong>facts</strong> (kg, litres, IBC ids) — not rand pricing on the phone.</p>
+        <p>Managers review stock and close periods on <strong>Pulse</strong>. Floor enters <strong>facts</strong> (kg, litres, IBC ids) — quantities and times only on the phone.</p>
       </div>
     </div>
-    <div class="callout">Accurate meters and receives protect stock and money. The system dual-runs against the old pack so numbers can be trusted.</div>
+    <div class="callout">Accurate meters and receives protect stock truth. The system dual-runs against the old pack so numbers can be trusted.</div>
   </div>
 </section>
 
@@ -948,10 +948,10 @@
   <div class="slide-body">
     <div class="steps">
       <div class="step"><div class="step-n">1</div><div class="step-text"><h4>Schedule or start a load</h4><p>Contractor, waste types, date — or create on the spot when needed.</p></div></div>
-      <div class="step"><div class="step-n">2</div><div class="step-text"><h4>Evidence</h4><p>Photos, signature, paper ref where required — so the desk can finish weighbridge and cost.</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-text"><h4>Evidence</h4><p>Photos, signature, paper ref where required — so the desk can finish weighbridge and load review.</p></div></div>
       <div class="step"><div class="step-n">3</div><div class="step-text"><h4>Stock link</h4><p>Pick stock when the load uses on-site pools (including Copper sell stock where applicable).</p></div></div>
     </div>
-    <div class="callout">Weighbridge and cost approval are <strong>desk work on Pulse</strong> — not on the phone. Guard floor capture is rolling out with devices; managers already process live.</div>
+    <div class="callout">Weighbridge and load approval are <strong>desk work on Pulse</strong> — not on the phone. Guard floor capture is rolling out with devices; managers already process live.</div>
   </div>
 </section>
 
@@ -965,7 +965,7 @@
     <div class="grid-2">
       <div class="card">
         <h3>What you capture</h3>
-        <p>Visitor / contractor vehicle · company car exit/return · on-foot visitors · who is on site · force sign-out when needed · managers: company-car costs with receipt photo.</p>
+        <p>Visitor / contractor vehicle · company car exit/return · on-foot visitors · who is on site · force sign-out when needed · managers: company-car receipt photos when required.</p>
       </div>
       <div class="card">
         <h3>What we collect</h3>
@@ -1094,7 +1094,7 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 17 — Fun facts ============ -->
+<!-- ============ SLIDE 17 — Behind the scenes ============ -->
 <section class="slide">
   <header class="slide-header">
     <div class="slide-title">Behind the Scenes</div>
@@ -1111,9 +1111,9 @@
     </div>
     <ul class="checks">
       <li><strong>Lines of code</strong> (~179,000): mobile app, Pulse board, Cloud Functions, and rules — counted from the live source trees (July 2026).</li>
-      <li><strong>Time spent</strong> (~908 engaged hours / 5.7 FTE-months over ~101 active days): design, build, and ops on this system — from the internal Time Review record (grand total, tools merged so nothing is double-counted).</li>
-      <li>The escalation engine runs in a Google data centre in <strong>Belgium</strong>. The database lives in <strong>Johannesburg</strong>. Two continents — typically under 2 seconds to your pocket.</li>
-      <li>Every photo, note, and job card is stored in the cloud with automatic redundancy — the floor is not the only copy of the record.</li>
+      <li><strong>Time spent</strong> (~908 engaged hours / 5.7 FTE-months over ~101 active days, Apr–Jul 2026): design and build of this system from the development time record. Tools are merged into one timeline so simultaneous work is not double-counted. Gaps over 60 minutes start a new session; each session includes 15 minutes setup.</li>
+      <li>Those hours are <strong>development only</strong> (coding, planning, shipping). Time on the floor explaining the app and onboarding people is <strong>extra</strong> — not in the 908 h.</li>
+      <li>Live data sits in Google Cloud in <strong>Johannesburg</strong>. Scheduled jobs (escalation timers) run from a European Google region. Photos, notes, and job cards stay in the cloud with redundancy — the phone is not the only copy.</li>
     </ul>
   </div>
 </section>
