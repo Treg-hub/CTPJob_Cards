@@ -105,7 +105,7 @@ If all of those check out, ask Admin to look at the `notifications` Firestore co
 
 1. **Location permission level** — must be "Allow All the Time", not "Only while using the app". Background location is the *only* thing that triggers the geofence when the screen is off.
 2. **Location services on** — phone-wide location switch must be enabled.
-3. **Geofence radius** — the active geofence is ~800 m around the configured centre. If you're outside it, you're correctly off-site; the radius can be reconfigured by Admin via the **Geofence Editor** screen.
+3. **Geofence radius** — the active geofence is ~400 m around the configured centre (live value comes from Admin geofence settings). If you're outside it, you're correctly off-site; the radius can be reconfigured by Admin via the **Geofence Editor** screen.
 4. **Re-registration after reboot** — Android removes geofences on device reboot. The app re-registers on next launch; if you rebooted and didn't open the app, do so once.
 5. **Force-refresh location** — Settings → "Check Current Location" button. This calls `LocationService.checkCurrentLocation()` and updates `isOnSite` immediately.
 

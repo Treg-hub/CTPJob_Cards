@@ -43,7 +43,7 @@ class _PermissionsOnboardingScreenState
   final PageController _pageController = PageController();
 
   // Live geofence radius from the central `settings/geofence` doc, so the
-  // onboarding copy always matches the real barrier instead of a hard-coded "800 m".
+  // onboarding copy always matches the real barrier instead of a hard-coded radius.
   int _radiusMeters = kDefaultGeofence.radius.round();
   WasteSettings? _wasteSettings;
   FleetSettings? _fleetSettings;

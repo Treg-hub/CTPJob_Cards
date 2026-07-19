@@ -27,7 +27,7 @@ class GeofenceConfig {
 /// the live geofence, the editor, the WorkManager check and the onboarding copy
 /// in agreement instead of drifting apart.
 const GeofenceConfig kDefaultGeofence =
-    GeofenceConfig(-29.994938052011612, 30.939421740548614, 800.0);
+    GeofenceConfig(-29.994938052011612, 30.939421740548614, 400.0);
 
 /// Hysteresis margin (metres) for the off-site decision. Presence is sticky:
 /// you become on-site within [GeofenceConfig.radius], but only flip back to

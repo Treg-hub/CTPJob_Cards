@@ -53,7 +53,7 @@ When you open the app for the first time, it will ask for a number of permission
 The app uses your location to determine whether you are on site or off site. This matters for two reasons:
 
 - **On-site status** — Your profile is updated to show you are on site. Employees who are on site receive live job card notifications. If you are off site, push notifications are held in your **Notification Inbox** instead of delivered to your phone — so nothing is lost, and you can review everything when you arrive.
-- **Geofence detection** — The moment you enter or leave the company boundary (approximately 800 m radius), the system logs it automatically.
+- **Geofence detection** — The moment you enter or leave the company boundary (approximately 400 m radius), the system logs it automatically.
 - **Return alert** — When you come back on site and open the app, a banner will appear if you have notifications waiting. Tap **Open** to go straight to your inbox.
 
 **Location is not used for surveillance.** It is used solely to determine whether you are within the company boundary and whether you should be receiving live job alerts.
