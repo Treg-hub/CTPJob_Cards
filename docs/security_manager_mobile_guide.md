@@ -26,7 +26,11 @@ Same flows as guards:
 - Company car exit / return
 - On-site list
 
-**Add company car cost** — available to you (`isSecurityCostManager`): pick a registered company car, category, receipt.
+**Add company car cost** — available to you (`isSecurityCostManager`): pick a registered company car, category, amount, date, description.
+
+- **Scan receipt** — photograph (or pick from gallery) a till slip. The app reads amount/date/merchant on-device and prefills the form. **Always check the amount and date before Save.** The same photo is stored with the cost for audit.
+- **Attach photo only** — attach without OCR if you prefer to type fields yourself.
+- Save still goes through the server (same as Pulse Costing).
 
 ### Waste Recovery tab
 
