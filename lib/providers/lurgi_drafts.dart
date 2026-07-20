@@ -34,6 +34,7 @@ class LurgiSectionFormDraft {
     this.air1Reset = false,
     this.air2Reset = false,
     this.effectiveAtMs,
+    this.spanComment = '',
   });
 
   final String gasMech;
@@ -61,6 +62,7 @@ class LurgiSectionFormDraft {
   final bool air1Reset;
   final bool air2Reset;
   final int? effectiveAtMs;
+  final String spanComment;
 
   bool get isEmpty {
     bool blank(String s) => s.trim().isEmpty;
@@ -77,6 +79,7 @@ class LurgiSectionFormDraft {
         blank(tank1) &&
         blank(tank2) &&
         blank(tank3) &&
+        blank(spanComment) &&
         tank1Dir == null &&
         tank2Dir == null &&
         tank3Dir == null &&

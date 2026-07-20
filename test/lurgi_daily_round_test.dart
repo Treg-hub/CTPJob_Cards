@@ -26,6 +26,19 @@ void main() {
     });
   });
 
+  group('lurgiDateKeyDaySpan', () {
+    test('counts calendar days between keys', () {
+      expect(lurgiDateKeyDaySpan('2026-07-15', '2026-07-18'), 3);
+      expect(lurgiDateKeyDaySpan('2026-07-18', '2026-07-18'), 0);
+    });
+  });
+
+  group('lurgiYesterdayDateKey', () {
+    test('returns previous calendar day', () {
+      expect(lurgiYesterdayDateKey(DateTime(2026, 7, 18)), '2026-07-17');
+    });
+  });
+
   group('LurgiDailyRound completion', () {
     test('morningComplete requires all five sections', () {
       final partial = LurgiDailyRound(

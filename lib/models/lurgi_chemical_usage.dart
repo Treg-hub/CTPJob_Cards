@@ -15,6 +15,11 @@ class LurgiChemicalUsage {
     required this.actorClockNo,
     required this.actorName,
     this.voided = false,
+    this.voidRequested = false,
+    this.voidRequestReason,
+    this.voidRequestedAt,
+    this.voidRequestedByClockNo,
+    this.voidRequestedByName,
   });
 
   final String? id;
@@ -28,6 +33,11 @@ class LurgiChemicalUsage {
   final String actorClockNo;
   final String actorName;
   final bool voided;
+  final bool voidRequested;
+  final String? voidRequestReason;
+  final DateTime? voidRequestedAt;
+  final String? voidRequestedByClockNo;
+  final String? voidRequestedByName;
 
   double get totalKg =>
       causticSodaKg +
@@ -49,6 +59,11 @@ class LurgiChemicalUsage {
       actorClockNo: d['actor_clock_no'] as String? ?? '',
       actorName: d['actor_name'] as String? ?? '',
       voided: d['voided'] as bool? ?? false,
+      voidRequested: d['void_requested'] as bool? ?? false,
+      voidRequestReason: d['void_request_reason'] as String?,
+      voidRequestedAt: _ts(d['void_requested_at']),
+      voidRequestedByClockNo: d['void_requested_by_clock_no'] as String?,
+      voidRequestedByName: d['void_requested_by_name'] as String?,
     );
   }
 
@@ -81,6 +96,7 @@ class LurgiChemicalDayTotals {
     this.hydrochloricAcidKg = 0,
     this.sodiumChlorideKg = 0,
     this.naccolaintKg = 0,
+    this.voidRequestedCount = 0,
   });
 
   final int entryCount;
@@ -88,6 +104,7 @@ class LurgiChemicalDayTotals {
   final double hydrochloricAcidKg;
   final double sodiumChlorideKg;
   final double naccolaintKg;
+  final int voidRequestedCount;
 
   double get totalKg =>
       causticSodaKg +
@@ -98,11 +115,13 @@ class LurgiChemicalDayTotals {
   factory LurgiChemicalDayTotals.fromEntries(
       List<LurgiChemicalUsage> entries) {
     var c = 0.0, h = 0.0, s = 0.0, n = 0.0;
+    var pending = 0;
     for (final e in entries) {
       c += e.causticSodaKg;
       h += e.hydrochloricAcidKg;
       s += e.sodiumChlorideKg;
       n += e.naccolaintKg;
+      if (e.voidRequested) pending++;
     }
     return LurgiChemicalDayTotals(
       entryCount: entries.length,
@@ -110,6 +129,7 @@ class LurgiChemicalDayTotals {
       hydrochloricAcidKg: h,
       sodiumChlorideKg: s,
       naccolaintKg: n,
+      voidRequestedCount: pending,
     );
   }
 }
