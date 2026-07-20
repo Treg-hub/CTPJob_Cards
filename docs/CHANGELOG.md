@@ -6,7 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## Unreleased — Security receipt OCR (pending APK ship)
+
+### What you will notice
+
+- **Add company car cost** (managers): **Scan receipt** photographs a till slip, reads amount/date/merchant on the phone, and fills the form for you to check.
+- The receipt **photo is saved with the cost** when you tap Save (same as before for attached photos).
+- You can still type everything manually or attach a photo without scanning.
+
+---
+
 ## 2026-07-19 — 2.3.0+182 — Lurgi drafts, ink notes, site boundary
+
 
 ### What you will notice
 

@@ -538,7 +538,7 @@ Live list of vehicles currently on site (operational view; managers also use Pul
 
 `lib/screens/security_add_cost_screen.dart` — **Roles:** Security Manager, Admin
 
-Company car picker + receipt/category. Not available to guards.
+Company car picker + category/amount/date/description. **Scan receipt** runs on-device OCR to prefill fields; the photo is uploaded on Save (`receipt_photo_url`). Attach-only and fully manual paths remain. Not available to guards.
 
 ### Document Scan (shared)
 

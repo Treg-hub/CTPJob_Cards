@@ -59,6 +59,7 @@ dependencies:
   signature: ^5.5.0
   crypto: ^3.0.6   # Salted-hash exit code for Kiosk Mode device lockdown
   printing: ^5.14.3
+  google_mlkit_text_recognition: ^0.16.0
 
 dev_dependencies:
   flutter_test:
