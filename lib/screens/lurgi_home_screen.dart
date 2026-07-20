@@ -10,14 +10,16 @@ import '../theme/app_theme.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
+import '../widgets/lurgi_operator_note.dart';
 import 'ink_daily_readings_screen.dart';
 import 'lurgi_chemicals_screen.dart';
 import 'lurgi_ink_factory_recovery_screen.dart';
+import 'lurgi_operator_guide_screen.dart';
 import 'lurgi_period_history_screen.dart';
 import 'lurgi_recycling_screen.dart';
 import 'lurgi_section_form.dart';
 
-/// Lurgi department hub — morning ops, multi-entry logs, Daily Readings, recovery view.
+/// Lurgi department hub — section walk, multi-entry logs, Daily Readings, guide.
 class LurgiHomeScreen extends ConsumerWidget {
   const LurgiHomeScreen({super.key});
 
@@ -64,6 +66,14 @@ class LurgiHomeScreen extends ConsumerWidget {
             ScreenInsets.scrollBottomFullScreen(context),
           ),
           children: [
+            const LurgiOperatorNote(
+              noteId: 'hub_walk_order',
+              message:
+                  'Walk the plant with the five Daily log tiles (Gas → Water → '
+                  'Air → Geyser → Tanks). Save each area before the next. '
+                  'Daily Readings can be finished later the same day (add missing). '
+                  'Open Operator guide anytime for the full checklist.',
+            ),
             _StatusCard(
               morningDone: morningDone,
               morningParts: morningParts,
@@ -72,49 +82,54 @@ class LurgiHomeScreen extends ConsumerWidget {
               readingsLabel: readings?.bannerMessage,
               chemicalEntries: chemTotals.entryCount,
               chemicalTotalKg: chemTotals.totalKg,
+              chemicalVoidPending: chemTotals.voidRequestedCount,
+              chemicalsNoneToday: round?.chemicalsNoneToday ?? false,
               recyclingRuns: recycleSummary.runCount,
               recyclingLitres: recycleSummary.totalLitresRecycled,
+              recyclingVoidPending: recycleSummary.voidRequestedCount,
+              recyclingNoneToday: round?.recyclingNoneToday ?? false,
+              multiDaySpan: (round?.meterSpanDays ?? 0) > 1,
             ),
             const SizedBox(height: 16),
+            _sectionLabel(context, 'Help'),
+            const SizedBox(height: 8),
+            _ActionGrid(actions: [
+              _Action(
+                Icons.menu_book_outlined,
+                'Operator guide',
+                builder: () => const LurgiOperatorGuideScreen(),
+              ),
+            ]),
+            const SizedBox(height: 20),
             _sectionLabel(context, 'Morning'),
             const SizedBox(height: 8),
             _ActionGrid(actions: [
               _Action(
-                Icons.wb_sunny_outlined,
-                'Morning Round',
-                badge: morningDone
-                    ? 'Done'
-                    : '$morningParts/${LurgiDailyRound.totalSections}',
-                badgeOk: morningDone,
-                builder: () =>
-                    const LurgiSectionFormScreen(section: LurgiSection.all),
-              ),
-              _Action(
                 Icons.speed_outlined,
                 'Daily Readings',
+                // Todo stays visible until all ink + toloul meters captured.
                 badge: readings == null
                     ? null
-                    : (readings.complete ? 'Done' : 'Todo'),
+                    : (readings.complete ? 'Done ✓' : 'Todo'),
                 badgeOk: readings?.complete ?? false,
                 builder: () => const InkDailyReadingsScreen(),
               ),
             ]),
             const SizedBox(height: 20),
-            _sectionLabel(context, 'Daily logs'),
+            _sectionLabel(context, 'Daily logs — walk order'),
+            const SizedBox(height: 4),
+            Text(
+              'Save each area as you walk. Completed sections turn green.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: appColors.textMuted,
+                  ),
+            ),
             const SizedBox(height: 8),
             _ActionGrid(actions: [
               _Action(
-                Icons.propane_tank_outlined,
-                'Toloul Tanks',
-                badge: (round?.tanksComplete ?? false) ? 'Done' : null,
-                badgeOk: round?.tanksComplete ?? false,
-                builder: () =>
-                    const LurgiSectionFormScreen(section: LurgiSection.tanks),
-              ),
-              _Action(
                 Icons.local_fire_department_outlined,
                 'Gas / Boiler / Softener',
-                badge: (round?.utilitiesComplete ?? false) ? 'Done' : null,
+                badge: (round?.utilitiesComplete ?? false) ? 'Done ✓' : 'Todo',
                 badgeOk: round?.utilitiesComplete ?? false,
                 builder: () => const LurgiSectionFormScreen(
                     section: LurgiSection.utilities),
@@ -122,7 +137,7 @@ class LurgiHomeScreen extends ConsumerWidget {
               _Action(
                 Icons.water_drop_outlined,
                 'Fresh & Effluent',
-                badge: (round?.waterComplete ?? false) ? 'Done' : null,
+                badge: (round?.waterComplete ?? false) ? 'Done ✓' : 'Todo',
                 badgeOk: round?.waterComplete ?? false,
                 builder: () =>
                     const LurgiSectionFormScreen(section: LurgiSection.water),
@@ -130,7 +145,7 @@ class LurgiHomeScreen extends ConsumerWidget {
               _Action(
                 Icons.ac_unit_outlined,
                 'Air Condenser',
-                badge: (round?.airComplete ?? false) ? 'Done' : null,
+                badge: (round?.airComplete ?? false) ? 'Done ✓' : 'Todo',
                 badgeOk: round?.airComplete ?? false,
                 builder: () =>
                     const LurgiSectionFormScreen(section: LurgiSection.air),
@@ -138,10 +153,18 @@ class LurgiHomeScreen extends ConsumerWidget {
               _Action(
                 Icons.thermostat_outlined,
                 'Geyser',
-                badge: (round?.geyserComplete ?? false) ? 'Done' : null,
+                badge: (round?.geyserComplete ?? false) ? 'Done ✓' : 'Todo',
                 badgeOk: round?.geyserComplete ?? false,
                 builder: () =>
                     const LurgiSectionFormScreen(section: LurgiSection.geyser),
+              ),
+              _Action(
+                Icons.propane_tank_outlined,
+                'Toloul Tanks',
+                badge: (round?.tanksComplete ?? false) ? 'Done ✓' : 'Todo',
+                badgeOk: round?.tanksComplete ?? false,
+                builder: () =>
+                    const LurgiSectionFormScreen(section: LurgiSection.tanks),
               ),
             ]),
             const SizedBox(height: 20),
@@ -151,24 +174,31 @@ class LurgiHomeScreen extends ConsumerWidget {
               _Action(
                 Icons.science_outlined,
                 'Effluent Chemicals',
-                badge: chemTotals.entryCount == 0
-                    ? null
-                    : '${chemTotals.entryCount} · ${qty.format(chemTotals.totalKg)} kg',
-                badgeOk: chemTotals.entryCount > 0,
+                badge: (round?.chemicalsNoneToday ?? false)
+                    ? 'None ✓'
+                    : chemTotals.entryCount == 0
+                        ? null
+                        : '${chemTotals.entryCount} · ${qty.format(chemTotals.totalKg)} kg',
+                // Green when intentionally none or at least one dose logged.
+                badgeOk: (round?.chemicalsNoneToday ?? false) ||
+                    chemTotals.entryCount > 0,
                 builder: () => const LurgiChemicalsScreen(),
               ),
               _Action(
                 Icons.recycling_outlined,
                 'Recycling Machine',
-                badge: recycleSummary.runCount == 0
-                    ? null
-                    : '${recycleSummary.runCount} · ${qty.format(recycleSummary.totalLitresRecycled)} L',
-                badgeOk: recycleSummary.runCount > 0,
+                badge: (round?.recyclingNoneToday ?? false)
+                    ? 'None ✓'
+                    : recycleSummary.runCount == 0
+                        ? null
+                        : '${recycleSummary.runCount} · ${qty.format(recycleSummary.totalLitresRecycled)} L',
+                badgeOk: (round?.recyclingNoneToday ?? false) ||
+                    recycleSummary.runCount > 0,
                 builder: () => const LurgiRecyclingScreen(),
               ),
             ]),
             const SizedBox(height: 20),
-            _sectionLabel(context, 'Ink Factory'),
+            _sectionLabel(context, 'Ink Factory & history'),
             const SizedBox(height: 8),
             _ActionGrid(actions: [
               _Action(
@@ -215,8 +245,13 @@ class _StatusCard extends StatelessWidget {
     this.readingsLabel,
     this.chemicalEntries = 0,
     this.chemicalTotalKg = 0,
+    this.chemicalVoidPending = 0,
+    this.chemicalsNoneToday = false,
     this.recyclingRuns = 0,
     this.recyclingLitres = 0,
+    this.recyclingVoidPending = 0,
+    this.recyclingNoneToday = false,
+    this.multiDaySpan = false,
   });
 
   final bool morningDone;
@@ -226,15 +261,19 @@ class _StatusCard extends StatelessWidget {
   final String? readingsLabel;
   final int chemicalEntries;
   final double chemicalTotalKg;
+  final int chemicalVoidPending;
+  final bool chemicalsNoneToday;
   final int recyclingRuns;
   final double recyclingLitres;
+  final int recyclingVoidPending;
+  final bool recyclingNoneToday;
+  final bool multiDaySpan;
 
   @override
   Widget build(BuildContext context) {
     final appColors = Theme.of(context).appColors;
     final scheme = Theme.of(context).colorScheme;
     final allOk = morningDone && readingsDone;
-    // Soft themed fills — never light text on light fill.
     final surface =
         allOk ? appColors.wasteGreenSurface : appColors.lurgiSurface;
     final border =
@@ -268,6 +307,14 @@ class _StatusCard extends StatelessWidget {
               '${morningDone ? ' ✓' : ''}',
               style: TextStyle(color: bodyColor),
             ),
+            if (multiDaySpan)
+              Text(
+                'Multi-day meter gap noted on today’s round',
+                style: TextStyle(
+                  color: scheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             const SizedBox(height: 2),
             Text(
               readingsDone
@@ -277,15 +324,21 @@ class _StatusCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              chemicalEntries == 0
-                  ? 'Chemicals: no entries yet today'
-                  : 'Chemicals: $chemicalEntries entr${chemicalEntries == 1 ? 'y' : 'ies'} · ${qty.format(chemicalTotalKg)} kg',
+              chemicalsNoneToday
+                  ? 'Chemicals: none today ✓'
+                  : chemicalEntries == 0
+                      ? 'Chemicals: no entries yet today'
+                      : 'Chemicals: $chemicalEntries entr${chemicalEntries == 1 ? 'y' : 'ies'} · ${qty.format(chemicalTotalKg)} kg'
+                          '${chemicalVoidPending > 0 ? ' · $chemicalVoidPending void pending' : ''}',
               style: TextStyle(color: bodyColor),
             ),
             Text(
-              recyclingRuns == 0
-                  ? 'Recycling: no runs yet today'
-                  : 'Recycling: $recyclingRuns run${recyclingRuns == 1 ? '' : 's'} · ${qty.format(recyclingLitres)} L',
+              recyclingNoneToday
+                  ? 'Recycling: none today ✓'
+                  : recyclingRuns == 0
+                      ? 'Recycling: no runs yet today'
+                      : 'Recycling: $recyclingRuns run${recyclingRuns == 1 ? '' : 's'} · ${qty.format(recyclingLitres)} L'
+                          '${recyclingVoidPending > 0 ? ' · $recyclingVoidPending void pending' : ''}',
               style: TextStyle(color: bodyColor),
             ),
           ],
@@ -307,6 +360,7 @@ class _Action {
   final String label;
   final Widget Function()? builder;
   final String? badge;
+  /// When true, tile uses green completed styling (all items captured).
   final bool badgeOk;
 }
 
@@ -338,12 +392,18 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
-    // Module accent on surfaceContainerHighest (not brand orange primary).
-    final iconColor = appColors.lurgiAccent;
+    final done = action.badgeOk;
+    // Completed tiles: green fill + border so capturers scan the hub at a glance.
+    final bg = done ? appColors.wasteGreenSurface : scheme.surfaceContainerHighest;
+    final borderColor = done
+        ? appColors.wasteGreenDark.withValues(alpha: 0.65)
+        : Colors.transparent;
+    final iconColor = done ? appColors.wasteGreenDark : appColors.lurgiAccent;
+    final labelColor = done ? appColors.wasteGreenDark : scheme.onSurface;
     final badgeColor =
-        action.badgeOk ? appColors.statusCompleted : appColors.lurgiAccent;
+        done ? appColors.statusCompleted : appColors.lurgiAccent;
     return Material(
-      color: scheme.surfaceContainerHighest,
+      color: bg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -355,17 +415,28 @@ class _ActionCard extends StatelessWidget {
             );
           }
         },
-        child: Padding(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: borderColor,
+              width: done ? 1.5 : 0,
+            ),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: Column(
             children: [
-              Icon(action.icon, color: iconColor),
+              Icon(
+                done ? Icons.check_circle_outline : action.icon,
+                color: iconColor,
+              ),
               const SizedBox(height: 6),
               Text(
                 action.label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurface,
+                      color: labelColor,
+                      fontWeight: done ? FontWeight.w600 : null,
                     ),
               ),
               if (action.badge != null) ...[
@@ -374,7 +445,7 @@ class _ActionCard extends StatelessWidget {
                   action.badge!,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: badgeColor,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
               ],

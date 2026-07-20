@@ -98,7 +98,13 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     final warnings = <String>[];
     final qty = NumberFormat('#,##0.##');
 
+    final inkCaptured = ref.read(inkTodayMeterItemCodesProvider).valueOrNull ??
+        {};
+    final toloulCaptured =
+        ref.read(inkTodayToloulPointIdsProvider).valueOrNull ?? {};
+
     for (final item in inkItems) {
+      if (inkCaptured.contains(item.itemCode)) continue;
       final raw = _inkCtrl(item.itemCode).text.trim();
       if (raw.isEmpty) continue;
       final entered = double.tryParse(raw);
@@ -165,6 +171,7 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
 
     for (final p in toloulPoints) {
       final id = p.id!;
+      if (toloulCaptured.contains(id)) continue;
       final raw = _toloulCtrl(id).text.trim();
       if (raw.isEmpty) continue;
       final entered = double.tryParse(raw);
@@ -281,16 +288,8 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
     } on StateError catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      final isDuplicateInk = e.message.contains('calendar day');
-      final isDuplicateToloul = e.message.contains('already captured today');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(isDuplicateInk
-            ? 'Ink meter readings already submitted for this day. '
-                'Void the existing session first (Ink hub → Meter Sessions), '
-                'or submit only the remaining toloul meters.'
-            : isDuplicateToloul
-                ? e.message
-                : e.message),
+        content: Text(e.message),
         backgroundColor: Theme.of(context).colorScheme.error,
         duration: const Duration(seconds: 6),
       ));
@@ -410,12 +409,14 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     inkDoneToday && toloulRemaining > 0
-                        ? 'Ink readings are done for today. You can still record '
-                            'the remaining $toloulRemaining toloul meter(s) below.'
-                        : inkDoneToday
-                            ? 'Ink readings are done for today.'
-                            : 'Some toloul meters are already recorded today — '
-                                'only enter the remaining ones below.',
+                        ? 'Ink done for today. You can still add the remaining '
+                            '$toloulRemaining toloul meter(s) below (additive session).'
+                        : inkDoneToday && toloulRemaining == 0
+                            ? 'All ink and toloul readings are done for today. '
+                                'To correct a value, void the session on Pulse first.'
+                            : 'Some meters already recorded today — enter only '
+                                'the missing ones (additive session). '
+                                'Already-done meters are locked.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimaryContainer,
                       fontWeight: FontWeight.w500,
@@ -504,7 +505,13 @@ class _State extends ConsumerState<InkDailyReadingsScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.check),
-                  label: const Text('Record readings'),
+                  label: Text(
+                    _submitting
+                        ? 'Saving…'
+                        : (inkDoneToday || toloulCapturedToday.isNotEmpty)
+                            ? 'Add missing readings'
+                            : 'Record readings',
+                  ),
                   style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52)),
                 ),

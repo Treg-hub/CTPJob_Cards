@@ -1627,10 +1627,52 @@ class InkService {
     }
   }
 
+  /// Throws when any ink stock [itemCodes] already have a non-voided
+  /// `consumption_meter` row on [date]'s calendar day.
+  ///
+  /// Additive sessions: operators may submit missing meters later the same day;
+  /// corrections still require Pulse void first.
+  Future<void> assertInkMeterItemsAvailableForCalendarDay({
+    required DateTime date,
+    required List<String> itemCodes,
+  }) async {
+    if (itemCodes.isEmpty) return;
+    final captured = await fetchInkMeterItemCodesForCalendarDay(date);
+    final dupes = itemCodes.where(captured.contains).toList();
+    if (dupes.isNotEmpty) {
+      throw StateError(
+        'Ink meter reading(s) already captured today for: ${dupes.join(', ')}. '
+        'Void the existing session first if you need to replace them.',
+      );
+    }
+  }
+
+  /// Non-voided ink meter item codes already captured on [date]'s calendar day.
+  Future<Set<String>> fetchInkMeterItemCodesForCalendarDay(DateTime date) async {
+    final dayStart = _calendarDayStart(date);
+    final dayEnd = _calendarDayEnd(date);
+    final snap = await _db
+        .collection(Collections.inkTransactions)
+        .where('type', isEqualTo: InkTxnType.consumptionMeter.value)
+        .where('effective_at',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('effective_at', isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
+        .get();
+    final codes = <String>{};
+    for (final d in snap.docs) {
+      if (d.data()['voided'] as bool? ?? false) continue;
+      final code = d.data()['stock_item_code'] as String?;
+      if (code != null && code.isNotEmpty) codes.add(code);
+    }
+    return codes;
+  }
+
   /// Atomic daily submit: ink `consumption_meter` rows + toloul meter-point
-  /// readings in one batch, sharing [sessionId]. Blocks duplicate ink sessions
-  /// per calendar day; toloul-only follow-up submits are allowed for points not
-  /// yet captured that day.
+  /// readings in one batch, sharing [sessionId].
+  ///
+  /// **Additive sessions:** same calendar day may have multiple submits for
+  /// meters/points not yet captured. Re-submitting an already-recorded
+  /// ink item or toloul point is blocked (void first to correct).
   Future<void> recordDailyMeterSession({
     required String sessionId,
     required DateTime readingDate,
@@ -1649,7 +1691,10 @@ class InkService {
   }) async {
     _guardWrite();
     if (inkTransactions.isNotEmpty) {
-      await assertNoActiveMeterSessionForCalendarDay(readingDate);
+      await assertInkMeterItemsAvailableForCalendarDay(
+        date: readingDate,
+        itemCodes: inkTransactions.map((t) => t.stockItemCode).toList(),
+      );
     }
     if (toloulLines.isNotEmpty) {
       await assertToloulPointsAvailableForCalendarDay(

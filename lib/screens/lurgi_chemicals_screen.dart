@@ -11,10 +11,12 @@ import '../providers/lurgi_drafts.dart';
 import '../providers/lurgi_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/ink_pickers.dart';
+import '../utils/lurgi_draft_store.dart';
 import '../utils/persona_audit.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
+import '../widgets/lurgi_operator_note.dart';
 import '../widgets/lurgi_period_banner.dart';
 
 /// Multi-entry effluent chemical usage. Day total = sum of all entries.
@@ -39,7 +41,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
   bool _submitting = false;
   bool _loadedDraft = false;
   bool _draftBannerShown = false;
-  /// Admin test override for date_key + recorded_at (ink pattern).
+  /// Admin test override for date_key + recorded_at.
   DateTime _effectiveAt = DateTime.now();
 
   @override
@@ -57,7 +59,25 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
         _effectiveAt =
             DateTime.fromMillisecondsSinceEpoch(draft.effectiveAtMs!);
       }
+    } else {
+      _hydrateDisk();
     }
+  }
+
+  Future<void> _hydrateDisk() async {
+    final d = await LurgiDraftStore.loadChemicals();
+    if (!mounted || d == null || d.isEmpty) return;
+    _caustic.text = d.caustic;
+    _hcl.text = d.hcl;
+    _salt.text = d.salt;
+    _naccolaint.text = d.naccolaint;
+    _comments.text = d.comments;
+    if (d.effectiveAtMs != null) {
+      _effectiveAt = DateTime.fromMillisecondsSinceEpoch(d.effectiveAtMs!);
+    }
+    _loadedDraft = true;
+    ref.read(lurgiChemicalsDraftProvider.notifier).state = d;
+    setState(() {});
   }
 
   void _persistDraft() {
@@ -71,10 +91,12 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
     );
     ref.read(lurgiChemicalsDraftProvider.notifier).state =
         draft.isEmpty ? null : draft;
+    LurgiDraftStore.saveChemicals(draft.isEmpty ? null : draft);
   }
 
   void _clearDraft() {
     ref.read(lurgiChemicalsDraftProvider.notifier).state = null;
+    LurgiDraftStore.saveChemicals(null);
     _loadedDraft = false;
   }
 
@@ -96,7 +118,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
   }
 
   double _parseOrZero(String raw) {
-    final t = raw.trim();
+    final t = raw.trim().replaceAll(',', '.');
     if (t.isEmpty) return 0;
     return double.tryParse(t) ?? double.nan;
   }
@@ -163,6 +185,106 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
     }
   }
 
+  Future<void> _requestVoid(LurgiChemicalUsage e) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request void'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Totals still include this entry until a manager voids it on Pulse.',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Reason (required)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Request')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
+    try {
+      await ref.read(lurgiServiceProvider).requestChemicalVoid(
+            docId: e.id!,
+            reason: reasonCtrl.text,
+            actorClockNo: emp?.clockNo ?? '',
+            actorName: emp?.name ?? '',
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Void requested — wait for desk.')),
+      );
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$err')));
+    } finally {
+      reasonCtrl.dispose();
+    }
+  }
+
+  Future<void> _setNoneToday(bool value) async {
+    final emp = writeAttributionEmployee ??
+        ref.read(currentEmployeeProvider).valueOrNull;
+    final adminStamp =
+        role_utils.isAdmin(emp) || role_utils.isAdmin(currentEmployee);
+    final dayKey =
+        adminStamp ? lurgiDateKey(_effectiveAt) : lurgiDateKey();
+    final entries =
+        ref.read(lurgiChemicalUsageForDayProvider(dayKey)).valueOrNull ?? [];
+    if (value && entries.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Clear or request-void today’s entries before marking none.',
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      await ref.read(lurgiServiceProvider).setNoneTodayFlags(
+            dateKey: dayKey,
+            actorClockNo: emp?.clockNo ?? '',
+            actorName: emp?.name ?? '',
+            chemicalsNoneToday: value,
+            chemicalsNoneReason: value ? 'No dosing today' : null,
+            effectiveAt: adminStamp ? _effectiveAt : null,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value
+              ? 'Marked no chemicals today.'
+              : 'Cleared “none today”.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOnSite = realEmployee?.isOnSite ?? true;
@@ -190,6 +312,8 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
     final periodTotals = ref.watch(lurgiPeriodChemicalTotalsProvider);
     final settingsAsync = ref.watch(inkSettingsProvider);
     final periodFrom = settingsAsync.valueOrNull?.latestActiveCountDate;
+    final round = ref.watch(lurgiRoundForDateProvider(dayKey)).valueOrNull;
+    final noneToday = round?.chemicalsNoneToday ?? false;
     final scheme = Theme.of(context).colorScheme;
     final appColors = Theme.of(context).appColors;
     final df = DateFormat('EEE d MMM HH:mm');
@@ -214,26 +338,22 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
       body: ListView(
         padding: ScreenInsets.symmetricScroll(context),
         children: [
+          const LurgiOperatorNote(
+            noteId: 'chemicals_multi_entry',
+            message:
+                'Add one entry per dose. Day total is the sum. Wrong row → '
+                'Request void (desk voids on Pulse). Use “No dosing today” if idle.',
+          ),
           LurgiPeriodBanner(
             periodFrom: periodFrom,
             settingsLoading: settingsAsync.isLoading,
           ),
           const SizedBox(height: 10),
-          if (_loadedDraft)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Unsaved draft — leave and return any time; cleared after save.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.primary,
-                    ),
-              ),
-            ),
           if (canEditDate)
             OutlinedButton.icon(
               onPressed: _pickDate,
               icon: const Icon(Icons.event),
-              label: Text('Entry date: ${df.format(_effectiveAt)}'),
+              label: Text('Entry date (admin): ${df.format(_effectiveAt)}'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 alignment: Alignment.centerLeft,
@@ -241,21 +361,21 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
             )
           else
             Text(
-              'Date: $dayKey · add as you dose — day total is the sum of all entries.',
+              'Date: $dayKey · saved at current time · day total = sum of entries.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
             ),
-          if (canEditDate) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Admin test override · date_key $dayKey · add as you dose.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('No dosing today'),
+            subtitle: const Text('Marks intentional zero for the desk'),
+            value: noneToday,
+            onChanged: dayEntries.isNotEmpty && !noneToday
+                ? null
+                : (v) => _setNoneToday(v),
+          ),
           Card(
             margin: EdgeInsets.zero,
             color: appColors.lurgiSurface,
@@ -269,7 +389,10 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$dayLabel · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(totals.totalKg)} kg',
+                    noneToday
+                        ? '$dayLabel · none today ✓'
+                        : '$dayLabel · ${totals.entryCount} entr${totals.entryCount == 1 ? 'y' : 'ies'} · ${_qty.format(totals.totalKg)} kg'
+                            '${totals.voidRequestedCount > 0 ? ' · ${totals.voidRequestedCount} void pending' : ''}',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: appColors.lurgiDark,
@@ -286,52 +409,52 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'ADD USAGE',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _kgField(_caustic, 'Caustic soda'),
-                _kgField(_hcl, 'Hydrochloric acid'),
-                _kgField(_salt, 'Sodium chloride'),
-                _kgField(_naccolaint, 'Naccolaint'),
-                TextFormField(
-                  controller: _comments,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Comments (optional)',
-                    border: OutlineInputBorder(),
+          if (!noneToday) ...[
+            const SizedBox(height: 16),
+            Text(
+              'ADD USAGE',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurfaceVariant,
                   ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: _submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add),
-                  label: Text(_submitting ? 'Saving…' : 'Add entry'),
-                ),
-              ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  _kgField(_caustic, 'Caustic soda'),
+                  _kgField(_hcl, 'Hydrochloric acid'),
+                  _kgField(_salt, 'Sodium chloride'),
+                  _kgField(_naccolaint, 'Naccolaint'),
+                  TextFormField(
+                    controller: _comments,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Comments (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    label: Text(_submitting ? 'Saving…' : 'Add entry'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           Text(
-            canEditDate && dayKey != lurgiDateKey()
-                ? 'ENTRIES · $dayKey'
-                : "TODAY'S ENTRIES",
+            "TODAY'S ENTRIES",
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   letterSpacing: 0.6,
                   fontWeight: FontWeight.w700,
@@ -340,25 +463,22 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
           ),
           const SizedBox(height: 8),
           entriesAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Could not load: $e'),
             data: (entries) {
               if (entries.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text(
-                    canEditDate && dayKey != lurgiDateKey()
-                        ? 'No chemical entries for $dayKey.'
+                    noneToday
+                        ? 'Marked none today — no doses logged.'
                         : 'No chemical entries yet today.',
                   ),
                 );
               }
               return Column(
                 children: [
-                  for (final e in entries) _entryCard(e, scheme, showDate: false),
+                  for (final e in entries) _entryCard(e, scheme),
                 ],
               );
             },
@@ -376,30 +496,22 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
           ),
           const SizedBox(height: 8),
           periodAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Could not load period: $e'),
             data: (entries) {
               final earlier =
                   entries.where((e) => e.dateKey != dayKey).toList();
               if (periodFrom == null && !settingsAsync.isLoading) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'No active count period — history hidden.',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
+                return Text(
+                  'No active count period — history hidden.',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 );
               }
               if (earlier.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'No earlier chemical entries in this open period.',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
+                return Text(
+                  'No earlier chemical entries in this open period '
+                  '(first page). See Period history for full list.',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 );
               }
               return Column(
@@ -418,31 +530,43 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
   Widget _entryCard(
     LurgiChemicalUsage e,
     ColorScheme scheme, {
-    required bool showDate,
+    bool showDate = false,
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         title: Text(
-          '${_qty.format(e.totalKg)} kg total',
+          '${_qty.format(e.totalKg)} kg total'
+          '${e.voidRequested ? ' · void requested' : ''}',
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
+            color: e.voidRequested ? scheme.error : scheme.onSurface,
           ),
         ),
         subtitle: Text(
           [
-            if (showDate) '${_day.format(e.recordedAt)} · ${_time.format(e.recordedAt)}',
-            if (!showDate) _time.format(e.recordedAt),
+            if (showDate)
+              '${_day.format(e.recordedAt)} · ${_time.format(e.recordedAt)}'
+            else
+              _time.format(e.recordedAt),
             if (e.actorName.isNotEmpty) e.actorName,
             'C ${_qty.format(e.causticSodaKg)} · '
                 'HCl ${_qty.format(e.hydrochloricAcidKg)} · '
                 'NaCl ${_qty.format(e.sodiumChlorideKg)} · '
                 'N ${_qty.format(e.naccolaintKg)}',
             if (e.comments != null) e.comments!,
+            if (e.voidRequested && e.voidRequestReason != null)
+              'Void reason: ${e.voidRequestReason}',
           ].join('\n'),
         ),
         isThreeLine: true,
+        trailing: e.id == null || e.voidRequested
+            ? null
+            : IconButton(
+                tooltip: 'Request void',
+                icon: const Icon(Icons.flag_outlined),
+                onPressed: () => _requestVoid(e),
+              ),
       ),
     );
   }
@@ -459,7 +583,7 @@ class _LurgiChemicalsScreenState extends ConsumerState<LurgiChemicalsScreen> {
           border: const OutlineInputBorder(),
         ),
         validator: (v) {
-          final t = (v ?? '').trim();
+          final t = (v ?? '').trim().replaceAll(',', '.');
           if (t.isEmpty) return null;
           final d = double.tryParse(t);
           if (d == null) return 'Invalid number';

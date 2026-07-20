@@ -17,6 +17,11 @@ class LurgiRecyclingRun {
     required this.actorName,
     this.recordedAt,
     this.voided = false,
+    this.voidRequested = false,
+    this.voidRequestReason,
+    this.voidRequestedAt,
+    this.voidRequestedByClockNo,
+    this.voidRequestedByName,
   });
 
   final String? id;
@@ -32,6 +37,11 @@ class LurgiRecyclingRun {
   final String actorName;
   final DateTime? recordedAt;
   final bool voided;
+  final bool voidRequested;
+  final String? voidRequestReason;
+  final DateTime? voidRequestedAt;
+  final String? voidRequestedByClockNo;
+  final String? voidRequestedByName;
 
   Duration get duration {
     final d = finishAt.difference(startAt);
@@ -54,6 +64,11 @@ class LurgiRecyclingRun {
       actorName: d['actor_name'] as String? ?? '',
       recordedAt: _ts(d['recorded_at']),
       voided: d['voided'] as bool? ?? false,
+      voidRequested: d['void_requested'] as bool? ?? false,
+      voidRequestReason: d['void_request_reason'] as String?,
+      voidRequestedAt: _ts(d['void_requested_at']),
+      voidRequestedByClockNo: d['void_requested_by_clock_no'] as String?,
+      voidRequestedByName: d['void_requested_by_name'] as String?,
     );
   }
 
@@ -83,19 +98,24 @@ class LurgiRecyclingDaySummary {
   const LurgiRecyclingDaySummary({
     this.runCount = 0,
     this.totalLitresRecycled = 0,
+    this.voidRequestedCount = 0,
   });
 
   final int runCount;
   final double totalLitresRecycled;
+  final int voidRequestedCount;
 
   factory LurgiRecyclingDaySummary.fromRuns(List<LurgiRecyclingRun> runs) {
     var litres = 0.0;
+    var pending = 0;
     for (final r in runs) {
       litres += r.litresRecycled;
+      if (r.voidRequested) pending++;
     }
     return LurgiRecyclingDaySummary(
       runCount: runs.length,
       totalLitresRecycled: litres,
+      voidRequestedCount: pending,
     );
   }
 }
