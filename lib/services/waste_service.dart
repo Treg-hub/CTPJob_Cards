@@ -25,6 +25,7 @@ import '../utils/waste_collection_marker.dart';
 import '../utils/waste_queue_batch.dart';
 import '../utils/waste_stock_snapshot.dart';
 import '../utils/waste_type_routing.dart';
+import '../utils/waste_stock_mapping.dart';
 import '../models/waste_stock_source.dart';
 import 'copper_service.dart';
 import 'resilient_stream.dart';
@@ -1601,6 +1602,11 @@ class WasteService {
 
     await _flushWasteQueuePlan(plan);
 
+    // Create-from-scratch stock path — same copper deduct as Begin Collection.
+    if (stockLoadedIds.isNotEmpty) {
+      await _deductCopperSellForLoadedStock(stockLoadedIds);
+    }
+
     _triggerBackgroundWasteSync();
 
     return {
@@ -1960,7 +1966,8 @@ class WasteService {
           await _firestore.collection(Collections.wasteLoads).doc(loadId).get();
       if (!loadSnap.exists) return;
       final load = WasteLoad.fromFirestore(loadSnap);
-      if (load.mainWasteType != WasteStockTypes.copperWaste) return;
+      // Loads may be labeled Copper Waste, Copper Nuggets, Copper Rods, etc.
+      if (!isCopperStockFamilyName(load.mainWasteType)) return;
 
       final itemsSnap = await _firestore
           .collection(Collections.wasteItems)
@@ -1971,6 +1978,8 @@ class WasteService {
         final data = doc.data();
         if (data['is_deleted'] == true) continue;
         final subtype = (data['subtype'] as String?) ?? '';
+        // Commercial sale audit only for linked pool subtypes (Rods/Nuggets).
+        // Manual capture lines (e.g. scale-error correction) stay waste-only.
         if (subtype != WasteStockTypes.copperRods &&
             subtype != WasteStockTypes.copperNuggets) {
           continue;
@@ -2442,6 +2451,17 @@ class WasteService {
     return loadedIds.length;
   }
 
+  /// Copper To Sell mirrors on-site pools — always deduct after stock is marked
+  /// loaded (online write or Hive queue). Non-fatal: waste path must not fail.
+  Future<void> _deductCopperSellForLoadedStock(List<String> stockIds) async {
+    if (stockIds.isEmpty) return;
+    try {
+      await CopperService().deductSellForLoadedStockIds(stockIds);
+    } catch (e) {
+      debugPrint('_deductCopperSellForLoadedStock: $e');
+    }
+  }
+
   Future<void> markStockLoaded(List<String> stockIds, String loadId) async {
     _guardWrite();
     if (stockIds.isEmpty) return;
@@ -2462,7 +2482,7 @@ class WasteService {
         }
         await batch.commit().timeout(_firestoreWriteTimeout);
         // Mirror model: copper To Sell tracks on-site pools — deduct when loaded.
-        await CopperService().deductSellForLoadedStockIds(stockIds);
+        await _deductCopperSellForLoadedStock(stockIds);
         return;
       } catch (_) {
         // Fall through to queue below.
@@ -2478,16 +2498,16 @@ class WasteService {
         documentId: id,
       );
     }
-    // Offline queue: deduct best-effort when back online (batch path preferred).
-    try {
-      await CopperService().deductSellForLoadedStockIds(stockIds);
-    } catch (_) {}
+    // Best-effort while online; offline no-ops inside CopperService.
+    await _deductCopperSellForLoadedStock(stockIds);
   }
 
   /// Force-queues stock-loaded updates without a connectivity check.
   /// Use when the parent load submission was itself queued offline — both
   /// operations must replay together so stock is never marked loaded against
   /// a load that isn't in Firestore yet.
+  ///
+  /// Also deducts copper sell mirrors when online (Begin Collection path).
   Future<void> queueMarkStockLoaded(List<String> stockIds, String loadId) async {
     _guardWrite();
     if (stockIds.isEmpty) return;
@@ -2505,6 +2525,9 @@ class WasteService {
         documentId: id,
       );
     }
+    // Critical: Begin Collection always uses this path — without deduct,
+    // copper To Sell stays full and migrate can re-stage ghost stock (W-0022).
+    await _deductCopperSellForLoadedStock(stockIds);
   }
 
   /// Splits [takeQty] units off an IBC pool/split stock doc (`poolStockId`)

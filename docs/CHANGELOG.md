@@ -6,6 +6,19 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-19 — 2.3.0+182 — Lurgi drafts, ink notes, site boundary
+
+### What you will notice
+
+- Toloul tank **In / Out** is more reliable; it remembers today's or last choice and highlights clearly.
+- Meter reset only appears when a reading is entered and is lower than the previous one.
+- Lurgi forms keep what you typed if you leave a section and come back (until you save).
+- Admins can set **date and time** on Lurgi morning, chemicals, and recycling entries when needed.
+- Ink capture can **attach a delivery note** photo again when receiving stock.
+- Site / on-site distance wording matches the live boundary (~400 m).
+
+---
+
 ## 2026-07-18 — 2.3.0+181 — Lurgi capture polish
 
 ### What you will notice
