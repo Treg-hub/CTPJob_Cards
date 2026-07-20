@@ -6,13 +6,19 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
-## Unreleased — Security receipt OCR (pending APK ship)
+## 2026-07-20 — 2.3.0+183 — Lurgi daily walk + security receipt scan
 
 ### What you will notice
 
+- **Lurgi hub:** complete each **Daily log** area (Gas → Water → Air → Geyser → Tanks) one at a time; finished tiles turn **green** with Done.
+- **Daily Readings** can finish missing meters later the same day without voiding the whole day; finished tile turns green.
+- Wrong chemical or recycling entry: **Request void** and give a short reason (manager clears it on the board).
+- Mark **no dosing / no recycling today** when nothing is needed so the day is not left blank by mistake.
+- Multi-day meter gaps show a clear warning and ask for a short note.
+- **Operator guide** tile on the Lurgi hub explains the daily walk.
+- Tips on Lurgi screens can be dismissed with **Don't show again**.
 - **Add company car cost** (managers): **Scan receipt** photographs a till slip, reads amount/date/merchant on the phone, and fills the form for you to check.
-- The receipt **photo is saved with the cost** when you tap Save (same as before for attached photos).
-- You can still type everything manually or attach a photo without scanning.
+- Receipt **photo is saved with the cost** when you tap Save; you can still type everything manually.
 
 ---
 
