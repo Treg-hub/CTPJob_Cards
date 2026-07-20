@@ -643,6 +643,11 @@ class CopperService {
   }
 
   /// One-time / ship-time: ensure on-site waste pools mirror inventory sell.
+  ///
+  /// Heals failed load deducts first: if copper stock is already `loaded` with
+  /// weight still on the doc, inventory is reduced before any re-stage. That
+  /// prevents ghost on-site pools (seen on W-0022 when collection skipped
+  /// deduct and Copper open re-ran migrate).
   Future<void> migrateSellBucketsToWasteStockPools({
     required String userId,
   }) async {
@@ -650,6 +655,13 @@ class CopperService {
     if (!await ConnectivityService().isOnline()) {
       throw Exception('Migration requires online connection');
     }
+
+    // Heal undeducted loaded copper stock before mirroring sell → open pools.
+    final undeductedIds = await _findLoadedUndeductedCopperStockIds();
+    if (undeductedIds.isNotEmpty) {
+      await deductSellForLoadedStockIds(undeductedIds);
+    }
+
     final now = Timestamp.now();
     await _firestore.runTransaction((tx) async {
       final invDoc = await tx.get(_firestore.doc(inventoryPath));
@@ -661,6 +673,8 @@ class CopperService {
       final nuggets = roundKg(inv.sellNuggetsKg);
       if (rods <= 0 && nuggets <= 0) return;
 
+      // Only touch open pools. If pools are closed/missing, create only when
+      // inventory still claims on-site metal (true residual after heal).
       if (rods > 0) {
         _setCopperPoolAbsolute(
           tx: tx,
@@ -704,6 +718,32 @@ class CopperService {
             userId: userId,
           ).toFirestore());
     });
+  }
+
+  /// Copper sell stock already on a load but still holding weight (deduct missed).
+  Future<List<String>> _findLoadedUndeductedCopperStockIds() async {
+    try {
+      final snap = await _firestore
+          .collection(Collections.wasteStock)
+          .where('source', whereIn: ['copper_sell', 'copper_threshold'])
+          .limit(50)
+          .get();
+      final ids = <String>[];
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['is_deleted'] == true) continue;
+        if ((data['status'] as String?) != WasteStockStatus.loaded.value) {
+          continue;
+        }
+        final weight =
+            (data['estimated_weight_kg'] as num?)?.toDouble() ?? 0;
+        if (weight > kgDust) ids.add(doc.id);
+      }
+      return ids;
+    } catch (e) {
+      debugPrint('_findLoadedUndeductedCopperStockIds: $e');
+      return const [];
+    }
   }
 
   // ── Sell pool helpers (pointer + running on_site waste_stock) ────────────

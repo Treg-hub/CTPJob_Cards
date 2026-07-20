@@ -812,6 +812,126 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
             ),
           ),
 
+          // ── Truck photos + driver signature (collection evidence) ──
+          if (_currentLoad.loadPhotos.isNotEmpty ||
+              (_currentLoad.driverSignatureUrl != null &&
+                  _currentLoad.driverSignatureUrl!.isNotEmpty)) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _currentLoad.loadPhotos.isNotEmpty
+                          ? 'Truck photos (${_currentLoad.loadPhotos.length})'
+                          : 'Collection evidence',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    if (_currentLoad.loadPhotos.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 88,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _currentLoad.loadPhotos.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (_, i) {
+                            final url = _currentLoad.loadPhotos[i];
+                            final isRemote = url.startsWith('http://') ||
+                                url.startsWith('https://');
+                            return GestureDetector(
+                              onTap: isRemote
+                                  ? () => _showNetworkPhoto(context, url)
+                                  : null,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: isRemote
+                                    ? CachedNetworkImage(
+                                        imageUrl: url,
+                                        width: 88,
+                                        height: 88,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => Container(
+                                          width: 88,
+                                          height: 88,
+                                          color: Colors.grey.shade200,
+                                          child: const Center(
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2),
+                                            ),
+                                          ),
+                                        ),
+                                        errorWidget: (_, __, ___) => Container(
+                                          width: 88,
+                                          height: 88,
+                                          color: Colors.grey.shade200,
+                                          child: const Icon(Icons.broken_image,
+                                              size: 22),
+                                        ),
+                                      )
+                                    : Container(
+                                        width: 88,
+                                        height: 88,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.image_outlined),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    if (_currentLoad.driverSignatureUrl != null &&
+                        _currentLoad.driverSignatureUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Driver signature',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () => _showNetworkPhoto(
+                          context,
+                          _currentLoad.driverSignatureUrl!,
+                        ),
+                        child: Container(
+                          height: 100,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: CachedNetworkImage(
+                            imageUrl: _currentLoad.driverSignatureUrl!,
+                            fit: BoxFit.contain,
+                            placeholder: (_, __) => const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           if (_usesPaperStock && _canManageItems && !_isCompleted) ...[
             const SizedBox(height: 12),
             Card(
@@ -1360,30 +1480,33 @@ class _ItemRow extends StatelessWidget {
                   final url = remotePhotos[i];
                   return Stack(
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: CachedNetworkImage(
-                          imageUrl: url,
-                          width: 72,
-                          height: 72,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
+                      GestureDetector(
+                        onTap: () => _showNetworkPhoto(context, url),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: url,
                             width: 72,
                             height: 72,
-                            color: Colors.grey.shade200,
-                            child: const Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              width: 72,
+                              height: 72,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
                               ),
                             ),
-                          ),
-                          errorWidget: (_, __, ___) => Container(
-                            width: 72,
-                            height: 72,
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.broken_image, size: 20),
+                            errorWidget: (_, __, ___) => Container(
+                              width: 72,
+                              height: 72,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.broken_image, size: 20),
+                            ),
                           ),
                         ),
                       ),
@@ -1410,6 +1533,42 @@ class _ItemRow extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showNetworkPhoto(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: const EdgeInsets.all(8),
+      child: Stack(
+        children: [
+          InteractiveViewer(
+            child: CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.contain,
+              placeholder: (_, __) => const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              errorWidget: (_, __, ___) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Icon(Icons.broken_image, color: Colors.white, size: 48),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
