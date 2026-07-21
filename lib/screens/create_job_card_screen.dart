@@ -955,10 +955,17 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                           if (previousParts.isNotEmpty)
                             Wrap(
                               spacing: 8,
-                              children: previousParts.map((p) => ActionChip(
-                                label: Text(p),
-                                onPressed: () => setState(() { part = p; _partController.text = p; }),
-                              )).toList(),
+                              children: previousParts
+                                  .map(
+                                    (p) => ActionChip(
+                                      label: Text(p),
+                                      onPressed: () => setState(() {
+                                        part = p;
+                                        _partController.text = p;
+                                      }),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                           const SizedBox(height: 8),
                           _buildPartTextField(),
@@ -1286,10 +1293,17 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                                 if (previousParts.isNotEmpty)
                                   Wrap(
                                     spacing: 8,
-                                    children: previousParts.map((p) => ActionChip(
-                                      label: Text(p),
-                                      onPressed: () => setState(() { part = p; _partController.text = p; }),
-                                    )).toList(),
+                                    children: previousParts
+                                        .map(
+                                          (p) => ActionChip(
+                                            label: Text(p),
+                                            onPressed: () => setState(() {
+                                              part = p;
+                                              _partController.text = p;
+                                            }),
+                                          ),
+                                        )
+                                        .toList(),
                                   ),
                                 const SizedBox(height: 8),
                                 _buildPartTextField(),
