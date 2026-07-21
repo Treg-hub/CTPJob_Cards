@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-21 — 2.3.0+184 — Job card parts, waste queue, smoother updates
+
+### What you will notice
+
+- **Create job card:** part / component names capitalise each word as you type and when you save (for example pump → Pump).
+- **Job card location edit** is more reliable when managers correct department, area, machine, or part.
+- **WasteTrack queued operations** list is easier to read in dark mode; the queue and home banner clear when items finish uploading.
+- Offline waste messages clear or update after the phone has synced, so you are not left with a stale “still uploading” note.
+- App startup and live data are more reliable after geofence / on-site checks (fewer false “not connected” moments at open).
+
+---
+
 ## 2026-07-20 — 2.3.0+183 — Lurgi daily walk + security receipt scan
 
 ### What you will notice
